@@ -1,0 +1,36 @@
+{
+  "name": "ecc-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECC Church Master Data Platform — portal & core API for synod-wide church management",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @ecc/database db:generate",
+    "db:migrate": "pnpm --filter @ecc/database db:migrate",
+    "db:seed": "pnpm --filter @ecc/database db:seed",
+    "db:studio": "pnpm --filter @ecc/database db:studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.7.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

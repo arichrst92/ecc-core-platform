@@ -1,0 +1,58 @@
+import { Router } from 'express';
+import { prisma } from '@ecc/database';
+import {
+  createCabangSchema,
+  updateCabangSchema,
+  paginationQuerySchema,
+} from '@ecc/shared-types';
+import { NotFound } from '../../lib/errors.js';
+
+export const cabangRouter = Router();
+
+cabangRouter.get('/', async (req, res) => {
+  const q = paginationQuerySchema.parse(req.query);
+  const where = q.search
+    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
+    : {};
+  const [data, total] = await Promise.all([
+    prisma.cabangGereja.findMany({
+      where,
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
+      include: { sinode: { select: { id: true, nama: true, kode: true } } },
+    }),
+    prisma.cabangGereja.count({ where }),
+  ]);
+  res.json({
+    success: true,
+    data,
+    meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
+  });
+});
+
+cabangRouter.get('/:id', async (req, res) => {
+  const item = await prisma.cabangGereja.findUnique({
+    where: { id: req.params.id },
+    include: { sinode: true, _count: { select: { jemaat: true, ibadah: true } } },
+  });
+  if (!item) throw NotFound('Cabang tidak ditemukan');
+  res.json({ success: true, data: item });
+});
+
+cabangRouter.post('/', async (req, res) => {
+  const input = createCabangSchema.parse(req.body);
+  const created = await prisma.cabangGereja.create({ data: input });
+  res.status(201).json({ success: true, data: created });
+});
+
+cabangRouter.patch('/:id', async (req, res) => {
+  const input = updateCabangSchema.parse(req.body);
+  const updated = await prisma.cabangGereja.update({ where: { id: req.params.id }, data: input });
+  res.json({ success: true, data: updated });
+});
+
+cabangRouter.delete('/:id', async (req, res) => {
+  await prisma.cabangGereja.delete({ where: { id: req.params.id } });
+  res.status(204).end();
+});

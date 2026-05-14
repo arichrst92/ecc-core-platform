@@ -1,0 +1,367 @@
+// ============================================================
+// ECC Church Master Data Platform — Prisma Schema
+// ============================================================
+// Generated: 2026-05-14
+// Database: PostgreSQL
+//
+// Entitas dikelompokkan ke dalam 5 cluster:
+//   1. Organisasi      : sinode, cabang_gereja, jemaat
+//   2. Klasifikasi     : role, sub_role, sub_role_status, jemaat_role
+//   3. Ibadah          : kategori_ibadah, ibadah
+//   4. Keluarga        : tipe_relasi_keluarga, jemaat_relasi
+//   5. Auth & API      : user, otp_verification, refresh_token, sinode_api_key
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 1. ORGANISASI
+// ============================================================
+
+model Sinode {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @db.VarChar(255)
+  kode      String   @unique @db.VarChar(20)
+  alamat    String?  @db.Text
+  kontak    String?  @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cabangGereja CabangGereja[]
+  apiKeys      SinodeApiKey[]
+
+  @@map("sinode")
+}
+
+model CabangGereja {
+  id        String   @id @default(uuid()) @db.Uuid
+  sinodeId  String   @map("sinode_id") @db.Uuid
+  nama      String   @db.VarChar(255)
+  kode      String   @db.VarChar(20)
+  alamat    String?  @db.Text
+  kontak    String?  @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sinode  Sinode   @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
+  jemaat  Jemaat[]
+  ibadah  Ibadah[]
+
+  @@unique([sinodeId, kode])
+  @@index([sinodeId])
+  @@map("cabang_gereja")
+}
+
+model Jemaat {
+  id              String    @id @default(uuid()) @db.Uuid
+  cabangId        String    @map("cabang_id") @db.Uuid
+  namaLengkap     String    @map("nama_lengkap") @db.VarChar(255)
+  email           String?   @unique @db.VarChar(255)
+  noHp            String?   @unique @map("no_hp") @db.VarChar(20)
+  tanggalLahir    DateTime? @map("tanggal_lahir") @db.Date
+  jenisKelamin    JenisKelamin? @map("jenis_kelamin")
+  alamat          String?   @db.Text
+  tanggalBergabung DateTime? @map("tanggal_bergabung") @db.Date
+  // Foto profil resmi jemaat (untuk kartu jemaat, direktori, dll).
+  // Relative path di VPS filesystem, mis. "/uploads/profiles/jemaat/{uuid}.webp"
+  fotoUrl         String?   @map("foto_url") @db.Text
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  cabang        CabangGereja    @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  jemaatRoles   JemaatRole[]
+  relasiAsal    JemaatRelasi[]  @relation("RelasiAsal")
+  relasiTujuan  JemaatRelasi[]  @relation("RelasiTujuan")
+  user          User?
+
+  @@index([cabangId])
+  @@index([noHp])
+  @@index([namaLengkap])
+  @@map("jemaat")
+}
+
+enum JenisKelamin {
+  L
+  P
+
+  @@map("jenis_kelamin")
+}
+
+// ============================================================
+// 2. KLASIFIKASI PERAN (Global, lintas sinode)
+// ============================================================
+
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @unique @db.VarChar(100)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subRoles    SubRole[]
+  jemaatRoles JemaatRole[]
+
+  @@map("role")
+}
+
+model SubRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  nama      String   @db.VarChar(100)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  role        Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  statuses    SubRoleStatus[]
+  jemaatRoles JemaatRole[]
+
+  @@unique([roleId, nama])
+  @@index([roleId])
+  @@map("sub_role")
+}
+
+model SubRoleStatus {
+  id        String   @id @default(uuid()) @db.Uuid
+  subRoleId String   @map("sub_role_id") @db.Uuid
+  nama      String   @db.VarChar(100)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subRole     SubRole      @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
+  jemaatRoles JemaatRole[]
+
+  @@unique([subRoleId, nama])
+  @@index([subRoleId])
+  @@map("sub_role_status")
+}
+
+// Junction many-to-many: jemaat ↔ role (dengan riwayat)
+model JemaatRole {
+  id               String    @id @default(uuid()) @db.Uuid
+  jemaatId         String    @map("jemaat_id") @db.Uuid
+  roleId           String    @map("role_id") @db.Uuid
+  subRoleId        String    @map("sub_role_id") @db.Uuid
+  subRoleStatusId  String?   @map("sub_role_status_id") @db.Uuid
+  tanggalMulai     DateTime  @default(now()) @map("tanggal_mulai") @db.Date
+  tanggalSelesai   DateTime? @map("tanggal_selesai") @db.Date
+  isActive         Boolean   @default(true) @map("is_active")
+  catatan          String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  jemaat         Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  role           Role           @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  subRole        SubRole        @relation(fields: [subRoleId], references: [id], onDelete: Restrict)
+  subRoleStatus  SubRoleStatus? @relation(fields: [subRoleStatusId], references: [id], onDelete: SetNull)
+
+  @@index([jemaatId])
+  @@index([roleId])
+  @@index([isActive])
+  @@map("jemaat_role")
+}
+
+// ============================================================
+// 3. IBADAH
+// ============================================================
+
+model KategoriIbadah {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @unique @db.VarChar(100)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ibadah Ibadah[]
+
+  @@map("kategori_ibadah")
+}
+
+model Ibadah {
+  id                String       @id @default(uuid()) @db.Uuid
+  cabangId          String       @map("cabang_id") @db.Uuid
+  kategoriIbadahId  String       @map("kategori_ibadah_id") @db.Uuid
+  nama              String       @db.VarChar(255)
+  tipeJadwal        TipeJadwal   @map("tipe_jadwal")
+  tanggalMulai      DateTime     @map("tanggal_mulai") @db.Date
+  hari              HariMinggu?  // diisi untuk weekly/biweekly
+  jamMulai          String       @map("jam_mulai") @db.VarChar(5)  // HH:mm
+  jamSelesai        String       @map("jam_selesai") @db.VarChar(5)
+  lokasi            String?      @db.Text
+  isOnline          Boolean      @default(false) @map("is_online")
+  linkStream        String?      @map("link_stream") @db.Text
+  deskripsi         String?      @db.Text
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  cabang         CabangGereja    @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  kategoriIbadah KategoriIbadah  @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
+
+  @@index([cabangId])
+  @@index([kategoriIbadahId])
+  @@map("ibadah")
+}
+
+enum TipeJadwal {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+
+  @@map("tipe_jadwal")
+}
+
+enum HariMinggu {
+  MINGGU
+  SENIN
+  SELASA
+  RABU
+  KAMIS
+  JUMAT
+  SABTU
+
+  @@map("hari_minggu")
+}
+
+// ============================================================
+// 4. RELASI KELUARGA
+// ============================================================
+
+model TipeRelasiKeluarga {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @unique @db.VarChar(50)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jemaatRelasi JemaatRelasi[]
+
+  @@map("tipe_relasi_keluarga")
+}
+
+// Self-referencing relasi antar jemaat (satu arah, bisa di-hard-delete)
+model JemaatRelasi {
+  id              String   @id @default(uuid()) @db.Uuid
+  jemaatId        String   @map("jemaat_id") @db.Uuid
+  jemaatTerkaitId String   @map("jemaat_terkait_id") @db.Uuid
+  tipeRelasiId    String   @map("tipe_relasi_id") @db.Uuid
+  keterangan      String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  jemaat        Jemaat             @relation("RelasiAsal", fields: [jemaatId], references: [id], onDelete: Cascade)
+  jemaatTerkait Jemaat             @relation("RelasiTujuan", fields: [jemaatTerkaitId], references: [id], onDelete: Cascade)
+  tipeRelasi    TipeRelasiKeluarga @relation(fields: [tipeRelasiId], references: [id], onDelete: Restrict)
+
+  @@unique([jemaatId, jemaatTerkaitId, tipeRelasiId])
+  @@index([jemaatId])
+  @@index([jemaatTerkaitId])
+  @@map("jemaat_relasi")
+}
+
+// ============================================================
+// 5. AUTH & API
+// ============================================================
+
+// User table untuk autentikasi.
+// Auth ini dipakai SEMUA jemaat (bukan hanya fulltimer) — karena
+// sistem auth ini akan dikonsumsi aplikasi lain di ekosistem ECC.
+// Akses ke portal admin tetap di-gate via role check (harus Fulltimer).
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  jemaatId        String    @unique @map("jemaat_id") @db.Uuid
+  // Avatar untuk akun login. Bisa beda dari jemaat.fotoUrl (foto resmi jemaat).
+  // Disimpan sebagai relative path di VPS filesystem, mis. "/uploads/profiles/user/{uuid}.webp"
+  fotoUrl         String?   @map("foto_url") @db.Text
+  faceDescriptor  Json?     @map("face_descriptor")    // 128-dim Float32 vector dari face-api.js
+  faceEnrolledAt  DateTime? @map("face_enrolled_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  jemaat        Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@map("user")
+}
+
+model OtpVerification {
+  id         String     @id @default(uuid()) @db.Uuid
+  noHp       String     @map("no_hp") @db.VarChar(20)
+  kodeHash   String     @map("kode_hash") @db.VarChar(255)  // hash bcrypt dari OTP
+  purpose    OtpPurpose
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @map("expires_at")
+  usedAt     DateTime?  @map("used_at")
+  ipAddress  String?    @map("ip_address") @db.VarChar(45)
+  userAgent  String?    @map("user_agent") @db.Text
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([noHp, purpose])
+  @@index([expiresAt])
+  @@map("otp_verification")
+}
+
+enum OtpPurpose {
+  LOGIN
+  ENROLLMENT
+  RESET_FACE
+
+  @@map("otp_purpose")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  userAgent  String?   @map("user_agent") @db.Text
+  ipAddress  String?   @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_token")
+}
+
+// API key untuk aplikasi konsumen di core-api.eccchurch.global
+// Scoped per sinode supaya satu aplikasi hanya akses data sinode-nya.
+model SinodeApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  sinodeId    String    @map("sinode_id") @db.Uuid
+  nama        String    @db.VarChar(255)            // deskripsi konsumen, mis. "Mobile App Sinode A"
+  keyHash     String    @unique @map("key_hash") @db.VarChar(255)
+  keyPrefix   String    @map("key_prefix") @db.VarChar(20)   // 8-12 char prefix untuk display
+  scopes      String[]  @default([])                // ["read:jemaat","read:ibadah",...]
+  isActive    Boolean   @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  sinode Sinode @relation(fields: [sinodeId], references: [id], onDelete: Cascade)
+
+  @@index([sinodeId])
+  @@index([keyPrefix])
+  @@map("sinode_api_key")
+}

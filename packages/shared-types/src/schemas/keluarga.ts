@@ -1,0 +1,25 @@
+import { z } from 'zod';
+import { uuidSchema } from './common.js';
+
+// ===== Tipe Relasi Keluarga (master) =====
+export const createTipeRelasiSchema = z.object({
+  nama: z.string().trim().min(2).max(50),
+  deskripsi: z.string().trim().optional(),
+});
+export type CreateTipeRelasiInput = z.infer<typeof createTipeRelasiSchema>;
+export const updateTipeRelasiSchema = createTipeRelasiSchema.partial().extend({ isActive: z.boolean().optional() });
+export type UpdateTipeRelasiInput = z.infer<typeof updateTipeRelasiSchema>;
+
+// ===== Jemaat Relasi (assignment) =====
+export const createJemaatRelasiSchema = z
+  .object({
+    jemaatId: uuidSchema,
+    jemaatTerkaitId: uuidSchema,
+    tipeRelasiId: uuidSchema,
+    keterangan: z.string().trim().optional(),
+  })
+  .refine((d) => d.jemaatId !== d.jemaatTerkaitId, {
+    message: 'Tidak boleh relasi ke diri sendiri',
+    path: ['jemaatTerkaitId'],
+  });
+export type CreateJemaatRelasiInput = z.infer<typeof createJemaatRelasiSchema>;

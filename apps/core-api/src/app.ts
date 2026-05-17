@@ -7,6 +7,12 @@ import swaggerUi from 'swagger-ui-express';
 
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
+import {
+  adminLimiter,
+  publicApiLimiter,
+  uploadLimiter,
+  globalLimiter,
+} from './middleware/rate-limit.js';
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin/index.js';
 import { publicRouter } from './routes/public/index.js';
@@ -49,18 +55,21 @@ export function createApp(): Express {
     }),
   );
 
-  // ---------- Routes ----------
-  // Auth (publik — login OTP, refresh, dll.)
+  // ---------- Routes (dengan rate limiting per kategori) ----------
+  // Auth: per-endpoint limiter di dalam authRouter (lihat routes/auth.ts)
   app.use('/auth', authRouter);
 
-  // Admin endpoints — dipakai oleh portal.eccchurch.global. Wajib JWT + role Fulltimer.
-  app.use('/admin', adminRouter);
+  // Admin endpoints — moderate per-user limit.
+  app.use('/admin', adminLimiter, adminRouter);
 
-  // Upload foto (jemaat: admin only · user/me: self-service)
-  app.use('/upload', uploadRouter);
+  // Upload — tighter limit karena resource-heavy.
+  app.use('/upload', uploadLimiter, uploadRouter);
 
-  // Public/consumer endpoints — dipakai aplikasi lain. Auth via API key.
-  app.use('/api/v1', publicRouter);
+  // Public/consumer endpoints — auth via API key, limit per API key.
+  app.use('/api/v1', publicApiLimiter, publicRouter);
+
+  // Fallback global limiter untuk endpoint lain (mis. /health di luar trust)
+  app.use(globalLimiter);
 
   // ---------- Error handling ----------
   app.use(notFoundHandler);

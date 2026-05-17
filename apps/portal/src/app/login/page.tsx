@@ -3,13 +3,14 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Phone, ShieldCheck, ScanFace } from 'lucide-react';
+import { Phone, ShieldCheck, ScanFace, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { normalizePhoneInput } from '@/lib/phone';
+import { FaceCapture } from '@/components/face/face-capture';
 
-type Step = 'phone' | 'otp' | 'face';
+type Step = 'phone' | 'otp' | 'face-phone' | 'face-capture';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,15 +41,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/otp/verify', { noHp, kode: otp, purpose: 'LOGIN' });
-      const auth = res.data.data;
-      if (!auth.user.isFulltimer) {
-        toast.error('Hanya Fulltimer yang boleh akses portal ini');
-        setLoading(false);
-        return;
-      }
-      setAuth(auth);
-      toast.success(`Selamat datang, ${auth.user.namaLengkap}`);
-      router.push('/dashboard');
+      finalizeLogin(res.data.data);
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message ?? 'OTP salah');
     } finally {
@@ -56,18 +49,35 @@ export default function LoginPage() {
     }
   }
 
+  async function handleFaceLogin(descriptor: number[]) {
+    const normalized = normalizePhoneInput(noHp);
+    if (!normalized) return toast.error('No HP tidak valid');
+    setLoading(true);
+    try {
+      const res = await apiClient.post('/auth/face/login', { noHp: normalized, descriptor });
+      finalizeLogin(res.data.data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message ?? 'Login wajah gagal');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function finalizeLogin(auth: any) {
+    if (!auth.user.isFulltimer) {
+      toast.error('Hanya Fulltimer yang boleh akses portal ini');
+      return;
+    }
+    setAuth(auth);
+    toast.success(`Selamat datang, ${auth.user.namaLengkap}`);
+    router.push('/dashboard');
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 to-white px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Image
-            src="/logo-ecc.webp"
-            alt="ECC Logo"
-            width={120}
-            height={120}
-            className="mx-auto"
-            priority
-          />
+          <Image src="/logo-ecc.webp" alt="ECC Logo" width={120} height={120} className="mx-auto" priority />
           <h1 className="text-2xl font-bold mt-4 text-neutral-900">ECC Portal</h1>
           <p className="text-neutral-500 text-sm mt-1">Master Data Management</p>
         </div>
@@ -79,37 +89,20 @@ export default function LoginPage() {
               <p className="text-sm text-neutral-500 mb-6">
                 Kami akan kirim kode OTP via WhatsApp ke nomor Anda.
               </p>
-              <label className="block">
-                <span className="text-sm font-medium text-neutral-700">No HP (WhatsApp)</span>
-                <div className="mt-1 flex items-center gap-2 border rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
-                  <Phone className="w-4 h-4 text-neutral-400" />
-                  <input
-                    type="tel"
-                    placeholder="+62812..."
-                    value={noHp}
-                    onChange={(e) => setNoHp(e.target.value)}
-                    className="flex-1 py-2 outline-none"
-                    autoFocus
-                  />
-                </div>
-              </label>
+              <PhoneInput value={noHp} onChange={setNoHp} />
               <button
                 onClick={handleRequestOtp}
                 disabled={loading}
-                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
+                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg"
               >
                 {loading ? 'Mengirim...' : 'Kirim OTP'}
               </button>
 
-              <div className="my-6 flex items-center gap-3">
-                <div className="flex-1 h-px bg-neutral-200" />
-                <span className="text-xs text-neutral-400 uppercase">atau</span>
-                <div className="flex-1 h-px bg-neutral-200" />
-              </div>
+              <Divider />
 
               <button
-                onClick={() => setStep('face')}
-                className="w-full border border-neutral-300 hover:bg-neutral-50 font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2"
+                onClick={() => setStep('face-phone')}
+                className="w-full border border-neutral-300 hover:bg-neutral-50 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2"
               >
                 <ScanFace className="w-4 h-4" />
                 Login dengan Wajah
@@ -142,21 +135,60 @@ export default function LoginPage() {
               <button
                 onClick={handleVerifyOtp}
                 disabled={loading}
-                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
+                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg"
               >
                 {loading ? 'Memverifikasi...' : 'Masuk'}
               </button>
               <button
                 onClick={() => setStep('phone')}
-                className="mt-3 w-full text-sm text-neutral-500 hover:text-neutral-700"
+                className="mt-3 w-full text-sm text-neutral-500 hover:text-neutral-700 flex items-center justify-center gap-1"
               >
-                ← Ganti nomor
+                <ArrowLeft className="w-3 h-3" /> Ganti nomor
               </button>
             </>
           )}
 
-          {step === 'face' && (
-            <FaceLoginPlaceholder onBack={() => setStep('phone')} />
+          {step === 'face-phone' && (
+            <>
+              <h2 className="text-lg font-semibold mb-1">Login dengan Wajah</h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                Masukkan no HP dulu (untuk identifikasi akun), lalu scan wajah Anda.
+              </p>
+              <PhoneInput value={noHp} onChange={setNoHp} />
+              <button
+                onClick={() => {
+                  const n = normalizePhoneInput(noHp);
+                  if (!n) return toast.error('Format no HP tidak valid');
+                  setNoHp(n);
+                  setStep('face-capture');
+                }}
+                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg"
+              >
+                Lanjut ke Scan Wajah
+              </button>
+              <button
+                onClick={() => setStep('phone')}
+                className="mt-3 w-full text-sm text-neutral-500 hover:text-neutral-700 flex items-center justify-center gap-1"
+              >
+                <ArrowLeft className="w-3 h-3" /> Kembali ke OTP
+              </button>
+            </>
+          )}
+
+          {step === 'face-capture' && (
+            <>
+              <h2 className="text-lg font-semibold mb-1">Scan Wajah</h2>
+              <p className="text-sm text-neutral-500 mb-4">
+                Login untuk <strong>{noHp}</strong>.
+              </p>
+              <FaceCapture onCapture={handleFaceLogin} submitting={loading} submitLabel="Masuk" />
+              <button
+                onClick={() => setStep('face-phone')}
+                className="mt-4 w-full text-sm text-neutral-500 hover:text-neutral-700 flex items-center justify-center gap-1"
+              >
+                <ArrowLeft className="w-3 h-3" /> Kembali
+              </button>
+            </>
           )}
         </div>
 
@@ -166,21 +198,31 @@ export default function LoginPage() {
   );
 }
 
-function FaceLoginPlaceholder({ onBack }: { onBack: () => void }) {
+function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="text-center">
-      <ScanFace className="w-16 h-16 mx-auto text-brand-500 mb-4" />
-      <h2 className="text-lg font-semibold mb-1">Face Recognition</h2>
-      <p className="text-sm text-neutral-500 mb-6">
-        Fitur ini akan diaktifkan setelah Anda enroll wajah dari menu Profile.
-        Untuk login pertama kali, gunakan WhatsApp OTP.
-      </p>
-      <button
-        onClick={onBack}
-        className="text-sm text-brand-600 hover:text-brand-700 font-medium"
-      >
-        ← Kembali ke login OTP
-      </button>
+    <label className="block">
+      <span className="text-sm font-medium text-neutral-700">No HP (WhatsApp)</span>
+      <div className="mt-1 flex items-center gap-2 border rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
+        <Phone className="w-4 h-4 text-neutral-400" />
+        <input
+          type="tel"
+          placeholder="+62812..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 py-2 outline-none"
+          autoFocus
+        />
+      </div>
+    </label>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="my-6 flex items-center gap-3">
+      <div className="flex-1 h-px bg-neutral-200" />
+      <span className="text-xs text-neutral-400 uppercase">atau</span>
+      <div className="flex-1 h-px bg-neutral-200" />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { randomInt } from 'node:crypto';
 
 const OTP_LENGTH = Number(process.env.OTP_LENGTH ?? 6);

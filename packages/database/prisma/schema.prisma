@@ -298,6 +298,7 @@ model User {
 
   jemaat        Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
 
   @@map("user")
 }
@@ -364,4 +365,48 @@ model SinodeApiKey {
   @@index([sinodeId])
   @@index([keyPrefix])
   @@map("sinode_api_key")
+}
+
+// ============================================================
+// 6. AUDIT LOG
+// ============================================================
+// Catatan semua operasi CUD pada master data + event auth penting.
+// Denormalisasi userName / resourceLabel disengaja: jika user/resource
+// nanti dihapus, log tetap readable untuk audit historis.
+// Default retention 365 hari (jalankan cron untuk purge yang lebih lama).
+model AuditLog {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String?     @map("user_id") @db.Uuid
+  userName      String?     @map("user_name") @db.VarChar(255)
+  action        AuditAction
+  resource      String      @db.VarChar(100)     // 'jemaat', 'sinode', 'auth', dst.
+  resourceId    String?     @map("resource_id") @db.Uuid
+  resourceLabel String?     @map("resource_label") @db.VarChar(500)
+  before        Json?       // state sebelum (UPDATE/DELETE)
+  after         Json?       // state sesudah (CREATE/UPDATE)
+  metadata      Json?
+  ipAddress     String?     @map("ip_address") @db.VarChar(45)
+  userAgent     String?     @map("user_agent") @db.Text
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([resource, resourceId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_log")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ENROLL_FACE
+  RESET_FACE
+  UPLOAD_PHOTO
+
+  @@map("audit_action")
 }

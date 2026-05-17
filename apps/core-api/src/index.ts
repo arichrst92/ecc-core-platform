@@ -1,4 +1,7 @@
 import 'dotenv/config';
+// PENTING: patch Express 4 supaya async handler yang throw error otomatis
+// di-forward ke errorHandler middleware. Tanpa ini, request akan hang.
+import 'express-async-errors';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
 

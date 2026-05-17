@@ -1,21 +1,22 @@
 /**
- * WhatsApp Cloud API client (Meta official).
+ * WhatsApp gateway client — Fonnte (gateway lokal Indonesia).
  *
- * Endpoint: https://graph.facebook.com/{version}/{phone_number_id}/messages
- * Docs:     https://developers.facebook.com/docs/whatsapp/cloud-api
+ * Endpoint: https://api.fonnte.com/send
+ * Docs:     https://docs.fonnte.com/
  *
- * Untuk pengiriman OTP, Meta MEWAJIBKAN pakai template message yang sudah
- * di-approve sebelumnya. Buat template dengan kategori AUTHENTICATION, isi
- * body "Kode OTP Anda: {{1}}". Nama template = WA_OTP_TEMPLATE_NAME.
+ * Kenapa Fonnte (vs Meta Cloud API)?
+ *   - Tidak perlu template approval — kirim text biasa
+ *   - Setup super cepat (cukup daftar + connect device WhatsApp)
+ *   - Harga ~Rp 100/pesan, cocok volume rendah-menengah
+ *   - API simpel (POST form-data dengan token di header)
+ *
+ * Untuk migrate ke Meta Cloud API nanti (saat volume tinggi atau butuh
+ * delivery guarantee resmi), tinggal ganti implementation fungsi
+ * `sendOtpViaWhatsApp()` — interface tetap sama.
  */
 
-const WA_API_VERSION = process.env.WA_API_VERSION ?? 'v20.0';
-const WA_TOKEN = process.env.WA_CLOUD_API_TOKEN ?? '';
-const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID ?? '';
-const WA_OTP_TEMPLATE_NAME = process.env.WA_OTP_TEMPLATE_NAME ?? 'ecc_login_otp';
-const WA_OTP_TEMPLATE_LANGUAGE = process.env.WA_OTP_TEMPLATE_LANGUAGE ?? 'id';
-
-const BASE_URL = `https://graph.facebook.com/${WA_API_VERSION}`;
+const FONNTE_URL = 'https://api.fonnte.com/send';
+const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
 
 export interface SendOtpResult {
   messageId: string;
@@ -23,57 +24,53 @@ export interface SendOtpResult {
 }
 
 /**
- * Kirim OTP via WhatsApp template. Format `to` E.164 tanpa prefix `+`
- * (Meta minta angka saja, mis. "628123456789").
+ * Kirim OTP via Fonnte. Format `noHpE164` = "+628...".
+ * Fonnte minta tanpa "+" di field `target` (mis. "628123456789").
  */
 export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise<SendOtpResult> {
-  if (!WA_TOKEN || !WA_PHONE_NUMBER_ID) {
-    throw new Error('WhatsApp Cloud API not configured (WA_CLOUD_API_TOKEN / WA_PHONE_NUMBER_ID)');
+  if (!FONNTE_TOKEN) {
+    throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
   }
 
-  // Strip "+" jika ada
-  const to = noHpE164.replace(/^\+/, '');
+  const target = noHpE164.replace(/^\+/, '');
+  const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
+  const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
+  const message = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
 
-  const payload = {
-    messaging_product: 'whatsapp',
-    to,
-    type: 'template',
-    template: {
-      name: WA_OTP_TEMPLATE_NAME,
-      language: { code: WA_OTP_TEMPLATE_LANGUAGE },
-      components: [
-        {
-          type: 'body',
-          parameters: [{ type: 'text', text: otp }],
-        },
-        {
-          // Untuk template AUTHENTICATION, Meta wajib ada button copy-code.
-          type: 'button',
-          sub_type: 'url',
-          index: '0',
-          parameters: [{ type: 'text', text: otp }],
-        },
-      ],
-    },
-  };
+  const formData = new URLSearchParams();
+  formData.append('target', target);
+  formData.append('message', message);
+  formData.append('countryCode', '62');
 
-  const res = await fetch(`${BASE_URL}/${WA_PHONE_NUMBER_ID}/messages`, {
+  const res = await fetch(FONNTE_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${WA_TOKEN}`,
-      'Content-Type': 'application/json',
+      Authorization: FONNTE_TOKEN,
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify(payload),
+    body: formData.toString(),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`WhatsApp send failed (${res.status}): ${text}`);
+    throw new Error(`Fonnte send failed (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { messages?: { id: string }[] };
-  const messageId = data.messages?.[0]?.id ?? '';
-  return { messageId, to };
+  const data = (await res.json()) as {
+    status?: boolean;
+    reason?: string;
+    id?: string[] | string;
+    detail?: string;
+  };
+
+  // Fonnte response: { status: true, id: ["123"], detail: "..." }
+  // Atau saat error: { status: false, reason: "..." }
+  if (data.status === false) {
+    throw new Error(`Fonnte error: ${data.reason ?? data.detail ?? 'unknown'}`);
+  }
+
+  const messageId = Array.isArray(data.id) ? (data.id[0] ?? '') : (data.id ?? '');
+  return { messageId, to: target };
 }
 
 /** Normalisasi no HP ke format E.164 Indonesia (+62...). */

@@ -1,11 +1,8 @@
-import { MasterDataPagePlaceholder } from '@/components/master-data-placeholder';
+'use client';
+
+import { CrudPage } from '@/components/crud/crud-page';
+import { cabangResource } from '@/lib/resources/cabang-config';
 
 export default function CabangPage() {
-  return (
-    <MasterDataPagePlaceholder
-      title="Master Data Cabang Gereja"
-      description="Cabang-cabang gereja di tiap sinode."
-      resource="cabang"
-    />
-  );
+  return <CrudPage config={cabangResource} />;
 }

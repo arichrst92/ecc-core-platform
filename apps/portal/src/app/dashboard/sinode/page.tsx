@@ -1,11 +1,8 @@
-import { MasterDataPagePlaceholder } from '@/components/master-data-placeholder';
+'use client';
+
+import { CrudPage } from '@/components/crud/crud-page';
+import { sinodeResource } from '@/lib/resources/sinode-config';
 
 export default function SinodePage() {
-  return (
-    <MasterDataPagePlaceholder
-      title="Master Data Sinode"
-      description="Kelola data sinode-sinode yang tergabung dalam ekosistem ECC."
-      resource="sinode"
-    />
-  );
+  return <CrudPage config={sinodeResource} />;
 }

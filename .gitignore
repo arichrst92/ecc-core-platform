@@ -44,6 +44,10 @@ prisma/migrations/dev.db*
 apps/core-api/uploads/
 uploads/
 
+# face-api.js model weights — di-download via scripts/download-face-models.sh
+apps/portal/public/face-models/*
+!apps/portal/public/face-models/README.md
+
 # Cache
 .cache/
 .eslintcache

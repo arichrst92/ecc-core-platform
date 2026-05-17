@@ -12,27 +12,33 @@ ecc-platform/
 ├── packages/
 │   ├── database/      # Prisma schema, migrations, seed
 │   ├── shared-types/  # TypeScript types & Zod schemas (shared FE/BE)
-│   └── auth/          # JWT, OTP, WhatsApp & face-api helpers
+│   └── auth/          # JWT, OTP, WhatsApp (Fonnte) & face-api helpers
 ├── images/            # Brand assets (logo-ecc, logo-idea)
-├── docker-compose.yml # PostgreSQL + Redis (dev)
+├── scripts/           # download-face-models.sh
 └── knowledge-base.md  # Dokumentasi lengkap arsitektur
 ```
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# 1. Pastikan PostgreSQL 16 ter-install & jalan
+brew install postgresql@16 && brew services start postgresql@16
+
+# 2. Setup database & user
+createuser -s ecc_user -P     # masukkan password: ecc_password
+createdb -O ecc_user ecc_platform
+
+# 3. Install deps + env
 pnpm install
-
-# Start database (PostgreSQL + Redis)
-pnpm docker:up
-
-# Setup database
 cp .env.example .env
-pnpm db:migrate
+# Edit .env: set JWT_SECRET (openssl rand -hex 32) dan FONNTE_TOKEN
+
+# 4. Setup schema + seed
+pnpm db:generate
+pnpm db:migrate                # ketik 'init' saat ditanya nama migration
 pnpm db:seed
 
-# Run dev (semua app)
+# 5. Run
 pnpm dev
 ```
 
@@ -40,7 +46,8 @@ Portal: http://localhost:3000  |  Core API: http://localhost:4000  |  Docs: http
 
 ## Dokumentasi
 
-Untuk informasi lengkap tentang arsitektur, ERD, flow autentikasi, konvensi kode, dan deployment, lihat **[knowledge-base.md](./knowledge-base.md)**.
+- **[BUILD.md](./BUILD.md)** — panduan setup detail dengan troubleshooting
+- **[knowledge-base.md](./knowledge-base.md)** — arsitektur, ERD, flow autentikasi, konvensi, decision log
 
 ---
 

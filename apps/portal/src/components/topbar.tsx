@@ -1,16 +1,14 @@
 'use client';
 
 import { useAuthStore } from '@/lib/auth-store';
+import { logout } from '@/lib/api-client';
 import { LogOut, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 export function Topbar() {
-  const router = useRouter();
-  const { user, clearAuth } = useAuthStore();
+  const { user } = useAuthStore();
 
   function handleLogout() {
-    clearAuth();
-    router.push('/login');
+    void logout(false);
   }
 
   return (

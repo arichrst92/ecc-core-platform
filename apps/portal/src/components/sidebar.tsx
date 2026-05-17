@@ -13,6 +13,8 @@ import {
   Layers,
   Heart,
   Key,
+  UserCog,
+  Activity,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -26,6 +28,8 @@ const nav = [
   { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers },
   { href: '/dashboard/tipe-relasi', label: 'Tipe Relasi', icon: Heart },
   { href: '/dashboard/api-key', label: 'API Keys', icon: Key },
+  { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity },
+  { href: '/dashboard/profile', label: 'Profil & Keamanan', icon: UserCog },
 ];
 
 export function Sidebar() {

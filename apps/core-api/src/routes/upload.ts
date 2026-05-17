@@ -4,6 +4,7 @@ import { prisma } from '@ecc/database';
 import { requireAuth } from '../middleware/require-auth.js';
 import { saveProfilePhoto, deleteProfilePhoto } from '../lib/storage.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { audit } from '../lib/audit.js';
 
 /**
  * Endpoint upload foto profil.
@@ -45,18 +46,32 @@ uploadRouter.post('/jemaat/:jemaatId/foto', upload.single('foto'), async (req, r
   const updated = await prisma.jemaat.update({
     where: { id: jemaat.id },
     data: { fotoUrl },
-    select: { id: true, fotoUrl: true },
+    select: { id: true, fotoUrl: true, namaLengkap: true },
   });
-
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'jemaat',
+    resourceId: jemaat.id,
+    resourceLabel: updated.namaLengkap,
+    metadata: { kind: 'jemaat-profile', size: req.file.size },
+  });
   res.json({ success: true, data: updated });
 });
 
 uploadRouter.delete('/jemaat/:jemaatId/foto', async (req, res) => {
   if (!req.user?.isFulltimer) throw Forbidden();
   await deleteProfilePhoto('jemaat', req.params.jemaatId);
-  await prisma.jemaat.update({
+  const updated = await prisma.jemaat.update({
     where: { id: req.params.jemaatId },
     data: { fotoUrl: null },
+    select: { namaLengkap: true },
+  });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'jemaat',
+    resourceId: req.params.jemaatId,
+    resourceLabel: updated.namaLengkap,
+    metadata: { kind: 'jemaat-profile-delete' },
   });
   res.status(204).end();
 });
@@ -73,6 +88,12 @@ uploadRouter.post('/user/me/foto', upload.single('foto'), async (req, res) => {
     data: { fotoUrl },
     select: { id: true, fotoUrl: true },
   });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'user',
+    resourceId: userId,
+    metadata: { kind: 'user-avatar', size: req.file.size },
+  });
   res.json({ success: true, data: updated });
 });
 
@@ -82,6 +103,12 @@ uploadRouter.delete('/user/me/foto', async (req, res) => {
   await prisma.user.update({
     where: { id: req.user.sub },
     data: { fotoUrl: null },
+  });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'user',
+    resourceId: req.user.sub,
+    metadata: { kind: 'user-avatar-delete' },
   });
   res.status(204).end();
 });

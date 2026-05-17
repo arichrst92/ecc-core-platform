@@ -1,11 +1,8 @@
-import { MasterDataPagePlaceholder } from '@/components/master-data-placeholder';
+'use client';
+
+import { CrudPage } from '@/components/crud/crud-page';
+import { ibadahResource } from '@/lib/resources/ibadah-config';
 
 export default function IbadahPage() {
-  return (
-    <MasterDataPagePlaceholder
-      title="Master Data Ibadah"
-      description="Jadwal ibadah per cabang gereja."
-      resource="ibadah"
-    />
-  );
+  return <CrudPage config={ibadahResource} />;
 }

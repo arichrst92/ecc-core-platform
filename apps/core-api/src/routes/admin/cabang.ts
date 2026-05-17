@@ -6,6 +6,7 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { NotFound } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
 
 export const cabangRouter = Router();
 
@@ -43,16 +44,23 @@ cabangRouter.get('/:id', async (req, res) => {
 cabangRouter.post('/', async (req, res) => {
   const input = createCabangSchema.parse(req.body);
   const created = await prisma.cabangGereja.create({ data: input });
+  audit(req, { action: 'CREATE', resource: 'cabang_gereja', resourceId: created.id, resourceLabel: created.nama, after: created });
   res.status(201).json({ success: true, data: created });
 });
 
 cabangRouter.patch('/:id', async (req, res) => {
   const input = updateCabangSchema.parse(req.body);
+  const before = await prisma.cabangGereja.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Cabang tidak ditemukan');
   const updated = await prisma.cabangGereja.update({ where: { id: req.params.id }, data: input });
+  audit(req, { action: 'UPDATE', resource: 'cabang_gereja', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
   res.json({ success: true, data: updated });
 });
 
 cabangRouter.delete('/:id', async (req, res) => {
+  const before = await prisma.cabangGereja.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Cabang tidak ditemukan');
   await prisma.cabangGereja.delete({ where: { id: req.params.id } });
+  audit(req, { action: 'DELETE', resource: 'cabang_gereja', resourceId: before.id, resourceLabel: before.nama, before });
   res.status(204).end();
 });

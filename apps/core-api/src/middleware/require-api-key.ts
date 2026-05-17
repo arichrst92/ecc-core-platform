@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@ecc/database';
 import { Unauthorized } from '../lib/errors.js';
 

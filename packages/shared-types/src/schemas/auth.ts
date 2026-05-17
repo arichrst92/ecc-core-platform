@@ -2,18 +2,22 @@ import { z } from 'zod';
 import { noHpSchema, uuidSchema } from './common.js';
 
 // ===== Request OTP =====
-export const requestOtpSchema = z.object({
-  noHp: noHpSchema,
-  purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
-});
+export const requestOtpSchema = z
+  .object({
+    noHp: noHpSchema,
+    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
+  })
+  .openapi('RequestOtpInput');
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 
 // ===== Verify OTP =====
-export const verifyOtpSchema = z.object({
-  noHp: noHpSchema,
-  kode: z.string().length(6, 'OTP harus 6 digit'),
-  purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
-});
+export const verifyOtpSchema = z
+  .object({
+    noHp: noHpSchema,
+    kode: z.string().length(6, 'OTP harus 6 digit').openapi({ example: '123456' }),
+    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
+  })
+  .openapi('VerifyOtpInput');
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
 // ===== Face Login (shortcut, opsional) =====

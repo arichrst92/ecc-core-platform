@@ -1,11 +1,8 @@
-import { MasterDataPagePlaceholder } from '@/components/master-data-placeholder';
+'use client';
+
+import { CrudPage } from '@/components/crud/crud-page';
+import { kategoriIbadahResource } from '@/lib/resources/kategori-ibadah-config';
 
 export default function KategoriIbadahPage() {
-  return (
-    <MasterDataPagePlaceholder
-      title="Master Kategori Ibadah"
-      description="Klasifikasi kategori ibadah (Umum, Doa, Pemuda, dst)."
-      resource="kategori-ibadah"
-    />
-  );
+  return <CrudPage config={kategoriIbadahResource} />;
 }

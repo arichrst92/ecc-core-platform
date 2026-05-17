@@ -4,6 +4,7 @@ import {
   createTipeRelasiSchema,
   updateTipeRelasiSchema,
   createJemaatRelasiSchema,
+  paginationQuerySchema,
 } from '@ecc/shared-types';
 import { NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
@@ -11,9 +12,25 @@ import { audit } from '../../lib/audit.js';
 export const keluargaRouter = Router();
 
 // ===== Tipe Relasi Keluarga (master) =====
-keluargaRouter.get('/tipe', async (_req, res) => {
-  const data = await prisma.tipeRelasiKeluarga.findMany({ orderBy: { nama: 'asc' } });
-  res.json({ success: true, data });
+keluargaRouter.get('/tipe', async (req, res) => {
+  const q = paginationQuerySchema.parse(req.query);
+  const where = q.search
+    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
+    : {};
+  const [data, total] = await Promise.all([
+    prisma.tipeRelasiKeluarga.findMany({
+      where,
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
+    }),
+    prisma.tipeRelasiKeluarga.count({ where }),
+  ]);
+  res.json({
+    success: true,
+    data,
+    meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
+  });
 });
 
 keluargaRouter.post('/tipe', async (req, res) => {

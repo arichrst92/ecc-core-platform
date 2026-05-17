@@ -42,7 +42,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-Portal: http://localhost:3000  |  Core API: http://localhost:4000  |  Docs: http://localhost:4000/docs
+Portal: http://localhost:3100  |  Core API: http://localhost:4100  |  Docs: http://localhost:4100/docs
 
 ## Dokumentasi
 

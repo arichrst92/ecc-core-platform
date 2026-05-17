@@ -179,15 +179,15 @@ pnpm dev
 ```
 
 Yang berjalan paralel via Turborepo:
-- **Portal** (Next.js) di http://localhost:3000
-- **Core API** (Express) di http://localhost:4000
-- **Swagger docs** di http://localhost:4000/docs
+- **Portal** (Next.js) di http://localhost:3100
+- **Core API** (Express) di http://localhost:4100
+- **Swagger docs** di http://localhost:4100/docs
 
 Tunggu sampai keduanya ready (~15-30 detik pertama kali).
 
 ## 9. Test login
 
-1. Buka http://localhost:3000 → auto-redirect ke `/login`
+1. Buka http://localhost:3100 → auto-redirect ke `/login`
 2. Input no HP yang Anda seed di step 6 (format `+628...`)
 3. Klik "Kirim OTP"
 
@@ -220,14 +220,16 @@ brew services list | grep postgresql
 brew services start postgresql@16
 ```
 
-### "EADDRINUSE: port 3000/4000 already in use"
+### "EADDRINUSE: port 3100/4100 already in use"
 
-Port konflik. Kill dulu:
+Port konflik dengan proses lain. Kill dulu:
 
 ```bash
-lsof -ti:3000 | xargs kill -9
-lsof -ti:4000 | xargs kill -9
+lsof -ti:3100 | xargs kill -9
+lsof -ti:4100 | xargs kill -9
 ```
+
+Atau pakai port lain — set `PORT=4200` di `.env` untuk core-api, dan ganti `-p 3100` jadi `-p 3200` di `apps/portal/package.json`. Pastikan `NEXT_PUBLIC_CORE_API_URL` dan `CORS_ALLOWED_ORIGINS` di `.env` ikut update.
 
 ### Prisma migration error setelah update schema
 

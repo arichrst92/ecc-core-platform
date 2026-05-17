@@ -1,3 +1,4 @@
+import './common.js'; // ensures z.openapi() extension applied
 import { z } from 'zod';
 
 export const createSinodeSchema = z

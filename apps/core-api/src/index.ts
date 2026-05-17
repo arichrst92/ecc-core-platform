@@ -5,7 +5,7 @@ import 'express-async-errors';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
 
-const PORT = Number(process.env.PORT ?? 4000);
+const PORT = Number(process.env.PORT ?? 4100);
 
 async function main() {
   const app = createApp();

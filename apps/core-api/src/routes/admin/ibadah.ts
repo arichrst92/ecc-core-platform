@@ -13,9 +13,25 @@ import { audit } from '../../lib/audit.js';
 export const ibadahRouter = Router();
 
 // ===== Kategori Ibadah =====
-ibadahRouter.get('/kategori', async (_req, res) => {
-  const data = await prisma.kategoriIbadah.findMany({ orderBy: { nama: 'asc' } });
-  res.json({ success: true, data });
+ibadahRouter.get('/kategori', async (req, res) => {
+  const q = paginationQuerySchema.parse(req.query);
+  const where = q.search
+    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
+    : {};
+  const [data, total] = await Promise.all([
+    prisma.kategoriIbadah.findMany({
+      where,
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
+    }),
+    prisma.kategoriIbadah.count({ where }),
+  ]);
+  res.json({
+    success: true,
+    data,
+    meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
+  });
 });
 
 ibadahRouter.post('/kategori', async (req, res) => {

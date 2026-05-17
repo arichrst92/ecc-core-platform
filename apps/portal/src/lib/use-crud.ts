@@ -20,12 +20,27 @@ interface ListParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-export function useList<T>(resource: string, endpoint: string, params: ListParams = {}) {
+export function useList<T>(
+  resource: string,
+  endpoint: string,
+  params: ListParams = {},
+  enabled = true,
+) {
   return useQuery({
     queryKey: [resource, 'list', params],
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<PaginatedResponse<T>>(endpoint, { params });
-      return res.data;
+      const data = res.data as PaginatedResponse<T> & { data: T[] };
+      // Backward compat: kalau endpoint return non-paginated { success, data: [] }
+      // tanpa meta, bikin meta default supaya konsumer tidak crash.
+      if (!data.meta && Array.isArray(data.data)) {
+        return {
+          ...data,
+          meta: { page: 1, limit: data.data.length, total: data.data.length, totalPages: 1 },
+        };
+      }
+      return data;
     },
     placeholderData: (prev) => prev,
   });
@@ -39,10 +54,12 @@ export function useInfiniteList<T>(
   resource: string,
   endpoint: string,
   params: Omit<ListParams, 'page'> & { limit?: number } = {},
+  enabled = true,
 ) {
   const limit = params.limit ?? 50;
   return useInfiniteQuery({
     queryKey: [resource, 'infinite', { ...params, limit }],
+    enabled,
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const res = await apiClient.get<PaginatedResponse<T>>(endpoint, {
@@ -50,8 +67,11 @@ export function useInfiniteList<T>(
       });
       return res.data;
     },
-    getNextPageParam: (lastPage) =>
-      lastPage.meta.page < lastPage.meta.totalPages ? lastPage.meta.page + 1 : undefined,
+    getNextPageParam: (lastPage) => {
+      // Defensive: kalau endpoint tidak paginated, stop di page 1
+      if (!lastPage?.meta) return undefined;
+      return lastPage.meta.page < lastPage.meta.totalPages ? lastPage.meta.page + 1 : undefined;
+    },
     placeholderData: (prev) => prev,
   });
 }

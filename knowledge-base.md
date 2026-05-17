@@ -321,9 +321,9 @@ pnpm dev
 ```
 
 Akses:
-- Portal: http://localhost:3000
-- Core API: http://localhost:4000
-- API Docs: http://localhost:4000/docs
+- Portal: http://localhost:3100
+- Core API: http://localhost:4100
+- API Docs: http://localhost:4100/docs
 - Prisma Studio (DB GUI): `pnpm db:studio` → http://localhost:5555
 
 ### Seed Akun Fulltimer Pertama

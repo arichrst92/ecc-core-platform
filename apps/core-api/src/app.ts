@@ -25,9 +25,21 @@ export function createApp(): Express {
 
   // ---------- Security & infra middleware ----------
   app.use(helmet());
+  // CORS — dev mode allow semua localhost origin, prod mode strict whitelist
+  const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:3100')
+    .split(',')
+    .map((o) => o.trim());
+
   app.use(
     cors({
-      origin: (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:3000').split(','),
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+          return callback(null, true);
+        }
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      },
       credentials: true,
     }),
   );

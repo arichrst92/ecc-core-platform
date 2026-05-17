@@ -1,4 +1,9 @@
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+
+// Pastikan z punya `.openapi()` method sebelum schema apa pun di-evaluate.
+// Idempotent — aman dipanggil multi kali (tsx/CJS kadang load schema sebelum index.ts).
+extendZodWithOpenApi(z);
 
 /** UUID v4 string */
 export const uuidSchema = z.string().uuid().openapi({ example: '550e8400-e29b-41d4-a716-446655440000' });

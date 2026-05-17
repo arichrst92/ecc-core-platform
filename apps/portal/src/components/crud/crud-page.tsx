@@ -29,29 +29,39 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({ c
 
   const debouncedSearch = useDebounce(search, 300);
 
-  // Paginated mode
-  const list = useList<T>(config.name, config.endpoint, {
-    page,
-    limit: 20,
-    search: debouncedSearch || undefined,
-    sortBy: config.defaultSort?.field,
-    sortOrder: config.defaultSort?.order,
-  });
+  // Paginated mode — disabled saat virtual scroll aktif
+  const list = useList<T>(
+    config.name,
+    config.endpoint,
+    {
+      page,
+      limit: 20,
+      search: debouncedSearch || undefined,
+      sortBy: config.defaultSort?.field,
+      sortOrder: config.defaultSort?.order,
+    },
+    !isVirtual,
+  );
 
-  // Virtual / infinite mode
-  const infinite = useInfiniteList<T>(config.name, config.endpoint, {
-    limit: config.virtualChunkSize ?? 50,
-    search: debouncedSearch || undefined,
-    sortBy: config.defaultSort?.field,
-    sortOrder: config.defaultSort?.order,
-  });
+  // Virtual / infinite mode — disabled saat pagination klasik
+  const infinite = useInfiniteList<T>(
+    config.name,
+    config.endpoint,
+    {
+      limit: config.virtualChunkSize ?? 50,
+      search: debouncedSearch || undefined,
+      sortBy: config.defaultSort?.field,
+      sortOrder: config.defaultSort?.order,
+    },
+    isVirtual,
+  );
 
   const createMut = useCreate<T>(config.name, config.endpoint);
   const updateMut = useUpdate<T>(config.name, config.endpoint);
   const deleteMut = useDelete(config.name, config.endpoint);
 
   const virtualRows = infinite.data?.pages.flatMap((p) => p.data) ?? [];
-  const virtualTotal = infinite.data?.pages[0]?.meta.total ?? 0;
+  const virtualTotal = infinite.data?.pages[0]?.meta?.total ?? 0;
 
   return (
     <div>

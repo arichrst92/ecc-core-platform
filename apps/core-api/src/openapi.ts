@@ -289,6 +289,22 @@ registerCrud({
   createSchema: createIbadahSchema,
   updateSchema: updateIbadahSchema,
 });
+registry.registerPath({
+  method: 'get',
+  path: '/admin/ibadah/calendar',
+  tags: ['Admin · Ibadah'],
+  summary: 'Generate occurrences ibadah di rentang tanggal (untuk calendar view)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: z.object({
+      from: z.string().date(),
+      to: z.string().date(),
+      cabangId: z.string().uuid().optional(),
+      kategoriIbadahId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'List occurrences', ...json(successOf(z.array(z.any()))) } },
+});
 registerCrud({
   basePath: '/admin/ibadah/kategori',
   tag: 'Admin · Ibadah',

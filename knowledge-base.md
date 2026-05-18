@@ -120,12 +120,24 @@ Seed default (dari skrip `seed.ts`):
 
 **`ibadah`** (per cabang):
 - `cabang_id, kategori_ibadah_id, nama`
-- `tipe_jadwal` enum: `WEEKLY | BIWEEKLY | MONTHLY`
-- `tanggal_mulai` (kapan ibadah ini pertama kali diadakan)
-- `hari` (Minggu/Senin/dst, wajib untuk weekly/biweekly)
+- `tipe_jadwal` enum: `WEEKLY | BIWEEKLY | MONTHLY | ONCE`
+  - **WEEKLY** — setiap minggu di hari `hari` (mis. Ibadah Umum Minggu pagi)
+  - **BIWEEKLY** — setiap 2 minggu di hari `hari`
+  - **MONTHLY** — setiap bulan di tanggal-of-month dari `tanggal_mulai` (mis. tanggal 1 setiap bulan)
+  - **ONCE** — event sekali di `tanggal_mulai` (mis. KKR, ibadah Natal khusus, retret)
+- `tanggal_mulai` — kapan ibadah dimulai (untuk recurring = tanggal pertama, untuk ONCE = tanggal event)
+- `hari` (Minggu/Senin/dst, **wajib untuk WEEKLY/BIWEEKLY**, di-hide untuk MONTHLY/ONCE)
 - `jam_mulai, jam_selesai` (string HH:mm)
 - `lokasi`, `is_online` (boolean), `link_stream` (nullable, wajib jika online)
 - `deskripsi, is_active`
+
+**Calendar view & occurrence generation:**
+- Endpoint `GET /admin/ibadah/calendar?from=&to=` generate semua occurrence di rentang tanggal
+- Logic di `apps/core-api/src/lib/ibadah-occurrences.ts`:
+  - WEEKLY/BIWEEKLY: iterate by 7/14 days dari `tanggal_mulai`, hanya tanggal yang match `hari`
+  - MONTHLY: same day-of-month tiap bulan (skip kalau tanggal invalid mis. 31 Feb)
+  - ONCE: 1 date saja
+- UI di `/dashboard/ibadah` → toggle **List | Kalender**. Calendar grid 7×N dengan event chips per tanggal, klik tanggal → panel detail bawah dengan link ke detail ibadah & reservasi tanggal tsb.
 
 ### 4.4 Cluster Relasi Keluarga
 
@@ -809,6 +821,9 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 | 2026-05-18  | Reservasi: track `tanggal_ibadah` spesifik (bukan `ibadah_id` saja)          | Ibadah recurring (mingguan), perlu tahu reservasi untuk occurrence tanggal mana. Unique constraint `(jemaat, ibadah, tanggal)` cegah double-reserve |
 | 2026-05-18  | Kode reservasi: **alphanumeric 8 char** uppercase, generated di server       | 32⁸ = ~1T kombinasi, human-readable (skip ambigu I/O/1/0), gampang di-print sebagai barcode. Generate + unique check di backend, bukan UUID karena UUID terlalu panjang utk QR mobile |
 | 2026-05-18  | Mobile app **terpisah** dengan API key auth (bukan JWT user)                 | Mobile scanner = stationary device per cabang, satu device satu API key. Tidak perlu login user; cukup scan kode → POST. Audit log catat `apiKeyId` |
+| 2026-05-18  | Tambah `ONCE` ke `TipeJadwal` (bukan modul Event terpisah)                  | Ibadah satu kali (KKR, Natal khusus) cukup ditangani sebagai ibadah non-recurring. Hindari duplikasi cluster Event di awal — kalau nanti butuh field event-spesifik (kapasitas, biaya, registrasi terbuka), bisa di-promote ke modul terpisah |
+| 2026-05-18  | Calendar view = **occurrences di-generate server-side per request**         | Tidak materialize semua occurrence ke DB (akan bloat). Generate on-demand per range tanggal yang user lihat. Limit 366 hari per request. Sorting + grouping di FE |
+| 2026-05-18  | MONTHLY occurrence pakai **day-of-month dari `tanggal_mulai`**, skip kalau invalid | Mis. tanggalMulai 31 Jan → Feb tidak punya 31, skip. Tidak roll ke 1 Mar (avoid confusion). Untuk first-of-month pattern, user set tanggalMulai = tanggal 1 di bulan apa pun |
 
 ---
 

@@ -10,6 +10,8 @@ import {
   Trash2,
   Loader2,
   Calendar,
+  CalendarDays,
+  List,
   Users,
   HandHeart,
   ChevronDown,
@@ -21,11 +23,13 @@ import { apiClient } from '@/lib/api-client';
 import { FormModal } from '@/components/crud/form-modal';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { ibadahResource } from '@/lib/resources/ibadah-config';
+import { CalendarView } from '@/components/ibadah/calendar-view';
 
 interface IbadahItem {
   id: string;
   nama: string;
-  tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+  tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
+  tanggalMulai: string;
   hari: string | null;
   jamMulai: string;
   jamSelesai: string;
@@ -43,7 +47,7 @@ const HARI_LABEL: Record<string, string> = {
   KAMIS: 'Kamis', JUMAT: 'Jumat', SABTU: 'Sabtu',
 };
 const TIPE_LABEL: Record<string, string> = {
-  WEEKLY: 'Mingguan', BIWEEKLY: '2 Mingguan', MONTHLY: 'Bulanan',
+  WEEKLY: 'Mingguan', BIWEEKLY: '2 Mingguan', MONTHLY: 'Bulanan', ONCE: 'Sekali',
 };
 
 export default function IbadahPage() {
@@ -51,6 +55,7 @@ export default function IbadahPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<IbadahItem | null>(null);
   const [deleting, setDeleting] = useState<IbadahItem | null>(null);
+  const [view, setView] = useState<'list' | 'calendar'>('list');
 
   const listQ = useQuery({
     queryKey: ['ibadah', 'all'],
@@ -116,19 +121,46 @@ export default function IbadahPage() {
             Ibadah
           </h1>
           <p className="text-neutral-500 mt-1">
-            Jadwal ibadah dikelompokkan per kategori. Klik nama untuk detail & manage pelayan.
+            {view === 'list'
+              ? 'Jadwal ibadah dikelompokkan per kategori.'
+              : 'Tampilan kalender — recurring occurrences di-generate otomatis.'}
           </p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah Ibadah
-        </button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="inline-flex border border-neutral-300 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setView('list')}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 ${
+                view === 'list' ? 'bg-brand-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              List
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 border-l border-neutral-300 ${
+                view === 'calendar' ? 'bg-brand-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              Kalender
+            </button>
+          </div>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Ibadah
+          </button>
+        </div>
       </div>
 
-      {listQ.isLoading ? (
+      {view === 'calendar' ? (
+        <CalendarView />
+      ) : listQ.isLoading ? (
         <div className="bg-white border border-neutral-200 rounded-xl p-12 text-center">
           <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
         </div>
@@ -248,7 +280,11 @@ function KategoriSection({
                   <td className="px-4 py-2.5 text-neutral-700">{i.cabang?.nama ?? '-'}</td>
                   <td className="px-4 py-2.5 text-neutral-700">
                     {TIPE_LABEL[i.tipeJadwal] ?? i.tipeJadwal}
-                    {i.hari && ` · ${HARI_LABEL[i.hari] ?? i.hari}`}
+                    {i.tipeJadwal === 'ONCE'
+                      ? ` · ${new Date(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                      : i.hari
+                        ? ` · ${HARI_LABEL[i.hari] ?? i.hari}`
+                        : ''}
                   </td>
                   <td className="px-4 py-2.5 text-neutral-700 tabular-nums">
                     {i.jamMulai}–{i.jamSelesai}

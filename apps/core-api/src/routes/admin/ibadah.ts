@@ -7,8 +7,9 @@ import {
   updateKategoriIbadahSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { NotFound } from '../../lib/errors.js';
+import { NotFound, BadRequest } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 
 export const ibadahRouter = Router();
 
@@ -56,6 +57,84 @@ ibadahRouter.delete('/kategori/:id', async (req, res) => {
   await prisma.kategoriIbadah.delete({ where: { id: req.params.id } });
   audit(req, { action: 'DELETE', resource: 'kategori_ibadah', resourceId: before.id, resourceLabel: before.nama, before });
   res.status(204).end();
+});
+
+// ===== Calendar — occurrences di rentang tanggal =====
+ibadahRouter.get('/calendar', async (req, res) => {
+  const fromStr = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const toStr = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (!fromStr || !toStr) throw BadRequest('Query `from` dan `to` (YYYY-MM-DD) wajib');
+  const from = new Date(fromStr);
+  const to = new Date(toStr);
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    throw BadRequest('Format tanggal harus YYYY-MM-DD');
+  }
+  // Limit range max 366 hari supaya tidak overload
+  const DAY = 1000 * 60 * 60 * 24;
+  if ((to.getTime() - from.getTime()) / DAY > 366) {
+    throw BadRequest('Rentang max 366 hari');
+  }
+  // End-of-day untuk `to` supaya inclusive
+  to.setHours(23, 59, 59, 999);
+
+  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
+  const kategoriIbadahId = typeof req.query.kategoriIbadahId === 'string' ? req.query.kategoriIbadahId : undefined;
+
+  const where: any = { isActive: true };
+  if (cabangId) where.cabangId = cabangId;
+  if (kategoriIbadahId) where.kategoriIbadahId = kategoriIbadahId;
+
+  const ibadahs = await prisma.ibadah.findMany({
+    where,
+    include: {
+      cabang: { select: { id: true, nama: true } },
+      kategoriIbadah: { select: { id: true, nama: true } },
+    },
+  });
+
+  // Generate occurrences per ibadah, flatten ke array tanggal+ibadah
+  const events: {
+    ibadahId: string;
+    tanggal: string; // ISO YYYY-MM-DD
+    nama: string;
+    jamMulai: string;
+    jamSelesai: string;
+    cabang: { id: string; nama: string };
+    kategoriIbadah: { id: string; nama: string };
+    tipeJadwal: string;
+    lokasi: string | null;
+    isOnline: boolean;
+  }[] = [];
+
+  for (const i of ibadahs) {
+    const dates = generateOccurrences(
+      { tipeJadwal: i.tipeJadwal, tanggalMulai: i.tanggalMulai, hari: i.hari },
+      from,
+      to,
+    );
+    for (const d of dates) {
+      events.push({
+        ibadahId: i.id,
+        tanggal: d.toISOString().slice(0, 10),
+        nama: i.nama,
+        jamMulai: i.jamMulai,
+        jamSelesai: i.jamSelesai,
+        cabang: i.cabang!,
+        kategoriIbadah: i.kategoriIbadah!,
+        tipeJadwal: i.tipeJadwal,
+        lokasi: i.lokasi,
+        isOnline: i.isOnline,
+      });
+    }
+  }
+
+  // Sort by tanggal + jam
+  events.sort((a, b) => {
+    if (a.tanggal !== b.tanggal) return a.tanggal.localeCompare(b.tanggal);
+    return a.jamMulai.localeCompare(b.jamMulai);
+  });
+
+  res.json({ success: true, data: events, meta: { from: fromStr, to: toStr, count: events.length } });
 });
 
 // ===== Ibadah =====

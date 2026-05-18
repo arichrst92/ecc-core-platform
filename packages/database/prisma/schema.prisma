@@ -227,6 +227,7 @@ enum TipeJadwal {
   WEEKLY
   BIWEEKLY
   MONTHLY
+  ONCE     // Ibadah sekali (event one-time, mis. KKR, ibadah Natal khusus)
 
   @@map("tipe_jadwal")
 }

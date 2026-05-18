@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
-export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']);
+export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY', 'ONCE']);
 export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']);
 
 // ===== Kategori Ibadah =====
@@ -37,8 +37,10 @@ export const createIbadahSchema = z
     deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
-    (d) => (d.tipeJadwal === 'MONTHLY' ? true : !!d.hari),
-    { message: 'Field hari wajib untuk WEEKLY/BIWEEKLY', path: ['hari'] },
+    // Hari hanya wajib untuk recurring weekly/biweekly.
+    // MONTHLY pakai day-of-month dari tanggalMulai, ONCE = sekali di tanggal_mulai.
+    (d) => (d.tipeJadwal === 'WEEKLY' || d.tipeJadwal === 'BIWEEKLY' ? !!d.hari : true),
+    { message: 'Field hari wajib untuk jadwal Mingguan / Dua Mingguan', path: ['hari'] },
   )
   .refine(
     (d) => (!d.isOnline ? true : !!d.linkStream),

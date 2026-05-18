@@ -9,7 +9,7 @@ interface Ibadah extends Record<string, unknown> {
   cabangId: string;
   kategoriIbadahId: string;
   nama: string;
-  tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+  tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
   tanggalMulai: string;
   hari: string | null;
   jamMulai: string;
@@ -36,6 +36,7 @@ const TIPE_OPTIONS = [
   { value: 'WEEKLY', label: 'Mingguan' },
   { value: 'BIWEEKLY', label: 'Dua Mingguan' },
   { value: 'MONTHLY', label: 'Bulanan' },
+  { value: 'ONCE', label: 'Sekali (Event)' },
 ];
 
 export const ibadahResource: ResourceConfig<Ibadah> = {
@@ -67,6 +68,9 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       width: '180px',
       render: (_v, row) => {
         const tipe = TIPE_OPTIONS.find((t) => t.value === row.tipeJadwal)?.label ?? row.tipeJadwal;
+        if (row.tipeJadwal === 'ONCE') {
+          return `${tipe} · ${dateLocal(row.tanggalMulai)}`;
+        }
         const hari = row.hari ? HARI_OPTIONS.find((h) => h.value === row.hari)?.label : null;
         return `${tipe}${hari ? ` · ${hari}` : ''}`;
       },
@@ -109,9 +113,17 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       type: 'select',
       options: HARI_OPTIONS,
       helperText: 'Wajib untuk jadwal Mingguan / Dua Mingguan.',
-      showIf: (v) => v.tipeJadwal !== 'MONTHLY',
+      // Hide untuk MONTHLY (pakai tanggal-of-month) dan ONCE (pakai tanggal spesifik)
+      showIf: (v) => v.tipeJadwal === 'WEEKLY' || v.tipeJadwal === 'BIWEEKLY',
     },
-    { name: 'tanggalMulai', label: 'Tanggal Mulai', type: 'date', required: true, helperText: 'Tanggal pertama ibadah ini diadakan.' },
+    {
+      name: 'tanggalMulai',
+      label: 'Tanggal',
+      type: 'date',
+      required: true,
+      helperText:
+        'Untuk recurring: tanggal pertama ibadah dimulai. Untuk Sekali (ONCE): tanggal event berlangsung.',
+    },
     { name: 'jamMulai', label: 'Jam Mulai', type: 'time', required: true, placeholder: '08:00' },
     { name: 'jamSelesai', label: 'Jam Selesai', type: 'time', required: true, placeholder: '10:00' },
     { name: 'lokasi', label: 'Lokasi', type: 'text', placeholder: 'Sanctuary Lt. 2' },

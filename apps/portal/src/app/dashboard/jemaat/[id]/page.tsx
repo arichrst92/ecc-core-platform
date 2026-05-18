@@ -17,6 +17,7 @@ import {
   Trash2,
   CheckCircle2,
   Clock,
+  Heart,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -275,6 +276,9 @@ export default function JemaatDetailPage() {
         </div>
       </section>
 
+      {/* Relasi Keluarga section */}
+      <RelasiSection jemaatId={jemaatId} />
+
       {/* Assign modal */}
       {assignOpen && (
         <AssignPelayananModal
@@ -489,6 +493,323 @@ function AssignPelayananModal({
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
             >
               {assignMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Tambah
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============== Relasi Keluarga Section ==============
+
+interface RelasiItem {
+  id: string;
+  keterangan: string | null;
+  jemaatTerkait: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
+  tipeRelasi: { id: string; nama: string };
+}
+
+interface TipeRelasi {
+  id: string;
+  nama: string;
+}
+
+interface JemaatLite {
+  id: string;
+  namaLengkap: string;
+  noHp: string | null;
+}
+
+function RelasiSection({ jemaatId }: { jemaatId: string }) {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleting, setDeleting] = useState<RelasiItem | null>(null);
+  const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
+
+  const relasiQ = useQuery({
+    queryKey: ['relasi-jemaat', jemaatId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RelasiItem[] }>(
+        `/admin/keluarga/relasi/jemaat/${jemaatId}`,
+      );
+      return res.data.data;
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => apiClient.delete(`/admin/keluarga/relasi/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['relasi-jemaat', jemaatId] });
+      toast.success('Relasi dihapus');
+      setDeleting(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  const relasi = relasiQ.data ?? [];
+
+  return (
+    <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div>
+          <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+            <Heart className="w-4 h-4 text-pink-500" />
+            Relasi Keluarga
+          </h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Hubungan kekeluargaan (suami/istri/anak/orangtua/dll) ke jemaat lain.
+          </p>
+        </div>
+        <button
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg"
+        >
+          <Plus className="w-4 h-4" />
+          Tambah Relasi
+        </button>
+      </div>
+
+      <div className="p-6">
+        {relasiQ.isLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+          </div>
+        ) : relasi.length === 0 ? (
+          <p className="text-sm text-neutral-400 italic text-center py-3">
+            Belum ada relasi keluarga tercatat.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {relasi.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50"
+              >
+                {r.jemaatTerkait.fotoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`${apiBase}${r.jemaatTerkait.fotoUrl}`}
+                    alt={r.jemaatTerkait.namaLengkap}
+                    className="w-9 h-9 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+                    <UserIcon className="w-4 h-4" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/dashboard/jemaat/${r.jemaatTerkait.id}`}
+                    className="font-medium text-neutral-900 hover:text-brand-600 hover:underline text-sm truncate block"
+                  >
+                    {r.jemaatTerkait.namaLengkap}
+                  </Link>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="inline-block px-2 py-0.5 bg-pink-50 text-pink-700 text-xs rounded">
+                      {r.tipeRelasi.nama}
+                    </span>
+                    {r.keterangan && (
+                      <span className="text-xs text-neutral-500 italic">{r.keterangan}</span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDeleting(r)}
+                  className="p-1.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600 shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {addOpen && (
+        <AddRelasiModal
+          jemaatId={jemaatId}
+          onClose={() => setAddOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['relasi-jemaat', jemaatId] });
+            setAddOpen(false);
+          }}
+        />
+      )}
+
+      <ConfirmDelete
+        open={!!deleting}
+        loading={deleteMut.isPending}
+        onClose={() => setDeleting(null)}
+        title="Hapus relasi keluarga?"
+        itemName={
+          deleting
+            ? `${deleting.tipeRelasi.nama}: ${deleting.jemaatTerkait.namaLengkap}`
+            : undefined
+        }
+        onConfirm={() => deleting && deleteMut.mutate(deleting.id)}
+      />
+    </section>
+  );
+}
+
+function AddRelasiModal({
+  jemaatId,
+  onClose,
+  onSuccess,
+}: {
+  jemaatId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [jemaatTerkaitId, setJemaatTerkaitId] = useState('');
+  const [tipeRelasiId, setTipeRelasiId] = useState('');
+  const [keterangan, setKeterangan] = useState('');
+
+  const tipeRelasiQ = useQuery({
+    queryKey: ['tipe-relasi', 'options'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: TipeRelasi[] }>('/admin/keluarga/tipe', {
+        params: { limit: 100 },
+      });
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const searchQ = useQuery({
+    queryKey: ['jemaat-search', search],
+    enabled: search.length >= 2,
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: JemaatLite[] }>('/admin/jemaat', {
+        params: { search, limit: 15 },
+      });
+      // Filter out current jemaat (jangan relasi ke diri sendiri)
+      return res.data.data.filter((j) => j.id !== jemaatId);
+    },
+  });
+
+  const createMut = useMutation({
+    mutationFn: async () =>
+      apiClient.post('/admin/keluarga/relasi', {
+        jemaatId,
+        jemaatTerkaitId,
+        tipeRelasiId,
+        keterangan: keterangan || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Relasi ditambah');
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  const selected = (searchQ.data ?? []).find((j) => j.id === jemaatTerkaitId);
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900">Tambah Relasi Keluarga</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Tip: relasi <em>satu arah</em> — A → suami B berarti B adalah suami dari A.
+            </p>
+          </div>
+          <div className="p-6 space-y-4">
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Tipe Relasi</span>
+              <select
+                value={tipeRelasiId}
+                onChange={(e) => setTipeRelasiId(e.target.value)}
+                disabled={tipeRelasiQ.isLoading}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">— pilih tipe —</option>
+                {tipeRelasiQ.data?.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nama}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Cari jemaat terkait</span>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setJemaatTerkaitId('');
+                }}
+                placeholder="Ketik nama (min 2 karakter)"
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+
+            {search.length >= 2 && (
+              <div className="border border-neutral-200 rounded-lg max-h-40 overflow-y-auto">
+                {searchQ.isLoading ? (
+                  <div className="p-3 text-center text-sm text-neutral-400">
+                    <Loader2 className="w-4 h-4 mx-auto animate-spin" />
+                  </div>
+                ) : (searchQ.data ?? []).length === 0 ? (
+                  <div className="p-3 text-center text-sm text-neutral-400">
+                    Tidak ada jemaat ditemukan
+                  </div>
+                ) : (
+                  (searchQ.data ?? []).map((j) => (
+                    <button
+                      key={j.id}
+                      type="button"
+                      onClick={() => setJemaatTerkaitId(j.id)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-neutral-100 last:border-0 ${
+                        jemaatTerkaitId === j.id ? 'bg-brand-50 text-brand-700 font-medium' : ''
+                      }`}
+                    >
+                      <div>{j.namaLengkap}</div>
+                      {j.noHp && <div className="text-xs text-neutral-500">{j.noHp}</div>}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {selected && (
+              <div className="text-xs px-3 py-2 bg-green-50 text-green-800 rounded-lg">
+                ✓ Terpilih: <strong>{selected.namaLengkap}</strong>
+              </div>
+            )}
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Keterangan (opsional)</span>
+              <input
+                type="text"
+                value={keterangan}
+                onChange={(e) => setKeterangan(e.target.value)}
+                placeholder="Mis. menikah 2010"
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <button
+              onClick={onClose}
+              disabled={createMut.isPending}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={!jemaatTerkaitId || !tipeRelasiId || createMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
+            >
+              {createMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Tambah
             </button>
           </div>

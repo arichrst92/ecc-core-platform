@@ -231,7 +231,13 @@ function PoweredByIdea() {
   return (
     <div className="mt-8 flex items-center justify-center gap-2 opacity-60">
       <span className="text-xs text-neutral-500">Powered by</span>
-      <Image src="/logo-idea.webp" alt="IDEA" width={40} height={16} />
+      <Image
+        src="/logo-idea.webp"
+        alt="IDEA"
+        width={40}
+        height={16}
+        style={{ width: 'auto', height: '16px' }}
+      />
     </div>
   );
 }

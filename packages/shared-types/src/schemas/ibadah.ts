@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema } from './common.js';
+import { uuidSchema, emptyToUndefined } from './common.js';
 
 export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']);
 export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']);
@@ -7,10 +7,15 @@ export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KA
 // ===== Kategori Ibadah =====
 export const createKategoriIbadahSchema = z.object({
   nama: z.string().trim().min(2).max(100),
-  deskripsi: z.string().trim().optional(),
+  deskripsi: emptyToUndefined(z.string().trim()),
 });
 export type CreateKategoriIbadahInput = z.infer<typeof createKategoriIbadahSchema>;
-export const updateKategoriIbadahSchema = createKategoriIbadahSchema.partial().extend({ isActive: z.boolean().optional() });
+
+export const updateKategoriIbadahSchema = z.object({
+  nama: z.string().trim().min(2).max(100).optional(),
+  deskripsi: emptyToUndefined(z.string().trim()),
+  isActive: z.boolean().optional(),
+});
 export type UpdateKategoriIbadahInput = z.infer<typeof updateKategoriIbadahSchema>;
 
 // ===== Ibadah =====
@@ -23,13 +28,13 @@ export const createIbadahSchema = z
     nama: z.string().trim().min(2).max(255),
     tipeJadwal: tipeJadwalSchema,
     tanggalMulai: z.string().date(),
-    hari: hariMingguSchema.optional().nullable(),
+    hari: emptyToUndefined(hariMingguSchema),
     jamMulai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     jamSelesai: z.string().regex(jamRegex, 'Format jam HH:mm'),
-    lokasi: z.string().trim().optional(),
+    lokasi: emptyToUndefined(z.string().trim()),
     isOnline: z.boolean().default(false),
-    linkStream: z.string().url().optional().nullable(),
-    deskripsi: z.string().trim().optional(),
+    linkStream: emptyToUndefined(z.string().url()),
+    deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
     (d) => (d.tipeJadwal === 'MONTHLY' ? true : !!d.hari),
@@ -46,14 +51,14 @@ export const updateIbadahSchema = z.object({
   kategoriIbadahId: uuidSchema.optional(),
   nama: z.string().trim().min(2).max(255).optional(),
   tipeJadwal: tipeJadwalSchema.optional(),
-  tanggalMulai: z.string().date().optional(),
-  hari: hariMingguSchema.optional().nullable(),
-  jamMulai: z.string().regex(jamRegex).optional(),
-  jamSelesai: z.string().regex(jamRegex).optional(),
-  lokasi: z.string().trim().optional(),
+  tanggalMulai: emptyToUndefined(z.string().date()),
+  hari: emptyToUndefined(hariMingguSchema),
+  jamMulai: emptyToUndefined(z.string().regex(jamRegex)),
+  jamSelesai: emptyToUndefined(z.string().regex(jamRegex)),
+  lokasi: emptyToUndefined(z.string().trim()),
   isOnline: z.boolean().optional(),
-  linkStream: z.string().url().optional().nullable(),
-  deskripsi: z.string().trim().optional(),
+  linkStream: emptyToUndefined(z.string().url()),
+  deskripsi: emptyToUndefined(z.string().trim()),
   isActive: z.boolean().optional(),
 });
 export type UpdateIbadahInput = z.infer<typeof updateIbadahSchema>;

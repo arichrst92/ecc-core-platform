@@ -64,16 +64,28 @@ ibadahRouter.get('/', async (req, res) => {
   const where = q.search
     ? { nama: { contains: q.search, mode: 'insensitive' as const } }
     : {};
-  const [data, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.ibadah.findMany({
       where,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
-      orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
-      include: { cabang: { select: { id: true, nama: true } }, kategoriIbadah: true },
+      orderBy: [{ kategoriIbadah: { nama: 'asc' } }, { [q.sortBy ?? 'nama']: q.sortOrder }],
+      include: {
+        cabang: { select: { id: true, nama: true } },
+        kategoriIbadah: { select: { id: true, nama: true } },
+        // Nested count untuk hitung total petugas: sum dari semua ibadahPelayanan link
+        ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },
+      },
     }),
     prisma.ibadah.count({ where }),
   ]);
+  // Flatten: petugasCount = sum petugas dari semua linked pelayanan
+  const data = rows.map((i) => {
+    const { ibadahPelayanan, ...rest } = i;
+    const petugasCount = ibadahPelayanan.reduce((sum, ip) => sum + ip._count.petugas, 0);
+    const pelayananCount = ibadahPelayanan.length;
+    return { ...rest, petugasCount, pelayananCount };
+  });
   res.json({
     success: true,
     data,

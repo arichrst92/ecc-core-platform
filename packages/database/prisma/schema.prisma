@@ -85,6 +85,7 @@ model Jemaat {
   user                    User?
   jemaatPelayanan         JemaatPelayanan[]
   ibadahPelayananPetugas  IbadahPelayananPetugas[]
+  reservasi               Reservasi[]
 
   @@index([cabangId])
   @@index([noHp])
@@ -215,6 +216,7 @@ model Ibadah {
   cabang           CabangGereja      @relation(fields: [cabangId], references: [id], onDelete: Restrict)
   kategoriIbadah   KategoriIbadah    @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
   ibadahPelayanan  IbadahPelayanan[]
+  reservasi        Reservasi[]
 
   @@index([cabangId])
   @@index([kategoriIbadahId])
@@ -504,6 +506,60 @@ model IbadahPelayanan {
   @@index([ibadahId])
   @@index([pelayananId])
   @@map("ibadah_pelayanan")
+}
+
+// ============================================================
+// 8. KEHADIRAN / RESERVASI IBADAH
+// ============================================================
+// Reservasi jemaat untuk hadir di ibadah pada tanggal tertentu.
+// Karena ibadah recurring (mis. Ibadah Pemuda setiap Sabtu), kita track
+// `tanggal_ibadah` spesifik per reservasi.
+//
+// Workflow:
+//   1. Jemaat reservasi → status RESERVE → dapat kode (UUID short / random)
+//   2. Saat hadir → mobile scanner scan kode → status JOIN, set joined_at
+//   3. Kalau batal → status CANCEL, set cancelled_at
+//
+// Constraint: unique(jemaat_id, ibadah_id, tanggal_ibadah) supaya tidak bisa
+// double-reserve untuk ibadah+tanggal yang sama.
+// ============================================================
+
+model Reservasi {
+  id              String          @id @default(uuid()) @db.Uuid
+  jemaatId        String          @map("jemaat_id") @db.Uuid
+  ibadahId        String          @map("ibadah_id") @db.Uuid
+  // Tanggal occurrence ibadah (penting karena ibadah recurring)
+  tanggalIbadah   DateTime        @map("tanggal_ibadah") @db.Date
+  status          ReservasiStatus @default(RESERVE)
+  // Kode unik untuk barcode/QR — generate alphanumeric pendek (mis. "R7K2X9P")
+  kode            String          @unique @db.VarChar(20)
+  // Timestamps perubahan status
+  reservedAt      DateTime        @default(now()) @map("reserved_at")
+  joinedAt        DateTime?       @map("joined_at")
+  cancelledAt     DateTime?       @map("cancelled_at")
+  catatan         String?         @db.Text
+  // Metadata: siapa yang trigger checkin (mobile app scan, manual admin, dll)
+  checkedInBy     String?         @map("checked_in_by") @db.Uuid  // userId yang scan
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  ibadah Ibadah @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
+
+  @@unique([jemaatId, ibadahId, tanggalIbadah])
+  @@index([ibadahId, tanggalIbadah])
+  @@index([jemaatId])
+  @@index([status])
+  @@index([kode])
+  @@map("reservasi")
+}
+
+enum ReservasiStatus {
+  RESERVE
+  JOIN
+  CANCEL
+
+  @@map("reservasi_status")
 }
 
 // 3-way junction: Ibadah × Pelayanan × Jemaat — siapa bertugas di pelayanan

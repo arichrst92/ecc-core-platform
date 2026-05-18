@@ -64,6 +64,12 @@ export function createApp(): Express {
       maxAge: '7d',
       immutable: false,
       fallthrough: true,
+      setHeaders: (res) => {
+        // Allow cross-origin <img> dari portal (port 3100 ↔ core-api 4100).
+        // Helmet default Cross-Origin-Resource-Policy=same-origin akan blocked.
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      },
     }),
   );
 

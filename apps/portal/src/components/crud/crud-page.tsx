@@ -12,13 +12,24 @@ import { useDebounce } from '@/lib/use-debounce';
 
 interface Props<T extends { id: string }> {
   config: ResourceConfig<T>;
+  /**
+   * Extra query params yang di-merge ke list endpoint (mis. { cabangId, sinodeId }).
+   * Berguna untuk pre-filter berdasarkan URL params.
+   */
+  extraParams?: Record<string, string | undefined>;
+  /** Banner kecil di atas tabel untuk indicate filter aktif. */
+  filterBanner?: React.ReactNode;
 }
 
 /**
  * Generic CRUD page yang handle semua master data sederhana.
  * Dua mode: pagination klasik (default) atau virtual scroll (config.virtualScroll = true).
  */
-export function CrudPage<T extends { id: string } & Record<string, unknown>>({ config }: Props<T>) {
+export function CrudPage<T extends { id: string } & Record<string, unknown>>({
+  config,
+  extraParams,
+  filterBanner,
+}: Props<T>) {
   const isVirtual = !!config.virtualScroll;
 
   const [page, setPage] = useState(1);
@@ -28,6 +39,9 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({ c
   const [deleting, setDeleting] = useState<T | null>(null);
 
   const debouncedSearch = useDebounce(search, 300);
+  const cleanExtra = Object.fromEntries(
+    Object.entries(extraParams ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+  ) as Record<string, string>;
 
   // Paginated mode — disabled saat virtual scroll aktif
   const list = useList<T>(
@@ -39,6 +53,7 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({ c
       search: debouncedSearch || undefined,
       sortBy: config.defaultSort?.field,
       sortOrder: config.defaultSort?.order,
+      ...cleanExtra,
     },
     !isVirtual,
   );
@@ -52,6 +67,7 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({ c
       search: debouncedSearch || undefined,
       sortBy: config.defaultSort?.field,
       sortOrder: config.defaultSort?.order,
+      ...cleanExtra,
     },
     isVirtual,
   );
@@ -80,6 +96,8 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({ c
           Tambah {config.label}
         </button>
       </div>
+
+      {filterBanner && <div className="mb-4">{filterBanner}</div>}
 
       {config.searchable !== false && (
         <div className="mb-4 flex items-center gap-2 max-w-md">

@@ -1,8 +1,309 @@
 'use client';
 
-import { CrudPage } from '@/components/crud/crud-page';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Plus,
+  Eye,
+  Pencil,
+  Trash2,
+  Loader2,
+  Calendar,
+  Users,
+  HandHeart,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
+import { FormModal } from '@/components/crud/form-modal';
+import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { ibadahResource } from '@/lib/resources/ibadah-config';
 
+interface IbadahItem {
+  id: string;
+  nama: string;
+  tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+  hari: string | null;
+  jamMulai: string;
+  jamSelesai: string;
+  lokasi: string | null;
+  isOnline: boolean;
+  isActive: boolean;
+  cabang?: { id: string; nama: string };
+  kategoriIbadah?: { id: string; nama: string };
+  petugasCount?: number;
+  pelayananCount?: number;
+}
+
+const HARI_LABEL: Record<string, string> = {
+  MINGGU: 'Minggu', SENIN: 'Senin', SELASA: 'Selasa', RABU: 'Rabu',
+  KAMIS: 'Kamis', JUMAT: 'Jumat', SABTU: 'Sabtu',
+};
+const TIPE_LABEL: Record<string, string> = {
+  WEEKLY: 'Mingguan', BIWEEKLY: '2 Mingguan', MONTHLY: 'Bulanan',
+};
+
 export default function IbadahPage() {
-  return <CrudPage config={ibadahResource} />;
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<IbadahItem | null>(null);
+  const [deleting, setDeleting] = useState<IbadahItem | null>(null);
+
+  const listQ = useQuery({
+    queryKey: ['ibadah', 'all'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: IbadahItem[] }>('/admin/ibadah', {
+        params: { limit: 200 },
+      });
+      return res.data.data;
+    },
+  });
+
+  const items = listQ.data ?? [];
+
+  // Group by kategoriIbadah.nama
+  const grouped = useMemo(() => {
+    const map = new Map<string, IbadahItem[]>();
+    for (const i of items) {
+      const key = i.kategoriIbadah?.nama ?? 'Tanpa Kategori';
+      const arr = map.get(key) ?? [];
+      arr.push(i);
+      map.set(key, arr);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [items]);
+
+  const createMut = useMutation({
+    mutationFn: async (input: Record<string, unknown>) => apiClient.post('/admin/ibadah', input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ibadah'] });
+      toast.success('Ibadah ditambah');
+      setCreateOpen(false);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: Record<string, unknown> }) =>
+      apiClient.patch(`/admin/ibadah/${id}`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ibadah'] });
+      toast.success('Perubahan tersimpan');
+      setEditing(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => apiClient.delete(`/admin/ibadah/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ibadah'] });
+      toast.success('Ibadah dihapus');
+      setDeleting(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+            <Calendar className="w-6 h-6" />
+            Ibadah
+          </h1>
+          <p className="text-neutral-500 mt-1">
+            Jadwal ibadah dikelompokkan per kategori. Klik nama untuk detail & manage pelayan.
+          </p>
+        </div>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
+        >
+          <Plus className="w-4 h-4" />
+          Tambah Ibadah
+        </button>
+      </div>
+
+      {listQ.isLoading ? (
+        <div className="bg-white border border-neutral-200 rounded-xl p-12 text-center">
+          <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-white border border-neutral-200 rounded-xl p-12 text-center text-neutral-400">
+          Belum ada ibadah. Klik <strong>Tambah Ibadah</strong> di atas.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(([kategori, list]) => (
+            <KategoriSection
+              key={kategori}
+              kategori={kategori}
+              items={list}
+              onEdit={setEditing}
+              onDelete={setDeleting}
+            />
+          ))}
+        </div>
+      )}
+
+      <FormModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Tambah Ibadah"
+        schema={ibadahResource.createSchema}
+        fields={ibadahResource.fields}
+        defaultValues={Object.fromEntries(
+          ibadahResource.fields
+            .filter((f) => f.defaultValue !== undefined)
+            .map((f) => [f.name, f.defaultValue]),
+        )}
+        loading={createMut.isPending}
+        onSubmit={async (v) => createMut.mutateAsync(v as Record<string, unknown>)}
+      />
+      <FormModal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit Ibadah"
+        schema={ibadahResource.updateSchema}
+        fields={ibadahResource.fields}
+        defaultValues={editing ?? undefined}
+        isEdit
+        loading={updateMut.isPending}
+        onSubmit={async (v) => {
+          if (!editing) return;
+          await updateMut.mutateAsync({ id: editing.id, input: v as Record<string, unknown> });
+        }}
+      />
+      <ConfirmDelete
+        open={!!deleting}
+        loading={deleteMut.isPending}
+        onClose={() => setDeleting(null)}
+        itemName={deleting?.nama}
+        onConfirm={() => deleting && deleteMut.mutate(deleting.id)}
+      />
+    </div>
+  );
+}
+
+function KategoriSection({
+  kategori,
+  items,
+  onEdit,
+  onDelete,
+}: {
+  kategori: string;
+  items: IbadahItem[];
+  onEdit: (i: IbadahItem) => void;
+  onDelete: (i: IbadahItem) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 bg-neutral-50 hover:bg-neutral-100 border-b border-neutral-100"
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-neutral-500" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-neutral-500" />
+          )}
+          <Layers className="w-4 h-4 text-brand-500" />
+          <span className="font-semibold text-neutral-900">{kategori}</span>
+          <span className="text-xs text-neutral-500 ml-1">({items.length})</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">Nama Ibadah</th>
+                <th className="px-4 py-2 text-left font-medium" style={{ width: '140px' }}>Cabang</th>
+                <th className="px-4 py-2 text-left font-medium" style={{ width: '170px' }}>Jadwal</th>
+                <th className="px-4 py-2 text-left font-medium" style={{ width: '110px' }}>Jam</th>
+                <th className="px-4 py-2 text-center font-medium" style={{ width: '110px' }}>Pelayan</th>
+                <th className="px-4 py-2 text-center font-medium" style={{ width: '80px' }}>Status</th>
+                <th className="px-4 py-2 text-right font-medium" style={{ width: '90px' }}></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {items.map((i) => (
+                <tr key={i.id} className="hover:bg-neutral-50">
+                  <td className="px-4 py-2.5">
+                    <Link
+                      href={`/dashboard/ibadah/${i.id}`}
+                      className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+                    >
+                      <Eye className="w-3.5 h-3.5 shrink-0" />
+                      {i.nama}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-neutral-700">{i.cabang?.nama ?? '-'}</td>
+                  <td className="px-4 py-2.5 text-neutral-700">
+                    {TIPE_LABEL[i.tipeJadwal] ?? i.tipeJadwal}
+                    {i.hari && ` · ${HARI_LABEL[i.hari] ?? i.hari}`}
+                  </td>
+                  <td className="px-4 py-2.5 text-neutral-700 tabular-nums">
+                    {i.jamMulai}–{i.jamSelesai}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <Link
+                      href={`/dashboard/ibadah/${i.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs"
+                      title={`${i.petugasCount ?? 0} petugas terdaftar di ${i.pelayananCount ?? 0} pelayanan`}
+                    >
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-700 rounded">
+                        <Users className="w-3 h-3" />
+                        {i.petugasCount ?? 0}
+                      </span>
+                      <span className="text-neutral-400 inline-flex items-center gap-0.5">
+                        / <HandHeart className="w-3 h-3" />
+                        {i.pelayananCount ?? 0}
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    {i.isActive ? (
+                      <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                        Aktif
+                      </span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-neutral-100 text-neutral-500">
+                        Nonaktif
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => onEdit(i)}
+                        className="p-1.5 rounded hover:bg-brand-50 text-neutral-600 hover:text-brand-600"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(i)}
+                        className="p-1.5 rounded hover:bg-red-50 text-neutral-600 hover:text-red-600"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Plus, Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Loader2, Pencil, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
@@ -25,11 +25,16 @@ interface Role {
   subRoles: SubRole[];
 }
 
-type DeletingTarget = { kind: 'role' | 'sub-role' | 'sub-role-status'; id: string; label: string } | null;
+type Kind = 'role' | 'sub-role' | 'sub-role-status';
+type DeletingTarget = { kind: Kind; id: string; label: string } | null;
+type EditingTarget =
+  | { kind: Kind; id: string; nama: string; deskripsi: string | null }
+  | null;
 
 export default function RolePage() {
   const qc = useQueryClient();
   const [deleting, setDeleting] = useState<DeletingTarget>(null);
+  const [editing, setEditing] = useState<EditingTarget>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['role', 'tree'],
@@ -54,9 +59,7 @@ export default function RolePage() {
       toast.success('Berhasil dihapus');
       setDeleting(null);
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error?.message ?? 'Gagal menghapus');
-    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menghapus'),
   });
 
   const createRole = useMutation({
@@ -66,7 +69,6 @@ export default function RolePage() {
       toast.success('Role ditambah');
     },
   });
-
   const createSubRole = useMutation({
     mutationFn: async ({ roleId, nama }: { roleId: string; nama: string }) =>
       apiClient.post('/admin/role/sub-role', { roleId, nama }),
@@ -75,7 +77,6 @@ export default function RolePage() {
       toast.success('Sub-role ditambah');
     },
   });
-
   const createStatus = useMutation({
     mutationFn: async ({ subRoleId, nama }: { subRoleId: string; nama: string }) =>
       apiClient.post('/admin/role/sub-role-status', { subRoleId, nama }),
@@ -91,7 +92,7 @@ export default function RolePage() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Master Role, Sub-Role & Status</h1>
           <p className="text-neutral-500 mt-1">
-            Klasifikasi peran jemaat — 3 level: Role → Sub-Role → Status (opsional).
+            Klasifikasi peran jemaat — 3 level: Role → Sub-Role → Status (opsional). Klik nama untuk edit.
           </p>
         </div>
         <AddInline
@@ -110,13 +111,19 @@ export default function RolePage() {
           {data?.map((role) => (
             <div key={role.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 bg-brand-50/50 border-b border-neutral-100">
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setEditing({ kind: 'role', id: role.id, nama: role.nama, deskripsi: role.deskripsi })
+                  }
+                  className="flex items-center gap-2 text-left hover:bg-brand-100/50 px-1.5 py-0.5 rounded transition group"
+                >
                   <ChevronRight className="w-4 h-4 text-brand-600" />
+                  <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 transition" />
                   <h3 className="font-semibold text-neutral-900">{role.nama}</h3>
                   {role.deskripsi && (
                     <span className="text-xs text-neutral-500">— {role.deskripsi}</span>
                   )}
-                </div>
+                </button>
                 <button
                   onClick={() => setDeleting({ kind: 'role', id: role.id, label: role.nama })}
                   className="p-1.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600"
@@ -129,12 +136,23 @@ export default function RolePage() {
                 {role.subRoles.map((sr) => (
                   <div key={sr.id} className="border border-neutral-100 rounded-lg">
                     <div className="flex items-center justify-between px-4 py-2.5 bg-neutral-50">
-                      <div>
+                      <button
+                        onClick={() =>
+                          setEditing({
+                            kind: 'sub-role',
+                            id: sr.id,
+                            nama: sr.nama,
+                            deskripsi: sr.deskripsi,
+                          })
+                        }
+                        className="flex items-center gap-1.5 text-left hover:bg-neutral-100 px-1.5 py-0.5 rounded transition group"
+                      >
+                        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50" />
                         <span className="font-medium text-neutral-800">{sr.nama}</span>
                         {sr.deskripsi && (
-                          <span className="ml-2 text-xs text-neutral-500">{sr.deskripsi}</span>
+                          <span className="ml-1 text-xs text-neutral-500">{sr.deskripsi}</span>
                         )}
-                      </div>
+                      </button>
                       <button
                         onClick={() => setDeleting({ kind: 'sub-role', id: sr.id, label: sr.nama })}
                         className="p-1 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600"
@@ -147,12 +165,30 @@ export default function RolePage() {
                         {sr.statuses.map((st) => (
                           <span
                             key={st.id}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent-400/15 text-accent-600 text-xs rounded-full"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent-400/15 text-accent-600 text-xs rounded-full group"
                           >
-                            {st.nama}
                             <button
                               onClick={() =>
-                                setDeleting({ kind: 'sub-role-status', id: st.id, label: st.nama })
+                                setEditing({
+                                  kind: 'sub-role-status',
+                                  id: st.id,
+                                  nama: st.nama,
+                                  deskripsi: st.deskripsi,
+                                })
+                              }
+                              className="font-medium hover:underline flex items-center gap-1"
+                              title="Edit status"
+                            >
+                              <Pencil className="w-2.5 h-2.5 opacity-50 group-hover:opacity-100" />
+                              {st.nama}
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeleting({
+                                  kind: 'sub-role-status',
+                                  id: st.id,
+                                  label: st.nama,
+                                })
                               }
                               className="hover:text-red-600"
                             >
@@ -181,6 +217,17 @@ export default function RolePage() {
         </div>
       )}
 
+      {editing && (
+        <EditModal
+          target={editing}
+          onClose={() => setEditing(null)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['role'] });
+            setEditing(null);
+          }}
+        />
+      )}
+
       <ConfirmDelete
         open={!!deleting}
         loading={deleteMut.isPending}
@@ -190,6 +237,99 @@ export default function RolePage() {
         onConfirm={() => deleting && deleteMut.mutate(deleting)}
       />
     </div>
+  );
+}
+
+// ============== Edit modal ==============
+
+function EditModal({
+  target,
+  onClose,
+  onSuccess,
+}: {
+  target: NonNullable<EditingTarget>;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [nama, setNama] = useState(target.nama);
+  const [deskripsi, setDeskripsi] = useState(target.deskripsi ?? '');
+
+  const labelMap: Record<Kind, string> = {
+    role: 'Role',
+    'sub-role': 'Sub-Role',
+    'sub-role-status': 'Status',
+  };
+
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      const path =
+        target.kind === 'role'
+          ? `/admin/role/${target.id}`
+          : target.kind === 'sub-role'
+            ? `/admin/role/sub-role/${target.id}`
+            : `/admin/role/sub-role-status/${target.id}`;
+      return apiClient.patch(path, { nama, deskripsi: deskripsi || undefined });
+    },
+    onSuccess: () => {
+      toast.success('Tersimpan');
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900">Edit {labelMap[target.kind]}</h2>
+            <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Nama</span>
+              <input
+                type="text"
+                value={nama}
+                onChange={(e) => setNama(e.target.value)}
+                autoFocus
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Deskripsi (opsional)</span>
+              <input
+                type="text"
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
+                placeholder="Deskripsi singkat..."
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <button
+              onClick={onClose}
+              disabled={updateMut.isPending}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => updateMut.mutate()}
+              disabled={!nama.trim() || updateMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
+            >
+              {updateMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

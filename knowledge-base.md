@@ -84,9 +84,9 @@ ecc-platform/
 
 ---
 
-## 4. Model Data — 21 Tabel
+## 4. Model Data — 22 Tabel
 
-> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah. Total Prisma model sekarang = 21.
+> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah; lalu `reservasi` untuk kehadiran. Total Prisma model sekarang = 22.
 
 ### 4.1 Cluster Organisasi
 
@@ -326,6 +326,15 @@ Middleware `requireApiKey`:
 | `/admin/pelayanan/ibadah-link/:id/petugas` | GET | Fulltimer | List petugas di 1 ibadah-pelayanan           |
 | `/admin/pelayanan/petugas`              | POST   | Fulltimer   | Assign jemaat sebagai petugas              |
 | `/admin/pelayanan/petugas/:id`          | PATCH/DELETE | Fulltimer | Update/Hapus petugas                     |
+| `/admin/reservasi`                      | GET/POST | Fulltimer | List reservasi (filter status/ibadah/tgl) + create   |
+| `/admin/reservasi/by-kode/:kode`        | GET    | Fulltimer   | Lookup reservasi by kode barcode           |
+| `/admin/reservasi/:id`                  | GET/DELETE | Fulltimer | Detail/Hapus                              |
+| `/admin/reservasi/:id/status`           | PATCH  | Fulltimer   | Ganti status (Reserve/Join/Cancel)         |
+| `/admin/reservasi/bulk`                 | POST   | Fulltimer   | Bulk reservasi (banyak jemaat sekaligus)   |
+| `/admin/reservasi/checkin`              | POST   | Fulltimer   | Check-in by kode (admin scanner)           |
+| `/api/v1/reservasi/by-kode/:kode`       | GET    | API Key     | Mobile: lookup reservasi                   |
+| `/api/v1/reservasi/checkin`             | POST   | API Key     | Mobile: scan QR → check-in (set JOIN)      |
+| `/api/v1/reservasi/cancel`              | POST   | API Key     | Mobile: cancel reservasi                   |
 | `/admin/audit-log`                      | GET    | Fulltimer   | List audit log dengan filter               |
 | `/admin/audit-log/:id`                  | GET    | Fulltimer   | Detail entry                                |
 | `/admin/audit-log/resource/:res/:id`    | GET    | Fulltimer   | Timeline log 1 entity                       |
@@ -790,6 +799,16 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 | 2026-05-18  | Add Petugas: **checkbox-list member pelayanan** (bukan free-form search jemaat) | Enforce konsistensi — petugas ibadah-pelayanan harus dari member pelayanan tsb. Kalau jemaat belum jadi member, tambah dulu via halaman detail jemaat. Default role auto-fill dari JemaatPelayanan, bisa override. Submit batch via Promise.allSettled. |
 | 2026-05-18  | Edit PelayananRole inline di /pelayanan (modal saat klik nama role)         | Hapus standalone `/pelayanan-role` page yang redundant. Edit langsung di tempat role muncul lebih intuitif daripada navigasi ke halaman flat. |
 | 2026-05-18  | Page `/pelayanan-role` auto-redirect ke `/pelayanan`                         | Backward compat untuk bookmark/link lama. Backend endpoint flat tetap ada untuk konsumer OpenAPI. |
+| 2026-05-18  | Sinode/Cabang list endpoint return **flattened counts** (cabangCount, jemaatCount, ibadahCount) | Hindari N+1 di FE. Nested include + reduce di backend → satu query untuk semua angka |
+| 2026-05-18  | Jemaat list include **active roles** + filter `?cabangId` / `?sinodeId`     | Mendukung navigasi clickable dari sinode/cabang ke jemaat terfilter. Roles ringkas di tabel (max 2 chip + counter) |
+| 2026-05-18  | Ibadah page **dikelompokkan per kategori** (custom layout, bukan CrudPage)  | Tabel flat sulit di-scan saat banyak ibadah; grouping = struktur natural domain. Kolom Pelayan = `<petugasCount>/<pelayananCount>` dengan link ke detail |
+| 2026-05-18  | CrudPage support `extraParams` + `filterBanner` props                       | Generic factory tetap dipakai untuk konsistensi; URL param dibaca di wrapper page, lalu di-pass ke list endpoint |
+| 2026-05-18  | Relasi keluarga = **modal read-only** dari row jemaat                        | Quick peek tanpa pindah halaman. Klik nama jemaat dalam modal navigasi ke detail; tombol "Buka detail lengkap" untuk CRUD relasi (future scope) |
+| 2026-05-18  | **`emptyToUndefined()` helper universal** di common.ts                       | HTML `<input>` submit `""` saat kosong; Zod `.email()/.url()/.date().optional()` reject `""`. Preprocess `''→undefined` di setiap optional field dengan format validation cegah bug edit form di SEMUA resource |
+| 2026-05-18  | Update schemas **eksplisit** (bukan `.partial()` lagi)                       | `.partial()` inherit field declaration tapi tidak preprocessing. Eksplisit lebih jelas + reliably handle empty string |
+| 2026-05-18  | Reservasi: track `tanggal_ibadah` spesifik (bukan `ibadah_id` saja)          | Ibadah recurring (mingguan), perlu tahu reservasi untuk occurrence tanggal mana. Unique constraint `(jemaat, ibadah, tanggal)` cegah double-reserve |
+| 2026-05-18  | Kode reservasi: **alphanumeric 8 char** uppercase, generated di server       | 32⁸ = ~1T kombinasi, human-readable (skip ambigu I/O/1/0), gampang di-print sebagai barcode. Generate + unique check di backend, bukan UUID karena UUID terlalu panjang utk QR mobile |
+| 2026-05-18  | Mobile app **terpisah** dengan API key auth (bukan JWT user)                 | Mobile scanner = stationary device per cabang, satu device satu API key. Tidak perlu login user; cukup scan kode → POST. Audit log catat `apiKeyId` |
 
 ---
 
@@ -1052,6 +1071,75 @@ Tidak per-row audit supaya log tidak meledak. Detail per-row tersedia dari respo
 6. Result page: stats final, link kembali ke daftar atau import lagi
 
 Tombol "Import CSV" ada di top-right halaman `/dashboard/jemaat` (di atas tabel CRUD utama).
+
+---
+
+## 20. Kehadiran / Reservasi Ibadah
+
+Workflow attendance dengan barcode untuk integrasi mobile scanner app.
+
+### Model
+
+Tabel `reservasi` (cluster 8 di section 4):
+- `jemaat_id`, `ibadah_id`, `tanggal_ibadah` (track occurrence spesifik karena ibadah recurring)
+- `status` enum: `RESERVE` / `JOIN` / `CANCEL`
+- `kode` — 8 char alphanumeric uppercase (mis. `R7K2X9P`), unique, untuk barcode/QR
+- `reserved_at`, `joined_at`, `cancelled_at` — timestamps perubahan status
+- `checked_in_by` — userId yang scan (audit trail)
+- Unique constraint: `(jemaat_id, ibadah_id, tanggal_ibadah)` — cegah double-reserve
+
+### Generate kode
+
+`apps/core-api/src/lib/kode-reservasi.ts`:
+- Alphabet 32 char tanpa ambigu (skip `1`, `I`, `0`, `O`)
+- Default 8 char → 32⁸ = ~1 triliun kombinasi
+- `generateUniqueKode()` cek DB collision, retry sampai 5x
+
+### Workflow
+
+```
+1. Admin/jemaat reservasi → POST /admin/reservasi
+                          → status RESERVE, dapat kode `R7K2X9P`
+                          → portal display QR code
+
+2. Saat hadir di lokasi → mobile app scan QR
+                       → POST /api/v1/reservasi/checkin (kode)
+                       → status JOIN, joined_at = now
+
+3. Kalau batal → mobile POST /api/v1/reservasi/cancel
+              → status CANCEL, cancelled_at = now
+
+   Atau admin manual → PATCH /admin/reservasi/:id/status
+                    → bisa pindah ke status apa pun (Reserve juga, untuk reset)
+```
+
+### UI portal
+
+`/dashboard/kehadiran`:
+- Tabel daftar reservasi dengan filter (status, ibadah, tanggal, search nama/kode)
+- Kolom Kode = button clickable → modal QR preview (pakai api.qrserver.com untuk render QR image)
+- Action per row: tombol Join / Cancel / Reserve (quick status change) + hapus
+- Tombol header: **Buat Reservasi** (modal pilih ibadah + tanggal + cari jemaat) dan **Check-in via Kode** (modal input kode → POST checkin)
+
+### Mobile attendance app (terpisah)
+
+Belum di-build di repo ini. Spec endpoint untuk mobile app:
+
+```
+Headers: X-API-Key: ecc_xxx_yyy
+
+GET  /api/v1/reservasi/by-kode/:kode    → preview data (jemaat + ibadah)
+POST /api/v1/reservasi/checkin          → body { kode }, set JOIN
+POST /api/v1/reservasi/cancel           → body { kode }, set CANCEL
+```
+
+Sinode scoping otomatis: API key di-scope per sinode, kode reservasi dari ibadah sinode lain return 404 (sembunyikan keberadaannya).
+
+### Audit trail
+
+Setiap perubahan status di-log dengan metadata:
+- `method: 'admin-scanner'` atau `'mobile-scan'` atau `'mobile-cancel'`
+- `apiKeyId` untuk trace mobile request
 
 ---
 

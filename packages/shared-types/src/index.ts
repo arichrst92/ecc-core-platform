@@ -21,3 +21,4 @@ export * from './schemas/role.js';
 export * from './schemas/ibadah.js';
 export * from './schemas/keluarga.js';
 export * from './schemas/pelayanan.js';
+export * from './schemas/reservasi.js';

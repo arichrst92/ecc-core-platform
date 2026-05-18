@@ -7,6 +7,7 @@ import { roleRouter } from './role.js';
 import { ibadahRouter } from './ibadah.js';
 import { keluargaRouter } from './keluarga.js';
 import { pelayananRouter } from './pelayanan.js';
+import { reservasiRouter } from './reservasi.js';
 import { auditLogRouter } from './audit-log.js';
 
 export const adminRouter = Router();
@@ -21,4 +22,5 @@ adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);
 adminRouter.use('/keluarga', keluargaRouter);
 adminRouter.use('/pelayanan', pelayananRouter);
+adminRouter.use('/reservasi', reservasiRouter);
 adminRouter.use('/audit-log', auditLogRouter);

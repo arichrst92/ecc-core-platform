@@ -55,3 +55,15 @@ export function dateLocal(value: unknown) {
 export function timeRange(start: string, end: string) {
   return `${start} – ${end}`;
 }
+
+/** Hitung usia dalam tahun dari tanggal lahir (ISO date). */
+export function calcAge(tanggalLahir: string | null | undefined): number | null {
+  if (!tanggalLahir) return null;
+  const dob = new Date(tanggalLahir);
+  if (isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  return age;
+}

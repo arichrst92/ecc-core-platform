@@ -11,7 +11,7 @@ export const uuidSchema = z.string().uuid().openapi({ example: '550e8400-e29b-41
 /** Pagination query params (untuk list endpoints) */
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).openapi({ example: 1 }),
-  limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ example: 20 }),
+  limit: z.coerce.number().int().min(1).max(500).default(20).openapi({ example: 20 }),
   search: z.string().trim().optional().openapi({ description: 'Free-text search' }),
   sortBy: z.string().optional(),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
@@ -47,6 +47,20 @@ export const noHpSchema = z
   .trim()
   .regex(/^\+62[0-9]{8,13}$/, 'Format no HP harus E.164 (+62...)')
   .openapi({ example: '+628123456789', description: 'Format E.164 Indonesia' });
+
+/**
+ * Helper universal: terima `''` / `null` / `undefined` sebagai "tidak diisi"
+ * (→ `undefined`), supaya field opsional dengan validasi format (email/url/date)
+ * tidak gagal saat form HTML kirim string kosong.
+ *
+ * Pakai untuk SEMUA field opsional di create/update schemas.
+ *
+ *   const emailField = emptyToUndefined(z.string().trim().email());
+ *   // Diterima: undefined, null, '', "user@example.com"
+ *   // Ditolak:  "not-an-email"
+ */
+export const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' || v === null ? undefined : v), schema.optional());
 
 /** Common envelope schemas (untuk OpenAPI registration) */
 export const successEnvelopeSchema = z.object({

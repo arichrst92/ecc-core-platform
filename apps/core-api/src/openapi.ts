@@ -33,6 +33,10 @@ import {
   linkIbadahPelayananSchema,
   assignPetugasSchema,
   updatePetugasSchema,
+  createReservasiSchema,
+  updateReservasiStatusSchema,
+  bulkReserveSchema,
+  checkinByKodeSchema,
   requestOtpSchema,
   verifyOtpSchema,
   faceLoginSchema,
@@ -493,6 +497,113 @@ registry.registerPath({
     200: { description: 'Inserted', ...json(successOf(z.any())) },
     400: { description: 'Validation errors', ...json(errorEnvelopeSchema) },
   },
+});
+
+// ---------- Reservasi / Kehadiran ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/reservasi',
+  tags: ['Admin · Kehadiran'],
+  summary: 'List reservasi dengan filter',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: paginationQuerySchema.extend({
+      status: z.enum(['RESERVE', 'JOIN', 'CANCEL']).optional(),
+      ibadahId: z.string().uuid().optional(),
+      jemaatId: z.string().uuid().optional(),
+      tanggal: z.string().date().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/reservasi/by-kode/{kode}',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Get reservasi by kode (lookup)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ kode: z.string() }) },
+  responses: { 200: { description: 'Found', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/reservasi',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Buat reservasi baru (kode auto-generate)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(createReservasiSchema) },
+  responses: {
+    201: { description: 'Created', ...json(successOf(z.any())) },
+    400: { description: 'Duplikat (jemaat+ibadah+tanggal sudah ada)', ...json(errorEnvelopeSchema) },
+  },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/reservasi/bulk',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Bulk reservasi (banyak jemaat sekaligus)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(bulkReserveSchema) },
+  responses: { 201: { description: 'Result', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/reservasi/{id}/status',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Ganti status reservasi (Reserve/Join/Cancel)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(updateReservasiStatusSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/reservasi/checkin',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Check-in by kode (admin scanner)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(checkinByKodeSchema) },
+  responses: { 200: { description: 'Checked in', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/reservasi/{id}',
+  tags: ['Admin · Kehadiran'],
+  summary: 'Hapus reservasi',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ---------- Public mobile (kehadiran) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/reservasi/by-kode/{kode}',
+  tags: ['Public · Kehadiran'],
+  summary: 'Lookup reservasi by kode (untuk mobile scanner preview)',
+  security: [{ [apiKey.name]: [] }],
+  request: { params: z.object({ kode: z.string() }) },
+  responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/reservasi/checkin',
+  tags: ['Public · Kehadiran'],
+  summary: 'Check-in via kode (mobile)',
+  security: [{ [apiKey.name]: [] }],
+  request: { body: json(checkinByKodeSchema) },
+  responses: { 200: { description: 'Joined', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/reservasi/cancel',
+  tags: ['Public · Kehadiran'],
+  summary: 'Cancel reservasi via kode (mobile)',
+  security: [{ [apiKey.name]: [] }],
+  request: { body: json(checkinByKodeSchema) },
+  responses: { 200: { description: 'Cancelled', ...json(successOf(z.any())) } },
 });
 
 // ---------- Audit log (read-only) ----------

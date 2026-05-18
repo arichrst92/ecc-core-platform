@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { Users } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -11,6 +13,8 @@ interface Cabang extends Record<string, unknown> {
   kontak: string | null;
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
+  jemaatCount?: number;
+  ibadahCount?: number;
 }
 
 export const cabangResource: ResourceConfig<Cabang> = {
@@ -23,7 +27,22 @@ export const cabangResource: ResourceConfig<Cabang> = {
   columns: [
     { key: 'kode', label: 'Kode', width: '100px' },
     { key: 'nama', label: 'Nama Cabang' },
-    { key: 'sinode', label: 'Sinode', render: nestedField('sinode.nama') },
+    { key: 'sinode', label: 'Sinode', render: nestedField('sinode.nama'), width: '160px' },
+    {
+      key: 'jemaatCount',
+      label: 'Jemaat',
+      width: '110px',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/jemaat?cabangId=${row.id}`}
+          className="inline-flex items-center gap-1 text-brand-600 hover:underline font-medium"
+          title="Lihat jemaat di cabang ini"
+        >
+          <Users className="w-3.5 h-3.5" />
+          {row.jemaatCount ?? 0}
+        </Link>
+      ),
+    },
     { key: 'kontak', label: 'Kontak', width: '160px' },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],

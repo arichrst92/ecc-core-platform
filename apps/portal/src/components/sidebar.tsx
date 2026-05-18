@@ -16,6 +16,7 @@ import {
   UserCog,
   Activity,
   HandHeart,
+  Ticket,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -48,6 +49,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar },
       { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers },
       { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart },
+      { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket },
     ],
   },
   {
@@ -121,7 +123,13 @@ export function Sidebar() {
       <div className="p-4 border-t border-neutral-100">
         <div className="flex items-center gap-2 opacity-60">
           <span className="text-[10px] text-neutral-500">Powered by</span>
-          <Image src="/logo-idea.webp" alt="IDEA" width={36} height={14} />
+          <Image
+            src="/logo-idea.webp"
+            alt="IDEA"
+            width={36}
+            height={14}
+            style={{ width: 'auto', height: '14px' }}
+          />
         </div>
       </div>
     </aside>

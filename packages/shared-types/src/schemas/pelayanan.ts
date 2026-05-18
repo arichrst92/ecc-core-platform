@@ -1,19 +1,22 @@
 import './common.js'; // ensures z.openapi() extension applied
 import { z } from 'zod';
-import { uuidSchema } from './common.js';
+import { uuidSchema, emptyToUndefined } from './common.js';
 
 // ===== Pelayanan (master) =====
 export const createPelayananSchema = z
   .object({
     nama: z.string().trim().min(2).max(100),
-    deskripsi: z.string().trim().optional(),
+    deskripsi: emptyToUndefined(z.string().trim()),
   })
   .openapi('CreatePelayananInput');
 export type CreatePelayananInput = z.infer<typeof createPelayananSchema>;
 
-export const updatePelayananSchema = createPelayananSchema
-  .partial()
-  .extend({ isActive: z.boolean().optional() })
+export const updatePelayananSchema = z
+  .object({
+    nama: z.string().trim().min(2).max(100).optional(),
+    deskripsi: emptyToUndefined(z.string().trim()),
+    isActive: z.boolean().optional(),
+  })
   .openapi('UpdatePelayananInput');
 export type UpdatePelayananInput = z.infer<typeof updatePelayananSchema>;
 
@@ -22,7 +25,7 @@ export const createPelayananRoleSchema = z
   .object({
     pelayananId: uuidSchema,
     nama: z.string().trim().min(2).max(100),
-    deskripsi: z.string().trim().optional(),
+    deskripsi: emptyToUndefined(z.string().trim()),
     level: z.coerce.number().int().min(-100).max(100).default(0),
   })
   .openapi('CreatePelayananRoleInput');
@@ -31,7 +34,7 @@ export type CreatePelayananRoleInput = z.infer<typeof createPelayananRoleSchema>
 export const updatePelayananRoleSchema = z
   .object({
     nama: z.string().trim().min(2).max(100).optional(),
-    deskripsi: z.string().trim().optional(),
+    deskripsi: emptyToUndefined(z.string().trim()),
     level: z.coerce.number().int().min(-100).max(100).optional(),
     isActive: z.boolean().optional(),
   })
@@ -44,8 +47,8 @@ export const assignJemaatPelayananSchema = z
     jemaatId: uuidSchema,
     pelayananId: uuidSchema,
     pelayananRoleId: uuidSchema,
-    tanggalMulai: z.string().date().optional(),    // default now
-    catatan: z.string().trim().optional(),
+    tanggalMulai: emptyToUndefined(z.string().date()),
+    catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('AssignJemaatPelayananInput');
 export type AssignJemaatPelayananInput = z.infer<typeof assignJemaatPelayananSchema>;
@@ -53,9 +56,9 @@ export type AssignJemaatPelayananInput = z.infer<typeof assignJemaatPelayananSch
 export const updateJemaatPelayananSchema = z
   .object({
     pelayananRoleId: uuidSchema.optional(),
-    tanggalSelesai: z.string().date().optional(), // mengakhiri penugasan
+    tanggalSelesai: emptyToUndefined(z.string().date()),
     isActive: z.boolean().optional(),
-    catatan: z.string().trim().optional(),
+    catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('UpdateJemaatPelayananInput');
 export type UpdateJemaatPelayananInput = z.infer<typeof updateJemaatPelayananSchema>;
@@ -75,7 +78,7 @@ export const assignPetugasSchema = z
     ibadahPelayananId: uuidSchema,
     jemaatId: uuidSchema,
     pelayananRoleId: uuidSchema,
-    catatan: z.string().trim().optional(),
+    catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('AssignPetugasInput');
 export type AssignPetugasInput = z.infer<typeof assignPetugasSchema>;
@@ -83,7 +86,7 @@ export type AssignPetugasInput = z.infer<typeof assignPetugasSchema>;
 export const updatePetugasSchema = z
   .object({
     pelayananRoleId: uuidSchema.optional(),
-    catatan: z.string().trim().optional(),
+    catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('UpdatePetugasInput');
 export type UpdatePetugasInput = z.infer<typeof updatePetugasSchema>;

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Building2,
@@ -21,6 +22,7 @@ import {
   BookOpen,
   Home as HomeIcon,
   MapPin,
+  ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -91,11 +93,52 @@ const bottom: NavItem[] = [
   { href: '/dashboard/profile', label: 'Profil & Keamanan', icon: UserCog },
 ];
 
+const COLLAPSE_STORAGE_KEY = 'ecc-portal-sidebar-collapsed-groups';
+
+function isItemActive(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  if (pathname === href) return true;
+  if (href === '/dashboard') return false;
+  // Match nested routes (e.g. /dashboard/homecell/123) but avoid prefix
+  // collisions like /dashboard/homecell-area matching /dashboard/homecell.
+  return pathname.startsWith(href + '/');
+}
+
 export function Sidebar() {
   const pathname = usePathname();
 
-  function isActive(href: string) {
-    return pathname === href || (href !== '/dashboard' && pathname?.startsWith(href));
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [hydrated, setHydrated] = useState(false);
+
+  // Load persisted collapse state on mount.
+  useEffect(() => {
+    try {
+      const raw =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(COLLAPSE_STORAGE_KEY)
+          : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, boolean>;
+        setCollapsed(parsed ?? {});
+      }
+    } catch {
+      // Ignore malformed storage values.
+    }
+    setHydrated(true);
+  }, []);
+
+  // Persist whenever the collapse state changes (after hydration).
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(collapsed));
+    } catch {
+      // Storage might be unavailable (e.g. private mode); ignore.
+    }
+  }, [collapsed, hydrated]);
+
+  function toggleGroup(label: string) {
+    setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
   }
 
   return (
@@ -112,28 +155,52 @@ export function Sidebar() {
         {/* Top items (Dashboard) */}
         <div className="space-y-1">
           {top.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+            <NavLink key={item.href} item={item} active={isItemActive(pathname, item.href)} />
           ))}
         </div>
 
         {/* Grouped items */}
-        {groups.map((group) => (
-          <div key={group.label}>
-            <div className="px-3 mb-1.5 text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">
-              {group.label}
+        {groups.map((group) => {
+          const isCollapsed = Boolean(collapsed[group.label]);
+
+          return (
+            <div key={group.label}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                aria-expanded={!isCollapsed}
+                className="w-full flex items-center justify-between px-3 mb-1.5 text-[10px] uppercase tracking-wider text-neutral-400 font-semibold hover:text-neutral-600 transition"
+              >
+                <span>{group.label}</span>
+                <ChevronDown
+                  className={clsx(
+                    'w-3 h-3 transition-transform',
+                    isCollapsed && '-rotate-90',
+                  )}
+                />
+              </button>
+              <div
+                className={clsx(
+                  'space-y-0.5 overflow-hidden transition-all',
+                  isCollapsed ? 'max-h-0' : 'max-h-[1000px]',
+                )}
+              >
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={isItemActive(pathname, item.href)}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <NavLink key={item.href} item={item} active={isActive(item.href)} />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Bottom items (Profile) */}
         <div className="pt-2 mt-2 border-t border-neutral-100 space-y-1">
           {bottom.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+            <NavLink key={item.href} item={item} active={isItemActive(pathname, item.href)} />
           ))}
         </div>
       </nav>

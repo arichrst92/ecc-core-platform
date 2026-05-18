@@ -22,3 +22,5 @@ export * from './schemas/ibadah.js';
 export * from './schemas/keluarga.js';
 export * from './schemas/pelayanan.js';
 export * from './schemas/reservasi.js';
+export * from './schemas/konten.js';
+export * from './schemas/homecell.js';

@@ -74,6 +74,47 @@ jemaatRouter.get('/', async (req, res) => {
   });
 });
 
+/**
+ * GET /admin/jemaat/by-pelayanan?pelayanan=Penggembalaan&role=Zone%20Leader&cabangId=...
+ *
+ * Return jemaat dengan ACTIVE JemaatPelayanan(pelayanan=X, role=Y).
+ * Dipakai oleh dropdown PIC HomecellArea / Homecell untuk filter eligible jemaat.
+ *
+ * Filter opsional `cabangId` membatasi hasil hanya jemaat dari cabang tertentu.
+ */
+jemaatRouter.get('/by-pelayanan', async (req, res) => {
+  const pelayananNama = typeof req.query.pelayanan === 'string' ? req.query.pelayanan : undefined;
+  const roleNama = typeof req.query.role === 'string' ? req.query.role : undefined;
+  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
+  if (!pelayananNama) throw BadRequest('Query "pelayanan" wajib');
+
+  const where: any = {
+    isActive: true,
+    jemaatPelayanan: {
+      some: {
+        isActive: true,
+        pelayanan: { nama: pelayananNama },
+        ...(roleNama ? { pelayananRole: { nama: roleNama } } : {}),
+      },
+    },
+  };
+  if (cabangId) where.cabangId = cabangId;
+
+  const data = await prisma.jemaat.findMany({
+    where,
+    orderBy: { namaLengkap: 'asc' },
+    select: {
+      id: true,
+      namaLengkap: true,
+      noHp: true,
+      fotoUrl: true,
+      cabang: { select: { id: true, nama: true } },
+    },
+    take: 500,
+  });
+  res.json({ success: true, data });
+});
+
 jemaatRouter.get('/:id', async (req, res) => {
   const item = await prisma.jemaat.findUnique({
     where: { id: req.params.id },

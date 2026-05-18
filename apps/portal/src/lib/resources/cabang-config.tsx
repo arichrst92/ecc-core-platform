@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Users } from 'lucide-react';
+import { Users, Home } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -15,6 +15,8 @@ interface Cabang extends Record<string, unknown> {
   sinode?: { id: string; nama: string; kode: string };
   jemaatCount?: number;
   ibadahCount?: number;
+  homecellAreaCount?: number;
+  homecellCount?: number;
 }
 
 export const cabangResource: ResourceConfig<Cabang> = {
@@ -31,7 +33,7 @@ export const cabangResource: ResourceConfig<Cabang> = {
     {
       key: 'jemaatCount',
       label: 'Jemaat',
-      width: '110px',
+      width: '100px',
       render: (_v, row) => (
         <Link
           href={`/dashboard/jemaat?cabangId=${row.id}`}
@@ -43,7 +45,25 @@ export const cabangResource: ResourceConfig<Cabang> = {
         </Link>
       ),
     },
-    { key: 'kontak', label: 'Kontak', width: '160px' },
+    {
+      key: 'homecellCount',
+      label: 'Homecell',
+      width: '110px',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/homecell?cabangId=${row.id}`}
+          className="inline-flex items-center gap-1 text-brand-600 hover:underline font-medium"
+          title="Lihat homecell di cabang ini"
+        >
+          <Home className="w-3.5 h-3.5" />
+          {row.homecellCount ?? 0}
+          {row.homecellAreaCount ? (
+            <span className="text-[10px] text-neutral-400">/{row.homecellAreaCount} area</span>
+          ) : null}
+        </Link>
+      ),
+    },
+    { key: 'kontak', label: 'Kontak', width: '140px' },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],
   fields: [

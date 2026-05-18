@@ -37,6 +37,7 @@ model Sinode {
 
   cabangGereja CabangGereja[]
   apiKeys      SinodeApiKey[]
+  konten       Konten[]
 
   @@map("sinode")
 }
@@ -52,9 +53,11 @@ model CabangGereja {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sinode  Sinode   @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
-  jemaat  Jemaat[]
-  ibadah  Ibadah[]
+  sinode         Sinode         @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
+  jemaat         Jemaat[]
+  ibadah         Ibadah[]
+  konten         Konten[]
+  homecellAreas  HomecellArea[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -86,6 +89,9 @@ model Jemaat {
   jemaatPelayanan         JemaatPelayanan[]
   ibadahPelayananPetugas  IbadahPelayananPetugas[]
   reservasi               Reservasi[]
+  areaPic                 HomecellArea[]            @relation("AreaPic")
+  homecellPic             Homecell[]                @relation("HomecellPic")
+  homecellMembership      HomecellMember[]          @relation("HomecellMembership")
 
   @@index([cabangId])
   @@index([noHp])
@@ -305,6 +311,7 @@ model User {
   jemaat        Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  authoredKonten Konten[]
 
   @@map("user")
 }
@@ -561,6 +568,153 @@ enum ReservasiStatus {
   CANCEL
 
   @@map("reservasi_status")
+}
+
+// ============================================================
+// 9. KONTEN BROADCAST (News & Renungan)
+// ============================================================
+// Konten yang dipublish ke jemaat via mobile app.
+// Satu tabel `konten` dengan `tipe` enum NEWS / RENUNGAN — banyak field
+// overlap (judul, ringkasan, konten, hero image, author, target audience).
+//
+// Targeting (audience scope):
+//   - sinodeId = null, cabangId = null  → global (semua sinode + cabang)
+//   - sinodeId = X,    cabangId = null  → sinode-wide (semua cabang di sinode X)
+//   - sinodeId = X,    cabangId = Y     → cabang-specific (cabang Y di sinode X)
+//
+// Field renungan-spesifik (tanggal, ayat_alkitab) nullable untuk News.
+// ============================================================
+
+model Konten {
+  id           String     @id @default(uuid()) @db.Uuid
+  tipe         KontenTipe
+  judul        String     @db.VarChar(255)
+  // URL-friendly slug, unique global supaya bisa dipakai di public mobile url
+  slug         String     @unique @db.VarChar(280)
+  ringkasan    String?    @db.Text                                 // short preview
+  konten       String     @db.Text                                 // markdown body
+  heroImageUrl String?    @map("hero_image_url") @db.Text          // /uploads/content/hero/{id}.webp
+
+  // Audience scope
+  sinodeId     String?    @map("sinode_id") @db.Uuid
+  cabangId     String?    @map("cabang_id") @db.Uuid
+
+  // Renungan-spesifik (opsional, biasanya null untuk NEWS)
+  tanggal      DateTime?  @db.Date                                 // tanggal renungan ditujukan
+  ayatAlkitab  String?    @map("ayat_alkitab") @db.VarChar(255)    // mis. "Yohanes 3:16"
+
+  // Tags (PostgreSQL array)
+  tags         String[]   @default([])
+
+  // Publishing
+  isPublished  Boolean    @default(false) @map("is_published")
+  publishedAt  DateTime?  @map("published_at")
+
+  // Stats
+  viewCount    Int        @default(0) @map("view_count")
+
+  // Author
+  authorId     String     @map("author_id") @db.Uuid
+
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  author User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  sinode Sinode?       @relation(fields: [sinodeId], references: [id], onDelete: Cascade)
+  cabang CabangGereja? @relation(fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@index([tipe])
+  @@index([sinodeId])
+  @@index([cabangId])
+  @@index([isPublished, publishedAt])
+  @@index([tanggal])
+  @@index([slug])
+  @@map("konten")
+}
+
+enum KontenTipe {
+  NEWS
+  RENUNGAN
+
+  @@map("konten_tipe")
+}
+
+// ============================================================
+// 10. COMMUNITY — Homecell Area & Homecell
+// ============================================================
+// Struktur penggembalaan:
+//   CabangGereja
+//     └── HomecellArea (zone)
+//           └── Homecell (cellgroup)
+//                 └── HomecellMember (junction M:N dengan Jemaat)
+//
+// PIC constraint (business rule, validasi di backend):
+//   - HomecellArea.picJemaat HARUS punya active JemaatPelayanan
+//     dengan Pelayanan="Penggembalaan" + Role="Zone Leader"
+//   - Homecell.picJemaat HARUS Pelayanan="Penggembalaan" + Role="Homecell Leader"
+// ============================================================
+
+model HomecellArea {
+  id           String       @id @default(uuid()) @db.Uuid
+  cabangId     String       @map("cabang_id") @db.Uuid
+  nama         String       @db.VarChar(100)
+  deskripsi    String?      @db.Text
+  // PIC (Zone Leader) — nullable supaya area bisa dibuat dulu sebelum assign
+  picJemaatId  String?      @map("pic_jemaat_id") @db.Uuid
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  cabang     CabangGereja @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  picJemaat  Jemaat?      @relation("AreaPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
+  homecells  Homecell[]
+
+  @@unique([cabangId, nama])
+  @@index([cabangId])
+  @@index([picJemaatId])
+  @@map("homecell_area")
+}
+
+model Homecell {
+  id           String       @id @default(uuid()) @db.Uuid
+  areaId       String       @map("area_id") @db.Uuid
+  nama         String       @db.VarChar(150)
+  deskripsi    String?      @db.Text
+  alamat       String?      @db.Text                       // lokasi pertemuan
+  hari         HariMinggu?                                  // jadwal hari pertemuan
+  jam          String?      @db.VarChar(5)                  // HH:mm
+  picJemaatId  String?      @map("pic_jemaat_id") @db.Uuid
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  area       HomecellArea     @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  picJemaat  Jemaat?          @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
+  members    HomecellMember[]
+
+  @@index([areaId])
+  @@index([picJemaatId])
+  @@map("homecell")
+}
+
+model HomecellMember {
+  id               String    @id @default(uuid()) @db.Uuid
+  homecellId       String    @map("homecell_id") @db.Uuid
+  jemaatId         String    @map("jemaat_id") @db.Uuid
+  tanggalBergabung DateTime  @default(now()) @map("tanggal_bergabung") @db.Date
+  tanggalKeluar    DateTime? @map("tanggal_keluar") @db.Date
+  isActive         Boolean   @default(true) @map("is_active")
+  catatan          String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  homecell Homecell @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  jemaat   Jemaat   @relation("HomecellMembership", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([homecellId, jemaatId])
+  @@index([homecellId])
+  @@index([jemaatId])
+  @@map("homecell_member")
 }
 
 // 3-way junction: Ibadah × Pelayanan × Jemaat — siapa bertugas di pelayanan

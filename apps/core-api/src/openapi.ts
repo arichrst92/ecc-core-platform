@@ -37,6 +37,14 @@ import {
   updateReservasiStatusSchema,
   bulkReserveSchema,
   checkinByKodeSchema,
+  createKontenSchema,
+  updateKontenSchema,
+  createHomecellAreaSchema,
+  updateHomecellAreaSchema,
+  createHomecellSchema,
+  updateHomecellSchema,
+  addHomecellMemberSchema,
+  updateHomecellMemberSchema,
   requestOtpSchema,
   verifyOtpSchema,
   faceLoginSchema,
@@ -620,6 +628,265 @@ registry.registerPath({
   security: [{ [apiKey.name]: [] }],
   request: { body: json(checkinByKodeSchema) },
   responses: { 200: { description: 'Cancelled', ...json(successOf(z.any())) } },
+});
+
+// ---------- Konten (News & Renungan) ----------
+function registerKontenRoutes(basePath: string, label: string) {
+  const tag = `Admin · Broadcast (${label})`;
+  registry.registerPath({
+    method: 'get',
+    path: basePath,
+    tags: [tag],
+    summary: `List ${label.toLowerCase()}`,
+    security: [{ [bearer.name]: [] }],
+    request: {
+      query: paginationQuerySchema.extend({
+        sinodeId: z.string().uuid().optional(),
+        cabangId: z.string().uuid().optional(),
+        isPublished: z.enum(['true', 'false']).optional(),
+      }),
+    },
+    responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+  });
+  registry.registerPath({
+    method: 'get',
+    path: `${basePath}/{idOrSlug}`,
+    tags: [tag],
+    summary: 'Detail by id atau slug',
+    security: [{ [bearer.name]: [] }],
+    request: { params: z.object({ idOrSlug: z.string() }) },
+    responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+  });
+  registry.registerPath({
+    method: 'post',
+    path: basePath,
+    tags: [tag],
+    summary: `Buat ${label.toLowerCase()}`,
+    security: [{ [bearer.name]: [] }],
+    request: { body: json(createKontenSchema) },
+    responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+  });
+  registry.registerPath({
+    method: 'patch',
+    path: `${basePath}/{id}`,
+    tags: [tag],
+    summary: `Update ${label.toLowerCase()}`,
+    security: [{ [bearer.name]: [] }],
+    request: { params: z.object({ id: z.string().uuid() }), body: json(updateKontenSchema) },
+    responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+  });
+  registry.registerPath({
+    method: 'delete',
+    path: `${basePath}/{id}`,
+    tags: [tag],
+    summary: `Hapus ${label.toLowerCase()}`,
+    security: [{ [bearer.name]: [] }],
+    request: { params: z.object({ id: z.string().uuid() }) },
+    responses: { 204: { description: 'Deleted' } },
+  });
+  registry.registerPath({
+    method: 'post',
+    path: `${basePath}/{id}/hero`,
+    tags: [tag],
+    summary: 'Upload hero image (multipart, field name: foto)',
+    security: [{ [bearer.name]: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+      body: { content: { 'multipart/form-data': { schema: z.object({ foto: z.string() }) } } },
+    },
+    responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+  });
+}
+registerKontenRoutes('/admin/news', 'News');
+registerKontenRoutes('/admin/renungan', 'Renungan');
+
+// ---------- Public Konten (mobile) ----------
+function registerPublicKontenRoutes(basePath: string, label: string) {
+  const tag = `Public · Broadcast (${label})`;
+  registry.registerPath({
+    method: 'get',
+    path: basePath,
+    tags: [tag],
+    summary: `List published ${label.toLowerCase()} (scoped sinode)`,
+    security: [{ [apiKey.name]: [] }],
+    request: {
+      query: z.object({
+        page: z.coerce.number().optional(),
+        limit: z.coerce.number().optional(),
+        cabangId: z.string().uuid().optional(),
+      }),
+    },
+    responses: { 200: { description: 'Paginated', ...json(successOf(z.array(z.any()))) } },
+  });
+  registry.registerPath({
+    method: 'get',
+    path: `${basePath}/{slug}`,
+    tags: [tag],
+    summary: `Detail ${label.toLowerCase()} by slug + increment view`,
+    security: [{ [apiKey.name]: [] }],
+    request: { params: z.object({ slug: z.string() }) },
+    responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+  });
+}
+registerPublicKontenRoutes('/api/v1/news', 'News');
+registerPublicKontenRoutes('/api/v1/renungan', 'Renungan');
+
+// ---------- Community (Homecell) ----------
+const homecellTag = 'Admin · Community';
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/homecell-area',
+  tags: [homecellTag],
+  summary: 'List homecell area (zone)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: paginationQuerySchema.extend({
+      cabangId: z.string().uuid().optional(),
+      sinodeId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/homecell-area/{id}',
+  tags: [homecellTag],
+  summary: 'Detail homecell area + list homecell di dalamnya',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/homecell-area',
+  tags: [homecellTag],
+  summary: 'Buat homecell area (PIC harus Pelayanan Penggembalaan + Zone Leader)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(createHomecellAreaSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/homecell-area/{id}',
+  tags: [homecellTag],
+  summary: 'Update homecell area',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateHomecellAreaSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/homecell-area/{id}',
+  tags: [homecellTag],
+  summary: 'Hapus homecell area (hanya jika tidak punya homecell)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/homecell',
+  tags: [homecellTag],
+  summary: 'List homecell (cellgroup)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: paginationQuerySchema.extend({
+      areaId: z.string().uuid().optional(),
+      cabangId: z.string().uuid().optional(),
+      sinodeId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/homecell/{id}',
+  tags: [homecellTag],
+  summary: 'Detail homecell + members',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/homecell',
+  tags: [homecellTag],
+  summary: 'Buat homecell (PIC harus Pelayanan Penggembalaan + Homecell Leader)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(createHomecellSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/homecell/{id}',
+  tags: [homecellTag],
+  summary: 'Update homecell',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateHomecellSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/homecell/{id}',
+  tags: [homecellTag],
+  summary: 'Hapus homecell (CASCADE ke members)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/homecell/{id}/members',
+  tags: [homecellTag],
+  summary: 'Tambah member ke homecell',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(addHomecellMemberSchema),
+  },
+  responses: { 201: { description: 'Added', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/homecell/{id}/members/{memberId}',
+  tags: [homecellTag],
+  summary: 'Update member homecell (status, tanggal keluar, catatan)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid(), memberId: z.string().uuid() }),
+    body: json(updateHomecellMemberSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/homecell/{id}/members/{memberId}',
+  tags: [homecellTag],
+  summary: 'Hapus member homecell (hard delete)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid(), memberId: z.string().uuid() }),
+  },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/jemaat/by-pelayanan',
+  tags: ['Admin · Jemaat'],
+  summary: 'Filter jemaat by pelayanan+role aktif (untuk dropdown PIC homecell)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: z.object({
+      pelayanan: z.string().openapi({ example: 'Penggembalaan' }),
+      role: z.string().optional().openapi({ example: 'Zone Leader' }),
+      cabangId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Eligible jemaat', ...json(successOf(z.array(z.any()))) } },
 });
 
 // ---------- Audit log (read-only) ----------

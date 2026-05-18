@@ -160,6 +160,16 @@ async function main() {
         { nama: 'Member', level: 0 },
       ],
     },
+    {
+      nama: 'Penggembalaan',
+      deskripsi: 'Tim penggembalaan / pastoral care — homecell, zone, area',
+      roles: [
+        { nama: 'Pastor', level: 15, deskripsi: 'Gembala sidang / Lead Pastor area' },
+        { nama: 'Zone Leader', level: 10, deskripsi: 'PIC HomecellArea — mengkoordinir homecell dalam 1 zone' },
+        { nama: 'Homecell Leader', level: 5, deskripsi: 'PIC Homecell — leader cellgroup' },
+        { nama: 'Asisten', level: 0, deskripsi: 'Asisten homecell leader' },
+      ],
+    },
   ];
 
   for (const p of pelayananData) {

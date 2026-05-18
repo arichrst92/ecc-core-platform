@@ -84,9 +84,9 @@ ecc-platform/
 
 ---
 
-## 4. Model Data — 22 Tabel
+## 4. Model Data — 26 Tabel
 
-> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah; lalu `reservasi` untuk kehadiran. Total Prisma model sekarang = 22.
+> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah; lalu `reservasi` untuk kehadiran; `konten` untuk broadcast News + Renungan; dan cluster Community (`homecell_area`, `homecell`, `homecell_member`) untuk penggembalaan. Total Prisma model sekarang = 26.
 
 ### 4.1 Cluster Organisasi
 
@@ -347,6 +347,16 @@ Middleware `requireApiKey`:
 | `/api/v1/reservasi/by-kode/:kode`       | GET    | API Key     | Mobile: lookup reservasi                   |
 | `/api/v1/reservasi/checkin`             | POST   | API Key     | Mobile: scan QR → check-in (set JOIN)      |
 | `/api/v1/reservasi/cancel`              | POST   | API Key     | Mobile: cancel reservasi                   |
+| `/admin/news`                           | GET/POST | Fulltimer | List/Create news                           |
+| `/admin/news/:id`                       | GET/PATCH/DELETE | Fulltimer | Detail/Update/Delete                  |
+| `/admin/news/:id/hero`                  | POST/DELETE | Fulltimer | Upload/hapus hero image                  |
+| `/admin/renungan`                       | GET/POST | Fulltimer | Sama dengan news (CRUD)                    |
+| `/admin/renungan/:id`                   | GET/PATCH/DELETE | Fulltimer | Detail/Update/Delete                  |
+| `/admin/renungan/:id/hero`              | POST/DELETE | Fulltimer | Hero image                                |
+| `/api/v1/news`                          | GET    | API Key     | Mobile: list published news (sinode-scoped) |
+| `/api/v1/news/:slug`                    | GET    | API Key     | Mobile: detail news (increment view)       |
+| `/api/v1/renungan`                      | GET    | API Key     | Mobile: list published renungan            |
+| `/api/v1/renungan/:slug`                | GET    | API Key     | Mobile: detail renungan (increment view)   |
 | `/admin/audit-log`                      | GET    | Fulltimer   | List audit log dengan filter               |
 | `/admin/audit-log/:id`                  | GET    | Fulltimer   | Detail entry                                |
 | `/admin/audit-log/resource/:res/:id`    | GET    | Fulltimer   | Timeline log 1 entity                       |
@@ -824,6 +834,17 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 | 2026-05-18  | Tambah `ONCE` ke `TipeJadwal` (bukan modul Event terpisah)                  | Ibadah satu kali (KKR, Natal khusus) cukup ditangani sebagai ibadah non-recurring. Hindari duplikasi cluster Event di awal — kalau nanti butuh field event-spesifik (kapasitas, biaya, registrasi terbuka), bisa di-promote ke modul terpisah |
 | 2026-05-18  | Calendar view = **occurrences di-generate server-side per request**         | Tidak materialize semua occurrence ke DB (akan bloat). Generate on-demand per range tanggal yang user lihat. Limit 366 hari per request. Sorting + grouping di FE |
 | 2026-05-18  | MONTHLY occurrence pakai **day-of-month dari `tanggal_mulai`**, skip kalau invalid | Mis. tanggalMulai 31 Jan → Feb tidak punya 31, skip. Tidak roll ke 1 Mar (avoid confusion). Untuk first-of-month pattern, user set tanggalMulai = tanggal 1 di bulan apa pun |
+| 2026-05-18  | **News + Renungan** = satu tabel `konten` dengan `tipe` enum, bukan 2 tabel | Field overlap 90% (judul, ringkasan, body, hero, target, publish). Field renungan-spesifik (tanggal, ayatAlkitab) di-optional. Backend pakai factory pattern (`createKontenRouter(tipe)`) supaya routes terpisah `/admin/news` vs `/admin/renungan` tapi share controller logic — DRY |
+| 2026-05-18  | Audience targeting: **nullable sinodeId + cabangId** kombinasi semantik     | (null, null) = global, (X, null) = sinode-wide, (X, Y) = cabang-specific. Auto-derive sinodeId kalau cabangId set tapi sinodeId null. Mobile public endpoint auto-filter berdasarkan API key sinode |
+| 2026-05-18  | Konten body = **markdown** (bukan rich-text HTML)                            | Portable (export/import gampang), aman dari XSS, mobile app pakai markdown renderer (banyak library RN/Flutter). Editor di portal pakai plain textarea + preview future |
+| 2026-05-18  | **Slug auto-generate** dari judul, unique global                             | URL-friendly untuk mobile deep-link (`app://news/judul-news-saya`). Update judul tidak regenerate slug (URL stability) — user bisa override manual |
+| 2026-05-18  | Hero image upload **setelah save pertama** (butuh ID)                        | Pattern sama dengan foto profil. Modal form display warning "Simpan dulu, lalu upload hero". Trade-off: 2-step flow, tapi konsisten dengan storage scheme yang pakai entity-id sebagai filename |
+| 2026-05-18  | `viewCount` increment **fire-and-forget**, hanya dari mobile public          | Tidak block response. Admin endpoint tidak count (avoid skew). Untuk analytics future, bisa pivot ke event log terpisah |
+| 2026-05-18  | **Community cluster** = `HomecellArea` → `Homecell` → `HomecellMember`        | Sturktur natural penggembalaan: cabang punya beberapa zone, zone punya beberapa cellgroup, cellgroup punya anggota. 3 tabel lebih clean daripada single-table self-reference |
+| 2026-05-18  | PIC HomecellArea/Homecell **divalidasi via Pelayanan Penggembalaan**, bukan FK ke role | PIC harus orang yang sudah resmi di tim Penggembalaan dengan role spesifik (Zone Leader / Homecell Leader). Validasi runtime di backend (`assertPenggembalaanRole`), bukan schema-level FK — supaya kalau jemaat keluar dari pelayanan, PIC field tidak corrupt (`onDelete: SetNull`) dan re-assign cukup ganti orangnya |
+| 2026-05-18  | Endpoint `/admin/jemaat/by-pelayanan?pelayanan=&role=` untuk PIC dropdown      | Generic helper, bukan endpoint khusus homecell. Bisa di-reuse untuk dropdown PIC lain di masa depan (mis. Worship Leader dropdown, dst.) |
+| 2026-05-18  | `homecellCount` di cabang list **diaggregate via area.cabangId** (bukan _count.homecells) | Homecell tidak punya FK langsung ke cabang. Query terpisah `prisma.homecell.findMany({ where: area.cabangId in [...] })` lalu group by JS. Lebih clean daripada raw SQL, perf OK untuk skala awal |
+| 2026-05-18  | HomecellMember: **isActive toggle + tanggalKeluar** untuk lifecycle, bukan hard delete sebagai norm | Riwayat keanggotaan penting untuk discipleship tracking. Hard delete tersedia tapi soft toggle didorong sebagai default UX. Unique `(homecellId, jemaatId)` mencegah duplikat — re-join = reactivate row yang sama |
 
 ---
 
@@ -1155,6 +1176,160 @@ Sinode scoping otomatis: API key di-scope per sinode, kode reservasi dari ibadah
 Setiap perubahan status di-log dengan metadata:
 - `method: 'admin-scanner'` atau `'mobile-scan'` atau `'mobile-cancel'`
 - `apiKeyId` untuk trace mobile request
+
+---
+
+## 21. Broadcast — News & Renungan
+
+Content management untuk konsumsi mobile app jemaat. Satu tabel `konten` dengan enum `tipe` (NEWS / RENUNGAN), berbagi semua infrastructure (CRUD, upload hero, publish flow).
+
+### Model `konten`
+
+- `tipe` — NEWS atau RENUNGAN
+- `judul`, `slug` (auto-generated dari judul, unique global, URL-friendly)
+- `ringkasan` — short preview untuk list/card view
+- `konten` — body markdown (mobile app render markdown)
+- `heroImageUrl` — uploaded image, disimpan di `uploads/content/hero/{kind}/{id}.webp`
+- **Targeting** (audience scope, nullable kombinasi):
+  - `sinodeId=null, cabangId=null` → **Global** (semua sinode + cabang)
+  - `sinodeId=X, cabangId=null` → **Sinode-wide** (semua cabang di sinode X)
+  - `sinodeId=X, cabangId=Y` → **Cabang-specific**
+- `tanggal` & `ayatAlkitab` — renungan-spesifik, opsional
+- `tags[]` — untuk kategorisasi/filter
+- `isPublished` + `publishedAt` — draft vs published
+- `viewCount` — auto-increment saat detail di-akses dari public mobile endpoint
+- `authorId` → User yang create (auto dari JWT)
+
+### Hero image upload
+
+Sama pattern dengan foto profil — pakai sharp untuk resize + WebP convert. Hero lebih besar (max 1600px) untuk display utama mobile + tetap tajam. Folder: `uploads/content/hero/{news|renungan}/{kontenId}.webp` dengan cache-bust `?v=timestamp`.
+
+### Slug strategy
+
+- Auto-generate dari judul saat create (kebab-case, alphanumeric)
+- Unique global (untuk URL public mobile)
+- Update judul **tidak** auto-regenerate slug (URL tidak break)
+- User bisa override slug manual
+
+### Audience filter di mobile
+
+Endpoint public `/api/v1/news` & `/api/v1/renungan` auto-filter berdasarkan sinode dari API key:
+- Return konten dengan `(sinodeId=null AND cabangId=null)` (global)
+- OR `(sinodeId=APIkey.sinodeId AND cabangId=null)` (sinode-wide untuk sinode user)
+- OR `(cabangId match)` jika mobile pass `?cabangId=`
+- Hanya yang `isPublished=true`, sorted by `publishedAt desc`
+
+### View count
+
+Increment fire-and-forget setiap GET detail di public endpoint. Tidak block response. Hanya count dari mobile (admin endpoint tidak increment).
+
+### UI portal
+
+`/dashboard/news` & `/dashboard/renungan` — pakai shared component `KontenPage` (file: `apps/portal/src/components/broadcast/konten-page.tsx`).
+- Grid 2 kolom cards dengan hero thumbnail, badge published/draft, metadata
+- Filter: search + dropdown Published/Draft/All
+- Modal form: judul, slug (auto), ringkasan, konten markdown, target (sinode → cabang dropdown), tanggal/ayatAlkitab (kalau Renungan), tags (CSV input), publish toggle
+- Hero image: upload setelah save pertama (butuh ID), preview di modal, tombol ganti
+
+### Mobile app integration
+
+```bash
+# List news yang ter-publish di sinode tersebut
+curl https://core-api.eccchurch.global/api/v1/news?page=1 \
+  -H "X-API-Key: ecc_xxx_yyy"
+
+# Detail by slug (increment view)
+curl https://core-api.eccchurch.global/api/v1/news/ibadah-pemuda-akhir-tahun \
+  -H "X-API-Key: ecc_xxx_yyy"
+```
+
+---
+
+## 22. Community — Homecell Area & Homecell
+
+Struktur penggembalaan (pastoral care) untuk discipleship via small group meeting.
+
+### Hierarchy
+
+```
+CabangGereja
+  └── HomecellArea (zone)         — 1 PIC: Zone Leader
+        └── Homecell (cellgroup)  — 1 PIC: Homecell Leader
+              └── HomecellMember  — junction M:N dengan Jemaat (riwayat)
+```
+
+3 model baru: `HomecellArea`, `Homecell`, `HomecellMember`. Schema-level relations:
+- `HomecellArea.cabangId` → CabangGereja (`onDelete: Restrict`)
+- `HomecellArea.picJemaatId` → Jemaat (`@relation("AreaPic")`, `onDelete: SetNull`)
+- `Homecell.areaId` → HomecellArea (`onDelete: Restrict`)
+- `Homecell.picJemaatId` → Jemaat (`@relation("HomecellPic")`, `onDelete: SetNull`)
+- `HomecellMember.homecellId` → Homecell (`onDelete: Cascade`)
+- `HomecellMember.jemaatId` → Jemaat (`@relation("HomecellMembership")`, `onDelete: Cascade`)
+
+Unique constraints:
+- `HomecellArea (cabangId, nama)` — nama area unik per cabang
+- `HomecellMember (homecellId, jemaatId)` — satu jemaat hanya 1 row per homecell (tidak bisa join 2x; pakai `isActive` toggle untuk riwayat keluar/masuk kembali)
+
+### PIC business rule (validasi backend, bukan FK)
+
+Backend menolak create/update jika `picJemaatId` tidak memenuhi:
+- Punya `JemaatPelayanan` aktif dengan `Pelayanan.nama="Penggembalaan"` DAN role spesifik
+- Untuk `HomecellArea`: role `"Zone Leader"`
+- Untuk `Homecell`: role `"Homecell Leader"`
+
+Validasi di `apps/core-api/src/lib/homecell-pic.ts` via helper `assertPenggembalaanRole(jemaatId, roleNama)`.
+
+Frontend dropdown filter ke endpoint `/admin/jemaat/by-pelayanan?pelayanan=Penggembalaan&role=Zone%20Leader` (atau `Homecell%20Leader`) yang return hanya jemaat eligible.
+
+### Seed — Pelayanan Penggembalaan
+
+Ditambahkan ke `prisma/seed.ts`:
+- Pastor (level 15) — Gembala sidang
+- Zone Leader (level 10) — PIC HomecellArea
+- Homecell Leader (level 5) — PIC Homecell
+- Asisten (level 0)
+
+### Endpoint admin
+
+```
+GET    /admin/homecell-area              ?cabangId=&sinodeId=&page=&search=
+GET    /admin/homecell-area/:id           # detail + nested homecells
+POST   /admin/homecell-area              # validate PIC=Zone Leader
+PATCH  /admin/homecell-area/:id
+DELETE /admin/homecell-area/:id           # block jika punya homecells
+
+GET    /admin/homecell                   ?areaId=&cabangId=&sinodeId=&page=
+GET    /admin/homecell/:id                # detail + members
+POST   /admin/homecell                   # validate PIC=Homecell Leader
+PATCH  /admin/homecell/:id
+DELETE /admin/homecell/:id                # CASCADE members
+
+POST   /admin/homecell/:id/members        # tambah member
+PATCH  /admin/homecell/:id/members/:memberId   # set status keluar / catatan
+DELETE /admin/homecell/:id/members/:memberId   # hard delete dari riwayat
+```
+
+### Cabang list — homecellCount clickable
+
+`/admin/cabang` sekarang return `homecellAreaCount` + `homecellCount` per cabang (aggregated lewat `area.cabangId`). Portal column "Homecell" link ke `/dashboard/homecell?cabangId={id}`.
+
+### UI portal
+
+- `/dashboard/homecell-area` — CrudPage. Filter `?cabangId=` (banner reset).
+- `/dashboard/homecell` — CrudPage. Filter `?cabangId=` atau `?areaId=` (banner reset).
+- `/dashboard/homecell/[id]` — detail page custom (bukan modal):
+  - Header dengan back button, badge nonaktif
+  - 3 cards: PIC, Jadwal (hari + jam), Lokasi
+  - Members table dengan toggle aktif/keluar (`UserMinus`/`UserCheck`) + hapus permanen
+  - Add Member modal dengan jemaat picker (filtered ke cabang area)
+- Sidebar group **Community**: `Homecell Area` + `Homecell`
+
+### Member lifecycle
+
+- Tambah → `tanggalBergabung` (default hari ini), `isActive=true`, `tanggalKeluar=null`
+- Mark keluar → backend auto-set `tanggalKeluar=now` jika tidak diberikan
+- Reactivate → backend clear `tanggalKeluar`
+- Hard delete tersedia untuk hapus riwayat penuh (tidak audit-friendly, gunakan dengan hati-hati)
 
 ---
 

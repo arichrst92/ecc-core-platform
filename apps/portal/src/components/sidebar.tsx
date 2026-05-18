@@ -17,6 +17,10 @@ import {
   Activity,
   HandHeart,
   Ticket,
+  Newspaper,
+  BookOpen,
+  Home as HomeIcon,
+  MapPin,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -58,6 +62,20 @@ const groups: NavGroup[] = [
       { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users },
       { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield },
       { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart },
+    ],
+  },
+  {
+    label: 'Community',
+    items: [
+      { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin },
+      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon },
+    ],
+  },
+  {
+    label: 'Broadcast',
+    items: [
+      { href: '/dashboard/news', label: 'News', icon: Newspaper },
+      { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen },
     ],
   },
   {

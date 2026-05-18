@@ -25,15 +25,37 @@ cabangRouter.get('/', async (req, res) => {
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
       include: {
         sinode: { select: { id: true, nama: true, kode: true } },
-        _count: { select: { jemaat: true, ibadah: true } },
+        _count: { select: { jemaat: true, ibadah: true, homecellAreas: true } },
       },
     }),
     prisma.cabangGereja.count({ where }),
   ]);
-  // Flatten _count → jemaatCount / ibadahCount
+
+  // Aggregate homecellCount per cabang via grouped homecell query.
+  // homecell tidak punya cabangId langsung — harus join via area.cabangId.
+  const cabangIds = rows.map((c) => c.id);
+  const homecellRows = cabangIds.length
+    ? await prisma.homecell.findMany({
+        where: { area: { cabangId: { in: cabangIds } } },
+        select: { area: { select: { cabangId: true } } },
+      })
+    : [];
+  const homecellCountByCabang = new Map<string, number>();
+  for (const h of homecellRows) {
+    const cid = h.area.cabangId;
+    homecellCountByCabang.set(cid, (homecellCountByCabang.get(cid) ?? 0) + 1);
+  }
+
+  // Flatten _count → jemaatCount / ibadahCount / homecellAreaCount / homecellCount
   const data = rows.map((c) => {
     const { _count, ...rest } = c;
-    return { ...rest, jemaatCount: _count.jemaat, ibadahCount: _count.ibadah };
+    return {
+      ...rest,
+      jemaatCount: _count.jemaat,
+      ibadahCount: _count.ibadah,
+      homecellAreaCount: _count.homecellAreas,
+      homecellCount: homecellCountByCabang.get(c.id) ?? 0,
+    };
   });
   res.json({
     success: true,

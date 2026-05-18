@@ -15,15 +15,26 @@ sinodeRouter.get('/', async (req, res) => {
   const where = q.search
     ? { OR: [{ nama: { contains: q.search, mode: 'insensitive' as const } }, { kode: { contains: q.search.toUpperCase() } }] }
     : {};
-  const [data, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.sinode.findMany({
       where,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
+      include: {
+        _count: { select: { cabangGereja: true } },
+        // Nested count untuk jumlah jemaat — sum dari semua cabang
+        cabangGereja: { select: { _count: { select: { jemaat: true } } } },
+      },
     }),
     prisma.sinode.count({ where }),
   ]);
+  // Flatten: cabangCount + jemaatCount
+  const data = rows.map((s) => {
+    const { cabangGereja, _count, ...rest } = s;
+    const jemaatCount = cabangGereja.reduce((sum, c) => sum + c._count.jemaat, 0);
+    return { ...rest, cabangCount: _count.cabangGereja, jemaatCount };
+  });
   res.json({
     success: true,
     data,

@@ -24,6 +24,15 @@ import {
   updateKategoriIbadahSchema,
   createTipeRelasiSchema,
   updateTipeRelasiSchema,
+  createPelayananSchema,
+  updatePelayananSchema,
+  createPelayananRoleSchema,
+  updatePelayananRoleSchema,
+  assignJemaatPelayananSchema,
+  updateJemaatPelayananSchema,
+  linkIbadahPelayananSchema,
+  assignPetugasSchema,
+  updatePetugasSchema,
   requestOtpSchema,
   verifyOtpSchema,
   faceLoginSchema,
@@ -289,6 +298,160 @@ registerCrud({
   resourceName: 'tipe relasi keluarga',
   createSchema: createTipeRelasiSchema,
   updateSchema: updateTipeRelasiSchema,
+});
+registerCrud({
+  basePath: '/admin/pelayanan',
+  tag: 'Admin · Pelayanan',
+  resourceName: 'pelayanan',
+  createSchema: createPelayananSchema,
+  updateSchema: updatePelayananSchema,
+});
+
+// ---------- Pelayanan: role per-pelayanan + assignment + ibadah link ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/pelayanan/role',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Flat list semua role lintas pelayanan (untuk page Role Pelayanan)',
+  security: [{ [bearer.name]: [] }],
+  request: {
+    query: paginationQuerySchema.extend({ pelayananId: z.string().uuid().optional() }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/pelayanan/assign/jemaat/{jemaatId}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'List penugasan pelayanan untuk 1 jemaat (active + history)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ jemaatId: z.string().uuid() }) },
+  responses: { 200: { description: 'List', ...json(successOf(z.array(z.any()))) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/pelayanan/ibadah-link/ibadah/{ibadahId}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'List pelayanan yang melayani di 1 ibadah',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ ibadahId: z.string().uuid() }) },
+  responses: { 200: { description: 'List', ...json(successOf(z.array(z.any()))) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/pelayanan/role',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Tambah role di pelayanan tertentu',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(createPelayananRoleSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/pelayanan/role/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Update pelayanan role',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updatePelayananRoleSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/pelayanan/role/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Hapus pelayanan role',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/pelayanan/assign',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Assign jemaat ke pelayanan + role',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(assignJemaatPelayananSchema) },
+  responses: {
+    201: { description: 'Assigned', ...json(successOf(z.any())) },
+    400: { description: 'Role tidak terkait pelayanan', ...json(errorEnvelopeSchema) },
+  },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/pelayanan/assign/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Update penugasan jemaat di pelayanan',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateJemaatPelayananSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/pelayanan/assign/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Hapus penugasan jemaat dari pelayanan',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/pelayanan/ibadah-link',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Link pelayanan ke ibadah (M:N)',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(linkIbadahPelayananSchema) },
+  responses: { 201: { description: 'Linked', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/pelayanan/ibadah-link/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Unlink pelayanan dari ibadah (CASCADE hapus semua petugas)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Unlinked' } },
+});
+
+// ---------- Petugas (3-way junction: ibadah × pelayanan × jemaat) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/pelayanan/ibadah-link/{id}/petugas',
+  tags: ['Admin · Pelayanan'],
+  summary: 'List petugas untuk 1 ibadah-pelayanan link',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'List', ...json(successOf(z.array(z.any()))) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/pelayanan/petugas',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Assign jemaat sebagai petugas di ibadah-pelayanan tertentu',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(assignPetugasSchema) },
+  responses: {
+    201: { description: 'Assigned', ...json(successOf(z.any())) },
+    400: { description: 'Role bukan milik pelayanan tsb', ...json(errorEnvelopeSchema) },
+  },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/pelayanan/petugas/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Update petugas (mis. ganti role)',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updatePetugasSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/pelayanan/petugas/{id}',
+  tags: ['Admin · Pelayanan'],
+  summary: 'Hapus petugas',
+  security: [{ [bearer.name]: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
 });
 
 // ---------- CSV bulk import jemaat ----------

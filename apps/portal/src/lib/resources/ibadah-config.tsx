@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
 import { createIbadahSchema, updateIbadahSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField, dateLocal, chipText } from './render-helpers';
@@ -44,7 +46,19 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
   displayField: 'nama',
   defaultSort: { field: 'nama', order: 'asc' },
   columns: [
-    { key: 'nama', label: 'Nama Ibadah' },
+    {
+      key: 'nama',
+      label: 'Nama Ibadah',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/ibadah/${row.id}`}
+          className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          {row.nama}
+        </Link>
+      ),
+    },
     { key: 'cabang', label: 'Cabang', render: nestedField('cabang.nama'), width: '140px' },
     { key: 'kategoriIbadah', label: 'Kategori', render: nestedField('kategoriIbadah.nama'), width: '120px' },
     {

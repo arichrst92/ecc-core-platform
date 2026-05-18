@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
 import { createJemaatSchema, updateJemaatSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField, dateLocal } from './render-helpers';
@@ -30,7 +32,19 @@ export const jemaatResource: ResourceConfig<Jemaat> = {
   virtualChunkSize: 50,
   virtualHeight: '70vh',
   columns: [
-    { key: 'namaLengkap', label: 'Nama Lengkap' },
+    {
+      key: 'namaLengkap',
+      label: 'Nama Lengkap',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/jemaat/${row.id}`}
+          className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          {row.namaLengkap}
+        </Link>
+      ),
+    },
     { key: 'cabang', label: 'Cabang', render: nestedField('cabang.nama'), width: '160px' },
     { key: 'noHp', label: 'No HP', width: '140px' },
     {

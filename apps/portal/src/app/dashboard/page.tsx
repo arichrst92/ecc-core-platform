@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, Church, Users, Shield, Calendar, Layers } from 'lucide-react';
+import { Building2, Church, Users, Shield, Calendar, Layers, HandHeart } from 'lucide-react';
 
 const masterDataLinks = [
   { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, desc: 'Kelola data sinode' },
   { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, desc: 'Cabang-cabang di tiap sinode' },
   { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, desc: 'Data anggota jemaat' },
-  { href: '/dashboard/role', label: 'Role & Sub-Role', icon: Shield, desc: 'Klasifikasi peran' },
+  { href: '/dashboard/role', label: 'Role & Sub-Role', icon: Shield, desc: 'Klasifikasi keanggotaan' },
+  { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, desc: 'Tim ministry & roles' },
   { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, desc: 'Jadwal ibadah per cabang' },
   { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, desc: 'Kategori master ibadah' },
 ];

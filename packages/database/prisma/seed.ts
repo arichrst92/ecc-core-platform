@@ -4,16 +4,21 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
- * Seed data awal untuk master klasifikasi yang bersifat GLOBAL
- * (role, sub_role, sub_role_status, kategori_ibadah, tipe_relasi_keluarga).
+ * Seed data awal untuk master klasifikasi yang bersifat GLOBAL.
  *
- * Catatan: contoh dari user — Jemaat (New Comers/Jemaat Tetap),
- * Volunteer (Multimedia/Leader/Member), Fulltimer (Pastoral/Lead Pastor/dst).
+ * Cluster yang di-seed:
+ *   - role / sub_role / sub_role_status — klasifikasi keanggotaan
+ *     (Jemaat & Fulltimer saja — Volunteer dipindah ke cluster Pelayanan)
+ *   - kategori_ibadah
+ *   - tipe_relasi_keluarga
+ *   - pelayanan + pelayanan_role — tim ministry operasional
  */
 async function main() {
   console.log('🌱 Seeding ECC Platform master data...');
 
-  // ---------- ROLE & SUB-ROLE & STATUS ----------
+  // ============== ROLE & SUB-ROLE & STATUS ==============
+  // Catatan: Volunteer di-pindah ke cluster Pelayanan (tabel pelayanan).
+  // Role/sub_role/status sekarang hanya untuk klasifikasi keanggotaan.
   const rolesData = [
     {
       nama: 'Jemaat',
@@ -21,16 +26,6 @@ async function main() {
       subRoles: [
         { nama: 'New Comers', deskripsi: 'Jemaat baru yang masih dalam pembinaan awal', statuses: [] },
         { nama: 'Jemaat Tetap', deskripsi: 'Jemaat aktif yang sudah terintegrasi', statuses: [] },
-      ],
-    },
-    {
-      nama: 'Volunteer',
-      deskripsi: 'Jemaat yang melayani di tim ministry',
-      subRoles: [
-        { nama: 'Multimedia', deskripsi: 'Tim audio, video, streaming', statuses: ['Leader', 'Member'] },
-        { nama: 'Worship', deskripsi: 'Tim pujian & penyembahan', statuses: ['Leader', 'Member'] },
-        { nama: 'Usher', deskripsi: 'Tim sambutan & pelayanan ibadah', statuses: ['Leader', 'Member'] },
-        { nama: 'Children Ministry', deskripsi: 'Pelayanan anak', statuses: ['Leader', 'Member'] },
       ],
     },
     {
@@ -78,7 +73,119 @@ async function main() {
     }
   }
 
-  // ---------- KATEGORI IBADAH ----------
+  // Cleanup: hapus "Volunteer" lama kalau masih ada dari seed sebelumnya
+  // (CASCADE akan auto-hapus sub_roles + statuses + jemaat_role terkait)
+  const volunteerOld = await prisma.role.findUnique({ where: { nama: 'Volunteer' } });
+  if (volunteerOld) {
+    console.log('  ⚠️  Removing legacy "Volunteer" role (moved to Pelayanan cluster)...');
+    await prisma.role.delete({ where: { id: volunteerOld.id } });
+    console.log('  ✔ Legacy Volunteer removed');
+  }
+
+  // ============== PELAYANAN (Ministry) ==============
+  // Master tim ministry + role spesifik per tim.
+  // PelayananRole level: 10=Leader, 5=Co-Leader, 0=Member, -5=Trainee
+  const pelayananData = [
+    {
+      nama: 'Multimedia',
+      deskripsi: 'Tim audio, video, streaming, switcher',
+      roles: [
+        { nama: 'Leader', level: 10, deskripsi: 'Koordinator tim multimedia' },
+        { nama: 'Co-Leader', level: 5, deskripsi: 'Wakil koordinator' },
+        { nama: 'Camera Operator', level: 0 },
+        { nama: 'Sound Engineer', level: 0 },
+        { nama: 'Video Switcher', level: 0 },
+        { nama: 'Lighting', level: 0 },
+        { nama: 'Streaming', level: 0 },
+        { nama: 'Trainee', level: -5, deskripsi: 'Sedang dilatih' },
+      ],
+    },
+    {
+      nama: 'Worship',
+      deskripsi: 'Tim pujian & penyembahan',
+      roles: [
+        { nama: 'Worship Leader', level: 10 },
+        { nama: 'Co-Worship Leader', level: 5 },
+        { nama: 'Vocalist', level: 0 },
+        { nama: 'Guitarist', level: 0 },
+        { nama: 'Keyboardist', level: 0 },
+        { nama: 'Bassist', level: 0 },
+        { nama: 'Drummer', level: 0 },
+        { nama: 'Trainee', level: -5 },
+      ],
+    },
+    {
+      nama: 'Usher',
+      deskripsi: 'Tim sambutan & pelayanan tata letak ibadah',
+      roles: [
+        { nama: 'Leader', level: 10 },
+        { nama: 'Co-Leader', level: 5 },
+        { nama: 'Greeter', level: 0, deskripsi: 'Penyambut di pintu masuk' },
+        { nama: 'Seater', level: 0, deskripsi: 'Mengarahkan tempat duduk' },
+        { nama: 'Offering Counter', level: 0 },
+      ],
+    },
+    {
+      nama: 'Children Ministry',
+      deskripsi: 'Pelayanan anak (Sekolah Minggu)',
+      roles: [
+        { nama: 'Leader', level: 10 },
+        { nama: 'Teacher', level: 0 },
+        { nama: 'Assistant Teacher', level: 0 },
+        { nama: 'Trainee', level: -5 },
+      ],
+    },
+    {
+      nama: 'Teens Ministry',
+      deskripsi: 'Pelayanan remaja',
+      roles: [
+        { nama: 'Leader', level: 10 },
+        { nama: 'Mentor', level: 0 },
+        { nama: 'Assistant', level: 0 },
+      ],
+    },
+    {
+      nama: 'Prayer Ministry',
+      deskripsi: 'Tim doa & intercessory',
+      roles: [
+        { nama: 'Leader', level: 10 },
+        { nama: 'Prayer Warrior', level: 0 },
+      ],
+    },
+    {
+      nama: 'Hospitality',
+      deskripsi: 'Tim konsumsi & keramahtamahan',
+      roles: [
+        { nama: 'Leader', level: 10 },
+        { nama: 'Member', level: 0 },
+      ],
+    },
+  ];
+
+  for (const p of pelayananData) {
+    const pelayanan = await prisma.pelayanan.upsert({
+      where: { nama: p.nama },
+      update: { deskripsi: p.deskripsi },
+      create: { nama: p.nama, deskripsi: p.deskripsi },
+    });
+    console.log(`  ✔ Pelayanan: ${pelayanan.nama}`);
+
+    for (const r of p.roles) {
+      await prisma.pelayananRole.upsert({
+        where: { pelayananId_nama: { pelayananId: pelayanan.id, nama: r.nama } },
+        update: { level: r.level, deskripsi: r.deskripsi ?? null },
+        create: {
+          pelayananId: pelayanan.id,
+          nama: r.nama,
+          level: r.level,
+          deskripsi: r.deskripsi ?? null,
+        },
+      });
+      console.log(`    ↳ Role: ${r.nama} (level ${r.level})`);
+    }
+  }
+
+  // ============== KATEGORI IBADAH ==============
   const kategoriIbadahData = [
     { nama: 'Ibadah Umum', deskripsi: 'Ibadah Minggu pagi/siang/sore untuk umum' },
     { nama: 'Ibadah Doa', deskripsi: 'Ibadah doa bersama' },
@@ -97,7 +204,7 @@ async function main() {
     console.log(`  ✔ KategoriIbadah: ${k.nama}`);
   }
 
-  // ---------- TIPE RELASI KELUARGA ----------
+  // ============== TIPE RELASI KELUARGA ==============
   const tipeRelasiData = [
     { nama: 'Suami', deskripsi: 'Pasangan suami (untuk istri)' },
     { nama: 'Istri', deskripsi: 'Pasangan istri (untuk suami)' },

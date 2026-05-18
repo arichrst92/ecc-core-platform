@@ -20,3 +20,4 @@ export * from './schemas/jemaat.js';
 export * from './schemas/role.js';
 export * from './schemas/ibadah.js';
 export * from './schemas/keluarga.js';
+export * from './schemas/pelayanan.js';

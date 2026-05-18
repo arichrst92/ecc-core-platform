@@ -84,9 +84,9 @@ ecc-platform/
 
 ---
 
-## 4. Model Data — 16 Tabel
+## 4. Model Data — 21 Tabel
 
-> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`. Total Prisma model sekarang = 16.
+> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah. Total Prisma model sekarang = 21.
 
 ### 4.1 Cluster Organisasi
 
@@ -110,8 +110,9 @@ Fields: `id, cabang_id, nama_lengkap, email, no_hp, tanggal_lahir, jenis_kelamin
 
 Seed default (dari skrip `seed.ts`):
 - **Jemaat** → New Comers, Jemaat Tetap (tanpa status)
-- **Volunteer** → Multimedia/Worship/Usher/Children Ministry (Leader/Member)
 - **Fulltimer** → Pastoral (Lead/Associate/Children/Teens/Youth Pastor) + Administration (Head of Admin/Staff)
+
+> Catatan: role "Volunteer" yang sebelumnya di cluster ini sekarang dipindah ke cluster **Pelayanan** (section 4.6) karena semantik berbeda — Volunteer adalah operasional ministry, bukan klasifikasi keanggotaan.
 
 ### 4.3 Cluster Ibadah
 
@@ -152,6 +153,51 @@ Seed default (dari skrip `seed.ts`):
 - Scoped per sinode (`sinode_id`)
 - Key format: `ecc_<prefix>_<random>` — prefix dipakai untuk lookup cepat, full key di-bcrypt
 - Punya `scopes` (array, mis. `["read:jemaat", "read:ibadah"]`) untuk fine-grained access nanti.
+
+### 4.6 Cluster Pelayanan (Ministry — operasional)
+
+Berbeda dengan `role/sub_role` (klasifikasi keanggotaan: Jemaat/Fulltimer), cluster ini menggambarkan **struktur tim ministry aktif** yang melayani di ibadah. Empat tabel:
+
+**`pelayanan`** (global): nama, deskripsi, is_active.
+Seed default: Multimedia, Worship, Usher, Children Ministry, Teens Ministry, Prayer Ministry, Hospitality.
+
+**`pelayanan_role`** (per-pelayanan): role spesifik di tim itu. Punya `level` (integer) untuk hierarki.
+- Multimedia: Leader (10), Co-Leader (5), Camera Operator (0), Sound Engineer (0), Video Switcher (0), Lighting (0), Streaming (0), Trainee (-5)
+- Worship: Worship Leader (10), Co-Worship Leader (5), Vocalist (0), Guitarist (0), Keyboardist (0), Bassist (0), Drummer (0), Trainee (-5)
+- Usher: Leader (10), Co-Leader (5), Greeter (0), Seater (0), Offering Counter (0)
+- dst.
+
+**`jemaat_pelayanan`** (junction M:N + riwayat):
+- `jemaat_id, pelayanan_id, pelayanan_role_id`
+- `tanggal_mulai, tanggal_selesai (nullable), is_active, catatan`
+- Satu jemaat bisa join beberapa pelayanan dengan role berbeda.
+- Validasi backend: `pelayanan_role_id` harus belong ke `pelayanan_id` yang sama.
+
+**`ibadah_pelayanan`** (junction M:N):
+- `ibadah_id, pelayanan_id`
+- Tracking pelayanan mana yang melayani di ibadah mana.
+- Unique constraint pada pair `(ibadah_id, pelayanan_id)`.
+
+**`ibadah_pelayanan_petugas`** (3-way junction — siapa petugas spesifik di ibadah-pelayanan):
+- `ibadah_pelayanan_id, jemaat_id, pelayanan_role_id, catatan`
+- Contoh: Ibadah Pemuda → Multimedia → Jason (Camera Operator), Rahmat (Sound Engineer).
+- Unique pada `(ibadah_pelayanan_id, jemaat_id)` — satu jemaat 1 role per ibadah-pelayanan combo.
+- Validasi backend: `pelayanan_role_id` harus belong ke pelayanan dari `ibadah_pelayanan_id`.
+- CASCADE delete saat ibadah/pelayanan/link dihapus.
+- Assignment persistent untuk semua occurrence ibadah recurring (tidak per-date). Untuk schedule rotation per-date butuh tabel attendance terpisah (out-of-scope MVP).
+
+UI portal:
+- `/dashboard/pelayanan` — kartu per pelayanan dengan role chips (level dilambangkan warna: emas=Leader, oranye=Co-Leader, biru=Member, abu=Trainee). Add inline untuk pelayanan baru + role baru per pelayanan. **Klik nama role di chip** untuk edit (nama, level, deskripsi).
+- `/dashboard/jemaat/[id]` — detail jemaat dengan section Pelayanan (active + history), form assign baru, tombol "Akhiri" (set tanggalSelesai), hapus permanent.
+- `/dashboard/ibadah/[id]` — detail ibadah dengan section "Pelayanan yang Melayani". Tiap pelayanan link bisa di-expand → list petugas (jemaat + role) → tombol **Tambah Petugas** buka modal yang menampilkan **member pelayanan tsb** dengan checkbox + dropdown role per row (default = role mereka di pelayanan, bisa di-override). Submit batch (Promise.allSettled). Hapus link pelayanan auto-CASCADE hapus semua petugas-nya.
+
+Sidebar dikelompokkan jadi 4 grup dengan label header:
+- **Entity** — Sinode, Cabang Gereja
+- **Service** — Ibadah, Kategori Ibadah, Pelayanan (role di-edit inline di sini)
+- **People** — Jemaat, Role Jemaat, Relasi Jemaat
+- **Developer Tools** — API Keys, Audit Log
+
+Plus Dashboard di atas grup dan Profil & Keamanan di bawah (separator). Page lama `/dashboard/pelayanan-role` di-deprecate (auto-redirect ke `/pelayanan`).
 
 ---
 
@@ -270,6 +316,16 @@ Middleware `requireApiKey`:
 | `/admin/ibadah/kategori`                | GET/POST | Fulltimer | Kategori ibadah                            |
 | `/admin/keluarga/tipe`                  | GET/POST | Fulltimer | Tipe relasi master                         |
 | `/admin/keluarga/relasi`                | POST/DELETE | Fulltimer | Assign relasi antar jemaat              |
+| `/admin/pelayanan`                      | GET/POST | Fulltimer | List/Create pelayanan (ministry)           |
+| `/admin/pelayanan/:id`                  | GET/PATCH/DELETE | Fulltimer | Detail/Update/Delete pelayanan       |
+| `/admin/pelayanan/role`                 | POST   | Fulltimer   | Tambah role per-pelayanan                  |
+| `/admin/pelayanan/role/:id`             | PATCH/DELETE | Fulltimer | Update/Delete role                       |
+| `/admin/pelayanan/assign`               | POST   | Fulltimer   | Assign jemaat ke pelayanan + role          |
+| `/admin/pelayanan/assign/:id`           | PATCH/DELETE | Fulltimer | Update/akhiri penugasan                 |
+| `/admin/pelayanan/ibadah-link`          | POST/DELETE | Fulltimer | Link/unlink pelayanan ↔ ibadah          |
+| `/admin/pelayanan/ibadah-link/:id/petugas` | GET | Fulltimer | List petugas di 1 ibadah-pelayanan           |
+| `/admin/pelayanan/petugas`              | POST   | Fulltimer   | Assign jemaat sebagai petugas              |
+| `/admin/pelayanan/petugas/:id`          | PATCH/DELETE | Fulltimer | Update/Hapus petugas                     |
 | `/admin/audit-log`                      | GET    | Fulltimer   | List audit log dengan filter               |
 | `/admin/audit-log/:id`                  | GET    | Fulltimer   | Detail entry                                |
 | `/admin/audit-log/resource/:res/:id`    | GET    | Fulltimer   | Timeline log 1 entity                       |
@@ -719,6 +775,21 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 | 2026-05-17  | `dotenv-cli` di setiap workspace script                                    | Monorepo pkg punya cwd masing-masing; load `.env` dari root supaya single source |
 | 2026-05-17  | `bcryptjs` (pure JS), bukan `bcrypt` (native)                              | Hindari node-gyp fail di Mac M-series; performance OK untuk volume kita |
 | 2026-05-17  | `express-async-errors` di Express 4                                        | Express 4 tidak auto-forward async throws ke errorHandler — request hang tanpa ini |
+| 2026-05-18  | **Pelayanan** cluster terpisah dari role/sub_role                          | Semantik beda: role = klasifikasi keanggotaan; pelayanan = struktur tim ministry operasional yang serve di ibadah |
+| 2026-05-18  | Pelayanan **global** (bukan per-cabang)                                    | Konsisten + sederhana. Jemaat join langsung ke pelayanan global, tidak perlu duplikasi master per-cabang |
+| 2026-05-18  | PelayananRole **per-pelayanan** dengan `level` integer                     | Multimedia butuh "Sound Engineer", Worship butuh "Vocalist" — bukan generic Leader/Member. Level untuk hierarki + display |
+| 2026-05-18  | Pelayanan ↔ Ibadah **many-to-many** via junction `ibadah_pelayanan`        | 1 pelayanan bisa serve di banyak ibadah, 1 ibadah dilayani banyak pelayanan. Tidak modelkan jadwal rotasi (out-of-scope MVP) |
+| 2026-05-18  | "Volunteer" lama di role/sub_role di-**hapus** + auto-cleanup di seed      | Pindah ke Pelayanan cluster. Seed.ts auto-delete legacy "Volunteer" role kalau masih ada (CASCADE bersihkan sub_roles + jemaat_role) |
+| 2026-05-18  | Sidebar dikelompok jadi 4 grup dengan label header                          | Entity / Service / People / Developer Tools. Lebih mudah scan saat jumlah menu bertumbuh; konsisten dengan terminologi domain |
+| 2026-05-18  | Detail page untuk Jemaat & Ibadah (bukan modal/drawer)                     | URL routable (`/jemaat/[id]`, `/ibadah/[id]`) — bisa di-bookmark/share. Detail page punya space untuk multi-section (pelayanan, riwayat, dll.) |
+| 2026-05-18  | Klik nama di tabel = navigasi ke detail; tombol pencil = edit cepat        | Dua entry-point berbeda use case: detail untuk explore lengkap, pencil untuk update cepat field utama |
+| 2026-05-18  | **`ibadah_pelayanan_petugas`** sebagai 3-way junction terpisah              | Cleaner dari modal-only flow — petugas adalah entity dengan role spesifik per ibadah-pelayanan, perlu identitas (id) untuk delete/update |
+| 2026-05-18  | Petugas assignment **persistent** untuk semua occurrence ibadah recurring  | Default sederhana. Per-date roster/rotation = future scope dengan tabel attendance terpisah |
+| 2026-05-18  | Validasi `pelayananRoleId` belong ke pelayanan dari `ibadahPelayananId`    | Cegah Multimedia role di-assign ke pelayanan Worship. Validasi di backend (BadRequest 400) |
+| 2026-05-18  | ~~Add Petugas UI = search jemaat by nama/noHp~~ **Direvisi 2026-05-18**       | Diganti dengan checkbox-list member pelayanan (lihat row di bawah) |
+| 2026-05-18  | Add Petugas: **checkbox-list member pelayanan** (bukan free-form search jemaat) | Enforce konsistensi — petugas ibadah-pelayanan harus dari member pelayanan tsb. Kalau jemaat belum jadi member, tambah dulu via halaman detail jemaat. Default role auto-fill dari JemaatPelayanan, bisa override. Submit batch via Promise.allSettled. |
+| 2026-05-18  | Edit PelayananRole inline di /pelayanan (modal saat klik nama role)         | Hapus standalone `/pelayanan-role` page yang redundant. Edit langsung di tempat role muncul lebih intuitif daripada navigasi ke halaman flat. |
+| 2026-05-18  | Page `/pelayanan-role` auto-redirect ke `/pelayanan`                         | Backward compat untuk bookmark/link lama. Backend endpoint flat tetap ada untuk konsumer OpenAPI. |
 
 ---
 

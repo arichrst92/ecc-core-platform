@@ -12,19 +12,29 @@ export const cabangRouter = Router();
 
 cabangRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const where = q.search
-    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
-    : {};
-  const [data, total] = await Promise.all([
+  const sinodeId = typeof req.query.sinodeId === 'string' ? req.query.sinodeId : undefined;
+  const where: any = {};
+  if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
+  if (sinodeId) where.sinodeId = sinodeId;
+
+  const [rows, total] = await Promise.all([
     prisma.cabangGereja.findMany({
       where,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
-      include: { sinode: { select: { id: true, nama: true, kode: true } } },
+      include: {
+        sinode: { select: { id: true, nama: true, kode: true } },
+        _count: { select: { jemaat: true, ibadah: true } },
+      },
     }),
     prisma.cabangGereja.count({ where }),
   ]);
+  // Flatten _count → jemaatCount / ibadahCount
+  const data = rows.map((c) => {
+    const { _count, ...rest } = c;
+    return { ...rest, jemaatCount: _count.jemaat, ibadahCount: _count.ibadah };
+  });
   res.json({
     success: true,
     data,

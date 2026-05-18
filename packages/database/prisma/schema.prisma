@@ -78,11 +78,13 @@ model Jemaat {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  cabang        CabangGereja    @relation(fields: [cabangId], references: [id], onDelete: Restrict)
-  jemaatRoles   JemaatRole[]
-  relasiAsal    JemaatRelasi[]  @relation("RelasiAsal")
-  relasiTujuan  JemaatRelasi[]  @relation("RelasiTujuan")
-  user          User?
+  cabang                  CabangGereja              @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  jemaatRoles             JemaatRole[]
+  relasiAsal              JemaatRelasi[]            @relation("RelasiAsal")
+  relasiTujuan            JemaatRelasi[]            @relation("RelasiTujuan")
+  user                    User?
+  jemaatPelayanan         JemaatPelayanan[]
+  ibadahPelayananPetugas  IbadahPelayananPetugas[]
 
   @@index([cabangId])
   @@index([noHp])
@@ -210,8 +212,9 @@ model Ibadah {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  cabang         CabangGereja    @relation(fields: [cabangId], references: [id], onDelete: Restrict)
-  kategoriIbadah KategoriIbadah  @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
+  cabang           CabangGereja      @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  kategoriIbadah   KategoriIbadah    @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
+  ibadahPelayanan  IbadahPelayanan[]
 
   @@index([cabangId])
   @@index([kategoriIbadahId])
@@ -409,4 +412,128 @@ enum AuditAction {
   UPLOAD_PHOTO
 
   @@map("audit_action")
+}
+
+// ============================================================
+// 7. PELAYANAN (Ministry — operasional)
+// ============================================================
+// Pelayanan adalah tim ministry operasional (Multimedia, Worship, Usher, dll).
+// Berbeda dengan role/sub_role (Jemaat/Volunteer/Fulltimer — klasifikasi
+// keanggotaan), pelayanan menggambarkan struktur tim yang aktif melayani
+// di ibadah tertentu.
+//
+// Struktur:
+//   - Pelayanan (master, global): Multimedia, Worship, Usher
+//   - PelayananRole (per-pelayanan): Multimedia → Leader/Camera/Sound;
+//     Worship → Leader/Vocalist/Musician
+//   - JemaatPelayanan: junction M:N + role + riwayat
+//   - IbadahPelayanan: junction M:N — pelayanan ini melayani di ibadah mana
+// ============================================================
+
+model Pelayanan {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @unique @db.VarChar(100)
+  deskripsi String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  roles            PelayananRole[]
+  jemaatPelayanan  JemaatPelayanan[]
+  ibadahPelayanan  IbadahPelayanan[]
+
+  @@map("pelayanan")
+}
+
+model PelayananRole {
+  id           String   @id @default(uuid()) @db.Uuid
+  pelayananId  String   @map("pelayanan_id") @db.Uuid
+  nama         String   @db.VarChar(100)
+  deskripsi    String?  @db.Text
+  // Urutan hierarki untuk display + permission check (Leader=10, Member=0).
+  // Higher = senior. Bebas didefinisikan per pelayanan.
+  level        Int      @default(0)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  pelayanan               Pelayanan                 @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  jemaatPelayanan         JemaatPelayanan[]
+  ibadahPelayananPetugas  IbadahPelayananPetugas[]
+
+  @@unique([pelayananId, nama])
+  @@index([pelayananId])
+  @@map("pelayanan_role")
+}
+
+// Junction Jemaat <-> Pelayanan dengan role + riwayat
+model JemaatPelayanan {
+  id              String    @id @default(uuid()) @db.Uuid
+  jemaatId        String    @map("jemaat_id") @db.Uuid
+  pelayananId    String    @map("pelayanan_id") @db.Uuid
+  pelayananRoleId String   @map("pelayanan_role_id") @db.Uuid
+  tanggalMulai    DateTime  @default(now()) @map("tanggal_mulai") @db.Date
+  tanggalSelesai  DateTime? @map("tanggal_selesai") @db.Date
+  isActive        Boolean   @default(true) @map("is_active")
+  catatan         String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  jemaat        Jemaat        @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  pelayanan     Pelayanan     @relation(fields: [pelayananId], references: [id], onDelete: Restrict)
+  pelayananRole PelayananRole @relation(fields: [pelayananRoleId], references: [id], onDelete: Restrict)
+
+  @@index([jemaatId])
+  @@index([pelayananId])
+  @@index([isActive])
+  @@map("jemaat_pelayanan")
+}
+
+// Junction Ibadah <-> Pelayanan (M:N — pelayanan ini melayani di ibadah mana)
+model IbadahPelayanan {
+  id           String   @id @default(uuid()) @db.Uuid
+  ibadahId     String   @map("ibadah_id") @db.Uuid
+  pelayananId  String   @map("pelayanan_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ibadah    Ibadah                    @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
+  pelayanan Pelayanan                 @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  petugas   IbadahPelayananPetugas[]
+
+  @@unique([ibadahId, pelayananId])
+  @@index([ibadahId])
+  @@index([pelayananId])
+  @@map("ibadah_pelayanan")
+}
+
+// 3-way junction: Ibadah × Pelayanan × Jemaat — siapa bertugas di pelayanan
+// tertentu di ibadah tertentu, dengan role spesifik.
+//
+// Contoh: Ibadah Pemuda → Multimedia → Jason (Camera), Rahmat (Sound)
+//
+// Constraint:
+//   - Unique pada (ibadah_pelayanan_id, jemaat_id): satu jemaat hanya 1 role
+//     per ibadah-pelayanan combo (kalau mau dual role, buat 2 link pelayanan).
+//   - Validasi backend: pelayananRoleId harus belong ke pelayanan dari
+//     ibadahPelayanan (Multimedia role di Multimedia, bukan di Worship).
+//   - Default tidak ada history per-date (assignment persistent untuk semua
+//     occurrence ibadah recurring). Untuk schedule rotation per-date, butuh
+//     extension dengan tabel attendance/schedule terpisah.
+model IbadahPelayananPetugas {
+  id                String   @id @default(uuid()) @db.Uuid
+  ibadahPelayananId String   @map("ibadah_pelayanan_id") @db.Uuid
+  jemaatId          String   @map("jemaat_id") @db.Uuid
+  pelayananRoleId   String   @map("pelayanan_role_id") @db.Uuid
+  catatan           String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  ibadahPelayanan IbadahPelayanan @relation(fields: [ibadahPelayananId], references: [id], onDelete: Cascade)
+  jemaat          Jemaat          @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  pelayananRole   PelayananRole   @relation(fields: [pelayananRoleId], references: [id], onDelete: Restrict)
+
+  @@unique([ibadahPelayananId, jemaatId])
+  @@index([ibadahPelayananId])
+  @@index([jemaatId])
+  @@map("ibadah_pelayanan_petugas")
 }

@@ -32,22 +32,38 @@ const csvUpload = multer({
 
 jemaatRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const where = q.search
-    ? {
-        OR: [
-          { namaLengkap: { contains: q.search, mode: 'insensitive' as const } },
-          { email: { contains: q.search, mode: 'insensitive' as const } },
-          { noHp: { contains: q.search } },
-        ],
-      }
-    : {};
+  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
+  const sinodeId = typeof req.query.sinodeId === 'string' ? req.query.sinodeId : undefined;
+
+  const where: any = {};
+  if (q.search) {
+    where.OR = [
+      { namaLengkap: { contains: q.search, mode: 'insensitive' } },
+      { email: { contains: q.search, mode: 'insensitive' } },
+      { noHp: { contains: q.search } },
+    ];
+  }
+  if (cabangId) where.cabangId = cabangId;
+  if (sinodeId) where.cabang = { sinodeId };
+
   const [data, total] = await Promise.all([
     prisma.jemaat.findMany({
       where,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
       orderBy: { [q.sortBy ?? 'namaLengkap']: q.sortOrder },
-      include: { cabang: { select: { id: true, nama: true } } },
+      include: {
+        cabang: { select: { id: true, nama: true } },
+        // Aktif roles untuk tampil di kolom "Role" (compact format Role:SubRole)
+        jemaatRoles: {
+          where: { isActive: true },
+          select: {
+            role: { select: { nama: true } },
+            subRole: { select: { nama: true } },
+            subRoleStatus: { select: { nama: true } },
+          },
+        },
+      },
     }),
     prisma.jemaat.count({ where }),
   ]);

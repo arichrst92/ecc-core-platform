@@ -64,8 +64,12 @@ export default function LoginPage() {
   }
 
   function finalizeLogin(auth: any) {
-    if (!auth.user.isFulltimer) {
-      toast.error('Hanya Fulltimer yang boleh akses portal ini');
+    // Gate baru: canAccessPortal (RBAC). User butuh minimal satu role/sub
+    // dengan canAccessPortal=true. Toggle di /dashboard/role-access.
+    if (auth.user && auth.user.canAccessPortal === false) {
+      toast.error(
+        'Akun Anda tidak memiliki akses ke portal. Hubungi admin untuk minta wewenang.',
+      );
       return;
     }
     setAuth(auth);

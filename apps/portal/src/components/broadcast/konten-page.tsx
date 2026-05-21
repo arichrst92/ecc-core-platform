@@ -24,6 +24,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { useDebounce } from '@/lib/use-debounce';
 import { dateLocal } from '@/lib/resources/render-helpers';
+import { UploadHint } from '@/components/upload/upload-hint';
 
 export type KontenTipe = 'news' | 'renungan';
 
@@ -520,6 +521,18 @@ function KontenFormModal({
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handleHeroSelect}
                 className="hidden"
+              />
+              <UploadHint
+                kind={tipe === 'news' ? 'hero-news' : 'hero-renungan'}
+                context={{
+                  judul,
+                  ringkasan,
+                  ayatAlkitab,
+                  tags: tagsInput
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean),
+                }}
               />
             </div>
 

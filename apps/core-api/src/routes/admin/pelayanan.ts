@@ -333,9 +333,16 @@ pelayananRouter.delete('/ibadah-link/:id', async (req, res) => {
 
 // ===== Petugas (jemaat yang bertugas di ibadah-pelayanan specific) =====
 
-// List petugas untuk 1 ibadah-pelayanan link
+// List petugas untuk 1 ibadah-pelayanan link.
+//   - Tanpa query → return SEMUA row (default + override). UI bisa group
+//     berdasarkan tanggalIbadah null vs isi.
+//   - ?tanggal=YYYY-MM-DD → resolved view untuk tanggal itu (snapshot
+//     semantics: kalau ada override untuk tanggal → pakai override only;
+//     kalau tidak → pakai default).
 pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
-  const data = await prisma.ibadahPelayananPetugas.findMany({
+  const tanggalStr = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
+
+  const all = await prisma.ibadahPelayananPetugas.findMany({
     where: { ibadahPelayananId: req.params.id },
     orderBy: [{ pelayananRole: { level: 'desc' } }, { jemaat: { namaLengkap: 'asc' } }],
     include: {
@@ -343,10 +350,30 @@ pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
       pelayananRole: { select: { id: true, nama: true, level: true } },
     },
   });
-  res.json({ success: true, data });
+
+  if (!tanggalStr) {
+    res.json({ success: true, data: all });
+    return;
+  }
+
+  // Validate tanggal format
+  const tanggalDate = new Date(tanggalStr);
+  if (isNaN(tanggalDate.getTime())) {
+    throw BadRequest('Format tanggal harus YYYY-MM-DD');
+  }
+  // Resolve snapshot
+  const overrides = all.filter(
+    (p) => p.tanggalIbadah && p.tanggalIbadah.toISOString().slice(0, 10) === tanggalStr,
+  );
+  const data = overrides.length > 0 ? overrides : all.filter((p) => p.tanggalIbadah === null);
+  res.json({
+    success: true,
+    data,
+    meta: { tanggal: tanggalStr, source: overrides.length > 0 ? 'override' : 'default' },
+  });
 });
 
-// Assign petugas
+// Assign petugas (default ATAU override per tanggal)
 pelayananRouter.post('/petugas', async (req, res) => {
   const input = assignPetugasSchema.parse(req.body);
 
@@ -363,14 +390,24 @@ pelayananRouter.post('/petugas', async (req, res) => {
     throw BadRequest(`Role "${role.nama}" bukan milik pelayanan ${link.pelayanan.nama}`);
   }
 
+  const data = {
+    ibadahPelayananId: input.ibadahPelayananId,
+    jemaatId: input.jemaatId,
+    pelayananRoleId: input.pelayananRoleId,
+    catatan: input.catatan,
+    tanggalIbadah: input.tanggalIbadah ? new Date(input.tanggalIbadah) : null,
+    canScanAttendance: input.canScanAttendance ?? false,
+  };
+
   const created = await prisma.ibadahPelayananPetugas.create({
-    data: input,
+    data,
     include: {
       jemaat: { select: { namaLengkap: true } },
       pelayananRole: { select: { nama: true } },
     },
   });
-  const label = `${created.jemaat.namaLengkap} (${created.pelayananRole.nama}) — ${link.pelayanan.nama} @ ${link.ibadah.nama}`;
+  const dateLabel = data.tanggalIbadah ? ` [${input.tanggalIbadah}]` : ' [default]';
+  const label = `${created.jemaat.namaLengkap} (${created.pelayananRole.nama})${dateLabel} — ${link.pelayanan.nama} @ ${link.ibadah.nama}`;
   audit(req, {
     action: 'CREATE',
     resource: 'ibadah_pelayanan_petugas',

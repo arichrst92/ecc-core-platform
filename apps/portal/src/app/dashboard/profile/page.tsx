@@ -15,6 +15,7 @@ import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { FaceCapture } from '@/components/face/face-capture';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { UploadHint } from '@/components/upload/upload-hint';
 
 export default function ProfilePage() {
   const { user, setAuth, refreshToken, accessToken } = useAuthStore();
@@ -117,6 +118,7 @@ export default function ProfilePage() {
               <Upload className="w-4 h-4" />
               {uploadAvatarMut.isPending ? 'Mengunggah...' : 'Ganti avatar'}
             </button>
+            <UploadHint kind="profile" />
           </div>
         </div>
       </section>

@@ -1,0 +1,664 @@
+/**
+ * Mobile-app-centric self-service endpoints under /admin/me/*.
+ *
+ * Semua endpoint di sini operate terhadap "jemaat current" (req.user.jemaatId),
+ * tidak butuh role admin/fulltimer — siapapun yang punya akun valid bisa pakai.
+ *
+ * Cakupan endpoint:
+ *   - GET    /admin/me                          → profil diri (Jemaat + User)
+ *   - PATCH  /admin/me                          → self-edit profile (subset field)
+ *   - POST   /admin/me/foto                     → upload foto profile (multipart)
+ *   - GET    /admin/me/stats                    → streak + summary (M2)
+ *   - GET    /admin/me/scanner-events           → event yang user-nya scanner (M7)
+ *   - GET    /admin/me/scanner-ibadah           → ibadah yang user-nya scanner (M7)
+ *   - GET    /admin/me/homecell-managed         → homecell user-nya PIC (M9)
+ *   - GET    /admin/me/homecell-area-managed    → area user-nya PIC (M9)
+ *
+ *   - GET    /admin/me/family                   → list family network
+ *   - POST   /admin/me/family/link-by-kode      → link via scan QR kode
+ *   - POST   /admin/me/family/link-by-phone     → link via no HP
+ *   - POST   /admin/me/family/register-new      → register jemaat baru + auto-link
+ *   - PATCH  /admin/me/family/:jemaatId         → update role relasi
+ *   - DELETE /admin/me/family/:jemaatId         → unlink
+ *
+ *   - GET    /admin/me/branch-change-requests   → list request user (riwayat)
+ *   - POST   /admin/me/branch-change-request    → submit request pindah cabang
+ */
+import { Router } from 'express';
+import { prisma, Prisma } from '@ecc/database';
+import {
+  selfEditJemaatSchema,
+  linkFamilyByKodeSchema,
+  linkFamilyByPhoneSchema,
+  registerFamilyNewSchema,
+  updateFamilyRelationSchema,
+  createBranchChangeRequestSchema,
+  type FamilyRole,
+} from '@ecc/shared-types';
+import { BadRequest, Conflict, NotFound, Unauthorized } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
+import { saveProfilePhoto } from '../../lib/storage.js';
+import { generateUniqueKode } from '../../lib/kode-reservasi.js';
+import { flexImageUpload } from '../../lib/image-upload.js';
+
+export const meRouter = Router();
+
+// Upload pakai flexImageUpload() dari lib/image-upload.ts (lebih lenient:
+// field name agnostic + accept HEIC dari iOS).
+
+// ============================================================
+//  Helpers
+// ============================================================
+
+/** Helper: assert authenticated + return jemaatId. */
+function assertJemaatId(req: Parameters<Parameters<typeof meRouter.get>[1]>[0]): string {
+  if (!req.user) throw Unauthorized();
+  return req.user.jemaatId;
+}
+
+/** Reciprocal role: A -[role]→ B ⇒ B -[reciprocal]→ A. */
+function reciprocalRole(role: FamilyRole): FamilyRole {
+  switch (role) {
+    case 'SPOUSE':
+      return 'SPOUSE';
+    case 'CHILD':
+      return 'PARENT';
+    case 'PARENT':
+      return 'CHILD';
+    case 'SIBLING':
+      return 'SIBLING';
+  }
+}
+
+/**
+ * Create reciprocal family link (auto-verify per decision 2026-05-19).
+ * Idempotent: kalau row sudah ada, update role kalau berbeda.
+ */
+async function upsertFamilyLink(
+  jemaatAId: string,
+  jemaatBId: string,
+  role: FamilyRole,
+  createdBy: string,
+) {
+  if (jemaatAId === jemaatBId) throw BadRequest('Tidak bisa link ke diri sendiri.');
+
+  const reciprocal = reciprocalRole(role);
+  // Pakai transaction untuk konsistensi.
+  return prisma.$transaction(async (tx) => {
+    const a = await tx.familyRelation.upsert({
+      where: { jemaatAId_jemaatBId: { jemaatAId, jemaatBId } },
+      create: { jemaatAId, jemaatBId, role, isVerified: true, createdBy },
+      update: { role, isVerified: true },
+    });
+    await tx.familyRelation.upsert({
+      where: { jemaatAId_jemaatBId: { jemaatAId: jemaatBId, jemaatBId: jemaatAId } },
+      create: {
+        jemaatAId: jemaatBId,
+        jemaatBId: jemaatAId,
+        role: reciprocal,
+        isVerified: true,
+        createdBy,
+      },
+      update: { role: reciprocal, isVerified: true },
+    });
+    return a;
+  });
+}
+
+// ============================================================
+//  Profile (self)
+// ============================================================
+
+meRouter.get('/', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    include: {
+      cabang: { select: { id: true, nama: true, kode: true } },
+      jemaatRoles: {
+        where: { isActive: true },
+        include: { role: true, subRole: true, subRoleStatus: true },
+      },
+      homecellMembership: {
+        where: { isActive: true },
+        include: {
+          homecell: {
+            select: {
+              id: true,
+              nama: true,
+              area: { select: { id: true, nama: true } },
+            },
+          },
+        },
+      },
+      user: { select: { id: true, fotoUrl: true, faceEnrolledAt: true } },
+    },
+  });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  res.json({ success: true, data: jemaat });
+});
+
+meRouter.patch('/', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = selfEditJemaatSchema.parse(req.body);
+
+  const before = await prisma.jemaat.findUnique({ where: { id: jemaatId } });
+  if (!before) throw NotFound('Jemaat tidak ditemukan');
+
+  const data: Prisma.JemaatUpdateInput = {
+    namaLengkap: input.namaLengkap,
+    email: input.email ?? undefined,
+    tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
+    jenisKelamin: input.jenisKelamin ?? undefined,
+    alamat: input.alamat ?? undefined,
+  };
+  const updated = await prisma.jemaat.update({ where: { id: jemaatId }, data });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat',
+    resourceId: updated.id,
+    resourceLabel: `Self-edit: ${updated.namaLengkap}`,
+    before,
+    after: updated,
+    metadata: { kind: 'self-edit-mobile' },
+  });
+  res.json({ success: true, data: updated });
+});
+
+meRouter.post('/foto', flexImageUpload(), async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  if (!req.file) {
+    throw BadRequest(
+      'File foto wajib. Kirim sebagai multipart/form-data dengan field name "foto" (atau "file" / "image").',
+    );
+  }
+  const fotoUrl = await saveProfilePhoto('jemaat', jemaatId, req.file.buffer);
+  const updated = await prisma.jemaat.update({
+    where: { id: jemaatId },
+    data: { fotoUrl },
+    select: { id: true, fotoUrl: true },
+  });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'jemaat',
+    resourceId: jemaatId,
+    metadata: { kind: 'self-foto-mobile', size: req.file.size },
+  });
+  res.json({ success: true, data: updated });
+});
+
+// ============================================================
+//  Stats (streak + summary)
+// ============================================================
+//
+// streakWeeks = jumlah minggu berturut-turut (paling baru → ke belakang) di mana
+// jemaat punya ≥ 1 Reservasi status=JOIN. Streak break kalau ada gap (minggu
+// kosong) > 1.
+//
+// Window evaluasi: 52 minggu terakhir (max streak yang ditampilkan = 52).
+// ============================================================
+
+function startOfIsoWeek(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  const day = out.getDay(); // 0 = Sunday
+  const mondayOffset = (day + 6) % 7;
+  out.setDate(out.getDate() - mondayOffset);
+  return out;
+}
+
+function isoWeekKey(d: Date): string {
+  const s = startOfIsoWeek(d);
+  return `${s.getFullYear()}-W${String(Math.floor(s.getTime() / (7 * 24 * 60 * 60 * 1000))).slice(-4)}`;
+}
+
+meRouter.get('/stats', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+
+  // 1. Streak — ambil reservasi JOIN 52 minggu terakhir
+  const sinceStreak = new Date();
+  sinceStreak.setDate(sinceStreak.getDate() - 52 * 7);
+  const joins = await prisma.reservasi.findMany({
+    where: {
+      jemaatId,
+      status: 'JOIN',
+      tanggalIbadah: { gte: sinceStreak },
+    },
+    select: { tanggalIbadah: true },
+    orderBy: { tanggalIbadah: 'desc' },
+  });
+
+  const weekSet = new Set<string>();
+  for (const r of joins) {
+    weekSet.add(isoWeekKey(r.tanggalIbadah));
+  }
+  // Hitung streak: mulai dari minggu ini, hitung berturut-turut ke belakang.
+  let streakWeeks = 0;
+  let cursor = startOfIsoWeek(new Date());
+  for (let i = 0; i < 52; i++) {
+    const key = isoWeekKey(cursor);
+    if (weekSet.has(key)) {
+      streakWeeks += 1;
+      cursor = new Date(cursor.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else {
+      // Toleransi: kalau minggu ini belum hadir tapi minggu lalu hadir, jangan
+      // break streak (counted from start of last hadir week).
+      if (streakWeeks > 0) break;
+      cursor = new Date(cursor.getTime() - 7 * 24 * 60 * 60 * 1000);
+      // boleh 1x skip kalau belum start, untuk handle "minggu ini belum sempat hadir".
+      if (i > 0) break;
+    }
+  }
+
+  // 2. Attended this year (reservasi JOIN)
+  const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+  const attendedThisYear = await prisma.reservasi.count({
+    where: { jemaatId, status: 'JOIN', tanggalIbadah: { gte: startOfYear } },
+  });
+
+  // 3. Event participation count (status != BATAL)
+  const eventsJoined = await prisma.eventParticipation.count({
+    where: { jemaatId, status: { not: 'BATAL' } },
+  });
+
+  // 4. Homecell membership count (active)
+  const homecellsActive = await prisma.homecellMember.count({
+    where: { jemaatId, isActive: true },
+  });
+
+  res.json({
+    success: true,
+    data: {
+      streakWeeks,
+      attendedThisYear,
+      eventsJoined,
+      homecellsActive,
+      totalAttended: joins.length,
+    },
+  });
+});
+
+// ============================================================
+//  Scanner endpoints (M7)
+// ============================================================
+//
+// User yang ditandai canScanAttendance=true di event/ibadah pelayanan petugas
+// dapat scan QR kode jemaat di endpoint POST /admin/{event,ibadah}/:id/checkin.
+// Endpoint ini list semua event/ibadah yang user-nya scanner — mobile pakai
+// untuk hint "Anda authorized scanner di X event ini".
+// ============================================================
+
+meRouter.get('/scanner-events', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const rows = await prisma.eventPelayananPetugas.findMany({
+    where: { jemaatId, canScanAttendance: true },
+    include: {
+      eventPelayanan: {
+        include: {
+          pelayanan: { select: { nama: true } },
+          event: {
+            select: {
+              id: true,
+              judul: true,
+              slug: true,
+              tanggalMulai: true,
+              tanggalSelesai: true,
+              lokasi: true,
+              butuhKehadiran: true,
+            },
+          },
+        },
+      },
+      pelayananRole: { select: { nama: true, level: true } },
+    },
+    orderBy: { eventPelayanan: { event: { tanggalMulai: 'desc' } } },
+  });
+  const data = rows
+    .filter((r) => r.eventPelayanan.event.butuhKehadiran)
+    .map((r) => ({
+      eventId: r.eventPelayanan.event.id,
+      judul: r.eventPelayanan.event.judul,
+      slug: r.eventPelayanan.event.slug,
+      tanggalMulai: r.eventPelayanan.event.tanggalMulai,
+      tanggalSelesai: r.eventPelayanan.event.tanggalSelesai,
+      lokasi: r.eventPelayanan.event.lokasi,
+      pelayananNama: r.eventPelayanan.pelayanan.nama,
+      role: r.pelayananRole.nama,
+      level: r.pelayananRole.level,
+    }));
+  res.json({ success: true, data });
+});
+
+meRouter.get('/scanner-ibadah', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const rows = await prisma.ibadahPelayananPetugas.findMany({
+    where: { jemaatId, canScanAttendance: true },
+    include: {
+      ibadahPelayanan: {
+        include: {
+          pelayanan: { select: { nama: true } },
+          ibadah: {
+            select: {
+              id: true,
+              nama: true,
+              cabangId: true,
+              tipeJadwal: true,
+              hari: true,
+              jamMulai: true,
+              jamSelesai: true,
+              lokasi: true,
+              kategoriIbadah: { select: { nama: true } },
+            },
+          },
+        },
+      },
+      pelayananRole: { select: { nama: true, level: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Dedupe by ibadahId (banyak link via pelayanan berbeda)
+  const seen = new Set<string>();
+  const data: unknown[] = [];
+  for (const r of rows) {
+    const ib = r.ibadahPelayanan.ibadah;
+    if (seen.has(ib.id)) continue;
+    seen.add(ib.id);
+    data.push({
+      ibadahId: ib.id,
+      nama: ib.nama,
+      cabangId: ib.cabangId,
+      tipeJadwal: ib.tipeJadwal,
+      hari: ib.hari,
+      jamMulai: ib.jamMulai,
+      jamSelesai: ib.jamSelesai,
+      lokasi: ib.lokasi,
+      kategori: ib.kategoriIbadah.nama,
+      pelayananNama: r.ibadahPelayanan.pelayanan.nama,
+      role: r.pelayananRole.nama,
+      level: r.pelayananRole.level,
+    });
+  }
+  res.json({ success: true, data });
+});
+
+// ============================================================
+//  Homecell managed (M9)
+// ============================================================
+
+meRouter.get('/homecell-managed', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const data = await prisma.homecell.findMany({
+    where: { picJemaatId: jemaatId, isActive: true },
+    include: {
+      area: { select: { id: true, nama: true, cabang: { select: { id: true, nama: true } } } },
+      _count: { select: { members: { where: { isActive: true } } } },
+    },
+    orderBy: { nama: 'asc' },
+  });
+  res.json({ success: true, data: data.map((r) => ({ ...r, memberCount: r._count.members })) });
+});
+
+meRouter.get('/homecell-area-managed', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const data = await prisma.homecellArea.findMany({
+    where: { picJemaatId: jemaatId, isActive: true },
+    include: {
+      cabang: { select: { id: true, nama: true } },
+      _count: { select: { homecells: true } },
+    },
+    orderBy: { nama: 'asc' },
+  });
+  res.json({ success: true, data: data.map((r) => ({ ...r, homecellCount: r._count.homecells })) });
+});
+
+// ============================================================
+//  Family management (M5, auto-verify)
+// ============================================================
+
+meRouter.get('/family', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  // List semua family relation di mana user adalah jemaatA.
+  // jemaatB info di-include.
+  const rows = await prisma.familyRelation.findMany({
+    where: { jemaatAId: jemaatId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      jemaatB: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          noHp: true,
+          kode: true,
+          fotoUrl: true,
+          tanggalLahir: true,
+          jenisKelamin: true,
+          cabang: { select: { id: true, nama: true } },
+          // tandai dependent (anak balita) lewat presence primaryGuardianId === user current
+          primaryGuardianId: true,
+        },
+      },
+    },
+  });
+  const data = rows.map((r: any) => ({
+    id: r.id,
+    role: r.role,
+    isVerified: r.isVerified,
+    createdAt: r.createdAt,
+    jemaat: {
+      ...r.jemaatB,
+      isDependent: r.jemaatB.primaryGuardianId === jemaatId,
+    },
+  }));
+  res.json({ success: true, data });
+});
+
+meRouter.post('/family/link-by-kode', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = linkFamilyByKodeSchema.parse(req.body);
+  const target = await prisma.jemaat.findUnique({
+    where: { kode: input.kode },
+    select: { id: true, namaLengkap: true, kode: true },
+  });
+  if (!target) throw NotFound(`Kode jemaat "${input.kode}" tidak ditemukan.`);
+  if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
+
+  const link = await upsertFamilyLink(jemaatId, target.id, input.role, jemaatId);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'family_relation',
+    resourceId: link.id,
+    resourceLabel: `${input.role} ↔ ${target.namaLengkap}`,
+    metadata: { kind: 'family-link-kode', via: 'kode' },
+  });
+  res.status(201).json({ success: true, data: { ...link, target } });
+});
+
+meRouter.post('/family/link-by-phone', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = linkFamilyByPhoneSchema.parse(req.body);
+  const target = await prisma.jemaat.findUnique({
+    where: { noHp: input.noHp },
+    select: { id: true, namaLengkap: true, noHp: true },
+  });
+  if (!target) throw NotFound(`No HP "${input.noHp}" tidak ditemukan.`);
+  if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
+
+  const link = await upsertFamilyLink(jemaatId, target.id, input.role, jemaatId);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'family_relation',
+    resourceId: link.id,
+    resourceLabel: `${input.role} ↔ ${target.namaLengkap}`,
+    metadata: { kind: 'family-link-phone', via: 'phone' },
+  });
+  res.status(201).json({ success: true, data: { ...link, target } });
+});
+
+meRouter.post('/family/register-new', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = registerFamilyNewSchema.parse(req.body);
+  const me = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { cabangId: true, namaLengkap: true },
+  });
+  if (!me) throw NotFound('Jemaat current tidak ditemukan');
+
+  const cabangId = input.cabangId ?? me.cabangId;
+  const cabang = await prisma.cabangGereja.findUnique({
+    where: { id: cabangId },
+    select: { isActive: true },
+  });
+  if (!cabang?.isActive) throw BadRequest('Cabang tidak valid.');
+
+  if (input.noHp) {
+    const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
+    if (existing) throw Conflict('Nomor HP sudah terdaftar — gunakan link-by-phone.');
+  }
+
+  const kode = await generateUniqueKode(
+    async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
+  );
+
+  const created = await prisma.jemaat.create({
+    data: {
+      cabangId,
+      namaLengkap: input.namaLengkap,
+      kode,
+      noHp: input.noHp,
+      tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
+      jenisKelamin: input.jenisKelamin ?? undefined,
+      alamat: input.alamat,
+      tanggalBergabung: new Date(),
+      primaryGuardianId: input.noHp ? null : jemaatId, // dependent kalau no noHp
+      registeredViaJemaatId: jemaatId,
+      isActive: true,
+    },
+    select: { id: true, namaLengkap: true, kode: true, noHp: true },
+  });
+
+  const link = await upsertFamilyLink(jemaatId, created.id, input.role, jemaatId);
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'jemaat',
+    resourceId: created.id,
+    resourceLabel: `Family register-new: ${created.namaLengkap} via ${me.namaLengkap}`,
+    metadata: { kind: 'family-register-new', dependent: !input.noHp },
+  });
+  res.status(201).json({ success: true, data: { jemaat: created, family: link } });
+});
+
+meRouter.patch('/family/:jemaatId', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const targetId = req.params.jemaatId;
+  const input = updateFamilyRelationSchema.parse(req.body);
+  if (targetId === jemaatId) throw BadRequest('Tidak bisa update diri sendiri.');
+
+  const before = await prisma.familyRelation.findUnique({
+    where: { jemaatAId_jemaatBId: { jemaatAId: jemaatId, jemaatBId: targetId } },
+  });
+  if (!before) throw NotFound('Relasi keluarga tidak ditemukan.');
+
+  const link = await upsertFamilyLink(jemaatId, targetId, input.role, jemaatId);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'family_relation',
+    resourceId: link.id,
+    resourceLabel: `${input.role} update`,
+    before,
+    after: link,
+  });
+  res.json({ success: true, data: link });
+});
+
+meRouter.delete('/family/:jemaatId', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const targetId = req.params.jemaatId;
+  if (targetId === jemaatId) throw BadRequest('Tidak bisa unlink diri sendiri.');
+
+  // Hapus kedua arah supaya tidak menggantung.
+  const before = await prisma.familyRelation.findUnique({
+    where: { jemaatAId_jemaatBId: { jemaatAId: jemaatId, jemaatBId: targetId } },
+  });
+  if (!before) throw NotFound('Relasi keluarga tidak ditemukan.');
+
+  await prisma.$transaction([
+    prisma.familyRelation.deleteMany({
+      where: { jemaatAId: jemaatId, jemaatBId: targetId },
+    }),
+    prisma.familyRelation.deleteMany({
+      where: { jemaatAId: targetId, jemaatBId: jemaatId },
+    }),
+  ]);
+  audit(req, {
+    action: 'DELETE',
+    resource: 'family_relation',
+    resourceId: before.id,
+    resourceLabel: `unlink family`,
+    before,
+  });
+  res.status(204).end();
+});
+
+// ============================================================
+//  Branch change request (M6)
+// ============================================================
+
+meRouter.get('/branch-change-requests', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const data = await prisma.branchChangeRequest.findMany({
+    where: { jemaatId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      // Note: relation name di schema = currentCabangId tidak punya relation
+      // explicit (cuma id string). Tampilkan via lookup tambahan.
+    },
+  });
+  res.json({ success: true, data });
+});
+
+meRouter.post('/branch-change-request', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = createBranchChangeRequestSchema.parse(req.body);
+
+  const me = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { cabangId: true, namaLengkap: true },
+  });
+  if (!me) throw NotFound('Jemaat current tidak ditemukan');
+  if (me.cabangId === input.targetCabangId) {
+    throw BadRequest('Cabang tujuan sama dengan cabang saat ini.');
+  }
+  const target = await prisma.cabangGereja.findUnique({
+    where: { id: input.targetCabangId },
+    select: { isActive: true, nama: true },
+  });
+  if (!target?.isActive) throw BadRequest('Cabang tujuan tidak valid atau nonaktif.');
+
+  // Cek pending sudah ada? Tolak duplicate.
+  const pending = await prisma.branchChangeRequest.findFirst({
+    where: { jemaatId, status: 'PENDING' },
+  });
+  if (pending) {
+    throw Conflict('Sudah ada permohonan pindah cabang yang masih PENDING.');
+  }
+
+  const created = await prisma.branchChangeRequest.create({
+    data: {
+      jemaatId,
+      currentCabangId: me.cabangId,
+      targetCabangId: input.targetCabangId,
+      reason: input.reason,
+      status: 'PENDING',
+    },
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'branch_change_request',
+    resourceId: created.id,
+    resourceLabel: `${me.namaLengkap} → ${target.nama}`,
+    after: created,
+  });
+  res.status(201).json({ success: true, data: created });
+});

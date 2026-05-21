@@ -8,6 +8,12 @@ import { Upload, Filter, X } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 import { RelasiModal } from '@/components/jemaat/relasi-modal';
+import {
+  JemaatFilterBar,
+  defaultJemaatFilter,
+  toJemaatQueryParams,
+  type JemaatFilterState,
+} from '@/components/jemaat/filter-bar';
 import { apiClient } from '@/lib/api-client';
 
 function JemaatPageInner() {
@@ -17,6 +23,7 @@ function JemaatPageInner() {
   const sinodeId = sp.get('sinodeId') ?? undefined;
 
   const [relasiTarget, setRelasiTarget] = useState<{ id: string; namaLengkap: string } | null>(null);
+  const [filter, setFilter] = useState<JemaatFilterState>(defaultJemaatFilter);
   const config = useMemo(() => buildJemaatResource(setRelasiTarget), []);
 
   const cabangQ = useQuery({
@@ -63,6 +70,15 @@ function JemaatPageInner() {
       </div>
     ) : null;
 
+  // Gabungkan param URL (cabang/sinode) + state filter user → param ke API.
+  // CrudPage menerima extraParams; nilai di sini akan override `sortBy/sortOrder`
+  // default dari config (lihat CrudPage: `...cleanExtra` di-spread terakhir).
+  const extraParams = {
+    cabangId,
+    sinodeId,
+    ...toJemaatQueryParams(filter),
+  };
+
   return (
     <div>
       <div className="flex justify-end mb-3 -mt-2">
@@ -74,7 +90,10 @@ function JemaatPageInner() {
           Import CSV
         </Link>
       </div>
-      <CrudPage config={config} extraParams={{ cabangId, sinodeId }} filterBanner={banner} />
+
+      <JemaatFilterBar value={filter} onChange={setFilter} />
+
+      <CrudPage config={config} extraParams={extraParams} filterBanner={banner} />
 
       {relasiTarget && (
         <RelasiModal

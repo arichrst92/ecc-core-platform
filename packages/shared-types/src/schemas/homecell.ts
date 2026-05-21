@@ -2,20 +2,7 @@ import './common.js';
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
-// Hari minggu enum — selaras Prisma HariMinggu
-export const hariMingguSchema = z.enum([
-  'MINGGU',
-  'SENIN',
-  'SELASA',
-  'RABU',
-  'KAMIS',
-  'JUMAT',
-  'SABTU',
-]);
-export type HariMinggu = z.infer<typeof hariMingguSchema>;
-
-// jam HH:mm
-const jamSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:mm');
+// `hariMingguSchema` di-export dari schemas/ibadah.ts; tidak duplicate di sini.
 
 // ====================== HOMECELL AREA ======================
 //
@@ -48,14 +35,15 @@ export type UpdateHomecellAreaInput = z.infer<typeof updateHomecellAreaSchema>;
 //
 // PIC homecell harus Pelayanan="Penggembalaan" + Role="Homecell Leader".
 
+// Catatan: alamat / hari / jam pertemuan TIDAK lagi disimpan via form karena
+// di lapangan jadwal homecell ditentukan oleh kesepakatan dan bisa berubah
+// tiap minggu. Kolom DB masih ada (data lama tetap), tapi tidak diekspos
+// di form/UI.
 export const createHomecellSchema = z
   .object({
     areaId: uuidSchema,
     nama: z.string().trim().min(2).max(150),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
-    alamat: emptyToUndefined(z.string().trim().max(500)),
-    hari: emptyToUndefined(hariMingguSchema),
-    jam: emptyToUndefined(jamSchema),
     picJemaatId: emptyToUndefined(uuidSchema),
     isActive: z.boolean().default(true),
   })
@@ -67,9 +55,6 @@ export const updateHomecellSchema = z
     areaId: emptyToUndefined(uuidSchema),
     nama: z.string().trim().min(2).max(150).optional(),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
-    alamat: emptyToUndefined(z.string().trim().max(500)),
-    hari: emptyToUndefined(hariMingguSchema),
-    jam: emptyToUndefined(jamSchema),
     picJemaatId: emptyToUndefined(uuidSchema),
     isActive: z.boolean().optional(),
   })

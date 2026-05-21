@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,14 +18,34 @@ import {
   CheckCircle2,
   Clock,
   Heart,
+  Shield,
+  Pencil,
+  QrCode,
+  Copy,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { FormModal } from '@/components/crud/form-modal';
+import { buildJemaatResource } from '@/lib/resources/jemaat-config';
+
+interface JemaatRoleAssignment {
+  id: string;
+  isActive: boolean;
+  tanggalMulai: string;
+  tanggalSelesai: string | null;
+  catatan: string | null;
+  role: { id: string; nama: string };
+  subRole: { id: string; nama: string };
+  subRoleStatus: { id: string; nama: string } | null;
+}
 
 interface Jemaat {
   id: string;
+  cabangId: string;
   namaLengkap: string;
+  kode: string | null;
   email: string | null;
   noHp: string | null;
   tanggalLahir: string | null;
@@ -35,6 +55,17 @@ interface Jemaat {
   fotoUrl: string | null;
   isActive: boolean;
   cabang?: { id: string; nama: string };
+  jemaatRoles?: JemaatRoleAssignment[];
+}
+
+interface RoleDetail {
+  id: string;
+  nama: string;
+  subRoles: {
+    id: string;
+    nama: string;
+    statuses: { id: string; nama: string }[];
+  }[];
 }
 
 interface PelayananAssignment {
@@ -55,13 +86,19 @@ interface Pelayanan {
 
 export default function JemaatDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const qc = useQueryClient();
   const jemaatId = params.id;
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [deleting, setDeleting] = useState<PelayananAssignment | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [addRoleOpen, setAddRoleOpen] = useState(false);
+  const [deletingRole, setDeletingRole] = useState<JemaatRoleAssignment | null>(null);
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
+
+  // Re-use jemaat resource config untuk dapat field list + schema yang sama
+  // dengan halaman list. Tidak butuh callback Relasi di sini.
+  const jemaatConfig = useMemo(() => buildJemaatResource(() => {}), []);
 
   // Jemaat detail
   const jemaatQ = useQuery({
@@ -117,6 +154,46 @@ export default function JemaatDetailPage() {
       toast.success('Penugasan diakhiri');
     },
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  // ===== Edit profil jemaat =====
+  const updateProfileMut = useMutation({
+    mutationFn: async (values: Record<string, unknown>) =>
+      apiClient.patch(`/admin/jemaat/${jemaatId}`, values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jemaat', 'detail', jemaatId] });
+      qc.invalidateQueries({ queryKey: ['jemaat'] }); // list cache
+      toast.success('Profil jemaat diperbarui');
+      setEditOpen(false);
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal memperbarui profil'),
+  });
+
+  // ===== Role assignment mutations =====
+  const endRoleMut = useMutation({
+    mutationFn: async (id: string) =>
+      apiClient.patch(`/admin/role/assign/${id}`, {
+        isActive: false,
+        tanggalSelesai: new Date().toISOString().slice(0, 10),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jemaat', 'detail', jemaatId] });
+      toast.success('Role diakhiri');
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal mengakhiri role'),
+  });
+
+  const deleteRoleMut = useMutation({
+    mutationFn: async (id: string) => apiClient.delete(`/admin/role/assign/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jemaat', 'detail', jemaatId] });
+      toast.success('Role dihapus');
+      setDeletingRole(null);
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal hapus role'),
   });
 
   if (jemaatQ.isLoading) {
@@ -205,12 +282,16 @@ export default function JemaatDetailPage() {
           </div>
         </div>
         <button
-          onClick={() => router.push(`/dashboard/jemaat?edit=${j.id}`)}
-          className="px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
+          onClick={() => setEditOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
         >
+          <Pencil className="w-3.5 h-3.5" />
           Edit Profile
         </button>
       </div>
+
+      {/* Kartu QR jemaat — kode untuk scan check-in event */}
+      {j.kode && <JemaatQrCard kode={j.kode} nama={j.namaLengkap} />}
 
       {/* Pelayanan section */}
       <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
@@ -276,6 +357,76 @@ export default function JemaatDetailPage() {
         </div>
       </section>
 
+      {/* Role section */}
+      <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden mt-6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div>
+            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Role
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Role / Sub-Role / Status — riwayat penempatan jemaat dalam struktur gereja.
+            </p>
+          </div>
+          <button
+            onClick={() => setAddRoleOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Role
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {(() => {
+            const allRoles = j.jemaatRoles ?? [];
+            const activeRoles = allRoles.filter((r) => r.isActive);
+            const pastRoles = allRoles.filter((r) => !r.isActive);
+            return (
+              <>
+                <div>
+                  <div className="text-xs uppercase text-neutral-500 mb-2 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-green-600" /> Aktif
+                  </div>
+                  {activeRoles.length === 0 ? (
+                    <p className="text-sm text-neutral-400 italic">Belum ada role aktif.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeRoles.map((r) => (
+                        <JemaatRoleRow
+                          key={r.id}
+                          r={r}
+                          isActive
+                          onEnd={() => endRoleMut.mutate(r.id)}
+                          onDelete={() => setDeletingRole(r)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {pastRoles.length > 0 && (
+                  <div>
+                    <div className="text-xs uppercase text-neutral-500 mb-2 font-semibold flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Riwayat
+                    </div>
+                    <div className="space-y-2">
+                      {pastRoles.map((r) => (
+                        <JemaatRoleRow
+                          key={r.id}
+                          r={r}
+                          onDelete={() => setDeletingRole(r)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </section>
+
       {/* Relasi Keluarga section */}
       <RelasiSection jemaatId={jemaatId} />
 
@@ -300,6 +451,49 @@ export default function JemaatDetailPage() {
         title="Hapus penugasan ini?"
         itemName={deleting ? `${deleting.pelayanan.nama}:${deleting.pelayananRole.nama}` : undefined}
         onConfirm={() => deleting && deleteMut.mutate(deleting.id)}
+      />
+
+      {/* Edit Profile modal */}
+      <FormModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit Profil Jemaat"
+        schema={jemaatConfig.updateSchema}
+        fields={jemaatConfig.fields}
+        defaultValues={j as unknown as Record<string, unknown>}
+        isEdit
+        loading={updateProfileMut.isPending}
+        onSubmit={async (values) => {
+          await updateProfileMut.mutateAsync(values as Record<string, unknown>);
+        }}
+      />
+
+      {/* Add Role modal */}
+      {addRoleOpen && (
+        <AddJemaatRoleModal
+          jemaatId={jemaatId}
+          existing={j.jemaatRoles ?? []}
+          onClose={() => setAddRoleOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['jemaat', 'detail', jemaatId] });
+            setAddRoleOpen(false);
+          }}
+        />
+      )}
+
+      <ConfirmDelete
+        open={!!deletingRole}
+        loading={deleteRoleMut.isPending}
+        onClose={() => setDeletingRole(null)}
+        title="Hapus role ini?"
+        itemName={
+          deletingRole
+            ? `${deletingRole.role.nama}:${deletingRole.subRole.nama}${
+                deletingRole.subRoleStatus ? `:${deletingRole.subRoleStatus.nama}` : ''
+              }`
+            : undefined
+        }
+        onConfirm={() => deletingRole && deleteRoleMut.mutate(deletingRole.id)}
       />
     </div>
   );
@@ -816,5 +1010,328 @@ function AddRelasiModal({
         </div>
       </div>
     </>
+  );
+}
+
+// ============== Jemaat Role row + Modal ==============
+
+function JemaatRoleRow({
+  r,
+  isActive,
+  onEnd,
+  onDelete,
+}: {
+  r: JemaatRoleAssignment;
+  isActive?: boolean;
+  onEnd?: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-neutral-900">{r.role.nama}</span>
+          <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700">
+            {r.subRole.nama}
+          </span>
+          {r.subRoleStatus && (
+            <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-amber-50 text-amber-700">
+              {r.subRoleStatus.nama}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-neutral-500 mt-0.5">
+          {new Date(r.tanggalMulai).toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })}
+          {r.tanggalSelesai && (
+            <>
+              {' '}
+              –{' '}
+              {new Date(r.tanggalSelesai).toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </>
+          )}
+          {r.catatan && <span className="italic"> · {r.catatan}</span>}
+        </div>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        {isActive && onEnd && (
+          <button
+            onClick={onEnd}
+            className="px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded"
+            title="Akhiri (set tgl selesai = hari ini)"
+          >
+            Akhiri
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          className="p-1.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600"
+          title="Hapus permanent"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddJemaatRoleModal({
+  jemaatId,
+  existing,
+  onClose,
+  onSuccess,
+}: {
+  jemaatId: string;
+  existing: JemaatRoleAssignment[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [roleId, setRoleId] = useState('');
+  const [subRoleId, setSubRoleId] = useState('');
+  const [subRoleStatusId, setSubRoleStatusId] = useState('');
+  const [tanggalMulai, setTanggalMulai] = useState(new Date().toISOString().slice(0, 10));
+  const [catatan, setCatatan] = useState('');
+
+  const rolesQ = useQuery({
+    queryKey: ['role', 'with-subroles'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RoleDetail[] }>('/admin/role');
+      return res.data.data;
+    },
+  });
+
+  const selectedRole = (rolesQ.data ?? []).find((r) => r.id === roleId);
+  const selectedSubRole = selectedRole?.subRoles.find((s) => s.id === subRoleId);
+  const availableStatuses = selectedSubRole?.statuses ?? [];
+
+  // Cek duplikat aktif: jemaat tidak boleh punya 2 row aktif untuk
+  // (role, subRole) yang sama. Hanya warning di UI; backend tetap final guard.
+  const existingActiveKey = new Set(
+    existing.filter((e) => e.isActive).map((e) => `${e.role.id}:${e.subRole.id}`),
+  );
+  const duplicateActive =
+    !!(roleId && subRoleId && existingActiveKey.has(`${roleId}:${subRoleId}`));
+
+  const createMut = useMutation({
+    mutationFn: async () =>
+      apiClient.post('/admin/role/assign', {
+        jemaatId,
+        roleId,
+        subRoleId,
+        subRoleStatusId: subRoleStatusId || undefined,
+        tanggalMulai,
+        catatan: catatan || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Role ditambah');
+      onSuccess();
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal menambahkan role'),
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900">Tambah Role</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Role → Sub-Role wajib; Status opsional kalau Sub-Role punya tingkatan status.
+            </p>
+          </div>
+          <div className="p-6 space-y-4">
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Role</span>
+              <select
+                value={roleId}
+                onChange={(e) => {
+                  setRoleId(e.target.value);
+                  setSubRoleId('');
+                  setSubRoleStatusId('');
+                }}
+                disabled={rolesQ.isLoading}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:opacity-50"
+              >
+                <option value="">{rolesQ.isLoading ? 'Memuat...' : '— pilih role —'}</option>
+                {(rolesQ.data ?? []).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.nama}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Sub-Role</span>
+              <select
+                value={subRoleId}
+                onChange={(e) => {
+                  setSubRoleId(e.target.value);
+                  setSubRoleStatusId('');
+                }}
+                disabled={!roleId}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:opacity-50"
+              >
+                <option value="">— pilih sub-role —</option>
+                {(selectedRole?.subRoles ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nama}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">
+                Status <span className="text-neutral-400">(opsional)</span>
+              </span>
+              <select
+                value={subRoleStatusId}
+                onChange={(e) => setSubRoleStatusId(e.target.value)}
+                disabled={!subRoleId || availableStatuses.length === 0}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:opacity-50"
+              >
+                <option value="">
+                  {availableStatuses.length === 0 && subRoleId
+                    ? '(sub-role ini tidak punya tingkatan status)'
+                    : '— tanpa status —'}
+                </option>
+                {availableStatuses.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nama}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Tanggal Mulai</span>
+              <input
+                type="date"
+                value={tanggalMulai}
+                onChange={(e) => setTanggalMulai(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Catatan (opsional)</span>
+              <input
+                type="text"
+                value={catatan}
+                onChange={(e) => setCatatan(e.target.value)}
+                placeholder="Mis. dilantik 2025"
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+
+            {duplicateActive && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                Jemaat ini sudah memiliki role aktif untuk kombinasi tersebut.
+                Akhiri yang lama dulu atau pilih sub-role berbeda.
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <button
+              onClick={onClose}
+              disabled={createMut.isPending}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={
+                !roleId || !subRoleId || createMut.isPending || duplicateActive
+              }
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
+            >
+              {createMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Tambah
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============== Kartu QR Jemaat ==============
+// Tampilkan kode + QR. Kode dipakai untuk scan check-in event (sec 24 KB).
+// QR di-render via api.qrserver.com (pattern sama dgn QR kode reservasi).
+
+function JemaatQrCard({ kode, nama }: { kode: string; nama: string }) {
+  const [copied, setCopied] = useState(false);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(kode)}`;
+
+  function copyKode() {
+    navigator.clipboard?.writeText(kode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-neutral-100">
+        <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+          <QrCode className="w-4 h-4 text-brand-500" />
+          Kartu QR Jemaat
+        </h2>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Kode unik {nama} untuk scan check-in event yang butuh kehadiran.
+          Cetak atau kirim QR ini ke jemaat.
+        </p>
+      </div>
+      <div className="p-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={qrUrl}
+          alt={`QR ${kode}`}
+          className="w-40 h-40 border border-neutral-200 rounded bg-white p-2 shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
+            Kode
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="px-3 py-2 bg-neutral-100 rounded text-lg font-mono tracking-wider text-neutral-900">
+              {kode}
+            </code>
+            <button
+              onClick={copyKode}
+              className="inline-flex items-center gap-1 px-2 py-2 text-xs font-medium border border-neutral-300 rounded hover:bg-neutral-50"
+              title="Copy kode"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-green-600" />
+                  Tersalin
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-neutral-500 mt-3 leading-relaxed">
+            Saat hari H event, admin scan QR ini (atau ketik kode manual) di halaman event
+            → tombol <strong>Check-in</strong>. Sistem otomatis mark partisipasi sebagai HADIR.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

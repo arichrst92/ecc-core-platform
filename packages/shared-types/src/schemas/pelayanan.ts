@@ -73,11 +73,19 @@ export const linkIbadahPelayananSchema = z
 export type LinkIbadahPelayananInput = z.infer<typeof linkIbadahPelayananSchema>;
 
 // ===== Assign Petugas (jemaat) ke Ibadah-Pelayanan =====
+// tanggalIbadah:
+//   undefined / "" → petugas default (berlaku untuk semua occurrence)
+//   "YYYY-MM-DD"   → petugas override khusus tanggal itu
+//
+// canScanAttendance: kalau true, petugas ini berwenang scan QR kode jemaat
+// untuk check-in via POST /admin/ibadah/:id/checkin.
 export const assignPetugasSchema = z
   .object({
     ibadahPelayananId: uuidSchema,
     jemaatId: uuidSchema,
     pelayananRoleId: uuidSchema,
+    tanggalIbadah: emptyToUndefined(z.string().date()),
+    canScanAttendance: z.boolean().default(false),
     catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('AssignPetugasInput');
@@ -86,7 +94,33 @@ export type AssignPetugasInput = z.infer<typeof assignPetugasSchema>;
 export const updatePetugasSchema = z
   .object({
     pelayananRoleId: uuidSchema.optional(),
+    canScanAttendance: z.boolean().optional(),
     catatan: emptyToUndefined(z.string().trim()),
   })
   .openapi('UpdatePetugasInput');
 export type UpdatePetugasInput = z.infer<typeof updatePetugasSchema>;
+
+// ===== Occurrence cancel =====
+export const cancelOccurrenceSchema = z
+  .object({
+    catatan: emptyToUndefined(z.string().trim()),
+  })
+  .openapi('CancelOccurrenceInput');
+export type CancelOccurrenceInput = z.infer<typeof cancelOccurrenceSchema>;
+
+// ===== Check-in Ibadah (scan QR kode jemaat) =====
+export const ibadahCheckinSchema = z
+  .object({
+    kode: z
+      .string()
+      .trim()
+      .min(4, 'Kode terlalu pendek')
+      .max(20)
+      .transform((v) => v.toUpperCase()),
+    // YYYY-MM-DD — tanggal occurrence yang di-check-in. Default backend = today.
+    tanggalIbadah: emptyToUndefined(z.string().date()),
+    // Override warning (mis. kalau partisipasi sebelumnya CANCEL).
+    force: z.boolean().default(false),
+  })
+  .openapi('IbadahCheckinInput');
+export type IbadahCheckinInput = z.infer<typeof ibadahCheckinSchema>;

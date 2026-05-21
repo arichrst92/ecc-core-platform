@@ -1,8 +1,33 @@
 import Link from 'next/link';
-import { Eye, Heart } from 'lucide-react';
+import { Heart, User as UserIcon } from 'lucide-react';
 import { createJemaatSchema, updateJemaatSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField, calcAge } from './render-helpers';
+
+const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
+
+/** Avatar 32x32 bulat. Fallback ke inisial pertama bila tidak ada foto. */
+function JemaatAvatar({ nama, fotoUrl }: { nama: string; fotoUrl: string | null }) {
+  if (fotoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`${API_BASE}${fotoUrl}`}
+        alt={nama}
+        className="w-8 h-8 rounded-full object-cover border border-neutral-200 shrink-0"
+      />
+    );
+  }
+  const initial = nama.trim().charAt(0).toUpperCase() || '?';
+  return (
+    <div
+      className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-semibold shrink-0"
+      title={nama}
+    >
+      {initial === '?' ? <UserIcon className="w-4 h-4" /> : initial}
+    </div>
+  );
+}
 
 interface JemaatRoleLite {
   role: { nama: string };
@@ -51,10 +76,10 @@ export function buildJemaatResource(
         render: (_v, row) => (
           <Link
             href={`/dashboard/jemaat/${row.id}`}
-            className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-brand-600 hover:underline font-medium min-w-0"
           >
-            <Eye className="w-3.5 h-3.5 shrink-0" />
-            {row.namaLengkap}
+            <JemaatAvatar nama={row.namaLengkap} fotoUrl={row.fotoUrl} />
+            <span className="truncate">{row.namaLengkap}</span>
           </Link>
         ),
       },

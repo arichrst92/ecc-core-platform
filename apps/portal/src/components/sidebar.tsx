@@ -22,14 +22,22 @@ import {
   BookOpen,
   Home as HomeIcon,
   MapPin,
+  Megaphone,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { hasMenuAccess } from '@ecc/shared-types';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface NavItem {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
+  /**
+   * menuKey RBAC. Kalau diset, item hanya ditampilkan kalau user punya
+   * canRead access di menu ini. Item tanpa menuKey selalu tampil (mis. Dashboard, Profile).
+   */
+  menuKey?: string;
 }
 
 interface NavGroup {
@@ -45,46 +53,53 @@ const groups: NavGroup[] = [
   {
     label: 'Entity',
     items: [
-      { href: '/dashboard/sinode', label: 'Sinode', icon: Building2 },
-      { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church },
+      { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, menuKey: 'sinode' },
+      { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, menuKey: 'cabang' },
     ],
   },
   {
     label: 'Service',
     items: [
-      { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar },
-      { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers },
-      { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart },
-      { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket },
+      { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, menuKey: 'ibadah' },
+      { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, menuKey: 'kategori-ibadah' },
+      { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan' },
+      { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
     ],
   },
   {
     label: 'People',
     items: [
-      { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users },
-      { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield },
-      { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart },
+      { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, menuKey: 'jemaat' },
+      { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield, menuKey: 'role-jemaat' },
+      { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
     ],
   },
   {
     label: 'Community',
     items: [
-      { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin },
-      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon },
+      { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin, menuKey: 'homecell-area' },
+      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell' },
+    ],
+  },
+  {
+    label: 'Movement',
+    items: [
+      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event' },
     ],
   },
   {
     label: 'Broadcast',
     items: [
-      { href: '/dashboard/news', label: 'News', icon: Newspaper },
-      { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen },
+      { href: '/dashboard/news', label: 'News', icon: Newspaper, menuKey: 'news' },
+      { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
     ],
   },
   {
     label: 'Developer Tools',
     items: [
-      { href: '/dashboard/api-key', label: 'API Keys', icon: Key },
-      { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity },
+      { href: '/dashboard/role-access', label: 'Role Access', icon: Shield, menuKey: 'role-access' },
+      { href: '/dashboard/api-key', label: 'API Keys', icon: Key, menuKey: 'api-key' },
+      { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity, menuKey: 'audit-log' },
     ],
   },
 ];
@@ -106,6 +121,16 @@ function isItemActive(pathname: string | null, href: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+
+  // RBAC filter: item dengan menuKey hanya tampil kalau user punya canRead.
+  // Item tanpa menuKey selalu tampil. Selama menuAccess belum tersedia
+  // (mis. cache lama), tampilkan semua supaya tidak kosong total.
+  function isItemVisible(item: NavItem): boolean {
+    if (!item.menuKey) return true;
+    if (!user?.menuAccess) return true;
+    return hasMenuAccess(user.menuAccess, item.menuKey, 'read');
+  }
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -154,13 +179,16 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-2 space-y-4 overflow-y-auto">
         {/* Top items (Dashboard) */}
         <div className="space-y-1">
-          {top.map((item) => (
+          {top.filter(isItemVisible).map((item) => (
             <NavLink key={item.href} item={item} active={isItemActive(pathname, item.href)} />
           ))}
         </div>
 
-        {/* Grouped items */}
+        {/* Grouped items — kalau grup tidak punya item yang visible setelah
+            RBAC filter, jangan render header-nya sama sekali. */}
         {groups.map((group) => {
+          const visibleItems = group.items.filter(isItemVisible);
+          if (visibleItems.length === 0) return null;
           const isCollapsed = Boolean(collapsed[group.label]);
 
           return (
@@ -185,7 +213,7 @@ export function Sidebar() {
                   isCollapsed ? 'max-h-0' : 'max-h-[1000px]',
                 )}
               >
-                {group.items.map((item) => (
+                {visibleItems.map((item) => (
                   <NavLink
                     key={item.href}
                     item={item}

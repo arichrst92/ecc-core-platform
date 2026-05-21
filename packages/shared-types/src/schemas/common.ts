@@ -1,5 +1,6 @@
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 
 // Pastikan z punya `.openapi()` method sebelum schema apa pun di-evaluate.
 // Idempotent — aman dipanggil multi kali (tsx/CJS kadang load schema sebelum index.ts).
@@ -41,12 +42,48 @@ export interface ApiResponse<T = unknown> {
   };
 }
 
-/** Indonesian phone number — disimpan dalam format E.164 (+62...) */
+/**
+ * Phone number — disimpan dalam format E.164 internasional (`+<countryCode><digits>`).
+ *
+ * Per request 2026-05-20 (ecc-mobile-app/docs/backend-request-international-phone.md):
+ * sebelumnya hardcode `+62` only, sekarang accept E.164 dari country apa saja
+ * yang valid (jemaat diaspora, missionari, jemaat international).
+ *
+ * Validasi pakai `libphonenumber-js` (port resmi Google libphonenumber) —
+ * mengerti rules per country (panjang digit, valid mobile prefix, dll).
+ * Untuk `+62` behavior identical dengan regex lama, untuk country lain
+ * kasih validasi yang akurat.
+ *
+ * Format storage: E.164 tanpa spasi atau pemisah, contoh:
+ *   - +6281234567890   (Indonesia)
+ *   - +6512345678      (Singapore)
+ *   - +14155551234     (US)
+ *   - +61412345678     (Australia)
+ *
+ * Mobile dev: normalize string dulu sebelum kirim (strip spasi/dash/parens,
+ * pakai libphonenumber-js juga di client untuk konsistensi).
+ */
 export const noHpSchema = z
   .string()
   .trim()
-  .regex(/^\+62[0-9]{8,13}$/, 'Format no HP harus E.164 (+62...)')
-  .openapi({ example: '+628123456789', description: 'Format E.164 Indonesia' });
+  .refine(
+    (v) => {
+      try {
+        return isValidPhoneNumber(v);
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'Format no HP harus E.164 internasional yang valid (contoh: +6281234567890, +6512345678, +14155551234)',
+    },
+  )
+  .openapi({
+    example: '+6281234567890',
+    description:
+      'E.164 international format (any country). Examples: +62... (ID), +65... (SG), +1... (US/CA), +61... (AU).',
+  });
 
 /**
  * Helper universal: terima `''` / `null` / `undefined` sebagai "tidak diisi"

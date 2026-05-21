@@ -1,43 +1,35 @@
 'use client';
 
-import Link from 'next/link';
-import { Building2, Church, Users, Shield, Calendar, Layers, HandHeart } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { Loader2 } from 'lucide-react';
 
-const masterDataLinks = [
-  { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, desc: 'Kelola data sinode' },
-  { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, desc: 'Cabang-cabang di tiap sinode' },
-  { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, desc: 'Data anggota jemaat' },
-  { href: '/dashboard/role', label: 'Role & Sub-Role', icon: Shield, desc: 'Klasifikasi keanggotaan' },
-  { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, desc: 'Tim ministry & roles' },
-  { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, desc: 'Jadwal ibadah per cabang' },
-  { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, desc: 'Kategori master ibadah' },
-];
+/**
+ * Dashboard page = Globe interaktif yang plot cabang gereja.
+ *
+ * react-globe.gl pakai WebGL via three.js — tidak compatible dengan SSR.
+ * Pakai `next/dynamic` + `ssr: false` supaya hanya di-load di client.
+ *
+ * Komponen visualisasi sebenarnya ada di GlobeView (file terpisah supaya
+ * tree-shaking lebih bersih).
+ */
+const GlobeView = dynamic(() => import('@/components/dashboard/globe-view'), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 bg-white">
+      <Loader2 className="w-8 h-8 animate-spin mb-3" />
+      <p className="text-sm">Memuat globe...</p>
+    </div>
+  ),
+});
 
 export default function DashboardPage() {
+  // Dashboard layout (apps/portal/src/app/dashboard/layout.tsx) memberi padding.
+  // Untuk globe, kita ingin full-bleed; pakai negative margin + h-screen
+  // calc supaya bisa menempati seluruh viewport tinggi konten.
+  // Background putih menyesuaikan tema desain portal.
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-neutral-900">Selamat Datang</h1>
-      <p className="text-neutral-500 mt-1">Pilih master data yang ingin Anda kelola.</p>
-
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {masterDataLinks.map(({ href, label, icon: Icon, desc }) => (
-          <Link
-            key={href}
-            href={href}
-            className="group bg-white border border-neutral-200 rounded-xl p-5 hover:border-brand-400 hover:shadow-md transition"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600 group-hover:bg-brand-500 group-hover:text-white transition">
-                <Icon className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="font-semibold text-neutral-900">{label}</div>
-                <div className="text-xs text-neutral-500">{desc}</div>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+    <div className="relative -m-6 md:-m-8 bg-white overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
+      <GlobeView />
     </div>
   );
 }

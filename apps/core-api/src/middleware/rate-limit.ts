@@ -87,3 +87,19 @@ export const globalLimiter = makeLimiter('global', {
   windowMs: 1 * 60 * 1000,
   limit: 200,
 });
+
+/** Self-registration: 3 attempt per IP per jam (anti-abuse). */
+export const registerLimiter = makeLimiter('register', {
+  windowMs: 60 * 60 * 1000,    // 1 jam
+  limit: 3,
+});
+
+/**
+ * Public cabang list — dipanggil mobile saat splash / first launch utk
+ * populate picker cabang di sign-up. Disesuaikan dengan asumsi mobile
+ * cache 24 jam, jadi quota relatif rendah cukup.
+ */
+export const cabangListLimiter = makeLimiter('cabang-list', {
+  windowMs: 1 * 60 * 1000,     // 1 menit
+  limit: 30,                   // 30/menit/IP
+});

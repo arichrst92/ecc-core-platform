@@ -25,18 +25,41 @@ export function createApp(): Express {
 
   // ---------- Security & infra middleware ----------
   app.use(helmet());
-  // CORS — dev mode allow semua localhost origin, prod mode strict whitelist
+  // CORS — dev mode allow localhost + LAN IP + Expo origin, prod mode strict whitelist.
+  // Lihat docs/backend-request-dev-environment-access.md untuk konteks LAN access.
   const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:3100')
     .split(',')
     .map((o) => o.trim());
 
+  // Pola origin yang diizinkan di dev (NODE_ENV !== production):
+  //   - http://localhost:<port>          → web portal lokal
+  //   - http://127.0.0.1:<port>          → IP loopback eksplisit
+  //   - http://192.168.x.x:<port>        → LAN class C (rumah/kantor umum)
+  //   - http://10.x.x.x:<port>           → LAN class A (corp/VPN)
+  //   - http://172.16-31.x.x:<port>      → LAN class B (Docker bridge, hotspot)
+  //   - exp://<host>:<port>              → Expo Go dev client
+  //   - exps://<host>:<port>             → Expo Go dev client TLS
+  const DEV_ORIGIN_PATTERNS: RegExp[] = [
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+    /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+    /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+    /^exps?:\/\//,
+  ];
+
   app.use(
     cors({
       origin: (origin, callback) => {
+        // Native mobile fetch (RN/Expo Go) biasanya tanpa Origin header → izinkan.
         if (!origin) return callback(null, true);
-        if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
-          return callback(null, true);
+
+        if (process.env.NODE_ENV !== 'production') {
+          if (DEV_ORIGIN_PATTERNS.some((re) => re.test(origin))) {
+            return callback(null, true);
+          }
         }
+
         if (allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`CORS: origin ${origin} not allowed`));
       },

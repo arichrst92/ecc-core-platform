@@ -24,3 +24,8 @@ export * from './schemas/pelayanan.js';
 export * from './schemas/reservasi.js';
 export * from './schemas/konten.js';
 export * from './schemas/homecell.js';
+export * from './schemas/event.js';
+export * from './schemas/menu-catalog.js';
+export * from './schemas/api-key.js';
+export * from './schemas/family.js';
+export * from './schemas/branch-change.js';

@@ -49,6 +49,47 @@ homecellAreaRouter.get('/', async (req, res) => {
   });
 });
 
+// ============================================================
+// List homecells per area — mobile PIC area flow.
+// ============================================================
+// Mobile PIC area buka detail area → tampil SEMUA homecell di area itu,
+// termasuk yang user-nya bukan PIC homecell-nya. Endpoint detail area
+// (GET /:id) sudah include `homecells[]` tapi response shape-nya lebih
+// untuk admin (include sinodeId di cabang, dll). Endpoint ini khusus
+// untuk list homecells per area dengan shape yang ringkas untuk mobile.
+//
+// Authorization: PIC area atau admin. Saat ini permissive — semua user
+// yang punya akses /admin/* di-allow (RBAC strict via menu access nanti).
+homecellAreaRouter.get('/:id/homecells', async (req, res) => {
+  const area = await prisma.homecellArea.findUnique({
+    where: { id: req.params.id },
+    select: { id: true },
+  });
+  if (!area) throw NotFound('Homecell Area tidak ditemukan');
+
+  const data = await prisma.homecell.findMany({
+    where: { areaId: area.id, isActive: true },
+    orderBy: { nama: 'asc' },
+    include: {
+      picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
+      _count: { select: { members: { where: { isActive: true } } } },
+    },
+  });
+
+  const result = data.map((hc) => ({
+    id: hc.id,
+    nama: hc.nama,
+    alamat: hc.alamat,
+    hari: hc.hari,
+    jam: hc.jam,
+    isActive: hc.isActive,
+    picJemaat: hc.picJemaat,
+    memberCount: hc._count.members,
+  }));
+
+  res.json({ success: true, data: result });
+});
+
 // ===== Detail =====
 homecellAreaRouter.get('/:id', async (req, res) => {
   const item = await prisma.homecellArea.findUnique({

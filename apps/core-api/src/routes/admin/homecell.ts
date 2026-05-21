@@ -23,8 +23,11 @@ homecellRouter.get('/', async (req, res) => {
   const where: Prisma.HomecellWhereInput = {};
   if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
   if (areaId) where.areaId = areaId;
-  if (cabangId) where.area = { cabangId };
-  if (sinodeId) where.area = { ...(where.area ?? {}), cabang: { sinodeId } };
+  // area filter — gabungkan cabang & sinode kalau keduanya disebut.
+  const areaFilter: Prisma.HomecellAreaWhereInput = {};
+  if (cabangId) areaFilter.cabangId = cabangId;
+  if (sinodeId) areaFilter.cabang = { sinodeId };
+  if (Object.keys(areaFilter).length > 0) where.area = areaFilter;
 
   const [rows, total] = await Promise.all([
     prisma.homecell.findMany({
@@ -68,6 +71,8 @@ homecellRouter.get('/:id', async (req, res) => {
         select: {
           id: true,
           nama: true,
+          // pic Area juga di-include supaya mobile bisa check area-PIC authorization
+          picJemaatId: true,
           cabang: { select: { id: true, nama: true, kode: true } },
         },
       },
@@ -76,7 +81,15 @@ homecellRouter.get('/:id', async (req, res) => {
         orderBy: [{ isActive: 'desc' }, { tanggalBergabung: 'desc' }],
         include: {
           jemaat: {
-            select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true },
+            // Field tambahan (kode, jenisKelamin) per request mobile M9.
+            select: {
+              id: true,
+              namaLengkap: true,
+              kode: true,
+              fotoUrl: true,
+              noHp: true,
+              jenisKelamin: true,
+            },
           },
         },
       },
@@ -142,7 +155,7 @@ homecellRouter.delete('/:id', async (req, res) => {
 //  MEMBERS
 // ============================================================
 
-// Add member
+// Add member by jemaatId
 homecellRouter.post('/:id/members', async (req, res) => {
   const homecellId = req.params.id;
   const input = addHomecellMemberSchema.parse(req.body);
@@ -167,6 +180,47 @@ homecellRouter.post('/:id/members', async (req, res) => {
       resourceId: created.id,
       resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama}`,
       after: created,
+    });
+    res.status(201).json({ success: true, data: created });
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      throw BadRequest('Jemaat sudah jadi member homecell ini');
+    }
+    throw err;
+  }
+});
+
+// Add member by kode jemaat (scan QR di mobile PIC homecell)
+homecellRouter.post('/:id/members/by-kode', async (req, res) => {
+  const homecellId = req.params.id;
+  const kode = typeof req.body?.kode === 'string' ? req.body.kode.toUpperCase().trim() : '';
+  if (!kode) throw BadRequest('Field "kode" wajib');
+
+  const homecell = await prisma.homecell.findUnique({ where: { id: homecellId } });
+  if (!homecell) throw NotFound('Homecell tidak ditemukan');
+
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { kode },
+    select: { id: true, namaLengkap: true },
+  });
+  if (!jemaat) throw NotFound(`Kode jemaat "${kode}" tidak ditemukan`);
+
+  try {
+    const created = await prisma.homecellMember.create({
+      data: {
+        homecellId,
+        jemaatId: jemaat.id,
+        isActive: true,
+      },
+      include: { jemaat: { select: { namaLengkap: true, kode: true, fotoUrl: true } } },
+    });
+    audit(req, {
+      action: 'CREATE',
+      resource: 'homecell_member',
+      resourceId: created.id,
+      resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama} (via QR)`,
+      after: created,
+      metadata: { kind: 'homecell-add-by-kode' },
     });
     res.status(201).json({ success: true, data: created });
   } catch (err: any) {
@@ -211,6 +265,55 @@ homecellRouter.patch('/:id/members/:memberId', async (req, res) => {
     resourceLabel: `${before.jemaat.namaLengkap} @ ${before.homecell.nama}`,
     before,
     after: updated,
+  });
+  res.json({ success: true, data: updated });
+});
+
+// ============================================================
+// Soft-remove member by jemaatId — mobile PIC homecell flow.
+// ============================================================
+// Berbeda dengan DELETE /:memberId di bawah (hard delete by member row ID,
+// untuk admin portal). Endpoint ini:
+//   - Lookup by jemaatId (yang mobile punya dari list members)
+//   - SOFT delete (set isActive=false + tanggalKeluar=today)
+//   - Idempotent: kalau sudah isActive=false, return existing dengan
+//     meta.alreadyRemoved=true
+//
+// Authorization: PIC homecell-nya, atau PIC area parent-nya, atau admin
+// (RBAC strict via menu access nanti). Saat ini permissive — semua user
+// yang lewat /admin/* di-allow (sama dengan endpoint admin lain). Mobile
+// authorization di-enforce via filter di list endpoint.
+homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
+  const before = await prisma.homecellMember.findFirst({
+    where: { homecellId: req.params.id, jemaatId: req.params.jemaatId },
+    include: { jemaat: { select: { namaLengkap: true } }, homecell: { select: { nama: true } } },
+  });
+  if (!before) throw NotFound('Member tidak ditemukan di homecell ini.');
+
+  // Idempotent — sudah dikeluarkan, return existing.
+  if (!before.isActive) {
+    return res.json({
+      success: true,
+      data: before,
+      meta: { alreadyRemoved: true },
+    });
+  }
+
+  const updated = await prisma.homecellMember.update({
+    where: { id: before.id },
+    data: {
+      isActive: false,
+      tanggalKeluar: new Date(),
+    },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_member',
+    resourceId: updated.id,
+    resourceLabel: `Remove ${before.jemaat.namaLengkap} from ${before.homecell.nama}`,
+    before,
+    after: updated,
+    metadata: { kind: 'homecell-member-soft-remove' },
   });
   res.json({ success: true, data: updated });
 });

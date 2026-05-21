@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Users, Home } from 'lucide-react';
+import { Users, Home, BarChart3 } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -11,6 +11,8 @@ interface Cabang extends Record<string, unknown> {
   kode: string;
   alamat: string | null;
   kontak: string | null;
+  latitude: number | null;
+  longitude: number | null;
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
   jemaatCount?: number;
@@ -28,7 +30,20 @@ export const cabangResource: ResourceConfig<Cabang> = {
   defaultSort: { field: 'nama', order: 'asc' },
   columns: [
     { key: 'kode', label: 'Kode', width: '100px' },
-    { key: 'nama', label: 'Nama Cabang' },
+    {
+      key: 'nama',
+      label: 'Nama Cabang',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/cabang/${row.id}`}
+          className="inline-flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+          title="Lihat detail + statistik cabang"
+        >
+          <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+          {row.nama}
+        </Link>
+      ),
+    },
     { key: 'sinode', label: 'Sinode', render: nestedField('sinode.nama'), width: '160px' },
     {
       key: 'jemaatCount',
@@ -85,6 +100,20 @@ export const cabangResource: ResourceConfig<Cabang> = {
     },
     { name: 'alamat', label: 'Alamat', type: 'textarea' },
     { name: 'kontak', label: 'Kontak', type: 'text', placeholder: 'No HP / email' },
+    {
+      name: 'latitude',
+      label: 'Latitude',
+      type: 'number',
+      placeholder: '-6.2088',
+      helperText: 'Koordinat WGS84 (untuk tampil di Globe dashboard). Range -90..90.',
+    },
+    {
+      name: 'longitude',
+      label: 'Longitude',
+      type: 'number',
+      placeholder: '106.8456',
+      helperText: 'Koordinat WGS84. Range -180..180.',
+    },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],
   createSchema: createCabangSchema,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,10 +18,16 @@ import {
   ChevronRight,
   User as UserIcon,
   Users,
+  CalendarX,
+  CalendarDays,
+  RotateCcw,
+  ScanLine,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { CheckinModal } from '@/components/checkin-modal';
 
 interface Ibadah {
   id: string;
@@ -54,8 +60,29 @@ interface IbadahPelayananLink {
 interface PetugasItem {
   id: string;
   catatan: string | null;
+  // NULL = default (semua minggu); isi = override khusus tanggal itu.
+  tanggalIbadah: string | null;
+  // Apakah petugas ini berwenang scan QR kode jemaat untuk check-in.
+  canScanAttendance: boolean;
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
   pelayananRole: { id: string; nama: string; level: number };
+}
+
+interface CancelledOccurrence {
+  id: string;
+  tanggalIbadah: string;
+  status: 'CANCELLED';
+  catatan: string | null;
+  createdAt: string;
+}
+
+function formatTanggalLong(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 const HARI_LABEL: Record<string, string> = {
@@ -69,11 +96,19 @@ const TIPE_LABEL: Record<string, string> = {
 export default function IbadahDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
   const ibadahId = params.id;
+  // Saat user datang dari kalender via ?tanggal=YYYY-MM-DD, default filter
+  // petugas di-set ke tanggal tersebut supaya langsung relevan.
+  const tanggalFromUrl = searchParams.get('tanggal');
 
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [deletingLink, setDeletingLink] = useState<IbadahPelayananLink | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerTanggal, setScannerTanggal] = useState<string>(
+    new Date().toISOString().slice(0, 10),
+  );
 
   const ibadahQ = useQuery({
     queryKey: ['ibadah', 'detail', ibadahId],
@@ -126,6 +161,29 @@ export default function IbadahDetailPage() {
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
   });
 
+  // List occurrence yang ditiadakan (CANCELLED) untuk ibadah ini.
+  const cancelledQ = useQuery({
+    queryKey: ['ibadah-cancelled', ibadahId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CancelledOccurrence[] }>(
+        `/admin/ibadah/${ibadahId}/occurrence/cancelled`,
+      );
+      return res.data.data;
+    },
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: async (tanggal: string) =>
+      apiClient.delete(`/admin/ibadah/${ibadahId}/occurrence/${tanggal}/cancel`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ibadah-cancelled', ibadahId] });
+      qc.invalidateQueries({ queryKey: ['ibadah-calendar'] });
+      toast.success('Tanggal dibuka kembali. Reservasi yang lama tetap CANCEL.');
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal restore'),
+  });
+
   if (ibadahQ.isLoading) {
     return (
       <div className="flex justify-center py-20">
@@ -173,12 +231,31 @@ export default function IbadahDetailPage() {
               )}
             </div>
           </div>
-          <button
-            onClick={() => router.push(`/dashboard/ibadah`)}
-            className="px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
-          >
-            Edit Ibadah
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={scannerTanggal}
+                onChange={(ev) => setScannerTanggal(ev.target.value)}
+                className="text-xs px-2 py-1 border border-neutral-300 rounded outline-none focus:ring-2 focus:ring-brand-500"
+                title="Tanggal check-in"
+              />
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+                title="Scan QR kode jemaat"
+              >
+                <ScanLine className="w-4 h-4" />
+                Check-in
+              </button>
+            </div>
+            <button
+              onClick={() => router.push(`/dashboard/ibadah`)}
+              className="px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
+            >
+              Edit Ibadah
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
@@ -242,8 +319,69 @@ export default function IbadahDetailPage() {
                 <PelayananLinkCard
                   key={link.id}
                   link={link}
+                  initialFocusTanggal={tanggalFromUrl}
                   onDelete={() => setDeletingLink(link)}
                 />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Tanggal Ditiadakan section */}
+      <section id="cancelled" className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div>
+            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+              <CalendarX className="w-4 h-4 text-red-600" />
+              Tanggal Ditiadakan
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Occurrence ibadah recurring yang di-skip pada tanggal tertentu (mis. bertepatan dengan Natal).
+              Tanggal di sini tidak muncul di kalender dan reservasinya otomatis dibatalkan.
+            </p>
+          </div>
+        </div>
+        <div className="p-6">
+          {cancelledQ.isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
+            </div>
+          ) : (cancelledQ.data ?? []).length === 0 ? (
+            <p className="text-sm text-neutral-400 italic text-center py-6">
+              Tidak ada tanggal yang ditiadakan. Untuk meniadakan suatu minggu, buka kalender dan klik
+              <strong> Tiadakan</strong> pada tanggal ibadah.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {(cancelledQ.data ?? []).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 p-3 border border-red-100 bg-red-50/40 rounded-lg"
+                >
+                  <CalendarX className="w-4 h-4 text-red-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-neutral-900 text-sm">
+                      {formatTanggalLong(c.tanggalIbadah)}
+                    </div>
+                    {c.catatan && (
+                      <div className="text-xs text-neutral-600 mt-0.5 italic">
+                        “{c.catatan}”
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      restoreMut.mutate(c.tanggalIbadah.slice(0, 10))
+                    }
+                    disabled={restoreMut.isPending}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:bg-brand-50 px-2 py-1 rounded disabled:opacity-50"
+                    title="Buka kembali tanggal ini"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Buka kembali
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -270,15 +408,45 @@ export default function IbadahDetailPage() {
         }
         onConfirm={() => deletingLink && deleteLinkMut.mutate(deletingLink.id)}
       />
+
+      {/* Scanner check-in kehadiran */}
+      {scannerOpen && (
+        <CheckinModal
+          title="Check-in Kehadiran Ibadah"
+          subtitle={`${i.nama} · ${new Date(scannerTanggal).toLocaleDateString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}`}
+          endpoint={`/admin/ibadah/${i.id}/checkin`}
+          extraBody={{ tanggalIbadah: scannerTanggal }}
+          forceTrigger={(msg) => msg.toLowerCase().includes('ditiadakan')}
+          forceLabel="Tetap check-in (occurrence ditiadakan)"
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 // ============== Pelayanan Link Card (expandable dengan petugas) ==============
 
-function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDelete: () => void }) {
+function PelayananLinkCard({
+  link,
+  initialFocusTanggal,
+  onDelete,
+}: {
+  link: IbadahPelayananLink;
+  initialFocusTanggal: string | null;
+  onDelete: () => void;
+}) {
   const [expanded, setExpanded] = useState(true);
   const [addPetugasOpen, setAddPetugasOpen] = useState(false);
+  // tanggalIbadah yang sedang dipilih di modal Add (null = default)
+  const [addModalDefaultTanggal, setAddModalDefaultTanggal] = useState<string | null>(
+    initialFocusTanggal,
+  );
   const [deletingPetugas, setDeletingPetugas] = useState<PetugasItem | null>(null);
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
@@ -304,23 +472,61 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
   });
 
+  const toggleScanMut = useMutation({
+    mutationFn: async ({
+      id,
+      canScanAttendance,
+    }: {
+      id: string;
+      canScanAttendance: boolean;
+    }) =>
+      apiClient.patch(`/admin/pelayanan/petugas/${id}`, { canScanAttendance }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['petugas', link.id] });
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
   const petugas = petugasQ.data ?? [];
 
+  // Pisahkan default vs override per tanggal
+  const defaultPetugas = petugas.filter((p) => p.tanggalIbadah === null);
+  const overridesByDate = new Map<string, PetugasItem[]>();
+  for (const p of petugas) {
+    if (!p.tanggalIbadah) continue;
+    const iso = p.tanggalIbadah.slice(0, 10);
+    const arr = overridesByDate.get(iso) ?? [];
+    arr.push(p);
+    overridesByDate.set(iso, arr);
+  }
+  const overrideDates = Array.from(overridesByDate.keys()).sort();
+
   return (
-    <div className="border border-neutral-200 rounded-lg overflow-hidden">
+    <div id="petugas" className="border border-neutral-200 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 p-3 bg-neutral-50">
         <button
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-white/50 rounded-md px-1 py-0.5"
         >
-          {expanded ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronRight className="w-4 h-4 text-neutral-400" />}
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-neutral-400" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-neutral-400" />
+          )}
           <HandHeart className="w-4 h-4 text-brand-500 shrink-0" />
           <span className="font-medium text-neutral-900 truncate">{link.pelayanan.nama}</span>
-          {petugas.length > 0 && (
+          {defaultPetugas.length > 0 && (
             <span className="flex items-center gap-1 text-xs text-neutral-500">
               <Users className="w-3 h-3" />
-              {petugas.length}
+              {defaultPetugas.length} default
+            </span>
+          )}
+          {overrideDates.length > 0 && (
+            <span className="flex items-center gap-1 text-xs text-amber-700">
+              <CalendarDays className="w-3 h-3" />
+              {overrideDates.length} override
             </span>
           )}
         </button>
@@ -328,6 +534,7 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
           <button
             onClick={() => {
               setExpanded(true);
+              setAddModalDefaultTanggal(null);
               setAddPetugasOpen(true);
             }}
             className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 rounded"
@@ -345,9 +552,9 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
         </div>
       </div>
 
-      {/* Body: petugas list */}
+      {/* Body: petugas list, grouped by default vs override per tanggal */}
       {expanded && (
-        <div className="p-4">
+        <div className="p-4 space-y-4">
           {petugasQ.isLoading ? (
             <div className="flex justify-center py-4">
               <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
@@ -357,16 +564,78 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
               Belum ada petugas. Klik <strong>Tambah Petugas</strong> di atas.
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {petugas.map((p) => (
-                <PetugasRow
-                  key={p.id}
-                  p={p}
-                  apiBase={apiBase}
-                  onDelete={() => setDeletingPetugas(p)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Default petugas — berlaku tiap minggu yang tidak punya override */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
+                    Petugas Default
+                  </div>
+                  <span className="text-[10px] text-neutral-400">
+                    Berlaku tiap minggu yang tidak punya override
+                  </span>
+                </div>
+                {defaultPetugas.length === 0 ? (
+                  <p className="text-xs text-neutral-400 italic py-2">
+                    Belum ada petugas default.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {defaultPetugas.map((p) => (
+                      <PetugasRow
+                        key={p.id}
+                        p={p}
+                        apiBase={apiBase}
+                        onDelete={() => setDeletingPetugas(p)}
+                        onToggleScan={() =>
+                          toggleScanMut.mutate({
+                            id: p.id,
+                            canScanAttendance: !p.canScanAttendance,
+                          })
+                        }
+                        togglePending={toggleScanMut.isPending}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Override per tanggal */}
+              {overrideDates.map((iso) => {
+                const items = overridesByDate.get(iso) ?? [];
+                return (
+                  <div key={iso} className="border-t border-neutral-100 pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="text-xs uppercase tracking-wider text-amber-700 font-semibold">
+                          Override · {formatTanggalLong(iso)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setAddModalDefaultTanggal(iso);
+                          setAddPetugasOpen(true);
+                        }}
+                        className="text-xs text-brand-600 hover:underline"
+                      >
+                        + Tambah override
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {items.map((p) => (
+                        <PetugasRow
+                          key={p.id}
+                          p={p}
+                          apiBase={apiBase}
+                          onDelete={() => setDeletingPetugas(p)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       )}
@@ -375,7 +644,11 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
         <AddPetugasModal
           ibadahPelayananId={link.id}
           pelayanan={link.pelayanan}
-          existingJemaatIds={new Set(petugas.map((p) => p.jemaat.id))}
+          // Jangan kirim filter "sudah ada" karena petugas yang sama BOLEH muncul
+          // di tanggal default + tanggal override yang berbeda. Filter dilakukan
+          // di dalam modal berdasarkan kombinasi (jemaat, tanggal).
+          existingPetugas={petugas}
+          defaultTanggal={addModalDefaultTanggal}
           onClose={() => setAddPetugasOpen(false)}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['petugas', link.id] });
@@ -389,7 +662,15 @@ function PelayananLinkCard({ link, onDelete }: { link: IbadahPelayananLink; onDe
         loading={deletePetugasMut.isPending}
         onClose={() => setDeletingPetugas(null)}
         title="Hapus petugas ini?"
-        itemName={deletingPetugas?.jemaat.namaLengkap}
+        itemName={
+          deletingPetugas
+            ? `${deletingPetugas.jemaat.namaLengkap}${
+                deletingPetugas.tanggalIbadah
+                  ? ` — override ${formatTanggalLong(deletingPetugas.tanggalIbadah)}`
+                  : ' — default'
+              }`
+            : undefined
+        }
         onConfirm={() => deletingPetugas && deletePetugasMut.mutate(deletingPetugas.id)}
       />
     </div>
@@ -400,10 +681,14 @@ function PetugasRow({
   p,
   apiBase,
   onDelete,
+  onToggleScan,
+  togglePending,
 }: {
   p: PetugasItem;
   apiBase: string;
   onDelete: () => void;
+  onToggleScan?: () => void;
+  togglePending?: boolean;
 }) {
   const lvl = p.pelayananRole.level;
   const roleColor =
@@ -415,7 +700,13 @@ function PetugasRow({
           ? 'bg-neutral-100 text-neutral-500'
           : 'bg-blue-50 text-blue-700';
   return (
-    <div className="flex items-center gap-2.5 p-2.5 border border-neutral-100 rounded-md hover:bg-neutral-50">
+    <div
+      className={`flex items-center gap-2.5 p-2.5 border rounded-md ${
+        p.canScanAttendance
+          ? 'border-green-200 bg-green-50/30'
+          : 'border-neutral-100 hover:bg-neutral-50'
+      }`}
+    >
       {p.jemaat.fotoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -429,17 +720,42 @@ function PetugasRow({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <Link
-          href={`/dashboard/jemaat/${p.jemaat.id}`}
-          className="font-medium text-neutral-900 hover:text-brand-600 hover:underline text-sm truncate block"
-        >
-          {p.jemaat.namaLengkap}
-        </Link>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Link
+            href={`/dashboard/jemaat/${p.jemaat.id}`}
+            className="font-medium text-neutral-900 hover:text-brand-600 hover:underline text-sm truncate"
+          >
+            {p.jemaat.namaLengkap}
+          </Link>
+          {p.canScanAttendance && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase bg-green-600 text-white px-1.5 py-0.5 rounded">
+              <ShieldCheck className="w-3 h-3" />
+              Scanner
+            </span>
+          )}
+        </div>
         <span className={`inline-block mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${roleColor}`}>
           {p.pelayananRole.nama}
         </span>
         {p.catatan && <span className="text-xs text-neutral-500 italic block mt-0.5">{p.catatan}</span>}
       </div>
+      {onToggleScan && (
+        <button
+          onClick={onToggleScan}
+          disabled={togglePending}
+          className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded disabled:opacity-50 shrink-0 ${
+            p.canScanAttendance
+              ? 'text-green-700 bg-green-100 hover:bg-green-200'
+              : 'text-neutral-600 hover:bg-neutral-100 border border-neutral-300'
+          }`}
+          title={
+            p.canScanAttendance ? 'Cabut wewenang scan' : 'Beri wewenang scan check-in'
+          }
+        >
+          <ShieldCheck className="w-3 h-3" />
+          {p.canScanAttendance ? 'Bisa Scan' : 'Beri akses'}
+        </button>
+      )}
       <button
         onClick={onDelete}
         className="p-1 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600 shrink-0"
@@ -483,20 +799,28 @@ interface PelayananDetail {
 function AddPetugasModal({
   ibadahPelayananId,
   pelayanan,
-  existingJemaatIds,
+  existingPetugas,
+  defaultTanggal,
   onClose,
   onSuccess,
 }: {
   ibadahPelayananId: string;
   pelayanan: PelayananLite;
-  existingJemaatIds: Set<string>;
+  existingPetugas: PetugasItem[];
+  defaultTanggal: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  // Mode: 'default' (NULL, tiap minggu) atau 'date' (override khusus tanggal)
+  const [mode, setMode] = useState<'default' | 'date'>(defaultTanggal ? 'date' : 'default');
+  const [tanggal, setTanggal] = useState<string>(defaultTanggal ?? '');
   // Map jemaatId → { selected, roleId }
-  const [selected, setSelected] = useState<Record<string, { roleId: string }>>({});
+  // Map jemaatId → { roleId, canScan }. canScan default false.
+  const [selected, setSelected] = useState<
+    Record<string, { roleId: string; canScan: boolean }>
+  >({});
 
   const pelayananQ = useQuery({
     queryKey: ['pelayanan', 'detail', pelayanan.id],
@@ -510,9 +834,22 @@ function AddPetugasModal({
 
   const roles = pelayananQ.data?.roles ?? [];
   const allMembers = pelayananQ.data?.jemaatPelayanan ?? [];
-  // Hide non-active members + yang sudah jadi petugas
+  // Jemaat yang sudah punya row petugas pada kombinasi (link, tanggal) saat ini.
+  // Logika:
+  //   - Kalau mode 'default': hide jemaat yang sudah punya row tanggalIbadah=NULL
+  //   - Kalau mode 'date'   : hide jemaat yang sudah punya row tanggalIbadah=tanggal
+  const targetIso = mode === 'date' ? tanggal : null;
+  const existingForTarget = new Set(
+    existingPetugas
+      .filter((p) => {
+        const pIso = p.tanggalIbadah ? p.tanggalIbadah.slice(0, 10) : null;
+        return pIso === targetIso;
+      })
+      .map((p) => p.jemaat.id),
+  );
+  // Hide non-active members + yang sudah jadi petugas pada (link, tanggal-target)
   const candidates = allMembers.filter(
-    (m) => m.isActive && !existingJemaatIds.has(m.jemaat.id),
+    (m) => m.isActive && !existingForTarget.has(m.jemaat.id),
   );
   // Search filter
   const filtered = search.trim()
@@ -530,24 +867,37 @@ function AddPetugasModal({
         delete next[member.jemaat.id];
       } else {
         // Default role = role mereka di pelayanan (dari JemaatPelayanan)
-        next[member.jemaat.id] = { roleId: member.pelayananRole.id };
+        next[member.jemaat.id] = { roleId: member.pelayananRole.id, canScan: false };
       }
       return next;
     });
   }
 
   function changeRole(jemaatId: string, roleId: string) {
-    setSelected((prev) => ({ ...prev, [jemaatId]: { roleId } }));
+    setSelected((prev) => ({
+      ...prev,
+      [jemaatId]: { ...prev[jemaatId]!, roleId },
+    }));
+  }
+
+  function toggleCanScan(jemaatId: string) {
+    setSelected((prev) => ({
+      ...prev,
+      [jemaatId]: { ...prev[jemaatId]!, canScan: !prev[jemaatId]!.canScan },
+    }));
   }
 
   const batchMut = useMutation({
     mutationFn: async () => {
+      const payloadTanggal = mode === 'date' ? tanggal : undefined;
       const results = await Promise.allSettled(
         selectedIds.map((jemaatId) =>
           apiClient.post('/admin/pelayanan/petugas', {
             ibadahPelayananId,
             jemaatId,
             pelayananRoleId: selected[jemaatId]!.roleId,
+            tanggalIbadah: payloadTanggal,
+            canScanAttendance: selected[jemaatId]!.canScan,
           }),
         ),
       );
@@ -556,7 +906,8 @@ function AddPetugasModal({
       return { succeeded, failed };
     },
     onSuccess: ({ succeeded, failed }) => {
-      if (failed === 0) toast.success(`${succeeded} petugas ditambah`);
+      const label = mode === 'date' ? `untuk ${tanggal}` : 'sebagai default';
+      if (failed === 0) toast.success(`${succeeded} petugas ditambah ${label}`);
       else toast.error(`${succeeded} sukses, ${failed} gagal`);
       qc.invalidateQueries({ queryKey: ['petugas'] });
       onSuccess();
@@ -579,8 +930,62 @@ function AddPetugasModal({
             </p>
           </div>
 
-          {/* Search */}
+          {/* Mode toggle: default vs khusus tanggal */}
           <div className="px-6 pt-4">
+            <div className="text-xs font-medium text-neutral-700 mb-1.5">
+              Petugas berlaku untuk:
+            </div>
+            <div className="flex items-stretch gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('default')}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition text-left ${
+                  mode === 'default'
+                    ? 'border-brand-500 bg-brand-50 text-brand-900'
+                    : 'border-neutral-200 hover:bg-neutral-50 text-neutral-700'
+                }`}
+              >
+                <div className="font-medium">Default (tiap minggu)</div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">
+                  Otomatis dipakai di setiap occurrence
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('date')}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition text-left ${
+                  mode === 'date'
+                    ? 'border-brand-500 bg-brand-50 text-brand-900'
+                    : 'border-neutral-200 hover:bg-neutral-50 text-neutral-700'
+                }`}
+              >
+                <div className="font-medium">Khusus tanggal</div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">
+                  Override hanya untuk satu tanggal
+                </div>
+              </button>
+            </div>
+            {mode === 'date' && (
+              <div className="mt-2 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-amber-600 shrink-0" />
+                <input
+                  type="date"
+                  value={tanggal}
+                  onChange={(e) => setTanggal(e.target.value)}
+                  className="flex-1 px-3 py-1.5 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                />
+              </div>
+            )}
+            {mode === 'date' && (
+              <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                Override snapshot: jika tanggal ini sudah punya petugas override,
+                set petugas tanggal itu = override saja (tidak ditambahkan ke default).
+              </p>
+            )}
+          </div>
+
+          {/* Search */}
+          <div className="px-6 pt-3">
             <input
               type="text"
               value={search}
@@ -590,7 +995,8 @@ function AddPetugasModal({
             />
             {selectedIds.length > 0 && (
               <div className="mt-2 text-xs text-brand-600 font-medium">
-                {selectedIds.length} jemaat dipilih
+                {selectedIds.length} dipilih ·{' '}
+                {selectedIds.filter((id) => selected[id]!.canScan).length} jadi scanner
               </div>
             )}
           </div>
@@ -650,18 +1056,38 @@ function AddPetugasModal({
                         </div>
                       </div>
                       {isSelected && (
-                        <select
-                          value={currentRoleId}
-                          onChange={(e) => changeRole(m.jemaat.id, e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-xs px-2 py-1 border border-neutral-300 rounded outline-none focus:ring-1 focus:ring-brand-500 bg-white shrink-0"
-                        >
-                          {roles.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.nama}
-                            </option>
-                          ))}
-                        </select>
+                        <>
+                          <select
+                            value={currentRoleId}
+                            onChange={(e) => changeRole(m.jemaat.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs px-2 py-1 border border-neutral-300 rounded outline-none focus:ring-1 focus:ring-brand-500 bg-white shrink-0"
+                          >
+                            {roles.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.nama}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCanScan(m.jemaat.id);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded shrink-0 ${
+                              selected[m.jemaat.id]?.canScan
+                                ? 'text-green-700 bg-green-100'
+                                : 'text-neutral-500 border border-neutral-300'
+                            }`}
+                            title={
+                              selected[m.jemaat.id]?.canScan ? 'Bisa scan' : 'Tidak bisa scan'
+                            }
+                          >
+                            <ShieldCheck className="w-3 h-3" />
+                            {selected[m.jemaat.id]?.canScan ? 'Scan' : 'No-scan'}
+                          </button>
+                        </>
                       )}
                     </div>
                   );
@@ -680,7 +1106,11 @@ function AddPetugasModal({
             </button>
             <button
               onClick={() => batchMut.mutate()}
-              disabled={selectedIds.length === 0 || batchMut.isPending}
+              disabled={
+                selectedIds.length === 0 ||
+                batchMut.isPending ||
+                (mode === 'date' && !tanggal)
+              }
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
             >
               {batchMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

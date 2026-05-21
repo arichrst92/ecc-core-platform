@@ -5,7 +5,6 @@
  * Endpoint auto-filter & auto-set tipe.
  */
 import { Router } from 'express';
-import multer from 'multer';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createKontenSchema,
@@ -15,16 +14,11 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { saveContentHero, deleteContentHero, type ContentKind } from '../../lib/storage.js';
+import { idOrSlugWhere } from '../../lib/id-or-slug.js';
+import { flexImageUpload } from '../../lib/image-upload.js';
 
-const UPLOAD_OPTIONS = {
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5 MB
-  fileFilter: (_req: unknown, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const ok = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype);
-    if (!ok) return cb(new Error(`Tipe file tidak didukung: ${file.mimetype}`));
-    cb(null, true);
-  },
-};
+// Upload pakai flexImageUpload() dari lib — field name fleksibel + accept
+// HEIC/HEIF dari iOS. Tidak perlu config multer lokal.
 
 function slugify(input: string): string {
   return input
@@ -52,7 +46,6 @@ async function ensureUniqueSlug(base: string, excludeId?: string): Promise<strin
 export function createKontenRouter(tipe: 'NEWS' | 'RENUNGAN'): Router {
   const router = Router();
   const kind: ContentKind = tipe === 'NEWS' ? 'news' : 'renungan';
-  const upload = multer(UPLOAD_OPTIONS);
 
   // ===== List =====
   router.get('/', async (req, res) => {
@@ -95,12 +88,14 @@ export function createKontenRouter(tipe: 'NEWS' | 'RENUNGAN'): Router {
   });
 
   // ===== Detail by id atau slug =====
+  // Pakai helper `idOrSlugWhere` supaya tidak crash Postgres saat key bukan
+  // UUID (id column adalah UUID type).
   router.get('/:idOrSlug', async (req, res) => {
     const key = req.params.idOrSlug;
     const item = await prisma.konten.findFirst({
       where: {
         tipe,
-        OR: [{ id: key }, { slug: key }],
+        ...idOrSlugWhere(key),
       },
       include: {
         author: { select: { id: true, jemaat: { select: { namaLengkap: true, fotoUrl: true } } } },
@@ -181,11 +176,25 @@ export function createKontenRouter(tipe: 'NEWS' | 'RENUNGAN'): Router {
       sinodeId = cabang?.sinodeId;
     }
 
+    // Prisma update-input untuk relation field pakai `sinode: { connect/disconnect }`,
+    // bukan `sinodeId` langsung (seperti create-input).
+    const { sinodeId: _ignoreSinode, cabangId: _ignoreCabang, ...rest } = input;
+    void _ignoreSinode;
+    void _ignoreCabang;
     const data: Prisma.KontenUpdateInput = {
-      ...input,
+      ...rest,
       slug,
-      sinodeId,
       tanggal: input.tanggal ? new Date(input.tanggal) : undefined,
+      sinode: sinodeId
+        ? { connect: { id: sinodeId } }
+        : input.sinodeId === '' || input.cabangId === ''
+          ? { disconnect: true }
+          : undefined,
+      cabang: input.cabangId
+        ? { connect: { id: input.cabangId } }
+        : input.cabangId === ''
+          ? { disconnect: true }
+          : undefined,
     };
     // Auto-set publishedAt kalau berubah jadi published
     if (input.isPublished === true && !before.isPublished) {
@@ -224,8 +233,12 @@ export function createKontenRouter(tipe: 'NEWS' | 'RENUNGAN'): Router {
   });
 
   // ===== Upload hero image =====
-  router.post('/:id/hero', upload.single('foto'), async (req, res) => {
-    if (!req.file) throw BadRequest('File foto wajib (field name: foto)');
+  router.post('/:id/hero', flexImageUpload(), async (req, res) => {
+    if (!req.file) {
+      throw BadRequest(
+        'File foto wajib. Kirim sebagai multipart/form-data dengan field name "foto" (atau "file" / "image").',
+      );
+    }
     const item = await prisma.konten.findFirst({ where: { id: req.params.id, tipe } });
     if (!item) throw NotFound(`${tipe} tidak ditemukan`);
 

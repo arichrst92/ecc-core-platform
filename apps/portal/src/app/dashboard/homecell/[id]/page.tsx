@@ -7,8 +7,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Home as HomeIcon,
-  MapPin,
-  Calendar,
   Plus,
   Trash2,
   UserMinus,
@@ -24,9 +22,6 @@ interface Homecell {
   id: string;
   nama: string;
   deskripsi: string | null;
-  alamat: string | null;
-  hari: string | null;
-  jam: string | null;
   isActive: boolean;
   area: {
     id: string;
@@ -45,16 +40,6 @@ interface Homecell {
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
   }[];
 }
-
-const HARI_LABEL: Record<string, string> = {
-  MINGGU: 'Minggu',
-  SENIN: 'Senin',
-  SELASA: 'Selasa',
-  RABU: 'Rabu',
-  KAMIS: 'Kamis',
-  JUMAT: 'Jumat',
-  SABTU: 'Sabtu',
-};
 
 export default function HomecellDetailPage() {
   const params = useParams<{ id: string }>();
@@ -151,44 +136,26 @@ export default function HomecellDetailPage() {
         )}
       </div>
 
-      {/* Info card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-neutral-200 rounded-xl p-5">
-          <div className="text-xs text-neutral-500 mb-2">PIC (Homecell Leader)</div>
-          {h.picJemaat ? (
-            <Link
-              href={`/dashboard/jemaat/${h.picJemaat.id}`}
-              className="flex items-center gap-3 hover:bg-neutral-50 -mx-2 px-2 py-1.5 rounded-lg transition"
-            >
-              <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold">
-                {h.picJemaat.namaLengkap.charAt(0)}
-              </div>
-              <div>
-                <div className="font-medium text-neutral-900">{h.picJemaat.namaLengkap}</div>
-                <div className="text-xs text-neutral-500">{h.picJemaat.noHp ?? '-'}</div>
-              </div>
-            </Link>
-          ) : (
-            <div className="text-sm text-neutral-400 italic">Belum ada PIC</div>
-          )}
-        </div>
-
-        <div className="bg-white border border-neutral-200 rounded-xl p-5">
-          <div className="text-xs text-neutral-500 mb-2">Jadwal</div>
-          <div className="flex items-center gap-2 text-sm text-neutral-800">
-            <Calendar className="w-4 h-4 text-neutral-400" />
-            {h.hari ? HARI_LABEL[h.hari] : '—'}
-            {h.jam ? ` · ${h.jam}` : ''}
-          </div>
-        </div>
-
-        <div className="bg-white border border-neutral-200 rounded-xl p-5">
-          <div className="text-xs text-neutral-500 mb-2">Lokasi</div>
-          <div className="flex items-start gap-2 text-sm text-neutral-800">
-            <MapPin className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
-            <span className="whitespace-pre-line">{h.alamat ?? '—'}</span>
-          </div>
-        </div>
+      {/* Info card — hanya PIC. Jadwal & alamat tidak ditampilkan karena
+          pertemuan homecell dibahas per minggu via kesepakatan grup. */}
+      <div className="bg-white border border-neutral-200 rounded-xl p-5">
+        <div className="text-xs text-neutral-500 mb-2">PIC (Homecell Leader)</div>
+        {h.picJemaat ? (
+          <Link
+            href={`/dashboard/jemaat/${h.picJemaat.id}`}
+            className="flex items-center gap-3 hover:bg-neutral-50 -mx-2 px-2 py-1.5 rounded-lg transition"
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold">
+              {h.picJemaat.namaLengkap.charAt(0)}
+            </div>
+            <div>
+              <div className="font-medium text-neutral-900">{h.picJemaat.namaLengkap}</div>
+              <div className="text-xs text-neutral-500">{h.picJemaat.noHp ?? '-'}</div>
+            </div>
+          </Link>
+        ) : (
+          <div className="text-sm text-neutral-400 italic">Belum ada PIC</div>
+        )}
       </div>
 
       {h.deskripsi && (

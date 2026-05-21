@@ -9,9 +9,6 @@ interface Homecell extends Record<string, unknown> {
   areaId: string;
   nama: string;
   deskripsi: string | null;
-  alamat: string | null;
-  hari: string | null;
-  jam: string | null;
   picJemaatId: string | null;
   isActive: boolean;
   area?: { id: string; nama: string; cabang?: { id: string; nama: string } };
@@ -19,16 +16,9 @@ interface Homecell extends Record<string, unknown> {
   memberCount?: number;
 }
 
-const HARI_OPTIONS = [
-  { value: 'MINGGU', label: 'Minggu' },
-  { value: 'SENIN', label: 'Senin' },
-  { value: 'SELASA', label: 'Selasa' },
-  { value: 'RABU', label: 'Rabu' },
-  { value: 'KAMIS', label: 'Kamis' },
-  { value: 'JUMAT', label: 'Jumat' },
-  { value: 'SABTU', label: 'Sabtu' },
-];
-
+// Catatan: kolom alamat / hari / jam dihapus dari form & display. Jadwal
+// homecell di lapangan ditentukan per kesepakatan tiap minggu, jadi data
+// tetap (statis) tidak relevan. Kolom DB masih ada → data lama tidak hilang.
 export const homecellResource: ResourceConfig<Homecell> = {
   name: 'homecell',
   label: 'Homecell',
@@ -52,16 +42,6 @@ export const homecellResource: ResourceConfig<Homecell> = {
     },
     { key: 'area', label: 'Area', render: nestedField('area.nama'), width: '160px' },
     { key: 'cabang', label: 'Cabang', render: nestedField('area.cabang.nama'), width: '140px' },
-    {
-      key: 'jadwal',
-      label: 'Jadwal',
-      width: '140px',
-      render: (_v, row) => {
-        const hari = row.hari ? HARI_OPTIONS.find((h) => h.value === row.hari)?.label : null;
-        if (!hari && !row.jam) return <span className="text-neutral-400">—</span>;
-        return `${hari ?? ''}${hari && row.jam ? ' · ' : ''}${row.jam ?? ''}`;
-      },
-    },
     {
       key: 'picJemaat',
       label: 'PIC (Leader)',
@@ -91,9 +71,6 @@ export const homecellResource: ResourceConfig<Homecell> = {
       relation: { endpoint: '/admin/homecell-area', labelKey: 'nama' },
     },
     { name: 'nama', label: 'Nama Homecell', type: 'text', required: true, placeholder: 'Homecell Kelapa Gading' },
-    { name: 'alamat', label: 'Alamat Pertemuan', type: 'textarea' },
-    { name: 'hari', label: 'Hari Pertemuan', type: 'select', options: HARI_OPTIONS },
-    { name: 'jam', label: 'Jam Pertemuan', type: 'time', placeholder: '19:00' },
     {
       name: 'picJemaatId',
       label: 'PIC (Homecell Leader)',

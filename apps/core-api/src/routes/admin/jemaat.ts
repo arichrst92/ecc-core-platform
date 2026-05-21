@@ -14,7 +14,15 @@ import {
   generateTemplateCsv,
   type RowValidation,
 } from '../../lib/import-csv.js';
+import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { logger } from '../../lib/logger.js';
+
+// Helper: generate kode jemaat unik (mirip pattern reservasi).
+async function generateUniqueKodeJemaat(): Promise<string> {
+  return generateUniqueKode(
+    async (kode) => !!(await prisma.jemaat.findUnique({ where: { kode } })),
+  );
+}
 
 export const jemaatRouter = Router();
 
@@ -30,10 +38,30 @@ const csvUpload = multer({
   },
 });
 
+// Whitelist sortBy untuk jemaat list. Hanya field yang aman & masuk akal
+// di-sort yang diizinkan. Default = namaLengkap.
+const JEMAAT_SORT_FIELDS = new Set([
+  'namaLengkap',
+  'tanggalLahir',
+  'tanggalBergabung',
+  'cabang',
+  'createdAt',
+]);
+
+function getQueryString(req: { query: Record<string, unknown> }, key: string): string | undefined {
+  const v = req.query[key];
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
 jemaatRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
-  const sinodeId = typeof req.query.sinodeId === 'string' ? req.query.sinodeId : undefined;
+  const cabangId = getQueryString(req, 'cabangId');
+  const sinodeId = getQueryString(req, 'sinodeId');
+  const isActiveStr = getQueryString(req, 'isActive');
+  const jenisKelamin = getQueryString(req, 'jenisKelamin');
+  const roleId = getQueryString(req, 'roleId');
+  const umurMinStr = getQueryString(req, 'umurMin');
+  const umurMaxStr = getQueryString(req, 'umurMax');
 
   const where: any = {};
   if (q.search) {
@@ -46,12 +74,62 @@ jemaatRouter.get('/', async (req, res) => {
   if (cabangId) where.cabangId = cabangId;
   if (sinodeId) where.cabang = { sinodeId };
 
+  // Filter Status (Aktif/Nonaktif). "true" / "false" string dari query.
+  if (isActiveStr === 'true') where.isActive = true;
+  else if (isActiveStr === 'false') where.isActive = false;
+
+  // Filter Jenis Kelamin (L/P)
+  if (jenisKelamin === 'L' || jenisKelamin === 'P') {
+    where.jenisKelamin = jenisKelamin;
+  }
+
+  // Filter Role: ada active JemaatRole dengan roleId tertentu
+  if (roleId) {
+    where.jemaatRoles = { some: { isActive: true, roleId } };
+  }
+
+  // Filter usia: tanggalLahir antara (now - umurMax) .. (now - umurMin)
+  // Mis. umurMin=20 umurMax=30 → tanggalLahir between (today-30y) and (today-20y).
+  const umurMin = umurMinStr ? Number.parseInt(umurMinStr, 10) : undefined;
+  const umurMax = umurMaxStr ? Number.parseInt(umurMaxStr, 10) : undefined;
+  if (
+    (umurMin !== undefined && Number.isFinite(umurMin)) ||
+    (umurMax !== undefined && Number.isFinite(umurMax))
+  ) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tanggalLahirFilter: { gte?: Date; lte?: Date } = {};
+    if (umurMax !== undefined && Number.isFinite(umurMax) && umurMax >= 0) {
+      const min = new Date(today);
+      min.setFullYear(min.getFullYear() - umurMax - 1);
+      // Lahir > today - (umurMax+1) tahun → usia ≤ umurMax (inclusive)
+      tanggalLahirFilter.gte = new Date(min.getTime() + 24 * 60 * 60 * 1000);
+    }
+    if (umurMin !== undefined && Number.isFinite(umurMin) && umurMin >= 0) {
+      const max = new Date(today);
+      max.setFullYear(max.getFullYear() - umurMin);
+      // Lahir ≤ today - umurMin tahun → usia ≥ umurMin
+      tanggalLahirFilter.lte = max;
+    }
+    where.tanggalLahir = tanggalLahirFilter;
+  }
+
+  // Resolve sort: whitelist field, default namaLengkap, default order asc.
+  const sortBy =
+    q.sortBy && JEMAAT_SORT_FIELDS.has(q.sortBy) ? q.sortBy : 'namaLengkap';
+  const sortOrder = q.sortOrder === 'desc' ? 'desc' : 'asc';
+  // "cabang" disorted lewat nested relation cabang.nama
+  const orderBy: any =
+    sortBy === 'cabang'
+      ? [{ cabang: { nama: sortOrder } }, { namaLengkap: 'asc' }]
+      : { [sortBy]: sortOrder };
+
   const [data, total] = await Promise.all([
     prisma.jemaat.findMany({
       where,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
-      orderBy: { [q.sortBy ?? 'namaLengkap']: q.sortOrder },
+      orderBy,
       include: {
         cabang: { select: { id: true, nama: true } },
         // Aktif roles untuk tampil di kolom "Role" (compact format Role:SubRole)
@@ -115,6 +193,26 @@ jemaatRouter.get('/by-pelayanan', async (req, res) => {
   res.json({ success: true, data });
 });
 
+// Lookup by kode (untuk scan QR). Kode di-uppercase agar tahan typo case.
+jemaatRouter.get('/by-kode/:kode', async (req, res) => {
+  const kode = req.params.kode?.toUpperCase().trim();
+  if (!kode) throw BadRequest('Kode wajib');
+  const item = await prisma.jemaat.findUnique({
+    where: { kode },
+    select: {
+      id: true,
+      kode: true,
+      namaLengkap: true,
+      noHp: true,
+      fotoUrl: true,
+      isActive: true,
+      cabang: { select: { id: true, nama: true } },
+    },
+  });
+  if (!item) throw NotFound('Kode jemaat tidak ditemukan');
+  res.json({ success: true, data: item });
+});
+
 jemaatRouter.get('/:id', async (req, res) => {
   const item = await prisma.jemaat.findUnique({
     where: { id: req.params.id },
@@ -133,8 +231,10 @@ jemaatRouter.get('/:id', async (req, res) => {
 
 jemaatRouter.post('/', async (req, res) => {
   const input = createJemaatSchema.parse(req.body);
+  const kode = await generateUniqueKodeJemaat();
   const data = {
     ...input,
+    kode,
     email: input.email || null,
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
@@ -235,15 +335,24 @@ jemaatRouter.post('/import/commit', csvUpload.single('file'), async (req, res) =
     });
   }
 
+  // Pre-generate kode untuk semua row (di luar transaction supaya bisa retry
+  // collision per kode tanpa rollback besar).
+  const kodeList: string[] = [];
+  for (let i = 0; i < validRows.length; i++) {
+    kodeList.push(await generateUniqueKodeJemaat());
+  }
+
   // Batch insert dalam transaction
   const inserted = await prisma.$transaction(async (tx) => {
     const created: { id: string; namaLengkap: string }[] = [];
-    for (const row of validRows) {
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i]!;
       const r = row.parsed!;
       const c = await tx.jemaat.create({
         data: {
           cabangId: row.cabangId!,
           namaLengkap: r.namaLengkap,
+          kode: kodeList[i]!,
           email: r.email,
           noHp: r.noHp,
           jenisKelamin: r.jenisKelamin ?? undefined,

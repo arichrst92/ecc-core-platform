@@ -295,17 +295,19 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 /**
  * POST /auth/face/login — login shortcut via face descriptor.
  *
- * Patch 2026-05-21q (per request mobile face recognition):
- * - Error code distandarisasi (FACE_NO_MATCH, FACE_NOT_ENROLLED)
- * - Response include `confidence` field (1 - distance/threshold), supaya
- *   mobile UI bisa tampil "logged in as X (high confidence)"
+ * Patch 2026-05-21r — switch ke MobileFaceNet (192-dim cosine).
+ * Patch 2026-05-21q — RESTful endpoints + standardized error codes + confidence.
+ *
+ * - Response include `confidence` field (= cosine similarity, range ~0..1)
  * - Optional `modelVersion` di body — reject kalau mismatch dengan stored
  *   (cegah descriptor model lama match dengan model baru)
+ * - Reject stored descriptor dengan modelVersion lama (facenet-v1) — force
+ *   re-enroll dengan mobilefacenet-v1
  */
 authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
   const { noHp, descriptor, modelVersion } = faceLoginSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
   }
 
   const jemaat = await prisma.jemaat.findUnique({
@@ -316,14 +318,24 @@ authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
     throw new ApiError(401, 'FACE_NOT_ENROLLED', 'Wajah belum terdaftar untuk nomor ini. Login dengan OTP dulu lalu enroll wajah di settings.');
   }
 
-  // Model version check — kalau client kirim modelVersion dan stored beda,
-  // tolak. Mobile harus re-enroll dengan model baru.
+  // Model version check. Stored data dengan model lama (facenet-v1 atau NULL)
+  // tidak comparable dengan descriptor MobileFaceNet — tolak + minta re-enroll.
   const storedModelVersion = jemaat.user.faceModelVersion ?? 'facenet-v1';
+  if (storedModelVersion !== 'mobilefacenet-v1') {
+    throw new ApiError(
+      409,
+      'FACE_MODEL_MISMATCH',
+      `Model wajah lama terdeteksi (${storedModelVersion}). Hapus + re-enroll dengan model baru di settings.`,
+      { storedModelVersion, expectedModelVersion: 'mobilefacenet-v1' },
+    );
+  }
+  // Client mismatch (mobile kirim model selain mobilefacenet-v1)
   if (modelVersion && modelVersion !== storedModelVersion) {
     throw new ApiError(
       409,
       'FACE_MODEL_MISMATCH',
-      `Model wajah berbeda (client: ${modelVersion}, server: ${storedModelVersion}). Re-enroll wajah dulu di settings.`,
+      `Model wajah client beda (client: ${modelVersion}, server: ${storedModelVersion}).`,
+      { clientModelVersion: modelVersion, storedModelVersion },
     );
   }
 
@@ -334,13 +346,13 @@ authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
       401,
       'FACE_NO_MATCH',
       'Wajah tidak dikenali. Coba lagi atau login dengan OTP.',
-      { distance: result.distance, threshold: result.threshold },
+      { similarity: result.similarity, threshold: result.threshold },
     );
   }
 
-  // Compute confidence: 0 (worst) → 1 (best). Distance < threshold = match.
-  // Normalize: 1 - distance/threshold, clamp ke [0, 1].
-  const confidence = Math.max(0, Math.min(1, 1 - result.distance / result.threshold));
+  // Confidence = cosine similarity itself (already in 0..1 range untuk
+  // normalized face descriptors). Clamp untuk safety.
+  const confidence = Math.max(0, Math.min(1, result.similarity));
 
   const authResponse = await issueAuthResponse(noHp, req, 'FACE');
   return res.json({
@@ -363,7 +375,7 @@ authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
 authRouter.post('/face/enroll', requireAuth, async (req, res) => {
   const { descriptor, modelVersion, metadata } = faceEnrollmentSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
   }
 
   const userId = req.user!.sub;
@@ -386,7 +398,7 @@ authRouter.post('/face/enroll', requireAuth, async (req, res) => {
     data: {
       faceDescriptor: descriptor,
       faceEnrolledAt: new Date(),
-      faceModelVersion: modelVersion ?? 'facenet-v1',
+      faceModelVersion: modelVersion ?? 'mobilefacenet-v1',
       faceMetadata: metadata ? (metadata as Prisma.InputJsonValue) : Prisma.DbNull,
     },
     select: { id: true, faceEnrolledAt: true, faceModelVersion: true },
@@ -444,7 +456,7 @@ authRouter.get('/me/face-profile', requireAuth, async (req, res) => {
     data: {
       enrolled,
       enrolledAt: enrolled ? user!.faceEnrolledAt : null,
-      modelVersion: enrolled ? user!.faceModelVersion ?? 'facenet-v1' : null,
+      modelVersion: enrolled ? user!.faceModelVersion ?? 'mobilefacenet-v1' : null,
     },
   });
 });
@@ -458,7 +470,7 @@ authRouter.get('/me/face-profile', requireAuth, async (req, res) => {
 authRouter.put('/me/face-profile', requireAuth, async (req, res) => {
   const { descriptor, modelVersion, metadata } = faceEnrollmentSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
   }
 
   const userId = req.user!.sub;
@@ -472,7 +484,7 @@ authRouter.put('/me/face-profile', requireAuth, async (req, res) => {
     data: {
       faceDescriptor: descriptor,
       faceEnrolledAt: new Date(),
-      faceModelVersion: modelVersion ?? 'facenet-v1',
+      faceModelVersion: modelVersion ?? 'mobilefacenet-v1',
       faceMetadata: metadata ? (metadata as Prisma.InputJsonValue) : Prisma.DbNull,
     },
     select: { id: true, faceEnrolledAt: true, faceModelVersion: true },

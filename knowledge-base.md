@@ -2028,6 +2028,71 @@ Mobile submit spec lengkap push notif (Expo Push API + Device/Notification table
 
 **Code belum di-implement** — masih DEFERRED. KB akan di-update lagi setelah product re-approve + actual implementation.
 
+### Patch 2026-05-21r — Face Recognition V2: switch ke MobileFaceNet (192-dim cosine)
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet.md` (Priority HIGH, supersedes v1 face-api.js choice).
+
+**Background**: setelah pilot test, face-api.js + TFJS WebGL via WebView di RN ternyata **terlalu lambat** untuk production — detection hang >60s. Mobile pivot ke native TFLite (`react-native-fast-tflite`) + MobileFaceNet model. Konsekuensi: descriptor format berubah dari 128-dim FaceNet ke 192-dim MobileFaceNet, distance metric Euclidean → Cosine.
+
+**Penting**: BE **tidak perlu inference stack** (Q6 di request bisa di-skip). Server cuma compute cosine similarity antar 2 descriptor (pure math, ~10 lines TypeScript). Tidak butuh TFLite/ONNX/Python di BE.
+
+**Perubahan BE**:
+
+1. **`packages/auth/src/face.ts`** — rewrite:
+   - `FACE_DESCRIPTOR_DIM = 192` (export)
+   - `cosineSimilarity(a, b)` baru (replace `euclideanDistance` sebagai primary)
+   - `matchFace()` return `{ match, similarity, threshold }` (was `{ match, distance, threshold }`)
+   - `isValidDescriptor()` validate length === 192 (was 128)
+   - `euclideanDistance()` masih di-export tapi `@deprecated` (untuk audit historical)
+   - `FACE_MATCH_THRESHOLD` env default 0.5 (cosine, higher = stricter)
+
+2. **`packages/shared-types/src/schemas/auth.ts`**:
+   - `faceDescriptorSchema` length 192 (was 128)
+
+3. **`apps/core-api/src/routes/auth.ts`** — handlers:
+   - `POST /auth/face/login` — confidence = cosine similarity directly. Reject stored modelVersion `!= 'mobilefacenet-v1'` dengan `FACE_MODEL_MISMATCH` (force re-enroll).
+   - `POST /auth/face/enroll` + `PUT /auth/me/face-profile` — default modelVersion `mobilefacenet-v1` (was `facenet-v1`)
+   - `GET /auth/me/face-profile` — default modelVersion `mobilefacenet-v1` di response
+
+4. **Migration `20260521180000_face_v2_mobilefacenet`**:
+   - `UPDATE user SET face_descriptor = NULL, face_enrolled_at = NULL, face_model_version = NULL, face_metadata = NULL WHERE face_model_version IS DISTINCT FROM 'mobilefacenet-v1'`
+   - Effective no-op di production (semua enroll attempts hit timeout di pilot, no actual data)
+   - Safety untuk dev environment yang mungkin punya test data 128-dim
+
+**Decisions dari 10 technical questions** (di response doc):
+
+| Question | Answer |
+|---|---|
+| Q1 model identity | MobileFaceNet TFLite dari serengil/deepface atau sirius-ai/MobileFaceNet_TF |
+| Q2 embedding dim | **192** |
+| Q3 distance metric | **Cosine similarity** |
+| Q4 migration data | Wipe via migration — no actual user enrolled |
+| Q5 modelVersion | `mobilefacenet-v1` (existing `FACE_MODEL_MISMATCH` error code) |
+| Q6 BE inference stack | **None** — BE just compute cosine, no model run di server |
+| Q7 storage format | JSON column existing (cukup) |
+| Q8 pgvector | Defer (linear scan cukup untuk MVP) |
+| Q9 threshold | 0.5 default cosine, tune setelah pilot data |
+| Q10 liveness | Client-side (sama dengan v1, no BE change) |
+
+**Notable change** vs v1 patch:
+- v1 (patch q): confidence = `1 - distance / threshold` (Euclidean inversion)
+- v2 (patch r): confidence = cosine similarity directly (already 0..1)
+
+**Threshold logic flip**: Euclidean lower=better → Cosine higher=better. `matchFace.match` sekarang `similarity >= threshold` (was `distance < threshold`).
+
+**File berubah**:
+- `packages/auth/src/face.ts` — full rewrite untuk cosine
+- `packages/shared-types/src/schemas/auth.ts` — dim 128 → 192
+- `apps/core-api/src/routes/auth.ts` — match logic + model version defaults
+- `packages/database/prisma/migrations/20260521180000_face_v2_mobilefacenet/migration.sql` — wipe legacy
+- `docs/mobile-api-guide.md` — section 1.4 updated
+- `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet.md` — RESOLVED + Backend Response
+
+**User perlu run**:
+- `pnpm db:migrate dev` (apply migration)
+- `pnpm db:generate` (Prisma client OK karena tidak ubah schema, cuma data)
+- `pnpm dev` restart
+
 ### Patch 2026-05-21q — Face Recognition: RESTful endpoints + modelVersion + standardized errors
 
 **Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition.md` (Priority MEDIUM, M11 + future smart system data prerequisite).

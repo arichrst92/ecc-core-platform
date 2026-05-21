@@ -21,10 +21,12 @@ export const verifyOtpSchema = z
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
 // ===== Face Login (shortcut, opsional) =====
-// 128-dim Float32 descriptor dari face-api.js, di-encode ke array number.
+// 192-dim Float32 descriptor dari MobileFaceNet (native TFLite di mobile),
+// di-encode ke array number. **Patch 2026-05-21r** — switch dari 128-dim
+// face-api.js (FaceNet) karena WebView TFJS terlalu lambat di production.
 export const faceDescriptorSchema = z
   .array(z.number())
-  .length(128, 'Face descriptor harus 128 dimensi');
+  .length(192, 'Face descriptor harus 192 dimensi (MobileFaceNet)');
 
 export const faceLoginSchema = z
   .object({

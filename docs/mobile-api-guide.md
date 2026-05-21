@@ -326,15 +326,32 @@ Content-Type: application/json
 
 ## 1.4 Face Recognition (opsional)
 
-> **Patch 2026-05-21q**: face recognition endpoints diperluas dengan RESTful pattern + standardized error codes + confidence field. Existing `/auth/face/{login,enroll,reset}` tetap backward-compat.
+> **Patch 2026-05-21r** — **switch ke MobileFaceNet (192-dim cosine)** dari face-api.js (128-dim Euclidean). Mobile pakai native TFLite via `react-native-fast-tflite` + `@react-native-ml-kit/face-detection`. BE compute cosine similarity (pure math, no ML library di server).
+>
+> **Breaking**: descriptor format berubah dari 128 → 192 dimensi. Stored data lama (`facenet-v1`) di-wipe via migration. Mobile harus pakai `modelVersion: 'mobilefacenet-v1'` saat enroll/login.
 
 ### Background
 
-- **Descriptor**: 128-dim Float32 array dari face-api.js (atau library compatible)
-- **Distance metric**: Euclidean
+- **Descriptor**: 192-dim Float32 array dari **MobileFaceNet** (native TFLite di mobile, ~100ms inference)
+- **Distance metric**: **Cosine similarity** (range ~0..1, higher = better match)
 - **Match threshold**: 0.5 default (override via `FACE_MATCH_THRESHOLD` env)
-- **Model version**: `facenet-v1` default — kalau migrate ke model lain, set `modelVersion` field di body, mismatch akan tolak 409
-- **Storage**: `User.faceDescriptor` (Json column) + `faceModelVersion` + `faceMetadata` audit
+- **Model version**: `mobilefacenet-v1` (stored data dengan model lain ditolak `FACE_MODEL_MISMATCH`)
+- **Storage**: `User.faceDescriptor` (Json column 192 float) + `faceModelVersion` + `faceMetadata` audit
+
+### Mobile stack rekomendasi
+
+```
+Camera capture → ML Kit detect bounding box → crop face region
+              → resize ke 112x112 → MobileFaceNet TFLite → 192-dim descriptor
+              → POST /auth/face/enroll atau /auth/face/login
+```
+
+Deps:
+- `react-native-fast-tflite` — native TFLite inference (NNAPI Android / CoreML iOS)
+- `@react-native-ml-kit/face-detection` — Google ML Kit native, fast detection
+- Bundle `MobileFaceNet` TFLite model di asset (~4MB)
+
+Sources model: [serengil/deepface](https://github.com/serengil/deepface) atau [sirius-ai/MobileFaceNet_TF](https://github.com/sirius-ai/MobileFaceNet_TF).
 
 ### 1.4.1 Face Login
 
@@ -349,11 +366,11 @@ Content-Type: application/json
 {
   "noHp": "+6282115678446",
   "descriptor": [0.123, -0.456, ...],
-  "modelVersion": "facenet-v1"
+  "modelVersion": "mobilefacenet-v1"
 }
 ```
 
-`modelVersion` optional — server reject 409 kalau mismatch dengan stored (force re-enroll).
+`descriptor` = 192 float array dari MobileFaceNet. `modelVersion` optional tapi rekomendasi kirim — server reject 409 kalau mismatch dengan stored (force re-enroll).
 
 **Response 200:**
 
@@ -370,7 +387,7 @@ Content-Type: application/json
 }
 ```
 
-`confidence` 0..1 (higher = better match). Mobile UI bisa pakai untuk tampil "logged in as X (high confidence)".
+`confidence` = cosine similarity directly (0..1 untuk normalized descriptors, higher = better match). Mobile UI bisa pakai untuk tampil "logged in as X (high confidence)".
 
 **Error codes:**
 
@@ -417,7 +434,7 @@ Content-Type: application/json
 ```json
 {
   "descriptor": [0.123, -0.456, ...],
-  "modelVersion": "facenet-v1",
+  "modelVersion": "mobilefacenet-v1",
   "metadata": {
     "platform": "ios",
     "deviceModel": "iPhone 15 Pro",
@@ -426,6 +443,8 @@ Content-Type: application/json
   }
 }
 ```
+
+`descriptor` = 192 float dari MobileFaceNet. `modelVersion` default `mobilefacenet-v1`.
 
 `metadata` optional — audit only. `consentVersion` track versi consent screen yang user accept (untuk PDP Law audit trail).
 
@@ -490,7 +509,7 @@ Legacy endpoint `POST /auth/face/reset` masih jalan (sama behavior).
 - **Consent screen explicit** sebelum first enrollment — link ke privacy policy section "Data Biometrik"
 - **Persist `consentVersion`** di metadata setiap enroll (untuk audit trail PDP Law)
 - **Client-side liveness check** (blink, head turn) sebelum compute descriptor — server tidak validate liveness, mobile responsibility
-- **Threshold**: server pakai 0.5 (Euclidean distance). Kalau mobile compute confidence dari distance, normalize: `confidence = 1 - distance / 0.5`, clamp [0,1]
+- **Threshold**: server pakai 0.5 cosine similarity (range 0..1, higher = better). Confidence = cosine similarity directly (clamp [0,1])
 - **Re-enroll trigger**: kalau login fail 3x berturut-turut dengan FACE_NO_MATCH, prompt user "Update wajah?" → PUT /me/face-profile
 - **Hapus data**: button "Hapus Data Wajah Saya" di Profile → Privacy section, untuk PDP Law right-to-delete
 

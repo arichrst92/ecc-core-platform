@@ -50,8 +50,37 @@ import {
   faceLoginSchema,
   faceEnrollmentSchema,
   refreshTokenSchema,
+  registerJemaatSchema,
+  selfEditJemaatSchema,
   paginationQuerySchema,
   errorEnvelopeSchema,
+  // Mobile app phase 1
+  linkFamilyByKodeSchema,
+  linkFamilyByPhoneSchema,
+  registerFamilyNewSchema,
+  updateFamilyRelationSchema,
+  createBranchChangeRequestSchema,
+  reviewBranchChangeRequestSchema,
+  batchRegisterEventParticipationSchema,
+  createEventDonationSchema,
+  updateEventDonationSchema,
+  // Tambahan untuk fitur baru
+  createEventSchema,
+  updateEventSchema,
+  registerEventParticipationSchema,
+  updateEventParticipationSchema,
+  linkEventPelayananSchema,
+  assignEventVolunteerSchema,
+  updateEventVolunteerSchema,
+  eventCheckinSchema,
+  cancelOccurrenceSchema,
+  ibadahCheckinSchema,
+  createCabangRekeningSchema,
+  updateCabangRekeningSchema,
+  createApiKeySchema,
+  updateApiKeySchema,
+  setMenuAccessSchema,
+  updateCanAccessPortalSchema,
 } from '@ecc/shared-types';
 
 const registry = new OpenAPIRegistry();
@@ -123,41 +152,126 @@ registry.registerPath({
 registry.registerPath({
   method: 'post',
   path: '/auth/face/login',
-  tags: ['Auth'],
+  tags: ['Auth · Face Recognition'],
   summary: 'Login shortcut via face descriptor',
+  description:
+    'Body: noHp + descriptor 128-dim + optional modelVersion. Response include `confidence` (0..1, higher = better match). Error codes: FACE_NOT_ENROLLED (401), FACE_NO_MATCH (401), FACE_MODEL_MISMATCH (409), FACE_INVALID_DESCRIPTOR (422).',
   request: { body: json(faceLoginSchema) },
   responses: {
-    200: { description: 'Auth response', ...json(successOf(z.any())) },
-    401: { description: 'Wajah tidak cocok', ...json(errorEnvelopeSchema) },
+    200: {
+      description: 'Auth response + confidence',
+      ...json(
+        successOf(
+          z.object({
+            accessToken: z.string(),
+            refreshToken: z.string(),
+            user: z.any(),
+            confidence: z.number(),
+          }),
+        ),
+      ),
+    },
+    401: { description: 'FACE_NOT_ENROLLED atau FACE_NO_MATCH', ...json(errorEnvelopeSchema) },
+    409: { description: 'FACE_MODEL_MISMATCH', ...json(errorEnvelopeSchema) },
+    422: { description: 'FACE_INVALID_DESCRIPTOR', ...json(errorEnvelopeSchema) },
   },
 });
 
 registry.registerPath({
   method: 'post',
   path: '/auth/face/enroll',
-  tags: ['Auth'],
-  summary: 'Enroll face descriptor untuk user yang login',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Enroll face descriptor (first-time only — re-enroll pakai PUT)',
+  description:
+    'Body: descriptor + optional modelVersion + metadata (platform, deviceModel, appVersion, consentVersion). Tolak kalau sudah enrolled (409 FACE_ALREADY_ENROLLED) — pakai PUT /auth/me/face-profile untuk re-enroll.',
   security: [{ [bearer.name]: [] }],
   request: { body: json(faceEnrollmentSchema) },
   responses: {
-    200: {
+    201: {
       description: 'Enrolled',
       ...json(
-        successOf(z.object({ faceEnrolledAt: z.string().datetime(), hasFaceEnrolled: z.boolean() })),
+        successOf(
+          z.object({
+            faceEnrolledAt: z.string().datetime(),
+            modelVersion: z.string(),
+            hasFaceEnrolled: z.boolean(),
+          }),
+        ),
       ),
     },
-    400: { description: 'Descriptor invalid', ...json(errorEnvelopeSchema) },
+    409: { description: 'FACE_ALREADY_ENROLLED — pakai PUT untuk re-enroll', ...json(errorEnvelopeSchema) },
+    422: { description: 'FACE_INVALID_DESCRIPTOR', ...json(errorEnvelopeSchema) },
   },
 });
 
 registry.registerPath({
   method: 'post',
   path: '/auth/face/reset',
-  tags: ['Auth'],
-  summary: 'Hapus face descriptor (self-service)',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Hapus face descriptor (self-service, legacy — pakai DELETE /me/face-profile)',
   security: [{ [bearer.name]: [] }],
   responses: {
     200: { description: 'Reset', ...json(successOf(z.object({ hasFaceEnrolled: z.boolean() }))) },
+  },
+});
+
+// ---------- RESTful face profile endpoints (mobile preferred) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/auth/me/face-profile',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Status enrollment face untuk user current',
+  security: [{ [bearer.name]: [] }],
+  responses: {
+    200: {
+      description: 'Profile status',
+      ...json(
+        successOf(
+          z.object({
+            enrolled: z.boolean(),
+            enrolledAt: z.string().datetime().nullable(),
+            modelVersion: z.string().nullable(),
+          }),
+        ),
+      ),
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/auth/me/face-profile',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Re-enroll face descriptor (replace existing)',
+  description:
+    'Berbeda dengan POST /auth/face/enroll yang tolak existing, endpoint ini EKSPLISIT replace descriptor lama. Body sama dengan POST enroll.',
+  security: [{ [bearer.name]: [] }],
+  request: { body: json(faceEnrollmentSchema) },
+  responses: {
+    200: {
+      description: 'Re-enrolled',
+      ...json(
+        successOf(
+          z.object({
+            faceEnrolledAt: z.string().datetime(),
+            modelVersion: z.string(),
+            hasFaceEnrolled: z.boolean(),
+          }),
+        ),
+      ),
+    },
+    422: { description: 'FACE_INVALID_DESCRIPTOR', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/auth/me/face-profile',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Hapus face profile (self-service, PDP Law compliance)',
+  security: [{ [bearer.name]: [] }],
+  responses: {
+    200: { description: 'Deleted', ...json(successOf(z.object({ hasFaceEnrolled: z.boolean() }))) },
   },
 });
 
@@ -966,6 +1080,1123 @@ registry.registerPath({
   responses: {
     200: { description: 'Detail', ...json(successOf(z.any())) },
     404: { description: 'Not found', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ============================================================
+//  Fitur baru (2026-05-18+ session):
+//  Event/Movement, Ibadah cancel+checkin, Cabang stats+rekening,
+//  RBAC menu-access, API Keys admin, Auth /me/access.
+// ============================================================
+
+const adminAuth = [{ [bearer.name]: [] }];
+
+// ---------- Auth: /me/access ----------
+registry.registerPath({
+  method: 'get',
+  path: '/auth/me/access',
+  tags: ['Auth'],
+  summary: 'Resolved RBAC access untuk user current',
+  description:
+    'Re-fetch canAccessPortal + menuAccess. Berguna setelah admin ubah RBAC ' +
+    'agar sidebar/UI auto-update tanpa re-login.',
+  security: adminAuth,
+  responses: {
+    200: {
+      description: 'Resolved access',
+      ...json(
+        successOf(
+          z.object({
+            canAccessPortal: z.boolean(),
+            menuAccess: z.record(
+              z.object({
+                canRead: z.boolean(),
+                canWrite: z.boolean(),
+                canDelete: z.boolean(),
+              }),
+            ),
+          }),
+        ),
+      ),
+    },
+  },
+});
+
+// ---------- Jemaat: by-kode ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/jemaat/by-kode/{kode}',
+  tags: ['Jemaat'],
+  summary: 'Lookup jemaat by QR kode (untuk scan check-in)',
+  security: adminAuth,
+  request: {
+    params: z.object({ kode: z.string() }),
+  },
+  responses: {
+    200: { description: 'Jemaat info ringkas', ...json(successOf(z.any())) },
+    404: { description: 'Kode tidak ditemukan', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Ibadah: occurrence cancel ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/ibadah/{id}/occurrence/cancelled',
+  tags: ['Ibadah'],
+  summary: 'List occurrence yang ditiadakan',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.array(z.any()))) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/ibadah/{id}/occurrence/{tanggal}/cancel',
+  tags: ['Ibadah'],
+  summary: 'Tiadakan occurrence ibadah pada tanggal tertentu',
+  description:
+    'Side effect: semua reservasi RESERVE/JOIN pada tanggal itu auto-cancel ' +
+    '(catatan diisi alasan). Idempotent.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), tanggal: z.string() }),
+    body: json(cancelOccurrenceSchema),
+  },
+  responses: {
+    200: { description: 'OK', ...json(successOf(z.any())) },
+    400: { description: 'Tanggal bukan jadwal ibadah', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/ibadah/{id}/occurrence/{tanggal}/cancel',
+  tags: ['Ibadah'],
+  summary: 'Buka kembali occurrence yang ditiadakan',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid(), tanggal: z.string() }) },
+  responses: { 204: { description: 'Restored' } },
+});
+
+// ---------- Ibadah: check-in via kode jemaat ----------
+registry.registerPath({
+  method: 'post',
+  path: '/admin/ibadah/{id}/checkin',
+  tags: ['Ibadah'],
+  summary: 'Check-in kehadiran ibadah via QR kode jemaat',
+  description:
+    'Authorization: user.jemaatId harus terdaftar di IbadahPelayananPetugas ' +
+    'ibadah ini dengan canScanAttendance=true. Walk-in: kalau jemaat belum ' +
+    'reservasi, auto-create reservasi status JOIN.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(ibadahCheckinSchema),
+  },
+  responses: {
+    200: { description: 'Checked in', ...json(successOf(z.any())) },
+    403: { description: 'Tidak berwenang scan', ...json(errorEnvelopeSchema) },
+    404: { description: 'Kode tidak ditemukan', ...json(errorEnvelopeSchema) },
+    409: { description: 'Occurrence ditiadakan / partisipasi BATAL', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Event: CRUD ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event',
+  tags: ['Event'],
+  summary: 'List event',
+  security: adminAuth,
+  request: {
+    query: paginationQuerySchema.extend({
+      cabangId: z.string().uuid().optional(),
+      sinodeId: z.string().uuid().optional(),
+      tipeBayar: z.enum(['GRATIS', 'NOMINAL_TETAP', 'NOMINAL_BEBAS']).optional(),
+      isPublished: z.enum(['true', 'false']).optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{idOrSlug}',
+  tags: ['Event'],
+  summary: 'Detail event',
+  security: adminAuth,
+  request: { params: z.object({ idOrSlug: z.string() }) },
+  responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event',
+  tags: ['Event'],
+  summary: 'Create event',
+  security: adminAuth,
+  request: { body: json(createEventSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/event/{id}',
+  tags: ['Event'],
+  summary: 'Update event',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateEventSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}',
+  tags: ['Event'],
+  summary: 'Hapus event (cascade peserta, file hero+QRIS)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ---------- Event: hero & QRIS upload ----------
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/hero',
+  tags: ['Event'],
+  summary: 'Upload hero image (multipart "foto")',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/hero',
+  tags: ['Event'],
+  summary: 'Hapus hero image',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/qris',
+  tags: ['Event'],
+  summary: 'Upload QRIS event (multipart "foto")',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/qris',
+  tags: ['Event'],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  security: adminAuth,
+  summary: 'Hapus QRIS event',
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ---------- Event: peserta ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/peserta',
+  tags: ['Event'],
+  summary: 'List peserta event',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    query: z.object({
+      status: z.enum(['DAFTAR', 'MENUNGGU_VERIFIKASI', 'BAYAR', 'HADIR', 'BATAL']).optional(),
+    }),
+  },
+  responses: { 200: { description: 'OK', ...json(successOf(z.array(z.any()))) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/peserta',
+  tags: ['Event'],
+  summary: 'Daftarkan jemaat sebagai peserta',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(registerEventParticipationSchema),
+  },
+  responses: {
+    201: { description: 'Registered', ...json(successOf(z.any())) },
+    409: { description: 'Quota penuh / duplikat', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/event/{id}/peserta/{participationId}',
+  tags: ['Event'],
+  summary: 'Update partisipasi (status / nominal / catatan)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), participationId: z.string().uuid() }),
+    body: json(updateEventParticipationSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/peserta/{participationId}',
+  tags: ['Event'],
+  summary: 'Hapus partisipasi',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), participationId: z.string().uuid() }),
+  },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/peserta/{participationId}/bukti',
+  tags: ['Event'],
+  summary: 'Upload bukti transfer (multipart "foto"); auto-set MENUNGGU_VERIFIKASI',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), participationId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/peserta/{participationId}/approve',
+  tags: ['Event'],
+  summary: 'Approve bukti transfer → set status BAYAR',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), participationId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Approved', ...json(successOf(z.any())) } },
+});
+
+// ---------- Event: check-in ----------
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/checkin',
+  tags: ['Event'],
+  summary: 'Check-in event via QR kode jemaat',
+  description:
+    'Authorization: user.jemaatId harus terdaftar di EventPelayananPetugas ' +
+    'event ini dgn canScanAttendance=true. Untuk event berbayar, status ' +
+    'harus BAYAR (kecuali force=true).',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(eventCheckinSchema),
+  },
+  responses: {
+    200: { description: 'Checked in', ...json(successOf(z.any())) },
+    400: { description: 'Event tidak butuh kehadiran', ...json(errorEnvelopeSchema) },
+    403: { description: 'Tidak berwenang scan', ...json(errorEnvelopeSchema) },
+    409: { description: 'Belum bayar (paid event)', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Event: ministry & volunteer ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/pelayanan',
+  tags: ['Event'],
+  summary: 'List pelayanan + volunteer event',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.array(z.any()))) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/pelayanan',
+  tags: ['Event'],
+  summary: 'Link pelayanan ke event',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(linkEventPelayananSchema),
+  },
+  responses: { 201: { description: 'Linked', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/pelayanan/{linkId}',
+  tags: ['Event'],
+  summary: 'Unlink pelayanan (cascade volunteer)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid(), linkId: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/pelayanan/{linkId}/petugas',
+  tags: ['Event'],
+  summary: 'Assign volunteer ke pelayanan event',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), linkId: z.string().uuid() }),
+    body: json(assignEventVolunteerSchema),
+  },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/event/{id}/pelayanan/{linkId}/petugas/{petugasId}',
+  tags: ['Event'],
+  summary: 'Update volunteer (role / canScanAttendance / catatan)',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      id: z.string().uuid(),
+      linkId: z.string().uuid(),
+      petugasId: z.string().uuid(),
+    }),
+    body: json(updateEventVolunteerSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/pelayanan/{linkId}/petugas/{petugasId}',
+  tags: ['Event'],
+  summary: 'Hapus volunteer',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      id: z.string().uuid(),
+      linkId: z.string().uuid(),
+      petugasId: z.string().uuid(),
+    }),
+  },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ---------- Cabang: stats + locations ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/cabang/locations',
+  tags: ['Cabang'],
+  summary: 'List cabang dengan koordinat (untuk Globe dashboard)',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.array(z.any()))) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/cabang/{id}/stats',
+  tags: ['Cabang'],
+  summary: 'Statistik kehadiran cabang (ibadah/event/homecell)',
+  description:
+    'KPI + top ibadah/event by kehadiran + time-series harian + homecell summary ' +
+    '+ donut status reservasi. Default periode 30 hari terakhir.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    query: z.object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Stats payload', ...json(successOf(z.any())) } },
+});
+
+// ---------- Cabang Rekening ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/cabang/{id}/rekening',
+  tags: ['Cabang'],
+  summary: 'List rekening cabang',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.array(z.any()))) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/cabang/{id}/rekening',
+  tags: ['Cabang'],
+  summary: 'Tambah rekening cabang',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(createCabangRekeningSchema),
+  },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/cabang/{id}/rekening/{rekeningId}',
+  tags: ['Cabang'],
+  summary: 'Update rekening cabang',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), rekeningId: z.string().uuid() }),
+    body: json(updateCabangRekeningSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/cabang/{id}/rekening/{rekeningId}',
+  tags: ['Cabang'],
+  summary: 'Hapus rekening',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), rekeningId: z.string().uuid() }),
+  },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/cabang/{id}/rekening/{rekeningId}/qris',
+  tags: ['Cabang'],
+  summary: 'Upload QRIS rekening (multipart "foto")',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), rekeningId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/cabang/{id}/rekening/{rekeningId}/qris',
+  tags: ['Cabang'],
+  summary: 'Hapus QRIS rekening',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), rekeningId: z.string().uuid() }),
+  },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ---------- RBAC: menu access ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/role/access/matrix',
+  tags: ['RBAC'],
+  summary: 'Matrix Role × Menu untuk halaman manage Role Access',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/role/{id}/access/portal',
+  tags: ['RBAC'],
+  summary: 'Set Role.canAccessPortal',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateCanAccessPortalSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/role/sub/{id}/access/portal',
+  tags: ['RBAC'],
+  summary: 'Set SubRole.canAccessPortal (null=inherit)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateCanAccessPortalSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/admin/role/{id}/access/menu',
+  tags: ['RBAC'],
+  summary: 'Upsert RoleMenuAccess (canRead/Write/Delete per menu)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(setMenuAccessSchema) },
+  responses: { 200: { description: 'Upserted', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/admin/role/sub/{id}/access/menu',
+  tags: ['RBAC'],
+  summary: 'Upsert SubRoleMenuAccess (override Role-level)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(setMenuAccessSchema) },
+  responses: { 200: { description: 'Upserted', ...json(successOf(z.any())) } },
+});
+
+// ---------- API Keys ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/sinode-api-key',
+  tags: ['API Keys'],
+  summary: 'List API keys',
+  security: adminAuth,
+  request: {
+    query: paginationQuerySchema.extend({
+      sinodeId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/sinode-api-key',
+  tags: ['API Keys'],
+  summary: 'Buat API key (return plaintext SEKALI saja)',
+  description:
+    'Response data.key adalah plaintext token — hanya di-return di response ' +
+    'ini. Setelah modal close di FE, token tidak bisa direveal lagi.',
+  security: adminAuth,
+  request: { body: json(createApiKeySchema) },
+  responses: { 201: { description: 'Created + key', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/sinode-api-key/{id}',
+  tags: ['API Keys'],
+  summary: 'Update API key (nama/scopes/expire/isActive)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateApiKeySchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/sinode-api-key/{id}',
+  tags: ['API Keys'],
+  summary: 'Revoke API key',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Revoked' } },
+});
+
+// ============================================================
+// Mobile App Phase 1 (2026-05-21)
+// ============================================================
+
+// ---------- Public catalog (untuk signup picker) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/auth/cabang',
+  tags: ['Auth'],
+  summary: 'Public list cabang untuk signup picker (no auth)',
+  description:
+    'Rate-limited 30/menit/IP. Field di-whitelist (tidak expose kontak admin). ' +
+    'Default `?isActive=true`. Pakai `?isActive=all` untuk dapat semua termasuk nonaktif.',
+  request: {
+    query: z.object({
+      isActive: z.enum(['true', 'false', 'all']).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'List cabang',
+      ...json(
+        successOf(
+          z.array(
+            z.object({
+              id: z.string().uuid(),
+              nama: z.string(),
+              kode: z.string(),
+              alamat: z.string().nullable(),
+              latitude: z.number().nullable(),
+              longitude: z.number().nullable(),
+              isActive: z.boolean(),
+            }),
+          ),
+        ),
+      ),
+    },
+    429: { description: 'Rate limit exceeded', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Self-Registration ----------
+registry.registerPath({
+  method: 'post',
+  path: '/auth/register',
+  tags: ['Auth'],
+  summary: 'Self-register jemaat baru (post-OTP enrollment)',
+  description:
+    'Pre-requisite: OTP purpose=ENROLLMENT sudah diverify. Submit data diri → akun langsung aktif + login. Anti-abuse: rate limit 3/jam/IP. Auto-assign role default "Jemaat:Jemaat Tetap" kalau seed role tersedia.',
+  request: { body: json(registerJemaatSchema) },
+  responses: {
+    201: { description: 'Auth response + jemaat created', ...json(successOf(z.any())) },
+    401: { description: 'OTP belum diverify', ...json(errorEnvelopeSchema) },
+    409: { description: 'Nomor sudah terdaftar', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- /admin/me — self-service ----------
+const meAuth = [{ [bearer.name]: [] }];
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me',
+  tags: ['Me'],
+  summary: 'Profile diri (Jemaat + User + cabang + roles + homecells)',
+  security: meAuth,
+  responses: { 200: { description: 'Profile', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/me',
+  tags: ['Me'],
+  summary: 'Self-edit profile (subset field — noHp & cabangId tidak boleh)',
+  security: meAuth,
+  request: { body: json(selfEditJemaatSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/foto',
+  tags: ['Me'],
+  summary: 'Upload foto profile (multipart, field=foto, max 5MB)',
+  security: meAuth,
+  request: {
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({ foto: z.any().describe('Binary image (jpeg/png/webp)') }),
+        },
+      },
+    },
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/stats',
+  tags: ['Me'],
+  summary: 'Streak hadir + summary (attendedThisYear, eventsJoined, homecellsActive)',
+  security: meAuth,
+  responses: { 200: { description: 'Stats', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/scanner-events',
+  tags: ['Me'],
+  summary: 'List event yang user-nya canScanAttendance volunteer',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/scanner-ibadah',
+  tags: ['Me'],
+  summary: 'List ibadah yang user-nya canScanAttendance petugas',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/homecell-managed',
+  tags: ['Me'],
+  summary: 'List homecell yang user-nya PIC',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/homecell-area-managed',
+  tags: ['Me'],
+  summary: 'List homecell area yang user-nya PIC',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+// ---------- Family management ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/family',
+  tags: ['Family'],
+  summary: 'List family member user',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/family/link-by-kode',
+  tags: ['Family'],
+  summary: 'Link existing jemaat ke family via kode (scan QR). Auto-verified.',
+  security: meAuth,
+  request: { body: json(linkFamilyByKodeSchema) },
+  responses: { 201: { description: 'Linked', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/family/link-by-phone',
+  tags: ['Family'],
+  summary: 'Link existing jemaat ke family via no HP. Auto-verified.',
+  security: meAuth,
+  request: { body: json(linkFamilyByPhoneSchema) },
+  responses: { 201: { description: 'Linked', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/family/register-new',
+  tags: ['Family'],
+  summary: 'Register jemaat baru + auto-link family (utk anak balita/dependent)',
+  description:
+    'Kalau noHp tidak diisi, jemaat baru di-set sebagai dependent dengan primaryGuardianId=user current.',
+  security: meAuth,
+  request: { body: json(registerFamilyNewSchema) },
+  responses: { 201: { description: 'Created + linked', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/me/family/{jemaatId}',
+  tags: ['Family'],
+  summary: 'Update role relasi family',
+  security: meAuth,
+  request: {
+    params: z.object({ jemaatId: z.string().uuid() }),
+    body: json(updateFamilyRelationSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/family/{jemaatId}',
+  tags: ['Family'],
+  summary: 'Unlink family member (hapus 2 arah)',
+  security: meAuth,
+  request: { params: z.object({ jemaatId: z.string().uuid() }) },
+  responses: { 204: { description: 'Unlinked' } },
+});
+
+// ---------- Branch change request (self) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/branch-change-requests',
+  tags: ['Me'],
+  summary: 'Riwayat permohonan pindah cabang user',
+  security: meAuth,
+  responses: { 200: { description: 'List', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/branch-change-request',
+  tags: ['Me'],
+  summary: 'Submit permohonan pindah cabang',
+  description: 'Maksimal 1 permohonan PENDING per jemaat. Admin approve di /admin/branch-change-request/{id}/review.',
+  security: meAuth,
+  request: { body: json(createBranchChangeRequestSchema) },
+  responses: {
+    201: { description: 'Submitted', ...json(successOf(z.any())) },
+    409: { description: 'Sudah ada PENDING request', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Branch change request (admin queue) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/branch-change-request',
+  tags: ['Admin · Branch Change'],
+  summary: 'List branch change requests (admin queue)',
+  security: adminAuth,
+  request: {
+    query: paginationQuerySchema.extend({
+      status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
+      cabangId: z.string().uuid().optional(),
+    }),
+  },
+  responses: { 200: { description: 'Paginated', ...json(paginatedOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/branch-change-request/{id}',
+  tags: ['Admin · Branch Change'],
+  summary: 'Detail branch change request',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Detail', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/branch-change-request/{id}/review',
+  tags: ['Admin · Branch Change'],
+  summary: 'Approve / reject permohonan',
+  description: 'Saat APPROVED, Jemaat.cabangId di-update ke targetCabangId.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(reviewBranchChangeRequestSchema),
+  },
+  responses: { 200: { description: 'Reviewed', ...json(successOf(z.any())) } },
+});
+
+// ---------- Get own event participation status ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{idOrSlug}/peserta/me',
+  tags: ['Movement · Event'],
+  summary: 'Get participation status user di event ini (atau 404 kalau belum daftar)',
+  description:
+    'Resolve current user dari JWT, return row partisipasi mereka di event tsb. ' +
+    'Pure read endpoint, idempotent. Accept id atau slug. ' +
+    'Mobile pakai sebagai source of truth untuk render CTA event detail — ' +
+    'lebih reliable daripada rely on local storage yang fragile di edge case.',
+  security: adminAuth,
+  request: { params: z.object({ idOrSlug: z.string() }) },
+  responses: {
+    200: { description: 'Participation row', ...json(successOf(z.any())) },
+    404: { description: 'Belum terdaftar di event ini', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Self-cancel event participation ----------
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/peserta/me',
+  tags: ['Movement · Event'],
+  summary: 'Batalkan partisipasi sendiri (self-cancel)',
+  description:
+    'User batalkan registrasi event-nya sendiri. Soft cancel: status → BATAL, ' +
+    'row tetap untuk audit. Slot kuota otomatis available kembali. ' +
+    'Status HADIR tidak bisa di-cancel (400). Idempotent untuk BATAL (200 dengan ' +
+    '`meta.alreadyCancelled=true`).',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'Cancelled', ...json(successOf(z.any())) },
+    400: { description: 'Status HADIR — tidak bisa cancel', ...json(errorEnvelopeSchema) },
+    404: { description: 'Belum terdaftar di event ini', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Event Donations (multi-payment per participation) ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/donations',
+  tags: ['Movement · Event'],
+  summary: 'Admin: list semua donation di event (paginated)',
+  description:
+    'Untuk fundraising progress. Response include `meta.totalAmountConfirmed` (sum nominalBayar status BAYAR). Filter status via `?status=BAYAR|MENUNGGU_VERIFIKASI|BATAL`.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    query: paginationQuerySchema.extend({
+      status: z.enum(['MENUNGGU_VERIFIKASI', 'BAYAR', 'BATAL']).optional(),
+    }),
+  },
+  responses: { 200: { description: 'Donations', ...json(paginatedOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/donations/me',
+  tags: ['Movement · Event'],
+  summary: 'List donations user current di event ini (mobile)',
+  description:
+    'Resolve current user dari JWT. Return semua donation row + `meta.totalConfirmed` (sum BAYAR).',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Own donations', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/donations',
+  tags: ['Movement · Event'],
+  summary: 'Create donation untuk event (mobile / admin)',
+  description:
+    'Auto-resolve/create participation dari current user. Nominal divalidasi sesuai event.tipeBayar (NOMINAL_TETAP exact, NOMINAL_BEBAS >= minimum, GRATIS rejected).',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(createEventDonationSchema),
+  },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/donations/{donationId}',
+  tags: ['Movement · Event'],
+  summary: 'Detail donation',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), donationId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Donation row', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/event/{id}/donations/{donationId}',
+  tags: ['Movement · Event'],
+  summary: 'Admin update donation (status / nominal / catatan)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), donationId: z.string().uuid() }),
+    body: json(updateEventDonationSchema),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/donations/{donationId}/bukti',
+  tags: ['Movement · Event'],
+  summary: 'Upload bukti transfer per donation (multipart)',
+  description: 'Field name fleksibel (foto/bukti/file/image), max 5MB.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), donationId: z.string().uuid() }),
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({ foto: z.any().describe('Binary image') }),
+        },
+      },
+    },
+  },
+  responses: { 200: { description: 'Bukti saved', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/donations/{donationId}/approve',
+  tags: ['Movement · Event'],
+  summary: 'Admin approve donation — set status BAYAR',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), donationId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Approved', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/event/{id}/donations/{donationId}',
+  tags: ['Movement · Event'],
+  summary: 'Cancel donation (owner / admin)',
+  description: 'Soft cancel — status → BATAL. Idempotent (BATAL → meta.alreadyCancelled).',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid(), donationId: z.string().uuid() }),
+  },
+  responses: { 200: { description: 'Cancelled', ...json(successOf(z.any())) } },
+});
+
+// ---------- Batch event registration ----------
+registry.registerPath({
+  method: 'post',
+  path: '/admin/event/{id}/peserta/batch',
+  tags: ['Movement · Event'],
+  summary: 'Daftar multiple jemaat sekaligus (mobile family flow)',
+  description:
+    'Partial success: response { successful: Participation[], failed: { jemaatId, error }[] }. Max 20 jemaat per request.',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(batchRegisterEventParticipationSchema),
+  },
+  responses: { 201: { description: 'Batch result', ...json(successOf(z.any())) } },
+});
+
+// ---------- Scanner stats ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/event/{id}/checkin/stats',
+  tags: ['Movement · Event'],
+  summary: 'Stats kehadiran event (polling-friendly)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'Stats', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/ibadah/{id}/checkin/stats',
+  tags: ['Ibadah'],
+  summary: 'Stats kehadiran ibadah per tanggal',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    query: z.object({ tanggalIbadah: z.string().date().optional() }),
+  },
+  responses: { 200: { description: 'Stats', ...json(successOf(z.any())) } },
+});
+
+// ---------- Homecell member by kode ----------
+registry.registerPath({
+  method: 'post',
+  path: '/admin/homecell/{id}/members/by-kode',
+  tags: ['Community · Homecell'],
+  summary: 'Tambah member homecell via scan QR kode jemaat',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(z.object({ kode: z.string().min(4).max(20) })),
+  },
+  responses: { 201: { description: 'Added', ...json(successOf(z.any())) } },
+});
+
+// ---------- Homecell soft-remove member by jemaatId (mobile PIC flow) ----------
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/homecell/{id}/members/by-jemaat/{jemaatId}',
+  tags: ['Community · Homecell'],
+  summary: 'Soft-remove member dari homecell (set isActive=false)',
+  description:
+    'Untuk mobile PIC homecell flow. Berbeda dengan DELETE /:memberId (hard delete oleh admin portal), ini lookup by jemaatId dan SOFT delete (isActive=false + tanggalKeluar). Idempotent untuk yang sudah dikeluarkan.',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      id: z.string().uuid(),
+      jemaatId: z.string().uuid(),
+    }),
+  },
+  responses: {
+    200: { description: 'Removed (or alreadyRemoved)', ...json(successOf(z.any())) },
+    404: { description: 'Member tidak ditemukan di homecell', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ---------- Homecell list per area ----------
+registry.registerPath({
+  method: 'get',
+  path: '/admin/homecell-area/{id}/homecells',
+  tags: ['Community · Homecell'],
+  summary: 'List semua homecell di area (mobile PIC area flow)',
+  description:
+    'Mobile PIC area buka detail area → list semua homecell di area itu (termasuk yang user-nya bukan PIC homecell-nya). Shape ringkas: id, nama, alamat, hari, jam, picJemaat, memberCount.',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'Homecells in area', ...json(successOf(z.any())) },
+    404: { description: 'Area tidak ditemukan', ...json(errorEnvelopeSchema) },
   },
 });
 

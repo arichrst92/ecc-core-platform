@@ -192,24 +192,37 @@ Seed default: Multimedia, Worship, Usher, Children Ministry, Teens Ministry, Pra
 
 **`ibadah_pelayanan_petugas`** (3-way junction — siapa petugas spesifik di ibadah-pelayanan):
 - `ibadah_pelayanan_id, jemaat_id, pelayanan_role_id, catatan`
-- Contoh: Ibadah Pemuda → Multimedia → Jason (Camera Operator), Rahmat (Sound Engineer).
-- Unique pada `(ibadah_pelayanan_id, jemaat_id)` — satu jemaat 1 role per ibadah-pelayanan combo.
+- `tanggal_ibadah` (nullable DATE) — **NULL = petugas default tiap minggu; isi = override khusus tanggal itu.**
+- Resolve untuk tanggal X (snapshot semantics): kalau ada row dengan `tanggal_ibadah=X` → pakai SEMUA override itu; kalau tidak ada → fallback ke set default (NULL).
+- Contoh: Ibadah Pemuda → Multimedia → default Jason (Camera Operator) + Rahmat (Sound Engineer); override 25 Des → Andi (Camera Operator).
+- Unique composite `(ibadah_pelayanan_id, jemaat_id, tanggal_ibadah)` + partial unique `(ibadah_pelayanan_id, jemaat_id) WHERE tanggal_ibadah IS NULL` untuk row default (satu jemaat hanya 1 row default per link).
+- `can_scan_attendance` (boolean, default false) — flag wewenang scan QR kode jemaat untuk check-in kehadiran (lihat section 20). **Permissive**: jemaat yang punya minimal 1 row petugas dengan flag=true di ibadah tsb → boleh scan tanpa peduli tanggal row-nya.
 - Validasi backend: `pelayanan_role_id` harus belong ke pelayanan dari `ibadah_pelayanan_id`.
-- CASCADE delete saat ibadah/pelayanan/link dihapus.
-- Assignment persistent untuk semua occurrence ibadah recurring (tidak per-date). Untuk schedule rotation per-date butuh tabel attendance terpisah (out-of-scope MVP).
+- CASCADE delete saat ibadah/pelayanan/link dihapus. Override = snapshot (tidak ikut berubah saat template `ibadah_pelayanan` ditambah/dihapus pelayanan).
+
+**`ibadah_occurrence_status`** (sparse exception list untuk recurring):
+- `ibadah_id, tanggal_ibadah, status, catatan, created_by` — saat ini status hanya `CANCELLED`.
+- Unique `(ibadah_id, tanggal_ibadah)`. Row hanya dibuat saat occurrence di-cancel; default tidak ada row.
+- Calendar endpoint skip occurrence yang `CANCELLED`.
+- Side effect saat cancel: semua reservasi `RESERVE`/`JOIN` pada `(ibadah_id, tanggal)` auto-set ke `CANCEL` dengan catatan alasan (transaksional). Sistem notifikasi belum ada — admin perlu announce manual.
+- Use case: ibadah Minggu Pagi bertepatan dengan Natal → tiadakan minggu itu, ibadah Natal khusus dibuat sebagai `Ibadah` baru tipe `ONCE`.
 
 UI portal:
 - `/dashboard/pelayanan` — kartu per pelayanan dengan role chips (level dilambangkan warna: emas=Leader, oranye=Co-Leader, biru=Member, abu=Trainee). Add inline untuk pelayanan baru + role baru per pelayanan. **Klik nama role di chip** untuk edit (nama, level, deskripsi).
-- `/dashboard/jemaat/[id]` — detail jemaat dengan section Pelayanan (active + history), form assign baru, tombol "Akhiri" (set tanggalSelesai), hapus permanent.
-- `/dashboard/ibadah/[id]` — detail ibadah dengan section "Pelayanan yang Melayani". Tiap pelayanan link bisa di-expand → list petugas (jemaat + role) → tombol **Tambah Petugas** buka modal yang menampilkan **member pelayanan tsb** dengan checkbox + dropdown role per row (default = role mereka di pelayanan, bisa di-override). Submit batch (Promise.allSettled). Hapus link pelayanan auto-CASCADE hapus semua petugas-nya.
+- `/dashboard/jemaat/[id]` — detail jemaat dengan section Pelayanan + section Role (active + history), modal Tambah Penugasan / Tambah Role, tombol "Akhiri" (set tanggalSelesai) + hapus permanent. Edit Profile membuka FormModal in-page (PATCH `/admin/jemaat/:id`).
+- `/dashboard/ibadah/[id]` — detail ibadah dengan section "Pelayanan yang Melayani". Tiap pelayanan link expandable → list petugas dipisah section **Petugas Default** vs **Override · {tanggal}** (badge jumlah di header). Modal Tambah Petugas punya toggle Default vs Khusus tanggal + date picker. Section terpisah **Tanggal Ditiadakan** untuk restore occurrence yang sebelumnya di-cancel.
 
-Sidebar dikelompokkan jadi 4 grup dengan label header:
+Sidebar dikelompokkan jadi 6 grup dengan label header **collapsible** (state persistent di `localStorage.ecc-portal-sidebar-collapsed-groups`):
 - **Entity** — Sinode, Cabang Gereja
-- **Service** — Ibadah, Kategori Ibadah, Pelayanan (role di-edit inline di sini)
+- **Service** — Ibadah, Kategori Ibadah, Pelayanan (role di-edit inline di sini), Kehadiran
 - **People** — Jemaat, Role Jemaat, Relasi Jemaat
+- **Community** — Homecell Area, Homecell
+- **Broadcast** — News, Renungan
 - **Developer Tools** — API Keys, Audit Log
 
 Plus Dashboard di atas grup dan Profil & Keamanan di bawah (separator). Page lama `/dashboard/pelayanan-role` di-deprecate (auto-redirect ke `/pelayanan`).
+
+Highlight rule: active link match exact-or-prefix dengan trailing `/` untuk menghindari tabrakan (mis. `/dashboard/homecell-area` tidak ikut highlight `/dashboard/homecell`).
 
 ---
 
@@ -627,6 +640,14 @@ Gunakan `ApiError` classes di `apps/core-api/src/lib/errors.ts`:
 - `TooManyRequests(msg)` — 429
 
 Semua di-throw, ditangani sentral oleh `errorHandler` middleware. Zod errors di-format otomatis.
+
+**Prisma errors di-translate otomatis** oleh middleware (tidak perlu di-handle per-route):
+- `P2003` / `P2014` (foreign key) → **409** dengan pesan `"Data {Label} tidak dapat dihapus karena masih berelasi dengan data lain."`
+- `P2002` (unique violation) → 409 dengan info field duplikat
+- `P2025` (record not found) → 404
+- `PrismaClientValidationError` → 400
+
+`{Label}` di-resolve via mapping di `error-handler.ts` (Sinode, Cabang Gereja, Jemaat, Homecell, Pelayanan, dst.). Tambah entry baru di `MODEL_LABEL` saat ada model baru supaya pesannya ramah.
 
 ### Validation
 
@@ -1138,9 +1159,18 @@ Tabel `reservasi` (cluster 8 di section 4):
                           → status RESERVE, dapat kode `R7K2X9P`
                           → portal display QR code
 
-2. Saat hadir di lokasi → mobile app scan QR
-                       → POST /api/v1/reservasi/checkin (kode)
-                       → status JOIN, joined_at = now
+2. Saat hadir di lokasi (DUA mode tersedia):
+   a. Admin scan QR KODE JEMAAT (rekomendasi, sejak 2026-05):
+      → POST /admin/ibadah/:id/checkin { kode, tanggalIbadah?, force? }
+      → Lookup jemaat by kode → upsert Reservasi ke JOIN, joined_at = now
+      → Walk-in allowed: kalau jemaat belum reservasi, auto-create reservasi
+        dengan status JOIN langsung
+      → Authorization: user.jemaatId harus terdaftar di IbadahPelayananPetugas
+        ibadah tsb dengan can_scan_attendance=true (lihat sec 4.6)
+
+   b. Mobile/external scan QR KODE RESERVASI (legacy, masih ada):
+      → POST /api/v1/reservasi/checkin (kode reservasi)
+      → status JOIN, joined_at = now
 
 3. Kalau batal → mobile POST /api/v1/reservasi/cancel
               → status CANCEL, cancelled_at = now
@@ -1149,6 +1179,10 @@ Tabel `reservasi` (cluster 8 di section 4):
                     → bisa pindah ke status apa pun (Reserve juga, untuk reset)
 ```
 
+> **Catatan**: kode jemaat = QR statis milik tiap jemaat (8 char alphanumeric,
+> field `jemaat.kode`). Sama yang dipakai untuk check-in Event. Satu kartu
+> jemaat → dipakai untuk semua kehadiran (ibadah maupun event).
+
 ### UI portal
 
 `/dashboard/kehadiran`:
@@ -1156,6 +1190,14 @@ Tabel `reservasi` (cluster 8 di section 4):
 - Kolom Kode = button clickable → modal QR preview (pakai api.qrserver.com untuk render QR image)
 - Action per row: tombol Join / Cancel / Reserve (quick status change) + hapus
 - Tombol header: **Buat Reservasi** (modal pilih ibadah + tanggal + cari jemaat) dan **Check-in via Kode** (modal input kode → POST checkin)
+
+`/dashboard/ibadah/[id]`:
+- Header dapat **date picker tanggal** + tombol hijau **Check-in** (scan QR kode jemaat).
+- Modal scanner reuse komponen generik `apps/portal/src/components/checkin-modal.tsx` (sama yang dipakai Event):
+  - Input auto-focused, scanner hardware tinggal scan + Enter
+  - History sesi dengan badge **Walk-in** untuk peserta yang reservasi-nya auto-created
+  - Override flow kalau occurrence ditiadakan
+- Tiap row petugas di card Pelayanan punya tombol toggle **Bisa Scan / Beri akses** untuk flip `can_scan_attendance` inline. Badge hijau "Scanner" tampil untuk yang aktif. Modal Tambah Petugas juga punya toggle Scan/No-scan per row supaya bisa set langsung saat add.
 
 ### Mobile attendance app (terpisah)
 
@@ -1319,10 +1361,12 @@ DELETE /admin/homecell/:id/members/:memberId   # hard delete dari riwayat
 - `/dashboard/homecell` — CrudPage. Filter `?cabangId=` atau `?areaId=` (banner reset).
 - `/dashboard/homecell/[id]` — detail page custom (bukan modal):
   - Header dengan back button, badge nonaktif
-  - 3 cards: PIC, Jadwal (hari + jam), Lokasi
+  - Card PIC saja (Homecell Leader)
   - Members table dengan toggle aktif/keluar (`UserMinus`/`UserCheck`) + hapus permanen
   - Add Member modal dengan jemaat picker (filtered ke cabang area)
 - Sidebar group **Community**: `Homecell Area` + `Homecell`
+
+> **Catatan**: kolom `homecell.alamat / hari / jam` masih ada di skema, tapi **tidak diekspos di form/UI**. Realita di lapangan, pertemuan homecell ditentukan per kesepakatan tiap minggu, jadi data statis tersebut menyesatkan. Schema kolom dipertahankan untuk backward-compat (data lama aman); bisa di-drop via migration terpisah kalau diperlukan.
 
 ### Member lifecycle
 
@@ -1330,6 +1374,1335 @@ DELETE /admin/homecell/:id/members/:memberId   # hard delete dari riwayat
 - Mark keluar → backend auto-set `tanggalKeluar=now` jika tidak diberikan
 - Reactivate → backend clear `tanggalKeluar`
 - Hard delete tersedia untuk hapus riwayat penuh (tidak audit-friendly, gunakan dengan hati-hati)
+
+---
+
+## 23. Update Log — 2026-05-19
+
+Patch besar yang menyentuh schema + API + UI sekaligus. Ringkasan supaya mudah dilacak; detail teknis ada di section masing-masing yang sudah di-update.
+
+### Sidebar polish
+
+- Bug fix: `isActive` semula pakai `pathname.startsWith(href)`, jadi `/dashboard/homecell-area` ikut highlight `/dashboard/homecell`. Diganti ke exact match + prefix `href + '/'`.
+- Group header sekarang button **expand/collapse** dengan chevron rotate; state di-persist ke `localStorage.ecc-portal-sidebar-collapsed-groups`. Tidak ada auto-force-open — user bebas collapse grup mana saja.
+
+### Petugas ibadah per-tanggal
+
+- Kolom `tanggal_ibadah` (nullable DATE) ditambah ke `ibadah_pelayanan_petugas`. NULL = default tiap minggu; isi = override khusus tanggal.
+- Snapshot semantics: kalau ada satu atau lebih override untuk tanggal X, override **menggantikan** default sepenuhnya untuk tanggal itu.
+- Unique baru: komposit `(link, jemaat, tanggal_ibadah)` + partial unique untuk row default (`WHERE tanggal_ibadah IS NULL`) supaya Postgres tetap enforce "1 jemaat 1 row default per link" walaupun NULL secara default distinct di unique index.
+- API: `POST /admin/pelayanan/petugas` menerima `tanggalIbadah` opsional. `GET /admin/pelayanan/ibadah-link/:id/petugas?tanggal=YYYY-MM-DD` return resolved view (kalau ada override → override only; else fallback default).
+- UI: detail ibadah memisahkan section **Petugas Default** vs **Override · {tanggal}**. Modal Tambah Petugas punya toggle Default vs Khusus tanggal + date picker. Klik tanggal di kalender → tombol **Petugas khusus** (link ke detail ibadah dengan `?tanggal=...`).
+
+### Cancel occurrence (skip minggu Natal, dll.)
+
+- Tabel baru `ibadah_occurrence_status` (`ibadah_id, tanggal_ibadah, status, catatan, created_by`). Status saat ini hanya `CANCELLED`. Sparse table — row hanya dibuat saat cancel.
+- API:
+  - `POST   /admin/ibadah/:id/occurrence/:tanggal/cancel` — idempotent upsert + auto-cancel semua reservasi aktif pada tanggal itu (transaksional, catatan reservasi di-prefix `[Ibadah ditiadakan]`).
+  - `DELETE /admin/ibadah/:id/occurrence/:tanggal/cancel` — buka kembali. Reservasi yang sudah di-cancel **tidak** auto-restore (admin handle manual).
+  - `GET    /admin/ibadah/:id/occurrence/cancelled` — list.
+- Calendar endpoint skip occurrence yang berstatus `CANCELLED`.
+- Validasi: backend tolak cancel kalau tanggal bukan jadwal `Ibadah` tsb (cek dengan `generateOccurrences`).
+- **Sistem notifikasi belum ada** — admin perlu announce manual. Banner di modal cancel sudah menjelaskan ini.
+- UI: tombol **Tiadakan** di calendar detail panel (hanya muncul untuk recurring, ONCE pakai delete Ibadah biasa). Section **Tanggal Ditiadakan** di detail ibadah dengan tombol **Buka kembali**.
+
+### Workflow Natal di hari Minggu
+
+1. Buat ibadah Natal sebagai `Ibadah` baru `tipeJadwal=ONCE` tanggal 25 Des.
+2. Buka kalender → klik tanggal Natal yang jatuh di Minggu.
+3. Pada baris Ibadah Mingguan, klik **Tiadakan** → backend create row `IbadahOccurrenceStatus(CANCELLED)` → di kalender row mingguan hilang, reservasi-nya otomatis CANCEL.
+4. Selesai. Hanya ibadah Natal yang muncul di tanggal itu.
+
+### Friendly Prisma error messages
+
+- `error-handler.ts` translate `PrismaClientKnownRequestError`:
+  - `P2003` / `P2014` → 409 `"Data {Label} tidak dapat dihapus karena masih berelasi dengan data lain."`
+  - `P2002` → 409 dengan field duplikat
+  - `P2025` → 404
+  - `PrismaClientValidationError` → 400
+- Label resource via mapping `MODEL_LABEL` (Sinode, Cabang Gereja, Jemaat, Homecell, Pelayanan, …). Update mapping saat tambah model baru.
+
+### Homecell form disederhanakan
+
+Field `alamat`, `hari`, `jam` dihapus dari form (create + update schemas), tabel list, dan info cards di detail page. Alasan: pertemuan homecell di lapangan ditentukan per kesepakatan tiap minggu. Kolom DB dipertahankan (data lama aman) — drop via migration kalau perlu.
+
+### Jemaat list: filter, sort, avatar
+
+- Backend `GET /admin/jemaat` menerima query baru:
+  - `isActive=true|false`, `jenisKelamin=L|P`, `roleId=<uuid>` (ada active JemaatRole dengan role tsb), `umurMin`, `umurMax` (derive ke `tanggal_lahir` range)
+  - `sortBy` di-whitelist: `namaLengkap`, `tanggalLahir`, `tanggalBergabung`, `cabang` (nested → `cabang.nama`), `createdAt`
+- Frontend `JemaatFilterBar` (`apps/portal/src/components/jemaat/filter-bar.tsx`) — toolbar dengan dropdown Status / Jenis Kelamin / Role, input rentang usia, pilihan sort + tombol toggle arah Naik/Turun. Reset filter, state encoded ke `extraParams` (CrudPage spread setelah `sortBy/sortOrder` jadi otomatis override default config).
+- Avatar bulat 32×32 di kolom Nama. Fallback inisial brand-color, ikon `User` kalau nama kosong. Source: `${NEXT_PUBLIC_CORE_API_URL}${fotoUrl}`.
+
+### Jemaat detail: Edit Profile + Role section
+
+- **Edit Profile** sebelumnya broken (cuma `router.push('?edit=')` yang tidak di-handle list page). Sekarang membuka `FormModal` in-page reuse `updateSchema + fields` dari `jemaat-config`. Submit → `PATCH /admin/jemaat/:id` → invalidate `['jemaat','detail',id]` & `['jemaat']`.
+- Section baru **Role** (terpisah dari Pelayanan):
+  - List active + history JemaatRole dari `j.jemaatRoles` (sudah di-include di detail endpoint).
+  - Modal Tambah Role dengan dropdown berjenjang `Role → Sub-Role → Status (opsional)`. Status disabled kalau sub-role tidak punya tingkatan.
+  - Validasi UX duplikat: kalau jemaat sudah punya row aktif `(Role, Sub-Role)` yang sama, tombol Tambah di-disable dengan warning kuning (backend tetap final guard).
+  - Tombol **Akhiri** (PATCH `isActive=false, tanggalSelesai=today`) dan **Hapus permanent** (DELETE `/admin/role/assign/:id`).
+
+---
+
+## 24. Movement — Event
+
+Cluster baru di skema: `Event` + `EventParticipation`. Berbeda dengan **Ibadah** (recurring schedule, jadwal tetap), **Event** adalah aktivitas berbatas waktu: penggalangan dana, retreat, puasa 21 hari, KKR khusus, dll.
+
+### Model `event`
+
+- `judul`, `slug` (auto-generated, unique global, URL-friendly), `ringkasan`, `deskripsi` (markdown body)
+- `heroImageUrl` — teaser banner (uploaded, `/uploads/content/hero/event/{id}.webp`, max 1600px)
+- `videoUrl` — link YouTube/Vimeo/file mp4 (free-form URL), untuk teaser video
+- `tanggalMulai`, `tanggalSelesai` (nullable, untuk acara 1 hari), `lokasi`
+- **Targeting (sama dengan Konten):**
+  - `sinodeId=null & cabangId=null` → **Global**
+  - `sinodeId=X & cabangId=null` → **Sinode-wide**
+  - `sinodeId=X & cabangId=Y` → **Cabang-specific**
+  - `cabangId` set → backend auto-derive `sinodeId`
+- **Pembayaran:** `tipeBayar` enum `GRATIS | NOMINAL_TETAP | NOMINAL_BEBAS`
+  - `GRATIS` — tidak ada pembayaran
+  - `NOMINAL_TETAP` — `nominal` wajib > 0 (admin tentukan)
+  - `NOMINAL_BEBAS` — `nominal` opsional sebagai minimum; jemaat tentukan nominal sendiri
+  - `qrisImageUrl` — uploaded QRIS image per event (`/uploads/content/event/qris/{id}.webp`)
+  - `bankNama`, `bankNomor`, `bankAtasNama` — info transfer manual
+- `quotaPeserta` nullable — kalau diisi, registrasi otomatis ditolak saat partisipasi non-BATAL sudah ≥ quota
+- `tags[]` (Postgres array) — untuk filter/search
+- `butuhKehadiran` (boolean, default false) — kalau true, admin bisa scan QR kode jemaat untuk mark partisipasi sebagai HADIR pada hari H. Kalau false, lifecycle berhenti di DAFTAR / BAYAR — tidak ada absensi.
+- `isPublished` + `publishedAt` — draft vs published. Auto-set saat toggle published.
+- `viewCount` (untuk public mobile endpoint nanti), `authorId` → User
+
+### Model `event_participation`
+
+Satu jemaat ↔ satu event = satu row (unique `(eventId, jemaatId)`).
+
+- `status` enum `event_participation_status`:
+  - `DAFTAR` — baru daftar, belum bayar (atau gratis pending)
+  - `MENUNGGU_VERIFIKASI` — bukti transfer ter-upload, menunggu admin approve
+  - `BAYAR` — admin approved (set `approvedBy`, `approvedAt`, `paidAt`)
+  - `HADIR` — hadir di event (set `attendedAt`)
+  - `BATAL` — dibatalkan (set `cancelledAt`)
+- `nominalBayar` — untuk berbayar; untuk NOMINAL_TETAP auto-set dari `event.nominal`, untuk NOMINAL_BEBAS jemaat tentukan (≥ `event.nominal` minimum)
+- `buktiTransferUrl` — uploaded, `/uploads/content/event/bukti/{participationId}.webp` (max 2000px supaya cukup tajam untuk verifikasi)
+- `catatan` — field bebas untuk pertanyaan custom (ukuran kaos, makanan, dst.)
+- Lifecycle timestamps: `registeredAt`, `paidAt`, `attendedAt`, `cancelledAt`, `approvedAt`
+- Approval audit: `approvedBy` → Jemaat (admin yang verify)
+
+### Endpoint admin
+
+```
+GET    /admin/event                         ?cabangId=&sinodeId=&isPublished=&tipeBayar=&search=&page=
+GET    /admin/event/:idOrSlug               # detail + pesertaCount
+POST   /admin/event                         # create
+PATCH  /admin/event/:id                     # update
+DELETE /admin/event/:id                     # hapus + cleanup hero & QRIS files
+
+POST   /admin/event/:id/hero                # multipart "foto" — upload hero
+DELETE /admin/event/:id/hero
+POST   /admin/event/:id/qris                # multipart "foto" — upload QRIS
+DELETE /admin/event/:id/qris
+
+GET    /admin/event/:id/peserta             ?status=...
+POST   /admin/event/:id/peserta             # register jemaat (admin)
+PATCH  /admin/event/:id/peserta/:participationId   # ubah status / nominal / catatan
+DELETE /admin/event/:id/peserta/:participationId
+POST   /admin/event/:id/peserta/:participationId/bukti      # upload bukti transfer; auto-naik ke MENUNGGU_VERIFIKASI
+POST   /admin/event/:id/peserta/:participationId/approve    # shortcut: set BAYAR + approvedBy + approvedAt
+
+POST   /admin/event/:id/checkin             # body { kode, force? } — scan QR kode jemaat, set HADIR
+
+# Ministry & Volunteer (hanya relevan saat butuhKehadiran=true)
+GET    /admin/event/:id/pelayanan                              # list link + volunteer
+POST   /admin/event/:id/pelayanan                              # body { pelayananId }
+DELETE /admin/event/:id/pelayanan/:linkId                      # cascade volunteer
+POST   /admin/event/:id/pelayanan/:linkId/petugas              # add volunteer
+PATCH  /admin/event/:id/pelayanan/:linkId/petugas/:petugasId   # update role / canScanAttendance
+DELETE /admin/event/:id/pelayanan/:linkId/petugas/:petugasId
+```
+
+### Ministry & Volunteer (per event)
+
+Untuk event `butuhKehadiran=true`, ada section **Ministry & Volunteer** di detail event. Pattern mirror `IbadahPelayanan` + `IbadahPelayananPetugas`, tapi per-event:
+
+- **EventPelayanan** (junction Event ↔ Pelayanan) — pelayanan apa saja yang bertugas. Unique `(eventId, pelayananId)`.
+- **EventPelayananPetugas** (junction EventPelayanan ↔ Jemaat) — siapa volunteer-nya dengan role. Plus field `canScanAttendance` (boolean, default false) — flag wewenang scan QR check-in. Unique `(eventPelayananId, jemaatId)`.
+
+Workflow di UI:
+
+1. Klik **Tambah Pelayanan** → modal pilih pelayanan dari list global.
+2. Per pelayanan card, klik **Tambah Volunteer** → modal pilih member pelayanan tsb dengan:
+   - Checkbox pilih jemaat
+   - Dropdown role (default = role member di pelayanan, bisa di-override)
+   - Toggle **Scan/No-scan** untuk set `canScanAttendance` sekaligus saat add
+3. List volunteer: tombol toggle **Bisa Scan** / **Beri akses scan** untuk flip `canScanAttendance` per row. Badge hijau "Scanner" muncul untuk yang sudah di-flag.
+
+### Check-in flow (hari H event)
+
+Khusus event dengan `butuhKehadiran=true`:
+
+1. Admin buka halaman detail event → klik tombol **Check-in** (hanya muncul kalau butuhKehadiran=true).
+2. Modal scanner buka dengan input field auto-focused — scanner hardware bisa langsung ngirim kode + Enter, atau admin ketik manual.
+3. Backend `POST /admin/event/:id/checkin` body `{ kode, force }`:
+   - Validate `event.butuhKehadiran=true` (kalau false, reject 400).
+   - **Authorization**: cek `req.user.sub` → `user.jemaatId` → ada di list `EventPelayananPetugas(eventId, jemaatId, canScanAttendance=true)`. Kalau tidak → **403 Forbidden** dengan pesan jelas. Artinya bahkan Fulltimer harus ditandai sebagai authorized scanner untuk event tsb (decision: hanya yang di-assign yang boleh).
+   - Lookup `jemaat` by `kode` (case-insensitive, di-uppercase).
+   - Lookup `EventParticipation(event, jemaat)` — harus ada, status bukan BATAL.
+   - Untuk event berbayar: status harus `BAYAR`. Kalau bukan, return 409 dengan hint admin bisa retry dengan `force=true`.
+   - Idempotent: kalau status sudah `HADIR`, return data lama + `meta.alreadyCheckedIn=true` (toast info, bukan error).
+   - Set `status=HADIR`, `attendedAt=now`. Audit log.
+4. Modal tampilkan history sesi (max 20 scan) dengan foto + nama + status, agar admin punya feedback visual cepat.
+
+> **Operasional**: kalau tidak ada volunteer dengan `canScanAttendance=true`, **tidak ada yang bisa scan** — banner kuning muncul di section Ministry sebagai peringatan. Admin harus add minimal satu authorized scanner sebelum hari H.
+
+### Kode Jemaat (QR statis)
+
+Field baru `Jemaat.kode` — 8 char alphanumeric uppercase (sama strategi dgn `kode-reservasi.ts`, skip karakter ambigu 1/I/0/O). Unique + nullable.
+
+- Auto-generate saat `POST /admin/jemaat` dan saat bulk import CSV (pre-generate per row supaya transaction tidak terganggu collision retry).
+- Backfill row existing dilakukan di migration SQL (`20260519140000_kode_jemaat_butuh_kehadiran`) pakai PL/pgSQL loop.
+- Endpoint `GET /admin/jemaat/by-kode/:kode` untuk lookup cepat (return summary jemaat).
+- Halaman detail jemaat menampilkan **Kartu QR Jemaat** dengan QR image (via `api.qrserver.com`) + kode + tombol copy. Bisa di-print untuk kartu fisik.
+
+> Catatan: satu kode = satu jemaat, dipakai untuk SEMUA event/ibadah (global). Tidak ada kode per-partisipasi.
+
+### UI portal
+
+`/dashboard/event` (sidebar grup baru **Movement**):
+
+- Grid 3 kolom kartu event dengan hero thumbnail, badge **Published/Draft** + badge **tipe bayar** (Gratis hijau, Nominal Tetap kuning, Sukarela biru), info tanggal + lokasi + peserta count
+- Filter: search, status (all / published / draft), tipe bayar
+- Tombol **Tambah Event** → modal form lengkap (info dasar, waktu+lokasi, target audience, pembayaran dengan radio card 3 tipe, quota, tags CSV, publish toggle). Nominal field muncul kondisional sesuai tipe bayar.
+- Tombol Detail/Edit/Hapus per kartu.
+
+`/dashboard/event/[id]`:
+
+- Hero banner besar (3:1) dengan tombol Ganti/Hapus
+- Info utama (tanggal range, lokasi, peserta/quota, link video teaser kalau ada, tags, deskripsi expandable)
+- Section **Info Pembayaran** (hanya muncul untuk event berbayar): tipe, nominal, bank info, QRIS image dengan upload/replace/delete
+- Section **Peserta** dengan dua tombol header: **Check-in** (hanya muncul kalau `butuhKehadiran=true`) + **Daftarkan Jemaat**. List peserta dengan filter status, avatar, badge status berwarna sesuai enum. Tombol aksi per row:
+  - **Bukti** (upload bukti transfer mewakili jemaat) — auto-naik ke MENUNGGU_VERIFIKASI kalau belum BAYAR/HADIR
+  - **Approve** (untuk MENUNGGU_VERIFIKASI) — shortcut set BAYAR
+  - **Hadir** — set HADIR
+  - **Batal** — set BATAL
+  - **Hapus** — delete permanent (file bukti ikut dihapus)
+- Modal **Daftarkan Jemaat**: search jemaat (min 2 huruf), set nominal (untuk berbayar), catatan custom
+
+### Aturan & validasi
+
+- Slug unique global. Auto-generate dari judul kalau kosong. Update judul tidak auto-regenerate slug (URL stabil).
+- `tanggalSelesai >= tanggalMulai` di-enforce Zod.
+- `NOMINAL_TETAP` wajib `nominal > 0` di-enforce Zod.
+- `NOMINAL_BEBAS` dengan `nominal` set = minimum yang harus dibayar. Backend reject `nominalBayar < min`.
+- Quota guard di backend: hitung partisipasi `status != BATAL`. Daftar baru ditolak (409) kalau ≥ quota.
+- Hero/QRIS image upload: max 5 MB, sharp resize → webp (1600px hero, 1600px QRIS), JPEG/PNG/WebP input.
+- Bukti transfer per partisipasi: ukuran 2000px (lebih besar supaya cukup detail untuk verifikasi).
+- Delete event cascade: `event_participation` ikut terhapus; file hero & QRIS dibersihkan (best-effort). File bukti transfer per partisipasi juga dibersihkan saat partisipasi dihapus.
+- Sinode/cabang FK = `onDelete: SetNull` (event tidak ikut hilang kalau target dihapus, tinggal jadi global).
+- Author FK ke User = `onDelete: Restrict` (cegah delete user yang masih punya event).
+
+### Notifikasi
+
+Belum ada (sama seperti `IbadahOccurrenceStatus`). Saat ada perubahan status partisipasi (mis. BAYAR di-approve), tidak ada notif WA/push otomatis — admin perlu announce manual. Bisa ditambah saat sistem notif global dibangun.
+
+---
+
+## 25. Update Log — 2026-05-19 (lanjutan)
+
+### Movement / Event
+
+Lihat section 24 untuk dokumentasi lengkap. Patch terbaru menambah:
+
+- Model `Event` + `EventParticipation` + 2 enum baru (`event_tipe_bayar`, `event_participation_status`).
+- Endpoint `/admin/event` lengkap (CRUD + hero/QRIS upload + participation lifecycle + bukti transfer + approve shortcut).
+- Sidebar grup **Movement** baru dengan menu **Event** (icon Megaphone).
+- Halaman list `/dashboard/event` (grid cards + filter) dan detail `/dashboard/event/[id]` (hero + info bank/QRIS + peserta management).
+- Form modal Event (`event-form-modal.tsx`) dengan radio card untuk tipe bayar.
+- Extend `storage.ts`: `saveEventQris`, `deleteEventQris`, `saveEventBuktiTransfer`, `deleteEventBuktiTransfer`. `ContentKind` ditambah `'event'`.
+- Update `MODEL_LABEL` di `error-handler.ts` (Event, EventParticipation).
+
+### Kehadiran event + QR jemaat (lanjutan)
+
+- Field baru `Event.butuhKehadiran` (boolean, default false) — toggle aktif/nonaktifkan absensi pada hari H.
+- Field baru `Jemaat.kode` (8 char alphanumeric, unique) — QR statis untuk scan check-in. Auto-generate saat create + bulk import; backfill row existing via PL/pgSQL di migration `20260519140000_kode_jemaat_butuh_kehadiran`.
+- Endpoint `POST /admin/event/:id/checkin` `{ kode, force? }` — validate event, jemaat, partisipasi, status. Untuk berbayar wajib BAYAR (kecuali `force=true`). Idempotent.
+- Endpoint `GET /admin/jemaat/by-kode/:kode` — lookup cepat untuk scanner mobile/external.
+- UI:
+  - Toggle **Event butuh kehadiran** di form Event.
+  - Tombol **Check-in** (hijau) di detail event header section Peserta — hanya muncul kalau `butuhKehadiran=true`.
+  - Modal scanner: input auto-focused untuk hardware scanner (Enter trigger submit), preview history scan dalam sesi, override warning untuk event berbayar yg belum BAYAR.
+  - Section **Kartu QR Jemaat** di detail jemaat: QR image (api.qrserver.com) + kode + tombol copy. Cetak untuk kartu fisik.
+
+### Ministry & Volunteer + authorized scanner
+
+- Model baru `EventPelayanan` + `EventPelayananPetugas` (lihat section 24). Pattern mirror IbadahPelayanan tapi per-event + flag `canScanAttendance`.
+- Endpoint baru: `GET/POST/DELETE /admin/event/:id/pelayanan` dan `POST/PATCH/DELETE /admin/event/:id/pelayanan/:linkId/petugas`.
+- Authorization check di `POST /admin/event/:id/checkin` sekarang strict: hanya user dengan jemaatId ada di list `canScanAttendance=true` boleh scan. Fulltimer yang tidak di-assign → 403.
+- UI section **Ministry & Volunteer** di detail event (hanya saat `butuhKehadiran=true`): card per pelayanan, badge hijau "Scanner" untuk volunteer authorized, toggle per row untuk flip `canScanAttendance`. Modal Tambah Volunteer punya toggle Scan/No-scan per row supaya bisa set langsung saat add. Banner kuning muncul kalau belum ada scanner.
+
+### API Keys management
+
+Halaman `/dashboard/api-key` (group Developer Tools) — full CRUD untuk `SinodeApiKey`.
+
+**Lib generator** (`apps/core-api/src/lib/api-key.ts`):
+- `generateApiKey()` return `{ key, prefix, hash }`.
+- Format: `ecc_<prefix>_<secret>` (prefix 8 char, secret 24 char alphanumeric, total ~144 bits entropy).
+- DB simpan: `keyPrefix` plaintext (untuk lookup cepat di `require-api-key.ts`) + `keyHash` bcrypt(seluruh key).
+
+**Scopes catalog** (`API_KEY_SCOPES` di shared-types + lib api-key.ts, harus sinkron):
+`read:jemaat, read:ibadah, read:event, read:news, read:renungan, read:reservasi, write:reservasi`.
+
+> **Catatan UI** (sejak 2026-05-20): UI default membuat API key **global** (sinode-id NULL = lintas sinode) dengan scopes **kosong** (full access). Field sinode-id dan scopes tetap di schema untuk backward-compat dan fleksibilitas future — kalau perlu key yang scoped, edit langsung di DB atau pakai PATCH endpoint. Migration `20260520120000_apikey_global` mengubah `sinode_id` jadi nullable.
+
+**Endpoints** (`apps/core-api/src/routes/admin/api-key.ts`):
+```
+GET    /admin/sinode-api-key                # list (paginated, filter ?sinodeId=)
+POST   /admin/sinode-api-key                # body { sinodeId, nama, scopes, expiresAt? }
+                                              # → return { ...row, key } SEKALI saja
+PATCH  /admin/sinode-api-key/:id            # update nama/scopes/expiresAt/isActive
+DELETE /admin/sinode-api-key/:id            # revoke (cascade konsumer langsung 401)
+```
+
+`keyHash` di-redact dari semua response. Plaintext `key` HANYA ada di response POST create.
+
+**UI** (`/dashboard/api-key`):
+- Banner info di atas (1x reveal warning).
+- Table dengan: Nama+createdAt, Sinode, Prefix (mis. `ecc_AB23xy7K_…`), Scopes chips (3+rest), Last used (relative `5 menit lalu` / `2 hari lalu`), Expires (atau "tanpa expire"; merah kalau lewat), Status.
+- Aksi inline per row: toggle aktif/nonaktif (Power icon), Edit (Pencil), Revoke (Trash) dengan ConfirmDelete.
+- Modal **Form** (create/edit): pilih Sinode (locked saat edit), nama, scopes (checkbox grid 2 kolom), expire date (opsional).
+- Modal **RevealedKeyModal** (hanya setelah create): banner kuning warning, dark code block dengan full key, tombol copy big (turn green on success), tutup pakai tombol "Saya sudah copy, tutup".
+
+**Middleware** (`require-api-key.ts`, existing): consumer pakai `X-API-Key: ecc_<prefix>_<secret>`. Lookup by prefix → bcrypt compare → set `req.apiKey = { id, sinodeId, scopes }`. Update `lastUsedAt`. Block kalau expired atau `isActive=false`.
+
+> **Catatan**: API key middleware `requireApiKey` sudah ready, tapi belum di-apply ke `/api/v1/*` endpoints di codebase ini. Saat membangun mobile endpoint, tinggal `publicRouter.use(requireApiKey)` di prefix yang tepat + cek `req.apiKey.scopes.includes('read:...')`.
+
+### Cabang Rekening (multi rekening per cabang + QRIS)
+
+Setiap cabang punya banyak rekening bank dengan **purpose** berbeda (Persembahan Umum, Pembangunan, Diakonia, Misi, dll). Tiap rekening optional punya QR code (QRIS) untuk transfer cepat.
+
+**Schema** (migration `20260520100000_cabang_rekening`):
+
+```
+CabangRekening
+  cabangId (FK Cascade)
+  purpose          VarChar(255)   # text bebas, FE saran preset
+  bankNama
+  bankNomor
+  bankAtasNama
+  qrisImageUrl     # /uploads/content/cabang/qris/{rekeningId}.webp
+  catatan          # optional
+  isActive
+```
+
+Preset purpose di `REKENING_PURPOSE_PRESETS` (shared-types/cabang.ts):
+`Persembahan Umum, Persepuluhan, Pembangunan, Diakonia, Misi, Operasional, Pelayanan Anak, Pelayanan Pemuda`. FE pakai `<datalist>` supaya admin dapat auto-complete tapi tetap bisa input bebas.
+
+**Endpoints:**
+```
+GET    /admin/cabang/:id/rekening                  # list
+POST   /admin/cabang/:id/rekening                  # tambah
+PATCH  /admin/cabang/:id/rekening/:rekeningId
+DELETE /admin/cabang/:id/rekening/:rekeningId      # cascade hapus file QRIS
+POST   /admin/cabang/:id/rekening/:rekeningId/qris      # multipart 'foto'
+DELETE /admin/cabang/:id/rekening/:rekeningId/qris
+```
+
+**UI**: Section "Rekening Bank" di `/dashboard/cabang/[id]` (atas, sebelum filter periode). Grid 2 kolom card per rekening dengan:
+- Badge purpose (kuning) + status aktif/nonaktif
+- Nama bank, nomor (tombol copy), atas nama, catatan
+- QRIS image 80×80 (klik → buka full size); upload/ganti/hapus
+- Tombol Edit + Hapus di pojok kanan-atas
+
+Modal form punya input bank/nomor/atas nama + datalist preset purpose + textarea catatan + toggle active. Upload QRIS dilakukan setelah save (butuh ID).
+
+### Dashboard Globe + Cabang Detail Analytics
+
+Dashboard utama (`/dashboard`) sekarang menampilkan **Globe interactive 3D** (via `react-globe.gl` + three.js) yang plot semua cabang gereja sebagai marker. Klik marker → navigate ke detail cabang.
+
+**Schema baru di CabangGereja:**
+- `latitude: Float?` + `longitude: Float?` (nullable, koordinat WGS84). Migration `20260519220000_cabang_coordinates` backfill 3 cabang seed (JKT/BDG/SBY) dengan koordinat real.
+
+**Endpoint baru:**
+- `GET /admin/cabang/locations` — return cabang dengan koordinat saja (id, nama, kode, lat/lng, sinode, jemaat count). Tanpa pagination — total cabang realistis di bawah 1000.
+- `GET /admin/cabang/:id/stats?from=&to=` — KPI cards (jemaat/ibadah/event/homecell), top ibadah & event, time-series harian (Reservasi JOIN + EventParticipation HADIR), homecell breakdown, donut Reservasi status. Default periode 30 hari terakhir.
+
+**UI:**
+- `/dashboard` (page baru) — full-bleed globe `bg-black`, auto-rotate, atmosphere amber. Marker tinggi proportional ke jumlah jemaat. Hover → tooltip card kiri-bawah dengan info cabang. Click → `router.push(/dashboard/cabang/:id)`. Globe component di-render via `next/dynamic` dengan `ssr: false` karena butuh WebGL.
+- `/dashboard/cabang/[id]` (page baru) — header info cabang + filter periode (date range + preset 7/30/90/365 hari) + 4 KPI cards + LineChart trend + BarChart top ibadah + DonutChart status reservasi + table partisipasi event + BarChart homecell.
+- `cabang-config.tsx` (list page) — nama cabang sekarang clickable ke detail dengan icon `BarChart3`.
+
+**Chart components** (`apps/portal/src/components/charts/simple-charts.tsx`, baru):
+- `BarChart`, `DonutChart`, `LineChart` — semua custom SVG/CSS, **tanpa library eksternal**. Reusable untuk dashboard page lain.
+
+**Dependencies baru** (perlu `pnpm install` di local):
+- `react-globe.gl@^2.27.0` (wraps three-globe)
+- `three@^0.160.0`
+- `@types/three` (dev)
+
+### Ibadah check-in via kode jemaat + wewenang scan
+
+- Field baru `IbadahPelayananPetugas.canScanAttendance` (boolean, default false) — flag wewenang scan, permissive (lihat sec 4.6).
+- Endpoint baru `POST /admin/ibadah/:id/checkin` `{ kode, tanggalIbadah?, force? }`:
+  - Authorization: cek user.jemaatId di petugas link tied ibadah tsb dengan canScanAttendance=true → 403 kalau tidak.
+  - Validasi tanggal harus jadwal valid (`generateOccurrences`).
+  - Cek occurrence ditiadakan → 409 dengan opsi `force=true` untuk override.
+  - Lookup jemaat by kode → upsert Reservasi:
+    - Existing: update status ke JOIN.
+    - Tidak ada: auto-create reservasi dengan status JOIN (walk-in attendance, generate `kode` reservasi unik).
+  - Idempotent: kalau sudah JOIN, return `meta.alreadyCheckedIn=true`.
+  - `checkedInBy` di-set ke userId scanner (audit trail).
+- Komponen reusable baru `apps/portal/src/components/checkin-modal.tsx` — generic scanner modal yang dipakai oleh ibadah dan event. Support `extraBody` (mis. tanggalIbadah) dan `forceTrigger` (custom keyword untuk override).
+- UI detail ibadah: header dapat date picker + tombol Check-in. Petugas row punya tombol toggle scan + badge "Scanner". Modal Tambah Petugas tambah toggle Scan/No-scan per row.
+- Flow lama (mobile scan kode reservasi via `/api/v1/reservasi/checkin`) tetap berfungsi sebagai backward-compat untuk mobile app yang belum di-update.
+
+### RBAC — Role/SubRole Menu Access
+
+Sebelumnya gate portal pakai boolean `isFulltimer`. Sudah diganti dengan RBAC yang lebih fleksibel di migration `20260519200000_rbac_menu_access`.
+
+**Schema baru:**
+- `Role.canAccessPortal` boolean default false. Backfill: `role` bernama "Fulltimer" otomatis di-set true.
+- `SubRole.canAccessPortal` boolean nullable — `null = inherit dari Role`, `true/false = override`.
+- `RoleMenuAccess (roleId, menuKey, canRead, canWrite, canDelete)` — unique `(roleId, menuKey)`.
+- `SubRoleMenuAccess (subRoleId, menuKey, ...)` — sama, tapi override Role-level.
+
+**Menu catalog**: static list di `packages/shared-types/src/schemas/menu-catalog.ts`. 17 menu key (sinode, cabang, jemaat, ibadah, event, role-access, dst). Shared dengan FE/BE.
+
+**Resolve algorithm** (di `apps/core-api/src/lib/menu-access.ts → resolveJemaatAccess`):
+1. Ambil semua JemaatRole aktif user → list `(role, subRole)`.
+2. Untuk setiap pasang, build map menuKey → levels:
+   - Mulai dari `RoleMenuAccess` (Role-level default).
+   - Override dengan `SubRoleMenuAccess` untuk menuKey yang sama (SubRole snapshot).
+3. Union semua role user: OR per level (canRead/canWrite/canDelete).
+
+**canAccessPortal resolve**: kalau **ANY** role/sub user punya effective `true` → boleh login. SubRole non-null override Role; SubRole null inherit Role.
+
+**Endpoints (di `apps/core-api/src/routes/admin/role.ts`)**:
+```
+GET   /admin/role/access/matrix           # untuk halaman manage
+PATCH /admin/role/:id/access/portal       # body { canAccessPortal: bool }
+PATCH /admin/role/sub/:id/access/portal   # body { canAccessPortal: bool|null }
+PUT   /admin/role/:id/access/menu         # body { menuKey, canRead?, canWrite?, canDelete? }
+PUT   /admin/role/sub/:id/access/menu     # sama, untuk SubRole
+
+GET   /auth/me/access                     # resolved access user current (untuk re-fetch)
+```
+
+PUT endpoint upsert; kalau ketiga level false → row dihapus (sparse storage).
+
+**Login response** sekarang sertakan `canAccessPortal` + `menuAccess: ResolvedMenuAccess`. Frontend `auth-store` simpan keduanya di state, persisten via zustand/persist.
+
+**Login gate**: di `/login` page, kalau `auth.user.canAccessPortal === false` → tolak dengan pesan minta admin grant akses.
+
+**Sidebar filter**: setiap menu item punya `menuKey?` optional. Sidebar pakai `hasMenuAccess(user.menuAccess, menuKey, 'read')` untuk filter. Item tanpa menuKey (Dashboard, Profile) selalu visible. Grup yang tidak punya item visible setelah filter — header-nya juga di-hide.
+
+**Halaman manage**: `/dashboard/role-access` (menu group Developer Tools). Card per Role dengan:
+- Toggle `canAccessPortal` di header (untuk Role-level).
+- Pills SubRole untuk switch context (Role-level default vs override per SubRole).
+- Tabel grid menu × levels (Read/Write/Delete) dengan checkbox inline. Auto-enable Read kalau user enable Write/Delete.
+- Untuk SubRole context: tombol Ya / Tidak / Inherit untuk `canAccessPortal` override.
+
+**Note pada backend protection**: Sesuai keputusan user, RBAC saat ini **hanya filter UI sidebar**, bukan middleware backend. Setiap user yang login (canAccessPortal=true) bisa hit semua endpoint `/admin/*`. Backend protection per-menu bisa ditambah di iterasi berikutnya (`requireMenuAccess('menuKey', 'write')` middleware).
+
+---
+
+## 26. Mobile App Phase 1 — Response Feedback Tim Mobile (2026-05-21)
+
+Tim mobile (Ari) submit dua dokumen feedback `api-gap-analysis.md` + `backend-meeting-brief.md` yang highlight 12 gap antara spec API dan kebutuhan mobile app. Decisions yang sudah di-konfirmasi (lihat opsi yang user pilih saat AskUserQuestion):
+
+- **Scope kerja**: Plan + implement semuanya termasuk notif & face enroll
+- **Family confirmation flow**: Auto-verify (no two-way confirm) — trust-based
+- **Push notification**: Defer total — tidak masuk scope sekarang
+
+### Schema baru (migration `20260521100000_mobile_app_phase1`)
+
+```
+FamilyRelation
+  jemaatAId, jemaatBId (Cascade), role (FamilyRole), isVerified, createdBy
+  @@unique([jemaatAId, jemaatBId])
+
+BranchChangeRequest
+  jemaatId (Cascade), currentCabangId, targetCabangId, reason
+  status (BranchChangeStatus: PENDING/APPROVED/REJECTED)
+  reviewedBy, reviewedAt, reviewNote
+
+Jemaat extension:
+  primaryGuardianId (FK self, SetNull)        # untuk dependent tanpa noHp
+  registeredViaJemaatId (FK self, SetNull)    # audit self-onboarding
+```
+
+Enum baru: `family_role` (SPOUSE/CHILD/PARENT/SIBLING), `branch_change_status` (PENDING/APPROVED/REJECTED).
+
+`noHp` di Jemaat memang sudah nullable di schema sebelumnya, jadi tidak perlu ALTER COLUMN. Yang ditambah cuma 2 FK kolom self-referencing untuk audit dependent + self-onboarding.
+
+### Endpoint baru — 20 endpoint
+
+**Self-registration (M1):**
+- `POST /auth/register` — register jemaat baru pasca-OTP verify (`purpose=ENROLLMENT`). Anti-abuse: rate limit `registerLimiter` 3/jam/IP. Auto-assign role default "Jemaat:Jemaat Tetap" jika seed tersedia. Issue access+refresh token langsung. Optional foto base64 di body.
+- `POST /auth/otp/request` di-update: untuk `purpose=ENROLLMENT`, BE tidak require jemaat existing (validate justru nomor BELUM terdaftar).
+
+**Self-service mobile `/admin/me/*`** (router baru `apps/core-api/src/routes/admin/me.ts`):
+- `GET /admin/me` — full profile (Jemaat + cabang + roles + homecells + user)
+- `PATCH /admin/me` — edit subset (nama/email/tanggalLahir/jenisKelamin/alamat). noHp & cabangId TIDAK boleh — pakai OTP & branch-change.
+- `POST /admin/me/foto` — upload foto profile (multipart `foto`, max 5MB, resize ke 1024px)
+- `GET /admin/me/stats` — streakWeeks (52w window), attendedThisYear, eventsJoined, homecellsActive, totalAttended. Streak calc: ISO week dengan toleransi 1 minggu kosong di awal.
+- `GET /admin/me/scanner-events` — event di mana user `canScanAttendance=true` (filter `butuhKehadiran=true`)
+- `GET /admin/me/scanner-ibadah` — ibadah di mana user `canScanAttendance=true` (dedupe by ibadahId)
+- `GET /admin/me/homecell-managed` — homecell yang user-nya PIC
+- `GET /admin/me/homecell-area-managed` — area yang user-nya PIC
+
+**Family management (M5)** — semua di `/admin/me/family/*`:
+- `GET /admin/me/family` — list family dengan `isDependent: bool` (true kalau primaryGuardianId = user current)
+- `POST /admin/me/family/link-by-kode` — link via QR scan kode
+- `POST /admin/me/family/link-by-phone` — link via no HP
+- `POST /admin/me/family/register-new` — register jemaat baru + auto-link. Kalau `noHp=null` → dependent (primaryGuardianId=user).
+- `PATCH /admin/me/family/:jemaatId` — update role relasi
+- `DELETE /admin/me/family/:jemaatId` — unlink, hapus 2 arah (A→B + B→A)
+
+Reciprocal pair: CHILD ⇄ PARENT, SPOUSE ⇄ SPOUSE, SIBLING ⇄ SIBLING. Helper `upsertFamilyLink()` + `reciprocalRole()` di `me.ts`.
+
+**Branch change request (M6)**:
+- `POST /admin/me/branch-change-request` — submit pindah cabang. Max 1 PENDING per jemaat (409 kalau duplicate).
+- `GET /admin/me/branch-change-requests` — riwayat user
+- `GET /admin/branch-change-request` — admin queue (paginated, filter status/cabangId), router baru `branch-change.ts`
+- `GET /admin/branch-change-request/:id` — detail
+- `POST /admin/branch-change-request/:id/review` — approve/reject. Saat APPROVED, transaksi update `Jemaat.cabangId` ke targetCabangId.
+
+**Event batch (M3)**:
+- `POST /admin/event/:id/peserta/batch` — daftar multi-jemaat (max 20 per request). Partial success: response `{ successful: Participation[], failed: { jemaatId, error: { code, message } }[] }`. Codes: QUOTA_FULL / DUPLICATE / NOT_FOUND / INTERNAL.
+
+**Stats kehadiran (M7)**:
+- `GET /admin/event/:id/checkin/stats` — total, hadir, byStatus, quotaPeserta, lastUpdated
+- `GET /admin/ibadah/:id/checkin/stats?tanggalIbadah=` — reserved, joined, cancelled, total, lastUpdated (default today)
+
+**Homecell (M9)**:
+- `POST /admin/homecell/:id/members/by-kode` — tambah member via QR scan kode (vs endpoint lama by jemaatId)
+
+**Face enrollment (M11)**: `POST /auth/face/enroll` sudah ada sejak iterasi sebelumnya — di section ini diperjelas ke mobile team via api guide.
+
+### Decisions yang masuk doc/changelog
+
+| Item | Decision | Lokasi |
+|---|---|---|
+| Self-registration | Auto-active, anti-abuse via rate limit | mobile-api-guide section 12.1 |
+| Family confirmation | Auto-verify (trust-based) | mobile-api-guide section 13 + me.ts comment |
+| Push notification | Defer total — mobile pakai local notif | mobile-app-reference section 18 |
+| Bilingual content | UI translated, konten Indonesia | mobile-app-reference section 13 |
+| Streak source | Endpoint dedicated `/admin/me/stats` | mobile-api-guide section 12.3 |
+| Bookmark | Local AsyncStorage di mobile, no BE | mobile-app-reference section 4 |
+
+### Yang ditunda Phase 2+
+
+- Push notification infrastructure: `DeviceToken` model + `Notification` model + FCM/APNS sender service.
+- WA confirmation flow untuk family link (kolom `isVerified` sudah ready di schema).
+- Branch change SLA + notifikasi otomatis ke jemaat saat status berubah.
+- WebSocket realtime untuk scanner stats (current pakai polling 10-15s).
+
+### Update di docs
+
+- `docs/mobile-api-guide.md` → tambah section 12-15 (Phase 1 endpoints), update section 16 (Rate Limits) untuk include `/auth/register`, tambah section 19 (Gap Status table).
+- `docs/mobile-app-reference.md` → update section 18 (Decisions sudah/belum), tambah section 20 (Phase 1 Implementation Status), bump version ke 1.1.
+- OpenAPI spec (`apps/core-api/src/openapi.ts`) → register ~20 path baru di tag "Me", "Family", "Admin · Branch Change", + extend existing tags.
+
+### File baru
+
+- `packages/database/prisma/migrations/20260521100000_mobile_app_phase1/migration.sql`
+- `packages/shared-types/src/schemas/family.ts`
+- `packages/shared-types/src/schemas/branch-change.ts`
+- `apps/core-api/src/routes/admin/me.ts` (~640 lines)
+- `apps/core-api/src/routes/admin/branch-change.ts` (~145 lines)
+
+### File edit
+
+- `packages/database/prisma/schema.prisma` — tambah `FamilyRelation`, `BranchChangeRequest`, 2 enum, extend Jemaat dengan 2 FK kolom + relations
+- `packages/shared-types/src/schemas/auth.ts` — `registerJemaatSchema`, `selfEditJemaatSchema`
+- `packages/shared-types/src/schemas/event.ts` — `batchRegisterEventParticipationSchema`
+- `packages/shared-types/src/index.ts` — export family + branch-change
+- `apps/core-api/src/routes/auth.ts` — `POST /auth/register` + adjust `/otp/request` untuk ENROLLMENT
+- `apps/core-api/src/routes/admin/index.ts` — mount `/me` + `/branch-change-request`
+- `apps/core-api/src/routes/admin/event.ts` — `/peserta/batch` + `/checkin/stats`
+- `apps/core-api/src/routes/admin/ibadah.ts` — `/checkin/stats`
+- `apps/core-api/src/routes/admin/homecell.ts` — `/members/by-kode`
+- `apps/core-api/src/middleware/rate-limit.ts` — `registerLimiter`
+- `apps/core-api/src/openapi.ts` — register paths baru
+
+### Caveat untuk maintainer
+
+1. **Prisma generate diperlukan**: schema baru → user harus run `pnpm db:generate` di local. Sandbox tidak bisa fetch Prisma binary (403). Typecheck errors `Property 'familyRelation' does not exist on PrismaClient` akan resolve setelah generate.
+
+2. **Migration belum di-apply**: file SQL ready, tapi user harus `pnpm db:migrate dev` (atau prod) untuk apply ke DB.
+
+3. **Default role "Jemaat:Jemaat Tetap" assumption**: `/auth/register` cek role+subrole by nama. Kalau seed tidak ada keduanya, jemaat di-create tanpa role assignment (perlu admin assign manual). Pastikan seed punya pasangan ini sebelum mobile go-live.
+
+4. **OTP verify flow untuk ENROLLMENT**: current implementation tidak return user data di response verify ENROLLMENT (karena jemaat belum ada). Mobile harus chain ke `/auth/register` immediately after verify. Marker `pendingRegistration: true` bisa ditambah di response future.
+
+5. **Audit trail dependent**: jemaat dengan `primaryGuardianId` non-null berarti dependent. Portal admin perlu UX untuk lihat / manage list dependent jemaat. Untuk sekarang tampil di jemaat list seperti biasa.
+
+### Decision 2026-05-21 — Alkitab content: Opsi B (bundle JSON) dengan TB + NKJV
+
+**Update**: pengganti entry "Deferred — Alkitab content" sebelumnya. Product owner decide pakai **Opsi B (bundle JSON di mobile asset)** dengan versi **TB (Terjemahan Baru, LAI)** + **NKJV (New King James Version, Thomas Nelson)**. Sumber data dari ekosistem **yukuku/androidbible**.
+
+**Implikasi BE**:
+- **Tidak ada content endpoint** — semua content di mobile bundle, tidak di-host BE
+- **Tidak butuh seed data Alkitab di Postgres ECC**
+- **Mobile fully offline-capable** untuk read
+
+**⚠ Licensing flag yang BE catat** (di response doc):
+- **TB**: LAI copyright. Yukuku host di api.alkitab.app — kemungkinan punya arrangement spesifik dengan LAI, tidak otomatis transferable
+- **NKJV**: Thomas Nelson copyright, **highly restrictive**. Default lisensi cuma allow personal use + 500 ayat max quote untuk non-commercial publication. Bundle full di app gereja Indonesia tanpa lisensi eksplisit = high risk
+- BE rekomendasi: **verify lisensi dengan LAI + Thomas Nelson** sebelum mobile ship bundle, atau switch ke AYT (CC BY-SA) + WEB/KJV (public domain) yang license clean
+
+Status legal: **blocking** sebelum mobile mulai bundle. BE tidak block code, cuma flag risk untuk awareness product/legal team.
+
+**Optional BE work yang tetap useful** (decision delayed, bisa di-add saat mobile launch Alkitab):
+- `GET /admin/alkitab/verse-of-day` — server-curated reference (versionCode + bookId + bab + ayat). Mobile lookup teks dari local bundle. Tidak butuh content di BE.
+- `/admin/me/bible-bookmarks` (CRUD) — server-side bookmark sync cross-device. Simpan reference saja, bukan teks. No licensing concern.
+
+Total BE effort kalau implement optional: **~1 hari sprint**.
+
+**File berubah**:
+- `ecc-mobile-app/docs/backend-request-bible-content.md` — status DECIDED + Decision & Implementation Plan section lengkap (licensing flag, sumber data options, JSON format, mobile loader pattern, action items)
+- `knowledge-base.md` — entry ini
+
+**Code BE belum berubah** — entry ini documentation only. Optional verse-of-day + bookmark sync di-implement nanti kalau product approve.
+
+### Deferred 2026-05-21 — Push notification infrastructure (NO CODE)
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-bible-content.md`.
+
+Mobile saat ini ship dengan **Opsi C** (sample-only, ~17 pasal populer di-bundle). Mau jump ke Opsi A (BE host full TB LAI + API) atau Opsi B (bundle full di asset), tapi **gate utamanya legal/licensing TB LAI** — bukan engineering. BE bisa serve content kapan saja kalau sumber data clear.
+
+**BE analysis ditulis lengkap di response section file mobile docs**. Highlights:
+
+| Opsi | BE verdict |
+|---|---|
+| A. BE host + 4 endpoint | ~5 hari sprint, butuh seed data + license LAI clear |
+| B. Bundle di mobile asset | BE effort ~0, mobile 1-2 hari, license issue tetap ada |
+| C. Sample-only (current) | Already shipped, zero risk |
+
+**Alternative versi** (kalau LAI restrict): **AYT** (Alkitab Yang Terbuka, CC BY-SA — paling permissive), BIS, MILT, WBTC.
+
+**BE recommendation — phased**:
+
+1. **Now (Q3 2026 launch)**: tetap Opsi C, tapi interim improvement tanpa licensing risk:
+   - Expand sample 17 → 50 pasal populer (mobile, 1 hari)
+   - Endpoint `GET /alkitab/verse-of-day` server-curated dari pool sample (BE, 0.5 hari)
+   - Endpoint bookmark sync `/admin/me/bible-bookmarks` simpan reference saja, tidak content (BE, 0.5 hari)
+2. **Phase 2 (post legal clear)**: implement Opsi A atau B sesuai keputusan
+
+**Questions untuk product owner + legal team** (di response doc):
+1. Kontak resmi LAI?
+2. ECC OK pakai AYT sebagai alternatif?
+3. Alkitab high priority (differentiator) atau secondary?
+4. Budget legal admin?
+5. Timeline target?
+
+**Triggers un-defer**: legal clear LAI / decide AYT / concrete user feedback frequent / Q4 milestone review.
+
+**Code belum di-implement** — KB di-update lagi setelah product+legal approve direction + actual implementation.
+
+### Deferred 2026-05-21 — Push notification infrastructure (NO CODE)
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-push-notification.md` (Priority MEDIUM).
+
+Mobile submit spec lengkap push notif (Expo Push API + Device/Notification table + 4 endpoints + 8 scenarios). **BE status: 🔵 DEFERRED** sesuai decision product 2026-05-21 yang sebelumnya di-confirm di response Mobile Phase 1.
+
+**BE analysis ditulis lengkap di response section file mobile docs**. Ringkasan:
+
+- Spec mobile sudah excellent + siap implement kalau go-ahead nanti
+- BE setuju dengan: Expo Push API provider awal, Device + Notification table architecture, 4 endpoint shape, 8 scenarios priority
+- BE refine beberapa hal:
+  - Token format multi-provider (Expo/FCM/APNS) via `provider` column
+  - Notification idempotency via composite key `(jemaatId, category, sourceType, sourceId)`
+  - Quiet hours default 22:00-06:00 untuk non-urgent
+  - Broadcast rate limit 1/hari/cabang
+  - Coordination dengan WhatsApp broadcast (jangan duplicate channel)
+  - Delivery report defer ke v2
+
+**Triggers untuk reconsider implement** (kapan un-defer):
+1. Retention D7 < 30% post-launch
+2. Event registration < 20% target
+3. Renungan readership < 5%
+4. Product owner approve event campaign besar
+5. 6 bulan post-launch milestone re-evaluation
+
+**Estimate kalau implement nanti**: ~7 hari BE sprint.
+
+**Code belum di-implement** — masih DEFERRED. KB akan di-update lagi setelah product re-approve + actual implementation.
+
+### Patch 2026-05-21q — Face Recognition: RESTful endpoints + modelVersion + standardized errors
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition.md` (Priority MEDIUM, M11 + future smart system data prerequisite).
+
+Mobile butuh face recognition system yang lebih lengkap dari basic existing (login/enroll/reset). Plus future-proof untuk smart system (lobby auto check-in, family clustering).
+
+**Existing yang sudah ada** (BE side):
+- `POST /auth/face/login` — login via descriptor
+- `POST /auth/face/enroll` — enroll
+- `POST /auth/face/reset` — clear descriptor
+- `User.faceDescriptor` (Json) + `faceEnrolledAt`
+- `matchFace()` + `isValidDescriptor()` helper di @ecc/auth
+- 128-dim FaceNet-style descriptor (face-api.js compatible)
+- Euclidean distance, threshold 0.5
+
+**Yang ditambah/diperbaiki di patch ini**:
+
+**Schema** (migration `20260521170000_face_metadata`):
+- `User.faceModelVersion` VARCHAR(32) — untuk future model migration (default `facenet-v1`)
+- `User.faceMetadata` JSONB — audit info (platform, deviceModel, appVersion, consentVersion)
+
+**Endpoint baru (RESTful)**:
+- `GET /auth/me/face-profile` — status enrollment
+- `PUT /auth/me/face-profile` — re-enroll (replace existing)
+- `DELETE /auth/me/face-profile` — hapus data wajah (PDP Law right-to-delete)
+
+**Updates ke endpoint existing**:
+- `POST /auth/face/enroll` — sekarang tolak 409 `FACE_ALREADY_ENROLLED` kalau sudah ada (force PUT untuk re-enroll). Accept `modelVersion` + `metadata` di body. Response 201 (sebelumnya 200).
+- `POST /auth/face/login` — return `confidence` field (0..1, normalized dari `1 - distance/threshold`). Standardized error codes: `FACE_NOT_ENROLLED` (401), `FACE_NO_MATCH` (401), `FACE_MODEL_MISMATCH` (409), `FACE_INVALID_DESCRIPTOR` (422). Accept `modelVersion` di body.
+- `POST /auth/face/reset` — legacy, masih jalan (alias ke DELETE /me/face-profile).
+
+**BE design decisions** (didokumentasikan di response doc — 20 technical questions dijawab):
+
+| Decision | Pilihan BE |
+|---|---|
+| ML library | face-api.js compatible (128-dim FaceNet). Mobile bebas pilih library yang produce 128-dim descriptor compatible |
+| Embedding dim | **128** (existing) |
+| Distance metric | **Euclidean** (existing) |
+| Threshold default | **0.5** (env override `FACE_MATCH_THRESHOLD`) |
+| Single profile per user | Yes — 1 jemaat 1 descriptor. Re-enroll via PUT replace |
+| Storage format | Json column existing (cukup untuk N < 50k). pgvector defer |
+| Encryption at rest | Volume-level cukup MVP, column-level kalau audit Kominfo request |
+| Retention | DELETE endpoint untuk PDP right-to-delete. Auto-purge kalau jemaat archive defer |
+| Liveness | Server skip — client-side challenge (mobile responsibility). MVP accept risk |
+| Twin/family false positive | Tingkatkan threshold ke 0.45 + secondary noHp hint (existing flow sudah pakai noHp) |
+| Smart system endpoint | Defer — design saat go-live |
+| Re-enrollment | PUT /me/face-profile, replace existing |
+| Rate limit | Pakai existing `authVerifyLimiter` (10/15min/IP). Per-phone limit defer |
+| PDP compliance | Mobile track `consentVersion` di metadata. Legal: register DPA ke Kominfo (out of BE scope) |
+
+**Helper baru** di auth.ts:
+- `resetFaceProfile(req)` — shared function untuk hapus face data + audit. Dipakai oleh POST `/face/reset` + DELETE `/me/face-profile`.
+
+**Confidence calculation**:
+```typescript
+const confidence = Math.max(0, Math.min(1, 1 - distance / threshold));
+// distance < threshold → confidence > 0. distance = 0 → confidence = 1.
+```
+
+**File berubah**:
+- `packages/database/prisma/schema.prisma` — User extension
+- `packages/database/prisma/migrations/20260521170000_face_metadata/migration.sql` — add 2 column
+- `packages/shared-types/src/schemas/auth.ts` — faceLoginSchema + faceEnrollmentSchema extended
+- `apps/core-api/src/routes/auth.ts` — 3 endpoint baru + 3 endpoint existing diperbaiki + helper
+- `apps/core-api/src/openapi.ts` — tag baru "Auth · Face Recognition" + 6 path
+- `docs/mobile-api-guide.md` — section 1.4 expanded (5 sub-section) + Gap Status table
+- `ecc-mobile-app/docs/backend-request-face-recognition.md` — RESOLVED + Backend Response dengan 20 answers
+
+**User perlu run**:
+- `pnpm db:generate` — Prisma client recognize `faceModelVersion` + `faceMetadata`
+- `pnpm db:migrate dev` — apply migration
+
+**Smart system future** (out of scope patch ini): saat go-live, BE tambah `POST /api/v1/identify` (atau `/smart/identify`) yang accept descriptor, return nearest neighbor + confidence. Schema sekarang sudah ready (model version + metadata audit).
+
+### Patch 2026-05-21p — Homecell M9: extend detail + soft-remove + list per area
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-homecell-detail.md` (Priority MEDIUM).
+
+3 endpoint untuk PIC homecell / PIC area flow di mobile. Sebagian existing tapi belum match spec mobile.
+
+**Change 1**: `GET /admin/homecell/:id` (existing) — **extended** select fields di nested `members[].jemaat`. Tambah `kode` + `jenisKelamin`. Plus `area.picJemaatId` di-expose supaya mobile bisa check apakah user adalah PIC area parent (untuk authorization).
+
+**Change 2** (NEW): `DELETE /admin/homecell/:id/members/by-jemaat/:jemaatId` — soft remove via jemaatId. Set `isActive=false` + `tanggalKeluar`. Idempotent (sudah dikeluarkan → 200 + `meta.alreadyRemoved=true`). Berbeda dengan existing `DELETE /:memberId` yang hard delete (untuk admin portal).
+
+**Change 3** (NEW): `GET /admin/homecell-area/:id/homecells` — list semua homecell di area itu (filter `isActive=true`). Shape ringkas: id, nama, alamat, hari, jam, picJemaat, memberCount. Mobile PIC area pakai untuk tampil semua homecell, termasuk yang user-nya bukan PIC homecell-nya (vs `useManagedHomecells` yang filter by user PIC).
+
+**Authorization**: saat ini permissive (semua user lewat `/admin/*` di-allow, sama dengan endpoint admin lain). RBAC strict via menu access middleware bisa di-add nanti.
+
+**Route ordering** di `homecell-area.ts`: `GET /:id/homecells` di-register SEBELUM `GET /:id` (2-segment lebih spesifik). Express matches by segment count, jadi sebenarnya tidak conflict, tapi konvensi codebase tetap di-keep.
+
+**File berubah**:
+- `apps/core-api/src/routes/admin/homecell.ts` — extend detail select + DELETE /by-jemaat
+- `apps/core-api/src/routes/admin/homecell-area.ts` — GET /:id/homecells
+- `apps/core-api/src/openapi.ts` — register 2 path baru + update detail description
+- `docs/mobile-api-guide.md` — section 12.6 Homecell Self-Service expanded
+- `ecc-mobile-app/docs/backend-request-homecell-detail.md` — RESOLVED
+
+### Patch 2026-05-21o — Bug fix: donation endpoint crash P2023 saat pakai slug
+
+**Bug** (lapor 2026-05-21 dari mobile):
+
+```
+POST /admin/event/penggalangan-dana-pembangunan-2026/donations → P2023
+"Error creating UUID, invalid character... found 'p' at 1"
+```
+
+**Root cause**: 7 donation handler (POST/GET/PATCH/DELETE/bukti/approve list+me) pakai `prisma.event.findUnique({ where: { id: req.params.id } })` — assume `:id` adalah UUID. Mobile pakai slug → Postgres throw P2023 (invalid UUID syntax).
+
+Pattern identical dengan patch 2026-05-21e (event detail by slug crash) — saat itu fix-nya pakai `idOrSlugWhere()` helper. Donation handlers belum di-cover karena baru ditambah di patch 2026-05-21l.
+
+**Fix**: helper baru `resolveEventByIdOrSlug(idOrSlug)` di `event.ts`:
+
+```typescript
+async function resolveEventByIdOrSlug(idOrSlug: string) {
+  const event = await prisma.event.findFirst({ where: idOrSlugWhere(idOrSlug) });
+  if (!event) throw NotFound('Event tidak ditemukan');
+  return event;
+}
+```
+
+Pakai `prisma.event.findFirst` (bukan `findUnique`) supaya bisa pass OR filter ke `idOrSlugWhere()`. Postgres aman karena helper sudah skip `id` predicate kalau key bukan UUID format.
+
+**Apply ke 7 donation handler**:
+- `GET    /:id/donations`
+- `GET    /:id/donations/me`
+- `POST   /:id/donations`
+- `GET    /:id/donations/:donationId`
+- `PATCH  /:id/donations/:donationId`
+- `POST   /:id/donations/:donationId/bukti`
+- `POST   /:id/donations/:donationId/approve`
+- `DELETE /:id/donations/:donationId`
+
+Untuk handler yang punya nested check `participation.eventId !== req.params.id` (donation detail/patch/bukti/approve/delete), ganti dengan `!== event.id` (UUID dari resolved event) supaya comparison correct kalau user pakai slug.
+
+**Endpoint lain yang belum di-cover** (UUID-only):
+- POST/PATCH/DELETE event itself (admin portal)
+- Hero/QRIS upload
+- Peserta endpoints (POST register, /me, batch, PATCH, approve, bukti)
+- Ministry/volunteer
+- Check-in
+
+Ini admin operations yang umumnya dipanggil dari portal dengan UUID. Mobile mungkin perlu ini juga di future — bisa di-add per kebutuhan dengan pattern yang sama.
+
+**File berubah**: `apps/core-api/src/routes/admin/event.ts` only.
+
+**Defense-in-depth**: error handler `middleware/error-handler.ts` sudah translate P2023 ke 400 INVALID_INPUT_FORMAT sejak patch 2026-05-21e. Kalau ada code path lain miss helper, mobile dapat 400 informatif, bukan 500.
+
+### Patch 2026-05-21n — Bug fix: approve event peserta P2025 saat JWT stale
+
+**Lanjutan patch 2026-05-21m**. Setelah ganti `req.user.sub` → `req.user.jemaatId`, masih ada error P2025 di approve. Root cause baru: JWT stale — admin login sebelum `prisma migrate reset`, jadi `jemaatId` di JWT tidak ada lagi di tabel `jemaat`. Prisma nested connect ke ID yang tidak ada → P2025.
+
+**Fix defensive**: helper baru `resolveApproverJemaatId(req)` di `event.ts`:
+1. Ambil `req.user?.jemaatId`
+2. Verify jemaat exists dengan `prisma.jemaat.findUnique`
+3. Kalau exists → return jemaatId
+4. Kalau tidak → return `undefined` (skip approver field, audit trail tetap jalan tanpa attribution)
+
+Apply ke 4 lokasi yang sama (peserta + donation, PATCH BAYAR + approve):
+```typescript
+const approverJemaatId = await resolveApproverJemaatId(req);
+// ...
+data.approver = approverJemaatId ? { connect: { id: approverJemaatId } } : undefined;
+```
+
+Kolom `approvedBy` di kedua tabel sudah nullable, jadi skip aman.
+
+**Trade-off**: kalau ini sering terjadi di production (bukan dev), pertimbangkan force logout user yang JWT-nya stale. Untuk dev local, biar tidak block flow.
+
+**Alternative yang dipertimbangkan tapi tidak diambil**:
+- Hard fail (throw Unauthorized "session invalid") — terlalu agresif, admin yang baru migrate reset stuck sampai logout/login ulang
+- Auto-create jemaat row kalau tidak ada — silly, masking data inconsistency
+- Catch P2025 generic — kurang explicit, sulit di-trace
+
+**File berubah**: `apps/core-api/src/routes/admin/event.ts` only (helper + 4 call sites).
+
+### Patch 2026-05-21m — Bug fix: approve event peserta/donation P2025 (User.id vs Jemaat.id)
+
+**Bug** (lapor 2026-05-21 dari portal):
+
+```
+POST /admin/event/.../peserta/.../approve → 404 P2025
+"No 'Jemaat' record(s) was found for a nested connect on one-to-many relation 'EventApprover'."
+```
+
+**Root cause**: 4 handler di `event.ts` (peserta approve, peserta PATCH dengan status=BAYAR, donation approve, donation PATCH dengan status=BAYAR) pakai `req.user?.sub` (yang adalah `User.id`) untuk connect ke `approver` relation. Tapi `EventParticipation.approver` dan `EventDonation.approver` keduanya relasi ke **Jemaat** (`@relation("EventApprover", fields: [approvedBy], references: [id]`). `User.id` jelas tidak ada di tabel Jemaat → Prisma throw P2025.
+
+**Fix**: replace `req.user?.sub` dengan `req.user?.jemaatId` di 4 lokasi:
+- `eventRouter.patch('/:id/peserta/:participationId')` — saat status BAYAR
+- `eventRouter.post('/:id/peserta/:participationId/approve')`
+- `eventRouter.patch('/:id/donations/:donationId')` — saat status BAYAR
+- `eventRouter.post('/:id/donations/:donationId/approve')`
+
+Rename variable jadi `approverJemaatId` untuk eksplisit.
+
+**Sebelum**:
+```typescript
+const userId = req.user?.sub;
+// ...
+data.approver = userId ? { connect: { id: userId } } : undefined;
+```
+
+**Sesudah**:
+```typescript
+const approverJemaatId = req.user?.jemaatId;
+// ...
+data.approver = approverJemaatId ? { connect: { id: approverJemaatId } } : undefined;
+```
+
+**Kenapa bug baru terlihat sekarang**: handler peserta `/approve` sudah ada sejak Phase 1 Movement implementation tapi mungkin tidak banyak admin pakai (mereka edit status manual via PATCH dropdown). Setelah portal punya DonationsSection dengan tombol Approve eksplisit (patch 2026-05-21l), bug surface karena admin sering klik Approve.
+
+**File berubah**: `apps/core-api/src/routes/admin/event.ts` only.
+
+### Patch 2026-05-21l — Multi-donation untuk fundraising event (Opsi B IMPLEMENTED)
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-multi-donation-event.md`. Status DISCUSSION sebelumnya → product owner decide **Opsi B** (sub-table `EventDonation`). Now implemented.
+
+**Schema (migration `20260521150000_event_donation`)**:
+
+```
+EventDonation
+  id, participationId (Cascade), nominalBayar (Decimal 15,2)
+  buktiTransferUrl, status (EventDonationStatus), catatan
+  paidAt, approvedBy, approvedAt
+  createdAt, updatedAt
+
+EventDonationStatus enum:
+  MENUNGGU_VERIFIKASI | BAYAR | BATAL
+
+Jemaat extension:
+  eventDonationApprovals EventDonation[] @relation("EventDonationApprover")
+
+EventParticipation extension:
+  donations EventDonation[]
+```
+
+Existing `EventParticipation.nominalBayar/buktiTransferUrl/paidAt/approvedBy/approvedAt` **tetap (deprecated)** untuk backward-compat. Migration backfill: untuk row existing yang punya payment data, INSERT 1 EventDonation row dengan status sesuai EventParticipation.status mapping.
+
+**7 endpoint baru di event router**:
+- `GET    /admin/event/:id/donations` — admin list paginated, with `meta.totalAmountConfirmed`
+- `GET    /admin/event/:id/donations/me` — mobile list own donations + totalConfirmed
+- `POST   /admin/event/:id/donations` — create (auto-resolve participation, validate nominal per tipeBayar)
+- `GET    /admin/event/:id/donations/:donationId` — detail
+- `PATCH  /admin/event/:id/donations/:donationId` — admin update status/nominal/catatan
+- `POST   /admin/event/:id/donations/:donationId/bukti` — upload bukti per donation (multipart, `flexImageUpload`)
+- `POST   /admin/event/:id/donations/:donationId/approve` — admin shortcut → BAYAR
+- `DELETE /admin/event/:id/donations/:donationId` — soft cancel, idempotent
+
+**Concept shift**:
+- `EventParticipation` = registration commitment (DAFTAR / HADIR / BATAL)
+- `EventDonation` = giving record (MENUNGGU_VERIFIKASI / BAYAR / BATAL), 1-to-many per participation
+
+**Helper baru**:
+- `lib/storage.ts` — `saveEventDonationBukti(donationId, buffer)` + `deleteEventDonationBukti`. Layout `/uploads/content/event/donation-bukti/{donationId}.webp`.
+- `routes/admin/event.ts` — `ensureParticipation(eventId, jemaatId)` lazy upsert (kalau user langsung donasi tanpa register dulu, BE auto-create participation status DAFTAR).
+
+**Validation per `event.tipeBayar`**:
+- `GRATIS` → tolak 400 ("event gratis tidak menerima donation")
+- `NOMINAL_TETAP` → nominal harus tepat == `event.nominal`
+- `NOMINAL_BEBAS` → nominal >= `event.nominal` (kalau di-set sebagai minimum)
+
+**Use cases yang sekarang work**:
+- Fundraising pembangunan — cicilan bulanan (Jan, Feb, dst.) sebagai donation row terpisah
+- Persembahan misi — initial + top-up berkali-kali
+- Persembahan tahunan — multiple giving sepanjang tahun
+- Event NOMINAL_TETAP — masih 1 donation per participation (backward compat)
+
+**Fundraising progress**: admin list endpoint kasih `meta.totalAmountConfirmed` = SUM(donations.nominalBayar where status=BAYAR). UI mobile/portal pakai untuk progress bar "Rp 12.500.000 dari Rp 50.000.000 target".
+
+**Backward compat existing flow**:
+- Endpoint lama `/peserta/:participationId/bukti`, `/peserta/:participationId/approve` masih ada (deprecated)
+- `EventParticipation.nominalBayar/buktiTransferUrl` masih di-keep untuk row existing
+- New code harus pakai `/donations/*` endpoints
+
+**Portal UI**: section "Donations / Persembahan" di event detail page muncul untuk semua event paid (TETAP + BEBAS). Komponen baru `components/event/donations-section.tsx`:
+- Fundraising progress card hijau dengan `totalAmountConfirmed` (dari `meta.totalAmountConfirmed`)
+- Filter pills: Semua / Menunggu / Bayar / Batal
+- List donations dengan avatar, nama, no HP, nominal, status badge, catatan, paidAt, approver
+- Actions per row: upload bukti (flexImageUpload), approve (kalau MENUNGGU), batal
+- Pagination
+
+Untuk NOMINAL_BEBAS judul **"Donations / Persembahan"** dengan label "Total terkumpul"; untuk NOMINAL_TETAP judul **"Payment History"** dengan label "Total pembayaran terkonfirmasi". Same UI, beda label context.
+
+**File berubah**:
+- `packages/database/prisma/schema.prisma` — model `EventDonation`, enum `EventDonationStatus`, relasi
+- `packages/database/prisma/migrations/20260521150000_event_donation/migration.sql` — create table + backfill
+- `packages/shared-types/src/schemas/event.ts` — `createEventDonationSchema`, `updateEventDonationSchema`, enum
+- `apps/core-api/src/lib/storage.ts` — `saveEventDonationBukti` + delete
+- `apps/core-api/src/routes/admin/event.ts` — 7 handler baru + helper `ensureParticipation`
+- `apps/core-api/src/openapi.ts` — register 7 path baru
+- `apps/portal/src/components/event/donations-section.tsx` — NEW (admin view)
+- `apps/portal/src/app/dashboard/event/[id]/page.tsx` — render `DonationsSection` untuk event paid
+- `docs/mobile-api-guide.md` — section **5.7 Event Donations** lengkap + Gap Status table
+- `ecc-mobile-app/docs/backend-request-multi-donation-event.md` — RESOLVED + impl summary
+
+**User perlu**:
+- `pnpm db:generate` — Prisma client regenerate untuk recognize `EventDonation` model
+- `pnpm db:migrate dev` — apply migration ke DB
+
+### Patch 2026-05-21k — Support nomor HP internasional E.164
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-multi-donation-event.md` (Priority MEDIUM, status 🔵 DISCUSSION).
+
+Mobile request: support multi-donation per jemaat per event untuk fundraising (cicilan/top-up). Saat ini `EventParticipation` unique `(eventId, jemaatId)` → user yang sudah BAYAR sekali tidak bisa donasi lagi ke event yang sama → 409 CONFLICT.
+
+**BE analysis tertulis lengkap di response section file mobile docs**. Ringkasan rekomendasi:
+
+| Opsi | BE verdict |
+|---|---|
+| A. Drop unique constraint, multi row per event-jemaat | ⚠ Tidak rekomendasi — migration mahal, edge case risky |
+| B. Sub-table `EventDonation` (1-to-many dari Participation) | ✅ Rekomendasi long-term — clean separation commitment/realisasi |
+| C. Extend Persembahan endpoint dengan optional `eventId` | ❌ Tidak feasible — tabel Persembahan generic belum ada |
+| D. Status quo, mobile redirect ke Persembahan tab | ✅ OK short-term, ❌ tidak ideal long-term (data tidak ter-link ke event) |
+
+**Phased rollout yang disarankan**:
+1. **Now (no BE change)**: opsi D — mobile tampil info card di event NOMINAL_BEBAS arahkan ke rekening cabang.
+2. **Phase 2 (kalau ada concrete fundraising plan)**: implement opsi B, BE estimate 2-3 hari sprint + migration.
+3. **Long-term**: build separate `Persembahan` table generic untuk all giving.
+
+**Decision yang dibutuhkan product owner** (4 questions di response doc):
+- Concrete fundraising plan 1-3 bulan?
+- Admin butuh "total per event" report?
+- Giving history per jemaat (UX feature)?
+- Timeline target?
+
+**Code belum di-implement** — masih DISCUSSION. KB akan di-update lagi setelah product decision + actual implementation.
+
+### Patch 2026-05-21k — Support nomor HP internasional E.164
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-international-phone.md` (Priority LOW-MEDIUM).
+
+Sebelumnya `noHpSchema` di `packages/shared-types/src/schemas/common.ts` hardcode regex `/^\+62[0-9]{8,13}$/` — hanya accept nomor Indonesia. Block jemaat diaspora, missionari, jemaat cabang luar negeri.
+
+**Fix**: ganti pakai `libphonenumber-js` (port resmi Google libphonenumber) yang validate per-country rules:
+
+```typescript
+// SEBELUM
+export const noHpSchema = z.string().trim()
+  .regex(/^\+62[0-9]{8,13}$/, 'Format no HP harus E.164 (+62...)');
+
+// SESUDAH
+import { isValidPhoneNumber } from 'libphonenumber-js';
+export const noHpSchema = z.string().trim()
+  .refine((v) => { try { return isValidPhoneNumber(v); } catch { return false; } },
+    { message: 'Format no HP harus E.164 internasional yang valid...' });
+```
+
+Untuk `+62` perilaku identical dengan regex lama; untuk country lain (mis. `+65`, `+1`, `+61`) validasi spesifik per country (panjang digit + mobile prefix valid).
+
+**Tidak butuh migration database**: kolom `Jemaat.noHp` sudah `VARCHAR(20)` (cukup untuk E.164 max 15 digit + `+`). Tidak ada constraint yang assume +62 prefix. Existing data tetap valid (semua +62XXX adalah valid E.164).
+
+**Schema yang inherit `noHpSchema` otomatis ikut**: `requestOtpSchema`, `verifyOtpSchema`, `faceLoginSchema`, `registerJemaatSchema`, `createJemaatSchema`, `updateJemaatSchema`, `linkFamilyByPhoneSchema`, `registerFamilyNewSchema`. Tidak ada perubahan code di-tempat lain.
+
+**Caveat — WhatsApp delivery**: BE side support semua E.164, tapi delivery WhatsApp depends provider (Fonnte/Twilio/Meta direct) dan country reachability.
+- Provider perlu check: bisa kirim ke country apa saja? Cost per country?
+- Country yang WhatsApp blocked (mis. China) butuh metode auth alternatif yang belum di-build.
+- Untuk launch awal, support country populer (ID/SG/MY/HK/AU/UK/US) — verify dengan provider sebelum mass rollout.
+- Rate limit per-IP + per-nomor existing tetap berlaku regardless country.
+
+**Mobile-side plan** (di-document di response file):
+- Tambah country picker di PhoneInput (default ID +62)
+- Pakai `libphonenumber-js` di client juga untuk format/validate real-time
+- Persist last-used country di SecureStore
+
+**File berubah**:
+- `packages/shared-types/package.json` — tambah `libphonenumber-js ^1.11.0`
+- `packages/shared-types/src/schemas/common.ts` — replace regex dengan `isValidPhoneNumber`
+- `docs/mobile-api-guide.md` — section "Phone number normalization" updated
+- `ecc-mobile-app/docs/backend-request-international-phone.md` — RESOLVED dengan Backend Response
+
+**User perlu run**: `pnpm install` di root untuk install `libphonenumber-js`.
+
+### Patch 2026-05-21j — Image upload hints + AI prompt generator (portal)
+
+Request internal: admin sering bingung ukuran ideal untuk hero image event/news/renungan, dan kekurangan ide visual yang sesuai brand.
+
+**Solusi**: komponen reusable `<UploadHint>` (`apps/portal/src/components/upload/upload-hint.tsx`) dengan 2 fitur:
+
+1. **Size hint card** — tampil spek rekomendasi per upload kind:
+   - `hero-event` / `hero-news` / `hero-renungan` → 1600×1067 px (3:2), max 5MB, JPEG/PNG/WebP/HEIC
+   - `qris` → min 600×600 (1:1), max 5MB
+   - `bukti` → bebas, max 5MB
+   - `profile` → min 400×400 (1:1)
+
+2. **AI prompt generator** (hanya untuk hero-*) — collapsible section dengan prompt template yang admin bisa copy:
+   - Auto-fill context dari form (judul, ringkasan, ayatAlkitab, tags)
+   - Style guidance per kind: event (cerah, energetic), news (photographic, informatif), renungan (reflektif, soft tone)
+   - Platform hint: DALL-E 3, Midjourney (`--ar 3:2 --v 6`), Stable Diffusion settings
+   - Note "tidak ada teks di gambar" supaya admin tidak generate dengan watermark text
+
+**Apply ke 4 lokasi**:
+- `components/broadcast/konten-page.tsx` — form modal news/renungan (di bawah hero image upload, context dari form state)
+- `app/dashboard/event/[id]/page.tsx` — detail page event, di bawah hero image card + di QRIS section
+- `components/cabang/rekening-section.tsx` — QRIS rekening per cabang
+- `app/dashboard/profile/page.tsx` — foto avatar user
+
+**Contoh prompt output (hero-renungan dengan judul + ayat)**:
+
+```
+Buatkan ilustrasi hero banner untuk renungan harian berjudul "Tidak Ada Yang Mustahil Bagi Allah".
+Ayat utama: "Lukas 1:37"
+
+Style:
+- Tone hangat, reflektif, kontemplatif (mis. sunrise, open Bible, hands in prayer)
+- Soft natural lighting, warna lembut (sepia, gold, soft amber)
+- Aspect ratio 3:2 landscape (1600x1067 px)
+- Tidak ada teks tulisan di gambar
+- ...
+```
+
+**Tidak ada perubahan BE** — purely UI improvement.
+
+### Patch 2026-05-21i — `myParticipation` di event detail + `GET /:idOrSlug/peserta/me`
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-event-participation-status.md` (Priority MEDIUM).
+
+Mobile rely on local storage untuk track participation status user di event. Edge case: fresh install / device change / storage corruption → local kosong → UI tampil "Daftar Sekarang" padahal user sudah daftar dan belum bayar. Workaround 409 CONFLICT recovery sudah ada tapi tidak ideal (placeholder participationId='unknown' → upload bukti gagal).
+
+**Implementation — keduanya** (BE pilih combine, sesuai rekomendasi mobile):
+
+1. **Field `myParticipation` di response `GET /admin/event/:idOrSlug`** — primary source of truth saat mobile load detail.
+   - `null` kalau belum daftar
+   - Otherwise: row participation lengkap (id, status, nominalBayar, buktiTransferUrl, registeredAt, paidAt, attendedAt, cancelledAt)
+   - Resolve via `req.user.jemaatId` — kalau request anonymous, field tetap `null` (defensive, walaupun endpoint butuh JWT)
+
+2. **Endpoint `GET /admin/event/:idOrSlug/peserta/me`** — standalone refetch, useful setelah mutation (register/cancel/upload bukti) tanpa re-fetch full detail.
+   - 200 + data row kalau terdaftar
+   - 404 kalau belum daftar
+   - Accept id atau slug (sama pola endpoint detail)
+
+**Route ordering**: `GET /:idOrSlug/peserta/me` di-register **SEBELUM** `DELETE /:id/peserta/me` (sebenarnya beda HTTP method jadi Express tidak konflik, tapi konvensi codebase: route `me` di-group sebelum route `:participationId`).
+
+**Mobile pattern (rekomendasi BE):**
+- Initial load event detail → pakai `data.myParticipation` dari `GET /:idOrSlug` (1 query, efisien)
+- Refresh setelah mutation → pakai `GET /:idOrSlug/peserta/me` (cepat, tidak fetch ulang event)
+
+**Source of truth shift**: mobile harus pakai BE response sebagai authoritative, bukan local storage. Local storage tetap berguna untuk offline UX cache, tapi saat online selalu rekonsiliasi dengan BE.
+
+**File berubah**:
+- `apps/core-api/src/routes/admin/event.ts` — detail handler include `myParticipation`, new handler `GET /:idOrSlug/peserta/me`
+- `apps/core-api/src/openapi.ts` — register new path
+- `docs/mobile-api-guide.md` — section 5.2 (myParticipation field) + section 5.2.1 (standalone endpoint) + Gap Status table
+- `ecc-mobile-app/docs/backend-request-event-participation-status.md` — RESOLVED dengan Backend Response
+
+**Tidak ada breaking change**: `myParticipation` adalah field tambahan optional. Client lama yang tidak baca field tsb tetap jalan normal. Single round-trip lebih heavy 1 query Postgres (~ms) — acceptable.
+
+### Patch 2026-05-21h — Dev environment LAN access untuk mobile
+
+**Request mobile**: `docs/backend-request-dev-environment-access.md` (Priority HIGH — blocker QA real device).
+
+Mobile dev pakai Expo Go di HP fisik untuk QA fitur kamera/QR/Bluetooth. HP tidak bisa hit `http://localhost:4100` karena `localhost` di HP = HP itu sendiri, bukan Mac dev. Mobile sudah patch sisi-nya: auto-detect IP Mac dari Expo `hostUri`. Tapi BE perlu listen `0.0.0.0` supaya bisa di-reach via LAN IP.
+
+**Fix BE (3 perubahan)**:
+
+1. **`apps/core-api/src/index.ts`** — eksplisit `app.listen(PORT, HOST, ...)` dengan `HOST = process.env.HOST ?? '0.0.0.0'`. Sebelumnya implicit Node default (yang juga `0.0.0.0`, tapi tidak terlihat di code). Plus log enumerate LAN URLs via `os.networkInterfaces()` saat startup:
+
+   ```
+   🚀 ECC Core API listening on 0.0.0.0:4100 (all interfaces)
+   📚 API docs: http://localhost:4100/docs
+   📱 LAN access untuk HP / device fisik (Expo Go, dll):
+      → http://192.168.1.5:4100
+   ```
+
+2. **`apps/core-api/src/app.ts`** — CORS allowlist diperluas saat `NODE_ENV !== 'production'`:
+   - `http://localhost:<port>` (existing)
+   - `http://127.0.0.1:<port>`
+   - `http://192.168.x.x:<port>` (LAN class C)
+   - `http://10.x.x.x:<port>` (LAN class A)
+   - `http://172.16-31.x.x:<port>` (LAN class B / Docker / hotspot)
+   - `exp://` / `exps://` (Expo Go dev client)
+
+   Native mobile fetch tanpa Origin header tetap di-allow (logic existing).
+
+3. **Tidak ada migration / breaking change**. Production deployment tidak terimbas (K8s default sudah bind `0.0.0.0`, `CORS_ALLOWED_ORIGINS` env tetap strict).
+
+**Macos firewall — separate concern**. Patch BE tidak otomatis allow port di firewall. Setiap dev tim perlu setup sekali:
+
+```bash
+# Cek status
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+
+# Kalau enabled, allow Node binary
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add $(which node)
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp $(which node)
+```
+
+Atau matikan firewall di System Settings saat dev (kalau di WiFi trusted).
+
+**Dev workflow setelah patch**:
+
+1. `pnpm dev` di Mac → log tampilkan LAN URL
+2. HP & Mac di WiFi sama
+3. Expo Go scan QR → app auto-pakai IP Mac via `Constants.expoConfig.hostUri`
+4. App call `http://<MAC_LAN_IP>:4100/...` → BE accept via CORS regex
+
+**Override HOST**: bisa via env `HOST=192.168.1.5` kalau ada use case khusus (multi-NIC dev machine). Default `0.0.0.0` cocok 99% kasus.
+
+**File berubah**:
+- `apps/core-api/src/index.ts` — explicit HOST bind + LAN URL log
+- `apps/core-api/src/app.ts` — CORS regex list
+- `docs/backend-request-dev-environment-access.md` — RESOLVED + Backend Response
+
+### Patch 2026-05-21g — Self-cancel event participation
+
+**Request mobile**: `docs/backend-request-cancel-participation.md` (Priority Low-Medium).
+
+Mobile butuh user bisa batalkan registrasi event sendiri tanpa hubungi admin via WhatsApp. Sebelumnya cuma admin yang bisa cancel via `PATCH /:participationId { status: 'BATAL' }`.
+
+**Endpoint baru**: `DELETE /admin/event/:id/peserta/me`
+- Resolve current user dari JWT — mobile tidak perlu kirim `participationId` di path
+- Soft cancel: status → BATAL + `cancelledAt`, row tetap untuk audit
+- Idempotent untuk BATAL (return existing dengan `meta.alreadyCancelled: true`)
+- Reject 400 kalau status HADIR (sudah hadir, tidak bisa undo)
+- Reject 404 kalau user belum daftar
+
+**Behavior matrix**:
+
+| Status before | Response |
+|---|---|
+| (no row) | 404 |
+| DAFTAR / MENUNGGU_VERIFIKASI / BAYAR | 200, set BATAL |
+| HADIR | 400 |
+| BATAL | 200 idempotent |
+
+**Route ordering**: handler `/peserta/me` di-register SEBELUM route `:participationId` di `event.ts` — Express match in order, jadi `me` tidak di-treat sebagai UUID param.
+
+**Re-register flow**: setelah cancel, user bisa register ulang via `POST /admin/event/:id/peserta` — BE deteksi existing BATAL row dan reactivate ke DAFTAR (response 201, `meta.reactivated: true`). Logic sudah ada dari patch sebelumnya (Issue 1 fix di session ini).
+
+**Slot kuota**: otomatis available kembali karena quota guard di POST `/peserta` filter `status: { not: 'BATAL' }` (sudah ada sejak awal Phase 1).
+
+**Refund**: out of scope. Cancel hanya update status; kalau user sudah BAYAR, refund manual via admin WhatsApp.
+
+**Admin cancel** (untuk user lain): tetap pakai `PATCH /:participationId { status: 'BATAL' }`. Endpoint baru ini hanya untuk self-cancel mobile.
+
+**File berubah**:
+- `apps/core-api/src/routes/admin/event.ts` — handler baru
+- `apps/core-api/src/openapi.ts` — register path
+- `docs/mobile-api-guide.md` — section 5.6 Batalkan partisipasi sendiri + Gap Status table
+- `docs/backend-request-cancel-participation.md` — RESOLVED dengan Backend Response
+
+### Patch 2026-05-21f — Bug fix: upload bukti transfer 400 (field name + MIME strict)
+
+**Bug** (lapor 2026-05-21 dari mobile):
+
+```
+POST /admin/event/.../peserta/.../bukti → 400 Bad Request
+```
+
+**Root cause**: handler pakai `multer.single('foto')` — strict field name `foto` saja. Mobile dev pakai field name `bukti` (logical untuk endpoint `/bukti`), multer abaikan field tsb, `req.file` undefined → 400 "File bukti transfer wajib (field name: foto)". Plus, MIME filter cuma accept `jpeg/png/webp` — iOS HEIC ditolak.
+
+Pattern serupa ada di **semua endpoint upload** di codebase: event hero/qris/bukti, cabang rekening QRIS, news/renungan hero, profile foto, jemaat foto. Semua pakai `.single('foto')` + MIME strict.
+
+**Fix**: helper baru `apps/core-api/src/lib/image-upload.ts` dengan `flexImageUpload()`:
+
+1. **Field name agnostic** — pakai `multer.any()` lalu populate `req.file` dengan file pertama. Mobile bisa pakai `foto`/`bukti`/`file`/`image` — semua kerja.
+2. **MIME lebih luas** — tambah `image/heic`, `image/heif` (iOS Live Photo), `image/gif`, plus toleran `application/octet-stream` (Android camera). Matching case-insensitive.
+3. **Multer error translated** — `LIMIT_FILE_SIZE` → 400 dengan pesan size limit. `LIMIT_FILE_COUNT` → 400. File filter rejection → 400 dengan MIME yang di-reject + accepted list.
+4. **Error message friendly** — sebut field name yang accepted di error: "...field name 'foto' (atau 'bukti'/'file'/'image')".
+
+**Apply di**:
+- `apps/core-api/src/routes/admin/event.ts` — hero, qris, bukti
+- `apps/core-api/src/routes/admin/me.ts` — `/foto` (drop `PHOTO_UPLOAD` lokal, drop import multer)
+- `apps/core-api/src/routes/admin/cabang.ts` — rekening qris (drop `IMG_UPLOAD` lokal, drop import multer)
+- `apps/core-api/src/routes/admin/_konten-factory.ts` — hero news/renungan
+- `apps/core-api/src/routes/upload.ts` — legacy jemaat foto + user me foto (drop `upload` lokal, drop import multer)
+
+Total: 6 file backend + 1 file helper baru.
+
+**Docs**: mobile-api-guide section 11 (Practical Patterns) tambah **"File upload (multipart) — universal pattern"** lengkap dengan:
+- Tabel MIME types yang diterima
+- Tabel endpoint upload yang ada
+- Contoh React Native FormData
+- Tabel common errors + fix
+
+**Catatan teknis**: helper pakai `multer.any()` (accept all fields) + filter di handler dengan `req.files[0]`. Karena populate `req.file` untuk backward-compat, handler existing tidak perlu di-refactor besar — cuma ganti middleware-nya saja.
+
+**Defensive note**: kalau mobile salah set `Content-Type` (mis. `application/json` instead of let RN auto-set with boundary), multer tidak akan parse body → `req.file` undefined → 400 friendly. Bukan 500 silent.
+
+### Patch 2026-05-21e — Bug fix: detail by slug crash 500 (UUID type column)
+
+**Bug** (lapor 2026-05-21 dari mobile):
+
+```
+GET /admin/event/retreat-pemuda-2026 → 500 Internal Server Error
+```
+
+**Root cause**: handler detail event pakai `where: { OR: [{ id: key }, { slug: key }] }`. Saat `key` adalah slug (mis. `"retreat-pemuda-2026"`), Prisma kirim predicate ke Postgres yang coba match string ke column `id` bertipe UUID → Postgres throw `invalid input syntax for type uuid: "retreat-pemuda-2026"` → Prisma surface jadi `P2023 Inconsistent column data`. Error handler tidak handle P2023, fallback ke generic 500.
+
+Pattern bug yang sama ditemukan di:
+- `apps/core-api/src/routes/admin/event.ts` — `GET /admin/event/:idOrSlug`
+- `apps/core-api/src/routes/admin/_konten-factory.ts` — `GET /admin/news/:idOrSlug` + `GET /admin/renungan/:idOrSlug`
+
+**Fix**: helper baru `apps/core-api/src/lib/id-or-slug.ts` dengan fungsi `idOrSlugWhere(key)`:
+- Kalau `key` valid UUID format → return `{ OR: [{ id: key }, { slug: key }] }` (Postgres aman karena id memang UUID)
+- Kalau bukan UUID → return `{ slug: key }` saja (skip id predicate untuk avoid Postgres error)
+
+Pakai di event.ts + _konten-factory.ts (replace `OR: [{id}, {slug}]` dengan `...idOrSlugWhere(key)`).
+
+**Defense in depth**: error handler `middleware/error-handler.ts` sekarang juga handle P2023 → translate ke 400 `INVALID_INPUT_FORMAT`, supaya kalau ada code path lain miss helper, mobile dapat error message informatif daripada 500 generic.
+
+**File yang berubah**:
+- `apps/core-api/src/lib/id-or-slug.ts` (new)
+- `apps/core-api/src/routes/admin/event.ts` — pakai helper
+- `apps/core-api/src/routes/admin/_konten-factory.ts` — pakai helper
+- `apps/core-api/src/middleware/error-handler.ts` — handle P2023
+
+### Patch 2026-05-21d — Optional `tanggalLahir` & `alamat` di `/auth/register`
+
+**Request mobile**: `docs/backend-request-optional-signup-fields.md` (Priority Low).
+
+Tim mobile simplify signup form ke 3 field saja (nama + jenis kelamin + cabang) untuk minimize friction onboarding. `tanggalLahir` & `alamat` user lengkapi nanti via `PATCH /admin/me`.
+
+**Investigasi**: kolom `Jemaat.tanggalLahir` & `Jemaat.alamat` di schema **sudah nullable** sejak awal. Tidak perlu migration. Yang perlu fix: Zod schema `registerJemaatSchema` paksa `tanggalLahir` required walau DB optional → mobile workaround kirim placeholder `"2000-01-01"`.
+
+**Fix**:
+1. `packages/shared-types/src/schemas/auth.ts` — `tanggalLahir` di `registerJemaatSchema` jadi `.optional()`. `alamat` sudah optional.
+2. `apps/core-api/src/routes/auth.ts` — register handler guard `new Date(input.tanggalLahir)` dengan ternary, pakai `?? null` untuk alamat. Kalau undefined → simpan `null`.
+
+**Spec final** (sudah update di mobile-api-guide section 12.1 Step 3):
+
+| Field | Required |
+|---|---|
+| noHp, namaLengkap, jenisKelamin, cabangId | ✅ |
+| tanggalLahir, alamat, homecellId, fotoBase64 | ⚪ optional |
+
+**Admin portal tidak ter-impact** — `POST /admin/jemaat` pakai `createJemaatSchema` yang terpisah dengan validation berbeda. Admin yang input via portal tetap bisa fill semua field.
+
+Request doc di-tandai RESOLVED dengan section "Backend Response" lengkap. Action item ke mobile: hapus placeholder values di mutationFn + update Profile screen untuk handle null value dengan "Belum diisi" placeholder + tombol edit.
+
+### Patch 2026-05-21c — Bug fix `/auth/otp/verify` untuk ENROLLMENT
+
+**Bug**: saat mobile sign-up, masukin OTP yang benar tetap dapat error "Data tidak ditemukan" (P2025).
+
+**Root cause**: `/auth/otp/verify` setelah verify hash valid, selalu panggil `issueAuthResponse(noHp, ...)` yang internal-nya `prisma.jemaat.findUniqueOrThrow({ where: { noHp } })`. Untuk `purpose=ENROLLMENT` jemaat memang belum ada (baru akan di-create di `/auth/register`), jadi `findUniqueOrThrow` throw P2025 → error handler translate ke "Data tidak ditemukan".
+
+**Fix**: branching di `/auth/otp/verify` berdasarkan `purpose`:
+- `LOGIN` / `RESET_FACE` → langsung `issueAuthResponse` (jemaat harus ada, behavior lama).
+- `ENROLLMENT` → response cuma marker, **tidak** lookup jemaat:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "otpVerified": true,
+      "purpose": "ENROLLMENT",
+      "noHp": "+62...",
+      "pendingRegistration": true,
+      "nextStep": "POST /auth/register",
+      "validForSeconds": 900
+    }
+  }
+  ```
+
+Mobile flow sign-up jadi:
+1. `POST /auth/otp/request { noHp, purpose: 'ENROLLMENT' }` → OTP terkirim WhatsApp
+2. `POST /auth/otp/verify { noHp, kode, purpose: 'ENROLLMENT' }` → response `pendingRegistration: true`
+3. `POST /auth/register { noHp, namaLengkap, ... }` → akun aktif + JWT (issued via `issueAuthResponse`)
+
+Window 15 menit antara step 2 dan step 3 (di-enforce di `/auth/register` via `usedAt > Date.now() - 15min` check, sudah ada sejak implementation awal).
+
+### Patch 2026-05-21b — Public cabang catalog
+
+Setelah Phase 1 deploy, tim mobile submit request tambahan via `docs/backend-request-cabang-list.md`: butuh endpoint cabang list **public** (tanpa JWT/API key) untuk picker di signup screen. Workaround sebelumnya = hardcoded di `app/src/constants/branches.ts`, tidak scalable.
+
+**Endpoint baru:** `GET /auth/cabang?isActive=true|false|all`
+- Public (no auth), rate-limited 30/menit/IP via `cabangListLimiter` baru di `rate-limit.ts`
+- Default filter `isActive=true`; bisa di-override dengan `?isActive=false` atau `?isActive=all`
+- Field di-whitelist: `id, nama, kode, alamat, latitude, longitude, isActive`
+- **TIDAK** expose `kontak` (info admin), `sinodeId` internal, atau jumlah jemaat
+
+**Catatan field `kota`:** mobile team request `kota` terpisah, tapi schema saat ini tidak punya kolom itu — konvensi naming "ECC <Kota>" sudah cukup untuk display, atau parse dari `alamat`. Kalau ada kebutuhan strict (mis. group by kota), bisa tambah kolom di iterasi berikutnya.
+
+**Validation cabangId di `/auth/register`** sudah cek `isActive` — kalau mobile pakai cache stale dan kirim cabangId yang sekarang nonaktif, register akan ditolak 400 `Cabang tidak valid atau nonaktif`.
+
+**Caching pattern (recommended ke mobile)**: cache 24 jam di local store (mis. `expo-secure-store` key `ecc.branches`), refresh saat splash launch atau pull-to-refresh.
+
+Request doc `docs/backend-request-cabang-list.md` di-tandai RESOLVED dengan implementation summary di bawah.
 
 ---
 

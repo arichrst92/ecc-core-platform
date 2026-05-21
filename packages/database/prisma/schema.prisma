@@ -38,6 +38,7 @@ model Sinode {
   cabangGereja CabangGereja[]
   apiKeys      SinodeApiKey[]
   konten       Konten[]
+  events       Event[]
 
   @@map("sinode")
 }
@@ -49,26 +50,72 @@ model CabangGereja {
   kode      String   @db.VarChar(20)
   alamat    String?  @db.Text
   kontak    String?  @db.VarChar(100)
+  // Koordinat geografis untuk plot di Globe (apps/portal/.../dashboard).
+  // Nullable supaya backward-compat dgn cabang lama. Nilai mengikuti
+  // konvensi WGS84 (latitude -90..90, longitude -180..180).
+  latitude  Float?
+  longitude Float?
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sinode         Sinode         @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
+  sinode         Sinode           @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
   jemaat         Jemaat[]
   ibadah         Ibadah[]
   konten         Konten[]
   homecellAreas  HomecellArea[]
+  events         Event[]
+  rekening       CabangRekening[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
   @@map("cabang_gereja")
 }
 
+// ============================================================
+// Rekening bank per cabang (multi-rekening).
+// ============================================================
+// Setiap cabang bisa punya banyak rekening dengan purpose berbeda — mis.
+// "Persembahan Umum", "Pembangunan Gedung", "Diakonia", "Misi". Tiap
+// rekening bisa punya QR code (QRIS) yang di-upload terpisah.
+//
+// QRIS image disimpan di /uploads/content/cabang/qris/{rekeningId}.webp
+// (lihat apps/core-api/src/lib/storage.ts).
+// ============================================================
+model CabangRekening {
+  id           String   @id @default(uuid()) @db.Uuid
+  cabangId     String   @map("cabang_id") @db.Uuid
+  // Purpose / peruntukan rekening — bebas, mis. "Persembahan Umum",
+  // "Pembangunan", "Diakonia", "Misi". Untuk konsistensi UI, FE
+  // menyarankan beberapa preset namun text bebas.
+  purpose      String   @db.VarChar(255)
+  bankNama     String   @map("bank_nama") @db.VarChar(100)
+  bankNomor    String   @map("bank_nomor") @db.VarChar(100)
+  bankAtasNama String   @map("bank_atas_nama") @db.VarChar(255)
+  qrisImageUrl String?  @map("qris_image_url") @db.Text
+  catatan      String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  cabang CabangGereja @relation(fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@index([cabangId])
+  @@map("cabang_rekening")
+}
+
 model Jemaat {
   id              String    @id @default(uuid()) @db.Uuid
   cabangId        String    @map("cabang_id") @db.Uuid
   namaLengkap     String    @map("nama_lengkap") @db.VarChar(255)
+  // Kode pendek unik (8 char alphanumeric uppercase) untuk QR card.
+  // Dipakai untuk scan check-in event/ibadah. Auto-generated saat create.
+  // Nullable supaya backward-compat dgn row lama; backfill dilakukan via
+  // migration SQL menggunakan random function Postgres.
+  kode            String?   @unique @db.VarChar(20)
   email           String?   @unique @db.VarChar(255)
+  // noHp opsional — anak balita / dependent yang di-register via parent
+  // tidak punya nomor HP sendiri, account hanya bisa diakses via guardian.
   noHp            String?   @unique @map("no_hp") @db.VarChar(20)
   tanggalLahir    DateTime? @map("tanggal_lahir") @db.Date
   jenisKelamin    JenisKelamin? @map("jenis_kelamin")
@@ -77,6 +124,13 @@ model Jemaat {
   // Foto profil resmi jemaat (untuk kartu jemaat, direktori, dll).
   // Relative path di VPS filesystem, mis. "/uploads/profiles/jemaat/{uuid}.webp"
   fotoUrl         String?   @map("foto_url") @db.Text
+  // Untuk jemaat tanpa noHp (anak balita / dependent). Guardian = jemaat
+  // yang manage account ini (biasanya ortu). Mobile app: kalau guardian
+  // login, dia bisa lihat/manage profil dependent ini.
+  primaryGuardianId   String? @map("primary_guardian_id") @db.Uuid
+  // Audit: siapa yang trigger self-onboarding / register-new untuk jemaat ini.
+  // NULL untuk jemaat lama yang dibuat admin via portal.
+  registeredViaJemaatId String? @map("registered_via_jemaat_id") @db.Uuid
   isActive        Boolean   @default(true) @map("is_active")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -92,10 +146,26 @@ model Jemaat {
   areaPic                 HomecellArea[]            @relation("AreaPic")
   homecellPic             Homecell[]                @relation("HomecellPic")
   homecellMembership      HomecellMember[]          @relation("HomecellMembership")
+  eventPartisipasi        EventParticipation[]      @relation("EventPartisipasi")
+  eventApprovals          EventParticipation[]      @relation("EventApprover")
+  eventVolunteer          EventPelayananPetugas[]   @relation("EventVolunteer")
+  eventDonationApprovals  EventDonation[]           @relation("EventDonationApprover")
+  // Family relations (untuk mobile app)
+  familyAsA               FamilyRelation[]          @relation("FamilyA")
+  familyAsB               FamilyRelation[]          @relation("FamilyB")
+  primaryGuardian         Jemaat?                   @relation("Guardian", fields: [primaryGuardianId], references: [id], onDelete: SetNull)
+  guardianOf              Jemaat[]                  @relation("Guardian")
+  registeredVia           Jemaat?                   @relation("RegisteredVia", fields: [registeredViaJemaatId], references: [id], onDelete: SetNull)
+  registeredBy            Jemaat[]                  @relation("RegisteredVia")
+  // Branch change request (mobile)
+  branchChangeRequests    BranchChangeRequest[]     @relation("BranchChangeRequester")
+  branchChangeReviews     BranchChangeRequest[]     @relation("BranchChangeReviewer")
 
   @@index([cabangId])
   @@index([noHp])
   @@index([namaLengkap])
+  @@index([kode])
+  @@index([primaryGuardianId])
   @@map("jemaat")
 }
 
@@ -114,12 +184,16 @@ model Role {
   id        String   @id @default(uuid()) @db.Uuid
   nama      String   @unique @db.VarChar(100)
   deskripsi String?  @db.Text
+  // Gate login portal di level Role. Kalau Jemaat punya minimal 1 role aktif
+  // dengan canAccessPortal=true (atau SubRole override), boleh login portal.
+  canAccessPortal Boolean @default(false) @map("can_access_portal")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  subRoles    SubRole[]
-  jemaatRoles JemaatRole[]
+  subRoles      SubRole[]
+  jemaatRoles   JemaatRole[]
+  menuAccesses  RoleMenuAccess[]
 
   @@map("role")
 }
@@ -129,13 +203,16 @@ model SubRole {
   roleId    String   @map("role_id") @db.Uuid
   nama      String   @db.VarChar(100)
   deskripsi String?  @db.Text
+  // Override per SubRole. NULL = inherit dari Role. true/false = override.
+  canAccessPortal Boolean? @map("can_access_portal")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  role        Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  statuses    SubRoleStatus[]
-  jemaatRoles JemaatRole[]
+  role          Role                 @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  statuses      SubRoleStatus[]
+  jemaatRoles   JemaatRole[]
+  menuAccesses  SubRoleMenuAccess[]
 
   @@unique([roleId, nama])
   @@index([roleId])
@@ -219,10 +296,11 @@ model Ibadah {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  cabang           CabangGereja      @relation(fields: [cabangId], references: [id], onDelete: Restrict)
-  kategoriIbadah   KategoriIbadah    @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
-  ibadahPelayanan  IbadahPelayanan[]
-  reservasi        Reservasi[]
+  cabang             CabangGereja             @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  kategoriIbadah     KategoriIbadah           @relation(fields: [kategoriIbadahId], references: [id], onDelete: Restrict)
+  ibadahPelayanan    IbadahPelayanan[]
+  reservasi          Reservasi[]
+  occurrenceStatuses IbadahOccurrenceStatus[]
 
   @@index([cabangId])
   @@index([kategoriIbadahId])
@@ -303,15 +381,23 @@ model User {
   fotoUrl         String?   @map("foto_url") @db.Text
   faceDescriptor  Json?     @map("face_descriptor")    // 128-dim Float32 vector dari face-api.js
   faceEnrolledAt  DateTime? @map("face_enrolled_at")
+  // Versi model ML yang dipakai saat enroll — untuk future migration kalau
+  // mobile ganti model (mis. dari face-api.js v0.x ke MobileFaceNet).
+  // Default "facenet-v1" untuk existing data. Login flow tolak kalau mismatch.
+  faceModelVersion String?  @map("face_model_version") @db.VarChar(32)
+  // Metadata audit enrollment: platform, deviceModel, appVersion, consentVersion.
+  // Disimpan di JSON untuk fleksibel — tidak di-query, audit only.
+  faceMetadata    Json?     @map("face_metadata")
   lastLoginAt     DateTime? @map("last_login_at")
   isActive        Boolean   @default(true) @map("is_active")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  jemaat        Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  jemaat         Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
   authoredKonten Konten[]
+  authoredEvents Event[]        @relation("EventAuthor")
 
   @@map("user")
 }
@@ -362,18 +448,22 @@ model RefreshToken {
 // Scoped per sinode supaya satu aplikasi hanya akses data sinode-nya.
 model SinodeApiKey {
   id          String    @id @default(uuid()) @db.Uuid
-  sinodeId    String    @map("sinode_id") @db.Uuid
-  nama        String    @db.VarChar(255)            // deskripsi konsumen, mis. "Mobile App Sinode A"
+  // Nullable: null = global API key (akses lintas sinode).
+  // Diisi → key scoped ke 1 sinode (legacy). Default UI sekarang: global.
+  sinodeId    String?   @map("sinode_id") @db.Uuid
+  nama        String    @db.VarChar(255)            // deskripsi konsumen
   keyHash     String    @unique @map("key_hash") @db.VarChar(255)
-  keyPrefix   String    @map("key_prefix") @db.VarChar(20)   // 8-12 char prefix untuk display
-  scopes      String[]  @default([])                // ["read:jemaat","read:ibadah",...]
+  keyPrefix   String    @map("key_prefix") @db.VarChar(20)   // prefix untuk display + lookup
+  // Scopes tidak lagi dipaksa di UI — empty array = full access.
+  // Tetap di schema untuk backward-compat dan fleksibilitas future.
+  scopes      String[]  @default([])
   isActive    Boolean   @default(true) @map("is_active")
   lastUsedAt  DateTime? @map("last_used_at")
   expiresAt   DateTime? @map("expires_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  sinode Sinode @relation(fields: [sinodeId], references: [id], onDelete: Cascade)
+  sinode Sinode? @relation(fields: [sinodeId], references: [id], onDelete: Cascade)
 
   @@index([sinodeId])
   @@index([keyPrefix])
@@ -451,6 +541,7 @@ model Pelayanan {
   roles            PelayananRole[]
   jemaatPelayanan  JemaatPelayanan[]
   ibadahPelayanan  IbadahPelayanan[]
+  eventPelayanan   EventPelayanan[]
 
   @@map("pelayanan")
 }
@@ -470,6 +561,7 @@ model PelayananRole {
   pelayanan               Pelayanan                 @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
   jemaatPelayanan         JemaatPelayanan[]
   ibadahPelayananPetugas  IbadahPelayananPetugas[]
+  eventPelayananPetugas   EventPelayananPetugas[]
 
   @@unique([pelayananId, nama])
   @@index([pelayananId])
@@ -727,24 +819,463 @@ model HomecellMember {
 //     per ibadah-pelayanan combo (kalau mau dual role, buat 2 link pelayanan).
 //   - Validasi backend: pelayananRoleId harus belong ke pelayanan dari
 //     ibadahPelayanan (Multimedia role di Multimedia, bukan di Worship).
-//   - Default tidak ada history per-date (assignment persistent untuk semua
-//     occurrence ibadah recurring). Untuk schedule rotation per-date, butuh
-//     extension dengan tabel attendance/schedule terpisah.
+//   - Per-tanggal override didukung lewat kolom `tanggalIbadah`:
+//       NULL  → petugas default, berlaku untuk semua occurrence yang TIDAK
+//               punya override pada tanggal tersebut.
+//       isi   → override khusus untuk tanggal itu saja. Saat resolve petugas
+//               untuk tanggal X, kalau ada row override → pakai SEMUA override
+//               (snapshot per tanggal); kalau tidak ada satu pun override
+//               untuk tanggal X → fallback ke set default (NULL).
+//   - Override bersifat snapshot: kalau Pelayanan ditambah/dihapus di link
+//     ibadah-pelayanan, override yang sudah ada TIDAK ikut berubah.
 model IbadahPelayananPetugas {
-  id                String   @id @default(uuid()) @db.Uuid
-  ibadahPelayananId String   @map("ibadah_pelayanan_id") @db.Uuid
-  jemaatId          String   @map("jemaat_id") @db.Uuid
-  pelayananRoleId   String   @map("pelayanan_role_id") @db.Uuid
-  catatan           String?  @db.Text
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  ibadahPelayananId String    @map("ibadah_pelayanan_id") @db.Uuid
+  jemaatId          String    @map("jemaat_id") @db.Uuid
+  pelayananRoleId   String    @map("pelayanan_role_id") @db.Uuid
+  // NULL = default tiap minggu; isi = override khusus tanggal tertentu.
+  tanggalIbadah     DateTime? @map("tanggal_ibadah") @db.Date
+  // Volunteer ditandai canScanAttendance=true berwenang scan QR kode jemaat
+  // di endpoint POST /admin/ibadah/:id/checkin. Berlaku permissive: kalau
+  // jemaat ada di SETIDAKNYA satu row petugas link tsb dgn flag=true,
+  // dia boleh scan (tidak peduli tanggalIbadah).
+  canScanAttendance Boolean   @default(false) @map("can_scan_attendance")
+  catatan           String?   @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   ibadahPelayanan IbadahPelayanan @relation(fields: [ibadahPelayananId], references: [id], onDelete: Cascade)
   jemaat          Jemaat          @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   pelayananRole   PelayananRole   @relation(fields: [pelayananRoleId], references: [id], onDelete: Restrict)
 
-  @@unique([ibadahPelayananId, jemaatId])
+  // Komposit unique: 1 jemaat hanya bisa muncul sekali per (link, tanggal).
+  // Karena Postgres treat NULL sebagai berbeda di UNIQUE, kolom default
+  // (tanggalIbadah=NULL) juga diatur oleh unique partial index (lihat
+  // migration: idx unique pada (ibadah_pelayanan_id, jemaat_id) WHERE
+  // tanggal_ibadah IS NULL).
+  @@unique([ibadahPelayananId, jemaatId, tanggalIbadah], map: "ibadah_pelayanan_petugas_link_jemaat_tanggal_key")
   @@index([ibadahPelayananId])
+  @@index([ibadahPelayananId, tanggalIbadah], map: "ibadah_pelayanan_petugas_link_tanggal_idx")
   @@index([jemaatId])
+  @@index([canScanAttendance])
   @@map("ibadah_pelayanan_petugas")
+}
+
+// ============================================================
+// Occurrence override — tandai tanggal tertentu sebagai DITIADAKAN.
+// ============================================================
+// Tabel ini sengaja sparse: hanya buat row kalau ada perubahan dari default.
+// Saat ini hanya support status CANCELLED. Future: bisa tambah MOVED untuk
+// reschedule occurrence ke tanggal lain.
+//
+// Side effect saat status CANCELLED dibuat:
+//   - Calendar endpoint skip occurrence pada tanggal tersebut.
+//   - Reservasi RESERVE/JOIN pada (ibadahId, tanggal) auto-set ke CANCEL,
+//     dengan `catatan` di-isi alasan dari occurrence ini.
+// ============================================================
+model IbadahOccurrenceStatus {
+  id            String           @id @default(uuid()) @db.Uuid
+  ibadahId      String           @map("ibadah_id") @db.Uuid
+  tanggalIbadah DateTime         @map("tanggal_ibadah") @db.Date
+  status        OccurrenceStatus
+  catatan       String?          @db.Text
+  // Audit ringan
+  createdBy     String?          @map("created_by") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  ibadah Ibadah @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
+
+  @@unique([ibadahId, tanggalIbadah])
+  @@index([ibadahId])
+  @@index([tanggalIbadah])
+  @@map("ibadah_occurrence_status")
+}
+
+enum OccurrenceStatus {
+  CANCELLED
+
+  @@map("occurrence_status")
+}
+
+// ============================================================
+// 11. MOVEMENT — Event
+// ============================================================
+// Event = aktivitas berbatas waktu (Penggalangan Dana, Puasa 21 Hari, Retreat,
+// KKR khusus, dll.). Berbeda dengan Ibadah:
+//   - Punya rentang tanggal (mulai → selesai), bukan recurring schedule.
+//   - Teaser hero image / link video.
+//   - Bisa berbayar (admin-tetap atau bebas) atau gratis.
+//   - Jemaat dapat ber-partisipasi; pembayaran dicatat manual (transfer +
+//     upload bukti, di-approve admin).
+//
+// Targeting audience pakai pola yang sama dengan Konten:
+//   - sinodeId=null & cabangId=null → GLOBAL (semua sinode + cabang)
+//   - sinodeId=X    & cabangId=null → SINODE-WIDE
+//   - sinodeId=X    & cabangId=Y    → CABANG-SPECIFIC
+// ============================================================
+model Event {
+  id            String         @id @default(uuid()) @db.Uuid
+  judul         String         @db.VarChar(255)
+  slug          String         @unique @db.VarChar(280)
+  ringkasan     String?        @db.Text                      // short preview
+  deskripsi     String         @db.Text                      // body markdown
+  heroImageUrl  String?        @map("hero_image_url") @db.Text
+  videoUrl      String?        @map("video_url") @db.Text    // YouTube/Vimeo embed url (free-form)
+
+  // Rentang waktu event berlangsung
+  tanggalMulai   DateTime  @map("tanggal_mulai")
+  tanggalSelesai DateTime? @map("tanggal_selesai")
+  lokasi         String?   @db.Text
+
+  // Audience scope (pola Konten)
+  sinodeId String? @map("sinode_id") @db.Uuid
+  cabangId String? @map("cabang_id") @db.Uuid
+
+  // Pembayaran
+  tipeBayar     EventTipeBayar @default(GRATIS) @map("tipe_bayar")
+  // Nominal tetap: jumlah wajib bayar (kalau NOMINAL_TETAP).
+  // Nominal bebas: NULL = jemaat tentukan apapun; isi = minimum yang harus dibayar.
+  nominal       Decimal?       @db.Decimal(15, 2)
+  // Info bank/QRIS — disimpan per event supaya bisa beda akun per panitia.
+  qrisImageUrl  String?        @map("qris_image_url") @db.Text
+  bankNama      String?        @map("bank_nama") @db.VarChar(100)
+  bankNomor     String?        @map("bank_nomor") @db.VarChar(100)
+  bankAtasNama  String?        @map("bank_atas_nama") @db.VarChar(255)
+
+  // Quota & tags
+  quotaPeserta  Int?     @map("quota_peserta")
+  tags          String[] @default([])
+
+  // Apakah event butuh absensi pada hari H. Kalau true → admin bisa scan QR
+  // kode jemaat untuk set partisipasi ke HADIR. Kalau false → cukup partisipasi
+  // (DAFTAR / BAYAR / BATAL), tidak ada tracking kehadiran.
+  butuhKehadiran Boolean @default(false) @map("butuh_kehadiran")
+
+  // Publish state
+  isPublished Boolean   @default(false) @map("is_published")
+  publishedAt DateTime? @map("published_at")
+  viewCount   Int       @default(0) @map("view_count")
+
+  // Audit
+  authorId  String   @map("author_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author       User                 @relation("EventAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  sinode       Sinode?              @relation(fields: [sinodeId], references: [id], onDelete: SetNull)
+  cabang       CabangGereja?        @relation(fields: [cabangId], references: [id], onDelete: SetNull)
+  partisipasi  EventParticipation[]
+  pelayanan    EventPelayanan[]
+
+  @@index([cabangId])
+  @@index([sinodeId])
+  @@index([tanggalMulai])
+  @@index([isPublished, publishedAt])
+  @@map("event")
+}
+
+enum EventTipeBayar {
+  GRATIS          // tidak ada pembayaran
+  NOMINAL_TETAP   // admin tentukan nominal (wajib)
+  NOMINAL_BEBAS   // jemaat tentukan; `nominal` opsional = minimum
+
+  @@map("event_tipe_bayar")
+}
+
+// ============================================================
+// EventParticipation — registrasi jemaat ke 1 event
+// ============================================================
+// Workflow:
+//   1. Jemaat / admin daftar → status DAFTAR (free atau berbayar).
+//   2. Untuk berbayar: jemaat upload bukti transfer → status MENUNGGU_VERIFIKASI.
+//   3. Admin verifikasi → status BAYAR (set approvedBy, approvedAt).
+//   4. Saat event berlangsung: admin mark HADIR.
+//   5. Jemaat / admin batalkan: status BATAL (cancelledAt).
+//
+// catatan: untuk event gratis, lompat dari DAFTAR langsung ke HADIR.
+// ============================================================
+model EventParticipation {
+  id           String @id @default(uuid()) @db.Uuid
+  eventId      String @map("event_id") @db.Uuid
+  jemaatId     String @map("jemaat_id") @db.Uuid
+
+  status         EventParticipationStatus @default(DAFTAR)
+  // ⚠ DEPRECATED 2026-05-21l — gunakan tabel EventDonation untuk multi-donation
+  // (request mobile fundraising support). Field-field di bawah tetap ada untuk
+  // backward-compat dengan flow registration paid event single-payment yang lama.
+  // Untuk fundraising / cicilan / top-up, gunakan endpoint /donations.
+  nominalBayar   Decimal?                 @map("nominal_bayar") @db.Decimal(15, 2)
+  buktiTransferUrl String?                @map("bukti_transfer_url") @db.Text
+  // Field bebas untuk pertanyaan custom event (ukuran kaos, makanan, dst.)
+  catatan        String?                  @db.Text
+
+  // Lifecycle timestamps
+  registeredAt DateTime  @default(now()) @map("registered_at")
+  paidAt       DateTime? @map("paid_at")
+  attendedAt   DateTime? @map("attended_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+
+  // Approval audit (deprecated — pakai EventDonation.approvedBy)
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  jemaat    Jemaat          @relation("EventPartisipasi", fields: [jemaatId], references: [id], onDelete: Cascade)
+  approver  Jemaat?         @relation("EventApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  donations EventDonation[]
+
+  @@unique([eventId, jemaatId])
+  @@index([eventId])
+  @@index([jemaatId])
+  @@index([status])
+  @@map("event_participation")
+}
+
+enum EventParticipationStatus {
+  DAFTAR              // baru daftar, belum bayar (atau gratis pending)
+  // MENUNGGU_VERIFIKASI dan BAYAR DEPRECATED — sekarang status payment di-track
+  // di tabel EventDonation. EventParticipation cuma tracking commitment +
+  // kehadiran (DAFTAR → HADIR / BATAL). Tetap di enum untuk backward-compat
+  // (existing rows + legacy endpoint).
+  MENUNGGU_VERIFIKASI
+  BAYAR
+  HADIR               // hadir di event
+  BATAL
+
+  @@map("event_participation_status")
+}
+
+// ============================================================
+// 14. EVENT DONATION — multi-payment per participation
+// ============================================================
+// Patch 2026-05-21l (per request mobile fundraising):
+// Sebelumnya EventParticipation 1-to-1 (1 jemaat = 1 nominal bayar per event).
+// Untuk event NOMINAL_BEBAS (fundraising / cicilan / top-up persembahan),
+// user butuh multiple giving entries per event. EventDonation = sub-table
+// 1-to-many dari EventParticipation untuk track setiap giving secara terpisah.
+//
+// Pola:
+//   - 1 EventParticipation = "saya terdaftar/akan hadir" (registration commitment)
+//   - n EventDonation = "saya memberi <nominal> ke event ini" (giving record)
+//
+// Untuk event NOMINAL_TETAP / GRATIS biasanya cukup 1 donation per
+// participation (atau 0 untuk gratis). Untuk NOMINAL_BEBAS bisa banyak.
+//
+// Source of truth status payment ada di donasi-donasi. EventParticipation
+// field `nominalBayar/buktiTransferUrl` tetap untuk backward-compat tapi
+// new code harus pakai aggregate dari `donations[]`.
+// ============================================================
+model EventDonation {
+  id              String   @id @default(uuid()) @db.Uuid
+  participationId String   @map("participation_id") @db.Uuid
+  nominalBayar    Decimal  @map("nominal_bayar") @db.Decimal(15, 2)
+  buktiTransferUrl String? @map("bukti_transfer_url") @db.Text
+  status          EventDonationStatus @default(MENUNGGU_VERIFIKASI)
+  catatan         String?  @db.Text
+  paidAt          DateTime? @map("paid_at")
+  // Approval audit
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  participation EventParticipation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+  approver      Jemaat?            @relation("EventDonationApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([participationId])
+  @@index([status])
+  @@index([paidAt])
+  @@map("event_donation")
+}
+
+enum EventDonationStatus {
+  MENUNGGU_VERIFIKASI  // bukti transfer ter-upload (atau belum), menunggu admin verify
+  BAYAR                // admin approved — payment confirmed
+  BATAL                // jemaat / admin cancel donation ini
+
+  @@map("event_donation_status")
+}
+
+// ============================================================
+// Event ministry (Pelayanan) + volunteer + authorized scanners.
+// ============================================================
+// Pattern mirror IbadahPelayanan + IbadahPelayananPetugas, tapi per-event
+// (event tidak recurring) plus field `canScanAttendance` untuk menandai
+// volunteer yang berwenang scan QR check-in di hari H.
+//
+// Hanya relevan saat `event.butuhKehadiran=true`. Untuk event tanpa absensi,
+// section ministry/volunteer tidak ditampilkan / tidak wajib diisi.
+// ============================================================
+model EventPelayanan {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @map("event_id") @db.Uuid
+  pelayananId String   @map("pelayanan_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event     Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pelayanan Pelayanan               @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  petugas   EventPelayananPetugas[]
+
+  @@unique([eventId, pelayananId])
+  @@index([eventId])
+  @@index([pelayananId])
+  @@map("event_pelayanan")
+}
+
+// ============================================================
+// RBAC — Menu Access per Role / SubRole.
+// ============================================================
+// menuKey = string identifier (lihat shared-types/menu-catalog.ts), bukan FK.
+// Per row tracking 3 level akses: canRead / canWrite / canDelete.
+//
+// Resolve algorithm untuk Jemaat dengan banyak JemaatRole:
+//   1. Untuk setiap JemaatRole aktif, ambil (role, subRole).
+//   2. Cek SubRoleMenuAccess(subRoleId, menuKey) — kalau ada, pakai itu.
+//   3. Else fallback ke RoleMenuAccess(roleId, menuKey).
+//   4. Union semua akses dari semua role user (allow kalau ANY grant).
+// ============================================================
+model RoleMenuAccess {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  menuKey   String   @map("menu_key") @db.VarChar(50)
+  canRead   Boolean  @default(true) @map("can_read")
+  canWrite  Boolean  @default(false) @map("can_write")
+  canDelete Boolean  @default(false) @map("can_delete")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, menuKey])
+  @@index([roleId])
+  @@map("role_menu_access")
+}
+
+model SubRoleMenuAccess {
+  id        String   @id @default(uuid()) @db.Uuid
+  subRoleId String   @map("sub_role_id") @db.Uuid
+  menuKey   String   @map("menu_key") @db.VarChar(50)
+  canRead   Boolean  @default(true) @map("can_read")
+  canWrite  Boolean  @default(false) @map("can_write")
+  canDelete Boolean  @default(false) @map("can_delete")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subRole SubRole @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([subRoleId, menuKey])
+  @@index([subRoleId])
+  @@map("sub_role_menu_access")
+}
+
+model EventPelayananPetugas {
+  id                String   @id @default(uuid()) @db.Uuid
+  eventPelayananId  String   @map("event_pelayanan_id") @db.Uuid
+  jemaatId          String   @map("jemaat_id") @db.Uuid
+  pelayananRoleId   String   @map("pelayanan_role_id") @db.Uuid
+  // Volunteer yang ditandai canScanAttendance=true berhak akses endpoint
+  // POST /admin/event/:id/checkin untuk scan QR jemaat.
+  canScanAttendance Boolean  @default(false) @map("can_scan_attendance")
+  catatan           String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  eventPelayanan EventPelayanan @relation(fields: [eventPelayananId], references: [id], onDelete: Cascade)
+  jemaat         Jemaat         @relation("EventVolunteer", fields: [jemaatId], references: [id], onDelete: Cascade)
+  pelayananRole  PelayananRole  @relation(fields: [pelayananRoleId], references: [id], onDelete: Restrict)
+
+  @@unique([eventPelayananId, jemaatId])
+  @@index([eventPelayananId])
+  @@index([jemaatId])
+  @@index([canScanAttendance])
+  @@map("event_pelayanan_petugas")
+}
+
+// ============================================================
+// 12. FAMILY RELATION (Mobile App)
+// ============================================================
+// Relasi keluarga yang dibentuk dari mobile app (berbeda dari JemaatRelasi
+// yang sudah ada — JemaatRelasi adalah data master directional dari portal
+// admin; FamilyRelation adalah self-managed network dari mobile).
+//
+// Pola:
+//   - Direksi symmetric: kalau A link B as spouse, B otomatis link A as spouse
+//     (handled di backend dengan create 2 row, atau 1 row + lookup biarrah).
+//     Untuk simplicity, kita create 2 row reciprocal per link (A→B + B→A) dgn
+//     role yang tepat (CHILD ⇄ PARENT, SPOUSE ⇄ SPOUSE, SIBLING ⇄ SIBLING).
+//   - Per keputusan product (2026-05-19): **auto-verify** — tidak ada flow
+//     konfirmasi dua arah. Trust-based, audit log capture createdBy.
+//   - Anak balita yang di-register via "register-new" → otomatis muncul di
+//     family list parent. primaryGuardianId di Jemaat = parent yang register.
+// ============================================================
+model FamilyRelation {
+  id        String         @id @default(uuid()) @db.Uuid
+  jemaatAId String         @map("jemaat_a_id") @db.Uuid
+  jemaatBId String         @map("jemaat_b_id") @db.Uuid
+  role      FamilyRole
+  // isVerified default true (auto-verify per decision). Kolom tetap di-keep
+  // untuk future kalau mau switch ke two-way confirm flow.
+  isVerified Boolean        @default(true) @map("is_verified")
+  // Audit: siapa yang trigger link (jemaatId user yang panggil endpoint).
+  createdBy String?        @map("created_by") @db.Uuid
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  jemaatA Jemaat @relation("FamilyA", fields: [jemaatAId], references: [id], onDelete: Cascade)
+  jemaatB Jemaat @relation("FamilyB", fields: [jemaatBId], references: [id], onDelete: Cascade)
+
+  @@unique([jemaatAId, jemaatBId])
+  @@index([jemaatAId])
+  @@index([jemaatBId])
+  @@map("family_relation")
+}
+
+enum FamilyRole {
+  SPOUSE
+  CHILD       // jemaatA adalah anak dari jemaatB
+  PARENT      // jemaatA adalah ortu dari jemaatB
+  SIBLING
+
+  @@map("family_role")
+}
+
+// ============================================================
+// 13. BRANCH CHANGE REQUEST (Mobile App)
+// ============================================================
+// Permintaan pindah cabang dari mobile app — masuk queue, di-approve admin
+// di portal. Saat approved, Jemaat.cabangId di-update.
+// ============================================================
+model BranchChangeRequest {
+  id              String   @id @default(uuid()) @db.Uuid
+  jemaatId        String   @map("jemaat_id") @db.Uuid
+  currentCabangId String   @map("current_cabang_id") @db.Uuid
+  targetCabangId  String   @map("target_cabang_id") @db.Uuid
+  reason          String?  @db.Text
+  status          BranchChangeStatus @default(PENDING)
+  reviewedBy      String?  @map("reviewed_by") @db.Uuid
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewNote      String?  @map("review_note") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  jemaat   Jemaat  @relation("BranchChangeRequester", fields: [jemaatId], references: [id], onDelete: Cascade)
+  reviewer Jemaat? @relation("BranchChangeReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([jemaatId])
+  @@index([status])
+  @@map("branch_change_request")
+}
+
+enum BranchChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("branch_change_status")
 }

@@ -26,16 +26,41 @@ export const faceDescriptorSchema = z
   .array(z.number())
   .length(128, 'Face descriptor harus 128 dimensi');
 
-export const faceLoginSchema = z.object({
-  noHp: noHpSchema,
-  descriptor: faceDescriptorSchema,
-});
+export const faceLoginSchema = z
+  .object({
+    noHp: noHpSchema,
+    descriptor: faceDescriptorSchema,
+    modelVersion: z.string().min(1).max(32).optional(),
+  })
+  .openapi('FaceLoginInput');
 export type FaceLoginInput = z.infer<typeof faceLoginSchema>;
 
 // ===== Face Enrollment =====
-export const faceEnrollmentSchema = z.object({
-  descriptor: faceDescriptorSchema,
-});
+//
+// Body: 128-dim descriptor + optional modelVersion + metadata.
+// Mobile dev kirim descriptor dari client-side face-api.js (atau library
+// lain yang produce 128-dim compatible). modelVersion + metadata optional
+// untuk audit + future model migration.
+export const faceEnrollmentSchema = z
+  .object({
+    descriptor: faceDescriptorSchema,
+    modelVersion: z
+      .string()
+      .min(1)
+      .max(32)
+      .optional()
+      .openapi({ example: 'facenet-v1', description: 'ML model identifier, default facenet-v1' }),
+    metadata: z
+      .object({
+        platform: z.enum(['ios', 'android', 'web']).optional(),
+        deviceModel: z.string().max(100).optional(),
+        appVersion: z.string().max(32).optional(),
+        consentVersion: z.string().max(32).optional(),
+      })
+      .optional()
+      .openapi({ description: 'Audit metadata: device + consent info' }),
+  })
+  .openapi('FaceEnrollmentInput');
 export type FaceEnrollmentInput = z.infer<typeof faceEnrollmentSchema>;
 
 // ===== JWT Payload =====
@@ -70,6 +95,54 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+
+// ===== Self-Registration (mobile app, post-OTP) =====
+// Flow: jemaat baru request OTP purpose=ENROLLMENT → verify OTP → submit form
+// data diri ke POST /auth/register. Backend cek OTP record terakhir untuk
+// noHp+purpose=ENROLLMENT yang status `usedAt != null` (sudah verified) dalam
+// window 15 menit. Anti-abuse: rate limit per noHp (1 register / nomor).
+// Per request `docs/backend-request-optional-signup-fields.md` (2026-05-21):
+// Mobile simplify form ke 3 field saja (nama, JK, cabang). tanggalLahir &
+// alamat opsional supaya user onboard cepat dan lengkapi data via PATCH /admin/me
+// setelah login.
+export const registerJemaatSchema = z
+  .object({
+    noHp: noHpSchema,
+    namaLengkap: z.string().trim().min(2).max(255),
+    jenisKelamin: z.enum(['L', 'P']),
+    cabangId: uuidSchema,
+    // Optional — user bisa lengkapi nanti via PATCH /admin/me.
+    tanggalLahir: z
+      .string()
+      .date()
+      .optional()
+      .openapi({ example: '1992-05-15', description: 'ISO date, opsional' }),
+    alamat: z.string().trim().max(500).optional(),
+    homecellId: uuidSchema.optional(),
+    // OPSIONAL: foto profile bisa di-upload setelah register via /admin/me/foto.
+    fotoBase64: z
+      .string()
+      .max(5 * 1024 * 1024) // ~5MB base64 string
+      .optional()
+      .openapi({ description: 'Base64-encoded JPEG/PNG (max ~5MB)' }),
+  })
+  .openapi('RegisterJemaatInput');
+export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;
+
+// ===== Self profile edit (PATCH /admin/me) =====
+// Field yang user boleh self-edit (subset dari updateJemaatSchema admin).
+// noHp tidak boleh — pindah HP perlu re-verify OTP.
+// cabangId tidak boleh — pakai branch change request.
+export const selfEditJemaatSchema = z
+  .object({
+    namaLengkap: z.string().trim().min(2).max(255).optional(),
+    email: z.string().trim().email().nullable().optional(),
+    tanggalLahir: z.string().date().nullable().optional(),
+    jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
+    alamat: z.string().trim().max(500).nullable().optional(),
+  })
+  .openapi('SelfEditJemaatInput');
+export type SelfEditJemaatInput = z.infer<typeof selfEditJemaatSchema>;
 
 // ===== User Profile =====
 export const userProfileSchema = z.object({

@@ -1,10 +1,14 @@
 /**
  * Face matching helper.
  *
- * **Patch 2026-05-21r — switch ke MobileFaceNet (192-dim cosine similarity)**.
+ * **Patch 2026-05-21r — switch ke MobileFaceNet cosine similarity**.
+ * **Patch 2026-05-21s — dim correction 192 → 128** (per mobile flatbuffer
+ * inspect: `sirius-ai/MobileFaceNet_TF` variant ini output `[1, 128]`, not 192
+ * sebagaimana initial estimate. Source-of-truth: `MobileFaceNet_Arch.txt`
+ * `Logits:[None, 128]` + TFLite tensor shape inspection).
  *
  * Sebelumnya: face-api.js (FaceNet 128-dim) + Euclidean distance.
- * Sekarang: MobileFaceNet (192-dim) + Cosine similarity.
+ * Sekarang: MobileFaceNet (128-dim) + Cosine similarity.
  *
  * Alasan switch: face-api.js TFJS WebGL backend di RN WebView terlalu lambat
  * (detection hang >60s di pilot test mobile). MobileFaceNet via native TFLite
@@ -19,12 +23,16 @@
  *   - Untuk face descriptor (normalized), typically 0..1
  *   - Threshold default: 0.5 (higher = stricter match)
  *   - Tune setelah pilot data tersedia
+ *
+ * Note: dim sama dengan legacy face-api.js (128) tapi ini tetap mobilefacenet —
+ * descriptor space berbeda total, gunakan `face_model_version` field untuk
+ * disambiguate. Legacy descriptor sudah di-wipe via migration 21r.
  */
 
 const FACE_MATCH_THRESHOLD = Number(process.env.FACE_MATCH_THRESHOLD ?? 0.5);
 
-/** Embedding dimension untuk MobileFaceNet. */
-export const FACE_DESCRIPTOR_DIM = 192;
+/** Embedding dimension untuk MobileFaceNet (verified via flatbuffer inspect). */
+export const FACE_DESCRIPTOR_DIM = 128;
 
 export interface FaceMatchResult {
   match: boolean;
@@ -69,7 +77,7 @@ export function matchFace(candidate: number[], stored: number[]): FaceMatchResul
   };
 }
 
-/** Validasi format descriptor — 192-dim, semua finite number. */
+/** Validasi format descriptor — 128-dim (MobileFaceNet), semua finite number. */
 export function isValidDescriptor(descriptor: unknown): descriptor is number[] {
   return (
     Array.isArray(descriptor) &&

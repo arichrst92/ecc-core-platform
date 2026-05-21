@@ -2028,7 +2028,45 @@ Mobile submit spec lengkap push notif (Expo Push API + Device/Notification table
 
 **Code belum di-implement** — masih DEFERRED. KB akan di-update lagi setelah product re-approve + actual implementation.
 
-### Patch 2026-05-21r — Face Recognition V2: switch ke MobileFaceNet (192-dim cosine)
+### Patch 2026-05-21s — Face Recognition V2 dim correction: 192 → 128
+
+**Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet-dim-correction.md` (Priority HIGH, blocking M13 face login launch).
+
+**Background**: setelah mobile convert `sirius-ai/MobileFaceNet_TF` `.pb` → `.tflite`, verify actual output dim via flatbuffer inspect — **128**, bukan 192. Source-of-truth:
+- `MobileFaceNet_Arch.txt` baris terakhir: `Logits:[None, 128]`
+- TFLite tensor `embeddings` shape `[1, 128]` (adjacent in binary to tensor name = strong evidence ini output utama)
+- Cross-check dengan model 4.9MB consistent dengan 128-dim variant
+
+Initial estimate 192 di Q2 patch r based on "typical MobileFaceNet" assumption — turn out variant yang dipilih 128-dim.
+
+**Perubahan BE (trivial)**:
+
+1. **`packages/auth/src/face.ts`** — `FACE_DESCRIPTOR_DIM = 128` (was 192). Comments updated.
+
+2. **`packages/shared-types/src/schemas/auth.ts`** — `faceDescriptorSchema.length(128)` + message "harus 128 dimensi". Updated enrollment doc comment + openapi example modelVersion default.
+
+3. **`apps/core-api/src/routes/auth.ts`** — error message "Descriptor tidak valid (harus 128-dim, semua finite)" (3 occurrences). Header comment patch line added.
+
+4. **`docs/mobile-api-guide.md`** section 1.4 — semua mention "192" → "128", note tambahan: dim kebetulan sama dengan legacy face-api.js (128) tapi disambiguate **wajib** via `modelVersion` (descriptor space berbeda total).
+
+**Yang tidak berubah**:
+- `mobilefacenet-v1` constant tetap valid — cuma dim assumption yang revised, bukan model identity
+- Cosine similarity algorithm sama persis (dim-agnostic)
+- Migration `20260521180000` sudah wipe semua legacy data, no new migration needed (Json column flexible length)
+- Threshold 0.5 default tetap (cosine dim-independent dalam range yang sama untuk normalized descriptor)
+
+**Coincidence trap**: dim **kebetulan sama** dengan face-api.js legacy (128). **JANGAN** compare langsung antar descriptor — model space berbeda. Gunakan `face_model_version` field untuk gating: tolak `FACE_MODEL_MISMATCH` kalau stored != `mobilefacenet-v1`.
+
+**File berubah**:
+- `packages/auth/src/face.ts`
+- `packages/shared-types/src/schemas/auth.ts`
+- `apps/core-api/src/routes/auth.ts`
+- `docs/mobile-api-guide.md`
+- `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet-dim-correction.md` — RESOLVED
+
+**User perlu run**: `pnpm db:generate` tidak perlu (no schema change). Cuma `pnpm dev` restart.
+
+### Patch 2026-05-21r — Face Recognition V2: switch ke MobileFaceNet (cosine similarity)
 
 **Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet.md` (Priority HIGH, supersedes v1 face-api.js choice).
 
@@ -2064,7 +2102,7 @@ Mobile submit spec lengkap push notif (Expo Push API + Device/Notification table
 | Question | Answer |
 |---|---|
 | Q1 model identity | MobileFaceNet TFLite dari serengil/deepface atau sirius-ai/MobileFaceNet_TF |
-| Q2 embedding dim | **192** |
+| Q2 embedding dim | **192** *(corrected to 128 di patch 21s setelah mobile flatbuffer inspect — variant ini 128-dim, lihat patch berikutnya)* |
 | Q3 distance metric | **Cosine similarity** |
 | Q4 migration data | Wipe via migration — no actual user enrolled |
 | Q5 modelVersion | `mobilefacenet-v1` (existing `FACE_MODEL_MISMATCH` error code) |

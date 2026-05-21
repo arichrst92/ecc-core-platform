@@ -326,23 +326,25 @@ Content-Type: application/json
 
 ## 1.4 Face Recognition (opsional)
 
-> **Patch 2026-05-21r** — **switch ke MobileFaceNet (192-dim cosine)** dari face-api.js (128-dim Euclidean). Mobile pakai native TFLite via `react-native-fast-tflite` + `@react-native-ml-kit/face-detection`. BE compute cosine similarity (pure math, no ML library di server).
+> **Patch 2026-05-21r** — **switch ke MobileFaceNet (cosine similarity)** dari face-api.js (Euclidean). Mobile pakai native TFLite via `react-native-fast-tflite` + `@react-native-ml-kit/face-detection`. BE compute cosine similarity (pure math, no ML library di server).
 >
-> **Breaking**: descriptor format berubah dari 128 → 192 dimensi. Stored data lama (`facenet-v1`) di-wipe via migration. Mobile harus pakai `modelVersion: 'mobilefacenet-v1'` saat enroll/login.
+> **Patch 2026-05-21s** — dim correction: actual `sirius-ai/MobileFaceNet_TF` variant ini output **128-dim**, bukan 192 (initial estimate revised setelah mobile flatbuffer inspect: tensor `embeddings` shape `[1, 128]`, arch file `Logits:[None, 128]`).
+>
+> **Breaking**: descriptor space berubah total dari face-api.js (descriptor numerik tidak comparable). Stored data lama (`facenet-v1`) di-wipe via migration. Mobile harus pakai `modelVersion: 'mobilefacenet-v1'` saat enroll/login. Dim kebetulan sama (128) — disambiguate **wajib** via `modelVersion`.
 
 ### Background
 
-- **Descriptor**: 192-dim Float32 array dari **MobileFaceNet** (native TFLite di mobile, ~100ms inference)
+- **Descriptor**: 128-dim Float32 array dari **MobileFaceNet** (native TFLite di mobile, ~100ms inference)
 - **Distance metric**: **Cosine similarity** (range ~0..1, higher = better match)
 - **Match threshold**: 0.5 default (override via `FACE_MATCH_THRESHOLD` env)
 - **Model version**: `mobilefacenet-v1` (stored data dengan model lain ditolak `FACE_MODEL_MISMATCH`)
-- **Storage**: `User.faceDescriptor` (Json column 192 float) + `faceModelVersion` + `faceMetadata` audit
+- **Storage**: `User.faceDescriptor` (Json column 128 float) + `faceModelVersion` + `faceMetadata` audit
 
 ### Mobile stack rekomendasi
 
 ```
 Camera capture → ML Kit detect bounding box → crop face region
-              → resize ke 112x112 → MobileFaceNet TFLite → 192-dim descriptor
+              → resize ke 112x112 → MobileFaceNet TFLite → 128-dim descriptor
               → POST /auth/face/enroll atau /auth/face/login
 ```
 
@@ -370,7 +372,7 @@ Content-Type: application/json
 }
 ```
 
-`descriptor` = 192 float array dari MobileFaceNet. `modelVersion` optional tapi rekomendasi kirim — server reject 409 kalau mismatch dengan stored (force re-enroll).
+`descriptor` = 128 float array dari MobileFaceNet. `modelVersion` optional tapi rekomendasi kirim — server reject 409 kalau mismatch dengan stored (force re-enroll).
 
 **Response 200:**
 
@@ -444,7 +446,7 @@ Content-Type: application/json
 }
 ```
 
-`descriptor` = 192 float dari MobileFaceNet. `modelVersion` default `mobilefacenet-v1`.
+`descriptor` = 128 float dari MobileFaceNet. `modelVersion` default `mobilefacenet-v1`.
 
 `metadata` optional — audit only. `consentVersion` track versi consent screen yang user accept (untuk PDP Law audit trail).
 

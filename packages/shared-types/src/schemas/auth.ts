@@ -21,12 +21,16 @@ export const verifyOtpSchema = z
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
 // ===== Face Login (shortcut, opsional) =====
-// 192-dim Float32 descriptor dari MobileFaceNet (native TFLite di mobile),
-// di-encode ke array number. **Patch 2026-05-21r** — switch dari 128-dim
-// face-api.js (FaceNet) karena WebView TFJS terlalu lambat di production.
+// 128-dim Float32 descriptor dari MobileFaceNet (native TFLite di mobile),
+// di-encode ke array number. **Patch 2026-05-21r** — switch dari face-api.js
+// (FaceNet 128-dim Euclidean) ke MobileFaceNet (cosine) karena WebView TFJS
+// terlalu lambat di production. **Patch 2026-05-21s** — dim correction: actual
+// MobileFaceNet variant ini output 128-dim (verified via TFLite flatbuffer
+// inspect mobile-side; initial estimate 192 typo'd). Descriptor space tetap
+// beda dari legacy face-api.js — disambiguate via `face_model_version`.
 export const faceDescriptorSchema = z
   .array(z.number())
-  .length(192, 'Face descriptor harus 192 dimensi (MobileFaceNet)');
+  .length(128, 'Face descriptor harus 128 dimensi (MobileFaceNet)');
 
 export const faceLoginSchema = z
   .object({
@@ -39,10 +43,10 @@ export type FaceLoginInput = z.infer<typeof faceLoginSchema>;
 
 // ===== Face Enrollment =====
 //
-// Body: 128-dim descriptor + optional modelVersion + metadata.
-// Mobile dev kirim descriptor dari client-side face-api.js (atau library
-// lain yang produce 128-dim compatible). modelVersion + metadata optional
-// untuk audit + future model migration.
+// Body: 128-dim descriptor (MobileFaceNet) + optional modelVersion + metadata.
+// Mobile dev kirim descriptor dari client-side MobileFaceNet (TFLite native via
+// react-native-fast-tflite). modelVersion + metadata optional untuk audit +
+// future model migration. Default modelVersion server-side: `mobilefacenet-v1`.
 export const faceEnrollmentSchema = z
   .object({
     descriptor: faceDescriptorSchema,
@@ -51,7 +55,7 @@ export const faceEnrollmentSchema = z
       .min(1)
       .max(32)
       .optional()
-      .openapi({ example: 'facenet-v1', description: 'ML model identifier, default facenet-v1' }),
+      .openapi({ example: 'mobilefacenet-v1', description: 'ML model identifier, default mobilefacenet-v1' }),
     metadata: z
       .object({
         platform: z.enum(['ios', 'android', 'web']).optional(),

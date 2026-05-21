@@ -295,7 +295,9 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 /**
  * POST /auth/face/login — login shortcut via face descriptor.
  *
- * Patch 2026-05-21r — switch ke MobileFaceNet (192-dim cosine).
+ * Patch 2026-05-21r — switch ke MobileFaceNet (cosine similarity).
+ * Patch 2026-05-21s — dim correction: actual MobileFaceNet variant ini output
+ *                     128-dim, bukan 192 (mobile flatbuffer inspect confirmed).
  * Patch 2026-05-21q — RESTful endpoints + standardized error codes + confidence.
  *
  * - Response include `confidence` field (= cosine similarity, range ~0..1)
@@ -307,7 +309,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
   const { noHp, descriptor, modelVersion } = faceLoginSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
   }
 
   const jemaat = await prisma.jemaat.findUnique({
@@ -375,7 +377,7 @@ authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
 authRouter.post('/face/enroll', requireAuth, async (req, res) => {
   const { descriptor, modelVersion, metadata } = faceEnrollmentSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
   }
 
   const userId = req.user!.sub;
@@ -470,7 +472,7 @@ authRouter.get('/me/face-profile', requireAuth, async (req, res) => {
 authRouter.put('/me/face-profile', requireAuth, async (req, res) => {
   const { descriptor, modelVersion, metadata } = faceEnrollmentSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
-    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 192-dim, semua finite).');
+    throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
   }
 
   const userId = req.user!.sub;

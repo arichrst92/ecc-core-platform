@@ -73,6 +73,51 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
   return { messageId, to: target };
 }
 
+/**
+ * Generic Fonnte text send — dipakai untuk reminder ibadah, event,
+ * announcement, dll (selain OTP). Mengembalikan {messageId, to} sama seperti
+ * `sendOtpViaWhatsApp()`.
+ *
+ * Throws kalau Fonnte error (caller bisa catch + log ke NotificationLog).
+ */
+export async function sendWhatsAppText(
+  noHpE164: string,
+  message: string,
+): Promise<SendOtpResult> {
+  if (!FONNTE_TOKEN) {
+    throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
+  }
+  const target = noHpE164.replace(/^\+/, '');
+  const formData = new URLSearchParams();
+  formData.append('target', target);
+  formData.append('message', message);
+  formData.append('countryCode', '62');
+
+  const res = await fetch(FONNTE_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: FONNTE_TOKEN,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: formData.toString(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Fonnte send failed (${res.status}): ${text}`);
+  }
+  const data = (await res.json()) as {
+    status?: boolean;
+    reason?: string;
+    id?: string[] | string;
+    detail?: string;
+  };
+  if (data.status === false) {
+    throw new Error(`Fonnte error: ${data.reason ?? data.detail ?? 'unknown'}`);
+  }
+  const messageId = Array.isArray(data.id) ? (data.id[0] ?? '') : (data.id ?? '');
+  return { messageId, to: target };
+}
+
 /** Normalisasi no HP ke format E.164 Indonesia (+62...). */
 export function normalizeNoHp(input: string): string {
   let s = input.trim().replace(/[\s\-()]/g, '');

@@ -170,6 +170,8 @@ model Jemaat {
   visitsAsTarget          Visit[]                   @relation("VisitTarget")
   // Local Market (Movement) — bisnis jemaat (UMKM directory).
   localBusinesses         LocalBusiness[]           @relation("LocalBusinessOwner")
+  // WA Notification logs (reminder ibadah/event, dst) — recipient.
+  notificationLogs        NotificationLog[]         @relation("NotificationLogTarget")
 
   @@index([cabangId])
   @@index([noHp])
@@ -1466,4 +1468,55 @@ enum Platform {
   ANDROID
 
   @@map("app_platform")
+}
+
+// ============================================================
+// 15. NOTIFICATION LOG — outbound WA reminder + audit/dedup
+// ============================================================
+// Setiap reminder yang di-dispatch (ibadah H-1, event H-1, dst) di-log di sini
+// dengan `dedupKey` unique supaya cron retry tidak double-send. Status SENT
+// (sukses Fonnte) atau FAILED (error transient). FAILED bisa di-retry kalau
+// nanti ada retry job.
+//
+// Format dedupKey: "{TYPE}:{sourceId}:{tanggalIso}:{jemaatId}"
+// Contoh: "IBADAH_REMINDER:550e8400-e29b-41d4-a716-446655440000:2026-05-24:7c2a...-...-..."
+model NotificationLog {
+  id           String              @id @default(uuid()) @db.Uuid
+  jemaatId     String?             @map("jemaat_id") @db.Uuid
+  noHp         String              @map("no_hp") @db.VarChar(20)
+  type         NotificationType
+  // Dedup key — unique → INSERT akan gagal kalau cron retry, sehingga
+  // dispatch logic pakai upsert atau check existence dulu.
+  dedupKey     String              @unique @map("dedup_key") @db.VarChar(255)
+  status       NotificationStatus  @default(PENDING)
+  messageBody  String?             @map("message_body") @db.Text
+  // Fonnte message id (untuk trace di dashboard WA gateway).
+  messageId    String?             @map("message_id") @db.VarChar(100)
+  errorReason  String?             @map("error_reason") @db.Text
+  attemptCount Int                 @default(0) @map("attempt_count")
+  sentAt       DateTime?           @map("sent_at")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  jemaat Jemaat? @relation("NotificationLogTarget", fields: [jemaatId], references: [id], onDelete: SetNull)
+
+  @@index([jemaatId])
+  @@index([type, status])
+  @@index([createdAt])
+  @@map("notification_log")
+}
+
+enum NotificationType {
+  IBADAH_REMINDER
+  EVENT_REMINDER
+
+  @@map("notification_type")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+
+  @@map("notification_status")
 }

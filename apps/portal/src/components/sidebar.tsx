@@ -27,6 +27,7 @@ import {
   Store,
   FileText,
   Smartphone,
+  Wrench,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -113,6 +114,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/role-access', label: 'Role Access', icon: Shield, menuKey: 'role-access' },
       { href: '/dashboard/api-key', label: 'API Keys', icon: Key, menuKey: 'api-key' },
       { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity, menuKey: 'audit-log' },
+      { href: '/dashboard/maintenance', label: 'Maintenance', icon: Wrench, menuKey: 'maintenance' },
     ],
   },
 ];

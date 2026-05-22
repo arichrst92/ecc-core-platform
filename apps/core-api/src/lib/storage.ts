@@ -29,6 +29,7 @@ export type ContentKind = 'news' | 'renungan' | 'event';
 const MAX_DIM_PROFILE = 1024;
 const MAX_DIM_HERO = 1600; // hero image lebih besar untuk display utama di mobile
 const MAX_DIM_BUKTI = 2000; // bukti transfer perlu cukup tajam untuk verifikasi
+const MAX_DIM_LOGO = 512;  // logo square — cukup tajam utk display medium tanpa overkill
 const QUALITY = 82;
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -280,6 +281,41 @@ export async function saveBusinessHero(businessId: string, buffer: Buffer): Prom
 
 export async function deleteBusinessHero(businessId: string): Promise<void> {
   const absPath = path.join(UPLOADS_DIR, 'content', 'local-business', 'hero', `${businessId}.webp`);
+  try {
+    await fs.unlink(absPath);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
+/**
+ * Logo bisnis — force square via sharp fit:'cover'. Source image bebas
+ * aspect ratio, di-crop center jadi square 512x512.
+ */
+export async function saveBusinessLogo(businessId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'content', 'local-business', 'logo');
+  await ensureDir(dir);
+  const filename = `${businessId}.webp`;
+  const absPath = path.join(dir, filename);
+
+  await sharp(buffer)
+    .rotate()
+    .resize({
+      width: MAX_DIM_LOGO,
+      height: MAX_DIM_LOGO,
+      fit: 'cover',           // crop ke square (bukan letterbox)
+      position: 'centre',
+      withoutEnlargement: false,
+    })
+    .webp({ quality: QUALITY })
+    .toFile(absPath);
+
+  const v = Date.now();
+  return `${PUBLIC_UPLOADS_PREFIX}/content/local-business/logo/${filename}?v=${v}`;
+}
+
+export async function deleteBusinessLogo(businessId: string): Promise<void> {
+  const absPath = path.join(UPLOADS_DIR, 'content', 'local-business', 'logo', `${businessId}.webp`);
   try {
     await fs.unlink(absPath);
   } catch (err: any) {

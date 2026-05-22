@@ -22,12 +22,12 @@ function isPdfMime(mime: string, filename?: string): boolean {
 }
 
 export interface FlexPdfUploadOptions {
-  /** Max file size in bytes. Default: 10 MB (company profile bisa cukup besar). */
+  /** Max file size in bytes. Default: 5 MB. */
   maxBytes?: number;
 }
 
 export function flexPdfUpload(opts: FlexPdfUploadOptions = {}): RequestHandler {
-  const maxBytes = opts.maxBytes ?? 10 * 1024 * 1024;
+  const maxBytes = opts.maxBytes ?? 5 * 1024 * 1024;
   const m: Multer = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: maxBytes, files: 1 },

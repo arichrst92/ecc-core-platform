@@ -13,7 +13,11 @@ import { prisma } from '@ecc/database';
 import { adminLocalBusinessQuerySchema } from '@ecc/shared-types';
 import { NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { deleteBusinessHero, deleteBusinessProfilePdf } from '../../lib/storage.js';
+import {
+  deleteBusinessHero,
+  deleteBusinessLogo,
+  deleteBusinessProfilePdf,
+} from '../../lib/storage.js';
 
 export const localBusinessRouter = Router();
 
@@ -91,6 +95,9 @@ localBusinessRouter.delete('/:id', async (req, res) => {
 
   if (before.heroImageUrl) {
     await deleteBusinessHero(before.id).catch(() => undefined);
+  }
+  if (before.logoUrl) {
+    await deleteBusinessLogo(before.id).catch(() => undefined);
   }
   if (before.companyProfileUrl) {
     await deleteBusinessProfilePdf(before.id).catch(() => undefined);

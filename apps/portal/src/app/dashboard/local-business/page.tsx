@@ -42,6 +42,7 @@ interface BusinessItem {
   nama: string;
   deskripsi: string | null;
   heroImageUrl: string | null;
+  logoUrl: string | null;
   industri: string | null;
   tipeBisnis: TipeBisnis;
   isOnline: boolean;
@@ -341,19 +342,30 @@ function BusinessCard({
       }`}
       onClick={onOpen}
     >
-      {b.heroImageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`${apiBase}${b.heroImageUrl}`}
-          alt={b.nama}
-          className="w-full h-32 object-cover bg-neutral-100"
-        />
-      ) : (
-        <div className="w-full h-32 bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
-          <Store className="w-8 h-8 text-brand-400" />
-        </div>
-      )}
-      <div className="p-4 flex-1 flex flex-col gap-2">
+      <div className="relative">
+        {b.heroImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${apiBase}${b.heroImageUrl}`}
+            alt={b.nama}
+            className="w-full h-32 object-cover bg-neutral-100"
+          />
+        ) : (
+          <div className="w-full h-32 bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
+            <Store className="w-8 h-8 text-brand-400" />
+          </div>
+        )}
+        {/* Logo overlay di sudut kiri-bawah hero — square dengan border putih. */}
+        {b.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${apiBase}${b.logoUrl}`}
+            alt={`${b.nama} logo`}
+            className="absolute -bottom-4 left-3 w-12 h-12 rounded-lg object-cover bg-white border-2 border-white shadow-sm"
+          />
+        )}
+      </div>
+      <div className={`p-4 flex-1 flex flex-col gap-2 ${b.logoUrl ? 'pt-6' : ''}`}>
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-neutral-900 truncate flex-1">{b.nama}</h3>
           <span
@@ -443,7 +455,15 @@ function DetailModal({
               className="w-full h-44 object-cover rounded-t-2xl"
             />
           )}
-          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100 gap-3">
+            {b.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`${apiBase}${b.logoUrl}`}
+                alt={`${b.nama} logo`}
+                className={`w-14 h-14 rounded-lg object-cover bg-white shrink-0 ${b.heroImageUrl ? '-mt-12 border-2 border-white shadow-sm' : 'border border-neutral-200'}`}
+              />
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-neutral-900">{b.nama}</h2>

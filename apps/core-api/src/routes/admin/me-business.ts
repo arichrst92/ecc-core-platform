@@ -33,6 +33,8 @@ import { flexPdfUpload } from '../../lib/pdf-upload.js';
 import {
   saveBusinessHero,
   deleteBusinessHero,
+  saveBusinessLogo,
+  deleteBusinessLogo,
   saveBusinessProfilePdf,
   deleteBusinessProfilePdf,
 } from '../../lib/storage.js';
@@ -169,6 +171,9 @@ meBusinessRouter.delete('/:id', async (req, res) => {
   if (biz.heroImageUrl) {
     await deleteBusinessHero(biz.id).catch(() => undefined);
   }
+  if (biz.logoUrl) {
+    await deleteBusinessLogo(biz.id).catch(() => undefined);
+  }
   if (biz.companyProfileUrl) {
     await deleteBusinessProfilePdf(biz.id).catch(() => undefined);
   }
@@ -227,6 +232,52 @@ meBusinessRouter.delete('/:id/hero', async (req, res) => {
     resource: 'local_business',
     resourceId: biz.id,
     resourceLabel: `${biz.nama} (hero cleared)`,
+  });
+  res.status(204).end();
+});
+
+// ============================================================
+//  Logo upload / clear — auto crop ke square 512x512.
+// ============================================================
+meBusinessRouter.post('/:id/logo', flexImageUpload(), async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const id = req.params.id;
+  if (!id) throw BadRequest('Path param :id wajib.');
+  const biz = await findMyBusinessOrThrow(id, jemaatId);
+  if (!req.file) throw BadRequest('File logo wajib (multipart).');
+
+  const logoUrl = await saveBusinessLogo(biz.id, req.file.buffer);
+  const updated = await prisma.localBusiness.update({
+    where: { id: biz.id },
+    data: { logoUrl },
+    select: { id: true, logoUrl: true },
+  });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'local_business',
+    resourceId: biz.id,
+    resourceLabel: `${biz.nama} (logo)`,
+    metadata: { kind: 'local-business-logo' },
+  });
+  res.json({ success: true, data: updated });
+});
+
+meBusinessRouter.delete('/:id/logo', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  if (!biz.logoUrl) {
+    return res.status(204).end();
+  }
+  await deleteBusinessLogo(biz.id);
+  await prisma.localBusiness.update({
+    where: { id: biz.id },
+    data: { logoUrl: null },
+  });
+  audit(req, {
+    action: 'DELETE',
+    resource: 'local_business',
+    resourceId: biz.id,
+    resourceLabel: `${biz.nama} (logo cleared)`,
   });
   res.status(204).end();
 });

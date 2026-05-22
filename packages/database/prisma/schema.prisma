@@ -1358,6 +1358,9 @@ model LocalBusiness {
   // Hero banner — upload terpisah via POST /:id/hero (multipart). URL relative
   // ke PUBLIC_UPLOADS_PREFIX. Resize standard hero size.
   heroImageUrl      String?  @map("hero_image_url") @db.Text
+  // Logo — upload terpisah via POST /:id/logo. Auto crop ke square via
+  // sharp fit:'cover' (resize 512px). Untuk display di card + avatar bisnis.
+  logoUrl           String?  @map("logo_url") @db.Text
   // Industri — free text (UI mobile boleh datalist suggested). Searchable.
   industri          String?  @db.VarChar(100)
   tipeBisnis        TipeBisnis @map("tipe_bisnis")

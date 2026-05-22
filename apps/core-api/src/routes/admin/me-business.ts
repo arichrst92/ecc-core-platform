@@ -188,7 +188,11 @@ meBusinessRouter.delete('/:id', async (req, res) => {
 // ============================================================
 meBusinessRouter.post('/:id/hero', flexImageUpload(), async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  // Note: dengan middleware di chain, TS infer req.params.id = string|undefined
+  // (ParamsDictionary), beda dengan handler tanpa middleware yg dapat string.
+  const id = req.params.id;
+  if (!id) throw BadRequest('Path param :id wajib.');
+  const biz = await findMyBusinessOrThrow(id, jemaatId);
   if (!req.file) throw BadRequest('File foto wajib (multipart).');
 
   const heroImageUrl = await saveBusinessHero(biz.id, req.file.buffer);
@@ -232,7 +236,10 @@ meBusinessRouter.delete('/:id/hero', async (req, res) => {
 // ============================================================
 meBusinessRouter.post('/:id/profile-pdf', flexPdfUpload(), async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  // Note: dengan middleware di chain, TS infer req.params.id = string|undefined.
+  const id = req.params.id;
+  if (!id) throw BadRequest('Path param :id wajib.');
+  const biz = await findMyBusinessOrThrow(id, jemaatId);
   if (!req.file) throw BadRequest('File PDF wajib (multipart).');
 
   const companyProfileUrl = await saveBusinessProfilePdf(biz.id, req.file.buffer);

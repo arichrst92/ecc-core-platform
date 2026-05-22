@@ -163,6 +163,8 @@ model Jemaat {
   // Visit (Movement) — peer-to-peer pertemuan antar jemaat via scan QR.
   visitsAsInitiator       Visit[]                   @relation("VisitInitiator")
   visitsAsTarget          Visit[]                   @relation("VisitTarget")
+  // Local Market (Movement) — bisnis jemaat (UMKM directory).
+  localBusinesses         LocalBusiness[]           @relation("LocalBusinessOwner")
 
   @@index([cabangId])
   @@index([noHp])
@@ -1332,4 +1334,65 @@ model Visit {
   @@index([targetJemaatId])
   @@index([tanggalVisit])
   @@map("visit")
+}
+
+// ============================================================
+// 12. MOVEMENT — Local Market (Bisnis Jemaat)
+// ============================================================
+// Direktori UMKM/bisnis jemaat. Setiap jemaat boleh multiple bisnis. Owner
+// CRUD lewat mobile app (create/edit/delete + upload hero & company profile
+// PDF). Portal admin: read-only list + delete moderasi.
+//
+// Mobile "Local Market" page tampilkan list publik (filter by cabang).
+// Bisnis dengan isActive=false di-hide dari public browse tapi tetap visible
+// ke owner di portfolio-nya sendiri.
+//
+// Social links di-simpan sebagai Json array `[{platform, url}]` supaya UI
+// bisa rendering icon per-platform tanpa junction table tambahan.
+// ============================================================
+model LocalBusiness {
+  id                String   @id @default(uuid()) @db.Uuid
+  ownerJemaatId     String   @map("owner_jemaat_id") @db.Uuid
+  nama              String   @db.VarChar(255)
+  deskripsi         String?  @db.Text
+  // Hero banner — upload terpisah via POST /:id/hero (multipart). URL relative
+  // ke PUBLIC_UPLOADS_PREFIX. Resize standard hero size.
+  heroImageUrl      String?  @map("hero_image_url") @db.Text
+  // Industri — free text (UI mobile boleh datalist suggested). Searchable.
+  industri          String?  @db.VarChar(100)
+  tipeBisnis        TipeBisnis @map("tipe_bisnis")
+  // Lokasi: kombinasi isOnline flag + text. isOnline=true → bisnis murni
+  // online (e-commerce, jasa remote). lokasi optional bahkan kalau online
+  // (mis. "Operating from Jakarta", kosong kalau benar2 ga ada lokasi fisik).
+  isOnline          Boolean  @default(false) @map("is_online")
+  lokasi            String?  @db.Text
+  // External links
+  websiteUrl        String?  @map("website_url") @db.Text
+  whatsappUrl       String?  @map("whatsapp_url") @db.Text
+  // Company profile — PDF upload via POST /:id/profile-pdf. URL relative.
+  companyProfileUrl String?  @map("company_profile_url") @db.Text
+  // Social media links — array of { platform: string, url: string }.
+  // Stored as Json untuk fleksibilitas count dynamic. Validate di Zod layer.
+  socialLinks       Json?    @map("social_links")
+  // Owner toggle: false = hide dari public browse. Owner tetap bisa lihat &
+  // edit. Tidak menghapus row (gunakan DELETE endpoint untuk benar2 hilang).
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  owner Jemaat @relation("LocalBusinessOwner", fields: [ownerJemaatId], references: [id], onDelete: Cascade)
+
+  @@index([ownerJemaatId])
+  @@index([nama])
+  @@index([industri])
+  @@index([tipeBisnis])
+  @@map("local_business")
+}
+
+enum TipeBisnis {
+  B2C
+  B2B
+  B2B2C
+
+  @@map("tipe_bisnis")
 }

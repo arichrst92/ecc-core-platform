@@ -50,6 +50,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // Movement
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },
   { key: 'visit', label: 'Visit', href: '/dashboard/visit', group: 'Movement' },
+  { key: 'local-business', label: 'Local Market', href: '/dashboard/local-business', group: 'Movement' },
 
   // Broadcast
   { key: 'news', label: 'News', href: '/dashboard/news', group: 'Broadcast' },

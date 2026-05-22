@@ -30,3 +30,4 @@ export * from './schemas/api-key.js';
 export * from './schemas/family.js';
 export * from './schemas/branch-change.js';
 export * from './schemas/visit.js';
+export * from './schemas/local-business.js';

@@ -249,3 +249,69 @@ export async function deleteCabangRekeningQris(rekeningId: string): Promise<void
     if (err.code !== 'ENOENT') throw err;
   }
 }
+
+// =====================================================
+//  Local Business — hero image (webp) + company profile (PDF passthrough)
+// =====================================================
+//
+// Layout:
+//   content/local-business/hero/{business-uuid}.webp
+//   content/local-business/profile/{business-uuid}.pdf
+//
+// Hero image follow standard hero treatment (resize + webp). Profile PDF
+// disimpan apa adanya (passthrough; PDF tidak di-resize, hanya dicek size
+// di multer).
+
+export async function saveBusinessHero(businessId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'content', 'local-business', 'hero');
+  await ensureDir(dir);
+  const filename = `${businessId}.webp`;
+  const absPath = path.join(dir, filename);
+
+  await sharp(buffer)
+    .rotate()
+    .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(absPath);
+
+  const v = Date.now();
+  return `${PUBLIC_UPLOADS_PREFIX}/content/local-business/hero/${filename}?v=${v}`;
+}
+
+export async function deleteBusinessHero(businessId: string): Promise<void> {
+  const absPath = path.join(UPLOADS_DIR, 'content', 'local-business', 'hero', `${businessId}.webp`);
+  try {
+    await fs.unlink(absPath);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
+export async function saveBusinessProfilePdf(
+  businessId: string,
+  buffer: Buffer,
+): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'content', 'local-business', 'profile');
+  await ensureDir(dir);
+  const filename = `${businessId}.pdf`;
+  const absPath = path.join(dir, filename);
+  // PDF passthrough — tidak ada konversi.
+  await fs.writeFile(absPath, buffer);
+  const v = Date.now();
+  return `${PUBLIC_UPLOADS_PREFIX}/content/local-business/profile/${filename}?v=${v}`;
+}
+
+export async function deleteBusinessProfilePdf(businessId: string): Promise<void> {
+  const absPath = path.join(
+    UPLOADS_DIR,
+    'content',
+    'local-business',
+    'profile',
+    `${businessId}.pdf`,
+  );
+  try {
+    await fs.unlink(absPath);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}

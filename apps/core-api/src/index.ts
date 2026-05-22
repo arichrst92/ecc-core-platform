@@ -5,6 +5,7 @@ import 'express-async-errors';
 import os from 'node:os';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
+import { startScheduledJobs } from './lib/scheduled-jobs.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
 // Default bind ke `0.0.0.0` (semua interfaces) supaya:
@@ -35,6 +36,9 @@ function listLanIps(): string[] {
 
 async function main() {
   const app = createApp();
+  // Kick off background maintenance (refresh-token cleanup, dst).
+  // Aman dijalankan sebelum listen — pakai setTimeout internal untuk delay.
+  startScheduledJobs();
   app.listen(PORT, HOST, () => {
     const bind = HOST === '0.0.0.0' ? 'all interfaces' : HOST;
     logger.info(`🚀 ECC Core API listening on ${HOST}:${PORT} (${bind})`);

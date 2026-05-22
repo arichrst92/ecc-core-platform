@@ -570,9 +570,13 @@ meRouter.post('/family/link-by-kode', async (req, res) => {
   const input = linkFamilyByKodeSchema.parse(req.body);
   const target = await prisma.jemaat.findUnique({
     where: { kode: input.kode },
-    select: { id: true, namaLengkap: true, kode: true },
+    select: { id: true, namaLengkap: true, kode: true, isActive: true },
   });
   if (!target) throw NotFound(`Kode jemaat "${input.kode}" tidak ditemukan.`);
+  // Inactive (self-deactivated) jemaat tidak boleh di-link sebagai family.
+  if (!target.isActive) {
+    throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
+  }
   if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
 
   const link = await upsertFamilyLink(jemaatId, target.id, input.role, jemaatId);
@@ -591,9 +595,12 @@ meRouter.post('/family/link-by-phone', async (req, res) => {
   const input = linkFamilyByPhoneSchema.parse(req.body);
   const target = await prisma.jemaat.findUnique({
     where: { noHp: input.noHp },
-    select: { id: true, namaLengkap: true, noHp: true },
+    select: { id: true, namaLengkap: true, noHp: true, isActive: true },
   });
   if (!target) throw NotFound(`No HP "${input.noHp}" tidak ditemukan.`);
+  if (!target.isActive) {
+    throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
+  }
   if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
 
   const link = await upsertFamilyLink(jemaatId, target.id, input.role, jemaatId);
@@ -624,8 +631,18 @@ meRouter.post('/family/register-new', async (req, res) => {
   if (!cabang?.isActive) throw BadRequest('Cabang tidak valid.');
 
   if (input.noHp) {
-    const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
-    if (existing) throw Conflict('Nomor HP sudah terdaftar — gunakan link-by-phone.');
+    const existing = await prisma.jemaat.findUnique({
+      where: { noHp: input.noHp },
+      select: { isActive: true },
+    });
+    if (existing) {
+      if (!existing.isActive) {
+        throw Conflict(
+          'Nomor HP sudah terdaftar tapi statusnya nonaktif. Hubungi admin cabang untuk reaktivasi.',
+        );
+      }
+      throw Conflict('Nomor HP sudah terdaftar — gunakan link-by-phone.');
+    }
   }
 
   const kode = await generateUniqueKode(

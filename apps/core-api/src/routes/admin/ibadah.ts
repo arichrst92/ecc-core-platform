@@ -469,10 +469,13 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
   // Lookup jemaat by kode
   const jemaat = await prisma.jemaat.findUnique({
     where: { kode: input.kode },
-    select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true },
+    select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true },
   });
   if (!jemaat) {
     throw NotFound(`Kode jemaat "${input.kode}" tidak ditemukan.`);
+  }
+  if (!jemaat.isActive) {
+    throw BadRequest(`Jemaat "${jemaat.namaLengkap}" sudah nonaktif — tidak bisa check-in.`);
   }
 
   // Cari reservasi existing

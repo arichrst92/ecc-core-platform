@@ -50,8 +50,11 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
   const requesterId = req.user.jemaatId;
   const targetId = req.params.id;
 
-  const target = await prisma.jemaat.findUnique({
-    where: { id: targetId },
+  // Hide inactive (self-deactivated) jemaat dari public lookup — return
+  // 404 supaya keberadaannya tidak ke-ekspose. Pakai findFirst supaya bisa
+  // composite-where (isActive + id), beda dengan findUnique yg unique-only.
+  const target = await prisma.jemaat.findFirst({
+    where: { id: targetId, isActive: true },
     include: {
       cabang: { select: { id: true, nama: true } },
       jemaatRoles: {

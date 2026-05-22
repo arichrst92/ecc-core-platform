@@ -37,7 +37,10 @@ publicRouter.get('/ibadah', async (req, res) => {
 
 publicRouter.get('/jemaat/:id', async (req, res) => {
   const data = await prisma.jemaat.findFirst({
-    where: { id: req.params.id, cabang: { sinodeId: req.apiKey!.sinodeId } },
+    // Filter isActive=true supaya jemaat self-deactivated tidak ekspose
+    // ke external consumer (mobile attendance system, dll). Return 404 di
+    // bawah untuk sembunyikan keberadaannya.
+    where: { id: req.params.id, isActive: true, cabang: { sinodeId: req.apiKey!.sinodeId } },
     select: {
       id: true,
       namaLengkap: true,

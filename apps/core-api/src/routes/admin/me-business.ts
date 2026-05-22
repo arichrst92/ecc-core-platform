@@ -338,9 +338,12 @@ meLocalMarketRouter.get('/', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const q = browseLocalMarketQuerySchema.parse(req.query);
 
-  const where: any = { isActive: true };
+  // isActive=true → bisnis aktif. owner.isActive=true → jangan tampilkan
+  // bisnis dari owner yg sudah self-deactivate (consistent dgn delete-account).
+  const where: any = { isActive: true, owner: { isActive: true } };
   if (q.cabangId) {
-    where.owner = { cabangId: q.cabangId };
+    // Merge owner filter dengan cabang filter.
+    where.owner = { isActive: true, cabangId: q.cabangId };
   }
   if (q.industri) {
     where.industri = { contains: q.industri, mode: 'insensitive' };
@@ -380,7 +383,8 @@ meLocalMarketRouter.get('/', async (req, res) => {
   });
 });
 
-// Public detail. Hanya yg isActive=true visible (kecuali caller adalah owner).
+// Public detail. Hanya yg isActive=true (+ owner aktif) visible — kecuali
+// caller adalah owner sendiri.
 meLocalMarketRouter.get('/:id', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const biz = await prisma.localBusiness.findUnique({
@@ -389,7 +393,15 @@ meLocalMarketRouter.get('/:id', async (req, res) => {
   });
   if (!biz) throw NotFound('Bisnis tidak ditemukan');
   const isOwner = biz.ownerJemaatId === req.user.jemaatId;
-  if (!biz.isActive && !isOwner) {
+  // Cek owner.isActive — Prisma return owner relation, butuh refetch atau
+  // include `isActive`. Sementara owner select tidak include isActive,
+  // pakai query terpisah ringan.
+  const ownerActive = await prisma.jemaat.findUnique({
+    where: { id: biz.ownerJemaatId },
+    select: { isActive: true },
+  });
+  const hidden = !biz.isActive || ownerActive?.isActive === false;
+  if (hidden && !isOwner) {
     throw NotFound('Bisnis tidak ditemukan'); // sembunyikan keberadaannya
   }
   res.json({ success: true, data: biz });

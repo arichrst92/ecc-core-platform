@@ -23,6 +23,7 @@ import { localBusinessRouter } from './local-business.js';
 import { legalRouter } from './legal.js';
 import { appVersionRouter } from './app-version.js';
 import { maintenanceRouter } from './maintenance.js';
+import { serverHealthRouter } from './server-health.js';
 
 export const adminRouter = Router();
 
@@ -58,6 +59,7 @@ adminRouter.use('/local-business', localBusinessRouter);
 adminRouter.use('/legal', legalRouter);
 adminRouter.use('/app-version', appVersionRouter);
 adminRouter.use('/maintenance', maintenanceRouter);
+adminRouter.use('/server-health', serverHealthRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

@@ -1,0 +1,110 @@
+# ============================================================
+# ECC Core Platform — CI + Deploy pipeline
+# ============================================================
+# Workflow:
+#   1. `validate` job — checks: install deps, prisma generate, prisma format
+#      check, turbo lint, type-check, build. Jalan di setiap push ke main
+#      DAN setiap PR ke main.
+#   2. `deploy` job — depends on `validate`. Hanya jalan di push ke main
+#      (bukan PR). SSH ke VPS, jalankan scripts/deploy.sh.
+#
+# Secrets yang wajib di-set di GitHub (Settings → Secrets and variables → Actions):
+#   - VPS_HOST          → IP atau hostname VPS (mis. 1.2.3.4 atau ecc.id)
+#   - VPS_USER          → SSH user (mis. deploy)
+#   - VPS_SSH_KEY       → private key PEM (paste full content -----BEGIN…END-----)
+#   - VPS_PORT          → optional, default 22
+#   - DEPLOY_PATH       → absolute path di VPS, mis. /var/www/ecc-core-platform
+#
+# Setup pertama kali: lihat docs/cicd-setup.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel run sebelumnya kalau push baru datang di branch yang sama.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate (lint, type-check, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # postinstall di packages/database sudah `prisma generate`, tapi
+      # jalankan eksplisit untuk safety + log visibility.
+      - name: Prisma generate
+        run: pnpm --filter @ecc/database exec prisma generate
+
+      - name: Prisma schema format check
+        run: |
+          cd packages/database
+          # Format pakai tmp file, lalu diff dengan source. Kalau berbeda → fail.
+          cp prisma/schema.prisma /tmp/schema-original.prisma
+          pnpm exec prisma format
+          if ! diff -q /tmp/schema-original.prisma prisma/schema.prisma > /dev/null; then
+            echo "::error::schema.prisma tidak ter-format. Run 'pnpm --filter @ecc/database exec prisma format' lokal lalu commit."
+            diff /tmp/schema-original.prisma prisma/schema.prisma || true
+            exit 1
+          fi
+
+      - name: Turbo lint
+        run: pnpm turbo lint
+        continue-on-error: true  # lint warning tidak block deploy (sementara)
+
+      - name: Turbo type-check
+        run: pnpm turbo type-check
+
+      - name: Turbo build
+        run: pnpm turbo build
+
+  deploy:
+    name: Deploy ke production VPS
+    needs: validate
+    # Hanya jalan untuk push langsung ke main (bukan PR).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://ecc.id
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          # Timeout 5 menit — install + migrate + build bisa cukup lama.
+          command_timeout: 5m
+          # Script-nya disimpan di repo (scripts/deploy.sh) supaya gampang
+          # di-edit + versioned. SSH cuma `cd && pull && exec`.
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch origin main
+            git reset --hard origin/main
+            ./scripts/deploy.sh

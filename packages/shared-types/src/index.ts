@@ -29,3 +29,4 @@ export * from './schemas/menu-catalog.js';
 export * from './schemas/api-key.js';
 export * from './schemas/family.js';
 export * from './schemas/branch-change.js';
+export * from './schemas/visit.js';

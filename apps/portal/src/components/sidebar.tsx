@@ -23,6 +23,7 @@ import {
   Home as HomeIcon,
   MapPin,
   Megaphone,
+  Handshake,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -85,6 +86,7 @@ const groups: NavGroup[] = [
     label: 'Movement',
     items: [
       { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event' },
+      { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
     ],
   },
   {

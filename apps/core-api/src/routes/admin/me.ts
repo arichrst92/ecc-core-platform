@@ -41,8 +41,13 @@ import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
+import { meVisitRouter } from './me-visit.js';
 
 export const meRouter = Router();
+
+// Sub-router untuk Movement → Visit (scan QR antar jemaat).
+// Mount dulu di atas supaya path /me/visits ke-resolve sebelum route lain.
+meRouter.use('/visits', meVisitRouter);
 
 // Upload pakai flexImageUpload() dari lib/image-upload.ts (lebih lenient:
 // field name agnostic + accept HEIC dari iOS).

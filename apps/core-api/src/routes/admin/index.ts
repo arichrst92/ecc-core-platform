@@ -18,6 +18,7 @@ import { meRouter } from './me.js';
 import { branchChangeRouter } from './branch-change.js';
 import { ministryRouter } from './ministry.js';
 import { jemaatPublicRouter } from './jemaat-public.js';
+import { visitRouter } from './visit.js';
 
 export const adminRouter = Router();
 
@@ -48,6 +49,7 @@ adminRouter.use('/renungan', createKontenRouter('RENUNGAN'));
 adminRouter.use('/homecell-area', homecellAreaRouter);
 adminRouter.use('/homecell', homecellRouter);
 adminRouter.use('/event', eventRouter);
+adminRouter.use('/visit', visitRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

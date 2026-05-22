@@ -160,6 +160,9 @@ model Jemaat {
   // Branch change request (mobile)
   branchChangeRequests    BranchChangeRequest[]     @relation("BranchChangeRequester")
   branchChangeReviews     BranchChangeRequest[]     @relation("BranchChangeReviewer")
+  // Visit (Movement) — peer-to-peer pertemuan antar jemaat via scan QR.
+  visitsAsInitiator       Visit[]                   @relation("VisitInitiator")
+  visitsAsTarget          Visit[]                   @relation("VisitTarget")
 
   @@index([cabangId])
   @@index([noHp])
@@ -1283,4 +1286,50 @@ enum BranchChangeStatus {
   REJECTED
 
   @@map("branch_change_status")
+}
+
+// ============================================================
+// 11. MOVEMENT — Visit (Pertemuan antar jemaat via scan QR)
+// ============================================================
+// Use case: jemaat A bertemu jemaat B di dunia nyata, A scan QR kode B di
+// mobile → row Visit langsung tercipta. Initiator (A) set judul + lokasi
+// opsional. Setelah itu masing-masing pihak (A & B) bisa menulis "note"
+// untuk lawan bicaranya — A nulis catatan tentang B, B nulis catatan
+// tentang A. Notes hanya bisa di-edit oleh authornya sendiri.
+//
+// Portal admin: read-only list (filter cabang/jemaat/range tanggal) +
+// delete untuk moderasi. Tidak ada create/edit dari portal.
+// ============================================================
+model Visit {
+  id                  String   @id @default(uuid()) @db.Uuid
+  // Initiator = jemaat yang melakukan scan QR target. Target = pemilik QR
+  // yang di-scan. Pembedaan ini perlu untuk attribute "siapa set judul"
+  // dan "siapa edit note yang mana".
+  initiatorJemaatId   String   @map("initiator_jemaat_id") @db.Uuid
+  targetJemaatId      String   @map("target_jemaat_id") @db.Uuid
+  // Single shared title — di-input initiator saat create.
+  // Editable hanya oleh initiator.
+  judul               String   @db.VarChar(255)
+  // Lokasi pertemuan — text bebas (nama tempat / alamat singkat / "Rumah Pak X").
+  // Mobile boleh prefill dari reverse-geocode tapi tidak wajib.
+  lokasi              String?  @db.Text
+  // Notes per arah. noteDariInitiator = catatan A tentang B (visible ke B).
+  // noteDariTarget    = catatan B tentang A (visible ke A).
+  // Editable hanya oleh authornya masing-masing.
+  noteDariInitiator   String?  @map("note_dari_initiator") @db.Text
+  noteDariTarget      String?  @map("note_dari_target") @db.Text
+  // Tanggal/waktu visit terjadi — default = saat scan. Disimpan eksplisit
+  // (bukan reuse createdAt) supaya bisa di-override kalau perlu (mis. user
+  // input visit retroaktif), dan untuk filter range di portal.
+  tanggalVisit        DateTime @default(now()) @map("tanggal_visit")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  initiator Jemaat @relation("VisitInitiator", fields: [initiatorJemaatId], references: [id], onDelete: Restrict)
+  target    Jemaat @relation("VisitTarget",    fields: [targetJemaatId],    references: [id], onDelete: Restrict)
+
+  @@index([initiatorJemaatId])
+  @@index([targetJemaatId])
+  @@index([tanggalVisit])
+  @@map("visit")
 }

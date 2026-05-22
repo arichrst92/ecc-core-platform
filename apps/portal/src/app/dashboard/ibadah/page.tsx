@@ -25,7 +25,10 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { ibadahResource } from '@/lib/resources/ibadah-config';
 import { CalendarView } from '@/components/ibadah/calendar-view';
 
-interface IbadahItem {
+// Index signature wajib karena FormModal generic constraint `T extends
+// Record<string, unknown>` (lihat components/crud/form-modal.tsx).
+// Pattern sama seperti resource configs lain (Cabang, Homecell, Jemaat).
+interface IbadahItem extends Record<string, unknown> {
   id: string;
   nama: string;
   tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
@@ -194,7 +197,9 @@ export default function IbadahPage() {
             .map((f) => [f.name, f.defaultValue]),
         )}
         loading={createMut.isPending}
-        onSubmit={async (v) => createMut.mutateAsync(v as Record<string, unknown>)}
+        onSubmit={async (v) => {
+          await createMut.mutateAsync(v as Record<string, unknown>);
+        }}
       />
       <FormModal
         open={!!editing}

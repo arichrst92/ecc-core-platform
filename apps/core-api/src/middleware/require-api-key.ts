@@ -35,6 +35,11 @@ export const requireApiKey: RequestHandler = async (req, _res, next) => {
     const matched = await bcrypt.compare(raw, candidate.keyHash);
     if (!matched) continue;
     if (candidate.expiresAt && candidate.expiresAt < new Date()) continue;
+    // TODO(global-keys): schema SinodeApiKey.sinodeId nullable utk "global key"
+    // (lihat schema comment). Saat ini consumer endpoints di /api/v1/* scope ke
+    // sinodeId — perlu refactor untuk support global access. Sementara skip
+    // null-sinode candidates supaya type Request.apiKey tetap sinodeId: string.
+    if (!candidate.sinodeId) continue;
 
     await prisma.sinodeApiKey.update({
       where: { id: candidate.id },

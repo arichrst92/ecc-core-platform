@@ -752,6 +752,7 @@ meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
 meRouter.post('/family/:jemaatId/foto', flexImageUpload(), async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const targetId = req.params.jemaatId;
+  if (!targetId) throw BadRequest('Path param :jemaatId wajib.');
   if (!req.file) {
     throw BadRequest(
       'File foto wajib. Kirim sebagai multipart/form-data dengan field name "foto" (atau "file" / "image").',

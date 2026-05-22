@@ -5,7 +5,12 @@
     "rootDir": "./src",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "target": "ES2022"
+    "target": "ES2022",
+    // core-api adalah application, bukan library yg di-consume sebagai module.
+    // Tidak butuh emit .d.ts → matikan supaya tidak ke-trigger TS2742 saat
+    // type Router (express) tidak portable via pnpm symlink path.
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["src/**/*"]
 }

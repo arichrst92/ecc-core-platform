@@ -81,6 +81,21 @@ import {
   updateApiKeySchema,
   setMenuAccessSchema,
   updateCanAccessPortalSchema,
+  // Liveness gate
+  requestLivenessNonceSchema,
+  // Movement — Visit
+  createVisitSchema,
+  updateVisitMetaSchema,
+  updateVisitNoteSchema,
+  // Movement — Local Business
+  createLocalBusinessSchema,
+  updateLocalBusinessSchema,
+  // Self-deactivation
+  deleteMyAccountSchema,
+  // Legal docs
+  upsertLegalDocumentSchema,
+  // App version
+  upsertAppVersionSchema,
 } from '@ecc/shared-types';
 
 const registry = new OpenAPIRegistry();
@@ -2198,6 +2213,503 @@ registry.registerPath({
     200: { description: 'Homecells in area', ...json(successOf(z.any())) },
     404: { description: 'Area tidak ditemukan', ...json(errorEnvelopeSchema) },
   },
+});
+
+// ================================================================
+// Liveness Nonce — server-side gate untuk face enroll/login
+// ================================================================
+registry.registerPath({
+  method: 'post',
+  path: '/auth/face/liveness-nonce',
+  tags: ['Auth · Face Recognition'],
+  summary: 'Issue HMAC signed liveness nonce (3 menit TTL, one-shot)',
+  description:
+    'Mobile call sebelum show liveness UI. Submit nonce di body /face/login atau /face/enroll bersama descriptor. Error codes saat consume: LIVENESS_NONCE_INVALID, LIVENESS_NONCE_EXPIRED, LIVENESS_NONCE_PURPOSE_MISMATCH, LIVENESS_NONCE_BIND_MISMATCH, LIVENESS_NONCE_REUSED. V1: optional di /face/login + /face/enroll (V2 akan required).',
+  request: { body: json(requestLivenessNonceSchema) },
+  responses: {
+    200: {
+      description: 'Nonce issued',
+      ...json(
+        successOf(
+          z.object({
+            nonce: z.string().openapi({ description: 'Opaque token, kirim apa adanya di body request /face/* berikutnya.' }),
+            expiresAt: z.string().openapi({ format: 'date-time' }),
+            ttlSeconds: z.number(),
+          }),
+        ),
+      ),
+    },
+  },
+});
+
+// ================================================================
+// Movement · Visit (scan QR antar jemaat)
+// ================================================================
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/visits',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'List visit yang melibatkan saya',
+  description: 'Filter role=all|initiator|target, range from/to, search judul/lokasi.',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/visits',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'Create visit via scan QR',
+  description:
+    'Caller = initiator. Body: targetKode (QR kode jemaat) + judul + lokasi (opsional).',
+  security: adminAuth,
+  request: { body: json(createVisitSchema) },
+  responses: {
+    201: { description: 'Created', ...json(successOf(z.any())) },
+    400: { description: 'Target inactive / scan diri sendiri', ...json(errorEnvelopeSchema) },
+    404: { description: 'Kode tidak ditemukan', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/visits/{id}',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'Detail visit (peserta only)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'OK', ...json(successOf(z.any())) },
+    403: { description: 'Bukan peserta', ...json(errorEnvelopeSchema) },
+    404: { description: 'Visit tidak ditemukan', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/me/visits/{id}',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'Edit judul / lokasi (initiator-only)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateVisitMetaSchema) },
+  responses: {
+    200: { description: 'Updated', ...json(successOf(z.any())) },
+    403: { description: 'Bukan initiator', ...json(errorEnvelopeSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/me/visits/{id}/note',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'Edit own note (auto-route ke side caller)',
+  description:
+    'Body: { note }. Caller initiator → update noteDariInitiator. Caller target → update noteDariTarget. String kosong = hapus.',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateVisitNoteSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/visits/{id}',
+  tags: ['Movement · Visit (Mobile self)'],
+  summary: 'Cancel visit (initiator-only, dalam 1 jam)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    204: { description: 'Cancelled' },
+    409: { description: 'Window 1 jam lewat', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// --- Admin portal visit (read + delete moderation)
+registry.registerPath({
+  method: 'get',
+  path: '/admin/visit',
+  tags: ['Movement · Visit (Admin)'],
+  summary: 'List visits dengan filter cabang/jemaat/range tanggal/search',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/visit/{id}',
+  tags: ['Movement · Visit (Admin)'],
+  summary: 'Detail visit (admin)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/visit/{id}',
+  tags: ['Movement · Visit (Admin)'],
+  summary: 'Hapus visit (moderasi, audit logged)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ================================================================
+// Movement · Local Business (UMKM directory)
+// ================================================================
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/businesses',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'List bisnis saya (semua, termasuk nonaktif)',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/businesses',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Create bisnis baru',
+  security: adminAuth,
+  request: { body: json(createLocalBusinessSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/businesses/{id}',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Detail bisnis (owner only)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'OK', ...json(successOf(z.any())) },
+    403: { description: 'Bukan owner', ...json(errorEnvelopeSchema) },
+  },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/me/businesses/{id}',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Update bisnis (owner only)',
+  description:
+    'socialLinks kalau dikirim REPLACE entire array. isActive toggle hide/show di browse.',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }), body: json(updateLocalBusinessSchema) },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/businesses/{id}',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Hapus bisnis (owner only, cleanup files)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/businesses/{id}/hero',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Upload hero banner (image, multipart, max 5 MB)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: {
+        'multipart/form-data': { schema: z.object({ foto: z.any() }) },
+      },
+    },
+  },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/businesses/{id}/hero',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Clear hero banner',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Cleared' } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/businesses/{id}/logo',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Upload logo (auto-crop square 512x512, max 5 MB)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: {
+        'multipart/form-data': { schema: z.object({ foto: z.any() }) },
+      },
+    },
+  },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/businesses/{id}/logo',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Clear logo',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Cleared' } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/me/businesses/{id}/profile-pdf',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Upload company profile PDF (max 5 MB, passthrough)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: {
+        'multipart/form-data': { schema: z.object({ file: z.any() }) },
+      },
+    },
+  },
+  responses: { 200: { description: 'Uploaded', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me/businesses/{id}/profile-pdf',
+  tags: ['Movement · Local Business (Mobile owner)'],
+  summary: 'Clear company profile PDF',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Cleared' } },
+});
+
+// --- Browse Local Market (mobile public list)
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/local-market',
+  tags: ['Movement · Local Market (Mobile browse)'],
+  summary: 'Browse bisnis jemaat (filter cabang/industri/tipe/online/search)',
+  description: 'Hanya tampilkan bisnis isActive=true + owner.isActive=true.',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/me/local-market/{id}',
+  tags: ['Movement · Local Market (Mobile browse)'],
+  summary: 'Detail bisnis public',
+  description: 'Hidden kalau isActive=false atau owner inactive (kecuali caller = owner).',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'OK', ...json(successOf(z.any())) },
+    404: { description: 'Tidak ditemukan / hidden', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// --- Admin portal local-business (read + delete moderation)
+registry.registerPath({
+  method: 'get',
+  path: '/admin/local-business',
+  tags: ['Movement · Local Business (Admin)'],
+  summary: 'List bisnis dengan filter cabang/owner/industri/tipe/aktif/search',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(paginatedOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/local-business/{id}',
+  tags: ['Movement · Local Business (Admin)'],
+  summary: 'Detail bisnis (admin)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/local-business/{id}',
+  tags: ['Movement · Local Business (Admin)'],
+  summary: 'Hapus bisnis (moderasi + cleanup files)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ================================================================
+// Self-deactivate (delete account) — store compliance
+// ================================================================
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/me',
+  tags: ['Mobile · Self Service'],
+  summary: 'Self-deactivate (soft delete + revoke all sessions)',
+  description:
+    'Body harus confirmText="HAPUS AKUN SAYA" (literal). Set Jemaat.isActive=false + deactivatedAt + revoke semua RefreshToken. Reactivation hanya via admin portal.',
+  security: adminAuth,
+  request: { body: json(deleteMyAccountSchema) },
+  responses: {
+    200: { description: 'Deactivated', ...json(successOf(z.any())) },
+    400: { description: 'confirmText tidak match', ...json(errorEnvelopeSchema) },
+    409: { description: 'Akun sudah dinonaktifkan sebelumnya', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ================================================================
+// Legal Documents (admin CRUD + public read)
+// ================================================================
+registry.registerPath({
+  method: 'get',
+  path: '/public/legal/{key}',
+  tags: ['Public (no auth) · Legal'],
+  summary: 'Get legal doc (Terms / Privacy) untuk mobile pre-login screen',
+  description:
+    'No auth. Lang fallback ke `id` kalau lang yang di-minta tidak ada. :key = TERMS | PRIVACY.',
+  request: {
+    params: z.object({ key: z.enum(['TERMS', 'PRIVACY']) }),
+    query: z.object({ lang: z.enum(['id', 'en']).optional() }),
+  },
+  responses: {
+    200: { description: 'OK', ...json(successOf(z.any())) },
+    404: { description: 'Dokumen tidak ada', ...json(errorEnvelopeSchema) },
+  },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/legal',
+  tags: ['App Settings · Legal'],
+  summary: 'List semua legal docs (semua key × lang)',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/legal/{key}/{lang}',
+  tags: ['App Settings · Legal'],
+  summary: 'Detail legal doc',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      key: z.enum(['TERMS', 'PRIVACY']),
+      lang: z.enum(['id', 'en']),
+    }),
+  },
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'put',
+  path: '/admin/legal/{key}/{lang}',
+  tags: ['App Settings · Legal'],
+  summary: 'Upsert legal doc (title + content + version + isPublished)',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      key: z.enum(['TERMS', 'PRIVACY']),
+      lang: z.enum(['id', 'en']),
+    }),
+    body: json(upsertLegalDocumentSchema),
+  },
+  responses: { 200: { description: 'Saved', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/legal/{key}/{lang}',
+  tags: ['App Settings · Legal'],
+  summary: 'Delete translasi (id tidak boleh dihapus, fallback default)',
+  security: adminAuth,
+  request: {
+    params: z.object({
+      key: z.enum(['TERMS', 'PRIVACY']),
+      lang: z.enum(['id', 'en']),
+    }),
+  },
+  responses: {
+    204: { description: 'Deleted' },
+    400: { description: 'Tidak boleh hapus id', ...json(errorEnvelopeSchema) },
+  },
+});
+
+// ================================================================
+// App Version (admin CRUD + public check)
+// ================================================================
+registry.registerPath({
+  method: 'get',
+  path: '/public/app-version',
+  tags: ['Public (no auth) · App Version'],
+  summary: 'Check update aplikasi (pre-login splash + manual)',
+  description:
+    'Query: platform=ios|android (required) + currentVersion=1.0.0 (optional, semver). Server compute updateAvailable + forceUpdate via semver compare. Kalau belum ada published row, return null fields.',
+  request: {
+    query: z.object({
+      platform: z.enum(['ios', 'android']),
+      currentVersion: z.string().optional(),
+    }),
+  },
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/app-version',
+  tags: ['App Settings · App Version'],
+  summary: 'List semua versi (semua platform, history + published)',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'get',
+  path: '/admin/app-version/{id}',
+  tags: ['App Settings · App Version'],
+  summary: 'Detail version row',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/app-version',
+  tags: ['App Settings · App Version'],
+  summary: 'Create version baru (auto-unpublish row lama kalau isPublished=true)',
+  security: adminAuth,
+  request: { body: json(upsertAppVersionSchema) },
+  responses: { 201: { description: 'Created', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/app-version/{id}',
+  tags: ['App Settings · App Version'],
+  summary: 'Update version row (partial)',
+  security: adminAuth,
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: json(upsertAppVersionSchema.partial()),
+  },
+  responses: { 200: { description: 'Updated', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/app-version/{id}',
+  tags: ['App Settings · App Version'],
+  summary: 'Hapus version row (hard delete)',
+  security: adminAuth,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { 204: { description: 'Deleted' } },
+});
+
+// ================================================================
+// Maintenance (manual trigger jobs)
+// ================================================================
+registry.registerPath({
+  method: 'get',
+  path: '/admin/maintenance/refresh-token-stats',
+  tags: ['Maintenance'],
+  summary: 'Diagnostic count refresh tokens (total/expired/revoked/active)',
+  security: adminAuth,
+  responses: { 200: { description: 'OK', ...json(successOf(z.any())) } },
+});
+registry.registerPath({
+  method: 'post',
+  path: '/admin/maintenance/refresh-token-cleanup',
+  tags: ['Maintenance'],
+  summary: 'Manual trigger cleanup expired refresh tokens',
+  description:
+    'Otomatis juga jalan via scheduled-jobs (interval 6 jam). Endpoint ini untuk manual trigger oleh admin.',
+  security: adminAuth,
+  responses: { 200: { description: 'Cleanup result', ...json(successOf(z.any())) } },
 });
 
 // ---------- Health ----------

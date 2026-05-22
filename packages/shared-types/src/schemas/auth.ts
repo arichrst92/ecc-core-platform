@@ -32,11 +32,22 @@ export const faceDescriptorSchema = z
   .array(z.number())
   .length(128, 'Face descriptor harus 128 dimensi (MobileFaceNet)');
 
+/**
+ * Optional di V1 — opaque HMAC-signed nonce dari POST /auth/face/liveness-nonce.
+ * Saat di-set, server verify nonce TTL + binding ke noHp + one-shot consume.
+ * Future: required setelah grace period mobile migrate.
+ */
+const livenessNonceField = z.string().min(20).max(2048).optional().openapi({
+  description:
+    'Liveness nonce dari POST /auth/face/liveness-nonce (3 menit TTL, one-shot). Optional V1, required setelah grace period.',
+});
+
 export const faceLoginSchema = z
   .object({
     noHp: noHpSchema,
     descriptor: faceDescriptorSchema,
     modelVersion: z.string().min(1).max(32).optional(),
+    livenessNonce: livenessNonceField,
   })
   .openapi('FaceLoginInput');
 export type FaceLoginInput = z.infer<typeof faceLoginSchema>;
@@ -65,9 +76,23 @@ export const faceEnrollmentSchema = z
       })
       .optional()
       .openapi({ description: 'Audit metadata: device + consent info' }),
+    livenessNonce: livenessNonceField,
   })
   .openapi('FaceEnrollmentInput');
 export type FaceEnrollmentInput = z.infer<typeof faceEnrollmentSchema>;
+
+// ===== Liveness Nonce Request =====
+// POST /auth/face/liveness-nonce — caller specify noHp + purpose.
+// Response include nonce (opaque token, JWT-style HMAC signed, TTL 3 menit).
+export const requestLivenessNonceSchema = z
+  .object({
+    noHp: noHpSchema,
+    purpose: z.enum(['ENROLL', 'LOGIN']).openapi({
+      description: 'ENROLL untuk face enrollment baru, LOGIN untuk shortcut login.',
+    }),
+  })
+  .openapi('RequestLivenessNonceInput');
+export type RequestLivenessNonceInput = z.infer<typeof requestLivenessNonceSchema>;
 
 // ===== JWT Payload =====
 export interface JwtPayload {

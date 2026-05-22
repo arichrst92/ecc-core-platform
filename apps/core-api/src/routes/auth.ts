@@ -24,7 +24,13 @@ import {
   faceEnrollmentSchema,
   refreshTokenSchema,
   registerJemaatSchema,
+  requestLivenessNonceSchema,
 } from '@ecc/shared-types';
+import {
+  issueLivenessNonce,
+  consumeLivenessNonce,
+  LivenessNonceError,
+} from '../lib/liveness-nonce.js';
 import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -306,10 +312,51 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
  * - Reject stored descriptor dengan modelVersion lama (facenet-v1) — force
  *   re-enroll dengan mobilefacenet-v1
  */
+/**
+ * POST /auth/face/liveness-nonce — issue signed nonce untuk liveness gate.
+ *
+ * Mobile flow:
+ *   1. Sebelum start liveness challenge UI, panggil endpoint ini dengan
+ *      { noHp, purpose: 'ENROLL' | 'LOGIN' }.
+ *   2. Server return nonce (HMAC signed JWT) + expiresAt (3 menit dari now).
+ *   3. Mobile execute challenges client-side.
+ *   4. Mobile submit /face/login or /face/enroll dengan body include
+ *      `livenessNonce` field.
+ *   5. Server verify signature + TTL + one-shot, throw 401 kalau invalid.
+ *
+ * Rate-limited via authVerifyLimiter supaya attacker tidak bisa enumerate
+ * nonces. Backward compat: nonce OPTIONAL di V1, log warn kalau missing.
+ */
+authRouter.post('/face/liveness-nonce', authVerifyLimiter, async (req, res) => {
+  const { noHp, purpose } = requestLivenessNonceSchema.parse(req.body);
+  const { nonce, expiresAt } = issueLivenessNonce(noHp, purpose);
+  res.json({
+    success: true,
+    data: { nonce, expiresAt, ttlSeconds: Math.floor((expiresAt.getTime() - Date.now()) / 1000) },
+  });
+});
+
 authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
-  const { noHp, descriptor, modelVersion } = faceLoginSchema.parse(req.body);
+  const { noHp, descriptor, modelVersion, livenessNonce } = faceLoginSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
     throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
+  }
+  // Liveness gate — V1 optional supaya mobile lama tidak break.
+  // V2 akan flip ke required setelah grace period (2026-06-01).
+  if (livenessNonce) {
+    try {
+      consumeLivenessNonce(livenessNonce, noHp, 'LOGIN');
+    } catch (err: any) {
+      if (err instanceof LivenessNonceError) {
+        throw new ApiError(401, err.code, err.message);
+      }
+      throw err;
+    }
+  } else {
+    logger.warn(
+      { noHp, kind: 'face-login-no-nonce' },
+      '[liveness] face/login tanpa nonce — V1 grace, akan ke-enforce V2.',
+    );
   }
 
   const jemaat = await prisma.jemaat.findUnique({
@@ -375,12 +422,37 @@ authRouter.post('/face/login', authVerifyLimiter, async (req, res) => {
  * - Accept modelVersion + metadata di body untuk audit.
  */
 authRouter.post('/face/enroll', requireAuth, async (req, res) => {
-  const { descriptor, modelVersion, metadata } = faceEnrollmentSchema.parse(req.body);
+  const { descriptor, modelVersion, metadata, livenessNonce } = faceEnrollmentSchema.parse(req.body);
   if (!isValidDescriptor(descriptor)) {
     throw new ApiError(422, 'FACE_INVALID_DESCRIPTOR', 'Descriptor tidak valid (harus 128-dim, semua finite).');
   }
 
   const userId = req.user!.sub;
+  // Liveness gate — V1 optional. Untuk ENROLL, expect noHp dari current jemaat.
+  if (livenessNonce) {
+    const callerNoHp = (
+      await prisma.jemaat.findUnique({
+        where: { id: req.user!.jemaatId },
+        select: { noHp: true },
+      })
+    )?.noHp;
+    if (!callerNoHp) {
+      throw new ApiError(400, 'NO_PHONE', 'Caller tidak punya noHp — tidak bisa verify liveness.');
+    }
+    try {
+      consumeLivenessNonce(livenessNonce, callerNoHp, 'ENROLL');
+    } catch (err: any) {
+      if (err instanceof LivenessNonceError) {
+        throw new ApiError(401, err.code, err.message);
+      }
+      throw err;
+    }
+  } else {
+    logger.warn(
+      { userId, kind: 'face-enroll-no-nonce' },
+      '[liveness] face/enroll tanpa nonce — V1 grace, akan ke-enforce V2.',
+    );
+  }
 
   // Cek kalau sudah enrolled — POST untuk first-time only, re-enroll via PUT.
   const existing = await prisma.user.findUnique({

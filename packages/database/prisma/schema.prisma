@@ -132,6 +132,11 @@ model Jemaat {
   // NULL untuk jemaat lama yang dibuat admin via portal.
   registeredViaJemaatId String? @map("registered_via_jemaat_id") @db.Uuid
   isActive        Boolean   @default(true) @map("is_active")
+  // Soft-delete metadata. Saat jemaat self-deactivate via DELETE /admin/me,
+  // simpan timestamp + alasan opsional. isActive=false sudah cukup untuk
+  // gate access; field ini hanya untuk audit trail.
+  deactivatedAt   DateTime? @map("deactivated_at")
+  deactivationReason String? @map("deactivation_reason") @db.Text
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -1398,4 +1403,67 @@ enum TipeBisnis {
   B2B2C
 
   @@map("tipe_bisnis")
+}
+
+// ============================================================
+// 13. LEGAL DOCUMENTS — Terms & Privacy untuk mobile + portal admin CRUD
+// ============================================================
+// Configurable dari portal supaya legal team bisa update tanpa rebuild app.
+// Multi-language: id wajib, en optional. Public endpoint (no auth) supaya
+// pre-login bisa akses. Mobile cache by version untuk avoid refetch.
+model LegalDocument {
+  id              String    @id @default(uuid()) @db.Uuid
+  key             LegalKey
+  language        String    @db.VarChar(5)              // ISO 639-1: "id" | "en"
+  title           String    @db.VarChar(255)
+  content         String    @db.Text                    // markdown
+  // Version string ISO date (mis. "2026-05-22"). Bumped tiap publish baru
+  // supaya mobile bisa detect update. Tidak harus monoton — admin pakai
+  // tanggal publish.
+  version         String    @db.VarChar(20)
+  isPublished     Boolean   @default(true) @map("is_published")
+  publishedAt     DateTime  @map("published_at")
+  publishedByUserId String? @map("published_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@unique([key, language])
+  @@map("legal_document")
+}
+
+enum LegalKey {
+  TERMS
+  PRIVACY
+
+  @@map("legal_key")
+}
+
+// ============================================================
+// 14. APP VERSION — Update check (force/recommended) per platform
+// ============================================================
+// Cuma 1 row aktif (isPublished=true) per platform. Old versions di-keep
+// untuk audit (admin bisa rollback dengan toggle isPublished). Mobile call
+// GET /public/app-version?platform=ios&currentVersion=1.0.0 → semver compare.
+model AppVersion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  platform            Platform
+  latestVersion       String    @map("latest_version") @db.VarChar(20)
+  minSupportedVersion String    @map("min_supported_version") @db.VarChar(20)
+  releaseNotes        String?   @map("release_notes") @db.Text          // markdown atau plain
+  downloadUrl         String    @map("download_url") @db.Text
+  isPublished         Boolean   @default(false) @map("is_published")
+  publishedAt         DateTime? @map("published_at")
+  publishedByUserId   String?   @map("published_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([platform, isPublished])
+  @@map("app_version")
+}
+
+enum Platform {
+  IOS
+  ANDROID
+
+  @@map("app_platform")
 }

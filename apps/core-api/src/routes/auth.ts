@@ -25,7 +25,7 @@ import {
   refreshTokenSchema,
   registerJemaatSchema,
 } from '@ecc/shared-types';
-import { ApiError, BadRequest, Conflict, NotFound, Unauthorized } from '../lib/errors.js';
+import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { resolveJemaatAccess } from '../lib/menu-access.js';
@@ -612,6 +612,15 @@ authRouter.post('/refresh', refreshLimiter, async (req, res) => {
       },
     },
   });
+  // Gate refresh: kalau jemaat sudah self-deactivate, revoke all + tolak.
+  // Kombinasi dgn revoke saat DELETE /admin/me memastikan session benar2 mati.
+  if (!user.jemaat.isActive) {
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    throw Unauthorized('Akun sudah dinonaktifkan. Silakan hubungi admin.');
+  }
 
   const roles = user.jemaat.jemaatRoles.map((jr) => {
     const status = jr.subRoleStatus?.nama ? `:${jr.subRoleStatus.nama}` : '';
@@ -748,6 +757,12 @@ async function issueAuthResponse(noHp: string, req: Request, method: 'OTP' | 'FA
       },
     },
   });
+  // Gate: jemaat self-deactivated → tolak login. Reactivation hanya via portal admin.
+  if (!jemaat.isActive) {
+    throw Forbidden(
+      'Akun Anda sudah dinonaktifkan. Hubungi admin cabang untuk reaktivasi.',
+    );
+  }
 
   let user = jemaat.user;
   if (!user) {

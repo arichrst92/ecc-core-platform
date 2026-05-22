@@ -60,6 +60,10 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'api-key', label: 'API Keys', href: '/dashboard/api-key', group: 'Developer Tools' },
   { key: 'audit-log', label: 'Audit Log', href: '/dashboard/audit-log', group: 'Developer Tools' },
   { key: 'role-access', label: 'Role Access', href: '/dashboard/role-access', group: 'Developer Tools' },
+
+  // App Settings — content untuk mobile app (legal, version)
+  { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },
+  { key: 'app-version', label: 'App Versions', href: '/dashboard/app-version', group: 'App Settings' },
 ];
 
 export const MENU_KEYS = MENU_CATALOG.map((m) => m.key) as readonly string[];

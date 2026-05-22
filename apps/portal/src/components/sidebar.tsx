@@ -25,6 +25,8 @@ import {
   Megaphone,
   Handshake,
   Store,
+  FileText,
+  Smartphone,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -96,6 +98,13 @@ const groups: NavGroup[] = [
     items: [
       { href: '/dashboard/news', label: 'News', icon: Newspaper, menuKey: 'news' },
       { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
+    ],
+  },
+  {
+    label: 'App Settings',
+    items: [
+      { href: '/dashboard/legal', label: 'Legal Docs', icon: FileText, menuKey: 'legal' },
+      { href: '/dashboard/app-version', label: 'App Versions', icon: Smartphone, menuKey: 'app-version' },
     ],
   },
   {

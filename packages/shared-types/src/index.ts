@@ -31,3 +31,6 @@ export * from './schemas/family.js';
 export * from './schemas/branch-change.js';
 export * from './schemas/visit.js';
 export * from './schemas/local-business.js';
+export * from './schemas/delete-account.js';
+export * from './schemas/legal.js';
+export * from './schemas/app-version.js';

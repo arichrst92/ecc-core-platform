@@ -16,6 +16,7 @@ import {
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin/index.js';
 import { publicRouter } from './routes/public/index.js';
+import { publicUnauthRouter } from './routes/public-unauth.js';
 import { uploadRouter } from './routes/upload.js';
 import { openApiSpec } from './openapi.js';
 import { UPLOADS_DIR, PUBLIC_UPLOADS_PREFIX } from './lib/storage.js';
@@ -108,6 +109,11 @@ export function createApp(): Express {
 
   // Public/consumer endpoints — auth via API key, limit per API key.
   app.use('/api/v1', publicApiLimiter, publicRouter);
+
+  // Public (unauthenticated) — legal docs + app version check.
+  // Diakses sebelum login (splash, signup screen). Limit pakai globalLimiter
+  // saja karena unauthenticated.
+  app.use('/public', publicUnauthRouter);
 
   // Fallback global limiter untuk endpoint lain (mis. /health di luar trust)
   app.use(globalLimiter);

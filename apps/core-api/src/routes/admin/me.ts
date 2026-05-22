@@ -34,6 +34,7 @@ import {
   registerFamilyNewSchema,
   updateFamilyRelationSchema,
   createBranchChangeRequestSchema,
+  deleteMyAccountSchema,
   type FamilyRole,
 } from '@ecc/shared-types';
 import { BadRequest, Conflict, NotFound, Unauthorized } from '../../lib/errors.js';
@@ -872,4 +873,83 @@ meRouter.post('/branch-change-request', async (req, res) => {
     after: created,
   });
   res.status(201).json({ success: true, data: created });
+});
+
+// ============================================================
+//  DELETE /admin/me — self-deactivate (soft delete)
+// ============================================================
+// Requirement: Apple/Google store compliance — app dengan account creation
+// wajib provide delete-account flow. Implementasi soft delete:
+//   1. Validate confirmText match "HAPUS AKUN SAYA" (Zod literal)
+//   2. Set jemaat.isActive=false + deactivatedAt + deactivationReason
+//   3. Revoke semua RefreshToken user → force logout dari semua device
+//   4. Audit log
+//
+// Reactivation hanya via portal admin (toggle isActive=true), tidak dari
+// mobile. Existing access token masih valid sampai expiry (~15 min) — tapi
+// karena refresh sudah revoked, session naturally expire.
+//
+// Data preserved (tidak di-delete): kehadiran, event participation, visit,
+// family relation, local business (hidden via isActive filter), donation.
+meRouter.delete('/', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = deleteMyAccountSchema.parse(req.body ?? {});
+
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { id: true, namaLengkap: true, isActive: true, user: { select: { id: true } } },
+  });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  if (!jemaat.isActive) {
+    throw Conflict('Akun sudah dinonaktifkan sebelumnya.');
+  }
+
+  const now = new Date();
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.jemaat.update({
+      where: { id: jemaat.id },
+      data: {
+        isActive: false,
+        deactivatedAt: now,
+        deactivationReason: input.reason ?? null,
+      },
+      select: { id: true, isActive: true, deactivatedAt: true },
+    });
+    // Revoke semua refresh token aktif → force logout dari semua device.
+    // Access token short-lived (~15min) tetap valid sampai expiry; refresh
+    // tidak bisa lagi, jadi session naturally berakhir.
+    let revokedCount = 0;
+    if (jemaat.user?.id) {
+      const r = await tx.refreshToken.updateMany({
+        where: { userId: jemaat.user.id, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      revokedCount = r.count;
+    }
+    return { updated, revokedCount };
+  });
+
+  audit(req, {
+    action: 'DELETE',
+    resource: 'jemaat',
+    resourceId: jemaat.id,
+    resourceLabel: `[self-deactivate] ${jemaat.namaLengkap}`,
+    metadata: {
+      kind: 'self-deactivate',
+      reason: input.reason ?? null,
+      revokedSessions: result.revokedCount,
+    },
+  });
+
+  res.json({
+    success: true,
+    data: {
+      jemaatId: jemaat.id,
+      deactivatedAt: result.updated.deactivatedAt,
+      message:
+        'Akun berhasil dinonaktifkan. Anda akan ter-logout dari semua device. ' +
+        'Hubungi admin cabang untuk reaktivasi.',
+      revokedSessions: result.revokedCount,
+    },
+  });
 });

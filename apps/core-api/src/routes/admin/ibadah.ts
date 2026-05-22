@@ -77,8 +77,9 @@ ibadahRouter.get('/calendar', async (req, res) => {
   if ((to.getTime() - from.getTime()) / DAY > 366) {
     throw BadRequest('Rentang max 366 hari');
   }
-  // End-of-day untuk `to` supaya inclusive
-  to.setHours(23, 59, 59, 999);
+  // End-of-day untuk `to` supaya inclusive — pakai UTC supaya konsisten dengan
+  // tanggalMulai (UTC midnight) & generator yang sekarang full-UTC.
+  to.setUTCHours(23, 59, 59, 999);
 
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
   const kategoriIbadahId = typeof req.query.kategoriIbadahId === 'string' ? req.query.kategoriIbadahId : undefined;
@@ -248,13 +249,26 @@ ibadahRouter.delete('/:id', async (req, res) => {
 // ============================================================
 
 function parseTanggal(input: string): Date {
-  // Strict YYYY-MM-DD
+  // Strict YYYY-MM-DD — return UTC midnight supaya konsisten dengan
+  // @db.Date Prisma & generator occurrence.
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) {
     throw BadRequest('Format tanggal harus YYYY-MM-DD');
   }
   const d = new Date(input);
   if (isNaN(d.getTime())) throw BadRequest('Tanggal tidak valid');
   return d;
+}
+
+/**
+ * "Today" sebagai calendar-date di TZ server (proses Node), di-construct
+ * sebagai UTC midnight. Server ECC jalan di WIB → ini adalah hari ini-nya
+ * jemaat. Tanpa konversi via Date.UTC, `setHours(0,0,0,0)` pada Date baru
+ * akan return LOCAL midnight (UTC 17:00 hari sebelumnya di WIB), yang tidak
+ * cocok dgn `tanggalIbadah` di DB (UTC midnight). Lihat ibadah-occurrences.ts.
+ */
+function todayAsUtcMidnight(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 }
 
 ibadahRouter.get('/:id/occurrence/cancelled', async (req, res) => {
@@ -418,13 +432,12 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
 
   const input = ibadahCheckinSchema.parse(req.body);
 
-  // Resolve tanggal — default hari ini
+  // Resolve tanggal — default hari ini (UTC midnight, biar match @db.Date)
   let tanggalDate: Date;
   if (input.tanggalIbadah) {
     tanggalDate = parseTanggal(input.tanggalIbadah);
   } else {
-    tanggalDate = new Date();
-    tanggalDate.setHours(0, 0, 0, 0);
+    tanggalDate = todayAsUtcMidnight();
   }
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
 
@@ -548,14 +561,13 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
   const ibadah = await prisma.ibadah.findUnique({ where: { id: req.params.id } });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
 
-  // Tanggal default = hari ini
+  // Tanggal default = hari ini (UTC midnight, biar match @db.Date)
   let tanggalDate: Date;
   const tanggalStr = typeof req.query.tanggalIbadah === 'string' ? req.query.tanggalIbadah : undefined;
   if (tanggalStr) {
     tanggalDate = parseTanggal(tanggalStr);
   } else {
-    tanggalDate = new Date();
-    tanggalDate.setHours(0, 0, 0, 0);
+    tanggalDate = todayAsUtcMidnight();
   }
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
 

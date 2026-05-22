@@ -10,12 +10,24 @@
  *
  * Edge case MONTHLY: kalau tanggalMulai = 31 dan bulan tujuan hanya 30 hari,
  * skip bulan tsb (atau pakai tanggal terakhir bulan). Default: skip.
+ *
+ * TIMEZONE NOTE
+ * -------------
+ * Semua tanggal di-treat sebagai "calendar date" tanpa TZ semantics dan
+ * disimpan sebagai UTC midnight (Prisma @db.Date returns Date object di UTC).
+ * Function ini wajib pakai UTC methods (getUTCDay, setUTCHours, setUTCDate)
+ * supaya tidak shift hari saat server jalan di TZ != UTC.
+ *
+ * Bug history: pre-fix pakai getDay/setHours/setDate (local) → kalau server di
+ * WIB (UTC+7), hari Minggu (00:00 UTC) jadi getDay()=6 (Sabtu local) → occurrence
+ * geser jadi Sabtu. Lihat juga `toISOString().slice(0,10)` di calendar endpoint
+ * yang return UTC date — harus konsisten dengan generator.
  */
 
 type TipeJadwal = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
 type HariMinggu = 'MINGGU' | 'SENIN' | 'SELASA' | 'RABU' | 'KAMIS' | 'JUMAT' | 'SABTU';
 
-// JS Date.getDay(): 0 = Sunday (MINGGU), 1 = Monday, ..., 6 = Saturday
+// Date.getUTCDay(): 0 = Sunday (MINGGU), 1 = Monday, ..., 6 = Saturday
 const HARI_TO_DOW: Record<HariMinggu, number> = {
   MINGGU: 0, SENIN: 1, SELASA: 2, RABU: 3, KAMIS: 4, JUMAT: 5, SABTU: 6,
 };
@@ -28,7 +40,7 @@ export interface IbadahForOccurrence {
 
 /**
  * Generate semua occurrence dates dalam rentang [from, to] (inclusive).
- * Return: array Date (sorted ascending), tanpa duplikat.
+ * Return: array Date (sorted ascending), tanpa duplikat. Semua at UTC midnight.
  */
 export function generateOccurrences(
   ibadah: IbadahForOccurrence,
@@ -54,38 +66,38 @@ export function generateOccurrences(
     const interval = ibadah.tipeJadwal === 'WEEKLY' ? 7 : 14;
     const targetDow = HARI_TO_DOW[ibadah.hari];
 
-    // Cari first occurrence ≥ tanggalMulai yang jatuh di hari target
+    // Cari first occurrence ≥ tanggalMulai yang jatuh di hari target — UTC
     const cur = new Date(ibadah.tanggalMulai);
-    cur.setHours(0, 0, 0, 0);
-    while (cur.getDay() !== targetDow) {
-      cur.setDate(cur.getDate() + 1);
+    cur.setUTCHours(0, 0, 0, 0);
+    while (cur.getUTCDay() !== targetDow) {
+      cur.setUTCDate(cur.getUTCDate() + 1);
     }
     // Iterate by interval
     while (cur.getTime() <= toMs) {
       if (cur.getTime() >= fromMs && cur.getTime() >= startMs) {
         dates.push(new Date(cur));
       }
-      cur.setDate(cur.getDate() + interval);
+      cur.setUTCDate(cur.getUTCDate() + interval);
     }
     return dates;
   }
 
   if (ibadah.tipeJadwal === 'MONTHLY') {
-    const dayOfMonth = ibadah.tanggalMulai.getDate();
+    const dayOfMonth = ibadah.tanggalMulai.getUTCDate();
     // Mulai dari bulan dari `from` atau dari `tanggalMulai` (yang lebih besar)
     const startMonth =
       from.getTime() > ibadah.tanggalMulai.getTime() ? from : ibadah.tanggalMulai;
-    let year = startMonth.getFullYear();
-    let month = startMonth.getMonth();
+    let year = startMonth.getUTCFullYear();
+    let month = startMonth.getUTCMonth();
     // Kalau bulan saat ini sudah lewat hari `dayOfMonth`, skip ke bulan berikutnya
-    if (startMonth.getDate() > dayOfMonth) {
+    if (startMonth.getUTCDate() > dayOfMonth) {
       month += 1;
       if (month > 11) { month = 0; year += 1; }
     }
     while (true) {
-      const candidate = new Date(year, month, dayOfMonth);
+      const candidate = new Date(Date.UTC(year, month, dayOfMonth));
       // Validasi: pastikan tanggal valid (mis. 31 Feb auto-roll → skip)
-      if (candidate.getMonth() !== month) {
+      if (candidate.getUTCMonth() !== month) {
         // Tanggal tidak valid di bulan ini (mis. Feb 31 → Mar 3) — skip
       } else if (candidate.getTime() > toMs) {
         break;
@@ -94,7 +106,7 @@ export function generateOccurrences(
       }
       month += 1;
       if (month > 11) { month = 0; year += 1; }
-      if (year - startMonth.getFullYear() > 5) break; // safety guard
+      if (year - startMonth.getUTCFullYear() > 5) break; // safety guard
     }
     return dates;
   }

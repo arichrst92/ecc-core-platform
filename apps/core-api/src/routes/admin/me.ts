@@ -28,6 +28,7 @@ import { Router } from 'express';
 import { prisma, Prisma } from '@ecc/database';
 import {
   selfEditJemaatSchema,
+  editDependentJemaatSchema,
   linkFamilyByKodeSchema,
   linkFamilyByPhoneSchema,
   registerFamilyNewSchema,
@@ -111,7 +112,7 @@ async function upsertFamilyLink(
 
 meRouter.get('/', async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  const jemaat = await prisma.jemaat.findUnique({
+  let jemaat = await prisma.jemaat.findUnique({
     where: { id: jemaatId },
     include: {
       cabang: { select: { id: true, nama: true, kode: true } },
@@ -131,11 +132,79 @@ meRouter.get('/', async (req, res) => {
           },
         },
       },
+      // Ministry membership (Pelayanan via JemaatPelayanan junction).
+      // Patch 2026-05-22 per request mobile ministry-endpoints.md.
+      jemaatPelayanan: {
+        where: { isActive: true },
+        include: {
+          pelayanan: { select: { id: true, nama: true, deskripsi: true } },
+          pelayananRole: { select: { id: true, nama: true, level: true } },
+        },
+        orderBy: { tanggalMulai: 'desc' },
+      },
       user: { select: { id: true, fotoUrl: true, faceEnrolledAt: true } },
     },
   });
   if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
-  res.json({ success: true, data: jemaat });
+
+  // Patch 2026-05-22 (#4 Issue 1): self-heal kode kosong. Kalau jemaat lama
+  // belum punya kode (legacy data), generate on-the-fly + persist. Idempotent.
+  if (!jemaat.kode) {
+    const newKode = await generateUniqueKode(
+      async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
+    );
+    jemaat = await prisma.jemaat.update({
+      where: { id: jemaatId },
+      data: { kode: newKode },
+      include: {
+        cabang: { select: { id: true, nama: true, kode: true } },
+        jemaatRoles: {
+          where: { isActive: true },
+          include: { role: true, subRole: true, subRoleStatus: true },
+        },
+        homecellMembership: {
+          where: { isActive: true },
+          include: {
+            homecell: {
+              select: {
+                id: true,
+                nama: true,
+                area: { select: { id: true, nama: true } },
+              },
+            },
+          },
+        },
+        jemaatPelayanan: {
+          where: { isActive: true },
+          include: {
+            pelayanan: { select: { id: true, nama: true, deskripsi: true } },
+            pelayananRole: { select: { id: true, nama: true, level: true } },
+          },
+          orderBy: { tanggalMulai: 'desc' },
+        },
+        user: { select: { id: true, fotoUrl: true, faceEnrolledAt: true } },
+      },
+    });
+  }
+
+  // Shape response — flatten jemaatPelayanan → ministries (mobile-friendly).
+  const ministries = jemaat.jemaatPelayanan.map((jp) => ({
+    id: jp.id,
+    pelayananId: jp.pelayananId,
+    nama: jp.pelayanan.nama,
+    deskripsi: jp.pelayanan.deskripsi,
+    posisi: jp.pelayananRole.nama,
+    posisiLevel: jp.pelayananRole.level,
+    tanggalMulai: jp.tanggalMulai,
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      ...jemaat,
+      ministries,
+    },
+  });
 });
 
 meRouter.patch('/', async (req, res) => {
@@ -145,14 +214,47 @@ meRouter.patch('/', async (req, res) => {
   const before = await prisma.jemaat.findUnique({ where: { id: jemaatId } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
 
+  // Patch 2026-05-22: cabangId boleh di-update langsung (direct-branch-change).
+  // Validate cabang exists + active. Pindahkan ke cabang yang sama = no-op (skip).
+  let cabangIdToUpdate: string | undefined;
+  if (input.cabangId && input.cabangId !== before.cabangId) {
+    const targetCabang = await prisma.cabangGereja.findUnique({
+      where: { id: input.cabangId },
+      select: { id: true, nama: true, isActive: true },
+    });
+    if (!targetCabang) throw BadRequest('Cabang tujuan tidak ditemukan.');
+    if (!targetCabang.isActive) throw BadRequest('Cabang tujuan nonaktif.');
+    cabangIdToUpdate = input.cabangId;
+  }
+
   const data: Prisma.JemaatUpdateInput = {
     namaLengkap: input.namaLengkap,
     email: input.email ?? undefined,
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     jenisKelamin: input.jenisKelamin ?? undefined,
     alamat: input.alamat ?? undefined,
+    cabang: cabangIdToUpdate ? { connect: { id: cabangIdToUpdate } } : undefined,
   };
   const updated = await prisma.jemaat.update({ where: { id: jemaatId }, data });
+
+  // Separate audit row untuk branch change supaya ops bisa filter by resource
+  // type. Existing self-edit audit tetap capture full before/after.
+  if (cabangIdToUpdate) {
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'jemaat_cabang',
+      resourceId: updated.id,
+      resourceLabel: `Pindah cabang: ${updated.namaLengkap}`,
+      before: { cabangId: before.cabangId },
+      after: { cabangId: updated.cabangId },
+      metadata: {
+        kind: 'direct-branch-change-mobile',
+        fromCabangId: before.cabangId,
+        toCabangId: updated.cabangId,
+      },
+    });
+  }
+
   audit(req, {
     action: 'UPDATE',
     resource: 'jemaat',
@@ -570,6 +672,105 @@ meRouter.patch('/family/:jemaatId', async (req, res) => {
     after: link,
   });
   res.json({ success: true, data: link });
+});
+
+// ============================================================
+//  Dependent profile edit + foto (Patch 2026-05-22, M5)
+// ============================================================
+// Parent (primaryGuardian) bisa edit basic profile + foto dependent (anak
+// balita / lansia tanpa HP). Authorization: target.primaryGuardianId ===
+// current jemaatId + target.noHp IS NULL (artinya bonafide dependent, bukan
+// adult yang harus self-edit).
+//
+// Per request mobile profile-edit-completeness.md.
+
+/**
+ * Helper: resolve target dependent + verify current user adalah primaryGuardian.
+ * Throws 403 kalau bukan guardian, 400 kalau target bukan dependent (punya HP).
+ */
+async function assertDependentGuardian(currentJemaatId: string, targetJemaatId: string) {
+  if (currentJemaatId === targetJemaatId) {
+    throw BadRequest('Endpoint ini untuk edit dependent — pakai /admin/me untuk self-edit.');
+  }
+  const target = await prisma.jemaat.findUnique({
+    where: { id: targetJemaatId },
+    select: {
+      id: true,
+      namaLengkap: true,
+      noHp: true,
+      primaryGuardianId: true,
+      fotoUrl: true,
+      tanggalLahir: true,
+      jenisKelamin: true,
+      alamat: true,
+    },
+  });
+  if (!target) throw NotFound('Jemaat dependent tidak ditemukan.');
+  if (target.primaryGuardianId !== currentJemaatId) {
+    throw Unauthorized(
+      'Hanya primary guardian yang boleh edit profile dependent ini.',
+    );
+  }
+  if (target.noHp) {
+    throw BadRequest(
+      'Target punya nomor HP sendiri — bukan dependent. Mereka harus self-edit via /admin/me.',
+    );
+  }
+  return target;
+}
+
+meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const targetId = req.params.jemaatId;
+  const input = editDependentJemaatSchema.parse(req.body);
+  const before = await assertDependentGuardian(jemaatId, targetId);
+
+  const data: Prisma.JemaatUpdateInput = {
+    namaLengkap: input.namaLengkap,
+    tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
+    jenisKelamin: input.jenisKelamin ?? undefined,
+    alamat: input.alamat ?? undefined,
+  };
+  const updated = await prisma.jemaat.update({ where: { id: targetId }, data });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat',
+    resourceId: updated.id,
+    resourceLabel: `Edit dependent: ${updated.namaLengkap}`,
+    before,
+    after: updated,
+    metadata: { kind: 'dependent-edit-mobile', guardianJemaatId: jemaatId },
+  });
+  res.json({ success: true, data: updated });
+});
+
+meRouter.post('/family/:jemaatId/foto', flexImageUpload(), async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const targetId = req.params.jemaatId;
+  if (!req.file) {
+    throw BadRequest(
+      'File foto wajib. Kirim sebagai multipart/form-data dengan field name "foto" (atau "file" / "image").',
+    );
+  }
+  await assertDependentGuardian(jemaatId, targetId);
+
+  const fotoUrl = await saveProfilePhoto('jemaat', targetId, req.file.buffer);
+  const updated = await prisma.jemaat.update({
+    where: { id: targetId },
+    data: { fotoUrl },
+    select: { id: true, fotoUrl: true },
+  });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'jemaat',
+    resourceId: targetId,
+    metadata: {
+      kind: 'dependent-foto-mobile',
+      guardianJemaatId: jemaatId,
+      size: req.file.size,
+    },
+  });
+  res.json({ success: true, data: updated });
 });
 
 meRouter.delete('/family/:jemaatId', async (req, res) => {

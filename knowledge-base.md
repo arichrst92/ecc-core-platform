@@ -2028,6 +2028,89 @@ Mobile submit spec lengkap push notif (Expo Push API + Device/Notification table
 
 **Code belum di-implement** — masih DEFERRED. KB akan di-update lagi setelah product re-approve + actual implementation.
 
+### Patch 2026-05-22a — Mobile batch #5: jam event, direct branch change, ministry, jemaat-public, profile-edit
+
+5 request paralel dari mobile (24 jam terakhir), di-batch karena scope kecil-medium dan saling independent. Di-implement dengan default rekomendasi BE setelah diskusi.
+
+#### #2 Event time fields — `jamMulai`/`jamSelesai` separate (Option B)
+
+**Request mobile**: `backend-request-event-time-fields.md`. Sebelumnya `Event.tanggalMulai DateTime` sudah include jam (no `@db.Date`) tapi admin portal cuma input `type="date"` → effective T00:00:00. Mobile prefer Option B (separate fields, konsisten dengan `Ibadah`).
+
+Implementasi:
+- Migration `20260522010000_event_jam_fields` — ADD COLUMN `jam_mulai`, `jam_selesai` VARCHAR(5) NULL
+- `schema.prisma Event` — tambah `jamMulai`/`jamSelesai` `String?` `@db.VarChar(5)`
+- `shared-types/event.ts` — `createEventSchema`/`updateEventSchema` accept `jamMulai`/`jamSelesai` regex `HH:mm`
+- `routes/admin/event.ts` — POST/PATCH propagate jam fields (default null)
+- `portal/event-form-modal.tsx` — 2 time inputs (`type="time"`) di Section "Waktu & Lokasi"
+
+Backward compat: existing events (jam = NULL) → mobile fallback parse ISO dari `tanggalMulai` (helper existing). Kalau jam NULL → date-only event, hide row jam.
+
+#### #5 Direct branch change — extend PATCH /admin/me
+
+**Request mobile**: `backend-request-direct-branch-change.md`. UX simplification: trust-based langsung pindah tanpa approval admin.
+
+Implementasi:
+- `selfEditJemaatSchema` — tambah `cabangId: uuidSchema.optional()`
+- PATCH /admin/me handler — kalau `cabangId` beda dari before, validate exists+active, update via `cabang.connect`
+- Separate audit row `resource: 'jemaat_cabang'` untuk traceability (sisanya bundled di self-edit audit)
+- Branch change request flow (`POST /admin/me/branch-change-request`) **tetap** untuk backward compat — mobile bisa hapus tombol "ajukan" tapi BE endpoint tetap supaya tidak break admin portal queue
+
+#### #1 Ministry endpoints — leverage existing Pelayanan schema
+
+**Request mobile**: `backend-request-ministry-endpoints.md`. Mobile asumsi perlu table baru `Ministry` + `MinistryMembership` — **tidak perlu**: schema sudah punya `Pelayanan` + `PelayananRole` + `JemaatPelayanan` junction.
+
+Implementasi:
+- `GET /admin/me` — extend dengan `ministries: Array<{ id, pelayananId, nama, deskripsi, posisi, posisiLevel, tanggalMulai }>` derived dari `jemaatPelayanan` where `isActive`
+- New route `apps/core-api/src/routes/admin/ministry.ts`:
+  - `GET /admin/ministry` — list semua Pelayanan + memberCount + leader proxy (member dengan role level tertinggi)
+  - `GET /admin/ministry/:id` — detail + members + myMembership flag
+- Wired di admin/index.ts sebagai `/ministry`
+
+Note: Mobile asumsi "ministry biasanya cabang-specific" — schema actually global. Skip `?cabangId` filter untuk MVP. Leader tidak ada di schema explicit — derive dari highest level JemaatPelayanan.
+
+#### #3 Jemaat public profile — tiered visibility
+
+**Request mobile**: `backend-request-jemaat-public-profile.md`. Mobile suggest Opsi (d) tiered. Pakai pendekatan **hybrid**: Public fields (id/nama/foto/cabang/roles/ministries/homecell) selalu visible untuk authenticated user; sensitive fields (noHp full, DOB tahun, alamat, family) hanya untuk "close relation" (same-cabang ATAU family-linked ATAU homecell co-member).
+
+Implementasi:
+- New route `apps/core-api/src/routes/admin/jemaat-public.ts` — `GET /admin/jemaat-public/:id`
+- Endpoint TIDAK overlap dengan existing `/admin/jemaat/:id` (admin CRUD untuk fulltimer)
+- Helper: `maskNoHp()`, `birthMonthDay()` — selalu emit `noHpMasked` + `ulangTahunBulanTgl` even untuk public-only
+- Response include `visibility: { isCloseRelation, reason }` untuk mobile UI hint
+
+**Penting untuk mobile**: path baru `/admin/jemaat-public/:id`, **bukan** `/admin/jemaat/:id` (existing admin CRUD route).
+
+#### #4 Profile edit completeness — kode self-heal + dependent edit/foto
+
+**Request mobile**: `backend-request-profile-edit-completeness.md`.
+
+Issue 1 (kode kosong): **self-heal** di `GET /admin/me` handler. Kalau `jemaat.kode === null`, generate via `generateUniqueKode()` + persist. Idempotent, no admin intervention needed. Backfill ad-hoc tidak perlu — endpoint heal saat user pertama buka profile.
+
+Issue 2 (foto dependent): `POST /admin/me/family/:jemaatId/foto` — flexImageUpload + saveProfilePhoto. Auth: target harus dependent (`noHp IS NULL`) DAN `primaryGuardianId === currentJemaatId`.
+
+Issue 3 (PATCH dependent): `PATCH /admin/me/family/:jemaatId/profile` — schema baru `editDependentJemaatSchema` (nama, DOB, JK, alamat). Same auth check. Path explicit `/profile` supaya tidak conflict dengan existing `PATCH /admin/me/family/:jemaatId` (yang update FamilyRelation.role).
+
+Helper `assertDependentGuardian(currentId, targetId)` consolidate auth check (DRY untuk 2 endpoint).
+
+**File berubah** (mostly batch):
+- `packages/database/prisma/schema.prisma` — Event.jamMulai/jamSelesai
+- `packages/database/prisma/migrations/20260522010000_event_jam_fields/migration.sql`
+- `packages/shared-types/src/schemas/event.ts` — jam fields di create/update
+- `packages/shared-types/src/schemas/auth.ts` — selfEdit cabangId + editDependentJemaatSchema baru
+- `apps/core-api/src/routes/admin/me.ts` — PATCH cabangId, ministries di GET, kode self-heal, dependent foto + profile endpoints
+- `apps/core-api/src/routes/admin/event.ts` — jam fields propagate
+- `apps/core-api/src/routes/admin/ministry.ts` — NEW
+- `apps/core-api/src/routes/admin/jemaat-public.ts` — NEW
+- `apps/core-api/src/routes/admin/index.ts` — wire 2 new routers
+- `apps/portal/src/components/event/event-form-modal.tsx` — time inputs
+
+**User perlu run**:
+- `pnpm db:migrate dev` (apply migration 20260522010000)
+- `pnpm db:generate` (regen Prisma client untuk jamMulai/jamSelesai)
+- `pnpm dev` restart core-api + portal
+
+**Mobile docs** — Backend Response di-append ke 5 file mobile request (semuanya RESOLVED).
+
 ### Patch 2026-05-21s — Face Recognition V2 dim correction: 192 → 128
 
 **Request mobile**: `ecc-mobile-app/docs/backend-request-face-recognition-v2-mobilefacenet-dim-correction.md` (Priority HIGH, blocking M13 face login launch).

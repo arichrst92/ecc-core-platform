@@ -923,9 +923,14 @@ model Event {
   heroImageUrl  String?        @map("hero_image_url") @db.Text
   videoUrl      String?        @map("video_url") @db.Text    // YouTube/Vimeo embed url (free-form)
 
-  // Rentang waktu event berlangsung
+  // Rentang waktu event berlangsung. tanggalMulai/tanggalSelesai = full datetime
+  // (biasanya admin input cuma tanggal → T00:00:00). Untuk display jam spesifik,
+  // pakai jamMulai/jamSelesai (string HH:mm) yang nullable — pattern sama
+  // dengan Ibadah. Patch 2026-05-22 per request mobile event-time-fields.
   tanggalMulai   DateTime  @map("tanggal_mulai")
   tanggalSelesai DateTime? @map("tanggal_selesai")
+  jamMulai       String?   @map("jam_mulai") @db.VarChar(5)   // "HH:mm" 24-hour WIB
+  jamSelesai     String?   @map("jam_selesai") @db.VarChar(5)
   lokasi         String?   @db.Text
 
   // Audience scope (pola Konten)

@@ -44,6 +44,21 @@ export const createEventSchema = z
     tanggalSelesai: emptyToUndefined(
       z.string().datetime({ offset: true }).or(z.string().date()),
     ),
+    // Jam spesifik untuk display "09:00 - 12:00 WIB". Nullable — kalau null,
+    // mobile assume date-only event (festival 3 hari tanpa jadwal jam).
+    // Format HH:mm (24-hour). Patch 2026-05-22 per mobile event-time-fields.
+    jamMulai: emptyToUndefined(
+      z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:mm (24-hour)')
+        .openapi({ example: '09:00' }),
+    ),
+    jamSelesai: emptyToUndefined(
+      z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:mm (24-hour)')
+        .openapi({ example: '12:00' }),
+    ),
     lokasi: emptyToUndefined(z.string().trim().max(500)),
 
     // Targeting — null/null = global
@@ -100,6 +115,18 @@ export const updateEventSchema = z
     ),
     tanggalSelesai: emptyToUndefined(
       z.string().datetime({ offset: true }).or(z.string().date()),
+    ),
+    jamMulai: emptyToUndefined(
+      z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:mm (24-hour)')
+        .openapi({ example: '09:00' }),
+    ),
+    jamSelesai: emptyToUndefined(
+      z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:mm (24-hour)')
+        .openapi({ example: '12:00' }),
     ),
     lokasi: emptyToUndefined(z.string().trim().max(500)),
     sinodeId: emptyToUndefined(uuidSchema),

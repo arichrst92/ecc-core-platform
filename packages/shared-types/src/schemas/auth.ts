@@ -138,7 +138,11 @@ export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;
 // ===== Self profile edit (PATCH /admin/me) =====
 // Field yang user boleh self-edit (subset dari updateJemaatSchema admin).
 // noHp tidak boleh — pindah HP perlu re-verify OTP.
-// cabangId tidak boleh — pakai branch change request.
+//
+// **Patch 2026-05-22** — cabangId sekarang **boleh** untuk direct branch
+// change (per request mobile direct-branch-change.md). Sebelumnya wajib via
+// branch-change-request flow + admin approval. UX decision: trust-based,
+// audit log capture pindah supaya ops bisa trace.
 export const selfEditJemaatSchema = z
   .object({
     namaLengkap: z.string().trim().min(2).max(255).optional(),
@@ -146,9 +150,25 @@ export const selfEditJemaatSchema = z
     tanggalLahir: z.string().date().nullable().optional(),
     jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
     alamat: z.string().trim().max(500).nullable().optional(),
+    cabangId: uuidSchema.optional(),
   })
   .openapi('SelfEditJemaatInput');
 export type SelfEditJemaatInput = z.infer<typeof selfEditJemaatSchema>;
+
+// ===== Edit dependent (PATCH /admin/me/family/:jemaatId/profile) =====
+// Patch 2026-05-22 per request mobile profile-edit-completeness.md.
+// Parent (primaryGuardian) bisa edit basic profile anggota family yang
+// dependent (anak balita / lansia tanpa HP). Allowed fields: nama, DOB, JK,
+// alamat. NoHp/email/cabangId/kode/primaryGuardianId tidak boleh (admin-only).
+export const editDependentJemaatSchema = z
+  .object({
+    namaLengkap: z.string().trim().min(2).max(255).optional(),
+    tanggalLahir: z.string().date().nullable().optional(),
+    jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
+    alamat: z.string().trim().max(500).nullable().optional(),
+  })
+  .openapi('EditDependentJemaatInput');
+export type EditDependentJemaatInput = z.infer<typeof editDependentJemaatSchema>;
 
 // ===== User Profile =====
 export const userProfileSchema = z.object({

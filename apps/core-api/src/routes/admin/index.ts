@@ -16,6 +16,8 @@ import { apiKeyRouter } from './api-key.js';
 import { auditLogRouter } from './audit-log.js';
 import { meRouter } from './me.js';
 import { branchChangeRouter } from './branch-change.js';
+import { ministryRouter } from './ministry.js';
+import { jemaatPublicRouter } from './jemaat-public.js';
 
 export const adminRouter = Router();
 
@@ -27,8 +29,14 @@ adminRouter.use(requireAuth);
 // jaga-jaga kalau ada path collision).
 adminRouter.use('/me', meRouter);
 
+// Ministry (Pelayanan) — mobile-friendly read-only. Patch 2026-05-22.
+adminRouter.use('/ministry', ministryRouter);
+
 adminRouter.use('/sinode', sinodeRouter);
 adminRouter.use('/cabang', cabangRouter);
+// Public profile (mobile tap-to-view) — HARUS sebelum /jemaat agar tidak
+// kepecet ke jemaatRouter (which is admin-CRUD). Patch 2026-05-22.
+adminRouter.use('/jemaat-public', jemaatPublicRouter);
 adminRouter.use('/jemaat', jemaatRouter);
 adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);

@@ -13,6 +13,8 @@ export type EventFormValues = {
   videoUrl?: string;
   tanggalMulai: string;
   tanggalSelesai?: string;
+  jamMulai?: string;
+  jamSelesai?: string;
   lokasi?: string;
   sinodeId?: string;
   cabangId?: string;
@@ -90,6 +92,8 @@ export function EventFormModal({
         videoUrl: (dv.videoUrl as string) ?? '',
         tanggalMulai: toDateInput(dv.tanggalMulai as string),
         tanggalSelesai: toDateInput(dv.tanggalSelesai as string),
+        jamMulai: (dv.jamMulai as string) ?? '',
+        jamSelesai: (dv.jamSelesai as string) ?? '',
         lokasi: (dv.lokasi as string) ?? '',
         sinodeId:
           (dv.sinodeId as string) ??
@@ -158,6 +162,8 @@ export function EventFormModal({
       ringkasan: values.ringkasan || undefined,
       videoUrl: values.videoUrl || undefined,
       tanggalSelesai: values.tanggalSelesai || undefined,
+      jamMulai: values.jamMulai || undefined,
+      jamSelesai: values.jamSelesai || undefined,
       lokasi: values.lokasi || undefined,
       sinodeId: values.sinodeId || undefined,
       cabangId: values.cabangId || undefined,
@@ -246,6 +252,30 @@ export function EventFormModal({
                     type="date"
                     value={toDateInput(values.tanggalSelesai)}
                     onChange={(e) => patch({ tanggalSelesai: e.target.value })}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="Jam Mulai"
+                  helper="Format HH:mm 24 jam. Kosongkan kalau acara seharian / festival tanpa jadwal jam spesifik."
+                >
+                  <input
+                    type="time"
+                    value={values.jamMulai ?? ''}
+                    onChange={(e) => patch({ jamMulai: e.target.value })}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field
+                  label="Jam Selesai"
+                  helper="Kosongkan kalau tidak ada estimasi selesai."
+                >
+                  <input
+                    type="time"
+                    value={values.jamSelesai ?? ''}
+                    onChange={(e) => patch({ jamSelesai: e.target.value })}
                     className={inputCls}
                   />
                 </Field>

@@ -268,6 +268,8 @@ eventRouter.post('/', async (req, res) => {
       videoUrl: input.videoUrl,
       tanggalMulai: new Date(input.tanggalMulai),
       tanggalSelesai: input.tanggalSelesai ? new Date(input.tanggalSelesai) : null,
+      jamMulai: input.jamMulai ?? null,
+      jamSelesai: input.jamSelesai ?? null,
       lokasi: input.lokasi,
       sinodeId,
       cabangId: input.cabangId,
@@ -321,6 +323,8 @@ eventRouter.patch('/:id', async (req, res) => {
     videoUrl: input.videoUrl,
     tanggalMulai: input.tanggalMulai ? new Date(input.tanggalMulai) : undefined,
     tanggalSelesai: input.tanggalSelesai ? new Date(input.tanggalSelesai) : undefined,
+    jamMulai: input.jamMulai ?? undefined,
+    jamSelesai: input.jamSelesai ?? undefined,
     lokasi: input.lokasi,
     sinode: sinodeId
       ? { connect: { id: sinodeId } }

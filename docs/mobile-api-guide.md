@@ -889,6 +889,8 @@ Bisa pakai ID UUID atau slug.
     "videoUrl": "https://youtube.com/watch?v=abc123",
     "tanggalMulai": "2026-08-15T00:00:00.000Z",
     "tanggalSelesai": "2026-08-17T00:00:00.000Z",
+    "jamMulai": "09:00",
+    "jamSelesai": "12:00",
     "lokasi": "Wisma Cibubur, Puncak",
     "tipeBayar": "NOMINAL_TETAP",
     "nominal": "750000",
@@ -929,6 +931,8 @@ Bisa pakai ID UUID atau slug.
 - `status: 'BATAL'` → treat seperti `null` (boleh re-register, BE akan reactivate ke DAFTAR)
 
 > **Patch 2026-05-21i**: field `myParticipation` ditambah ke response detail per request mobile. Sebelumnya hanya `pesertaCount`, dan mobile rely on local storage untuk track status user — fragile di edge case.
+
+> **Patch 2026-05-22**: field `jamMulai` / `jamSelesai` ditambah (string `HH:mm`, 24-hour WIB, nullable). Konsisten dengan `Ibadah`. Kalau null → date-only event (festival tanpa jadwal jam spesifik). Existing events di-set null secara default, admin bisa edit untuk add jam. Mobile fallback: kalau `jamMulai` null, parse jam dari ISO `tanggalMulai` (existing helper); kalau ISO jam = T00:00:00 → hide row jam.
 
 ## 5.2.1 Get my participation status (standalone)
 
@@ -2089,16 +2093,23 @@ Authorization: Bearer <JWT>
     "homecellMembership": [
       { "homecell": { "id": "…", "nama": "Sudirman 1", "area": { "id": "…", "nama": "Jakarta Pusat" } } }
     ],
+    "ministries": [
+      { "id": "<jemaat-pelayanan-id>", "pelayananId": "<pelayanan-id>", "nama": "Tim Multimedia", "posisi": "Sound", "posisiLevel": 0, "tanggalMulai": "2026-01-15" }
+    ],
     "user": { "id": "…", "fotoUrl": null, "faceEnrolledAt": null }
   }
 }
 ```
 
+> **Patch 2026-05-22** — `ministries` field baru (flat dari `jemaatPelayanan` active). Plus `kode` self-heal: kalau legacy user belum punya kode, BE auto-generate saat first fetch. Mobile tidak perlu special handling.
+
 ### PATCH /admin/me — edit field tertentu
 
-Field yang boleh self-edit: `namaLengkap`, `email`, `tanggalLahir`, `jenisKelamin`, `alamat`.
+Field yang boleh self-edit: `namaLengkap`, `email`, `tanggalLahir`, `jenisKelamin`, `alamat`, `cabangId`.
 
-**Tidak boleh:** `noHp` (perlu OTP), `cabangId` (pakai branch change request), `kode` (immutable).
+**Tidak boleh:** `noHp` (perlu OTP), `kode` (immutable, auto-generated).
+
+> **Patch 2026-05-22** — `cabangId` sekarang boleh langsung diubah (direct branch change, no admin approval). Lebih simple. Endpoint legacy `/branch-change-request` masih ada untuk backward compat tapi mobile boleh skip.
 
 ```
 PATCH /admin/me
@@ -2106,11 +2117,11 @@ Authorization: Bearer <JWT>
 
 {
   "alamat": "Jl. Baru No. 99, Jakarta",
-  "email": "ari@example.com"
+  "cabangId": "<uuid-cabang-baru>"
 }
 ```
 
-**Response 200:** updated Jemaat object.
+**Response 200:** updated Jemaat object. Cabang tidak valid / nonaktif → 400 `Cabang tujuan tidak ditemukan/nonaktif`.
 
 ### POST /admin/me/foto — upload foto profil
 
@@ -2677,9 +2688,48 @@ Authorization: Bearer <JWT>
 
 Hapus kedua arah (A→B + B→A). 204 No Content. Tidak menghapus akun Jemaat target — hanya hubungan.
 
+## 13.8 Edit Profile Dependent (Patch 2026-05-22)
+
+Parent (primaryGuardian) bisa edit basic profile + foto dependent (anak balita / lansia tanpa HP). Auth: target.primaryGuardianId === current jemaatId DAN target.noHp IS NULL.
+
+### PATCH /admin/me/family/{jemaatId}/profile
+
+```json
+{
+  "namaLengkap": "Nama Baru",
+  "tanggalLahir": "2018-03-12",
+  "jenisKelamin": "P",
+  "alamat": "Jl. Baru No. 1"
+}
+```
+
+Allowed fields: `namaLengkap`, `tanggalLahir`, `jenisKelamin`, `alamat`. Disallowed: `noHp`, `email`, `cabangId`, `kode`, `primaryGuardianId` (admin-only).
+
+**Response 200**: updated Jemaat.
+
+**Errors**:
+| Status | Penyebab |
+|---|---|
+| 401 | bukan primaryGuardian dari target |
+| 400 | target punya `noHp` (bukan dependent — harus self-edit via PATCH /admin/me) |
+| 404 | target tidak ditemukan |
+
+### POST /admin/me/family/{jemaatId}/foto
+
+Multipart, field `foto` (atau `file`/`image`/`bukti`). Same auth check + behavior dengan POST /admin/me/foto.
+
+```
+POST /admin/me/family/abc-123/foto
+Content-Type: multipart/form-data
+```
+
+**Response 200**: `{ id, fotoUrl }`.
+
 ---
 
-# 14. Mobile App Phase 1 — Branch Change Request (M6)
+# 14. Mobile App Phase 1 — Branch Change Request (M6) — LEGACY
+
+> **Patch 2026-05-22** — endpoint ini sekarang **opsional**. Mobile bisa pakai langsung `PATCH /admin/me { cabangId }` untuk direct branch change tanpa approval. Branch change request flow tetap ada untuk backward compat (admin portal queue). Lihat section 12.2.
 
 User submit permohonan pindah cabang. Admin approve di portal → `Jemaat.cabangId` di-update.
 
@@ -2942,6 +2992,11 @@ Re-evaluasi dari `api-gap-analysis.md` mobile team setelah Phase 1 deploy.
 | M9 Homecell detail + remove member + list per area | 🔴 missing | 🟢 ready | `GET /admin/homecell/:id` (extended), `DELETE /:id/members/by-jemaat/:jemaatId`, `GET /admin/homecell-area/:id/homecells` |
 | M11 Face enrollment | 🟡 partial | 🟢 ready | `POST /auth/face/enroll` (already existed) |
 | M11 Face recognition full (RESTful + modelVersion + audit) | 🟡 partial | 🟢 ready | `GET/PUT/DELETE /auth/me/face-profile` + standardized error codes + confidence + metadata |
+| M5 Dependent profile + foto edit | 🔴 missing | 🟢 ready | `PATCH/POST /admin/me/family/:id/profile|/foto` |
+| M6 Direct branch change | 🟡 via request flow | 🟢 ready (langsung) | `PATCH /admin/me { cabangId }` |
+| M8 Event jam fields | 🔴 jam selalu T00:00 | 🟢 ready | `Event.jamMulai`/`jamSelesai` HH:mm |
+| M16 Ministry list & detail | 🔴 missing | 🟢 ready | `GET /admin/ministry`, `/admin/ministry/:id`, `me.ministries` |
+| M16 Jemaat public profile (tap-to-view) | 🔴 missing | 🟢 ready (tiered visibility) | `GET /admin/jemaat-public/:id` |
 
 **Yang masih ditunda (Phase 2+):**
 
@@ -2949,6 +3004,161 @@ Re-evaluasi dari `api-gap-analysis.md` mobile team setelah Phase 1 deploy.
 - WA confirmation flow untuk family link (current = auto-verify; bisa di-switch ke 2-way confirm di future).
 - WebSocket realtime (current scanner stats pakai polling, cukup untuk MVP).
 - Bilingual content (konten news/renungan tetap Indonesia, UI label di mobile yang diterjemahkan).
+
+---
+
+# 16. Ministry (Pelayanan) — Patch 2026-05-22
+
+> Mobile request: `backend-request-ministry-endpoints.md`. Pelayanan model di BE = master global (Multimedia, Worship, Usher), bukan cabang-specific.
+
+## 16.1 List semua ministry
+
+```
+GET /admin/ministry
+Authorization: Bearer <JWT>
+```
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "<pelayanan-id>",
+      "nama": "Tim Multimedia",
+      "deskripsi": "Sound, Camera, Streaming...",
+      "memberCount": 12,
+      "isOpen": true,
+      "leader": {
+        "jemaat": { "id": "...", "namaLengkap": "Andi", "fotoUrl": "..." },
+        "role": "Leader"
+      },
+      "roles": [
+        { "id": "...", "nama": "Leader", "level": 10 },
+        { "id": "...", "nama": "Camera", "level": 0 }
+      ]
+    }
+  ]
+}
+```
+
+`leader` = member dengan role level tertinggi (highest seniority). Bisa null kalau pelayanan kosong. `roles` = preview role-role yang ada di ministry ini (mobile bisa show options sebelum apply).
+
+## 16.2 Detail ministry
+
+```
+GET /admin/ministry/:id
+Authorization: Bearer <JWT>
+```
+
+**Response 200:**
+
+```json
+{
+  "id": "...",
+  "nama": "Tim Multimedia",
+  "deskripsi": "...",
+  "isOpen": true,
+  "memberCount": 12,
+  "roles": [...],
+  "leader": {...},
+  "members": [
+    {
+      "id": "<jemaat-pelayanan-id>",
+      "jemaat": { "id": "...", "namaLengkap": "...", "fotoUrl": "...", "cabang": { "id": "...", "nama": "..." } },
+      "posisi": "Sound",
+      "sinceDate": "2026-01-15"
+    }
+  ],
+  "myMembership": {
+    "id": "<jemaat-pelayanan-id>",
+    "posisi": "Sound",
+    "sinceDate": "2026-01-15"
+  } | null
+}
+```
+
+`myMembership` populated kalau current user adalah member (untuk mobile UI tampil "Anda terlibat sebagai ...").
+
+## 16.3 Future (DEFERRED)
+
+`POST /admin/ministry/:id/join` — apply membership dengan approval leader. Not implemented di patch ini, scope creep. Mobile bisa add nanti kalau perlu.
+
+---
+
+# 17. Jemaat Public Profile — Patch 2026-05-22
+
+> Mobile request: `backend-request-jemaat-public-profile.md`. Mobile tap nama jemaat lain (dari scanner result, homecell member, family, area PIC, dll) → buka halaman profil ringkas.
+
+> **Penting**: endpoint baru `/admin/jemaat-public/:id`. **Bukan** `/admin/jemaat/:id` (yang itu admin CRUD untuk fulltimer, return full data tanpa privacy filter).
+
+## 17.1 Tiered Visibility
+
+| Field | Public (semua user) | Close Relation (extra) |
+|---|---|---|
+| id, kode, namaLengkap, fotoUrl, jenisKelamin, isActive | ✅ | ✅ |
+| cabang.id, cabang.nama | ✅ | ✅ |
+| roles, ministries, homecell | ✅ | ✅ |
+| noHpMasked, ulangTahunBulanTgl | ✅ | ✅ |
+| noHp (full) | ❌ null | ✅ |
+| tanggalLahir (full ISO) | ❌ null | ✅ |
+| alamat | ❌ null | ✅ |
+| family[] | ❌ null | ✅ |
+
+**Close Relation** = salah satu dari:
+1. Same cabang dengan requester
+2. Ada FamilyRelation antara requester ↔ target (verified)
+3. Co-member di Homecell yang sama (active membership)
+
+## 17.2 Endpoint
+
+```
+GET /admin/jemaat-public/:id
+Authorization: Bearer <JWT>
+```
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "...",
+    "kode": "A3K7P9XQ",
+    "namaLengkap": "Andi Pratama",
+    "fotoUrl": "/uploads/profiles/jemaat/...",
+    "jenisKelamin": "L",
+    "isActive": true,
+    "cabang": { "id": "...", "nama": "ECC Jakarta" },
+    "roles": [...],
+    "ministries": [...],
+    "homecell": { "id": "...", "nama": "Sudirman 1" } | null,
+    "noHpMasked": "+628****8446",
+    "ulangTahunBulanTgl": "05-15",
+    "noHp": "+6282115678446" | null,
+    "tanggalLahir": "1992-05-15" | null,
+    "alamat": "Jl. ..." | null,
+    "family": [
+      { "role": "SPOUSE", "jemaat": { "id": "...", "namaLengkap": "...", "fotoUrl": "..." } }
+    ] | null,
+    "visibility": {
+      "isCloseRelation": true,
+      "reason": "same-cabang"  // | "family" | "homecell-co-member" | "public-only"
+    }
+  }
+}
+```
+
+**Errors:**
+- 404 jemaat tidak ditemukan
+- 401 not authenticated (JWT missing/invalid)
+
+## 17.3 Mobile UI hints
+
+- `noHpMasked` selalu tersedia — tampil sebagai badge ringan ("+628****8446"). Kalau `noHp` non-null (close relation), tap → buka WA.
+- `ulangTahunBulanTgl` selalu tersedia — bisa pakai untuk badge "🎂 Ulang tahun bulan ini" tanpa expose tahun.
+- `visibility.reason` bisa dipakai untuk tooltip ("Anda satu cabang dengan ini, jadi noHp visible").
 
 ---
 

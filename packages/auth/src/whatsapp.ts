@@ -18,6 +18,20 @@
 const FONNTE_URL = 'https://api.fonnte.com/send';
 const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
 
+/**
+ * Signature di-append di SEMUA outbound WA message (OTP, reminder ibadah,
+ * reminder event, broadcast future). Single source of truth supaya kalau
+ * branding berubah, edit di sini saja.
+ */
+export const WA_SIGNATURE =
+  '\n\n_Powered by IDEA (https://ide.asia)_\n_an Enterprise IT Service and Outsourcing Company_';
+
+/** Wrap body dengan signature footer. Idempotent: kalau signature sudah ada, tidak duplicate. */
+export function appendSignature(body: string): string {
+  if (body.includes('Powered by IDEA')) return body;
+  return body + WA_SIGNATURE;
+}
+
 export interface SendOtpResult {
   messageId: string;
   to: string;
@@ -35,7 +49,8 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
   const target = noHpE164.replace(/^\+/, '');
   const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
   const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
-  const message = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
+  const body = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
+  const message = appendSignature(body);
 
   const formData = new URLSearchParams();
   formData.append('target', target);
@@ -88,9 +103,12 @@ export async function sendWhatsAppText(
     throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
   }
   const target = noHpE164.replace(/^\+/, '');
+  // Auto-append signature ke semua outbound message. Idempotent — kalau caller
+  // sudah include manual, tidak duplicate.
+  const finalMessage = appendSignature(message);
   const formData = new URLSearchParams();
   formData.append('target', target);
-  formData.append('message', message);
+  formData.append('message', finalMessage);
   formData.append('countryCode', '62');
 
   const res = await fetch(FONNTE_URL, {

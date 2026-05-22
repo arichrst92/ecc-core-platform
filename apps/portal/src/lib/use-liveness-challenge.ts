@@ -41,7 +41,9 @@ export function useLivenessChallenge(opts: Options = {}) {
   const directionStreakRef = useRef<{ direction: HeadDirection; count: number }>({ direction: 'center', count: 0 });
 
   const current = useMemo(
-    () => (state.status === 'running' ? challenges[state.currentIndex] : null),
+    // `challenges[state.currentIndex]` bisa undefined (noUncheckedIndexedAccess);
+    // normalize ke null supaya konsisten dengan ChallengePanel prop type.
+    () => (state.status === 'running' ? challenges[state.currentIndex] ?? null : null),
     [state, challenges],
   );
 

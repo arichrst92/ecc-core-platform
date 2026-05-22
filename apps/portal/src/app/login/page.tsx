@@ -51,7 +51,10 @@ export default function LoginPage() {
 
   async function handleFaceLogin(descriptor: number[]) {
     const normalized = normalizePhoneInput(noHp);
-    if (!normalized) return toast.error('No HP tidak valid');
+    if (!normalized) {
+      toast.error('No HP tidak valid');
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/face/login', { noHp: normalized, descriptor });

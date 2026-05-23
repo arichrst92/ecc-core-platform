@@ -24,6 +24,16 @@ import { UPLOADS_DIR, PUBLIC_UPLOADS_PREFIX } from './lib/storage.js';
 export function createApp(): Express {
   const app = express();
 
+  // ---------- Trust proxy ----------
+  // Production di belakang Nginx reverse proxy — Nginx set X-Forwarded-For
+  // header dengan real client IP. Tanpa trust proxy, Express ambil IP dari
+  // socket (= IP Nginx = 127.0.0.1) yang bikin rate-limit + audit log salah,
+  // dan express-rate-limit complain ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+  //
+  // Value '1' = trust 1 hop (Nginx). Jangan pakai `true` (trust all hops) —
+  // itu lubang security karena client bisa spoof X-Forwarded-For tanpa batas.
+  app.set('trust proxy', 1);
+
   // ---------- Security & infra middleware ----------
   app.use(helmet());
   // CORS — dev mode allow localhost + LAN IP + Expo origin, prod mode strict whitelist.

@@ -3515,12 +3515,155 @@ Mobile tidak panggil endpoint ini, tapi behavior berdampak ke pengalaman user. L
 | `cleanup-audit-log` | 24 jam | Hapus AuditLog > 365 hari. Tidak ke-affect mobile. |
 | `dispatch-ibadah-reminder` | 1 jam, send window 07–10 WIB | Kirim WA reminder H-1 untuk reservasi RESERVE/JOIN. User dapat WA pagi sebelum hari ibadah. |
 | `dispatch-event-reminder` | 1 jam, send window 07–10 WIB | Sama untuk EventParticipation. |
+| `cleanup-face-telemetry` | 24 jam | Purge `face_telemetry_event` > 90 hari. Tidak ke-affect mobile. |
+| `cleanup-diagnostics-error` | 24 jam | Purge `diagnostics_error_event` > 30 hari. Tidak ke-affect mobile. |
 
 User akan dapat WA reminder otomatis besok pagi kalau punya reservasi/event H-1. Tidak ada opt-out endpoint saat ini (future enhancement).
 
 ---
 
-# 28. Support
+# 28. App Config (`/public/app-config`)
+
+Mobile fetch config tune-able runtime saat splash. Cache 1 jam recommended.
+
+```http
+GET /public/app-config
+(no auth)
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "faceMatchThreshold": 0.5,
+    "lowConfidenceWarnThreshold": 0.7,
+    "telemetrySamplingRate": 1.0,
+    "errorReportingEnabled": true
+  }
+}
+```
+
+Field meaning:
+- `faceMatchThreshold` — mirror env `FACE_MATCH_THRESHOLD`. Read-only untuk mobile (server enforce di matchFace). Mobile pakai untuk normalize confidence display range `[faceMatchThreshold..1.0]`.
+- `lowConfidenceWarnThreshold` — mobile threshold untuk show "login berhasil dengan confidence rendah" toast. Tune-able via portal Admin → Diagnostics → App Config.
+- `telemetrySamplingRate` — sampling rate untuk push event ke `/auth/face/telemetry`. Mobile generate `Math.random() < rate` sebelum fetch. Pilot 1.0; post-pilot reduce 0.1-0.2.
+- `errorReportingEnabled` — kill switch. **Mobile tidak perlu cek field ini** — tetap push ke `/diagnostics/error`, backend handle drop server-side. Field di-expose cuma untuk transparansi / debug.
+
+Recommended cache strategy:
+- Pre-warm saat splash (`prefetchAppConfig`)
+- TTL 1 jam (`staleTime: 3600_000`)
+- Exclude dari persistent storage (jangan cache di SecureStore — always fresh dari server)
+- Fallback ke `APP_CONFIG_DEFAULTS` kalau fetch fail (mobile tetap functional)
+
+---
+
+# 29. Face Telemetry (`/auth/face/telemetry`) — pilot rollout
+
+Mobile push event saat face login/enroll flow untuk pilot observability. Fire-and-forget.
+
+```http
+POST /auth/face/telemetry
+(no auth)
+Content-Type: application/json
+
+{
+  "sessionId": "uuid-mobile-generated",
+  "noHp": "+62...",
+  "event": "face_login_attempt",
+  "flow": "login",
+  "outcome": "success",
+  "failureReason": null,
+  "confidence": 0.83,
+  "durationMs": {
+    "livenessTotal": 2840,
+    "descriptorCompute": 920,
+    "serverRoundtrip": 410
+  },
+  "device": {
+    "platform": "ios",
+    "model": "iPhone 14 Pro",
+    "osVersion": "17.4",
+    "appVersion": "0.1.0",
+    "modelVersion": "mobilefacenet-v1"
+  },
+  "timestamp": "2026-05-23T10:30:00Z"
+}
+```
+
+**Event types**:
+- `face_login_attempt`, `face_login_server_response`
+- `face_enroll_attempt`, `face_enroll_complete`, `face_enroll_fail`
+- `face_liveness_pass`, `face_liveness_fail`
+- `face_descriptor_compute`, `face_nonce_request`
+
+Response: `{ "success": true, "data": { "received": true } }`.
+
+Rate limit: 500/menit/IP. Sampling decision di-mobile (lihat `telemetrySamplingRate` di app-config).
+
+Privacy: `noHp` di-purge saat `DELETE /admin/me` (right-to-delete).
+
+Reference: `docs/backend-request-face-confidence-threshold-and-telemetry.md` di repo mobile.
+
+---
+
+# 30. Diagnostics Error (`/diagnostics/error`) — production runtime error
+
+Mobile push runtime error / warning dari production build. Fire-and-forget. Replace Sentry.
+
+```http
+POST /diagnostics/error
+(no auth)
+Content-Type: application/json
+
+{
+  "type": "error",
+  "release": "0.1.0+12",
+  "device": {
+    "platform": "ios",
+    "osVersion": "17.4",
+    "appVersion": "0.1.0",
+    "release": "0.1.0+12"
+  },
+  "user": {
+    "noHp": "+62..."
+  },
+  "breadcrumbs": [
+    {
+      "timestamp": "2026-05-23T10:30:00Z",
+      "message": "User tapped face login",
+      "category": "auth",
+      "data": { "screen": "welcome" }
+    }
+  ],
+  "timestamp": "2026-05-23T10:30:05Z",
+  "message": "Network request failed",
+  "stack": "Error: Network request failed\n  at fetch (...)",
+  "name": "TypeError",
+  "context": {
+    "endpoint": "/auth/face/login",
+    "attempt": 2
+  }
+}
+```
+
+Response: `{ "success": true, "data": { "received": true } }`.
+
+Rate limit: 100/menit/IP. Body cap: ~2MB Express default. Breadcrumbs max 50 (recommended 20).
+
+**Grouping**: backend auto-compute `fingerprint = md5(name + ':' + message)`. Same fingerprint = aggregate as 1 issue di portal dashboard (Developer Tools → Diagnostics → Error Events).
+
+**Kill switch**: admin set `app_config.errorReportingEnabled = false` → backend drop semua POST silent. Mobile tetap push (no client-side check).
+
+**Privacy**: `user.noHp` propagate ke right-to-delete saat `DELETE /admin/me`. Anonymous events tetap retained sampai retention cutoff.
+
+Retention: 30 hari (env `DIAGNOSTICS_ERROR_RETENTION_DAYS`).
+
+Reference: `docs/backend-request-diagnostics-error-endpoint.md` di repo mobile.
+
+---
+
+# 31. Support
 
 - Dokumen ini ada di repo: `docs/mobile-api-guide.md`
 - Spec lengkap auto-update saat backend deploy (lihat `/docs` Swagger UI di backend).

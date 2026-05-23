@@ -84,9 +84,9 @@ ecc-platform/
 
 ---
 
-## 4. Model Data — 42 Tabel
+## 4. Model Data — 47 Tabel
 
-> **Catatan evolusi**: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); M2 menambahkan `audit_log`; M3 menambahkan cluster Pelayanan, lalu Community (homecell), Event (event + participation + donation + pelayanan + petugas), RBAC menu access, branch change, family relation, Movement (Visit + LocalBusiness), App Settings (LegalDocument + AppVersion), Notification log, dan ibadah occurrence override. Total Prisma model sekarang = **42**.
+> **Catatan evolusi**: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); M2 menambahkan `audit_log`; M3 menambahkan cluster Pelayanan, lalu Community (homecell), Event (event + participation + donation + pelayanan + petugas), RBAC menu access, branch change, family relation, Movement (Visit + LocalBusiness), App Settings (LegalDocument + AppVersion), Notification log, ibadah occurrence override, MaintenanceMode singleton, Credential vault, dan Diagnostics cluster (AppConfig singleton + FaceTelemetryEvent + DiagnosticsErrorEvent). Total Prisma model sekarang = **47**.
 
 **Daftar cluster (10 cluster):**
 
@@ -3117,6 +3117,144 @@ UPLOADS_DIR="/var/www/ecc-core-platform/uploads"  # absolute path!
 - Code change + new env var
 - Code change + database migration
 - Emergency rollback
+
+---
+
+## 28. Diagnostics + App Config Cluster (2026-05-23)
+
+Respon untuk 2 mobile request menjelang pilot rollout 2026-06-08:
+- `backend-request-face-confidence-threshold-and-telemetry.md`
+- `backend-request-diagnostics-error-endpoint.md`
+
+### 28.1 Goals
+
+1. **Tune-able config runtime** — backend bisa adjust face threshold, sampling rate, dan kill switch tanpa app update + tanpa server restart.
+2. **Pilot observability face login** — track funnel (attempt → liveness → descriptor → server response), latency p50/p95 per step, confidence distribution, failure breakdown.
+3. **Production error reporting** — replace third-party Sentry. Mobile push runtime error fire-and-forget; backend aggregate Sentry-style fingerprint grouping.
+
+### 28.2 Schema — 3 model baru
+
+#### AppConfig (singleton, mirror MaintenanceMode pattern)
+
+`id="global"`, single row. Fields tune-able runtime:
+- `faceMatchThreshold` (default 0.5) — mirror env `FACE_MATCH_THRESHOLD`. Backend tetap baca env; field ini cuma read-only mirror untuk mobile.
+- `lowConfidenceWarnThreshold` (default 0.7) — mobile-side warning threshold di accepted range `[faceMatchThreshold..1.0]`.
+- `telemetrySamplingRate` (default 1.0) — sampling rate client-side. Pilot 1.0; post-pilot reduce ke 0.1-0.2.
+- `errorReportingEnabled` (default true) — kill switch saat incident (mis. infinite loop di mobile generate jutaan error/menit).
+
+#### FaceTelemetryEvent
+
+Mobile-pushed event saat face login/enroll flow.
+- `sessionId` UUID (mobile-generated) — group multiple events 1 attempt
+- `event` (face_login_attempt, face_liveness_pass, face_descriptor_compute, face_nonce_request, face_login_server_response, dll)
+- `flow` ('login' | 'enroll') untuk disambiguate shared events
+- `outcome` ('success' | 'failure'), `failureReason` (free-form)
+- `confidence` (raw cosine 0..1 untuk success login)
+- `durationMs` JSONB `{livenessTotal, descriptorCompute, serverRoundtrip}` ms
+- `device` JSONB `{platform, model, osVersion, appVersion, modelVersion}`
+- Indexes: `(event, timestamp)`, `sessionId`, partial pada `noHp`, `receivedAt` untuk retention
+- Retention 90 hari (`FACE_TELEMETRY_RETENTION_DAYS`)
+
+#### DiagnosticsErrorEvent
+
+Mobile-pushed runtime error / warning dari production build.
+- `type` ('error' | 'message')
+- `release` "X.Y.Z+buildNumber" identifier
+- `platform`, `osVersion`, `appVersion`
+- `userNoHp` (opsional, untuk debug)
+- `message`, `stack`, `errorName`, `context` JSONB, `breadcrumbs` JSONB (max 50)
+- **Generated column `fingerprint`** = `md5(error_name + ':' + message)` STORED — Sentry-style grouping.
+  ```sql
+  fingerprint VARCHAR(32) GENERATED ALWAYS AS (
+    md5(COALESCE(error_name, '') || ':' || COALESCE(message, ''))
+  ) STORED
+  ```
+- Indexes: `(fingerprint, release)`, `timestamp DESC`, partial `userNoHp`, `(release, platform)`, `receivedAt`
+- Retention 30 hari (`DIAGNOSTICS_ERROR_RETENTION_DAYS`)
+
+### 28.3 Endpoints
+
+#### Public (no auth — mobile fetch / push)
+
+| Endpoint | Purpose | Rate limit |
+|----------|---------|------------|
+| `GET /public/app-config` | Mobile fetch config saat splash, cache 1 jam | globalLimiter |
+| `POST /auth/face/telemetry` | Fire-and-forget face login event | telemetryLimiter 500/menit/IP |
+| `POST /diagnostics/error` | Fire-and-forget runtime error | diagnosticsErrorLimiter 100/menit/IP |
+
+Semua endpoint **defensive**: kalau Zod parse fail → return 200 + `{ dropped: true }` (mobile tidak retry). Insert DB async via `.catch()` log warning kalau gagal.
+
+#### Admin (JWT + RBAC menuKey `diagnostics`)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /admin/diagnostics/app-config` | Read singleton |
+| `PATCH /admin/diagnostics/app-config` | Update tune-able fields (audit log entry) |
+| `GET /admin/diagnostics/face-telemetry?platform=&flow=&from=&to=` | Funnel + latency + confidence aggregate |
+| `GET /admin/diagnostics/error-events?search=&platform=&page=&limit=` | Aggregate by fingerprint |
+| `GET /admin/diagnostics/error-events/:fingerprint` | Detail — recent 50 events + breakdown + trend |
+
+Latency aggregate pakai PostgreSQL `percentile_cont(0.5/0.95) WITHIN GROUP` (raw SQL via `prisma.$queryRaw` — Prisma groupBy tidak support percentile).
+
+### 28.4 Right-to-delete + Retention
+
+- `DELETE /admin/me` handler cascade DELETE WHERE `noHp` di:
+  - `face_telemetry_event.no_hp = jemaat.noHp`
+  - `diagnostics_error_event.user_no_hp = jemaat.noHp`
+- 2 cron job baru di `scheduled-jobs.ts`:
+  - `cleanup-face-telemetry` (daily, retention `FACE_TELEMETRY_RETENTION_DAYS` default 90)
+  - `cleanup-diagnostics-error` (daily, retention `DIAGNOSTICS_ERROR_RETENTION_DAYS` default 30)
+- Anonymous events (no `noHp`) tidak ke-affected oleh right-to-delete — tetap retained sampai retention cutoff.
+
+### 28.5 Portal Dashboard
+
+**Menu:** Developer Tools → **Diagnostics** (icon stethoscope, menuKey `diagnostics`, RBAC Fulltimer default).
+
+**3 tab:**
+1. **Face Telemetry** — stats card (total events, avg confidence, p50/p95), funnel table (event × outcome), top failure reasons, latency p50/p95 per step. Filter: platform + flow.
+2. **Error Events** — aggregate list by fingerprint dengan total count + user count + sample message + platforms/releases affected. Filter: search di message + platform. Click row → detail modal dengan recent 50 events + breadcrumbs expandable + stack trace expandable.
+3. **App Config** — edit form 4 field (face thresholds + sampling rate + kill switch toggle). Save trigger PATCH endpoint.
+
+### 28.6 Mobile Acknowledgment
+
+Tim mobile sudah implement client-side (terdokumentasi di file backend-request masing-masing section 8 / 11):
+
+#### M19.3 — Face Telemetry + App Config (terkait `face-confidence-threshold-and-telemetry.md`)
+- `src/types/appConfig.ts` — typed `AppConfig` + `APP_CONFIG_DEFAULTS` fallback
+- `src/api/appConfig.ts` — `getAppConfig()` GET wrapper
+- `src/hooks/useAppConfig.ts` — `useAppConfig()` hook + sync accessor + prefetch helper
+- Cache 1 jam, pre-warmed di splash, excluded dari React Query persist (always fresh dari server)
+- `welcome.tsx` + `login/index.tsx` — `data.confidence < 0.7` → `data.confidence < appConfig.lowConfidenceWarnThreshold` (dynamic)
+- `src/services/telemetry.ts` — module-level `currentSamplingRate` + setter, subscribe dari `_layout.tsx` useEffect
+- `trackFaceEvent` call `shouldSample()` sebelum fetch — drop event sebelum network kalau `Math.random() >= rate`
+- Fast path: rate=1.0 skip Math.random call
+
+#### M20 → M20.1 — Error Reporting (terkait `diagnostics-error-endpoint.md`)
+- `src/services/errorReporting.ts` — payload shape match BE spec section 1
+- Ring buffer `BREADCRUMB_BUFFER_SIZE = 20` (under BE zod limit 50), trim via `.slice(-20)`
+- No client-side kill switch check — BE handle drop via `app_config.errorReportingEnabled`
+- `__DEV__` skip — dev errors tidak pollute pilot dashboard
+- Silent fail on 404 / network error / timeout — fire-and-forget, never throws
+
+#### Pending verification (manual oleh Ari di physical device pilot dev build)
+
+5 check:
+1. Trigger face login → event muncul di portal Diagnostics → Face Telemetry tab
+2. Verify confidence distribution + latency p50/p95 muncul di dashboard
+3. Verify sampling: admin set `telemetrySamplingRate = 0.1` → 90% events di-drop sebelum push
+4. Verify low_confidence tune: admin set `lowConfidenceWarnThreshold = 0.85` → toast warning lebih sering
+5. Verify right-to-delete: trigger telemetry sebagai user A → DELETE /admin/me → confirm row terhapus
+
+Untuk error reporting tambahan 4 check (lihat backend-request-diagnostics-error-endpoint.md section 11).
+
+### 28.7 Decisions yang dicatat di sini
+
+- **Singleton pattern AppConfig** (id='global' TEXT, bukan UUID) — sama dengan MaintenanceMode. Konsisten untuk fitur tune-able runtime tanpa migration tiap toggle.
+- **Generated column fingerprint di DiagnosticsErrorEvent** — STORED di Postgres native, lebih efficient untuk grouping query dibanding compute di app layer. Trade-off: tidak bisa set via Prisma create (auto-computed di DB).
+- **Fire-and-forget pattern untuk telemetry + error** — mobile tidak retry, BE tidak guarantee delivery. Pilot scale (<100 users) OK; kalau scale > 10K events/day pertimbangkan queue (Bull/BullMQ).
+- **Server tetap baca threshold dari env, mobile dari app_config** — backend matching adalah hard contract (perlu restart untuk ubah, audit-safe). Mobile UI hint bisa dynamic (tune live tanpa downtime).
+- **Retention berbeda** — telemetry 90 hari (untuk trend analysis), errors 30 hari (volume bisa spike). Sesuaikan via env kalau perlu.
+- **Cast `Prisma.InputJsonValue`** di insert untuk JSON fields (context + breadcrumbs + durationMs + device) — Prisma narrow type tidak match dengan Zod `z.record(z.unknown())` / `z.array(...)`. Cast eksplisit + `Prisma.JsonNull` untuk null semantics.
 
 ---
 

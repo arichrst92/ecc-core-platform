@@ -181,16 +181,33 @@ export const selfEditJemaatSchema = z
 export type SelfEditJemaatInput = z.infer<typeof selfEditJemaatSchema>;
 
 // ===== Edit dependent (PATCH /admin/me/family/:jemaatId/profile) =====
-// Patch 2026-05-22 per request mobile profile-edit-completeness.md.
-// Parent (primaryGuardian) bisa edit basic profile anggota family yang
-// dependent (anak balita / lansia tanpa HP). Allowed fields: nama, DOB, JK,
-// alamat. NoHp/email/cabangId/kode/primaryGuardianId tidak boleh (admin-only).
+// Patch 2026-05-22 per request mobile profile-edit-completeness.md +
+// extended 2026-05-22 per dependent-edit-fuller.md untuk include
+// noHp + email — guardian bisa promote dependent ke full member (anak
+// balita yg sudah remaja + punya HP sendiri).
+//
+// Cabang/kode/primaryGuardianId/role tetap admin-only.
 export const editDependentJemaatSchema = z
   .object({
     namaLengkap: z.string().trim().min(2).max(255).optional(),
     tanggalLahir: z.string().date().nullable().optional(),
     jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
     alamat: z.string().trim().max(500).nullable().optional(),
+    // noHp & email: pakai noHpSchema (E.164 international) + email standard.
+    // Nullable supaya guardian bisa clear field dengan kirim null/"".
+    // Empty string '' di-coerce ke null via preprocess.
+    noHp: z
+      .preprocess(
+        (v) => (v === '' || v === null ? null : v),
+        z.union([noHpSchema, z.null()]),
+      )
+      .optional(),
+    email: z
+      .preprocess(
+        (v) => (v === '' || v === null ? null : v),
+        z.union([z.string().trim().email().max(255), z.null()]),
+      )
+      .optional(),
   })
   .openapi('EditDependentJemaatInput');
 export type EditDependentJemaatInput = z.infer<typeof editDependentJemaatSchema>;

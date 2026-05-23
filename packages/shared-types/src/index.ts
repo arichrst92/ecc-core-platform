@@ -34,3 +34,5 @@ export * from './schemas/local-business.js';
 export * from './schemas/delete-account.js';
 export * from './schemas/legal.js';
 export * from './schemas/app-version.js';
+export * from './schemas/maintenance-mode.js';
+export * from './schemas/credential.js';

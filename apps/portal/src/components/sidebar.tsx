@@ -29,6 +29,9 @@ import {
   Smartphone,
   Wrench,
   Gauge,
+  BookOpenCheck,
+  Power,
+  KeyRound,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -53,6 +56,10 @@ interface NavGroup {
 
 const top: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // User Guide — top-level (di bawah Dashboard, di luar grup). Tanpa menuKey
+  // supaya selalu visible untuk semua user yang sudah login portal — semua
+  // butuh akses panduan.
+  { href: '/dashboard/user-guide', label: 'User Guide', icon: BookOpenCheck },
 ];
 
 const groups: NavGroup[] = [
@@ -107,6 +114,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/dashboard/legal', label: 'Legal Docs', icon: FileText, menuKey: 'legal' },
       { href: '/dashboard/app-version', label: 'App Versions', icon: Smartphone, menuKey: 'app-version' },
+      { href: '/dashboard/maintenance-mode', label: 'Maintenance Mode', icon: Power, menuKey: 'maintenance-mode' },
     ],
   },
   {
@@ -117,6 +125,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity, menuKey: 'audit-log' },
       { href: '/dashboard/maintenance', label: 'Maintenance', icon: Wrench, menuKey: 'maintenance' },
       { href: '/dashboard/server-health', label: 'Server Health', icon: Gauge, menuKey: 'server-health' },
+      { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
     ],
   },
 ];

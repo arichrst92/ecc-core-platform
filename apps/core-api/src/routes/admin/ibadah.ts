@@ -198,10 +198,96 @@ ibadahRouter.get('/', async (req, res) => {
 ibadahRouter.get('/:id', async (req, res) => {
   const item = await prisma.ibadah.findUnique({
     where: { id: req.params.id },
-    include: { cabang: true, kategoriIbadah: true },
+    include: {
+      cabang: true,
+      kategoriIbadah: true,
+      // Include link-pelayanan + petugas. Petugas di-resolve di bawah supaya
+      // bisa support per-occurrence override via ?tanggal=.
+      ibadahPelayanan: {
+        include: {
+          pelayanan: { select: { id: true, nama: true } },
+          petugas: {
+            include: {
+              jemaat: {
+                select: {
+                  id: true,
+                  namaLengkap: true,
+                  fotoUrl: true,
+                  isActive: true,
+                },
+              },
+              pelayananRole: { select: { id: true, nama: true, level: true } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!item) throw NotFound('Ibadah tidak ditemukan');
-  res.json({ success: true, data: item });
+
+  // Resolve petugas dengan snapshot semantics:
+  //   1. Kalau caller kirim ?tanggal=YYYY-MM-DD, pakai override untuk
+  //      tanggal itu (tanggalIbadah=tanggalRequest). Kalau tidak ada
+  //      override → fallback ke default petugas (tanggalIbadah=null).
+  //   2. Kalau tidak ada ?tanggal=, default ke petugas master (NULL).
+  // Per ibadah_pelayanan link: kalau ada override untuk tanggal itu →
+  // override REPLACE default (bukan merge).
+  const tanggalRaw =
+    typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
+  const tanggalDate = tanggalRaw ? parseTanggal(tanggalRaw) : null;
+
+  type PetugasOut = {
+    id: string;
+    pelayananNama: string;
+    role: string;
+    jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
+  };
+  const petugas: PetugasOut[] = [];
+  for (const link of item.ibadahPelayanan) {
+    let rows = link.petugas.filter((p) => p.jemaat.isActive);
+    if (tanggalDate) {
+      // Pisahkan override (tanggalIbadah cocok) vs default (NULL)
+      const tanggalKey = tanggalDate.toISOString().slice(0, 10);
+      const overrides = rows.filter(
+        (p) =>
+          p.tanggalIbadah &&
+          p.tanggalIbadah.toISOString().slice(0, 10) === tanggalKey,
+      );
+      if (overrides.length > 0) {
+        rows = overrides; // override REPLACE default
+      } else {
+        rows = rows.filter((p) => p.tanggalIbadah === null);
+      }
+    } else {
+      rows = rows.filter((p) => p.tanggalIbadah === null);
+    }
+    for (const p of rows) {
+      petugas.push({
+        id: p.id,
+        pelayananNama: link.pelayanan.nama,
+        role: p.pelayananRole.nama,
+        jemaat: {
+          id: p.jemaat.id,
+          namaLengkap: p.jemaat.namaLengkap,
+          fotoUrl: p.jemaat.fotoUrl,
+        },
+      });
+    }
+  }
+
+  // Sort: by pelayanan nama (alphabetical) lalu role level DESC (Leader dulu),
+  // lalu nama jemaat. Lebih natural untuk display.
+  petugas.sort((a, b) => {
+    if (a.pelayananNama !== b.pelayananNama)
+      return a.pelayananNama.localeCompare(b.pelayananNama);
+    if (a.role !== b.role) return a.role.localeCompare(b.role);
+    return a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap);
+  });
+
+  // Strip ibadahPelayanan dari output (avoid duplicate data — petugas
+  // sudah di-flatten + kita tidak mau expose internal junction structure).
+  const { ibadahPelayanan: _strip, ...rest } = item;
+  res.json({ success: true, data: { ...rest, petugas } });
 });
 
 ibadahRouter.post('/', async (req, res) => {

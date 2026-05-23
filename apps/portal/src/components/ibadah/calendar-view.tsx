@@ -11,6 +11,12 @@ import {
   Globe,
   CalendarX,
   X,
+  Eye,
+  Users,
+  Ticket,
+  Calendar as CalendarIcon,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -40,6 +46,9 @@ export function CalendarView() {
 
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // Popup state — set saat user klik chip ibadah di kalender. Popup show
+  // detail singkat + action buttons (Lihat Detail / Tiadakan).
+  const [popup, setPopup] = useState<{ event: CalendarEvent; tanggal: string } | null>(null);
 
   // Range: tampilkan hari pertama grid (Minggu sebelum tanggal 1) sampai hari terakhir grid (Sabtu setelah tanggal terakhir)
   const { gridStart, gridEnd, fromStr, toStr } = useMemo(() => {
@@ -188,7 +197,14 @@ export function CalendarView() {
                   </div>
                   <div className="mt-1 space-y-0.5 overflow-hidden">
                     {events.slice(0, 3).map((e, i) => (
-                      <EventChip key={`${e.ibadahId}-${i}`} event={e} />
+                      <EventChip
+                        key={`${e.ibadahId}-${i}`}
+                        event={e}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setPopup({ event: e, tanggal: cell.iso });
+                        }}
+                      />
                     ))}
                     {events.length > 3 && (
                       <div className="text-[10px] text-neutral-500 font-medium px-1">
@@ -201,6 +217,19 @@ export function CalendarView() {
             })}
           </div>
         </div>
+      )}
+
+      {/* Popup saat klik chip event langsung */}
+      {popup && (
+        <EventActionPopup
+          event={popup.event}
+          tanggal={popup.tanggal}
+          onClose={() => setPopup(null)}
+          onAfterCancel={() => {
+            setPopup(null);
+            eventsQ.refetch();
+          }}
+        />
       )}
 
       {/* Selected date detail panel */}
@@ -241,16 +270,159 @@ export function CalendarView() {
   );
 }
 
-function EventChip({ event }: { event: CalendarEvent }) {
+function EventChip({
+  event,
+  onClick,
+}: {
+  event: CalendarEvent;
+  onClick: (ev: React.MouseEvent) => void;
+}) {
   return (
-    <Link
-      href={`/dashboard/ibadah/${event.ibadahId}`}
-      className="block px-1 py-0.5 text-[10px] font-medium rounded bg-brand-100 text-brand-800 hover:bg-brand-200 truncate"
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left block px-1 py-0.5 text-[10px] font-medium rounded bg-brand-100 text-brand-800 hover:bg-brand-200 truncate"
       title={`${event.nama} · ${event.cabang.nama} · ${event.jamMulai}`}
-      onClick={(ev) => ev.stopPropagation()}
     >
       {event.jamMulai} {event.nama}
-    </Link>
+    </button>
+  );
+}
+
+// ============== Popup saat klik chip ibadah ==============
+// Tampilkan info singkat + action buttons. Tiadakan flow nested confirm.
+function EventActionPopup({
+  event,
+  tanggal,
+  onClose,
+  onAfterCancel,
+}: {
+  event: CalendarEvent;
+  tanggal: string;
+  onClose: () => void;
+  onAfterCancel: () => void;
+}) {
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const tanggalLabel = new Date(tanggal).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100">
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold text-neutral-900 truncate">{event.nama}</h2>
+              <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1">
+                  <CalendarIcon className="w-3 h-3" />
+                  {tanggalLabel}
+                </span>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {event.jamMulai}–{event.jamSelesai}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-neutral-100 rounded shrink-0 ml-3"
+              aria-label="Tutup"
+            >
+              <X className="w-4 h-4 text-neutral-500" />
+            </button>
+          </div>
+
+          {/* Info badges */}
+          <div className="px-6 pt-4 pb-1 flex items-center gap-2 flex-wrap text-xs text-neutral-600">
+            <span className="inline-block px-1.5 py-0.5 bg-neutral-100 rounded font-medium">
+              {event.kategoriIbadah.nama}
+            </span>
+            <span className="inline-block px-1.5 py-0.5 bg-neutral-100 rounded">
+              {event.cabang.nama}
+            </span>
+            {event.lokasi && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {event.lokasi}
+              </span>
+            )}
+            {event.isOnline && (
+              <span className="inline-flex items-center gap-1 text-blue-700">
+                <Globe className="w-3 h-3" />
+                Online
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="p-6 space-y-2">
+            <Link
+              href={`/dashboard/ibadah/${event.ibadahId}?tanggal=${tanggal}`}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition"
+            >
+              <Eye className="w-4 h-4" />
+              Lihat Detail Ibadah
+            </Link>
+            <Link
+              href={`/dashboard/ibadah/${event.ibadahId}?tanggal=${tanggal}#petugas`}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-50 hover:bg-neutral-100 rounded-lg transition"
+            >
+              <Users className="w-4 h-4" />
+              Atur Petugas Khusus Tanggal Ini
+            </Link>
+            <Link
+              href={`/dashboard/kehadiran?ibadahId=${event.ibadahId}&tanggal=${tanggal}`}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-50 hover:bg-neutral-100 rounded-lg transition"
+            >
+              <Ticket className="w-4 h-4" />
+              Lihat Reservasi
+            </Link>
+
+            {/* Separator + destructive action */}
+            {event.tipeJadwal !== 'ONCE' && (
+              <>
+                <div className="border-t border-neutral-100 my-3" />
+                <button
+                  onClick={() => setCancelOpen(true)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                >
+                  <CalendarX className="w-4 h-4" />
+                  Tiadakan Ibadah Tanggal Ini
+                </button>
+              </>
+            )}
+            {event.tipeJadwal === 'ONCE' && (
+              <div className="text-[11px] text-neutral-500 text-center pt-2">
+                Ibadah tipe Sekali (ONCE) — untuk membatalkan, hapus ibadah-nya dari menu Ibadah.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmation nested modal */}
+      {cancelOpen && (
+        <CancelOccurrenceModal
+          ibadahId={event.ibadahId}
+          ibadahNama={event.nama}
+          tanggal={tanggal}
+          tanggalLabel={tanggalLabel}
+          onClose={() => setCancelOpen(false)}
+          onSuccess={() => {
+            setCancelOpen(false);
+            onAfterCancel();
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -356,12 +528,15 @@ function CancelOccurrenceModal({
   ibadahId,
   ibadahNama,
   tanggal,
+  tanggalLabel: tanggalLabelProp,
   onClose,
   onSuccess,
 }: {
   ibadahId: string;
   ibadahNama: string;
   tanggal: string;
+  /** Format readable, kalau tidak di-pass otomatis derived dari tanggal. */
+  tanggalLabel?: string;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -393,33 +568,39 @@ function CancelOccurrenceModal({
       toast.error(err.response?.data?.error?.message ?? 'Gagal meniadakan'),
   });
 
-  const tanggalLabel = new Date(tanggal).toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const tanggalLabel =
+    tanggalLabelProp ??
+    new Date(tanggal).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
           <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
-              <CalendarX className="w-4 h-4 text-red-600" />
-              Tiadakan ibadah tanggal ini
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Konfirmasi tiadakan ibadah
             </h2>
             <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
               <X className="w-4 h-4" />
             </button>
           </div>
           <div className="p-6 space-y-3 text-sm">
-            <div>
-              <div className="font-medium text-neutral-900">{ibadahNama}</div>
-              <div className="text-neutral-500">{tanggalLabel}</div>
+            {/* Prompt eksplisit "Apakah Anda yakin?" sesuai request user */}
+            <div className="text-base font-medium text-neutral-900">
+              Apakah Anda yakin akan meniadakan ibadah ini?
             </div>
-            <p className="text-neutral-600">
+            <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3">
+              <div className="font-semibold text-neutral-900">{ibadahNama}</div>
+              <div className="text-xs text-neutral-500 mt-0.5">{tanggalLabel}</div>
+            </div>
+            <p className="text-neutral-600 text-xs">
               Hanya tanggal ini yang akan ditiadakan; jadwal mingguan tetap berjalan
               di tanggal-tanggal lain. Semua reservasi aktif di tanggal ini akan
               <strong> otomatis dibatalkan</strong>.
@@ -434,10 +615,6 @@ function CancelOccurrenceModal({
                 className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm"
               />
             </label>
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              Notifikasi ke jemaat belum diimplementasi — silakan informasikan
-              secara terpisah lewat kanal lain.
-            </div>
           </div>
           <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
@@ -445,7 +622,7 @@ function CancelOccurrenceModal({
               disabled={mut.isPending}
               className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
             >
-              Batal
+              Tidak, batalkan
             </button>
             <button
               onClick={() => mut.mutate()}
@@ -453,7 +630,7 @@ function CancelOccurrenceModal({
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
             >
               {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Tiadakan
+              Ya, tiadakan
             </button>
           </div>
         </div>

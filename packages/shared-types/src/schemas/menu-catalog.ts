@@ -62,10 +62,12 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'role-access', label: 'Role Access', href: '/dashboard/role-access', group: 'Developer Tools' },
   { key: 'maintenance', label: 'Maintenance', href: '/dashboard/maintenance', group: 'Developer Tools' },
   { key: 'server-health', label: 'Server Health', href: '/dashboard/server-health', group: 'Developer Tools' },
+  { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
 
   // App Settings — content untuk mobile app (legal, version)
   { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },
   { key: 'app-version', label: 'App Versions', href: '/dashboard/app-version', group: 'App Settings' },
+  { key: 'maintenance-mode', label: 'Maintenance Mode', href: '/dashboard/maintenance-mode', group: 'App Settings' },
 ];
 
 export const MENU_KEYS = MENU_CATALOG.map((m) => m.key) as readonly string[];

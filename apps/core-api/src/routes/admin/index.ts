@@ -24,6 +24,8 @@ import { legalRouter } from './legal.js';
 import { appVersionRouter } from './app-version.js';
 import { maintenanceRouter } from './maintenance.js';
 import { serverHealthRouter } from './server-health.js';
+import { maintenanceModeRouter } from './maintenance-mode.js';
+import { credentialRouter } from './credential.js';
 
 export const adminRouter = Router();
 
@@ -60,6 +62,8 @@ adminRouter.use('/legal', legalRouter);
 adminRouter.use('/app-version', appVersionRouter);
 adminRouter.use('/maintenance', maintenanceRouter);
 adminRouter.use('/server-health', serverHealthRouter);
+adminRouter.use('/maintenance-mode', maintenanceModeRouter);
+adminRouter.use('/credential', credentialRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

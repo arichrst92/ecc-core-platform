@@ -1520,3 +1520,75 @@ enum NotificationStatus {
 
   @@map("notification_status")
 }
+
+// ============================================================
+// 16. MAINTENANCE MODE — global flag untuk mobile force-pause
+// ============================================================
+// Singleton row pattern: id="global" sebagai constant key. Admin upsert
+// untuk toggle on/off + set message + estimasi durasi.
+//
+// Mobile app polling /public/maintenance saat splash + periodic (mis. 5
+// menit). Kalau isEnabled=true → tampilkan full-screen modal dengan message
+// + countdown ke estimatedEndAt (kalau di-set).
+//
+// Estimated end:
+//   - Saat enable, admin pilih durasi (mis. 30 menit, 1 jam, 2 jam).
+//   - Server compute estimatedEndAt = startedAt + durasi.
+//   - Mobile display "Selesai dalam ~X menit" countdown.
+//   - Kalau durasi tidak di-set → estimatedEndAt null → display "Sedang
+//     maintenance, mohon tunggu" tanpa countdown.
+//
+// Saat disable, isEnabled=false tapi message+timestamp tetap untuk audit.
+model MaintenanceMode {
+  // String "global" — singleton. Tidak pakai UUID supaya upsert sederhana.
+  id              String    @id @default("global")
+  isEnabled       Boolean   @default(false) @map("is_enabled")
+  // Pesan yang ditampilkan ke user mobile. Mendukung plain text atau markdown
+  // singkat. Optional — default "Sistem sedang dalam pemeliharaan."
+  message         String?   @db.Text
+  // Kapan maintenance dimulai. Diset otomatis ke now() saat enable.
+  startedAt       DateTime? @map("started_at")
+  // Estimasi selesai. Diset otomatis = startedAt + durasi user input.
+  // NULL = tidak ada estimasi (mobile tampil tanpa countdown).
+  estimatedEndAt  DateTime? @map("estimated_end_at")
+  // Audit
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("maintenance_mode")
+}
+
+// ============================================================
+// 17. CREDENTIAL — vault untuk simpan credential third-party
+// ============================================================
+// Tempat simpan kredensial layanan yang dipakai tim ops: Fonnte, AWS,
+// SendGrid, social media admin login, hosting panel, dll. Akses ke menu
+// ini di portal di-gate dengan master password (env CREDENTIAL_MASTER_PASSWORD)
+// — extra layer di atas JWT login.
+//
+// Storage: plaintext di DB (bukan encrypted at rest). Threat model: DB
+// sudah secure di-belakang backend, admin yang sudah login + tahu master
+// password = authorized. Encryption tambahan bisa di-add later kalau perlu.
+//
+// Semua field selain `nama` opsional — kredensial bisa cuma punya URL
+// + email, atau cuma username + catatan, dst.
+model Credential {
+  id              String   @id @default(uuid()) @db.Uuid
+  // Display name — wajib supaya bisa di-list + di-search.
+  nama            String   @db.VarChar(255)
+  email           String?  @db.VarChar(255)
+  username        String?  @db.VarChar(255)
+  // Free format (boleh + atau tanpa +, bisa berisi label "+62...(WA bisnis)")
+  noHpTerdaftar   String?  @map("no_hp_terdaftar") @db.VarChar(100)
+  linkAkses       String?  @map("link_akses") @db.Text
+  recoveryEmail   String?  @map("recovery_email") @db.VarChar(255)
+  // Catatan bebas — password, 2FA backup codes, tips login, dll.
+  catatan         String?  @db.Text
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([nama])
+  @@map("credential")
+}

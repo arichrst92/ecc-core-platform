@@ -725,6 +725,7 @@ async function assertDependentGuardian(currentJemaatId: string, targetJemaatId: 
       id: true,
       namaLengkap: true,
       noHp: true,
+      email: true,
       primaryGuardianId: true,
       fotoUrl: true,
       tanggalLahir: true,
@@ -749,8 +750,35 @@ async function assertDependentGuardian(currentJemaatId: string, targetJemaatId: 
 meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const targetId = req.params.jemaatId;
+  if (!targetId) throw BadRequest('Path param :jemaatId wajib.');
   const input = editDependentJemaatSchema.parse(req.body);
   const before = await assertDependentGuardian(jemaatId, targetId);
+
+  // Uniqueness check untuk noHp + email (kalau di-set ke value non-null) —
+  // tolak kalau sudah dipakai jemaat lain yang aktif.
+  // Skip kalau value sama dengan existing (no-op update).
+  if (input.noHp !== undefined && input.noHp !== null && input.noHp !== before.noHp) {
+    const conflict = await prisma.jemaat.findFirst({
+      where: { noHp: input.noHp, isActive: true, NOT: { id: targetId } },
+      select: { id: true, namaLengkap: true },
+    });
+    if (conflict) {
+      throw Conflict(
+        `Nomor HP ${input.noHp} sudah terdaftar di akun jemaat lain (${conflict.namaLengkap}).`,
+      );
+    }
+  }
+  if (input.email !== undefined && input.email !== null && input.email !== before.email) {
+    const conflict = await prisma.jemaat.findFirst({
+      where: { email: input.email, isActive: true, NOT: { id: targetId } },
+      select: { id: true, namaLengkap: true },
+    });
+    if (conflict) {
+      throw Conflict(
+        `Email ${input.email} sudah terdaftar di akun jemaat lain (${conflict.namaLengkap}).`,
+      );
+    }
+  }
 
   const data: Prisma.JemaatUpdateInput = {
     namaLengkap: input.namaLengkap,
@@ -758,15 +786,28 @@ meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
     jenisKelamin: input.jenisKelamin ?? undefined,
     alamat: input.alamat ?? undefined,
   };
+  // noHp / email: optional + nullable. Kirim explicit `null` untuk clear,
+  // skip key (undefined) untuk tidak ubah.
+  if (input.noHp !== undefined) data.noHp = input.noHp;
+  if (input.email !== undefined) data.email = input.email;
+
   const updated = await prisma.jemaat.update({ where: { id: targetId }, data });
+
+  // Detect promote event — dependent yang sebelumnya tidak punya noHp,
+  // sekarang dapat noHp baru. Audit dengan kind khusus supaya analytics
+  // bisa track conversion dependent → full member.
+  const isPromote = !before.noHp && updated.noHp;
   audit(req, {
     action: 'UPDATE',
     resource: 'jemaat',
     resourceId: updated.id,
-    resourceLabel: `Edit dependent: ${updated.namaLengkap}`,
+    resourceLabel: `${isPromote ? '[promote]' : 'Edit'} dependent: ${updated.namaLengkap}`,
     before,
     after: updated,
-    metadata: { kind: 'dependent-edit-mobile', guardianJemaatId: jemaatId },
+    metadata: {
+      kind: isPromote ? 'dependent-promoted' : 'dependent-edit-mobile',
+      guardianJemaatId: jemaatId,
+    },
   });
   res.json({ success: true, data: updated });
 });

@@ -3162,8 +3162,367 @@ Authorization: Bearer <JWT>
 
 ---
 
-# 20. Support
+# 20. Movement — Visit (peer-to-peer scan QR)
+
+Pertemuan antar jemaat di-record via scan QR. Initiator scan kode QR target → row Visit tercipta. Both side bisa nulis note untuk lawan bicara.
+
+## 20.1 List visit saya
+
+```
+GET /admin/me/visits?role=all|initiator|target&from=&to=&search=&page=1&limit=20&sortBy=tanggalVisit&sortOrder=desc
+```
+
+Response shape sudah di-bentuk dari perspektif caller — `iAmInitiator`, `lawan` (peserta lawan), `myNote`, `noteLawan`.
+
+## 20.2 Create via scan QR
+
+```http
+POST /admin/me/visits
+{
+  "targetKode": "A1B2C3D4",       // dari QR scan
+  "judul": "Kunjungan rumah Pak Budi",
+  "lokasi": "Cafe Senopati"       // opsional
+}
+```
+
+Error: 400 (target inactive / scan diri sendiri), 404 (kode tidak ditemukan).
+
+## 20.3 Edit judul / lokasi (initiator-only)
+
+```
+PATCH /admin/me/visits/:id      { judul?, lokasi? }
+```
+
+403 kalau caller bukan initiator.
+
+## 20.4 Edit own note (initiator OR target)
+
+```
+PATCH /admin/me/visits/:id/note { note: string }
+```
+
+Auto-route: initiator → noteDariInitiator; target → noteDariTarget. String kosong = hapus.
+
+## 20.5 Cancel visit (initiator, 1-jam window)
+
+```
+DELETE /admin/me/visits/:id
+```
+
+Setelah 1 jam → 409 (`Tidak bisa cancel, window 1 jam lewat`). Untuk hapus, hubungi admin (portal moderation delete).
+
+Reference: `docs/backend-request-visit-feature.md` di mobile-app repo.
+
+---
+
+# 21. Movement — Local Business / Local Market
+
+Direktori UMKM jemaat. Owner CRUD via mobile, browse public per cabang.
+
+## 21.1 Owner CRUD — `/admin/me/businesses/*`
+
+| Method | Path | Note |
+|---|---|---|
+| GET | `/admin/me/businesses` | List bisnis saya (semua, termasuk nonaktif) |
+| POST | `/admin/me/businesses` | Create dengan nama + tipeBisnis (B2C/B2B/B2B2C) + optional industri/lokasi/url/socialLinks |
+| GET | `/admin/me/businesses/:id` | Detail (owner only, 403 kalau bukan) |
+| PATCH | `/admin/me/businesses/:id` | Update partial. `socialLinks` kalau dikirim **REPLACE** entire array (bukan merge) |
+| DELETE | `/admin/me/businesses/:id` | Hard delete + cleanup files |
+
+## 21.2 File uploads (separate endpoints)
+
+```
+POST   /admin/me/businesses/:id/hero            multipart, image, max 5MB → webp 1600px (preserve aspect)
+POST   /admin/me/businesses/:id/logo            multipart, image, max 5MB → webp square 512x512 (auto-crop center)
+POST   /admin/me/businesses/:id/profile-pdf     multipart, PDF only, max 5MB → passthrough
+
+DELETE /admin/me/businesses/:id/hero            clear
+DELETE /admin/me/businesses/:id/logo            clear
+DELETE /admin/me/businesses/:id/profile-pdf     clear
+```
+
+Field name multipart bebas (`foto`, `file`, `logo`, dll — diterima semua).
+
+## 21.3 Browse Local Market (public)
+
+```
+GET /admin/me/local-market?cabangId=&industri=&tipeBisnis=&isOnline=&search=&page=&limit=
+GET /admin/me/local-market/:id
+```
+
+Hanya bisnis dengan `isActive=true` **dan** owner `isActive=true`. Detail 404 kalau hidden (kecuali caller = owner).
+
+## 21.4 Field reference
+
+```typescript
+interface LocalBusiness {
+  id: string;
+  ownerJemaatId: string;
+  nama: string;
+  deskripsi: string | null;
+  heroImageUrl: string | null;      // banner upload
+  logoUrl: string | null;            // square 512x512
+  industri: string | null;           // free text, mobile boleh datalist suggestion
+  tipeBisnis: 'B2C' | 'B2B' | 'B2B2C';
+  isOnline: boolean;
+  lokasi: string | null;
+  websiteUrl: string | null;
+  whatsappUrl: string | null;        // format: https://wa.me/<nomor>
+  companyProfileUrl: string | null;  // PDF passthrough
+  socialLinks: Array<{ platform: string; url: string }> | null;  // max 10
+  isActive: boolean;                 // owner toggle hide/show di browse
+  owner: { id, namaLengkap, fotoUrl, cabang: { id, nama } };
+}
+```
+
+Reference: `docs/backend-request-local-market.md` di mobile-app repo.
+
+---
+
+# 22. Self-deactivate (Delete Account)
+
+Apple/Google store compliance — app dengan account creation wajib provide delete-account flow di-app.
+
+```http
+DELETE /admin/me
+Authorization: Bearer <token>
+{
+  "confirmText": "HAPUS AKUN SAYA",      // literal, harus match exact
+  "reason": "Pindah cabang lain"          // optional, max 500 chars
+}
+```
+
+**Success 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "jemaatId": "...",
+    "deactivatedAt": "2026-05-22T...",
+    "message": "Akun berhasil dinonaktifkan. Anda akan ter-logout dari semua device.",
+    "revokedSessions": 3
+  }
+}
+```
+
+Errors:
+- 400 — `confirmText` tidak match (literal "HAPUS AKUN SAYA")
+- 409 — akun sudah dinonaktifkan sebelumnya
+
+**Side effects:**
+
+1. `isActive=false` + `deactivatedAt` + `deactivationReason`
+2. Revoke semua `RefreshToken` → force logout dari semua device
+3. Audit log `kind: 'self-deactivate'`
+4. Login gate auto-reject 403 "Akun sudah dinonaktifkan"
+5. Refresh gate (POST /auth/refresh) auto-reject 401 + revoke remaining tokens
+
+**Reactivation**: tidak via mobile. User harus hubungi admin cabang (admin toggle `isActive=true` lewat portal Jemaat list).
+
+Reference: `docs/backend-request-delete-account.md`.
+
+---
+
+# 23. Legal Documents (Terms & Privacy)
+
+Multi-language (id wajib, en optional). Public (no auth) — accessible di pre-login screen.
+
+```
+GET /public/legal/:key?lang=id|en
+  :key = TERMS | PRIVACY
+```
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "key": "TERMS",
+    "language": "id",
+    "title": "Syarat & Ketentuan ECC",
+    "content": "# ...markdown content...",
+    "version": "2026-05-22",
+    "publishedAt": "2026-05-22T...",
+    "updatedAt": "2026-05-22T..."
+  }
+}
+```
+
+- Lang fallback ke `id` kalau yang di-minta tidak ada.
+- Mobile cache by `version` — refetch kalau version berubah.
+- Render via `react-native-markdown-display` atau equivalent.
+- Usage: link kecil di login/signup ("Dengan masuk, Anda setuju [Syarat] dan [Privasi]"), profile About section.
+
+Reference: `docs/backend-request-legal-pages.md`.
+
+---
+
+# 24. App Version Check
+
+Update prompt dengan semver compare server-side.
+
+```
+GET /public/app-version?platform=ios|android&currentVersion=1.0.0
+```
+
+`platform` wajib, lowercase. `currentVersion` opsional — kalau kosong, server return latest tanpa compute updateAvailable.
+
+**Response saat ada published row:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "platform": "IOS",
+    "latestVersion": "1.2.0",
+    "minSupportedVersion": "1.0.0",
+    "updateAvailable": true,            // currentVersion < latestVersion
+    "forceUpdate": false,               // currentVersion < minSupportedVersion
+    "releaseNotes": "- Fix QR scanner crash\n- ...",
+    "downloadUrl": "https://apps.apple.com/...",
+    "publishedAt": "2026-05-22T..."
+  }
+}
+```
+
+**Response saat belum ada row published**: semua field null + flag false → mobile fallback ke "no update".
+
+Mobile flow:
+
+- Auto-check di app launch (silent kalau no update)
+- Manual "Cek Update" di Settings → trigger same endpoint
+- Force update modal **non-dismissable** kalau `forceUpdate: true` — user harus update dulu sebelum bisa pakai app
+- Tap "Update Now" → buka `downloadUrl` di system browser → user manual update di App Store/Play Store
+
+Pakai `expo-application`:
+
+- `Application.nativeApplicationVersion` → `currentVersion` (string semver)
+- `Platform.OS` → `platform` ('ios' | 'android')
+
+Reference: `docs/backend-request-version-check.md`.
+
+---
+
+# 25. Liveness Nonce (face auth gate)
+
+**V1 SOFT LAUNCH** — sampai 2026-06-01 nonce OPTIONAL (log warn kalau missing). Setelah cutoff, REQUIRED.
+
+Tujuan: server-side gate untuk face login/enroll — sebelumnya purely client-side liveness bisa di-bypass.
+
+## 25.1 Request nonce
+
+```http
+POST /auth/face/liveness-nonce
+(no auth needed)
+
+{
+  "noHp": "+6281234567890",
+  "purpose": "LOGIN"        // atau "ENROLL"
+}
+```
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "nonce": "eyJhbGciOiJIUzI1NiI...",
+    "expiresAt": "2026-05-22T10:03:00Z",
+    "ttlSeconds": 180
+  }
+}
+```
+
+Token = opaque HMAC signed JWT. Mobile **tidak perlu parse** — simpan string apa adanya, kirim balik di body request berikutnya.
+
+## 25.2 Submit dengan nonce
+
+Tambah field `livenessNonce` di body `/auth/face/login` atau `/auth/face/enroll`:
+
+```http
+POST /auth/face/login
+{
+  "noHp": "+6281234567890",
+  "descriptor": [0.123, ...],
+  "modelVersion": "mobilefacenet-v1",
+  "livenessNonce": "eyJhbGciOiJIUzI1NiI..."
+}
+```
+
+## 25.3 Error codes (HTTP 401)
+
+Server verify signature + TTL + purpose match + noHp binding + one-shot.
+
+| Code | UX hint |
+|---|---|
+| `LIVENESS_NONCE_INVALID` | Signature salah / malformed. Mulai ulang flow. |
+| `LIVENESS_NONCE_EXPIRED` | TTL 3 menit lewat. Request nonce baru, ulangi liveness. |
+| `LIVENESS_NONCE_PURPOSE_MISMATCH` | Nonce ENROLL dipakai di LOGIN (atau sebaliknya). Bug client. |
+| `LIVENESS_NONCE_BIND_MISMATCH` | noHp di nonce ≠ noHp di body. Bug client. |
+| `LIVENESS_NONCE_REUSED` | Sudah pernah di-consume. Request nonce baru, jangan retry. |
+
+## 25.4 Suggested flow
+
+```typescript
+async function faceLogin(noHp: string) {
+  // 1. Request nonce sebelum show liveness UI
+  const { data } = await api.post('/auth/face/liveness-nonce', { noHp, purpose: 'LOGIN' });
+  const nonce = data.data.nonce;
+
+  // 2. Show liveness challenges (existing useLivenessChallenge hook)
+  await runLiveness();
+
+  // 3. Capture descriptor via MobileFaceNet
+  const descriptor = await captureDescriptor();
+
+  // 4. Submit dengan nonce
+  return await api.post('/auth/face/login', {
+    noHp,
+    descriptor,
+    modelVersion: 'mobilefacenet-v1',
+    livenessNonce: nonce,
+  });
+}
+```
+
+Reference: `docs/backend-request-liveness-nonce.md`.
+
+---
+
+# 26. WhatsApp signature footer (server-side)
+
+Semua outbound WA (OTP, reminder ibadah, reminder event) **otomatis append** signature di server:
+
+```
+_Powered by IDEA (https://ide.asia)_
+_an Enterprise IT Service and Outsourcing Company_
+```
+
+Italic markdown — render sebagai italic di WhatsApp. Mobile tidak perlu handle apa pun — pesan yang di-receive user sudah include signature.
+
+---
+
+# 27. Cron jobs (informational)
+
+Mobile tidak panggil endpoint ini, tapi behavior berdampak ke pengalaman user. List untuk konteks:
+
+| Job | Interval | Effect ke mobile |
+|---|---|---|
+| `cleanup-refresh-token` | 6 jam | Hapus RefreshToken expired. User tidak ke-affect (expired sudah tidak valid). |
+| `cleanup-audit-log` | 24 jam | Hapus AuditLog > 365 hari. Tidak ke-affect mobile. |
+| `dispatch-ibadah-reminder` | 1 jam, send window 07–10 WIB | Kirim WA reminder H-1 untuk reservasi RESERVE/JOIN. User dapat WA pagi sebelum hari ibadah. |
+| `dispatch-event-reminder` | 1 jam, send window 07–10 WIB | Sama untuk EventParticipation. |
+
+User akan dapat WA reminder otomatis besok pagi kalau punya reservasi/event H-1. Tidak ada opt-out endpoint saat ini (future enhancement).
+
+---
+
+# 28. Support
 
 - Dokumen ini ada di repo: `docs/mobile-api-guide.md`
-- Spec lengkap auto-update saat backend deploy.
+- Spec lengkap auto-update saat backend deploy (lihat `/docs` Swagger UI di backend).
+- Backend-request docs (per fitur, detail handoff): `ecc-mobile-app/docs/backend-request-*.md`
 - Pertanyaan: contact IDEA dev team atau buka issue di repo.

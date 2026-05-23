@@ -84,9 +84,27 @@ ecc-platform/
 
 ---
 
-## 4. Model Data — 26 Tabel
+## 4. Model Data — 42 Tabel
 
-> Catatan: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); Milestone 2 menambahkan `audit_log`; Milestone 3 menambahkan cluster Pelayanan (`pelayanan`, `pelayanan_role`, `jemaat_pelayanan`, `ibadah_pelayanan`); selanjutnya `ibadah_pelayanan_petugas` untuk roster per ibadah; lalu `reservasi` untuk kehadiran; `konten` untuk broadcast News + Renungan; dan cluster Community (`homecell_area`, `homecell`, `homecell_member`) untuk penggembalaan. Total Prisma model sekarang = 26.
+> **Catatan evolusi**: ERD konseptual awal punya 13 tabel. Saat scaffolding cluster Auth dipecah menjadi 4 tabel (`user`, `otp_verification`, `refresh_token`, `sinode_api_key`); M2 menambahkan `audit_log`; M3 menambahkan cluster Pelayanan, lalu Community (homecell), Event (event + participation + donation + pelayanan + petugas), RBAC menu access, branch change, family relation, Movement (Visit + LocalBusiness), App Settings (LegalDocument + AppVersion), Notification log, dan ibadah occurrence override. Total Prisma model sekarang = **42**.
+
+**Daftar cluster (10 cluster):**
+
+| # | Cluster | Tabel utama |
+|---|---|---|
+| 1 | **Organisasi** | sinode, cabang_gereja, cabang_rekening, jemaat |
+| 2 | **Klasifikasi Peran** | role, sub_role, sub_role_status, jemaat_role |
+| 3 | **Ibadah** | kategori_ibadah, ibadah, ibadah_occurrence_status |
+| 4 | **Relasi Keluarga** | tipe_relasi_keluarga, jemaat_relasi, family_relation |
+| 5 | **Auth & API** | user, otp_verification, refresh_token, sinode_api_key |
+| 6 | **Audit** | audit_log |
+| 7 | **Pelayanan (Ministry)** | pelayanan, pelayanan_role, jemaat_pelayanan, ibadah_pelayanan, ibadah_pelayanan_petugas, reservasi |
+| 8 | **Konten Broadcast** | konten (News + Renungan, tipe enum) |
+| 9 | **Community** | homecell_area, homecell, homecell_member |
+| 10 | **Event (Movement)** | event, event_participation, event_donation, event_pelayanan, event_pelayanan_petugas |
+| 11 | **Movement** | visit, local_business |
+| 12 | **App Settings** | legal_document, app_version |
+| 13 | **Operasional** | notification_log, branch_change_request, role_menu_access, sub_role_menu_access |
 
 ### 4.1 Cluster Organisasi
 
@@ -212,17 +230,61 @@ UI portal:
 - `/dashboard/jemaat/[id]` — detail jemaat dengan section Pelayanan + section Role (active + history), modal Tambah Penugasan / Tambah Role, tombol "Akhiri" (set tanggalSelesai) + hapus permanent. Edit Profile membuka FormModal in-page (PATCH `/admin/jemaat/:id`).
 - `/dashboard/ibadah/[id]` — detail ibadah dengan section "Pelayanan yang Melayani". Tiap pelayanan link expandable → list petugas dipisah section **Petugas Default** vs **Override · {tanggal}** (badge jumlah di header). Modal Tambah Petugas punya toggle Default vs Khusus tanggal + date picker. Section terpisah **Tanggal Ditiadakan** untuk restore occurrence yang sebelumnya di-cancel.
 
-Sidebar dikelompokkan jadi 6 grup dengan label header **collapsible** (state persistent di `localStorage.ecc-portal-sidebar-collapsed-groups`):
+Sidebar dikelompokkan jadi 8 grup dengan label header **collapsible** (state persistent di `localStorage.ecc-portal-sidebar-collapsed-groups`):
 - **Entity** — Sinode, Cabang Gereja
 - **Service** — Ibadah, Kategori Ibadah, Pelayanan (role di-edit inline di sini), Kehadiran
 - **People** — Jemaat, Role Jemaat, Relasi Jemaat
 - **Community** — Homecell Area, Homecell
+- **Movement** — Event, Visit, Local Market
 - **Broadcast** — News, Renungan
-- **Developer Tools** — API Keys, Audit Log
+- **App Settings** — Legal Docs, App Versions
+- **Developer Tools** — Role Access, API Keys, Audit Log, Maintenance, Server Health
 
 Plus Dashboard di atas grup dan Profil & Keamanan di bawah (separator). Page lama `/dashboard/pelayanan-role` di-deprecate (auto-redirect ke `/pelayanan`).
 
 Highlight rule: active link match exact-or-prefix dengan trailing `/` untuk menghindari tabrakan (mis. `/dashboard/homecell-area` tidak ikut highlight `/dashboard/homecell`).
+
+### 4.7 Cluster Konten Broadcast
+
+**`konten`** — single table untuk News + Renungan dengan `tipe` enum (`NEWS | RENUNGAN`). Field utama: `judul, slug (unique global), ringkasan, body (markdown), hero_image_url, tipe, sinode_id (nullable), cabang_id (nullable), tanggal_publikasi, ayat_alkitab (renungan-spesifik), view_count, is_published`. Audience targeting via kombinasi sinodeId+cabangId: `(null,null)` global; `(X,null)` sinode-wide; `(X,Y)` cabang-specific. Backend pakai factory pattern `createKontenRouter(tipe)` → routes `/admin/news` dan `/admin/renungan` share controller logic. Hero image upload separate post-create (butuh ID untuk filename).
+
+### 4.8 Cluster Community (Homecell)
+
+**`homecell_area`** → **`homecell`** → **`homecell_member`** — struktur penggembalaan 3-level. Area scoped ke cabang, homecell scoped ke area. PIC area/homecell **divalidasi via Pelayanan Penggembalaan** (`assertPenggembalaanRole`) bukan FK ke role — supaya kalau orang keluar dari pelayanan, PIC field tidak corrupt (`onDelete: SetNull`), tinggal re-assign. HomecellMember lifecycle: `is_active` toggle + `tanggal_keluar` untuk soft-deactivate (riwayat penting untuk discipleship tracking). Unique `(homecell_id, jemaat_id)` mencegah duplikat — re-join = reactivate row yang sama.
+
+### 4.9 Cluster Event (Movement)
+
+**`event`** — event tunggal dengan tipe_bayar (GRATIS, NOMINAL_TETAP, NOMINAL_BEBAS), quota_peserta, butuh_kehadiran (toggle scan QR), is_published, tanggal_mulai/selesai (full datetime). Audience targeting sama dengan konten (sinode + cabang nullable).
+
+**`event_participation`** — 5 status: DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR → BATAL. Bukti transfer upload terpisah. Pattern check-in mirip ibadah tapi pakai EventParticipation status (bukan Reservasi).
+
+**`event_donation`** — multi-payment per participation (fundraising / cicilan / top-up). Approval admin per donation row, bukan per participation. Pattern diputuskan via patch 2026-05-21l (Opsi B sub-table).
+
+**`event_pelayanan` + `event_pelayanan_petugas`** — mirror pattern `ibadah_pelayanan` + petugas, dengan `can_scan_attendance` flag untuk authorize volunteer scan QR di hari H (per patch 2026-05-19).
+
+### 4.10 Cluster Movement (peer-to-peer + UMKM)
+
+**`visit`** — pertemuan peer-to-peer antar jemaat via scan QR. Initiator scan kode QR target → row tercipta dengan judul shared + lokasi opsional. Each side bisa nulis `note_dari_initiator` / `note_dari_target` untuk lawan bicara. Portal admin read + delete moderasi. Mobile = aktivitas inti.
+
+**`local_business`** — direktori UMKM jemaat. Owner 1:N businesses. Field: nama, deskripsi, hero_image_url (banner), logo_url (square auto-crop 512x512), industri (text bebas), tipe_bisnis enum `B2C | B2B | B2B2C`, is_online + lokasi (text), website_url, whatsapp_url, company_profile_url (PDF max 5 MB passthrough), social_links (Json array of `{platform, url}` max 10), is_active. Mobile = CRUD + browse public filter by cabang. Portal admin = read + delete moderasi.
+
+### 4.11 Cluster App Settings (mobile-driven config)
+
+**`legal_document`** — Terms & Privacy multi-language (id wajib, en opsional). Unique `(key, language)`. Mobile fetch pre-login via `GET /public/legal/:key` (no auth, fallback ke id). Admin CRUD via `/admin/legal/:key/:lang`. Markdown content, `version` field (ISO date) untuk mobile cache invalidation.
+
+**`app_version`** — update prompt per platform IOS/ANDROID. 1 row aktif per platform (auto-unpublish row lama saat publish baru). Field: latest_version (semver), min_supported_version (semver), release_notes, download_url, is_published. Public `GET /public/app-version?platform=&currentVersion=` compute updateAvailable + forceUpdate via semver compare.
+
+### 4.12 Cluster Operasional
+
+**`notification_log`** — outbound WA reminder dedup + audit. Field: jemaat_id, no_hp, type enum (`IBADAH_REMINDER | EVENT_REMINDER`), `dedup_key` UNIQUE (format `"{TYPE}:{sourceId}:{tanggalIso}:{jemaatId}"`), status enum (`PENDING | SENT | FAILED`), message_body, message_id (Fonnte), error_reason, attempt_count, sent_at. Cron dispatch setiap 1 jam dalam window `REMINDER_SEND_HOUR_START`–`END` (default 07–10 WIB).
+
+**`branch_change_request`** — request pindah cabang. Status: PENDING → APPROVED/REJECTED dengan reviewer + reviewedAt + reviewNote. Setelah patch 2026-05-22 direct-branch-change, mobile bisa PATCH cabang langsung tanpa approval; queue admin tetap ada untuk audit.
+
+**`role_menu_access` + `sub_role_menu_access`** — RBAC menu access per Role/SubRole. Tiap menu di `MENU_CATALOG` (di `packages/shared-types/src/schemas/menu-catalog.ts`) bisa di-toggle canRead/canWrite/canDelete per role. Migration baru biasanya backfill `Fulltimer` dapat full access menu baru. `Role.canAccessPortal` (boolean) gate awal — minimal 1 role aktif dengan canAccessPortal=true baru bisa login portal. Subroles override role-level untuk granularity (mis. Magang Fulltimer tidak akses semua menu).
+
+### 4.13 Soft-delete jemaat (delete account compliance)
+
+`jemaat.is_active` sebagai gate utama login + access. Self-deactivate via `DELETE /admin/me` dengan confirmText="HAPUS AKUN SAYA" set `is_active=false` + `deactivated_at` + `deactivation_reason`, plus revoke semua RefreshToken (force logout dari semua device). Reactivation hanya via admin portal toggle. Lookup endpoint user-facing (visit scan, ibadah/event checkin, family link, public profile, /api/v1) auto-filter `is_active=true` — sembunyikan inactive jemaat dari mobile.
 
 ---
 
@@ -605,15 +667,33 @@ Jika perlu (mis. enrollment kiosk dengan supervisi manusia), pakai `<FaceCapture
 ### Server-side verification
 
 Lihat `packages/auth/src/face.ts`:
-- `matchFace(candidate, stored)` → Euclidean distance < `FACE_MATCH_THRESHOLD`
-- Default threshold 0.5 (face-api.js merekomendasikan ≤ 0.6)
+- `matchFace(candidate, stored)` → Cosine similarity ≥ `FACE_MATCH_THRESHOLD` (MobileFaceNet sejak patch 2026-05-21r — sebelumnya Euclidean face-api.js)
+- Default threshold 0.5, range cosine 0..1 (normalized descriptors)
+- Model version: `mobilefacenet-v1` (128-dim, beda dari legacy `facenet-v1` — di-tolak via `FACE_MODEL_MISMATCH` 409 supaya force re-enroll)
 
-Server tidak ikut verifikasi liveness — itu murni client-side. Risiko: attacker bypass FE dan langsung POST descriptor curian ke `/auth/face/login`. Mitigasi: rate-limit endpoint face login per noHp + IP, tambah signed liveness token dari client yang server validate.
+### Server-side liveness gate (patch 2026-05-22b)
+
+Sebelumnya: liveness 100% client-side → attacker bisa stealing descriptor (mis. ekstrak dari foto social media via model lokal) dan langsung POST `/auth/face/login` tanpa pernah ada human-presence verification.
+
+Sekarang: **HMAC signed nonce** dengan TTL 3 menit + one-shot consume. Flow:
+
+1. Mobile request nonce: `POST /auth/face/liveness-nonce` body `{ noHp, purpose: 'ENROLL' | 'LOGIN' }` → response `{ nonce, expiresAt, ttlSeconds: 180 }`.
+2. Mobile show liveness UI (existing blink + head turn) — client-side challenges TIDAK berubah.
+3. Saat submit `/auth/face/login` atau `/auth/face/enroll`, include field `livenessNonce` di body.
+4. Server `consumeLivenessNonce()` verify: signature (HMAC dengan `LIVENESS_NONCE_SECRET` / fallback `JWT_SECRET`), TTL, purpose match (ENROLL vs LOGIN), noHp binding, **one-shot** (JTI tidak boleh re-used).
+
+Implementasi `apps/core-api/src/lib/liveness-nonce.ts`:
+- Token = JWT-style (jsonwebtoken sign) — opaque untuk mobile, server-only decode
+- One-shot via in-memory `Set<jti>` dengan auto-eviction setelah TTL
+- Stateless (tidak butuh DB table) — kompromi: kalau scale >1 pod, butuh Redis SETNX untuk distributed one-shot
+- Error codes (HTTP 401): `LIVENESS_NONCE_INVALID`, `LIVENESS_NONCE_EXPIRED`, `LIVENESS_NONCE_PURPOSE_MISMATCH`, `LIVENESS_NONCE_BIND_MISMATCH`, `LIVENESS_NONCE_REUSED`
+
+**V1 backward compat (sampai 2026-06-01)**: `livenessNonce` field OPTIONAL di body. Kalau missing, server log `WARN [liveness] face/* tanpa nonce` tapi tetap accept untuk grace period sampai mobile selesai migrate. Setelah cutoff, flip ke required.
 
 ### TODO sebelum production (tinggi-risiko)
 
-- [ ] **Server-side liveness gate** — issue signed nonce di start challenge, klien sertakan saat submit. Server validate signature.
-- [ ] **Anti-spoofing dedicated** — AWS Rekognition Liveness atau Azure Face untuk mitigasi deepfake/3D mask
+- [x] **Server-side liveness gate** — implemented (signed nonce) — flip ke required setelah mobile confirm migrate
+- [ ] **Anti-spoofing dedicated** — AWS Rekognition Liveness atau Azure Face untuk mitigasi deepfake/3D mask (cost decision)
 - [ ] **Re-enrollment policy** — paksa user update descriptor setiap N bulan
 - [ ] **Multi-angle enrollment** — capture wajah dari beberapa sudut untuk robustness
 
@@ -786,12 +866,27 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 - [x] Rate limiting per IP & per user (express-rate-limit dengan kategori per endpoint)
 - [x] Virtual scroll untuk tabel besar (10k+ jemaat) — `@tanstack/react-virtual` + `useInfiniteQuery`, opt-in via `virtualScroll: true` di ResourceConfig
 - [x] Bulk import jemaat via CSV upload (dry-run preview + commit transactional)
-- [ ] Foto jemaat upload ke S3-compatible storage
-- [ ] Notifikasi: integrasi balik ke WhatsApp untuk reminder ibadah
-- [ ] Multi-language (en) untuk portal
-- [ ] CI/CD pipeline + staging environment
-- [ ] Audit log retention cron (purge >365 hari)
-- [ ] Liveness server-side gate dengan signed nonce
+- [x] Audit log retention cron (purge >365 hari) — `lib/scheduled-jobs.ts` `cleanupOldAuditLogs`, configurable via `AUDIT_LOG_RETENTION_DAYS`
+- [x] Refresh-token cleanup cron — 6-hour interval, manual trigger via `/admin/maintenance/refresh-token-cleanup`
+- [x] WhatsApp reminder cron — Ibadah + Event H-1, dedup via NotificationLog `dedup_key`, send window 07–10 WIB
+- [x] Liveness server-side gate — HMAC signed nonce dengan TTL 3 menit + one-shot consume (lihat section 9). V1 grace mode (optional) → V2 cutover 2026-06-01.
+- [x] CI/CD pipeline — GitHub Actions push-to-main auto-deploy via SSH ke VPS (lihat `docs/cicd-setup.md`)
+- [x] Server Health diagnostic — `/admin/server-health` + portal page dengan auto-refresh + 16 troubleshooting cases
+- [x] Maintenance ops page — manual trigger refresh-token / audit-log cleanup, notification stats + log viewer
+- [x] Movement cluster — Visit (peer-to-peer scan QR) + Local Market (UMKM directory)
+- [x] App Settings cluster — Legal docs (Terms/Privacy multi-lang) + App version check (per platform)
+- [x] Delete Account (Apple/Google store compliance) — DELETE /admin/me soft-delete + invalidate sessions
+- [x] WA outbound signature — IDEA footer di semua message via `appendSignature()` helper
+- [x] TZ fix ibadah occurrence — sebelumnya pakai local-time methods, sekarang full UTC supaya server di TZ non-UTC tidak shift hari
+- [x] Cascade isActive filter — semua endpoint lookup user-facing tolak jemaat self-deactivated
+- [ ] Foto jemaat upload ke S3-compatible storage **— deferred** (per decision 2026-05-22, stay local VPS)
+- [ ] Multi-language (en) untuk portal **— deferred**
+- [ ] WhatsApp Cloud API migration **— deferred** (Fonnte cukup untuk volume saat ini)
+- [ ] Push notification (FCM/APNs) **— deferred** (mobile pakai local notif sementara)
+- [ ] Cabang admin role + scoping per cabang
+- [ ] GDPR data export endpoint (hard-delete request manual via admin email saat ini)
+- [ ] Monitoring/alerting external (Sentry, Grafana)
+- [ ] Backup automation cron (pg_dump + uploads tar)
 
 ---
 
@@ -866,6 +961,25 @@ Default tetap pagination klasik. Switch ke virtual scroll hanya saat memang butu
 | 2026-05-18  | Endpoint `/admin/jemaat/by-pelayanan?pelayanan=&role=` untuk PIC dropdown      | Generic helper, bukan endpoint khusus homecell. Bisa di-reuse untuk dropdown PIC lain di masa depan (mis. Worship Leader dropdown, dst.) |
 | 2026-05-18  | `homecellCount` di cabang list **diaggregate via area.cabangId** (bukan _count.homecells) | Homecell tidak punya FK langsung ke cabang. Query terpisah `prisma.homecell.findMany({ where: area.cabangId in [...] })` lalu group by JS. Lebih clean daripada raw SQL, perf OK untuk skala awal |
 | 2026-05-18  | HomecellMember: **isActive toggle + tanggalKeluar** untuk lifecycle, bukan hard delete sebagai norm | Riwayat keanggotaan penting untuk discipleship tracking. Hard delete tersedia tapi soft toggle didorong sebagai default UX. Unique `(homecellId, jemaatId)` mencegah duplikat — re-join = reactivate row yang sama |
+| 2026-05-19  | Event cluster terpisah dari ibadah (5 tabel)                                | Use case berbeda: ibadah recurring, event one-time dengan tipe_bayar + quota + butuh_kehadiran. Pattern junction mirror ibadah (event_pelayanan + petugas) supaya konsisten |
+| 2026-05-19  | **`can_scan_attendance`** flag di petugas (ibadah + event)                  | Permissive scope: jemaat punya minimal 1 row petugas dengan flag=true → boleh scan QR di hari H, tanpa peduli tanggal row override. Authorization separable dari penugasan role |
+| 2026-05-19  | RBAC menu access via tabel `role_menu_access` + `sub_role_menu_access`     | Granularity per menuKey × role × (read/write/delete). MENU_CATALOG di shared-types = single source. Migration baru wajib backfill Fulltimer dapat full access menu baru |
+| 2026-05-20  | OTP request via WhatsApp number normalize ke **E.164 internasional**       | Sebelumnya hardcode +62. Jemaat diaspora/missionari/international perlu support. Pakai `libphonenumber-js` untuk validate per country |
+| 2026-05-21  | Face V2 — **MobileFaceNet** (TFLite native) replace face-api.js TFJS       | WebView TFJS terlalu lambat di production mobile. MobileFaceNet 128-dim cosine similarity (bukan Euclidean) untuk speed + accuracy. Dim correction ke 128 (initial estimate 192 typo). Stored descriptor model lama (facenet-v1) di-tolak via FACE_MODEL_MISMATCH 409 supaya force re-enroll |
+| 2026-05-21  | Multi-payment event donation = **sub-table** `event_donation` (Opsi B)     | Lebih flexible dari single nominal_total di participation. Mendukung fundraising, cicilan, top-up. Approval admin per donation row. Bukti transfer per donation. Mobile bisa view "my donations" terpisah |
+| 2026-05-21  | Push notification **DEFERRED**, mobile pakai local notif                    | Infra FCM/APNs butuh setup terpisah + per-device token tracking. Reconsider trigger: kalau ada >5k DAU atau event-driven need yang tidak bisa di-local-notif |
+| 2026-05-21  | Direct branch change tanpa approval (PATCH `/admin/me cabangId`)           | UX simplification. Old branch-change-request tetap ada untuk audit, tapi mobile bisa langsung PATCH |
+| 2026-05-22  | Ibadah occurrence: switch ke **UTC methods** (getUTCDay, setUTCHours, dst) | Bug: server di TZ non-UTC (WIB) compute getDay() local → return hari yang salah saat Prisma @db.Date dilakukan resolve. Sekarang full UTC, konsisten dengan storage. Lihat `apps/core-api/src/lib/ibadah-occurrences.ts` |
+| 2026-05-22  | **Visit cluster** (Movement)                                                | Peer-to-peer scan QR antar jemaat untuk record visitasi pastoral. Single shared title di-set initiator, dual notes per side (noteDariInitiator + noteDariTarget). Aktivitas inti di mobile, portal cuma display + moderation delete |
+| 2026-05-22  | **Local Business** + Local Market (Movement)                                | UMKM directory. 1 jemaat N businesses. Hero banner + logo square (auto-crop 512x512) + company profile PDF (max 5MB passthrough). Social links Json array. is_active toggle owner-controlled. Browse public mobile filter cabang/industri/tipe |
+| 2026-05-22  | **Delete Account** (Apple/Google store compliance)                          | DELETE /admin/me dengan confirmText="HAPUS AKUN SAYA" → soft-delete `isActive=false` + deactivatedAt + revoke semua RefreshToken. Cascade isActive filter di semua endpoint user-facing lookup. Reactivation hanya via admin portal |
+| 2026-05-22  | **Legal Docs** configurable per (key, language) — markdown content         | Mobile fetch `GET /public/legal/:key?lang=` no-auth pre-login. Fallback ke `id` kalau lang tidak ada. Version field (ISO date) untuk mobile cache invalidation. Markdown editor portal pakai plain textarea (no preview, minimal deps) |
+| 2026-05-22  | **App Version Check** per platform — semver compare server-side             | 1 row aktif per platform (auto-unpublish lama saat publish baru). Public `GET /public/app-version?platform=&currentVersion=` compute updateAvailable + forceUpdate. Semver manual parse (no `semver` npm dep) |
+| 2026-05-22  | **Liveness gate signed nonce** (V1 grace, V2 cutover 2026-06-01)            | HMAC JWT-style token, TTL 3 menit, one-shot via in-memory Set. Stateless (no DB). V1 backward compat optional. Multi-pod note: butuh Redis SETNX kalau scale |
+| 2026-05-22  | Scheduled cron in-process via **setInterval** (no node-cron dep)            | Refresh-token cleanup (6h), audit-log cleanup (24h), WA reminder dispatch (1h). Multi-pod safe via dedup unique key. Send window 07–10 WIB supaya WA tidak pop tengah malam |
+| 2026-05-22  | WA outbound **signature IDEA** di-append via single helper                  | `appendSignature()` idempotent (cek "Powered by IDEA" sudah ada). Single source di `packages/auth/src/whatsapp.ts` — branding change cukup edit 1 tempat |
+| 2026-05-22  | CI/CD **GitHub Actions** push-to-main → SSH deploy ke VPS                  | Workflow: validate (lint, type-check, build, prisma format check) → deploy job (SSH appleboy/ssh-action, run `scripts/deploy.sh`). PM2 ecosystem.config.cjs untuk process manager. Docs lengkap di `docs/cicd-setup.md` |
+| 2026-05-22  | pnpm hoist `@types/*` ke top-level via `.npmrc`                            | Tanpa ini, TypeScript TS2742 di ~22 router file karena express Router type live di .pnpm subfolder yang tidak portable saat emit declaration |
 
 ---
 

@@ -23,6 +23,45 @@ import { BadRequest, NotFound } from '../lib/errors.js';
 export const publicUnauthRouter = Router();
 
 // ============================================================
+//  GET /public/maintenance — global maintenance flag
+//  Mobile splash + periodic polling. No auth.
+// ============================================================
+publicUnauthRouter.get('/maintenance', async (_req, res) => {
+  const row = await prisma.maintenanceMode.findUnique({
+    where: { id: 'global' },
+  });
+  if (!row) {
+    // Defensive: kalau singleton belum ada (migration belum dijalankan?),
+    // return default off supaya mobile tetap berjalan.
+    return res.json({
+      success: true,
+      data: {
+        isEnabled: false,
+        message: null,
+        startedAt: null,
+        estimatedEndAt: null,
+      },
+    });
+  }
+  // Auto-disable kalau estimatedEndAt sudah lewat. Tidak update DB (avoid
+  // race + extra write); mobile cuma terima isEnabled=false. Admin perlu
+  // explicit disable via portal supaya audit clean.
+  let isEnabled = row.isEnabled;
+  if (isEnabled && row.estimatedEndAt && row.estimatedEndAt.getTime() < Date.now()) {
+    isEnabled = false;
+  }
+  res.json({
+    success: true,
+    data: {
+      isEnabled,
+      message: row.message,
+      startedAt: row.startedAt,
+      estimatedEndAt: row.estimatedEndAt,
+    },
+  });
+});
+
+// ============================================================
 //  GET /public/legal/:key?lang=id|en
 //  Mobile fetch Terms/Privacy. Fallback ke 'id' kalau lang yg di-minta
 //  tidak tersedia.

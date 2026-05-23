@@ -3006,4 +3006,118 @@ Request doc `docs/backend-request-cabang-list.md` di-tandai RESOLVED dengan impl
 
 ---
 
+## 27. Production Deployment — Live State (2026-05-23)
+
+### 27.1 Live URLs
+
+| Service     | URL                                       | Internal Port |
+|-------------|-------------------------------------------|---------------|
+| Portal      | https://portal.eccchurch.global           | 3100          |
+| Core API    | https://api.eccchurch.global              | 4100          |
+| API docs    | https://api.eccchurch.global/docs         | —             |
+| Static files| https://api.eccchurch.global/uploads/...  | —             |
+
+Domain `eccchurch.global` registered di Namecheap (perhatikan: **3 huruf 'c'** — bukan `echurch` atau `ecchurch`).
+
+### 27.2 Infrastructure
+
+- **VPS**: 187.77.118.85 (Ubuntu 22, deploy user `deploy`)
+- **Database**: PostgreSQL 16 (lokal di VPS, user `ecc_user`, db `ecc_platform`)
+- **Process manager**: PM2 (`ecc-core-api` + `ecc-portal`, fork mode, autorestart)
+- **Reverse proxy**: Nginx 1.24, sites-enabled untuk 2 subdomain
+- **SSL**: Let's Encrypt via certbot, auto-renew systemd timer (2x daily)
+- **Storage**: Static uploads di `/var/www/ecc-core-platform/uploads/` (Nginx serve langsung)
+- **Backup**: pg_dump scheduled — belum di-setup di cron, perlu manual sampai #TODO
+
+### 27.3 Gotchas yang di-temukan saat deploy pertama
+
+5 issue blocking yang fixed selama deploy session 2026-05-23. **Catat di sini supaya tidak terulang di future deploy:**
+
+#### Gotcha #1 — Workspace packages compile to dist/ untuk production
+
+**Symptom**: `SyntaxError: Unexpected identifier 'global'` saat core-api start, di `src/middleware/error-handler.ts:3:1`.
+
+**Cause**: `packages/{database,auth,shared-types}/package.json` semula punya `main: ./src/index.ts`. Di dev pakai `tsx` (strip TS on-the-fly) jadi work. Di prod pakai `node` raw — yang tidak bisa parse `declare global { ... }` atau syntax TS lainnya.
+
+**Fix**: Setiap workspace package punya `tsconfig.json` + `build: tsc` script + `main: ./dist/index.js`. Turbo `dependsOn: ^build` ensure packages compile dulu sebelum apps.
+
+#### Gotcha #2 — Transitive deps tidak ke-hoist di pnpm
+
+**Symptom**: `Cannot find module 'jsonwebtoken'` di production runtime, padahal di-import di `apps/core-api/src/lib/liveness-nonce.ts`.
+
+**Cause**: `jsonwebtoken` adalah dep dari `@ecc/auth`, bukan direct dep `@ecc/core-api`. pnpm tidak auto-hoist transitive deps (beda dari npm). Production runtime resolve module dari `apps/core-api/node_modules/` — tidak ketemu.
+
+**Fix**: Tambah semua module yang di-import langsung sebagai direct deps di app yang consume. Check via `grep -r "from 'jsonwebtoken'" apps/core-api/src` dan pastikan listed di `apps/core-api/package.json`.
+
+**Aturan untuk future**: kalau tambah `import X from 'some-package'` di apps/*/src, package harus listed di `apps/*/package.json` dependencies, even kalau juga ada di workspace dep.
+
+#### Gotcha #3 — `.env` loading di PM2
+
+**Symptom**: `[auth] JWT_SECRET missing or too short` di PM2 logs.
+
+**Cause**: `import 'dotenv/config'` di src/index.ts cari `.env` di `process.cwd()`. PM2 `cwd: ./apps/core-api`, jadi dotenv lihat `apps/core-api/.env` — file tidak ada di sana, hanya di root.
+
+**Fix**: `ecosystem.config.cjs` punya zero-dep .env parser di top file, lalu inject ke `env` field setiap app explicit. Lebih reliable daripada PM2 `env_file` directive (behavior inconsistent antar versi).
+
+**Aturan untuk future**: kalau tambah env var baru, **wajib** tambah ke 2 tempat:
+1. `.env.example` (template untuk developer baru)
+2. `ecosystem.config.cjs` `sharedEnv` object (supaya ke-inject ke PM2)
+
+#### Gotcha #4 — `NEXT_PUBLIC_*` di-bake build-time
+
+**Symptom**: Portal di production masih hit `http://localhost:4100/auth/otp/request` → `ERR_CONNECTION_REFUSED`.
+
+**Cause**: Next.js inline `NEXT_PUBLIC_*` env vars ke client bundle saat `next build`. Build kemarin di Mac/CI pakai `.env` lokal yang punya `NEXT_PUBLIC_CORE_API_URL=http://localhost:4100` → ke-bake ke bundle.
+
+**Fix**: Di VPS, update `.env` ke production URL, lalu **rebuild** portal (`pnpm --filter @ecc/portal build`). Restart PM2 portal supaya pick up bundle baru. Hard reload browser supaya bypass cache.
+
+**Aturan untuk future**: kalau update `NEXT_PUBLIC_*` di .env, **wajib rebuild portal**. PM2 reload aja tidak cukup karena `.next/` static chunks di-cache.
+
+#### Gotcha #5 — `trust proxy` + `UPLOADS_DIR` absolute path
+
+**Symptoms** (2 issue terpisah):
+1. `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` di logs setiap request.
+2. Gambar upload sukses tapi `https://api.eccchurch.global/uploads/...` return 404.
+
+**Causes**:
+1. Express tidak trust `X-Forwarded-For` dari Nginx → `req.ip = 127.0.0.1` → rate-limit error.
+2. `UPLOADS_DIR="./uploads"` relatif → file ke-save ke `apps/core-api/uploads/`, tapi Nginx alias point ke `/var/www/ecc-core-platform/uploads/` (mismatch).
+
+**Fix**:
+1. `app.set('trust proxy', 1)` di `apps/core-api/src/app.ts` — trust 1 hop (Nginx).
+2. Update `UPLOADS_DIR` di `.env` ke absolute path `/var/www/ecc-core-platform/uploads`. Migrate file existing dengan rsync. Set permission `deploy:www-data` 755.
+
+**Aturan untuk future**:
+- Selalu pakai **absolute path** di `.env` production untuk file storage.
+- Express harus `trust proxy` di belakang reverse proxy. Sudah ke-set di code, tidak perlu re-do.
+
+### 27.4 Production environment variables (.env di VPS)
+
+Berbeda dari `.env.example` untuk dev. Catat key differences:
+
+```bash
+NODE_ENV="production"
+DATABASE_URL="postgresql://ecc_user:EccGlobal2026%40@localhost:5432/ecc_platform?schema=public"
+# Note: @ di password di-encode jadi %40 (URL-encoding requirement)
+
+PORTAL_URL="https://portal.eccchurch.global"
+CORE_API_URL="https://api.eccchurch.global"
+NEXT_PUBLIC_CORE_API_URL="https://api.eccchurch.global"
+CORS_ALLOWED_ORIGINS="https://portal.eccchurch.global"
+UPLOADS_DIR="/var/www/ecc-core-platform/uploads"  # absolute path!
+
+# Sisanya sama dengan .env.example
+```
+
+### 27.5 Workflow deploy untuk future changes
+
+**Lihat dokumen `docs/future-changes-deploy-workflow.md`** untuk copy-paste command per skenario:
+- Code change saja (no schema, no env, no deps)
+- Code change + new dependency
+- Code change + new env var
+- Code change + database migration
+- Emergency rollback
+
+---
+
 *This document is the source of truth for ECC Core Platform architecture. Update whenever a major decision is made — append to Decision Log (section 13).*

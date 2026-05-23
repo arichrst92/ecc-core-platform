@@ -24,6 +24,9 @@ const STARTUP_DELAY_MS = 30 * 1000;
 
 // ===== Configurable retention =====
 const AUDIT_LOG_RETENTION_DAYS = Number(process.env.AUDIT_LOG_RETENTION_DAYS ?? 365);
+// Diagnostics tables — pendek karena volume bisa tinggi.
+const FACE_TELEMETRY_RETENTION_DAYS = Number(process.env.FACE_TELEMETRY_RETENTION_DAYS ?? 90);
+const DIAGNOSTICS_ERROR_RETENTION_DAYS = Number(process.env.DIAGNOSTICS_ERROR_RETENTION_DAYS ?? 30);
 
 // ===============================================================
 // Job 1: Cleanup expired RefreshToken
@@ -43,6 +46,28 @@ export async function cleanupOldAuditLogs(): Promise<number> {
   const cutoff = new Date(Date.now() - AUDIT_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const result = await prisma.auditLog.deleteMany({
     where: { createdAt: { lt: cutoff } },
+  });
+  return result.count;
+}
+
+// ===============================================================
+// Job 5: Cleanup old face telemetry events (retention 90 hari)
+// ===============================================================
+export async function cleanupOldFaceTelemetry(): Promise<number> {
+  const cutoff = new Date(Date.now() - FACE_TELEMETRY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.faceTelemetryEvent.deleteMany({
+    where: { receivedAt: { lt: cutoff } },
+  });
+  return result.count;
+}
+
+// ===============================================================
+// Job 6: Cleanup old diagnostics error events (retention 30 hari)
+// ===============================================================
+export async function cleanupOldDiagnosticsErrors(): Promise<number> {
+  const cutoff = new Date(Date.now() - DIAGNOSTICS_ERROR_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.diagnosticsErrorEvent.deleteMany({
+    where: { receivedAt: { lt: cutoff } },
   });
   return result.count;
 }
@@ -343,19 +368,34 @@ export function startScheduledJobs() {
     return dispatchEventReminders();
   });
 
+  const faceTelemetryJob = wrap('cleanup-face-telemetry', async () => {
+    const deleted = await cleanupOldFaceTelemetry();
+    return { deleted };
+  });
+  const diagnosticsErrorJob = wrap('cleanup-diagnostics-error', async () => {
+    const deleted = await cleanupOldDiagnosticsErrors();
+    return { deleted };
+  });
+
   // Initial run (delayed) untuk semua job.
   setTimeout(() => {
     void refreshTokenJob();
     void auditLogJob();
     void ibadahReminderJob();
     void eventReminderJob();
+    void faceTelemetryJob();
+    void diagnosticsErrorJob();
   }, STARTUP_DELAY_MS);
 
   const h1 = setInterval(() => void refreshTokenJob(), REFRESH_TOKEN_INTERVAL_MS);
   const h2 = setInterval(() => void auditLogJob(), AUDIT_LOG_INTERVAL_MS);
   const h3 = setInterval(() => void ibadahReminderJob(), REMINDER_DISPATCH_INTERVAL_MS);
   const h4 = setInterval(() => void eventReminderJob(), REMINDER_DISPATCH_INTERVAL_MS);
-  for (const h of [h1, h2, h3, h4]) {
+  // Diagnostics retention — daily interval cukup, volume tinggi tapi delete
+  // operation murah dengan index on received_at.
+  const h5 = setInterval(() => void faceTelemetryJob(), AUDIT_LOG_INTERVAL_MS);
+  const h6 = setInterval(() => void diagnosticsErrorJob(), AUDIT_LOG_INTERVAL_MS);
+  for (const h of [h1, h2, h3, h4, h5, h6]) {
     h.unref?.();
     intervalHandles.push(h);
   }
@@ -367,8 +407,10 @@ export function startScheduledJobs() {
       'reminder-interval': REMINDER_DISPATCH_INTERVAL_MS,
       'reminder-window': `${REMINDER_HOUR_START}:00-${REMINDER_HOUR_END}:00 (server local)`,
       'audit-retention-days': AUDIT_LOG_RETENTION_DAYS,
+      'face-telemetry-retention-days': FACE_TELEMETRY_RETENTION_DAYS,
+      'diagnostics-error-retention-days': DIAGNOSTICS_ERROR_RETENTION_DAYS,
     },
-    '⏰ Scheduled jobs started: cleanup-refresh-token, cleanup-audit-log, dispatch-ibadah-reminder, dispatch-event-reminder',
+    '⏰ Scheduled jobs started: cleanup-refresh-token, cleanup-audit-log, dispatch-ibadah-reminder, dispatch-event-reminder, cleanup-face-telemetry, cleanup-diagnostics-error',
   );
 }
 

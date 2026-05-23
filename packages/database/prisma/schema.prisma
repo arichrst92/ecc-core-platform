@@ -1592,3 +1592,132 @@ model Credential {
   @@index([nama])
   @@map("credential")
 }
+
+// ============================================================
+// 18. APP CONFIG — tune-able runtime config exposed to mobile
+// ============================================================
+// Singleton row pattern (mirror MaintenanceMode). Mobile fetch via
+// GET /public/app-config saat splash, cache 1 jam. Admin update via portal
+// Developer Tools → Diagnostics → App Config.
+//
+// Field tune-able runtime tanpa app update + tanpa server restart. Beda
+// dari env var seperti FACE_MATCH_THRESHOLD yang butuh restart untuk
+// effect. App config = guidance ke mobile, env = enforced di server.
+model AppConfig {
+  id                          String   @id @default("global")
+  // Mirror dari env FACE_MATCH_THRESHOLD — di-expose supaya mobile bisa
+  // normalize confidence range untuk UI. Backend tetap baca env, app_config
+  // ini cuma read-only mirror buat client side info.
+  faceMatchThreshold          Float    @default(0.5) @map("face_match_threshold")
+  // Threshold mobile-side untuk show "login berhasil dengan confidence rendah"
+  // warning toast. Tune-able tanpa app update via portal.
+  lowConfidenceWarnThreshold  Float    @default(0.7) @map("low_confidence_warn_threshold")
+  // Sampling rate untuk telemetry events (0.0–1.0). Pilot mode = 1.0,
+  // post-pilot reduce ke 0.1–0.2 untuk control storage.
+  telemetrySamplingRate       Float    @default(1.0) @map("telemetry_sampling_rate")
+  // Toggle untuk disable error reporting kalau ada incident (mis. infinite
+  // loop error report). Mobile cek field ini sebelum push ke /diagnostics/error.
+  errorReportingEnabled       Boolean  @default(true) @map("error_reporting_enabled")
+  updatedByUserId             String?  @map("updated_by_user_id") @db.Uuid
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  @@map("app_config")
+}
+
+// ============================================================
+// 19. FACE TELEMETRY EVENT — pilot rollout face login funnel
+// ============================================================
+// Mobile push event saat face login/enroll flow — track funnel
+// (open → liveness → descriptor → server response) + latency p50/p95 +
+// failure breakdown. Pilot insight 10-20 jemaat sebelum public release.
+//
+// Fire-and-forget pattern: mobile tidak retry kalau gagal, BE tidak
+// guarantee 100% delivery. Async insert OK untuk pilot scale.
+//
+// Retention: 90 hari, lalu auto-purge via cron. Right-to-delete:
+// kalau user DELETE /admin/me, semua row WHERE noHp dihapus.
+model FaceTelemetryEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  // Mobile-generated session UUID — group multiple events dalam 1 flow.
+  // Funnel query: `WHERE session_id = X` untuk trace lengkap satu attempt.
+  sessionId       String   @map("session_id") @db.Uuid
+  // Optional — user identity untuk correlate dengan complaint debug.
+  noHp            String?  @map("no_hp") @db.VarChar(32)
+  // Event types lihat docs/backend-request-face-confidence-threshold-and-telemetry.md
+  // section 2.3 (face_login_attempt, face_liveness_pass, face_descriptor_compute, dll).
+  event           String   @db.VarChar(64)
+  // 'login' | 'enroll' | null — disambiguate shared events.
+  flow            String?  @db.VarChar(16)
+  // 'success' | 'failure'
+  outcome         String   @db.VarChar(16)
+  // 'liveness_no_blink' | 'face_no_match' | 'face_not_enrolled' |
+  // 'liveness_nonce_expired' | 'network_timeout' | ... (free-form, agreed
+  // dengan mobile via docs).
+  failureReason   String?  @map("failure_reason") @db.VarChar(64)
+  // Hanya untuk outcome=success di face_login_server_response. Raw cosine
+  // similarity (0..1 range untuk normalized descriptors).
+  confidence      Float?
+  // {livenessTotal, descriptorCompute, serverRoundtrip} dalam ms.
+  durationMs      Json?    @map("duration_ms")
+  // {platform, model, osVersion, appVersion, modelVersion}.
+  device          Json?
+  // Mobile-side timestamp (client clock).
+  timestamp       DateTime @db.Timestamptz()
+  // Server-side received timestamp — untuk retention + drift detection.
+  receivedAt      DateTime @default(now()) @map("received_at") @db.Timestamptz()
+
+  @@index([event, timestamp(sort: Desc)])
+  @@index([sessionId])
+  @@index([noHp])
+  @@index([receivedAt])
+  @@map("face_telemetry_event")
+}
+
+// ============================================================
+// 20. DIAGNOSTICS ERROR EVENT — production runtime error reports
+// ============================================================
+// Mobile push runtime error/warning dari production build via
+// POST /diagnostics/error (fire-and-forget). Replace third-party Sentry
+// untuk avoid subscription cost + signup friction + privacy concerns.
+//
+// Grouping: `fingerprint` = md5(error_name + ':' + message) — generated
+// column di Postgres. Mirror Sentry-style grouping supaya error yang sama
+// (mis. "TypeError: Network request failed") di-aggregate as 1 issue.
+//
+// Retention: 30 hari (lebih pendek dari telemetry karena error volume
+// bisa spike). Right-to-delete: cascade saat user DELETE /admin/me.
+model DiagnosticsErrorEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  // 'error' | 'message' — 'error' = exception with stack, 'message' = log warn.
+  type            String   @default("error") @db.VarChar(16)
+  // Mobile build identifier "X.Y.Z+buildNumber" mis. "0.1.0+12".
+  release         String   @db.VarChar(64)
+  platform        String   @db.VarChar(16)
+  osVersion       String?  @map("os_version") @db.VarChar(32)
+  appVersion      String?  @map("app_version") @db.VarChar(32)
+  // Optional — user identity untuk debug specific complaint.
+  userNoHp        String?  @map("user_no_hp") @db.VarChar(32)
+  // Required — error message (untuk grouping fingerprint).
+  message         String   @db.Text
+  stack           String?  @db.Text
+  // error.name (TypeError, RangeError, dll) atau custom error class name.
+  errorName       String?  @map("error_name") @db.VarChar(64)
+  // Arbitrary k-v dari caller — endpoint URL, attempt count, dll.
+  context         Json?
+  // Array of last 20 breadcrumb events leading to error.
+  breadcrumbs     Json?
+  timestamp       DateTime @db.Timestamptz()
+  receivedAt      DateTime @default(now()) @map("received_at") @db.Timestamptz()
+  // Generated column: md5(error_name + ':' + message) — Postgres native.
+  // Tidak bisa di-set via Prisma create — auto-computed di DB.
+  // Untuk read: select via Prisma works (mapped as String).
+  fingerprint     String?  @db.VarChar(32)
+
+  @@index([fingerprint, release])
+  @@index([timestamp(sort: Desc)])
+  @@index([userNoHp])
+  @@index([release, platform])
+  @@index([receivedAt])
+  @@map("diagnostics_error_event")
+}

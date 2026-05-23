@@ -45,8 +45,13 @@ import {
 import { audit } from '../lib/audit.js';
 import { generateUniqueKode } from '../lib/kode-reservasi.js';
 import { saveProfilePhoto } from '../lib/storage.js';
+import { faceTelemetryRouter } from './face-telemetry.js';
 
 export const authRouter = Router();
+
+// Mount face telemetry sub-router di /auth/face/* (no auth, fire-and-forget).
+// Lihat docs/backend-request-face-confidence-threshold-and-telemetry.md.
+authRouter.use('/face', faceTelemetryRouter);
 
 /**
  * POST /auth/otp/request — kirim OTP via WhatsApp.

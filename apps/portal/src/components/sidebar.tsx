@@ -32,6 +32,7 @@ import {
   BookOpenCheck,
   Power,
   KeyRound,
+  Stethoscope,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -126,6 +127,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/maintenance', label: 'Maintenance', icon: Wrench, menuKey: 'maintenance' },
       { href: '/dashboard/server-health', label: 'Server Health', icon: Gauge, menuKey: 'server-health' },
       { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
+      { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
     ],
   },
 ];

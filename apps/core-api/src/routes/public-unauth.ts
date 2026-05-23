@@ -23,6 +23,39 @@ import { BadRequest, NotFound } from '../lib/errors.js';
 export const publicUnauthRouter = Router();
 
 // ============================================================
+//  GET /public/app-config — tune-able runtime config untuk mobile
+//  Mobile fetch saat splash + cache 1 jam. No auth.
+//
+//  Lihat docs/backend-request-face-confidence-threshold-and-telemetry.md
+//  + docs/backend-request-diagnostics-error-endpoint.md untuk konteks.
+// ============================================================
+publicUnauthRouter.get('/app-config', async (_req, res) => {
+  const row = await prisma.appConfig.findUnique({ where: { id: 'global' } });
+  if (!row) {
+    // Defensive: singleton belum di-seed (mis. migration belum jalan).
+    // Return safe defaults supaya mobile tidak crash.
+    return res.json({
+      success: true,
+      data: {
+        faceMatchThreshold: 0.5,
+        lowConfidenceWarnThreshold: 0.7,
+        telemetrySamplingRate: 1.0,
+        errorReportingEnabled: true,
+      },
+    });
+  }
+  res.json({
+    success: true,
+    data: {
+      faceMatchThreshold: row.faceMatchThreshold,
+      lowConfidenceWarnThreshold: row.lowConfidenceWarnThreshold,
+      telemetrySamplingRate: row.telemetrySamplingRate,
+      errorReportingEnabled: row.errorReportingEnabled,
+    },
+  });
+});
+
+// ============================================================
 //  GET /public/maintenance — global maintenance flag
 //  Mobile splash + periodic polling. No auth.
 // ============================================================

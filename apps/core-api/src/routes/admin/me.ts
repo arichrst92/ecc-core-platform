@@ -955,7 +955,7 @@ meRouter.delete('/', async (req, res) => {
 
   const jemaat = await prisma.jemaat.findUnique({
     where: { id: jemaatId },
-    select: { id: true, namaLengkap: true, isActive: true, user: { select: { id: true } } },
+    select: { id: true, namaLengkap: true, noHp: true, isActive: true, user: { select: { id: true } } },
   });
   if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
   if (!jemaat.isActive) {
@@ -984,7 +984,21 @@ meRouter.delete('/', async (req, res) => {
       });
       revokedCount = r.count;
     }
-    return { updated, revokedCount };
+    // Right-to-delete propagation — PDP Law compliance.
+    // Telemetry + error events keyed by noHp di-delete supaya user yg
+    // self-deactivate tidak bisa di-correlate via diagnostics data.
+    // Lihat:
+    //   - docs/backend-request-face-confidence-threshold-and-telemetry.md (privacy)
+    //   - docs/backend-request-diagnostics-error-endpoint.md (right-to-delete)
+    let telemetryDeleted = 0;
+    let errorEventsDeleted = 0;
+    if (jemaat.noHp) {
+      const t = await tx.faceTelemetryEvent.deleteMany({ where: { noHp: jemaat.noHp } });
+      telemetryDeleted = t.count;
+      const e = await tx.diagnosticsErrorEvent.deleteMany({ where: { userNoHp: jemaat.noHp } });
+      errorEventsDeleted = e.count;
+    }
+    return { updated, revokedCount, telemetryDeleted, errorEventsDeleted };
   });
 
   audit(req, {
@@ -996,6 +1010,8 @@ meRouter.delete('/', async (req, res) => {
       kind: 'self-deactivate',
       reason: input.reason ?? null,
       revokedSessions: result.revokedCount,
+      telemetryEventsDeleted: result.telemetryDeleted,
+      errorEventsDeleted: result.errorEventsDeleted,
     },
   });
 

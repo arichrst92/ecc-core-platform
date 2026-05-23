@@ -103,3 +103,25 @@ export const cabangListLimiter = makeLimiter('cabang-list', {
   windowMs: 1 * 60 * 1000,     // 1 menit
   limit: 30,                   // 30/menit/IP
 });
+
+/**
+ * Telemetry fire-and-forget endpoint — mobile push event saat face login flow.
+ * Tinggi karena 1 face login attempt = up to 4 events (attempt, liveness,
+ * descriptor, server-response). 10 user x 10 attempt/menit = 400, jadi limit
+ * 500/menit/IP cukup untuk pilot scale tanpa risk DoS.
+ */
+export const telemetryLimiter = makeLimiter('telemetry', {
+  windowMs: 1 * 60 * 1000,
+  limit: 500,
+});
+
+/**
+ * Diagnostics error reporting — mobile push runtime error.
+ * Lebih ketat dari telemetry karena 1 error report = 1 event (vs telemetry
+ * yang multi-event per flow). 100/menit/IP cukup defensive untuk bursty
+ * scenarios (kalau ada infinite loop di mobile, jangan sampai overwhelm BE).
+ */
+export const diagnosticsErrorLimiter = makeLimiter('diag-error', {
+  windowMs: 1 * 60 * 1000,
+  limit: 100,
+});

@@ -63,6 +63,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'maintenance', label: 'Maintenance', href: '/dashboard/maintenance', group: 'Developer Tools' },
   { key: 'server-health', label: 'Server Health', href: '/dashboard/server-health', group: 'Developer Tools' },
   { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
+  { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
 
   // App Settings — content untuk mobile app (legal, version)
   { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },

@@ -36,3 +36,4 @@ export * from './schemas/legal.js';
 export * from './schemas/app-version.js';
 export * from './schemas/maintenance-mode.js';
 export * from './schemas/credential.js';
+export * from './schemas/diagnostics.js';

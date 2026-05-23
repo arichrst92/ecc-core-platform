@@ -55,3 +55,7 @@ apps/portal/public/face-models/*
 # Misc
 *.tsbuildinfo
 .parcel-cache/
+
+# Backup files & DB dumps
+*.bak
+ecc_platform_dump_*.sql

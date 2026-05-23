@@ -1,7 +1,7 @@
 # Deployment Runbook — ECC Core Platform ke VPS Production
 
 **Target**: VPS 187.77.118.85, Ubuntu 22.04 LTS
-**Domains**: `portal.ecchurch.global` (Next.js portal) + `api.ecchurch.global` (Express backend)
+**Domains**: `portal.eccchurch.global` (Next.js portal) + `api.eccchurch.global` (Express backend)
 **DNS**: Namecheap
 **Data**: Migrasi dari local Postgres 16 ke VPS Postgres 16
 
@@ -9,7 +9,7 @@
 
 ## Phase 1 — DNS di Namecheap
 
-Login ke Namecheap → Domain List → klik **MANAGE** di sebelah `ecchurch.global` → tab **Advanced DNS** → **ADD NEW RECORD**:
+Login ke Namecheap → Domain List → klik **MANAGE** di sebelah `eccchurch.global` → tab **Advanced DNS** → **ADD NEW RECORD**:
 
 | Type | Host | Value | TTL |
 |---|---|---|---|
@@ -20,8 +20,8 @@ Klik **SAVE ALL CHANGES**. Tunggu propagation ~5–30 menit.
 
 Verifikasi dari komputer lokal:
 ```bash
-dig +short portal.ecchurch.global    # harus return 187.77.118.85
-dig +short api.ecchurch.global       # harus return 187.77.118.85
+dig +short portal.eccchurch.global    # harus return 187.77.118.85
+dig +short api.eccchurch.global       # harus return 187.77.118.85
 ```
 
 Kalau belum resolve, tunggu lebih lama atau cek via online tool `https://dnschecker.org`.
@@ -235,12 +235,12 @@ PORT=4100
 HOST=0.0.0.0
 
 # URLs (production)
-PORTAL_URL="https://portal.ecchurch.global"
-CORE_API_URL="https://api.ecchurch.global"
-NEXT_PUBLIC_CORE_API_URL="https://api.ecchurch.global"
+PORTAL_URL="https://portal.eccchurch.global"
+CORE_API_URL="https://api.eccchurch.global"
+NEXT_PUBLIC_CORE_API_URL="https://api.eccchurch.global"
 
 # CORS
-CORS_ALLOWED_ORIGINS="https://portal.ecchurch.global"
+CORS_ALLOWED_ORIGINS="https://portal.eccchurch.global"
 
 # Scheduled jobs
 AUDIT_LOG_RETENTION_DAYS=365
@@ -394,7 +394,7 @@ curl -s -I http://localhost:3100/        # portal (HTML response 200)
 ### 8.1 Config portal (port 3100)
 
 ```bash
-sudo nano /etc/nginx/sites-available/portal.ecchurch.global
+sudo nano /etc/nginx/sites-available/portal.eccchurch.global
 ```
 
 Paste:
@@ -402,7 +402,7 @@ Paste:
 server {
   listen 80;
   listen [::]:80;
-  server_name portal.ecchurch.global;
+  server_name portal.eccchurch.global;
 
   # Body size untuk file upload (dilihat dari mobile via API, tapi safety)
   client_max_body_size 10M;
@@ -424,7 +424,7 @@ server {
 ### 8.2 Config API (port 4100)
 
 ```bash
-sudo nano /etc/nginx/sites-available/api.ecchurch.global
+sudo nano /etc/nginx/sites-available/api.eccchurch.global
 ```
 
 Paste:
@@ -432,7 +432,7 @@ Paste:
 server {
   listen 80;
   listen [::]:80;
-  server_name api.ecchurch.global;
+  server_name api.eccchurch.global;
 
   # Lebih besar untuk upload hero image (5MB) + PDF (5MB)
   client_max_body_size 20M;
@@ -461,8 +461,8 @@ server {
 ### 8.3 Enable + reload
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/portal.ecchurch.global /etc/nginx/sites-enabled/
-sudo ln -s /etc/nginx/sites-available/api.ecchurch.global /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/portal.eccchurch.global /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/api.eccchurch.global /etc/nginx/sites-enabled/
 
 # Remove default site kalau ada
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -478,11 +478,11 @@ sudo systemctl reload nginx
 
 ```bash
 # Dari komputer lokal
-curl -I http://portal.ecchurch.global/    # harus 200 / 307 redirect
-curl -s http://api.ecchurch.global/health    # harus { "status": "ok", ... }
+curl -I http://portal.eccchurch.global/    # harus 200 / 307 redirect
+curl -s http://api.eccchurch.global/health    # harus { "status": "ok", ... }
 ```
 
-Kalau timeout: cek DNS sudah propagate (`dig +short portal.ecchurch.global`), atau firewall VPS allow 80.
+Kalau timeout: cek DNS sudah propagate (`dig +short portal.eccchurch.global`), atau firewall VPS allow 80.
 
 ---
 
@@ -492,10 +492,10 @@ Email valid (untuk renewal warnings):
 
 ```bash
 sudo certbot --nginx \
-  -d portal.ecchurch.global \
-  -d api.ecchurch.global \
+  -d portal.eccchurch.global \
+  -d api.eccchurch.global \
   --non-interactive --agree-tos \
-  --email admin@ecchurch.global \
+  --email admin@eccchurch.global \
   --redirect
 
 # Outputnya akan modify Nginx config untuk add SSL + auto-redirect HTTP→HTTPS
@@ -510,8 +510,8 @@ sudo certbot renew --dry-run
 ```
 
 Buka browser:
-- `https://portal.ecchurch.global` — should show login page
-- `https://api.ecchurch.global/health` — should show `{"status":"ok"}`
+- `https://portal.eccchurch.global` — should show login page
+- `https://api.eccchurch.global/health` — should show `{"status":"ok"}`
 
 🔒 Gembok hijau = SSL aktif.
 
@@ -521,7 +521,7 @@ Buka browser:
 
 ### 10.1 Login portal
 
-1. Buka `https://portal.ecchurch.global`
+1. Buka `https://portal.eccchurch.global`
 2. Masukkan nomor HP Fulltimer (yang sudah ada di DB hasil restore)
 3. Klik Kirim OTP → cek WhatsApp Anda → masukkan kode
 4. Dashboard muncul → sidebar menu lengkap
@@ -537,7 +537,7 @@ Buka browser:
 
 Update endpoint di mobile app `.env.production` (atau equivalent):
 ```
-API_URL=https://api.ecchurch.global
+API_URL=https://api.eccchurch.global
 ```
 
 Test login + fetch data di mobile app.
@@ -617,7 +617,7 @@ ls -lh /var/backups/ecc/    # cek hasil
 PM2 sudah punya basic monitoring. Untuk external uptime check:
 
 - Sign up gratis di `uptimerobot.com` atau `betterstack.com`
-- Add monitor untuk `https://api.ecchurch.global/health` (interval 5 menit)
+- Add monitor untuk `https://api.eccchurch.global/health` (interval 5 menit)
 - Alert via email/Slack/WA kalau down
 
 ### 12.3 Firewall tighten
@@ -635,14 +635,14 @@ sudo ufw status verbose
 ### DNS belum propagate
 
 ```bash
-dig +short portal.ecchurch.global    # kosong = belum
+dig +short portal.eccchurch.global    # kosong = belum
 # Tunggu sampai 60 menit, atau cek via dnschecker.org
 ```
 
 ### Certbot gagal
 
 ```bash
-sudo certbot --nginx -d portal.ecchurch.global -v
+sudo certbot --nginx -d portal.eccchurch.global -v
 # Common cause: DNS belum propagate, atau firewall block port 80
 # Solusi: tunggu DNS, atau allow port 80: sudo ufw allow 80
 ```

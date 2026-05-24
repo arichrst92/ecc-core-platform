@@ -116,6 +116,17 @@ export const telemetryLimiter = makeLimiter('telemetry', {
 });
 
 /**
+ * Public browse — guest mode endpoints (ibadah calendar, event, local-market,
+ * cabang rekening). Mobile guest user belum login → IP-based rate limit.
+ * 60/menit/IP cukup untuk pattern browse (user tap-tap tab atau filter cabang).
+ * Lihat docs/backend-request-public-endpoints-for-guest.md.
+ */
+export const publicBrowseLimiter = makeLimiter('public-browse', {
+  windowMs: 1 * 60 * 1000,
+  limit: 60,
+});
+
+/**
  * Diagnostics error reporting — mobile push runtime error.
  * Lebih ketat dari telemetry karena 1 error report = 1 event (vs telemetry
  * yang multi-event per flow). 100/menit/IP cukup defensive untuk bursty

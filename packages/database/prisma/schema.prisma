@@ -305,6 +305,11 @@ model Ibadah {
   linkStream        String?      @map("link_stream") @db.Text
   deskripsi         String?      @db.Text
   isActive          Boolean      @default(true) @map("is_active")
+  // Gate untuk public/guest endpoint (GET /public/ibadah/calendar).
+  // Default true = ibadah aktif otomatis appear di guest browse.
+  // Admin bisa toggle false untuk ibadah internal (mis. ibadah pengurus,
+  // latihan, ibadah khusus) yang tidak boleh ditampilkan ke guest.
+  isPublic          Boolean      @default(true) @map("is_public")
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
@@ -977,6 +982,12 @@ model Event {
   // Audit
   authorId  String   @map("author_id") @db.Uuid
   isActive  Boolean  @default(true) @map("is_active")
+  // Gate untuk public/guest endpoint (GET /public/event). Terpisah dari
+  // isPublished — `isPublished` = visible di mobile member; `isPublic` =
+  // visible juga di guest browse (no auth). Default true = published event
+  // auto appear di guest list. Admin toggle false untuk event internal
+  // (mis. retreat panitia, training spesifik) yang cuma untuk member login.
+  isPublic  Boolean  @default(true) @map("is_public")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

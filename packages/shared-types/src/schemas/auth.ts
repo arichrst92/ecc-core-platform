@@ -136,6 +136,22 @@ export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 // Mobile simplify form ke 3 field saja (nama, JK, cabang). tanggalLahir &
 // alamat opsional supaya user onboard cepat dan lengkapi data via PATCH /admin/me
 // setelah login.
+/**
+ * Jenis Jemaat — picker di mobile signup screen (per request M23.2 2026-05-24).
+ * Routes user ke sub-role yang sesuai saat backend create jemaat record:
+ *   - JEMAAT_TETAP → sub_role "Jemaat Tetap"
+ *   - NEW_COMER    → sub_role "New Comer"
+ *
+ * Backwards-compat: kalau mobile lama tidak kirim field ini → default
+ * JEMAAT_TETAP (preserve behavior pra-2026-05-24).
+ *
+ * Fulltimer sub-role assignment TIDAK di-handle di signup — admin assign
+ * manual via portal supaya tidak ada self-claim. Lihat
+ * docs/backend-request-signup-role-assignment.md (revised).
+ */
+export const jenisJemaatSchema = z.enum(['JEMAAT_TETAP', 'NEW_COMER']);
+export type JenisJemaat = z.infer<typeof jenisJemaatSchema>;
+
 export const registerJemaatSchema = z
   .object({
     noHp: noHpSchema,
@@ -156,6 +172,16 @@ export const registerJemaatSchema = z
       .max(5 * 1024 * 1024) // ~5MB base64 string
       .optional()
       .openapi({ description: 'Base64-encoded JPEG/PNG (max ~5MB)' }),
+    // Pilihan dari mobile signup screen — default JEMAAT_TETAP untuk
+    // backwards-compat (mobile lama tidak kirim field ini).
+    jenisJemaat: jenisJemaatSchema
+      .optional()
+      .default('JEMAAT_TETAP')
+      .openapi({
+        description:
+          'Pilihan jemaat tetap vs jemaat baru (default JEMAAT_TETAP). Backend ' +
+          'auto-assign sub-role Jemaat:Jemaat Tetap atau Jemaat:New Comer.',
+      }),
   })
   .openapi('RegisterJemaatInput');
 export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;

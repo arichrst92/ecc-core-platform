@@ -225,11 +225,27 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
   );
 
-  // 5. Resolve role default "Jemaat" + "Jemaat Tetap" (kalau ada di seed).
-  // Pakai best-effort — kalau tidak ada, skip role assignment.
+  // 5. Resolve role default "Jemaat" + sub-role per `jenisJemaat` pilihan
+  // user di mobile signup screen (per request M23.2 2026-05-24):
+  //   - JEMAAT_TETAP → sub-role "Jemaat Tetap"
+  //   - NEW_COMER    → sub-role "New Comer"
+  //
+  // Default JEMAAT_TETAP untuk backwards-compat (mobile lama tidak kirim
+  // field jenisJemaat, zod default akan apply). Best-effort lookup —
+  // kalau sub-role tidak ada di seed, skip role assignment supaya signup
+  // tetap jalan (sub-role bisa di-assign admin manual nanti).
+  const targetSubRoleName = input.jenisJemaat === 'NEW_COMER' ? 'New Comer' : 'Jemaat Tetap';
   const defaultRole = await prisma.role.findFirst({
     where: { nama: 'Jemaat', isActive: true },
-    include: { subRoles: { where: { nama: 'Jemaat Tetap', isActive: true } } },
+    include: {
+      subRoles: {
+        where: {
+          // Case-insensitive — defensive jika seed pakai casing berbeda.
+          nama: { equals: targetSubRoleName, mode: 'insensitive' },
+          isActive: true,
+        },
+      },
+    },
   });
 
   // 6. Create Jemaat

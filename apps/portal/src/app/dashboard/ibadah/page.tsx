@@ -16,7 +16,7 @@ import {
   HandHeart,
   ChevronDown,
   ChevronRight,
-  Layers,
+  Church,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -59,6 +59,9 @@ export default function IbadahPage() {
   const [editing, setEditing] = useState<IbadahItem | null>(null);
   const [deleting, setDeleting] = useState<IbadahItem | null>(null);
   const [view, setView] = useState<'list' | 'calendar'>('list');
+  // Filter cabang — kalau di-set ke specific cabangId, list dan calendar
+  // cuma show cabang itu. Default 'all' = tampilkan semua cabang.
+  const [cabangFilter, setCabangFilter] = useState<string>('all');
 
   const listQ = useQuery({
     queryKey: ['ibadah', 'all'],
@@ -72,17 +75,46 @@ export default function IbadahPage() {
 
   const items = listQ.data ?? [];
 
-  // Group by kategoriIbadah.nama
+  // Daftar cabang unique untuk dropdown filter (dari data ibadah).
+  const cabangOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const i of items) {
+      if (i.cabang?.id && !seen.has(i.cabang.id)) {
+        seen.set(i.cabang.id, i.cabang.nama);
+      }
+    }
+    return [...seen.entries()]
+      .map(([id, nama]) => ({ id, nama }))
+      .sort((a, b) => a.nama.localeCompare(b.nama));
+  }, [items]);
+
+  // Apply filter cabang sebelum grouping.
+  const filteredItems = useMemo(
+    () => (cabangFilter === 'all' ? items : items.filter((i) => i.cabang?.id === cabangFilter)),
+    [items, cabangFilter],
+  );
+
+  // Group by cabang.nama. "Tanpa Cabang" untuk row tanpa cabang (defensive
+  // — seharusnya tidak terjadi karena cabangId required di schema).
   const grouped = useMemo(() => {
     const map = new Map<string, IbadahItem[]>();
-    for (const i of items) {
-      const key = i.kategoriIbadah?.nama ?? 'Tanpa Kategori';
+    for (const i of filteredItems) {
+      const key = i.cabang?.nama ?? 'Tanpa Cabang';
       const arr = map.get(key) ?? [];
       arr.push(i);
       map.set(key, arr);
     }
+    // Sort items di dalam tiap cabang by kategori → nama
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const ka = a.kategoriIbadah?.nama ?? '';
+        const kb = b.kategoriIbadah?.nama ?? '';
+        if (ka !== kb) return ka.localeCompare(kb);
+        return a.nama.localeCompare(b.nama);
+      });
+    }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items]);
+  }, [filteredItems]);
 
   const createMut = useMutation({
     mutationFn: async (input: Record<string, unknown>) => apiClient.post('/admin/ibadah', input),
@@ -125,11 +157,29 @@ export default function IbadahPage() {
           </h1>
           <p className="text-neutral-500 mt-1">
             {view === 'list'
-              ? 'Jadwal ibadah dikelompokkan per kategori.'
-              : 'Tampilan kalender — recurring occurrences di-generate otomatis.'}
+              ? 'Jadwal ibadah dikelompokkan per cabang.'
+              : 'Tampilan kalender per cabang — recurring occurrences di-generate otomatis.'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Cabang filter — apply ke list view + calendar view */}
+          <div className="flex items-center gap-1.5">
+            <Church className="w-4 h-4 text-neutral-400" />
+            <select
+              value={cabangFilter}
+              onChange={(e) => setCabangFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-brand-500"
+              title="Filter per cabang"
+            >
+              <option value="all">Semua Cabang</option>
+              {cabangOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nama}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* View toggle */}
           <div className="inline-flex border border-neutral-300 rounded-lg overflow-hidden">
             <button
@@ -162,7 +212,7 @@ export default function IbadahPage() {
       </div>
 
       {view === 'calendar' ? (
-        <CalendarView />
+        <CalendarView cabangFilter={cabangFilter} cabangOptions={cabangOptions} />
       ) : listQ.isLoading ? (
         <div className="bg-white border border-neutral-200 rounded-xl p-12 text-center">
           <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
@@ -173,10 +223,10 @@ export default function IbadahPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {grouped.map(([kategori, list]) => (
-            <KategoriSection
-              key={kategori}
-              kategori={kategori}
+          {grouped.map(([cabang, list]) => (
+            <CabangSection
+              key={cabang}
+              cabang={cabang}
               items={list}
               onEdit={setEditing}
               onDelete={setDeleting}
@@ -226,18 +276,20 @@ export default function IbadahPage() {
   );
 }
 
-function KategoriSection({
-  kategori,
+function CabangSection({
+  cabang,
   items,
   onEdit,
   onDelete,
 }: {
-  kategori: string;
+  cabang: string;
   items: IbadahItem[];
   onEdit: (i: IbadahItem) => void;
   onDelete: (i: IbadahItem) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  // Hitung unique kategori untuk display di header.
+  const kategoriCount = new Set(items.map((i) => i.kategoriIbadah?.nama ?? '-')).size;
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
       <button
@@ -250,9 +302,11 @@ function KategoriSection({
           ) : (
             <ChevronRight className="w-4 h-4 text-neutral-500" />
           )}
-          <Layers className="w-4 h-4 text-brand-500" />
-          <span className="font-semibold text-neutral-900">{kategori}</span>
-          <span className="text-xs text-neutral-500 ml-1">({items.length})</span>
+          <Church className="w-4 h-4 text-brand-500" />
+          <span className="font-semibold text-neutral-900">{cabang}</span>
+          <span className="text-xs text-neutral-500 ml-1">
+            ({items.length} ibadah · {kategoriCount} kategori)
+          </span>
         </div>
       </button>
 
@@ -262,7 +316,7 @@ function KategoriSection({
             <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Nama Ibadah</th>
-                <th className="px-4 py-2 text-left font-medium" style={{ width: '140px' }}>Cabang</th>
+                <th className="px-4 py-2 text-left font-medium" style={{ width: '160px' }}>Kategori</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '170px' }}>Jadwal</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '110px' }}>Jam</th>
                 <th className="px-4 py-2 text-center font-medium" style={{ width: '110px' }}>Pelayan</th>
@@ -282,7 +336,15 @@ function KategoriSection({
                       {i.nama}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-neutral-700">{i.cabang?.nama ?? '-'}</td>
+                  <td className="px-4 py-2.5">
+                    {i.kategoriIbadah?.nama ? (
+                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">
+                        {i.kategoriIbadah.nama}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-400">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-neutral-700">
                     {TIPE_LABEL[i.tipeJadwal] ?? i.tipeJadwal}
                     {i.tipeJadwal === 'ONCE'

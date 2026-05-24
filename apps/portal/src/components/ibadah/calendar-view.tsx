@@ -17,6 +17,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   AlertTriangle,
+  Church,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -40,7 +41,21 @@ const BULAN_NAMA = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
-export function CalendarView() {
+interface CalendarViewProps {
+  /**
+   * Filter event by cabang ID. 'all' = tampilkan semua cabang (default
+   * mode lama). Specific UUID = filter ke cabang itu saja.
+   * Di-pass dari parent (Ibadah page) supaya konsisten dengan list view.
+   */
+  cabangFilter?: string;
+  /**
+   * Optional list cabang untuk display chip header (saat 'all' mode).
+   * Kalau kosong, chip cabang tetap muncul di tiap event card.
+   */
+  cabangOptions?: { id: string; nama: string }[];
+}
+
+export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptions = [] }: CalendarViewProps = {}) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -67,17 +82,25 @@ export function CalendarView() {
   }, [cursor]);
 
   const eventsQ = useQuery({
-    queryKey: ['ibadah-calendar', fromStr, toStr],
+    queryKey: ['ibadah-calendar', fromStr, toStr, cabangFilter],
     queryFn: async () => {
+      // Pass cabangId ke server kalau filter spesifik — server-side filter
+      // lebih efficient (admin endpoint sudah support cabangId param).
+      const params: { from: string; to: string; cabangId?: string } = {
+        from: fromStr,
+        to: toStr,
+      };
+      if (cabangFilter !== 'all') params.cabangId = cabangFilter;
       const res = await apiClient.get<{ data: CalendarEvent[] }>('/admin/ibadah/calendar', {
-        params: { from: fromStr, to: toStr },
+        params,
       });
       return res.data.data;
     },
     staleTime: 60_000,
   });
 
-  // Group events by tanggal
+  // Group events by tanggal. (Server sudah filter by cabang kalau cabangFilter
+  // spesifik, jadi client-side data sudah pre-filtered.)
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const e of eventsQ.data ?? []) {
@@ -116,10 +139,16 @@ export function CalendarView() {
 
   const selectedEvents = selectedDate ? eventsByDate.get(selectedDate) ?? [] : [];
 
+  // Label cabang aktif untuk display di header calendar (kalau filter spesifik).
+  const activeCabangName =
+    cabangFilter !== 'all'
+      ? _cabangOptions.find((c) => c.id === cabangFilter)?.nama ?? null
+      : null;
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <button
             onClick={goPrev}
@@ -139,12 +168,27 @@ export function CalendarView() {
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <button
-          onClick={goToday}
-          className="px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg border border-neutral-200"
-        >
-          Hari ini
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Badge cabang aktif (hanya saat filter spesifik) */}
+          {activeCabangName && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200 rounded-lg">
+              <Church className="w-3.5 h-3.5" />
+              {activeCabangName}
+            </span>
+          )}
+          {!activeCabangName && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-neutral-50 text-neutral-600 border border-neutral-200 rounded-lg">
+              <Church className="w-3.5 h-3.5" />
+              Semua Cabang
+            </span>
+          )}
+          <button
+            onClick={goToday}
+            className="px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg border border-neutral-200"
+          >
+            Hari ini
+          </button>
+        </div>
       </div>
 
       {eventsQ.isLoading && (

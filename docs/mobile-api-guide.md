@@ -3663,7 +3663,102 @@ Reference: `docs/backend-request-diagnostics-error-endpoint.md` di repo mobile.
 
 ---
 
-# 31. Support
+# 31. Guest Mode Public Endpoints (`/public/*`)
+
+Mobile guest mode (M24+ release) — browse-only tanpa signup. Semua no auth, rate-limit 60/menit/IP via `publicBrowseLimiter`.
+
+## 31.1 Ibadah Calendar
+```http
+GET /public/ibadah/calendar?cabangId=&from=&to=
+```
+Filter `isActive AND isPublic`. Max range 90 hari (default 30). Omit petugas + reservasi count. Response field: `id, tanggal, jam, jamSelesai, judul, cabang, kategori, lokasi, isOnline`.
+
+## 31.2 Event
+```http
+GET /public/event?cabangId=&limit=&page=
+```
+Filter `isActive AND isPublic AND isPublished AND tanggalMulai>=now`. Sort ascending. Omit peserta + capacity. Response: standard event fields + cabang.
+
+## 31.3 Local Market
+```http
+GET /public/local-market?cabangId=&industri=&tipeBisnis=&limit=&page=
+```
+Filter `isActive`. Cabang filter via owner jemaat. Owner detail di response cuma `namaLengkap + cabang` (no kontak info).
+
+## 31.4 Cabang Rekening
+```http
+GET /public/cabang/:id/rekening
+```
+Verify cabang exists+active first (anti-enumerate). Filter `isActive`. Response: `{ cabang: {...}, rekening: [...] }`.
+
+## 31.5 News
+```http
+GET /public/news?cabangId=&limit=&page=
+GET /public/news/:id              # accept UUID atau slug
+```
+Filter `tipe=NEWS AND isPublished`. Sort `publishedAt DESC`. Detail include full body markdown + view counter auto-increment. Path param accept UUID atau slug — auto-detect via regex.
+
+## 31.6 Renungan
+```http
+GET /public/renungan?limit=&page=
+GET /public/renungan/:id          # accept UUID atau slug
+```
+Filter `tipe=RENUNGAN AND isPublished`. Sort `tanggal DESC` → `publishedAt DESC`. **cabangId di-ignore** (renungan global). Detail include `ayatAlkitab` + body markdown.
+
+## 31.7 App Config (sudah dokumentasikan di section 28)
+
+`GET /public/app-config` — runtime tune-able config untuk mobile (face threshold, sampling rate, kill switch).
+
+## 31.8 Maintenance Mode
+```http
+GET /public/maintenance
+```
+Mobile poll saat splash + periodic untuk display modal blocking saat maintenance. Auto-disable kalau `estimatedEndAt` sudah lewat (server defensive).
+
+## 31.9 Recommended cache strategy mobile
+
+| Endpoint | Cache TTL |
+|----------|-----------|
+| News + Renungan list | 30 menit |
+| News + Renungan detail | 1 jam |
+| Ibadah calendar | 5 menit |
+| Event list | 10 menit |
+| Cabang rekening | 1 jam |
+| Local market | 15 menit |
+| App-config | 1 jam |
+| Maintenance | 1 menit (polling sering supaya quick response) |
+
+References:
+- `docs/backend-request-public-endpoints-for-guest.md` di repo mobile
+- `docs/backend-request-public-content-news-renungan.md` di repo mobile
+
+---
+
+# 32. Signup Role Assignment (`POST /auth/register`)
+
+Extension untuk pilihan `jenisJemaat` di mobile signup screen.
+
+```http
+POST /auth/register
+{
+  ...existing fields...,
+  "jenisJemaat": "JEMAAT_TETAP" | "NEW_COMER"   // optional, default JEMAAT_TETAP
+}
+```
+
+- `JEMAAT_TETAP` → backend assign sub_role "Jemaat Tetap"
+- `NEW_COMER` → backend assign sub_role "New Comer"
+- Tidak dikirim / mobile lama → default `JEMAAT_TETAP` (backwards-compat)
+
+**Fulltimer assignment TIDAK di-handle di signup** — admin assign manual via portal Admin → Jemaat → Edit → Roles. Reason: keep signup simple + avoid mis-classification.
+
+User `isFulltimer` auto-true di next `/auth/me/access` fetch setelah admin assignment.
+
+Reference: `docs/backend-request-signup-role-assignment.md` di repo mobile.
+
+---
+
+# 33. Support
 
 - Dokumen ini ada di repo: `docs/mobile-api-guide.md`
 - Spec lengkap auto-update saat backend deploy (lihat `/docs` Swagger UI di backend).

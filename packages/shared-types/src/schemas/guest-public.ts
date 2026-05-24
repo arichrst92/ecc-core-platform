@@ -54,3 +54,18 @@ export const publicLocalMarketQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
 });
 export type PublicLocalMarketQuery = z.infer<typeof publicLocalMarketQuerySchema>;
+
+// ============================================================
+// GET /public/news + /public/renungan
+// Konten model di-pisah by tipe via path. Query params sama untuk keduanya.
+// ============================================================
+export const publicKontenQuerySchema = z.object({
+  cabangId: uuidSchema.optional().openapi({
+    description:
+      'Filter by cabang (NEWS bisa scoped per cabang). Renungan biasanya ' +
+      'global, jadi field ini di-ignore untuk /public/renungan kalau diset.',
+  }),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type PublicKontenQuery = z.infer<typeof publicKontenQuerySchema>;

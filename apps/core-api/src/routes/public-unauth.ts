@@ -21,6 +21,7 @@ import {
   publicIbadahCalendarQuerySchema,
   publicEventQuerySchema,
   publicLocalMarketQuerySchema,
+  publicKontenQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
@@ -436,6 +437,224 @@ publicUnauthRouter.get('/cabang/:id/rekening', publicBrowseLimiter, async (req, 
     data: {
       cabang,
       rekening,
+    },
+  });
+});
+
+// ============================================================
+//  Public Content — News & Renungan (M28 — guest home content)
+//  Per docs/backend-request-public-content-news-renungan.md.
+//  Rate-limit 60/menit/IP via publicBrowseLimiter.
+// ============================================================
+
+// GET /public/news?cabangId=&limit=&page=
+// List news yang isPublished=true. Sort by publishedAt DESC.
+publicUnauthRouter.get('/news', publicBrowseLimiter, async (req, res) => {
+  const q = publicKontenQuerySchema.parse(req.query);
+
+  const where: {
+    tipe: 'NEWS';
+    isPublished: true;
+    cabangId?: string | null;
+  } = { tipe: 'NEWS', isPublished: true };
+  if (q.cabangId) where.cabangId = q.cabangId;
+
+  const [rows, total] = await Promise.all([
+    prisma.konten.findMany({
+      where,
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      select: {
+        id: true,
+        slug: true,
+        judul: true,
+        ringkasan: true,
+        heroImageUrl: true,
+        publishedAt: true,
+        tags: true,
+        cabang: { select: { id: true, nama: true } },
+        author: {
+          select: {
+            jemaat: { select: { namaLengkap: true } },
+          },
+        },
+      },
+    }),
+    prisma.konten.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      judul: r.judul,
+      ringkasan: r.ringkasan,
+      heroImageUrl: r.heroImageUrl,
+      tanggal: r.publishedAt,
+      tags: r.tags,
+      cabang: r.cabang,
+      author: r.author?.jemaat ? { namaLengkap: r.author.jemaat.namaLengkap } : null,
+    })),
+    meta: { page: q.page, limit: q.limit, total },
+  });
+});
+
+// GET /public/news/:id — detail single news. Filter isPublished=true.
+// `id` boleh UUID atau slug supaya mobile bisa pakai URL-friendly path.
+publicUnauthRouter.get('/news/:id', publicBrowseLimiter, async (req, res) => {
+  const idOrSlug = req.params.id ?? '';
+  if (!idOrSlug) throw BadRequest('ID/slug wajib.');
+
+  const isUuid = /^[0-9a-f-]{36}$/i.test(idOrSlug);
+  const row = await prisma.konten.findFirst({
+    where: {
+      tipe: 'NEWS',
+      isPublished: true,
+      ...(isUuid ? { id: idOrSlug } : { slug: idOrSlug }),
+    },
+    select: {
+      id: true,
+      slug: true,
+      judul: true,
+      ringkasan: true,
+      konten: true,
+      heroImageUrl: true,
+      publishedAt: true,
+      tags: true,
+      viewCount: true,
+      cabang: { select: { id: true, nama: true } },
+      author: {
+        select: {
+          jemaat: { select: { namaLengkap: true } },
+        },
+      },
+    },
+  });
+  if (!row) throw NotFound('News tidak ditemukan atau belum di-publish.');
+
+  // Fire-and-forget view counter increment. Tidak block response.
+  prisma.konten
+    .update({ where: { id: row.id }, data: { viewCount: { increment: 1 } } })
+    .catch(() => {});
+
+  res.json({
+    success: true,
+    data: {
+      id: row.id,
+      slug: row.slug,
+      judul: row.judul,
+      ringkasan: row.ringkasan,
+      konten: row.konten,
+      heroImageUrl: row.heroImageUrl,
+      tanggal: row.publishedAt,
+      tags: row.tags,
+      viewCount: row.viewCount + 1,
+      cabang: row.cabang,
+      author: row.author?.jemaat ? { namaLengkap: row.author.jemaat.namaLengkap } : null,
+    },
+  });
+});
+
+// GET /public/renungan?limit=&page=
+// List renungan published. Global (cabangId di-ignore — renungan bukan
+// scoped per cabang umumnya). Sort by tanggal DESC (atau publishedAt fallback).
+publicUnauthRouter.get('/renungan', publicBrowseLimiter, async (req, res) => {
+  const q = publicKontenQuerySchema.parse(req.query);
+
+  const where: { tipe: 'RENUNGAN'; isPublished: true } = {
+    tipe: 'RENUNGAN',
+    isPublished: true,
+  };
+  // Renungan biasanya global — cabangId di-ignore by design (lihat schema doc).
+
+  const [rows, total] = await Promise.all([
+    prisma.konten.findMany({
+      where,
+      orderBy: [{ tanggal: 'desc' }, { publishedAt: 'desc' }],
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      select: {
+        id: true,
+        slug: true,
+        judul: true,
+        ringkasan: true,
+        ayatAlkitab: true,
+        tanggal: true,
+        publishedAt: true,
+        author: {
+          select: {
+            jemaat: { select: { namaLengkap: true } },
+          },
+        },
+      },
+    }),
+    prisma.konten.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      judul: r.judul,
+      ringkasan: r.ringkasan,
+      ayatAlkitab: r.ayatAlkitab,
+      tanggal: r.tanggal ?? r.publishedAt,
+      author: r.author?.jemaat ? { namaLengkap: r.author.jemaat.namaLengkap } : null,
+    })),
+    meta: { page: q.page, limit: q.limit, total },
+  });
+});
+
+// GET /public/renungan/:id — detail renungan full body. Accept UUID atau slug.
+publicUnauthRouter.get('/renungan/:id', publicBrowseLimiter, async (req, res) => {
+  const idOrSlug = req.params.id ?? '';
+  if (!idOrSlug) throw BadRequest('ID/slug wajib.');
+
+  const isUuid = /^[0-9a-f-]{36}$/i.test(idOrSlug);
+  const row = await prisma.konten.findFirst({
+    where: {
+      tipe: 'RENUNGAN',
+      isPublished: true,
+      ...(isUuid ? { id: idOrSlug } : { slug: idOrSlug }),
+    },
+    select: {
+      id: true,
+      slug: true,
+      judul: true,
+      ringkasan: true,
+      konten: true,
+      ayatAlkitab: true,
+      tanggal: true,
+      publishedAt: true,
+      viewCount: true,
+      author: {
+        select: {
+          jemaat: { select: { namaLengkap: true } },
+        },
+      },
+    },
+  });
+  if (!row) throw NotFound('Renungan tidak ditemukan atau belum di-publish.');
+
+  prisma.konten
+    .update({ where: { id: row.id }, data: { viewCount: { increment: 1 } } })
+    .catch(() => {});
+
+  res.json({
+    success: true,
+    data: {
+      id: row.id,
+      slug: row.slug,
+      judul: row.judul,
+      ringkasan: row.ringkasan,
+      konten: row.konten,
+      ayatAlkitab: row.ayatAlkitab,
+      tanggal: row.tanggal ?? row.publishedAt,
+      viewCount: row.viewCount + 1,
+      author: row.author?.jemaat ? { namaLengkap: row.author.jemaat.namaLengkap } : null,
     },
   });
 });

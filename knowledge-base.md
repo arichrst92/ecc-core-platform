@@ -3258,4 +3258,144 @@ Untuk error reporting tambahan 4 check (lihat backend-request-diagnostics-error-
 
 ---
 
+## 29. Guest Mode Public Endpoints + Signup Role + Portal UX (2026-05-24)
+
+Response untuk 4 mobile requests + 1 user UX feedback dalam 1 batch deploy.
+
+### 29.1 Goals
+
+1. **Guest mode browse** — mobile user bisa explore aplikasi sebelum signup (improve conversion). Butuh 4 endpoint public + 4 endpoint content (news/renungan).
+2. **Signup role assignment** — user pilih `JEMAAT_TETAP` vs `NEW_COMER` saat signup (vs default JEMAAT_TETAP semua). Fulltimer assignment tetap manual admin.
+3. **Portal UX** — Cabang form input lat/long support koma decimal (locale Indonesia). Ibadah menu UI redesign per cabang.
+
+### 29.2 Schema additions
+
+Migration `20260524040000_guest_public_endpoints`:
+
+#### `is_public` flag — Ibadah + Event tables
+
+```sql
+ALTER TABLE ibadah ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT true;
+CREATE INDEX idx_ibadah_public_browse ON ibadah(cabang_id, tanggal_mulai)
+  WHERE is_active = true AND is_public = true;
+
+ALTER TABLE event ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT true;
+CREATE INDEX idx_event_public_browse ON event(cabang_id, tanggal_mulai DESC)
+  WHERE is_active = true AND is_public = true AND is_published = true;
+```
+
+Gate untuk guest visibility — terpisah dari `isPublished` (Event) yang controls publish/draft. Default `true` = published item auto-public. Admin bisa toggle `false` untuk event internal (training pengurus, retreat panitia) yang cuma untuk member login.
+
+#### Seed sub_roles "New Comer" + "Jemaat Tetap" (idempotent)
+
+INSERT...SELECT...WHERE NOT EXISTS pattern — skip kalau sudah ada di seed.
+
+#### Konten model — no schema change needed
+
+`isPublished` + `slug` + `tipe` (NEWS/RENUNGAN) sudah ada di Konten model existing. News + Renungan public endpoints reuse `isPublished` flag (tidak tambah `isPublic` baru).
+
+### 29.3 Endpoints — 8 public + 1 register extension
+
+#### Guest browse (no auth, rate-limit 60/min/IP via `publicBrowseLimiter`)
+
+| Endpoint | Filter | Notes |
+|----------|--------|-------|
+| `GET /public/ibadah/calendar?cabangId=&from=&to=` | `isActive AND isPublic` | Max 90 hari range, omit petugas |
+| `GET /public/event?cabangId=&limit=&page=` | `isActive AND isPublic AND isPublished AND tanggalMulai>=now` | Omit peserta + capacity |
+| `GET /public/local-market?cabangId=&industri=&tipeBisnis=&limit=&page=` | `isActive` | Filter cabang via `owner.cabangId`, omit owner contact |
+| `GET /public/cabang/:id/rekening` | `isActive` | Verify cabang exists+active first (anti-enumerate) |
+| `GET /public/news?cabangId=&limit=&page=` | `tipe=NEWS AND isPublished` | Sort publishedAt DESC |
+| `GET /public/news/:id` | `tipe=NEWS AND isPublished` | Accept UUID atau slug, view counter increment |
+| `GET /public/renungan?limit=&page=` | `tipe=RENUNGAN AND isPublished` | cabangId di-ignore (renungan global), sort tanggal DESC |
+| `GET /public/renungan/:id` | `tipe=RENUNGAN AND isPublished` | Accept UUID atau slug, view counter increment |
+
+#### Path param flexibility
+
+Detail endpoints (`/public/news/:id` + `/public/renungan/:id`) accept **UUID atau slug** via regex auto-detect `/^[0-9a-f-]{36}$/i`. Mobile bisa pakai URL share-able (`/news/youth-camp-2026`) atau UUID untuk programmatic.
+
+#### `POST /auth/register` extension
+
+Tambah optional field `jenisJemaat: 'JEMAAT_TETAP' | 'NEW_COMER'`. Default `JEMAAT_TETAP` (backwards-compat). Backend route ke sub-role yang sesuai. Case-insensitive lookup defensive.
+
+Fulltimer assignment **tidak handled** di signup — admin assign manual via portal Admin → Jemaat → Edit → Roles (existing UI).
+
+### 29.4 Portal UI improvements
+
+#### Cabang form — lat/long fix
+
+- New FieldType `'decimal'` di crud-types — render text input dengan `inputMode='decimal'` (mobile numeric keypad, browser tidak block koma)
+- Zod preprocess: normalize koma → titik sebelum coerce. Accept `"-6,2088"` atau `"-6.2088"` atau number direct
+- Label "(opsional)" + helperText eksplisit
+- Schema sudah optional sebelumnya (no migration)
+
+#### Ibadah menu — grouping per cabang
+
+- **List view**: ganti grouping primer dari kategori → cabang gereja (icon Church)
+  - Section header: "X ibadah · Y kategori" counter
+  - Table kolom: Nama, **Kategori** (badge), Jadwal, Jam, Pelayan, Status, Aksi
+  - Items sorted: kategori → nama dalam tiap cabang
+- **Calendar view**: cabang filter dropdown
+  - Server-side filter via API param `cabangId`
+  - Header badge "Semua Cabang" / "<Nama Cabang>" sesuai filter
+  - Query key include `cabangFilter` (cache per filter)
+- **Toolbar**: shared cabang dropdown — apply ke list + calendar
+
+#### Portal build script fix
+
+`apps/portal/package.json` build script: `NODE_ENV=production dotenv -e ../../.env -- next build`. Sebelumnya tanpa `NODE_ENV=production` prefix, dotenv load `NODE_ENV=development` dari root `.env` → Next.js build dengan dev mode → prerender error "useContext null".
+
+### 29.5 Decisions yang dicatat di sini
+
+- **`isPublic` terpisah dari `isPublished`** — Event sudah punya `isPublished` (draft/publish), tapi `isPublic` baru untuk gate guest visibility. Konsep: `isPublished` controls member visibility, `isPublic` controls guest visibility. Untuk simplify, kita default `isPublic=true` = published auto-public, admin opt-out untuk content internal.
+- **Konten reuse `isPublished`** — TIDAK tambah `isPublic` di Konten. Reasoning: news + renungan secara natural memang public content (gereja publish untuk dijangkau), tidak ada use case privacy granular saat ini.
+- **Path param dual-accept** (UUID OR slug) di news/renungan detail — Mobile flexibility. Auto-detect via regex saat handler runtime.
+- **Renungan ignore `cabangId`** — Renungan biasanya pelayan firman publish untuk semua jemaat, bukan scoped per cabang. Kalau future butuh cabang-scoped renungan, tambah behavior di-iterasi terpisah.
+- **Local-market filter cabang via owner** — LocalBusiness tidak punya `cabangId` langsung; relasi via `ownerJemaatId → Jemaat.cabangId`. Owner detail di response cuma `namaLengkap + cabang` (no kontak HP/email).
+- **Cabang rekening defensive lookup** — `findFirst({ id, isActive })` sebelum return rekening, supaya guest tidak bisa enumerate UUID untuk discovery cabang.
+- **View counter increment fire-and-forget** — `.catch(() => {})` di detail endpoint. Tidak block response, tidak rate-limit per user.
+- **Decimal field type vs number** — `'number'` HTML5 strict block koma di Indonesia locale. `'decimal'` = text + `inputMode='decimal'`, accept koma + titik, mobile numeric keypad. Schema normalize via Zod preprocess.
+- **Build script `NODE_ENV=production` prefix** — wajib karena dotenv-cli load `.env` yang punya `NODE_ENV="development"` (untuk dev). Tanpa prefix, Next.js build dengan dev runtime yang error saat static prerender.
+
+### 29.6 Mobile guest-mode flow (reference)
+
+Setelah deploy, mobile bisa replace `<GuestPlaceholderView>` di tab Ibadah/Event/Persembahan dengan view read-only:
+
+| Tab | Data source | Action saat tap |
+|-----|-------------|-----------------|
+| Home | `/public/news` (3 latest) + `/public/renungan` (1 latest) | Detail screen |
+| Ibadah | `/public/ibadah/calendar` | Show "Daftar untuk check-in" CTA |
+| Event | `/public/event` | Show "Daftar untuk RSVP" CTA |
+| Persembahan | `/public/cabang/:id/rekening` (per cabang) | QRIS displayable, "Daftar untuk e-bukti" CTA |
+| Local Market | `/public/local-market` | Browse listing, WhatsApp/website link work |
+| News detail | `/public/news/:id` | View counter ++, share button |
+| Renungan detail | `/public/renungan/:id` | View counter ++, save bookmark CTA |
+
+Cache strategy mobile (recommended):
+- News + Renungan list: 30 menit
+- Ibadah calendar: 5 menit
+- Event list: 10 menit
+- Cabang rekening: 1 jam
+- Local market: 15 menit
+
+### 29.7 Workflow deploy notes
+
+VPS pnpm install gotcha: kalau shell sudah ada `export NODE_ENV=production`, pnpm install **skip devDependencies** (prisma + turbo tidak ke-install). Workflow harus:
+
+```bash
+unset NODE_ENV
+pnpm install              # devDeps ke-install
+export NODE_ENV=production
+pnpm build                # production build
+pm2 reload ecosystem.config.cjs --update-env
+```
+
+Atau 1-liner:
+```bash
+NODE_ENV=development pnpm install && NODE_ENV=production pnpm build && pm2 reload ecosystem.config.cjs --update-env
+```
+
+Sudah documented di `docs/future-changes-deploy-workflow.md` Skenario 4.
+
+---
+
 *This document is the source of truth for ECC Core Platform architecture. Update whenever a major decision is made — append to Decision Log (section 13).*

@@ -61,6 +61,8 @@ export function FieldRenderer({ field }: Props) {
           <input
             {...register(
               field.name,
+              // 'number' → valueAsNumber (RHF parse ke number).
+              // 'decimal' → biarkan string, normalize + coerce di Zod (accept koma).
               field.type === 'number' ? { valueAsNumber: true } : undefined,
             )}
             type={
@@ -78,6 +80,9 @@ export function FieldRenderer({ field }: Props) {
                           ? 'url'
                           : 'text'
             }
+            // 'decimal' = text input dengan numeric keypad di mobile.
+            // Tidak pakai type='number' supaya browser tidak block koma.
+            inputMode={field.type === 'decimal' ? 'decimal' : undefined}
             placeholder={field.placeholder}
             className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
           />

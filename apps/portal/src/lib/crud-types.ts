@@ -15,6 +15,13 @@ export type FieldType =
   | 'email'
   | 'tel'
   | 'number'
+  // 'decimal' = text input dengan inputMode='decimal'. Beda dari 'number':
+  // - Accept koma ',' DAN titik '.' sebagai decimal separator (locale-friendly)
+  // - Mobile keyboard tetap show numeric keypad (inputMode='decimal')
+  // - Tidak strict block character non-digit di browser
+  // - Validation + normalization (koma → titik) di Zod schema preprocess
+  // Cocok untuk koordinat (lat/long), harga, persentase yang butuh input bebas.
+  | 'decimal'
   | 'textarea'
   | 'date'
   | 'time'

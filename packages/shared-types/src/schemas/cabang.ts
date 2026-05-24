@@ -1,12 +1,37 @@
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
-// Koordinat WGS84. Empty string → undefined (nullable di DB).
+// Koordinat WGS84. Empty/null → undefined (nullable di DB).
+//
+// Preprocess: accept koma ',' sebagai decimal separator (locale Indonesia)
+// + accept titik '.'. Browser HTML5 input[type=number] block koma di locale
+// Indonesia, jadi portal pakai inputMode='decimal' (text input) + normalize
+// di sini sebelum coerce ke number.
+//
+// Examples that work:
+//   "-6,2088"     → -6.2088
+//   "-6.2088"     → -6.2088
+//   "  6 , 2088 " → 6.2088 (whitespace di-trim)
+//   ""            → undefined
+//   null          → undefined
+//   -6.2088 (number) → -6.2088 (no-op)
+function preprocessDecimal(value: unknown): unknown {
+  if (value === '' || value === null || value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().replace(/,/g, '.').replace(/\s+/g, '');
+    if (trimmed === '') return undefined;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : value; // biar Zod yang reject kalau NaN
+  }
+  return value;
+}
+
 const latitudeSchema = z
-  .union([z.coerce.number().min(-90).max(90), z.literal('').transform(() => undefined)])
+  .preprocess(preprocessDecimal, z.number().min(-90).max(90).optional())
   .optional();
 const longitudeSchema = z
-  .union([z.coerce.number().min(-180).max(180), z.literal('').transform(() => undefined)])
+  .preprocess(preprocessDecimal, z.number().min(-180).max(180).optional())
   .optional();
 
 export const createCabangSchema = z

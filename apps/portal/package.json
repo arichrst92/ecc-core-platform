@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env -- next dev -p 3100",
-    "build": "next build",
+    "build": "NODE_ENV=production dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start -p 3100",
     "lint": "next lint",
     "type-check": "tsc --noEmit",

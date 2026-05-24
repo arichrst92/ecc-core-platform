@@ -3676,8 +3676,13 @@ Filter `isActive AND isPublic`. Max range 90 hari (default 30). Omit petugas + r
 ## 31.2 Event
 ```http
 GET /public/event?cabangId=&limit=&page=
+GET /public/event/:id              # accept UUID atau slug
 ```
-Filter `isActive AND isPublic AND isPublished AND tanggalMulai>=now`. Sort ascending. Omit peserta + capacity. Response: standard event fields + cabang.
+**List:** filter `isActive AND isPublic AND isPublished AND tanggalMulai>=now`. Sort ascending. Omit peserta + capacity. Response: standard event fields + cabang.
+
+**Detail:** filter sama, plus include `deskripsi` markdown body + payment info (`qrisImageUrl`, `bankNama`, `bankNomor`, `bankAtasNama`) untuk transparency guest. View counter auto-increment fire-and-forget. Path accept UUID atau slug.
+
+Omitted di detail: peserta list, quota, butuhKehadiran flag, author identity.
 
 ## 31.3 Local Market
 ```http

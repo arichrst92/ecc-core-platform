@@ -658,3 +658,62 @@ publicUnauthRouter.get('/renungan/:id', publicBrowseLimiter, async (req, res) =>
     },
   });
 });
+
+// GET /public/event/:id — detail single event. Accept UUID atau slug.
+// Filter isActive AND isPublic AND isPublished. Per
+// docs/backend-request-public-event-detail.md (2026-05-24).
+//
+// Field omitted vs admin: peserta list, registration form, internal capacity,
+// payment instructions detail. QRIS + bank info ditampilkan untuk transparency
+// ke guest yang ingin lihat info pembayaran sebelum daftar.
+publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
+  const idOrSlug = req.params.id ?? '';
+  if (!idOrSlug) throw BadRequest('ID/slug wajib.');
+
+  const isUuid = /^[0-9a-f-]{36}$/i.test(idOrSlug);
+  const row = await prisma.event.findFirst({
+    where: {
+      isActive: true,
+      isPublic: true,
+      isPublished: true,
+      ...(isUuid ? { id: idOrSlug } : { slug: idOrSlug }),
+    },
+    select: {
+      id: true,
+      slug: true,
+      judul: true,
+      ringkasan: true,
+      deskripsi: true,
+      heroImageUrl: true,
+      videoUrl: true,
+      tanggalMulai: true,
+      tanggalSelesai: true,
+      jamMulai: true,
+      jamSelesai: true,
+      lokasi: true,
+      tipeBayar: true,
+      nominal: true,
+      qrisImageUrl: true,
+      bankNama: true,
+      bankNomor: true,
+      bankAtasNama: true,
+      tags: true,
+      viewCount: true,
+      cabang: { select: { id: true, nama: true } },
+    },
+  });
+  if (!row) throw NotFound('Event tidak ditemukan atau belum di-publish.');
+
+  // Fire-and-forget view counter increment. Tidak block response.
+  prisma.event
+    .update({ where: { id: row.id }, data: { viewCount: { increment: 1 } } })
+    .catch(() => {});
+
+  res.json({
+    success: true,
+    data: {
+      ...row,
+      viewCount: row.viewCount + 1,
+    },
+  });
+});

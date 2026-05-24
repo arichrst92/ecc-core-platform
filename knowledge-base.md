@@ -3302,6 +3302,7 @@ INSERT...SELECT...WHERE NOT EXISTS pattern — skip kalau sudah ada di seed.
 |----------|--------|-------|
 | `GET /public/ibadah/calendar?cabangId=&from=&to=` | `isActive AND isPublic` | Max 90 hari range, omit petugas |
 | `GET /public/event?cabangId=&limit=&page=` | `isActive AND isPublic AND isPublished AND tanggalMulai>=now` | Omit peserta + capacity |
+| `GET /public/event/:id` | `isActive AND isPublic AND isPublished` | Accept UUID atau slug, include payment info (QRIS+bank), view counter increment |
 | `GET /public/local-market?cabangId=&industri=&tipeBisnis=&limit=&page=` | `isActive` | Filter cabang via `owner.cabangId`, omit owner contact |
 | `GET /public/cabang/:id/rekening` | `isActive` | Verify cabang exists+active first (anti-enumerate) |
 | `GET /public/news?cabangId=&limit=&page=` | `tipe=NEWS AND isPublished` | Sort publishedAt DESC |

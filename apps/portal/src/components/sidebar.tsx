@@ -33,6 +33,7 @@ import {
   Power,
   KeyRound,
   Stethoscope,
+  LayoutTemplate,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -116,6 +117,12 @@ const groups: NavGroup[] = [
       { href: '/dashboard/legal', label: 'Legal Docs', icon: FileText, menuKey: 'legal' },
       { href: '/dashboard/app-version', label: 'App Versions', icon: Smartphone, menuKey: 'app-version' },
       { href: '/dashboard/maintenance-mode', label: 'Maintenance Mode', icon: Power, menuKey: 'maintenance-mode' },
+    ],
+  },
+  {
+    label: 'Website',
+    items: [
+      { href: '/dashboard/website/content', label: 'Konten Website', icon: LayoutTemplate, menuKey: 'website-content' },
     ],
   },
   {

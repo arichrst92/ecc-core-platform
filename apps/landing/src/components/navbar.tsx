@@ -8,6 +8,9 @@ import { Menu, X } from 'lucide-react';
 const NAV_LINKS = [
   { href: '/', label: 'Beranda' },
   { href: '/about', label: 'Tentang Kami' },
+  { href: '/ibadah', label: 'Ibadah' },
+  { href: '/event', label: 'Event' },
+  { href: '/news', label: 'News' },
   { href: '/cabang', label: 'Cabang' },
   { href: '/contact', label: 'Kontak' },
 ];
@@ -20,11 +23,11 @@ export function Navbar() {
       <nav className="container-page flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-2.5">
           <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} priority />
-          <span className="font-bold text-neutral-900 text-lg tracking-tight">ECC Church</span>
+          <span className="font-bold text-neutral-900 text-lg tracking-tight">ECC</span>
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-6">
           {NAV_LINKS.map((l) => (
             <Link
               key={l.href}
@@ -34,14 +37,6 @@ export function Navbar() {
               {l.label}
             </Link>
           ))}
-          <a
-            href="https://portal.eccchurch.global"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary text-sm py-2 px-4"
-          >
-            Portal Admin
-          </a>
         </div>
 
         {/* Mobile menu button */}
@@ -58,25 +53,17 @@ export function Navbar() {
       {/* Mobile menu drawer */}
       {open && (
         <div className="md:hidden border-t border-neutral-100 bg-white">
-          <div className="container-page py-4 flex flex-col gap-2">
+          <div className="container-page py-4 flex flex-col gap-1">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="py-2 px-3 rounded text-neutral-700 hover:bg-neutral-50"
+                className="py-2 px-3 rounded text-neutral-700 hover:bg-neutral-50 font-medium"
               >
                 {l.label}
               </Link>
             ))}
-            <a
-              href="https://portal.eccchurch.global"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary text-sm justify-center mt-2"
-            >
-              Portal Admin
-            </a>
           </div>
         </div>
       )}

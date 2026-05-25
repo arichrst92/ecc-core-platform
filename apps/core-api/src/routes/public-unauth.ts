@@ -257,6 +257,9 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     kategori: { id: string; nama: string };
     lokasi: string | null;
     isOnline: boolean;
+    // URL streaming Zoom/YouTube — guest bisa lihat tanpa login (link
+    // biasanya public di poster). Mobile gate "Akses Online" button.
+    linkOnline: string | null;
   }> = [];
 
   for (const i of ibadahs) {
@@ -278,6 +281,7 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         kategori: i.kategoriIbadah!,
         lokasi: i.lokasi,
         isOnline: i.isOnline,
+        linkOnline: i.linkOnline,
       });
     }
   }
@@ -716,4 +720,26 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       viewCount: row.viewCount + 1,
     },
   });
+});
+
+// ============================================================
+//  GET /public/website-content — CMS content untuk landing site
+//  Mobile + landing fetch saat splash + cache 10 menit. No auth.
+//
+//  Response: map of { [key]: { contentType, content } } untuk semua
+//  active sections. Landing landing/lib parse + render dengan fallback
+//  ke hard-coded kalau key tidak ada.
+// ============================================================
+publicUnauthRouter.get('/website-content', publicBrowseLimiter, async (_req, res) => {
+  const rows = await prisma.websiteSection.findMany({
+    where: { isActive: true },
+    select: { key: true, contentType: true, content: true },
+  });
+
+  const data: Record<string, { contentType: string; content: string }> = {};
+  for (const r of rows) {
+    data[r.key] = { contentType: r.contentType, content: r.content };
+  }
+
+  res.json({ success: true, data });
 });

@@ -38,3 +38,5 @@ export * from './schemas/maintenance-mode.js';
 export * from './schemas/credential.js';
 export * from './schemas/diagnostics.js';
 export * from './schemas/guest-public.js';
+
+export * from './schemas/website-section.js';

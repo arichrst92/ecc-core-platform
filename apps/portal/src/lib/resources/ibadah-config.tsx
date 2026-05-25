@@ -16,7 +16,7 @@ interface Ibadah extends Record<string, unknown> {
   jamSelesai: string;
   lokasi: string | null;
   isOnline: boolean;
-  linkStream: string | null;
+  linkOnline: string | null;
   isActive: boolean;
   cabang?: { id: string; nama: string };
   kategoriIbadah?: { id: string; nama: string };
@@ -129,7 +129,7 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
     { name: 'lokasi', label: 'Lokasi', type: 'text', placeholder: 'Sanctuary Lt. 2' },
     { name: 'isOnline', label: 'Online?', type: 'switch', defaultValue: false },
     {
-      name: 'linkStream',
+      name: 'linkOnline',
       label: 'Link Stream',
       type: 'url',
       placeholder: 'https://youtube.com/...',

@@ -33,7 +33,7 @@ export const createIbadahSchema = z
     jamSelesai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     lokasi: emptyToUndefined(z.string().trim()),
     isOnline: z.boolean().default(false),
-    linkStream: emptyToUndefined(z.string().url()),
+    linkOnline: emptyToUndefined(z.string().url()),
     deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
@@ -43,8 +43,8 @@ export const createIbadahSchema = z
     { message: 'Field hari wajib untuk jadwal Mingguan / Dua Mingguan', path: ['hari'] },
   )
   .refine(
-    (d) => (!d.isOnline ? true : !!d.linkStream),
-    { message: 'linkStream wajib jika ibadah online', path: ['linkStream'] },
+    (d) => (!d.isOnline ? true : !!d.linkOnline),
+    { message: 'linkOnline wajib jika ibadah online', path: ['linkOnline'] },
   );
 export type CreateIbadahInput = z.infer<typeof createIbadahSchema>;
 
@@ -59,7 +59,7 @@ export const updateIbadahSchema = z.object({
   jamSelesai: emptyToUndefined(z.string().regex(jamRegex)),
   lokasi: emptyToUndefined(z.string().trim()),
   isOnline: z.boolean().optional(),
-  linkStream: emptyToUndefined(z.string().url()),
+  linkOnline: emptyToUndefined(z.string().url()),
   deskripsi: emptyToUndefined(z.string().trim()),
   isActive: z.boolean().optional(),
 });

@@ -302,7 +302,10 @@ model Ibadah {
   jamSelesai        String       @map("jam_selesai") @db.VarChar(5)
   lokasi            String?      @db.Text
   isOnline          Boolean      @default(false) @map("is_online")
-  linkStream        String?      @map("link_stream") @db.Text
+  // URL Zoom/YouTube Live/Meet untuk akses streaming. DB column tetap
+  // `link_stream` (existing), Prisma field rename ke `linkOnline` 2026-05-24
+  // per mobile request — naming align dengan UI ("Akses Online" button).
+  linkOnline        String?      @map("link_stream") @db.Text
   deskripsi         String?      @db.Text
   isActive          Boolean      @default(true) @map("is_active")
   // Gate untuk public/guest endpoint (GET /public/ibadah/calendar).
@@ -1731,4 +1734,42 @@ model DiagnosticsErrorEvent {
   @@index([release, platform])
   @@index([receivedAt])
   @@map("diagnostics_error_event")
+}
+
+// ============================================================
+// 21. WEBSITE SECTION — CMS untuk landing site (eccchurch.global)
+// ============================================================
+// Generic key-value store untuk content company profile website. Setiap
+// section di-identify by `key` unique (mis. "home.hero", "about.story",
+// "contact.info"). Content type bisa "markdown" (text bebas) atau "json"
+// (untuk structured data seperti list values, services, social links).
+//
+// Landing fetch via GET /public/website-content (return map of all active
+// sections). Admin edit via portal Developer Tools → Website → Konten Website.
+//
+// Graceful fallback: kalau API down atau key tidak ada, landing render
+// hard-coded defaults supaya site tetap functional.
+model WebsiteSection {
+  id              String   @id @default(uuid()) @db.Uuid
+  // Slug unique, lowercase dot-notation. Mis. "home.hero", "about.story",
+  // "footer.brand". Admin tidak edit field ini setelah create.
+  key             String   @unique @db.VarChar(64)
+  // Display label di admin portal. Mis. "Home — Hero Section".
+  title           String   @db.VarChar(255)
+  // 'markdown' = single textarea body (default). 'json' = JSON structured
+  // (mis. list values dengan icon+title+desc).
+  contentType     String   @default("markdown") @map("content_type") @db.VarChar(32)
+  // Content body. Untuk markdown = plain text dengan formatting. Untuk
+  // json = stringified JSON yang akan di-parse di landing.
+  content         String   @db.Text
+  // Hint admin tentang apa yang di-edit + format expected.
+  description     String?  @db.Text
+  // Soft-disable supaya bisa hide section tanpa hapus row.
+  isActive        Boolean  @default(true) @map("is_active")
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("website_section")
 }

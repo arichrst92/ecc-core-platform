@@ -5,17 +5,26 @@ import { Footer } from '@/components/footer';
 
 export const metadata: Metadata = {
   title: {
-    default: 'ECC Church — Engaging Christ Community',
-    template: '%s · ECC Church',
+    default: 'ECC — Elshaddai Creative Community',
+    template: '%s · ECC',
   },
   description:
-    'ECC Church — komunitas jemaat yang bertumbuh dalam Kristus. Bergabung dengan ibadah, persekutuan, dan pelayanan di cabang gereja terdekat.',
-  keywords: ['ECC Church', 'gereja', 'church', 'Jakarta', 'ibadah', 'jemaat', 'community'],
+    'Elshaddai Creative Community (ECC) — komunitas jemaat yang bertumbuh dalam Kristus, melayani dengan kreativitas. Bergabung dengan ibadah, persekutuan, dan pelayanan di cabang terdekat.',
+  keywords: [
+    'ECC',
+    'Elshaddai Creative Community',
+    'gereja',
+    'church',
+    'Jakarta',
+    'ibadah',
+    'jemaat',
+    'community',
+  ],
   openGraph: {
-    title: 'ECC Church',
-    description: 'Engaging Christ Community',
+    title: 'ECC — Elshaddai Creative Community',
+    description: 'Elshaddai Creative Community',
     url: 'https://eccchurch.global',
-    siteName: 'ECC Church',
+    siteName: 'ECC',
     locale: 'id_ID',
     type: 'website',
   },

@@ -124,6 +124,9 @@ ibadahRouter.get('/calendar', async (req, res) => {
     tipeJadwal: string;
     lokasi: string | null;
     isOnline: boolean;
+    // URL streaming Zoom/YouTube — null kalau ibadah offline atau belum di-set.
+    // Mobile gate "Akses Online" button dengan field ini.
+    linkOnline: string | null;
   }[] = [];
 
   for (const i of ibadahs) {
@@ -147,6 +150,7 @@ ibadahRouter.get('/calendar', async (req, res) => {
         tipeJadwal: i.tipeJadwal,
         lokasi: i.lokasi,
         isOnline: i.isOnline,
+        linkOnline: i.linkOnline,
       });
     }
   }

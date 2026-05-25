@@ -65,6 +65,9 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
 
+  // Website — CMS untuk landing site eccchurch.global
+  { key: 'website-content', label: 'Konten Website', href: '/dashboard/website/content', group: 'Website' },
+
   // App Settings — content untuk mobile app (legal, version)
   { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },
   { key: 'app-version', label: 'App Versions', href: '/dashboard/app-version', group: 'App Settings' },

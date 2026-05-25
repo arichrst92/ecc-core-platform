@@ -27,6 +27,7 @@ import { serverHealthRouter } from './server-health.js';
 import { maintenanceModeRouter } from './maintenance-mode.js';
 import { credentialRouter } from './credential.js';
 import { diagnosticsAdminRouter } from './diagnostics.js';
+import { websiteContentRouter } from './website-content.js';
 
 export const adminRouter = Router();
 
@@ -66,6 +67,7 @@ adminRouter.use('/server-health', serverHealthRouter);
 adminRouter.use('/maintenance-mode', maintenanceModeRouter);
 adminRouter.use('/credential', credentialRouter);
 adminRouter.use('/diagnostics', diagnosticsAdminRouter);
+adminRouter.use('/website-content', websiteContentRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

@@ -39,7 +39,7 @@ interface Ibadah {
   jamSelesai: string;
   lokasi: string | null;
   isOnline: boolean;
-  linkStream: string | null;
+  linkOnline: string | null;
   deskripsi: string | null;
   isActive: boolean;
   cabang?: { id: string; nama: string };
@@ -274,10 +274,10 @@ export default function IbadahDetailPage() {
               {i.lokasi}
             </Info>
           )}
-          {i.isOnline && i.linkStream && (
+          {i.isOnline && i.linkOnline && (
             <Info icon={Globe} label="Streaming" full>
-              <a href={i.linkStream} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline truncate">
-                {i.linkStream}
+              <a href={i.linkOnline} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline truncate">
+                {i.linkOnline}
               </a>
             </Info>
           )}

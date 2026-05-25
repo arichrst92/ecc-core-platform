@@ -22,6 +22,7 @@ import {
   publicEventQuerySchema,
   publicLocalMarketQuerySchema,
   publicKontenQuerySchema,
+  publicMinistryQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
@@ -719,6 +720,53 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       ...row,
       viewCount: row.viewCount + 1,
     },
+  });
+});
+
+// ============================================================
+//  GET /public/ministry — list pelayanan/ministry (tanpa data jemaat)
+//
+//  Dipakai landing site untuk halaman Ministry. Showcase pelayanan
+//  yang ada di gereja — nama, deskripsi, jumlah role, jumlah anggota
+//  aktif. SENGAJA TIDAK include nama/foto jemaat anggotanya (privacy).
+//
+//  Filter: isActive=true. Sort by nama ASC.
+// ============================================================
+publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
+  const q = publicMinistryQuerySchema.parse(req.query);
+
+  const where = { isActive: true } as const;
+  const [rows, total] = await Promise.all([
+    prisma.pelayanan.findMany({
+      where,
+      orderBy: { nama: 'asc' },
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      select: {
+        id: true,
+        nama: true,
+        deskripsi: true,
+        _count: {
+          select: {
+            roles: { where: { isActive: true } },
+            jemaatPelayanan: { where: { isActive: true } },
+          },
+        },
+      },
+    }),
+    prisma.pelayanan.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      nama: r.nama,
+      deskripsi: r.deskripsi,
+      roleCount: r._count.roles,
+      memberCount: r._count.jemaatPelayanan,
+    })),
+    meta: { page: q.page, limit: q.limit, total },
   });
 });
 

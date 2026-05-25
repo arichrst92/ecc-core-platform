@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { MapPin, Phone, ExternalLink, Church, Smartphone } from 'lucide-react';
+import { MapPin, ExternalLink, Church, Smartphone } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 
 export const metadata: Metadata = {
@@ -43,49 +43,27 @@ export default async function CabangPage() {
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 gap-6">
-              {cabang.map((c) => {
-                const mapHref =
-                  c.latitude && c.longitude
-                    ? `https://www.google.com/maps?q=${c.latitude},${c.longitude}`
-                    : c.alamat
-                      ? `https://www.google.com/maps/search/${encodeURIComponent(c.alamat)}`
-                      : null;
-                return (
-                  <div
-                    key={c.id}
-                    className="bg-white border border-neutral-200 rounded-2xl p-6 hover:shadow-md transition"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center shrink-0">
-                        <Church className="w-6 h-6" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-xl text-neutral-900 mb-1">{c.nama}</h3>
-                        <p className="text-xs text-neutral-400 font-mono uppercase mb-3">
-                          Kode {c.kode}
+              {cabang.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-white border border-neutral-200 rounded-2xl p-6 hover:shadow-md transition"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center shrink-0">
+                      <Church className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-xl text-neutral-900 mb-2">{c.nama}</h3>
+                      {c.alamat && (
+                        <p className="text-sm text-neutral-600 flex items-start gap-2">
+                          <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-neutral-400" />
+                          <span>{c.alamat}</span>
                         </p>
-                        {c.alamat && (
-                          <p className="text-sm text-neutral-600 mb-3 flex items-start gap-2">
-                            <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-neutral-400" />
-                            <span>{c.alamat}</span>
-                          </p>
-                        )}
-                        {mapHref && (
-                          <a
-                            href={mapHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Lihat di Google Maps
-                          </a>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
 

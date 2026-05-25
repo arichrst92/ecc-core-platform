@@ -11,6 +11,9 @@ const NAV_LINKS = [
   { href: '/ibadah', label: 'Ibadah' },
   { href: '/event', label: 'Event' },
   { href: '/news', label: 'News' },
+  { href: '/renungan', label: 'Renungan' },
+  { href: '/ministry', label: 'Ministry' },
+  { href: '/local-market', label: 'Local Market' },
   { href: '/cabang', label: 'Cabang' },
   { href: '/contact', label: 'Kontak' },
 ];
@@ -27,7 +30,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden lg:flex items-center gap-5">
           {NAV_LINKS.map((l) => (
             <Link
               key={l.href}
@@ -43,7 +46,7 @@ export function Navbar() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="md:hidden p-2 -mr-2 text-neutral-600 hover:text-neutral-900"
+          className="lg:hidden p-2 -mr-2 text-neutral-600 hover:text-neutral-900"
           aria-label={open ? 'Tutup menu' : 'Buka menu'}
         >
           {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -52,7 +55,7 @@ export function Navbar() {
 
       {/* Mobile menu drawer */}
       {open && (
-        <div className="md:hidden border-t border-neutral-100 bg-white">
+        <div className="lg:hidden border-t border-neutral-100 bg-white">
           <div className="container-page py-4 flex flex-col gap-1">
             {NAV_LINKS.map((l) => (
               <Link

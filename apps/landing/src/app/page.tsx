@@ -48,6 +48,7 @@ interface CalendarEvent {
   jam: string;
   judul: string;
   cabang: { id: string; nama: string };
+  kategori: { id: string; nama: string } | null;
   lokasi: string | null;
   isOnline: boolean;
 }
@@ -203,11 +204,18 @@ export default async function HomePage() {
                     <Clock className="w-3.5 h-3.5" />
                     {e.jam}
                   </div>
-                  <h3 className="font-semibold text-neutral-900 mb-1">{e.judul}</h3>
-                  <div className="text-xs text-neutral-500 flex items-center gap-1">
-                    <Church className="w-3 h-3" />
-                    {e.cabang.nama}
-                    {e.isOnline && <span className="text-brand-600">· Online</span>}
+                  <h3 className="font-semibold text-neutral-900 mb-2">{e.judul}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {e.kategori && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[11px] font-semibold uppercase tracking-wide">
+                        {e.kategori.nama}
+                      </span>
+                    )}
+                    <div className="text-xs text-neutral-500 flex items-center gap-1">
+                      <Church className="w-3 h-3" />
+                      {e.cabang.nama}
+                      {e.isOnline && <span className="text-brand-600">· Online</span>}
+                    </div>
                   </div>
                 </div>
               ))}

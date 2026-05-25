@@ -69,3 +69,15 @@ export const publicKontenQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
 });
 export type PublicKontenQuery = z.infer<typeof publicKontenQuerySchema>;
+
+// ============================================================
+// GET /public/ministry — list pelayanan (tanpa data jemaat)
+// Dipakai landing site untuk menampilkan ministry / pelayanan
+// gereja secara publik. Anggota & roster sengaja dihilangkan
+// supaya tidak ada PII jemaat di guest endpoint.
+// ============================================================
+export const publicMinistryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type PublicMinistryQuery = z.infer<typeof publicMinistryQuerySchema>;

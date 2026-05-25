@@ -51,6 +51,9 @@ export async function Footer() {
             <li><Link href="/ibadah" className="hover:text-brand-500">Jadwal Ibadah</Link></li>
             <li><Link href="/event" className="hover:text-brand-500">Event</Link></li>
             <li><Link href="/news" className="hover:text-brand-500">News</Link></li>
+            <li><Link href="/renungan" className="hover:text-brand-500">Renungan</Link></li>
+            <li><Link href="/ministry" className="hover:text-brand-500">Ministry</Link></li>
+            <li><Link href="/local-market" className="hover:text-brand-500">Local Market</Link></li>
             <li><Link href="/cabang" className="hover:text-brand-500">Cabang</Link></li>
             <li><Link href="/contact" className="hover:text-brand-500">Kontak</Link></li>
           </ul>

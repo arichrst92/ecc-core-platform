@@ -72,7 +72,12 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
     orderBy: { nama: 'asc' },
     include: {
       picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
-      _count: { select: { members: { where: { isActive: true } } } },
+      _count: {
+        select: {
+          members: { where: { isActive: true } },
+          schedules: true,
+        },
+      },
     },
   });
 
@@ -85,6 +90,7 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
     isActive: hc.isActive,
     picJemaat: hc.picJemaat,
     memberCount: hc._count.members,
+    scheduleCount: hc._count.schedules,
   }));
 
   res.json({ success: true, data: result });

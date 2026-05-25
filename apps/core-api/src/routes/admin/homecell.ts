@@ -10,8 +10,13 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
+
+// Sub-router: /:homecellId/schedule/* — jadwal pertemuan + QR attendance.
+// Lihat docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
+homecellRouter.use('/:homecellId/schedule', homecellScheduleRouter);
 
 // ===== List =====
 homecellRouter.get('/', async (req, res) => {
@@ -93,10 +98,42 @@ homecellRouter.get('/:id', async (req, res) => {
           },
         },
       },
+      _count: { select: { schedules: true } },
+      // Last schedule untuk display "Last meeting" di header detail page.
+      // Pakai take:1 + orderBy desc.
+      schedules: {
+        orderBy: { tanggal: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          tanggal: true,
+          lokasi: true,
+          _count: { select: { attendances: true } },
+        },
+      },
     },
   });
   if (!item) throw NotFound('Homecell tidak ditemukan');
-  res.json({ success: true, data: item });
+
+  // Flatten _count + lastSchedule untuk response yang clean.
+  const { _count, schedules, ...rest } = item;
+  const lastSchedule = schedules[0]
+    ? {
+        id: schedules[0].id,
+        tanggal: schedules[0].tanggal,
+        lokasi: schedules[0].lokasi,
+        attendanceCount: schedules[0]._count.attendances,
+      }
+    : null;
+
+  res.json({
+    success: true,
+    data: {
+      ...rest,
+      scheduleCount: _count.schedules,
+      lastSchedule,
+    },
+  });
 });
 
 // ===== Create =====

@@ -13,6 +13,11 @@ import {
   UserCheck,
   Users,
   Loader2,
+  Calendar,
+  MapPin,
+  ChevronRight,
+  CalendarDays,
+  Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -39,6 +44,23 @@ interface Homecell {
     catatan: string | null;
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
   }[];
+  scheduleCount?: number;
+  lastSchedule?: {
+    id: string;
+    tanggal: string;
+    lokasi: string;
+    attendanceCount: number;
+  } | null;
+}
+
+interface ScheduleListItem {
+  id: string;
+  tanggal: string;
+  lokasi: string;
+  catatan: string | null;
+  creator: { id: string; namaLengkap: string } | null;
+  createdAt: string;
+  attendanceCount: number;
 }
 
 export default function HomecellDetailPage() {
@@ -263,6 +285,9 @@ export default function HomecellDetailPage() {
         )}
       </div>
 
+      {/* Jadwal Pertemuan section — read-only di portal, CRUD via mobile PIC */}
+      <SchedulesSection homecellId={homecellId} />
+
       {addOpen && (
         <AddMemberModal
           homecellId={homecellId}
@@ -428,6 +453,110 @@ function AddMemberModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SchedulesSection({ homecellId }: { homecellId: string }) {
+  const q = useQuery({
+    queryKey: ['homecell', 'schedules', homecellId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ScheduleListItem[]; meta: { total: number } }>(
+        `/admin/homecell/${homecellId}/schedule`,
+        { params: { limit: 50 } },
+      );
+      return res.data;
+    },
+    enabled: !!homecellId,
+  });
+
+  const schedules = q.data?.data ?? [];
+
+  return (
+    <div className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-brand-500" />
+          <h2 className="font-bold text-neutral-900">Jadwal Pertemuan</h2>
+          <span className="text-xs text-neutral-500">({q.data?.meta.total ?? 0})</span>
+        </div>
+        <span
+          className="text-xs text-neutral-500 flex items-center gap-1"
+          title="Jadwal pertemuan dibuat oleh PIC homecell via aplikasi mobile. Portal read-only."
+        >
+          <Info className="w-3.5 h-3.5" />
+          Read-only. Dibuat dari aplikasi mobile.
+        </span>
+      </div>
+
+      {q.isLoading ? (
+        <div className="p-12 text-center">
+          <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
+        </div>
+      ) : schedules.length === 0 ? (
+        <div className="p-12 text-center text-neutral-400 text-sm">
+          Belum ada jadwal pertemuan tercatat untuk homecell ini.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
+            <tr>
+              <th className="px-5 py-2 text-left font-medium" style={{ width: '160px' }}>
+                Tanggal
+              </th>
+              <th className="px-5 py-2 text-left font-medium">Lokasi</th>
+              <th className="px-5 py-2 text-left font-medium" style={{ width: '170px' }}>
+                Dibuat oleh
+              </th>
+              <th className="px-5 py-2 text-center font-medium" style={{ width: '110px' }}>
+                Kehadiran
+              </th>
+              <th className="px-5 py-2 text-right font-medium" style={{ width: '50px' }}></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {schedules.map((s) => (
+              <tr key={s.id} className="hover:bg-neutral-50">
+                <td className="px-5 py-3 text-neutral-700 tabular-nums">
+                  <Link
+                    href={`/dashboard/homecell/${homecellId}/schedule/${s.id}`}
+                    className="text-brand-600 hover:underline font-medium inline-flex items-center gap-1.5"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(s.tanggal).toLocaleDateString('id-ID', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </Link>
+                </td>
+                <td className="px-5 py-3 text-neutral-700">
+                  <div className="flex items-start gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-neutral-400" />
+                    <span className="line-clamp-1">{s.lokasi}</span>
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-neutral-600">{s.creator?.namaLengkap ?? '-'}</td>
+                <td className="px-5 py-3 text-center">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-700 rounded font-medium tabular-nums">
+                    <Users className="w-3 h-3" />
+                    {s.attendanceCount}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <Link
+                    href={`/dashboard/homecell/${homecellId}/schedule/${s.id}`}
+                    className="inline-flex items-center text-neutral-400 hover:text-brand-600"
+                    title="Detail"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

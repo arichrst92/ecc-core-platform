@@ -40,3 +40,4 @@ export * from './schemas/diagnostics.js';
 export * from './schemas/guest-public.js';
 
 export * from './schemas/website-section.js';
+export * from './schemas/homecell-schedule.js';

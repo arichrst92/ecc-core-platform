@@ -151,6 +151,9 @@ model Jemaat {
   areaPic                 HomecellArea[]            @relation("AreaPic")
   homecellPic             Homecell[]                @relation("HomecellPic")
   homecellMembership      HomecellMember[]          @relation("HomecellMembership")
+  homecellScheduleCreator HomecellSchedule[]        @relation("HomecellScheduleCreator")
+  homecellAttendance      HomecellAttendance[]      @relation("HomecellAttendanceJemaat")
+  homecellAttendanceScans HomecellAttendance[]      @relation("HomecellAttendanceScanner")
   eventPartisipasi        EventParticipation[]      @relation("EventPartisipasi")
   eventApprovals          EventParticipation[]      @relation("EventApprover")
   eventVolunteer          EventPelayananPetugas[]   @relation("EventVolunteer")
@@ -800,9 +803,10 @@ model Homecell {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  area       HomecellArea     @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  picJemaat  Jemaat?          @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
+  area       HomecellArea       @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  picJemaat  Jemaat?            @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
   members    HomecellMember[]
+  schedules  HomecellSchedule[]
 
   @@index([areaId])
   @@index([picJemaatId])
@@ -1772,4 +1776,63 @@ model WebsiteSection {
 
   @@index([isActive])
   @@map("website_section")
+}
+
+// ============================================================
+// 22. HOMECELL SCHEDULE + ATTENDANCE — pertemuan + QR scan absensi
+// ============================================================
+// Per request mobile (2026-05-24, docs/backend-request-homecell-schedule-attendance.md):
+// PIC homecell create jadwal pertemuan, scan QR member untuk record absensi.
+// Pattern jadwal manual entry (no auto-recurring, beda dari Ibadah).
+//
+// Permission: PIC homecell ATAU PIC area parent ATAU admin fulltimer.
+// Helper assertCanManageHomecell di apps/core-api/src/lib/homecell-pic.ts.
+model HomecellSchedule {
+  id          String   @id @default(uuid()) @db.Uuid
+  homecellId  String   @map("homecell_id") @db.Uuid
+  // Tanggal pertemuan (date-only, no time). UTC midnight via @db.Date.
+  tanggal     DateTime @db.Date
+  // Free-text alamat/lokasi pertemuan (mis. "Rumah Pak Yohanes Jl. Mawar 5").
+  lokasi      String   @db.VarChar(500)
+  // Optional notes PIC (mis. "Bawa Alkitab dan camilan").
+  catatan     String?  @db.Text
+  // JemaatId PIC yang create (audit). Nullable kalau jemaat terhapus.
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  homecell    Homecell             @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  creator     Jemaat?              @relation("HomecellScheduleCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  attendances HomecellAttendance[]
+
+  @@index([homecellId, tanggal(sort: Desc)])
+  @@map("homecell_schedule")
+}
+
+model HomecellAttendance {
+  id         String   @id @default(uuid()) @db.Uuid
+  scheduleId String   @map("schedule_id") @db.Uuid
+  jemaatId   String   @map("jemaat_id") @db.Uuid
+  scannedAt  DateTime @default(now()) @map("scanned_at")
+  // JemaatId PIC yang scan (audit). Nullable kalau scanner jemaat terhapus.
+  scannedBy  String?  @map("scanned_by") @db.Uuid
+  // QR_SCAN = mode default (scan kode jemaat). MANUAL = future extension
+  // untuk PIC manual mark hadir tanpa QR (mis. HP member rusak).
+  source     AttendanceSource @default(QR_SCAN)
+
+  schedule HomecellSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  jemaat   Jemaat           @relation("HomecellAttendanceJemaat", fields: [jemaatId], references: [id], onDelete: Cascade)
+  scanner  Jemaat?          @relation("HomecellAttendanceScanner", fields: [scannedBy], references: [id], onDelete: SetNull)
+
+  // Idempotent — re-scan member yang sama di pertemuan yg sama tidak duplicate.
+  // Handler return existing row dengan flag alreadyAttended:true.
+  @@unique([scheduleId, jemaatId])
+  @@index([scheduleId])
+  @@index([jemaatId])
+  @@map("homecell_attendance")
+}
+
+enum AttendanceSource {
+  QR_SCAN
+  MANUAL
 }

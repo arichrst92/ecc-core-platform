@@ -134,5 +134,25 @@ module.exports = {
       error_file: '~/.pm2/logs/ecc-portal-error.log',
       time: true,
     },
+    {
+      // Company profile site — apex domain eccchurch.global.
+      // Next.js static-heavy site (no API call, no dynamic data).
+      // Memory footprint kecil (~80MB) karena tidak load berat seperti portal
+      // (no face-api, no globe.gl, no React Query).
+      name: 'ecc-landing',
+      cwd: './apps/landing',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start -p 3200',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 4000,
+      max_memory_restart: '300M',
+      env: sharedEnv,
+      out_file: '~/.pm2/logs/ecc-landing-out.log',
+      error_file: '~/.pm2/logs/ecc-landing-error.log',
+      time: true,
+    },
   ],
 };

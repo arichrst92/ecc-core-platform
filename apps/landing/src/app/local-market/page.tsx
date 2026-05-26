@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   Store,
   ExternalLink,
-  Globe,
   MapPin,
-  MessageCircle,
   Building2,
   Church,
+  ArrowRight,
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 
@@ -99,9 +99,10 @@ export default async function LocalMarketPage() {
                   </div>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {items.map((b) => (
-                      <div
+                      <Link
                         key={b.id}
-                        className="bg-white border border-neutral-200 rounded-2xl overflow-hidden hover:shadow-lg transition flex flex-col"
+                        href={`/local-market/${b.id}`}
+                        className="group bg-white border border-neutral-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-brand-200 transition flex flex-col"
                       >
                         {b.heroImageUrl ? (
                           <div className="aspect-video relative bg-neutral-100">
@@ -109,7 +110,7 @@ export default async function LocalMarketPage() {
                               src={absoluteUrl(b.heroImageUrl) ?? ''}
                               alt={b.nama}
                               fill
-                              className="object-cover"
+                              className="object-cover group-hover:scale-105 transition duration-500"
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                             />
                           </div>
@@ -132,7 +133,7 @@ export default async function LocalMarketPage() {
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-bold text-neutral-900 leading-tight">
+                              <h3 className="font-bold text-neutral-900 leading-tight group-hover:text-brand-600 transition">
                                 {b.nama}
                               </h3>
                               {b.industri && (
@@ -167,32 +168,12 @@ export default async function LocalMarketPage() {
                             )}
                           </div>
 
-                          <div className="mt-auto flex flex-wrap items-center gap-2">
-                            {b.websiteUrl && (
-                              <a
-                                href={b.websiteUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:underline"
-                              >
-                                <Globe className="w-3.5 h-3.5" />
-                                Website
-                              </a>
-                            )}
-                            {b.whatsappUrl && (
-                              <a
-                                href={b.whatsappUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:underline"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                WhatsApp
-                              </a>
-                            )}
+                          <div className="mt-auto flex items-center justify-end text-xs font-medium text-brand-600 gap-1 group-hover:gap-2 transition-all">
+                            Lihat detail
+                            <ArrowRight className="w-3.5 h-3.5" />
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </div>

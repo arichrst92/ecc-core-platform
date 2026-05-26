@@ -412,6 +412,46 @@ publicUnauthRouter.get('/local-market', publicBrowseLimiter, async (req, res) =>
   });
 });
 
+// GET /public/local-market/:id — detail single business.
+// Filter isActive=true. Owner sengaja hanya kasih cabang (no PII jemaat).
+// Field tambahan vs list: companyProfileUrl (PDF), socialLinks lengkap,
+// deskripsi full (di list deskripsi sengaja singkat untuk card).
+publicUnauthRouter.get('/local-market/:id', publicBrowseLimiter, async (req, res) => {
+  const idOrSlug = req.params.id ?? '';
+  if (!idOrSlug) throw BadRequest('ID wajib.');
+  // Saat ini LocalBusiness gak punya field slug — accept UUID saja.
+  if (!/^[0-9a-f-]{36}$/i.test(idOrSlug)) throw BadRequest('ID tidak valid.');
+
+  const row = await prisma.localBusiness.findFirst({
+    where: { id: idOrSlug, isActive: true },
+    select: {
+      id: true,
+      nama: true,
+      deskripsi: true,
+      industri: true,
+      tipeBisnis: true,
+      heroImageUrl: true,
+      logoUrl: true,
+      companyProfileUrl: true,
+      socialLinks: true,
+      websiteUrl: true,
+      whatsappUrl: true,
+      isOnline: true,
+      lokasi: true,
+      createdAt: true,
+      // Owner: cuma cabang (tidak include nama jemaat — privacy).
+      owner: {
+        select: {
+          cabang: { select: { id: true, nama: true } },
+        },
+      },
+    },
+  });
+  if (!row) throw NotFound('Bisnis tidak ditemukan atau nonaktif.');
+
+  res.json({ success: true, data: row });
+});
+
 // GET /public/cabang/:id/rekening
 // Info rekening cabang untuk guest persembahan tab. Filter isActive=true.
 // Privacy: rekening info biasanya sudah print di buletin cabang (publik).

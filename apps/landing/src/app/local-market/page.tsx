@@ -37,8 +37,11 @@ interface LocalBusiness {
 const UNASSIGNED = '__unassigned__';
 
 export default async function LocalMarketPage() {
+  // limit max 50 per public schema (publicLocalMarketQuerySchema). Request
+  // limit=100 akan ditolak Zod dengan 400. Untuk landing showcase 50 sudah
+  // cukup — kalau perlu lebih, expand schema.max() di shared-types.
   const list =
-    (await apiGet<LocalBusiness[]>('/public/local-market?limit=100')) ?? [];
+    (await apiGet<LocalBusiness[]>('/public/local-market?limit=50')) ?? [];
 
   // Group by cabang gereja. Bisnis tanpa cabang/owner masuk ke "Lainnya".
   const groups = new Map<string, { nama: string; items: LocalBusiness[] }>();

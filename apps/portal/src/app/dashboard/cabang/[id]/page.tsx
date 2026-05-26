@@ -16,6 +16,8 @@ import {
   MapPin,
   Phone,
   ExternalLink,
+  CalendarDays,
+  UserCheck,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { BarChart, DonutChart, LineChart } from '@/components/charts/simple-charts';
@@ -41,6 +43,8 @@ interface CabangStats {
     eventDiPeriode: number;
     totalIbadahCheckin: number;
     totalEventCheckin: number;
+    totalHomecellPertemuan: number;
+    totalHomecellKehadiran: number;
   };
   topIbadah: Array<{
     ibadahId: string;
@@ -66,6 +70,9 @@ interface CabangStats {
     area: string;
     memberAktif: number;
     memberBaru: number;
+    scheduleCount: number;
+    totalAttendance: number;
+    avgAttendancePercent: number | null;
     isActive: boolean;
   }>;
   reservasiStatusBreakdown: { JOIN: number; RESERVE: number; CANCEL: number };
@@ -230,7 +237,7 @@ export default function CabangDetailPage() {
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — row 1: jemaat + 3 jenis kehadiran */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           icon={Users}
@@ -253,11 +260,36 @@ export default function CabangDetailPage() {
           color="bg-amber-500"
         />
         <KpiCard
+          icon={UserCheck}
+          label="Kehadiran Homecell"
+          value={stats.kpi.totalHomecellKehadiran}
+          sublabel={`dari ${stats.kpi.totalHomecellPertemuan} pertemuan di periode`}
+          color="bg-purple-500"
+        />
+      </div>
+
+      {/* KPI cards — row 2: struktur cabang (area + homecell + total pertemuan) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <KpiCard
+          icon={MapPin}
+          label="Homecell Area"
+          value={stats.kpi.homecellArea}
+          sublabel="zona pengelompokan"
+          color="bg-teal-500"
+        />
+        <KpiCard
           icon={HomeIcon}
           label="Homecell Aktif"
           value={stats.kpi.homecellAktif}
-          sublabel={`${stats.kpi.homecellArea} area zone`}
+          sublabel={`di ${stats.kpi.homecellArea} area`}
           color="bg-green-500"
+        />
+        <KpiCard
+          icon={CalendarDays}
+          label="Total Pertemuan"
+          value={stats.kpi.totalHomecellPertemuan}
+          sublabel="jadwal homecell di periode"
+          color="bg-indigo-500"
         />
       </div>
 
@@ -376,29 +408,90 @@ export default function CabangDetailPage() {
         )}
       </Card>
 
-      {/* Homecell summary */}
+      {/* Homecell summary table — per-homecell: member aktif, pertemuan,
+          attendance, dan rata-rata kehadiran. Sengaja table (bukan bar chart)
+          biar bisa surface 4 metric sekaligus dengan ranking yg jelas. */}
       <Card
         icon={HomeIcon}
-        title="Homecell"
-        subtitle="Aktivitas homecell — anggota aktif dan jemaat baru bergabung di periode."
+        title="Aktivitas Homecell"
+        subtitle="Per homecell di cabang ini: anggota aktif, pertemuan, kehadiran, dan rata-rata persentase."
       >
         {stats.homecells.length === 0 ? (
           <p className="text-sm text-neutral-400 italic text-center py-6">
             Belum ada homecell di cabang ini.
           </p>
         ) : (
-          <BarChart
-            data={stats.homecells.map((h) => ({
-              label: h.nama,
-              value: h.memberAktif,
-              hint: h.area,
-              sublabel:
-                h.memberBaru > 0
-                  ? `member · +${h.memberBaru} baru`
-                  : 'member',
-            }))}
-            color="bg-green-500"
-          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-neutral-200 text-neutral-500">
+                <tr>
+                  <th className="text-left py-2 px-2 font-medium">Homecell</th>
+                  <th className="text-left py-2 px-2 font-medium w-28">Area</th>
+                  <th className="text-right py-2 px-2 font-medium w-20">Member</th>
+                  <th className="text-right py-2 px-2 font-medium w-24">Baru</th>
+                  <th className="text-right py-2 px-2 font-medium w-24">Pertemuan</th>
+                  <th className="text-right py-2 px-2 font-medium w-24">Hadir</th>
+                  <th className="text-right py-2 px-2 font-medium w-28">Rata² Hadir</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.homecells.map((h) => {
+                  const pct = h.avgAttendancePercent;
+                  const pctColor =
+                    pct === null
+                      ? 'text-neutral-400'
+                      : pct >= 75
+                        ? 'text-green-700'
+                        : pct >= 50
+                          ? 'text-amber-700'
+                          : 'text-red-700';
+                  return (
+                    <tr
+                      key={h.id}
+                      className={`border-b border-neutral-100 hover:bg-neutral-50 ${h.isActive ? '' : 'opacity-50'}`}
+                    >
+                      <td className="py-2 px-2">
+                        <Link
+                          href={`/dashboard/homecell/${h.id}`}
+                          className="text-brand-600 hover:underline font-medium"
+                        >
+                          {h.nama}
+                        </Link>
+                        {!h.isActive && (
+                          <span className="ml-1.5 text-[10px] text-neutral-400">
+                            (nonaktif)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-neutral-600 truncate">{h.area}</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-neutral-700">
+                        {h.memberAktif}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-green-700">
+                        {h.memberBaru > 0 ? `+${h.memberBaru}` : '—'}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-neutral-700">
+                        {h.scheduleCount}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-neutral-700">
+                        {h.totalAttendance}
+                      </td>
+                      <td
+                        className={`py-2 px-2 text-right tabular-nums font-semibold ${pctColor}`}
+                        title={
+                          pct === null
+                            ? 'Belum ada pertemuan atau member di periode ini'
+                            : `${h.totalAttendance} hadir dari ${h.memberAktif * h.scheduleCount} potensi check-in`
+                        }
+                      >
+                        {pct === null ? '—' : `${pct}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>

@@ -3,14 +3,16 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Phone, ShieldCheck, ScanFace, ArrowLeft } from 'lucide-react';
+import { Phone, ShieldCheck, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { normalizePhoneInput } from '@/lib/phone';
-import { FaceCapture } from '@/components/face/face-capture';
 
-type Step = 'phone' | 'otp' | 'face-phone' | 'face-capture';
+// Portal login: OTP-only (WhatsApp). Face login sengaja hanya tersedia di
+// mobile app — di portal admin, kombinasi browser face-api + manajemen
+// liveness lebih reliable dijalankan native di mobile. Per request 2026-05-26.
+type Step = 'phone' | 'otp';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,23 +46,6 @@ export default function LoginPage() {
       finalizeLogin(res.data.data);
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message ?? 'OTP salah');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleFaceLogin(descriptor: number[]) {
-    const normalized = normalizePhoneInput(noHp);
-    if (!normalized) {
-      toast.error('No HP tidak valid');
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await apiClient.post('/auth/face/login', { noHp: normalized, descriptor });
-      finalizeLogin(res.data.data);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error?.message ?? 'Login wajah gagal');
     } finally {
       setLoading(false);
     }
@@ -104,16 +89,6 @@ export default function LoginPage() {
               >
                 {loading ? 'Mengirim...' : 'Kirim OTP'}
               </button>
-
-              <Divider />
-
-              <button
-                onClick={() => setStep('face-phone')}
-                className="w-full border border-neutral-300 hover:bg-neutral-50 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2"
-              >
-                <ScanFace className="w-4 h-4" />
-                Login dengan Wajah
-              </button>
             </>
           )}
 
@@ -154,49 +129,6 @@ export default function LoginPage() {
               </button>
             </>
           )}
-
-          {step === 'face-phone' && (
-            <>
-              <h2 className="text-lg font-semibold mb-1">Login dengan Wajah</h2>
-              <p className="text-sm text-neutral-500 mb-6">
-                Masukkan no HP dulu (untuk identifikasi akun), lalu scan wajah Anda.
-              </p>
-              <PhoneInput value={noHp} onChange={setNoHp} />
-              <button
-                onClick={() => {
-                  const n = normalizePhoneInput(noHp);
-                  if (!n) return toast.error('Format no HP tidak valid');
-                  setNoHp(n);
-                  setStep('face-capture');
-                }}
-                className="mt-6 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg"
-              >
-                Lanjut ke Scan Wajah
-              </button>
-              <button
-                onClick={() => setStep('phone')}
-                className="mt-3 w-full text-sm text-neutral-500 hover:text-neutral-700 flex items-center justify-center gap-1"
-              >
-                <ArrowLeft className="w-3 h-3" /> Kembali ke OTP
-              </button>
-            </>
-          )}
-
-          {step === 'face-capture' && (
-            <>
-              <h2 className="text-lg font-semibold mb-1">Scan Wajah</h2>
-              <p className="text-sm text-neutral-500 mb-4">
-                Login untuk <strong>{noHp}</strong>.
-              </p>
-              <FaceCapture onCapture={handleFaceLogin} submitting={loading} submitLabel="Masuk" />
-              <button
-                onClick={() => setStep('face-phone')}
-                className="mt-4 w-full text-sm text-neutral-500 hover:text-neutral-700 flex items-center justify-center gap-1"
-              >
-                <ArrowLeft className="w-3 h-3" /> Kembali
-              </button>
-            </>
-          )}
         </div>
 
         <PoweredByIdea />
@@ -221,16 +153,6 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
         />
       </div>
     </label>
-  );
-}
-
-function Divider() {
-  return (
-    <div className="my-6 flex items-center gap-3">
-      <div className="flex-1 h-px bg-neutral-200" />
-      <span className="text-xs text-neutral-400 uppercase">atau</span>
-      <div className="flex-1 h-px bg-neutral-200" />
-    </div>
   );
 }
 

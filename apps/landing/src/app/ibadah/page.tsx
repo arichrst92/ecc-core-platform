@@ -1,31 +1,16 @@
 import type { Metadata } from 'next';
-import { Calendar, MapPin, Globe, Church, Smartphone } from 'lucide-react';
+import { Church, Smartphone } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { CabangGroup, type IbadahItem } from './cabang-group';
 
 export const metadata: Metadata = {
   title: 'Jadwal Ibadah',
   description: 'Jadwal ibadah Elshaddai Creative Community di semua cabang.',
 };
 
-interface CalendarEvent {
-  id: string;
-  tanggal: string;
-  jam: string;
-  jamSelesai: string;
-  judul: string;
+interface CalendarEvent extends IbadahItem {
   cabang: { id: string; nama: string };
-  kategori: { id: string; nama: string };
-  lokasi: string | null;
-  isOnline: boolean;
   linkOnline: string | null;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
 }
 
 export default async function IbadahPage() {
@@ -40,14 +25,24 @@ export default async function IbadahPage() {
       `/public/ibadah/calendar?from=${todayIso}&to=${futureIso}`,
     )) ?? [];
 
-  // Group by tanggal
-  const grouped = new Map<string, CalendarEvent[]>();
+  // Group nested: cabang → tanggal → items
+  const cabangMap = new Map<
+    string,
+    { nama: string; perTanggal: Map<string, CalendarEvent[]> }
+  >();
   for (const e of events) {
-    const arr = grouped.get(e.tanggal) ?? [];
+    const cabKey = e.cabang.id;
+    const bucket =
+      cabangMap.get(cabKey) ??
+      { nama: e.cabang.nama, perTanggal: new Map<string, CalendarEvent[]>() };
+    const arr = bucket.perTanggal.get(e.tanggal) ?? [];
     arr.push(e);
-    grouped.set(e.tanggal, arr);
+    bucket.perTanggal.set(e.tanggal, arr);
+    cabangMap.set(cabKey, bucket);
   }
-  const groupedSorted = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const cabangSorted = [...cabangMap.entries()].sort(([, a], [, b]) =>
+    a.nama.localeCompare(b.nama),
+  );
 
   return (
     <>
@@ -59,67 +54,38 @@ export default async function IbadahPage() {
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-neutral-900 mb-3">Jadwal Ibadah</h1>
           <p className="text-neutral-600">
-            Jadwal ibadah 30 hari ke depan di semua cabang ECC.
+            Jadwal ibadah 30 hari ke depan — klik nama cabang untuk lihat
+            jadwalnya.
           </p>
         </div>
       </section>
 
       <section className="py-12">
         <div className="container-page max-w-4xl mx-auto">
-          {groupedSorted.length === 0 ? (
+          {cabangSorted.length === 0 ? (
             <div className="text-center py-12 text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-xl">
               Belum ada jadwal ibadah dalam 30 hari ke depan.
             </div>
           ) : (
-            <div className="space-y-6">
-              {groupedSorted.map(([tanggal, items]) => (
-                <div key={tanggal}>
-                  <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-brand-500" />
-                    {formatDate(tanggal)}
-                  </h2>
-                  <div className="space-y-2">
-                    {items.map((e) => (
-                      <div
-                        key={`${e.id}-${e.tanggal}`}
-                        className="bg-white border border-neutral-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-                      >
-                        <div className="sm:w-24 shrink-0 text-center sm:text-left">
-                          <div className="font-mono text-lg font-bold text-brand-600">
-                            {e.jam}
-                          </div>
-                          <div className="text-xs text-neutral-400">{e.jamSelesai}</div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold text-neutral-900">{e.judul}</h3>
-                            <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded text-xs">
-                              {e.kategori.nama}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-neutral-500 mt-1">
-                            <span className="flex items-center gap-1">
-                              <Church className="w-3.5 h-3.5" />
-                              {e.cabang.nama}
-                            </span>
-                            {e.isOnline ? (
-                              <span className="flex items-center gap-1 text-brand-600">
-                                <Globe className="w-3.5 h-3.5" />
-                                Online streaming
-                              </span>
-                            ) : e.lokasi ? (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5" />
-                                {e.lokasi}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-3">
+              {cabangSorted.map(([cabId, { nama, perTanggal }], idx) => {
+                const tanggalSorted = [...perTanggal.entries()]
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([tanggal, items]) => ({ tanggal, items }));
+                const totalIbadah = [...perTanggal.values()].reduce(
+                  (sum, arr) => sum + arr.length,
+                  0,
+                );
+                return (
+                  <CabangGroup
+                    key={cabId}
+                    cabangNama={nama}
+                    totalCount={totalIbadah}
+                    perTanggal={tanggalSorted}
+                    defaultOpen={idx === 0}
+                  />
+                );
+              })}
             </div>
           )}
 

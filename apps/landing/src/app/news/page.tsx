@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Calendar, User, Newspaper, ArrowRight } from 'lucide-react';
+import { Calendar, Church, Newspaper } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 
 export const metadata: Metadata = {
@@ -71,6 +71,16 @@ export default async function NewsListPage() {
                     </div>
                   )}
                   <div className="p-5">
+                    {item.cabang ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 bg-brand-50 text-brand-700 rounded-full text-[11px] font-semibold uppercase tracking-wide">
+                        <Church className="w-3 h-3" />
+                        {item.cabang.nama}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 bg-neutral-100 text-neutral-600 rounded-full text-[11px] font-semibold uppercase tracking-wide">
+                        Lintas Cabang
+                      </span>
+                    )}
                     <h3 className="font-bold text-neutral-900 mb-2 group-hover:text-brand-600 transition line-clamp-2">
                       {item.judul}
                     </h3>
@@ -90,7 +100,9 @@ export default async function NewsListPage() {
                           })}
                         </span>
                       )}
-                      {item.cabang && <span>· {item.cabang.nama}</span>}
+                      {item.author && (
+                        <span>· {item.author.namaLengkap}</span>
+                      )}
                     </div>
                   </div>
                 </Link>

@@ -7,6 +7,7 @@ import {
   MapPin,
   MessageCircle,
   Building2,
+  Church,
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 
@@ -28,11 +29,32 @@ interface LocalBusiness {
   whatsappUrl: string | null;
   isOnline: boolean;
   lokasi: string | null;
+  // Owner sengaja tidak diambil/ditampilkan (privacy) — kecuali cabang
+  // untuk keperluan grouping per cabang gereja.
+  owner: { cabang: { id: string; nama: string } | null } | null;
 }
+
+const UNASSIGNED = '__unassigned__';
 
 export default async function LocalMarketPage() {
   const list =
-    (await apiGet<LocalBusiness[]>('/public/local-market?limit=50')) ?? [];
+    (await apiGet<LocalBusiness[]>('/public/local-market?limit=100')) ?? [];
+
+  // Group by cabang gereja. Bisnis tanpa cabang/owner masuk ke "Lainnya".
+  const groups = new Map<string, { nama: string; items: LocalBusiness[] }>();
+  for (const b of list) {
+    const cabang = b.owner?.cabang;
+    const key = cabang?.id ?? UNASSIGNED;
+    const nama = cabang?.nama ?? 'Lainnya';
+    const bucket = groups.get(key) ?? { nama, items: [] };
+    bucket.items.push(b);
+    groups.set(key, bucket);
+  }
+  const groupsSorted = [...groups.entries()].sort(([ka, va], [kb, vb]) => {
+    if (ka === UNASSIGNED) return 1;
+    if (kb === UNASSIGNED) return -1;
+    return va.nama.localeCompare(vb.nama);
+  });
 
   return (
     <>
@@ -46,7 +68,7 @@ export default async function LocalMarketPage() {
             Marketplace Komunitas ECC
           </h1>
           <p className="text-neutral-600">
-            Dukung bisnis jemaat. Temukan produk dan jasa dari komunitas kami.
+            Dukung bisnis jemaat — dikelompokkan per cabang gereja.
           </p>
         </div>
       </section>
@@ -58,98 +80,117 @@ export default async function LocalMarketPage() {
               Belum ada bisnis terdaftar. Kembali lagi nanti.
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {list.map((b) => (
-                <div
-                  key={b.id}
-                  className="bg-white border border-neutral-200 rounded-2xl overflow-hidden hover:shadow-lg transition flex flex-col"
-                >
-                  {b.heroImageUrl ? (
-                    <div className="aspect-video relative bg-neutral-100">
-                      <Image
-                        src={absoluteUrl(b.heroImageUrl) ?? ''}
-                        alt={b.nama}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      />
+            <div className="space-y-12">
+              {groupsSorted.map(([key, { nama, items }]) => (
+                <div key={key}>
+                  <div className="flex items-center gap-3 mb-5 pb-3 border-b border-neutral-200">
+                    <div className="w-10 h-10 bg-brand-100 text-brand-600 rounded-lg flex items-center justify-center shrink-0">
+                      <Church className="w-5 h-5" />
                     </div>
-                  ) : (
-                    <div className="aspect-video bg-gradient-to-br from-brand-100 to-accent-400/30 flex items-center justify-center">
-                      <Store className="w-12 h-12 text-brand-300" />
-                    </div>
-                  )}
-                  <div className="p-5 flex flex-col flex-1">
-                    <div className="flex items-start gap-3 mb-2">
-                      {b.logoUrl && (
-                        <div className="w-10 h-10 relative shrink-0 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200">
-                          <Image
-                            src={absoluteUrl(b.logoUrl) ?? ''}
-                            alt={`${b.nama} logo`}
-                            fill
-                            className="object-cover"
-                            sizes="40px"
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-neutral-900 leading-tight">{b.nama}</h3>
-                        {b.industri && (
-                          <p className="text-xs text-neutral-500 mt-0.5">{b.industri}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {b.deskripsi && (
-                      <p className="text-sm text-neutral-600 line-clamp-3 mb-3">
-                        {b.deskripsi}
+                    <div className="flex-1 min-w-0">
+                      <h2 className="font-bold text-xl text-neutral-900 leading-tight">{nama}</h2>
+                      <p className="text-xs text-neutral-500">
+                        {items.length} bisnis terdaftar
                       </p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-neutral-500">
-                      {b.tipeBisnis && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100">
-                          <Building2 className="w-3 h-3" />
-                          {b.tipeBisnis}
-                        </span>
-                      )}
-                      {b.isOnline && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
-                          Online
-                        </span>
-                      )}
-                      {b.lokasi && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {b.lokasi}
-                        </span>
-                      )}
                     </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {items.map((b) => (
+                      <div
+                        key={b.id}
+                        className="bg-white border border-neutral-200 rounded-2xl overflow-hidden hover:shadow-lg transition flex flex-col"
+                      >
+                        {b.heroImageUrl ? (
+                          <div className="aspect-video relative bg-neutral-100">
+                            <Image
+                              src={absoluteUrl(b.heroImageUrl) ?? ''}
+                              alt={b.nama}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-video bg-gradient-to-br from-brand-100 to-accent-400/30 flex items-center justify-center">
+                            <Store className="w-12 h-12 text-brand-300" />
+                          </div>
+                        )}
+                        <div className="p-5 flex flex-col flex-1">
+                          <div className="flex items-start gap-3 mb-2">
+                            {b.logoUrl && (
+                              <div className="w-10 h-10 relative shrink-0 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200">
+                                <Image
+                                  src={absoluteUrl(b.logoUrl) ?? ''}
+                                  alt={`${b.nama} logo`}
+                                  fill
+                                  className="object-cover"
+                                  sizes="40px"
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-neutral-900 leading-tight">
+                                {b.nama}
+                              </h3>
+                              {b.industri && (
+                                <p className="text-xs text-neutral-500 mt-0.5">{b.industri}</p>
+                              )}
+                            </div>
+                          </div>
 
-                    <div className="mt-auto flex flex-wrap items-center gap-2">
-                      {b.websiteUrl && (
-                        <a
-                          href={b.websiteUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:underline"
-                        >
-                          <Globe className="w-3.5 h-3.5" />
-                          Website
-                        </a>
-                      )}
-                      {b.whatsappUrl && (
-                        <a
-                          href={b.whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:underline"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          WhatsApp
-                        </a>
-                      )}
-                    </div>
+                          {b.deskripsi && (
+                            <p className="text-sm text-neutral-600 line-clamp-3 mb-3">
+                              {b.deskripsi}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-neutral-500">
+                            {b.tipeBisnis && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100">
+                                <Building2 className="w-3 h-3" />
+                                {b.tipeBisnis}
+                              </span>
+                            )}
+                            {b.isOnline && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                                Online
+                              </span>
+                            )}
+                            {b.lokasi && (
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                {b.lokasi}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-auto flex flex-wrap items-center gap-2">
+                            {b.websiteUrl && (
+                              <a
+                                href={b.websiteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:underline"
+                              >
+                                <Globe className="w-3.5 h-3.5" />
+                                Website
+                              </a>
+                            )}
+                            {b.whatsappUrl && (
+                              <a
+                                href={b.whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:underline"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                WhatsApp
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}

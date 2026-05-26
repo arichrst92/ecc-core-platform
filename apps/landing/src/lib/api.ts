@@ -6,10 +6,28 @@
  *
  * Server component only — call ini DI server component / route handler.
  * Tidak di-export ke client (no useState, no React Query — pure SSR).
+ *
+ * ENV:
+ *   NEXT_PUBLIC_CORE_API_URL — base URL backend.
+ *     - Local dev: http://localhost:4100 (set di apps/landing/.env.local)
+ *     - VPS prod:  https://api.eccchurch.global (default fallback)
+ *
+ * NEXT_PUBLIC_* harus di-bake saat `next build`. Jadi build dev pakai
+ * env dev, build prod pakai env prod. Untuk dev, .env.local di apps/landing/
+ * adalah sumber kebenarannya — bukan root .env (Next.js gak baca itu).
  */
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
+
+// Log API base sekali saat boot supaya jelas landing pointing ke mana.
+// Cuma di server-side (process.env.NODE_ENV ada di server) supaya bersih.
+if (typeof window === 'undefined') {
+  // eslint-disable-next-line no-console
+  console.info(
+    `[landing] API_BASE = ${API_BASE} (set NEXT_PUBLIC_CORE_API_URL di apps/landing/.env.local untuk override)`,
+  );
+}
 
 interface FetchOptions {
   /** Revalidate cache (detik). Default 600 (10 menit). */

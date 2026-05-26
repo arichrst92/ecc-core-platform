@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Eye, Users } from 'lucide-react';
+import { Eye, Users, CalendarDays, TrendingUp } from 'lucide-react';
 import { createHomecellSchema, updateHomecellSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -14,6 +14,10 @@ interface Homecell extends Record<string, unknown> {
   area?: { id: string; nama: string; cabang?: { id: string; nama: string } };
   picJemaat?: { id: string; namaLengkap: string } | null;
   memberCount?: number;
+  scheduleCount?: number;
+  totalAttendance?: number;
+  /** Persen rata-rata kehadiran (0–100), null kalau belum ada data. */
+  avgAttendancePercent?: number | null;
 }
 
 // Catatan: kolom alamat / hari / jam dihapus dari form & display. Jadwal
@@ -59,6 +63,47 @@ export const homecellResource: ResourceConfig<Homecell> = {
           {row.memberCount ?? 0}
         </span>
       ),
+    },
+    {
+      key: 'scheduleCount',
+      label: 'Pertemuan',
+      width: '110px',
+      render: (_v, row) => (
+        <span
+          className="inline-flex items-center gap-1 text-neutral-700"
+          title={`${row.totalAttendance ?? 0} total kehadiran tercatat`}
+        >
+          <CalendarDays className="w-3.5 h-3.5" />
+          {row.scheduleCount ?? 0}
+        </span>
+      ),
+    },
+    {
+      key: 'avgAttendancePercent',
+      label: 'Rata² Hadir',
+      width: '120px',
+      render: (_v, row) => {
+        const pct = row.avgAttendancePercent;
+        if (pct === null || pct === undefined) {
+          return <span className="text-neutral-400 text-xs">—</span>;
+        }
+        // Color tier: <50% merah, 50-74% amber, ≥75% hijau.
+        const color =
+          pct >= 75
+            ? 'bg-green-100 text-green-700'
+            : pct >= 50
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-red-100 text-red-700';
+        return (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ${color}`}
+            title={`${row.totalAttendance ?? 0} hadir dari ${(row.memberCount ?? 0) * (row.scheduleCount ?? 0)} potensi check-in (${row.memberCount ?? 0} member × ${row.scheduleCount ?? 0} pertemuan)`}
+          >
+            <TrendingUp className="w-3 h-3" />
+            {pct}%
+          </span>
+        );
+      },
     },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],

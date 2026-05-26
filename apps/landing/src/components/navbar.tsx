@@ -3,19 +3,41 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import {
+  Menu,
+  X,
+  Home,
+  Church,
+  Megaphone,
+  Newspaper,
+  BookOpen,
+  HandHeart,
+  Store,
+  MapPin,
+  Info,
+  Mail,
+  type LucideIcon,
+} from 'lucide-react';
 
-const NAV_LINKS = [
-  { href: '/', label: 'Beranda' },
-  { href: '/about', label: 'Tentang Kami' },
-  { href: '/ibadah', label: 'Ibadah' },
-  { href: '/event', label: 'Event' },
-  { href: '/news', label: 'News' },
-  { href: '/renungan', label: 'Renungan' },
-  { href: '/ministry', label: 'Ministry' },
-  { href: '/local-market', label: 'Local Market' },
-  { href: '/cabang', label: 'Cabang' },
-  { href: '/contact', label: 'Kontak' },
+interface NavLink {
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+}
+
+// Urutan: Beranda → Ibadah → Event → News → Renungan → Ministry →
+// Local Market → Cabang → Tentang Kami → Kontak.
+const NAV_LINKS: NavLink[] = [
+  { href: '/', label: 'Beranda', Icon: Home },
+  { href: '/ibadah', label: 'Ibadah', Icon: Church },
+  { href: '/event', label: 'Event', Icon: Megaphone },
+  { href: '/news', label: 'News', Icon: Newspaper },
+  { href: '/renungan', label: 'Renungan', Icon: BookOpen },
+  { href: '/ministry', label: 'Ministry', Icon: HandHeart },
+  { href: '/local-market', label: 'Local Market', Icon: Store },
+  { href: '/cabang', label: 'Cabang', Icon: MapPin },
+  { href: '/about', label: 'Tentang Kami', Icon: Info },
+  { href: '/contact', label: 'Kontak', Icon: Mail },
 ];
 
 export function Navbar() {
@@ -30,14 +52,15 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden lg:flex items-center gap-5">
-          {NAV_LINKS.map((l) => (
+        <div className="hidden lg:flex items-center gap-4">
+          {NAV_LINKS.map(({ href, label, Icon }) => (
             <Link
-              key={l.href}
-              href={l.href}
-              className="text-sm font-medium text-neutral-600 hover:text-brand-500 transition"
+              key={href}
+              href={href}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-brand-500 transition"
             >
-              {l.label}
+              <Icon className="w-4 h-4" />
+              {label}
             </Link>
           ))}
         </div>
@@ -57,14 +80,15 @@ export function Navbar() {
       {open && (
         <div className="lg:hidden border-t border-neutral-100 bg-white">
           <div className="container-page py-4 flex flex-col gap-1">
-            {NAV_LINKS.map((l) => (
+            {NAV_LINKS.map(({ href, label, Icon }) => (
               <Link
-                key={l.href}
-                href={l.href}
+                key={href}
+                href={href}
                 onClick={() => setOpen(false)}
-                className="py-2 px-3 rounded text-neutral-700 hover:bg-neutral-50 font-medium"
+                className="py-2 px-3 rounded text-neutral-700 hover:bg-neutral-50 font-medium inline-flex items-center gap-2.5"
               >
-                {l.label}
+                <Icon className="w-4 h-4 text-brand-500" />
+                {label}
               </Link>
             ))}
           </div>

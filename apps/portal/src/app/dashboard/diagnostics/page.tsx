@@ -28,7 +28,8 @@ export default function DiagnosticsPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">Diagnostics</h1>
             <p className="text-sm text-neutral-500 mt-0.5">
-              Pilot rollout observability — face login telemetry, runtime errors, dan app config.
+              Observability mobile app — telemetry face login (mobile only),
+              runtime errors, dan app config.
             </p>
           </div>
         </div>

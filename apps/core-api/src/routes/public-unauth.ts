@@ -305,17 +305,23 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
   const q = publicEventQuerySchema.parse(req.query);
 
   const now = new Date();
+  // Event "belum expired": kalau ada tanggalSelesai, pakai dia (multi-day
+  // event yang masih berlangsung masih dianggap relevan). Kalau tidak ada
+  // tanggalSelesai, fallback ke tanggalMulai.
   const where: {
     isActive: true;
     isPublic: true;
     isPublished: true;
-    tanggalMulai: { gte: Date };
     cabangId?: string | null;
+    OR?: Array<Record<string, unknown>>;
   } = {
     isActive: true,
     isPublic: true,
     isPublished: true,
-    tanggalMulai: { gte: now },
+    OR: [
+      { tanggalSelesai: { gte: now } },
+      { tanggalSelesai: null, tanggalMulai: { gte: now } },
+    ],
   };
   if (q.cabangId) where.cabangId = q.cabangId;
 
@@ -731,6 +737,11 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
 //  aktif. SENGAJA TIDAK include nama/foto jemaat anggotanya (privacy).
 //
 //  Filter: isActive=true. Sort by nama ASC.
+//
+//  Catatan: pakai plain `_count` (tanpa where filter) supaya kompatibel
+//  dengan semua versi Prisma 5.x. Filter isActive untuk roles/members
+//  dilakukan client-side: kita cuma return jumlah total — kalau perlu
+//  presisi aktif vs nonaktif, expand ke 2 query terpisah.
 // ============================================================
 publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
   const q = publicMinistryQuerySchema.parse(req.query);
@@ -746,12 +757,7 @@ publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
         id: true,
         nama: true,
         deskripsi: true,
-        _count: {
-          select: {
-            roles: { where: { isActive: true } },
-            jemaatPelayanan: { where: { isActive: true } },
-          },
-        },
+        _count: { select: { roles: true, jemaatPelayanan: true } },
       },
     }),
     prisma.pelayanan.count({ where }),

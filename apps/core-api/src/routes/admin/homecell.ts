@@ -49,16 +49,49 @@ homecellRouter.get('/', async (req, res) => {
           },
         },
         picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
-        _count: { select: { members: { where: { isActive: true } } } },
+        _count: {
+          select: {
+            members: { where: { isActive: true } },
+            schedules: true,
+          },
+        },
+        // Schedule attendance untuk hitung rata-rata % kehadiran.
+        // Tiap schedule cuma return _count attendances — payload tetap kecil.
+        schedules: {
+          select: { _count: { select: { attendances: true } } },
+        },
       },
     }),
     prisma.homecell.count({ where }),
   ]);
 
-  const data = rows.map((r) => ({
-    ...r,
-    memberCount: r._count.members,
-  }));
+  const data = rows.map((r) => {
+    const memberCount = r._count.members;
+    const scheduleCount = r._count.schedules;
+    const totalAttendance = r.schedules.reduce(
+      (sum, s) => sum + s._count.attendances,
+      0,
+    );
+    // Avg % = total attendance / (member aktif × jumlah pertemuan) × 100.
+    // Kalau belum ada member atau pertemuan → null (UI render '-' biar
+    // tidak ambigu sama "0%").
+    const avgAttendancePercent =
+      memberCount > 0 && scheduleCount > 0
+        ? Math.round((totalAttendance / (memberCount * scheduleCount)) * 100)
+        : null;
+
+    // Strip schedules array dari response — informasinya sudah ke-summarize
+    // via counter di atas. Tetap return _count + flat counter buat backwards
+    // compat dengan client lama yang baca memberCount langsung.
+    const { schedules: _schedules, _count, ...rest } = r;
+    return {
+      ...rest,
+      memberCount,
+      scheduleCount,
+      totalAttendance,
+      avgAttendancePercent,
+    };
+  });
 
   res.json({
     success: true,

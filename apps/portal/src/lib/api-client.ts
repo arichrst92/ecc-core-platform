@@ -41,13 +41,14 @@ apiClient.interceptors.response.use(
   async (err: AxiosError) => {
     const original = err.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // Hanya handle 401 yang belum di-retry, dan bukan request refresh itu sendiri
+    // Hanya handle 401 yang belum di-retry, dan bukan request refresh itu sendiri.
+    // (Catatan: cek /auth/face/login dihilangkan — portal tidak lagi expose
+    // face login, fitur tersebut hanya di mobile app.)
     if (
       err.response?.status !== 401 ||
       original?._retry ||
       original?.url?.includes('/auth/refresh') ||
-      original?.url?.includes('/auth/otp/') ||
-      original?.url?.includes('/auth/face/login')
+      original?.url?.includes('/auth/otp/')
     ) {
       return Promise.reject(err);
     }

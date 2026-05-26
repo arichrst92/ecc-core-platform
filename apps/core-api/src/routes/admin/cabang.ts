@@ -362,6 +362,8 @@ cabangRouter.get('/:id/stats', async (req, res) => {
   }
 
   // ============== Homecell breakdown ==============
+  // Include schedules di periode + attendances-nya untuk hitung total pertemuan
+  // & rata-rata % kehadiran per homecell.
   const homecells = await prisma.homecell.findMany({
     where: { area: { cabangId: cabang.id } },
     include: {
@@ -373,17 +375,42 @@ cabangRouter.get('/:id/stats', async (req, res) => {
         },
         select: { id: true },
       },
+      schedules: {
+        where: { tanggal: { gte: from, lte: to } },
+        select: { _count: { select: { attendances: true } } },
+      },
     },
     orderBy: { nama: 'asc' },
   });
-  const homecellSummary = homecells.map((h) => ({
-    id: h.id,
-    nama: h.nama,
-    area: h.area.nama,
-    memberAktif: h._count.members,
-    memberBaru: h.members.length,
-    isActive: h.isActive,
-  }));
+
+  let totalHomecellPertemuan = 0;
+  let totalHomecellKehadiran = 0;
+
+  const homecellSummary = homecells.map((h) => {
+    const memberAktif = h._count.members;
+    const scheduleCount = h.schedules.length;
+    const totalAttendance = h.schedules.reduce(
+      (sum, s) => sum + s._count.attendances,
+      0,
+    );
+    const avgAttendancePercent =
+      memberAktif > 0 && scheduleCount > 0
+        ? Math.round((totalAttendance / (memberAktif * scheduleCount)) * 100)
+        : null;
+    totalHomecellPertemuan += scheduleCount;
+    totalHomecellKehadiran += totalAttendance;
+    return {
+      id: h.id,
+      nama: h.nama,
+      area: h.area.nama,
+      memberAktif,
+      memberBaru: h.members.length,
+      scheduleCount,
+      totalAttendance,
+      avgAttendancePercent,
+      isActive: h.isActive,
+    };
+  });
 
   // ============== Reservasi status breakdown ==============
   const reservasiStatusBreakdown = await prisma.reservasi.groupBy({
@@ -423,6 +450,8 @@ cabangRouter.get('/:id/stats', async (req, res) => {
         eventDiPeriode: eventDiPeriodeCount,
         totalIbadahCheckin,
         totalEventCheckin,
+        totalHomecellPertemuan,
+        totalHomecellKehadiran,
       },
       topIbadah,
       topEvent,

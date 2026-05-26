@@ -12,7 +12,10 @@ interface AuthUser {
   canAccessPortal: boolean;
   // Map menuKey → { canRead, canWrite, canDelete }
   menuAccess: ResolvedMenuAccess;
-  hasFaceEnrolled: boolean;
+  // Optional — backend masih return field ini (mobile pakai untuk show
+  // status enroll wajah), tapi portal sudah tidak menggunakannya sejak
+  // face login dihapus dari portal (2026-05-26).
+  hasFaceEnrolled?: boolean;
   fotoUrl: string | null;
 }
 

@@ -498,6 +498,35 @@ meRouter.get('/scanner-ibadah', async (req, res) => {
 //  Homecell managed (M9)
 // ============================================================
 
+// ============================================================
+//  Group membership — list group yg current jemaat ikut (module 23)
+// ============================================================
+// Untuk mobile "My Groups" tab. Filter isActive=true group + member.
+meRouter.get('/group-membership', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const memberships = await prisma.groupMember.findMany({
+    where: { jemaatId, isActive: true },
+    include: {
+      group: {
+        include: {
+          cabang: { select: { id: true, nama: true } },
+          picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+          _count: { select: { members: { where: { isActive: true } } } },
+        },
+      },
+    },
+    orderBy: { tanggalBergabung: 'desc' },
+  });
+  const data = memberships
+    .filter((m) => m.group.isActive)
+    .map((m) => ({
+      membershipId: m.id,
+      tanggalBergabung: m.tanggalBergabung,
+      group: { ...m.group, memberCount: m.group._count.members },
+    }));
+  res.json({ success: true, data });
+});
+
 meRouter.get('/homecell-managed', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const data = await prisma.homecell.findMany({

@@ -28,6 +28,7 @@ import { maintenanceModeRouter } from './maintenance-mode.js';
 import { credentialRouter } from './credential.js';
 import { diagnosticsAdminRouter } from './diagnostics.js';
 import { websiteContentRouter } from './website-content.js';
+import { groupRouter } from './group.js';
 
 export const adminRouter = Router();
 
@@ -57,6 +58,9 @@ adminRouter.use('/news', createKontenRouter('NEWS'));
 adminRouter.use('/renungan', createKontenRouter('RENUNGAN'));
 adminRouter.use('/homecell-area', homecellAreaRouter);
 adminRouter.use('/homecell', homecellRouter);
+// Group (module 23 — generic grouping, terpisah dari Homecell).
+// Support hierarchy N-level + public/private + invitation join code.
+adminRouter.use('/group', groupRouter);
 adminRouter.use('/event', eventRouter);
 adminRouter.use('/visit', visitRouter);
 adminRouter.use('/local-business', localBusinessRouter);

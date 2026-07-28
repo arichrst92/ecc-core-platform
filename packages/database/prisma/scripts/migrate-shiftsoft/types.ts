@@ -62,6 +62,61 @@ export interface ShiftsoftUserListResponse {
 }
 
 /**
+ * Response `/circle/list?with[0]=Members` — array of LegacyCircle.
+ * Total 60+ field per circle; kita hanya declare yang dipakai.
+ */
+export interface ShiftsoftCircleListResponse {
+  data: LegacyCircle[];
+  total?: number;
+  length?: number;
+  message?: string;
+  success?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Circle di Shiftsoft = generic grouping (family/ministry/community/homecell).
+ * Field yg TIDAK kita pakai commented di bawah.
+ */
+export interface LegacyCircle {
+  ID: number;
+  Name: string;
+  Description?: string;
+  /** ID Circle parent (0 = root) */
+  ParentID: number;
+  /** Meeting day: 1=Sen ... 7=Min */
+  Day?: number;
+  /** "HH:mm" — jam mulai */
+  StartTime?: string;
+  /** "HH:mm" — jam selesai */
+  EndTime?: string;
+  /** Nama tempat pertemuan */
+  Place?: string;
+  /** "lat, lng" free text */
+  GPS?: string;
+  /** User.ID yg create circle → resolve ke Jemaat.legacyShiftsoftId untuk PIC */
+  CreatedBy?: number;
+  /** Company/tenant scope */
+  CompanyID?: number;
+  /** 1 = active, 2 = published/verified, 0 = draft/deleted */
+  Status?: number;
+  /** Path image logo circle */
+  Pic?: string;
+  PicPath?: string;
+  /** 1 = e-commerce store (skip untuk homecell/komunitas) */
+  IsStore?: number;
+  /** Members[] — user objects yg bergabung (eager loaded via ?with[0]=Members) */
+  Members?: LegacyUser[];
+  // Fields di-skip: Author, User, Class, ClassID, CommunityType, CommunityTypeID,
+  //   CommunityTarget, CommunityAgeRange, IsFamily, IsLesson, IsShowOnNearMe,
+  //   TierSystem, JoinCode, HonorHourlyFee, IsBudgeting, OneOnOneMentoring,
+  //   Notifications, Events, Downloads, Galleries, Quizzes, ScheduleDay,
+  //   CodeExpiredAt, SpecialAttributes, SpecialAttrs, SpecialAttrsJsonArr,
+  //   IsDisableViewMemberList, IsStoreCategory, IsNotSendBirthdayNotif,
+  //   File, FilePath, Childs, RoleID, IDEncrypt, DeletedAt, CreatedAt/UpdatedAt/By
+}
+
+/**
  * Shape user dari Shiftsoft. Field yang di-skip listed di bottom.
  */
 export interface LegacyUser {

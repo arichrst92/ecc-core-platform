@@ -66,6 +66,8 @@ model CabangGereja {
   homecellAreas HomecellArea[]
   events        Event[]
   rekening      CabangRekening[]
+  // Group (module 23 — generic grouping dari Shiftsoft Circle import)
+  groups        Group[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -205,6 +207,9 @@ model Jemaat {
   // Bapa Rohani self-relation — anak rohani (yg pilih dia sebagai mentor).
   bapaRohani              Jemaat?                  @relation("BapaRohani", fields: [bapaRohaniJemaatId], references: [id], onDelete: SetNull)
   anakRohani              Jemaat[]                 @relation("BapaRohani")
+  // Group (module 23 — generic grouping, dari Shiftsoft Circle import).
+  groupPic                Group[]                  @relation("GroupPic")
+  groupMembership         GroupMember[]            @relation("GroupMembership")
   // Branch change request (mobile)
   branchChangeRequests    BranchChangeRequest[]    @relation("BranchChangeRequester")
   branchChangeReviews     BranchChangeRequest[]    @relation("BranchChangeReviewer")
@@ -1877,4 +1882,103 @@ model HomecellAttendance {
 enum AttendanceSource {
   QR_SCAN
   MANUAL
+}
+
+// ============================================================
+// 23. GROUP — Generic group container (imported from Shiftsoft Circle)
+// ============================================================
+// Berbeda dengan `Homecell` yang STRICT ke cellgroup + PIC Zone/Homecell
+// Leader (Pelayanan Penggembalaan constraint), `Group` adalah generic
+// grouping — bisa berupa Family unit, Ministry team, Community/Fellowship
+// group, atau homecell-style tapi tidak strict soal PIC.
+//
+// Sumber utama: Shiftsoft legacy `/circle/list` (mirror struktur Circle).
+// Bisa juga di-create manual via portal untuk community group baru.
+//
+// Struktur:
+//   CabangGereja
+//     └── Group (hierarchy via parentId self-relation, N-level)
+//           └── GroupMember (junction M:N dengan Jemaat)
+//
+// vs Homecell (module 10) — Homecell = strict cellgroup pemuridan.
+//    Group = umbrella grouping semua jenis (family/ministry/community).
+//
+// Naming note: "Group" adalah kata umum tapi Prisma auto-quote identifier
+// jadi tidak konflik dengan SQL keyword GROUP.
+// ============================================================
+
+model Group {
+  id          String   @id @default(uuid()) @db.Uuid
+  cabangId    String   @map("cabang_id") @db.Uuid
+  // Self-relation untuk hierarchy — parent bisa Group lain (nested
+  // grouping) atau null (root level). Depth tidak dibatasi; UI portal
+  // biasanya render sampai 3-4 level.
+  parentId    String?  @map("parent_id") @db.Uuid
+  nama        String   @db.VarChar(200)
+  deskripsi   String?  @db.Text
+  jenis       GroupJenis @default(LAINNYA)
+  // Lokasi bebas — bisa alamat + landmark, atau nama tempat saja.
+  alamat      String?  @db.Text
+  // Koordinat GPS "lat, lng" — untuk map view di UI. Format free-text
+  // supaya bisa di-copy langsung dari Google Maps.
+  gps         String?  @db.VarChar(64)
+  // Jadwal pertemuan (opsional — tidak semua jenis group ada jadwal).
+  hari        HariMinggu?
+  jam         String?  @db.VarChar(5)  // HH:mm
+  // PIC (leader/coordinator) — nullable. Untuk import dari Shiftsoft,
+  // resolve dari Circle.CreatedBy → Jemaat via legacyShiftsoftId.
+  // Setelah import, admin bisa reassign via portal.
+  picJemaatId String?  @map("pic_jemaat_id") @db.Uuid
+  isActive    Boolean  @default(true) @map("is_active")
+  // Idempotent guard untuk sync ulang dari Shiftsoft. NULL untuk group
+  // yang dibuat organic via portal (bukan hasil import legacy).
+  legacyShiftsoftCircleId Int? @unique @map("legacy_shiftsoft_circle_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  cabang    CabangGereja  @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  parent    Group?        @relation("GroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Group[]       @relation("GroupHierarchy")
+  picJemaat Jemaat?       @relation("GroupPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
+  members   GroupMember[]
+
+  @@index([cabangId])
+  @@index([parentId])
+  @@index([picJemaatId])
+  @@index([jenis])
+  @@map("church_group")
+}
+
+enum GroupJenis {
+  FAMILY          // Unit keluarga (mis. "Jerry - Chiqa Family")
+  MINISTRY        // Tim pelayanan (mis. "Ministry Volunteers", "Bandung Leaders")
+  COMMUNITY       // Community/fellowship group (mis. "BRIDGE", "Professional & Family")
+  HOMECELL_STYLE  // Homecell-style grouping (tapi tidak strict PIC constraint spt module Homecell)
+  SYSTEM          // Internal system group (mis. "ADMIN")
+  LAINNYA         // Fallback / uncategorized
+
+  @@map("group_jenis")
+}
+
+// Junction M:N Group ↔ Jemaat.
+model GroupMember {
+  id               String    @id @default(uuid()) @db.Uuid
+  groupId          String    @map("group_id") @db.Uuid
+  jemaatId         String    @map("jemaat_id") @db.Uuid
+  tanggalBergabung DateTime  @default(now()) @map("tanggal_bergabung") @db.Date
+  tanggalKeluar    DateTime? @map("tanggal_keluar") @db.Date
+  isActive         Boolean   @default(true) @map("is_active")
+  catatan          String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  jemaat Jemaat @relation("GroupMembership", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  // 1 jemaat cuma 1 kali di 1 group (kalau sudah out + rejoin, update
+  // isActive daripada create baru). Reuse pattern HomecellMember.
+  @@unique([groupId, jemaatId])
+  @@index([groupId])
+  @@index([jemaatId])
+  @@map("group_member")
 }

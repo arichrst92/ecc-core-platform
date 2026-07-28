@@ -224,6 +224,8 @@ model Jemaat {
   groupMembership         GroupMember[]            @relation("GroupMembership")
   // Magic link email login tokens (module 24)
   magicLinkTokens         MagicLinkToken[]         @relation("MagicLinkTokens")
+  // Shiftsoft sync jobs yg di-trigger jemaat ini dari portal (module 25)
+  shiftsoftSyncJobs       ShiftsoftSyncJob[]       @relation("ShiftsoftSyncJobs")
   // Branch change request (mobile)
   branchChangeRequests    BranchChangeRequest[]    @relation("BranchChangeRequester")
   branchChangeReviews     BranchChangeRequest[]    @relation("BranchChangeReviewer")
@@ -2046,4 +2048,63 @@ model MagicLinkToken {
   @@index([jemaatId])
   @@index([expiresAt]) // untuk cron cleanup
   @@map("magic_link_token")
+}
+
+// ============================================================
+// Module 25: ShiftsoftSyncJob
+// ============================================================
+// Track manual sync trigger dari portal Developer Tools.
+// Setiap POST /admin/shiftsoft-sync bikin row baru dengan status RUNNING,
+// spawn tsx script async, pipe stdout ke `logTail`, update status final.
+//
+// Tail log disimpan max 200 baris terakhir supaya row gak balloon —
+// untuk debugging kebutuhan full log, cek pm2 log file.
+// ============================================================
+
+model ShiftsoftSyncJob {
+  id            String        @id @default(uuid()) @db.Uuid
+  // Phase pilihan operator: JEMAAT / GROUP / CLEANUP / SEED_CABANG.
+  phase         SyncPhase
+  // Tenant slug (mis. "eccbandung") atau "all" untuk semua tenant.
+  tenantSlug    String        @map("tenant_slug") @db.VarChar(32)
+  // Options JSON snapshot: { dryRun, limit, excludeSystem, includeEmpty }.
+  options       Json          @default("{}")
+  status        SyncStatus    @default(RUNNING)
+  // Counters populated saat job selesai (parse dari script output atau
+  // hitung selisih DB pre/post). Contoh: { imported: 4202, updated: 0,
+  // skipped: 1, errors: 0, collisionNulled: 92 }.
+  result        Json?
+  // Last ~200 lines of stdout (truncated). Untuk quick preview di UI
+  // tanpa harus SSH cek pm2 log.
+  logTail       String?       @map("log_tail")
+  // Kalau status = FAILED, alasan singkat (exception message / non-zero exit).
+  errorMessage  String?       @map("error_message")
+  // Jemaat yg trigger (untuk audit — siapa yg run apa kapan).
+  triggeredById String        @map("triggered_by_id") @db.Uuid
+  startedAt     DateTime      @default(now()) @map("started_at")
+  finishedAt    DateTime?     @map("finished_at")
+
+  triggeredBy Jemaat @relation("ShiftsoftSyncJobs", fields: [triggeredById], references: [id])
+
+  @@index([status])
+  @@index([tenantSlug])
+  @@index([startedAt(sort: Desc)])
+  @@map("shiftsoft_sync_job")
+}
+
+enum SyncPhase {
+  JEMAAT
+  GROUP
+  CLEANUP
+  SEED_CABANG
+
+  @@map("sync_phase")
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+
+  @@map("sync_status")
 }

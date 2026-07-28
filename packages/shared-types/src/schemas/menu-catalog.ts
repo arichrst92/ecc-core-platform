@@ -46,6 +46,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // Community
   { key: 'homecell-area', label: 'Homecell Area', href: '/dashboard/homecell-area', group: 'Community' },
   { key: 'homecell', label: 'Homecell', href: '/dashboard/homecell', group: 'Community' },
+  { key: 'group', label: 'Group', href: '/dashboard/group', group: 'Community' },
 
   // Movement
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },

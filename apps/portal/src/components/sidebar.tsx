@@ -21,6 +21,7 @@ import {
   Newspaper,
   BookOpen,
   Home as HomeIcon,
+  UsersRound,
   MapPin,
   Megaphone,
   Handshake,
@@ -94,6 +95,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin, menuKey: 'homecell-area' },
       { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell' },
+      { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group' },
     ],
   },
   {

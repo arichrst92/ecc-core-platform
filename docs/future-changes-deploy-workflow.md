@@ -10,6 +10,8 @@
 
 Workflow di-bagi per **skenario perubahan**. Pilih yang sesuai, copy-paste blok command. Setiap blok dirancang aman untuk di-jalankan berurutan.
 
+> 🚧 **Sprint 2 (Shiftsoft + Group + Magic Link) — pending deploy.** Karena kompleks (5 migration + 8 env + npm dep + data import), pakai runbook dedicated: **[`sprint-2-deploy-checklist.md`](./sprint-2-deploy-checklist.md)**.
+
 ---
 
 ## Skenario 1 — Code change saja (no schema, no env, no deps)

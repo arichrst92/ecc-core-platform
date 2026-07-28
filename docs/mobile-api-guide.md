@@ -3,6 +3,18 @@
 > Panduan integrasi untuk mobile app developer. Mencakup auth flow, common patterns, dan endpoint-endpoint yang paling sering dipakai dari sisi mobile.
 > Spec lengkap auto-generated tersedia di `GET /docs` (Swagger UI).
 
+## 🆕 Recent Backend Additions (2026-07-28)
+
+Guide utama ini masih berbasis snapshot Mei 2026. Untuk 3 fitur besar Sprint 2 (Juli 2026) — spec detail ada di **`docs/` folder di ecc-mobile-app repo**:
+
+| Feature | Doc | Ringkasan |
+|---|---|---|
+| Shiftsoft legacy migration | `backend-notice-shiftsoft-migration.md` | 6782 jemaat + 314 group import, Jemaat +14 field baru, model `Group` (module 23) |
+| Magic Link Email Login | `backend-notice-magic-link-email-login.md` | Login via email link (untuk 6736 legacy jemaat tanpa noHp valid), onboarding wizard gate (`user.needsOnboarding`), session extended 365 hari |
+| Group Endpoints | `backend-notice-group-endpoints.md` | 12 REST endpoint `/admin/group/*` — browse, self-join, QR invitation code, PIC actions, notif WA otomatis |
+
+Sisa dokumen ini (base URL, auth envelope, existing endpoints Ibadah/Event/News/dll) tetap valid. Auth flow OTP existing tidak berubah — magic link adalah **jalur tambahan**, bukan replacement.
+
 ## Base URL
 
 | Environment | URL |

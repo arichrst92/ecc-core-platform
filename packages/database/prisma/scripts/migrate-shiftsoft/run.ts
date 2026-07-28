@@ -32,6 +32,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { TENANTS, getTenant, type TenantConfig } from './config.js';
 import { ShiftsoftClient } from './shiftsoft-client.js';
 import { mapLegacyUserToJemaat } from './mappers/jemaat.js';
+import { shouldExclude } from './exclude-patterns.js';
 
 // ============================================================
 // CLI arg parser (minimal — no external deps)
@@ -40,14 +41,16 @@ interface CliArgs {
   slug?: string;
   all: boolean;
   commit: boolean;
+  excludeSystem: boolean;
   limit?: number;
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { all: false, commit: false };
+  const args: CliArgs = { all: false, commit: false, excludeSystem: false };
   for (const a of argv) {
     if (a === '--all') args.all = true;
     else if (a === '--commit') args.commit = true;
+    else if (a === '--exclude-system') args.excludeSystem = true;
     else if (a.startsWith('--slug=')) args.slug = a.slice('--slug='.length);
     else if (a.startsWith('--limit=')) args.limit = Number(a.slice('--limit='.length));
   }
@@ -93,6 +96,7 @@ interface TenantReport {
   created: number;
   updated: number;
   skippedNoName: number;
+  skippedSystem: number;
   errors: number;
   /**
    * Recovery counter: record yang collision di noHp/email, di-retry
@@ -107,7 +111,7 @@ interface TenantReport {
 
 async function migrateTenant(
   tenant: TenantConfig,
-  opts: { commit: boolean; limit?: number },
+  opts: { commit: boolean; limit?: number; excludeSystem: boolean },
 ): Promise<TenantReport> {
   const startedAt = Date.now();
   const report: TenantReport = {
@@ -119,6 +123,7 @@ async function migrateTenant(
     created: 0,
     updated: 0,
     skippedNoName: 0,
+    skippedSystem: 0,
     errors: 0,
     collisionsNulled: 0,
     warnings: [],
@@ -144,6 +149,15 @@ async function migrateTenant(
   const toProcess = opts.limit ? users.slice(0, opts.limit) : users;
 
   for (const u of toProcess) {
+    // Filter system accounts kalau opt-in via --exclude-system.
+    if (opts.excludeSystem) {
+      const exc = shouldExclude(u.Name);
+      if (exc.exclude) {
+        report.skippedSystem++;
+        continue;
+      }
+    }
+
     const mapped = mapLegacyUserToJemaat(u, cabangId);
     if (!mapped) {
       report.skippedNoName++;
@@ -290,8 +304,8 @@ async function migrateTenant(
   console.log(
     `[${tenant.slug}] ${mode} done: processed=${report.processed}/${report.fetched}, ` +
       `created=${report.created}, updated=${report.updated}, collisions_nulled=${report.collisionsNulled}, ` +
-      `skipped_no_name=${report.skippedNoName}, errors=${report.errors}, ` +
-      `warnings=${report.warnings.length}, took=${(report.durationMs / 1000).toFixed(1)}s`,
+      `skipped_no_name=${report.skippedNoName}, skipped_system=${report.skippedSystem}, ` +
+      `errors=${report.errors}, warnings=${report.warnings.length}, took=${(report.durationMs / 1000).toFixed(1)}s`,
   );
   return report;
 }
@@ -315,6 +329,7 @@ async function main() {
       const r = await migrateTenant(tenant, {
         commit: args.commit,
         limit: args.limit,
+        excludeSystem: args.excludeSystem,
       });
       reports.push(r);
     } catch (err) {

@@ -49,6 +49,25 @@ export const otpRequestLimiter = makeLimiter('otp-request', {
   limit: 5,                    // 5 request per IP per 15 menit
 });
 
+/**
+ * Magic link email request — anti-spam email + prevent enumeration.
+ * Ketat: 5 request per 1 jam per IP. Cukup untuk normal usage
+ * (user salah ketik email, resend 1-2x), tapi block email flood.
+ */
+export const magicLinkLimiter = makeLimiter('magic-link', {
+  windowMs: 60 * 60 * 1000,    // 1 jam
+  limit: 5,
+});
+
+/**
+ * Onboarding endpoints — moderate (user might submit form multiple times).
+ */
+export const onboardingLimiter = makeLimiter('onboarding', {
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: userOrIp,
+});
+
 /** OTP verify + face login: cegah brute-force OTP code. */
 export const authVerifyLimiter = makeLimiter('auth-verify', {
   windowMs: 15 * 60 * 1000,

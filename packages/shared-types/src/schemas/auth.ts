@@ -5,7 +5,7 @@ import { noHpSchema, uuidSchema } from './common.js';
 export const requestOtpSchema = z
   .object({
     noHp: noHpSchema,
-    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
+    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE', 'ONBOARDING_ADD_NOHP']).default('LOGIN'),
   })
   .openapi('RequestOtpInput');
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
@@ -15,7 +15,7 @@ export const verifyOtpSchema = z
   .object({
     noHp: noHpSchema,
     kode: z.string().length(6, 'OTP harus 6 digit').openapi({ example: '123456' }),
-    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE']).default('LOGIN'),
+    purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE', 'ONBOARDING_ADD_NOHP']).default('LOGIN'),
   })
   .openapi('VerifyOtpInput');
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
@@ -158,6 +158,18 @@ export const registerJemaatSchema = z
     namaLengkap: z.string().trim().min(2).max(255),
     jenisKelamin: z.enum(['L', 'P']),
     cabangId: uuidSchema,
+    // Email — opsional, disarankan untuk recovery via magic link (module 24).
+    // Kalau diisi, auto-save di jemaat.email. Verified implicit saat first
+    // magic link use, jadi tidak butuh verification email di register flow.
+    email: z
+      .string()
+      .trim()
+      .email()
+      .optional()
+      .openapi({
+        example: 'jemaat@example.com',
+        description: 'Opsional — untuk recovery via magic link',
+      }),
     // Optional — user bisa lengkapi nanti via PATCH /admin/me.
     tanggalLahir: z
       .string()
@@ -245,3 +257,40 @@ export const userProfileSchema = z.object({
   hasFaceEnrolled: z.boolean(),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
+
+// ============================================================
+// MODULE 24 — Magic Link Email Login
+// ============================================================
+
+/** POST /auth/email/request-magic-link */
+export const requestMagicLinkSchema = z
+  .object({
+    email: z.string().trim().email().max(255),
+  })
+  .openapi('RequestMagicLinkInput');
+export type RequestMagicLinkInput = z.infer<typeof requestMagicLinkSchema>;
+
+/** POST /auth/email/verify-magic-link */
+export const verifyMagicLinkSchema = z
+  .object({
+    // Token 64-char hex dari email link
+    token: z.string().trim().length(64).regex(/^[0-9a-f]+$/i, 'Invalid token format'),
+  })
+  .openapi('VerifyMagicLinkInput');
+export type VerifyMagicLinkInput = z.infer<typeof verifyMagicLinkSchema>;
+
+/**
+ * POST /auth/onboarding/complete — set profile + onboardedAt=now()
+ * Semua field opsional; handler auto-fill dari legacy data + overwrite dari input.
+ */
+export const completeOnboardingSchema = z
+  .object({
+    namaLengkap: z.string().trim().min(2).max(255).optional(),
+    jenisKelamin: z.enum(['L', 'P']).optional(),
+    tanggalLahir: z.string().date().optional(),
+    alamat: z.string().trim().max(500).optional(),
+    cabangId: uuidSchema.optional(),
+    email: z.string().trim().email().max(255).optional(),
+  })
+  .openapi('CompleteOnboardingInput');
+export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;

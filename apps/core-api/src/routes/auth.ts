@@ -25,7 +25,12 @@ import {
   refreshTokenSchema,
   registerJemaatSchema,
   requestLivenessNonceSchema,
+  requestMagicLinkSchema,
+  verifyMagicLinkSchema,
+  completeOnboardingSchema,
 } from '@ecc/shared-types';
+import { randomBytes } from 'node:crypto';
+import { sendMagicLinkEmail } from '../lib/sendgrid.js';
 import {
   issueLivenessNonce,
   consumeLivenessNonce,
@@ -41,6 +46,8 @@ import {
   refreshLimiter,
   registerLimiter,
   cabangListLimiter,
+  magicLinkLimiter,
+  onboardingLimiter,
 } from '../middleware/rate-limit.js';
 import { audit } from '../lib/audit.js';
 import { generateUniqueKode } from '../lib/kode-reservasi.js';
@@ -67,6 +74,15 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
     const existing = await prisma.jemaat.findUnique({ where: { noHp } });
     if (existing) throw Conflict('Nomor HP sudah terdaftar — gunakan login OTP.');
+  } else if (purpose === 'ONBOARDING_ADD_NOHP') {
+    // Onboarding — existing jemaat (via magic link) mau set noHp baru.
+    // Cek noHp belum dipakai jemaat lain (unique constraint akan enforce juga).
+    const existing = await prisma.jemaat.findUnique({ where: { noHp } });
+    if (existing) {
+      throw Conflict(
+        'Nomor HP sudah dipakai jemaat lain. Kalau ini nomor Anda, coba login OTP langsung.',
+      );
+    }
   } else {
     const jemaat = await prisma.jemaat.findUnique({ where: { noHp } });
     if (!jemaat) throw NotFound('Nomor HP belum terdaftar sebagai jemaat');
@@ -156,6 +172,45 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
         validForSeconds: 15 * 60,
       },
       message: 'OTP terverifikasi. Lanjutkan ke /auth/register untuk menyelesaikan registrasi.',
+    });
+  }
+
+  // ONBOARDING_ADD_NOHP — existing jemaat (logged via magic link) verify
+  // noHp baru. Butuh JWT (user context) untuk tau jemaat mana yg update.
+  if (purpose === 'ONBOARDING_ADD_NOHP') {
+    // Extract jemaatId dari JWT — required
+    const bearerToken = extractBearerToken(req.headers.authorization);
+    if (!bearerToken) {
+      throw Unauthorized('Bearer token wajib untuk ONBOARDING_ADD_NOHP');
+    }
+    let jwtPayload: { sub: string; jemaatId: string };
+    try {
+      const decoded = verifyAccessToken(bearerToken);
+      jwtPayload = { sub: decoded.sub, jemaatId: decoded.jemaatId };
+    } catch {
+      throw Unauthorized('Bearer token tidak valid');
+    }
+    // Set jemaat.noHp untuk authenticated jemaat
+    try {
+      await prisma.jemaat.update({
+        where: { id: jwtPayload.jemaatId },
+        data: { noHp },
+      });
+    } catch (err) {
+      // P2002 = noHp collision (walau di request handler sudah check, race possible)
+      throw Conflict('Nomor HP sudah dipakai jemaat lain');
+    }
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'jemaat',
+      resourceId: jwtPayload.jemaatId,
+      resourceLabel: `Add noHp via onboarding: ${noHp}`,
+      metadata: { method: 'ONBOARDING_ADD_NOHP' },
+    });
+    return res.json({
+      success: true,
+      message: 'Nomor HP berhasil di-verify + di-set',
+      data: { noHp },
     });
   }
 
@@ -254,6 +309,8 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
       cabangId: cabang.id,
       namaLengkap: input.namaLengkap,
       noHp: input.noHp,
+      // Email opsional (per module 24 — magic link recovery).
+      email: input.email ?? null,
       kode,
       // tanggalLahir & alamat opsional — kalau tidak diisi, simpan NULL.
       // User bisa lengkapi nanti via PATCH /admin/me.
@@ -261,6 +318,8 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
       jenisKelamin: input.jenisKelamin,
       alamat: input.alamat ?? null,
       tanggalBergabung: new Date(),
+      // Register lengkap = onboarded (skip wizard first login).
+      onboardedAt: new Date(),
       isActive: true,
       jemaatRoles: defaultRole?.subRoles[0]
         ? {
@@ -894,6 +953,19 @@ async function issueAuthResponse(noHp: string, req: Request, method: 'OTP' | 'FA
     metadata: { method, isFulltimer, canAccessPortal: access.canAccessPortal },
   });
 
+  const needsOnboarding = jemaat.onboardedAt == null;
+  const onboardingReason = needsOnboarding
+    ? {
+        missingNoHp: !jemaat.noHp,
+        missingProfile: (
+          [
+            !jemaat.jenisKelamin ? 'jenisKelamin' : null,
+            !jemaat.tanggalLahir ? 'tanggalLahir' : null,
+          ].filter(Boolean) as string[]
+        ),
+      }
+    : null;
+
   return {
     success: true,
     data: {
@@ -905,12 +977,337 @@ async function issueAuthResponse(noHp: string, req: Request, method: 'OTP' | 'FA
         jemaatId: jemaat.id,
         namaLengkap: jemaat.namaLengkap,
         noHp: jemaat.noHp ?? '',
+        email: jemaat.email ?? null,
         isFulltimer,
         canAccessPortal: access.canAccessPortal,
         menuAccess: access.menuAccess,
         hasFaceEnrolled: !!user.faceDescriptor,
         fotoUrl: user.fotoUrl ?? jemaat.fotoUrl ?? null,
+        // Onboarding gate untuk mobile: kalau true, route ke wizard first
+        // login. Ini akan set NULL untuk 6736 legacy Shiftsoft jemaat.
+        needsOnboarding,
+        onboardingReason,
       },
     },
   };
 }
+
+// ============================================================
+// MODULE 24 — MAGIC LINK EMAIL LOGIN + ONBOARDING
+// ============================================================
+
+/**
+ * Overload issueAuthResponse untuk terima jemaat by email (magic link path).
+ * Reuse core logic dengan lookup berbeda.
+ */
+async function issueAuthResponseByEmail(email: string, req: Request) {
+  // Same shape sebagai issueAuthResponse tapi lookup by email (unique).
+  // Untuk avoid duplication, kita panggil issueAuthResponse setelah dapat noHp.
+  // Kalau noHp NULL (legacy jemaat blm ada noHp), lookup via jemaatId shortcut.
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { email },
+    select: { id: true, noHp: true },
+  });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  if (jemaat.noHp) {
+    return issueAuthResponse(jemaat.noHp, req, 'EMAIL_MAGIC_LINK' as 'OTP');
+  }
+  // Legacy jemaat tanpa noHp — issue JWT langsung by jemaatId
+  return issueAuthResponseByJemaatId(jemaat.id, req);
+}
+
+/**
+ * Issue JWT untuk jemaat yg belum punya noHp (magic link path, legacy).
+ * Same output shape sebagai issueAuthResponse.
+ */
+async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
+  const jemaat = await prisma.jemaat.findUniqueOrThrow({
+    where: { id: jemaatId },
+    include: {
+      user: true,
+      jemaatRoles: {
+        where: { isActive: true },
+        include: { role: true, subRole: true, subRoleStatus: true },
+      },
+    },
+  });
+  if (!jemaat.isActive) {
+    throw Forbidden('Akun Anda sudah dinonaktifkan.');
+  }
+  let user = jemaat.user;
+  if (!user) {
+    user = await prisma.user.create({ data: { jemaatId: jemaat.id } });
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+  const roles = jemaat.jemaatRoles.map((jr) => {
+    const status = jr.subRoleStatus?.nama ? `:${jr.subRoleStatus.nama}` : '';
+    return `${jr.role.nama}:${jr.subRole.nama}${status}`;
+  });
+  const isFulltimer = jemaat.jemaatRoles.some((jr) => jr.role.nama === 'Fulltimer');
+  const accessToken = signAccessToken({
+    sub: user.id,
+    jemaatId: jemaat.id,
+    roles,
+    isFulltimer,
+  });
+  const refreshToken = signRefreshToken(user.id);
+  await persistRefreshToken(user.id, refreshToken, req);
+  const access = await resolveJemaatAccess(jemaat.id);
+
+  audit(req, {
+    action: 'LOGIN',
+    resource: 'auth',
+    resourceId: user.id,
+    resourceLabel: jemaat.namaLengkap,
+    userId: user.id,
+    userName: jemaat.namaLengkap,
+    metadata: { method: 'EMAIL_MAGIC_LINK', isFulltimer },
+  });
+
+  const needsOnboarding = jemaat.onboardedAt == null;
+  return {
+    success: true,
+    data: {
+      accessToken,
+      refreshToken,
+      expiresIn: getJwtTtlSeconds(),
+      user: {
+        id: user.id,
+        jemaatId: jemaat.id,
+        namaLengkap: jemaat.namaLengkap,
+        noHp: jemaat.noHp ?? '',
+        email: jemaat.email ?? null,
+        isFulltimer,
+        canAccessPortal: access.canAccessPortal,
+        menuAccess: access.menuAccess,
+        hasFaceEnrolled: !!user.faceDescriptor,
+        fotoUrl: user.fotoUrl ?? jemaat.fotoUrl ?? null,
+        needsOnboarding,
+        onboardingReason: needsOnboarding
+          ? {
+              missingNoHp: !jemaat.noHp,
+              missingProfile: (
+                [
+                  !jemaat.jenisKelamin ? 'jenisKelamin' : null,
+                  !jemaat.tanggalLahir ? 'tanggalLahir' : null,
+                ].filter(Boolean) as string[]
+              ),
+            }
+          : null,
+      },
+    },
+  };
+}
+
+/**
+ * POST /auth/email/request-magic-link
+ * Body: { email }
+ * Generic response — TIDAK leak apakah email exists (anti-enumeration).
+ * Rate limit 5/jam/IP.
+ */
+authRouter.post('/email/request-magic-link', magicLinkLimiter, async (req, res) => {
+  const { email } = requestMagicLinkSchema.parse(req.body);
+
+  // Lookup jemaat by email — kalau tidak ada, tetap return sukses (no leak).
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { email },
+    select: { id: true, namaLengkap: true, isActive: true },
+  });
+
+  if (jemaat && jemaat.isActive) {
+    // Generate token: 32-byte random → 64 char hex
+    const token = randomBytes(32).toString('hex');
+    const ttlMinutes = Number(process.env.MAGIC_LINK_TTL_MINUTES ?? 15);
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
+
+    await prisma.magicLinkToken.create({
+      data: {
+        jemaatId: jemaat.id,
+        email,
+        token,
+        expiresAt,
+        requestedIp: req.ip ?? null,
+      },
+    });
+
+    // Construct URL — mobile deeplink priority, fallback web
+    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
+    const magicLinkUrl = (mobileBase || webBase) + `?token=${token}`;
+
+    // Send email — non-blocking-ish (still await, but silent-fail wrapped)
+    try {
+      await sendMagicLinkEmail({
+        to: email,
+        namaLengkap: jemaat.namaLengkap,
+        magicLinkUrl,
+        expiresInMinutes: ttlMinutes,
+      });
+    } catch (err) {
+      // Log tapi jangan expose ke user (already generic response)
+      logger.error(
+        { err: (err as Error).message, jemaatId: jemaat.id },
+        '[magic-link] Email send failed',
+      );
+    }
+
+    audit(req, {
+      action: 'CREATE',
+      resource: 'magic_link_token',
+      resourceLabel: `Magic link requested for ${jemaat.namaLengkap}`,
+      metadata: { email },
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Kalau email terdaftar, link login sudah dikirim. Cek inbox Anda.',
+  });
+});
+
+/**
+ * POST /auth/email/verify-magic-link
+ * Body: { token }
+ * Validate token → issue JWT (+ needsOnboarding flag di user response).
+ */
+authRouter.post('/email/verify-magic-link', authVerifyLimiter, async (req, res) => {
+  const { token } = verifyMagicLinkSchema.parse(req.body);
+
+  const record = await prisma.magicLinkToken.findUnique({
+    where: { token },
+    select: {
+      id: true,
+      jemaatId: true,
+      email: true,
+      expiresAt: true,
+      usedAt: true,
+    },
+  });
+  if (!record) throw Unauthorized('Link tidak valid atau sudah kadaluarsa');
+  if (record.usedAt) throw Unauthorized('Link sudah dipakai');
+  if (record.expiresAt < new Date()) {
+    throw Unauthorized('Link sudah kadaluarsa. Request baru.');
+  }
+
+  // Mark used (one-time)
+  await prisma.magicLinkToken.update({
+    where: { id: record.id },
+    data: { usedAt: new Date() },
+  });
+
+  const authResponse = await issueAuthResponseByJemaatId(record.jemaatId, req);
+  return res.json(authResponse);
+});
+
+/**
+ * POST /auth/email/resend-magic-link
+ * Same as request-magic-link tapi rate-limited terpisah.
+ */
+authRouter.post('/email/resend-magic-link', magicLinkLimiter, async (req, res) => {
+  const { email } = requestMagicLinkSchema.parse(req.body);
+  // Delegate ke handler yg sama — re-implement inline karena tidak bisa
+  // re-call middleware chain. Same logic ringkas.
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { email },
+    select: { id: true, namaLengkap: true, isActive: true },
+  });
+  if (jemaat && jemaat.isActive) {
+    const token = randomBytes(32).toString('hex');
+    const ttlMinutes = Number(process.env.MAGIC_LINK_TTL_MINUTES ?? 15);
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
+    await prisma.magicLinkToken.create({
+      data: { jemaatId: jemaat.id, email, token, expiresAt, requestedIp: req.ip ?? null },
+    });
+    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
+    const magicLinkUrl = (mobileBase || webBase) + `?token=${token}`;
+    try {
+      await sendMagicLinkEmail({
+        to: email,
+        namaLengkap: jemaat.namaLengkap,
+        magicLinkUrl,
+        expiresInMinutes: ttlMinutes,
+      });
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, '[magic-link resend] Email send failed');
+    }
+  }
+  res.json({
+    success: true,
+    message: 'Link login baru sudah dikirim. Cek inbox Anda.',
+  });
+});
+
+/**
+ * POST /auth/onboarding/complete
+ * Body: { namaLengkap?, jenisKelamin?, tanggalLahir?, alamat?, cabangId?, email? }
+ * Requires JWT. Update profile fields + set onboardedAt=now().
+ *
+ * Untuk add noHp, lo pakai flow OTP terpisah:
+ *   POST /auth/otp/request  { noHp, purpose: 'ONBOARDING_ADD_NOHP' }
+ *   POST /auth/otp/verify   { noHp, kode, purpose: 'ONBOARDING_ADD_NOHP' }
+ * → Handler OTP verify akan set jemaat.noHp untuk authenticated user.
+ * Setelah noHp verified, call /onboarding/complete untuk profile lain.
+ */
+authRouter.post(
+  '/onboarding/complete',
+  onboardingLimiter,
+  requireAuth,
+  async (req, res) => {
+    if (!req.user) throw Unauthorized();
+    const input = completeOnboardingSchema.parse(req.body);
+
+    const existing = await prisma.jemaat.findUnique({
+      where: { id: req.user.jemaatId },
+      select: { id: true, onboardedAt: true, namaLengkap: true },
+    });
+    if (!existing) throw NotFound('Jemaat tidak ditemukan');
+
+    // Idempotent — kalau sudah onboarded, tetap boleh update profile tapi
+    // onboardedAt tidak berubah.
+    const wasOnboarded = existing.onboardedAt != null;
+
+    // Overwrite only fields yang di-set (undefined skip)
+    const updateData: Record<string, unknown> = {};
+    if (input.namaLengkap !== undefined) updateData.namaLengkap = input.namaLengkap;
+    if (input.jenisKelamin !== undefined) updateData.jenisKelamin = input.jenisKelamin;
+    if (input.tanggalLahir !== undefined) updateData.tanggalLahir = new Date(input.tanggalLahir);
+    if (input.alamat !== undefined) updateData.alamat = input.alamat;
+    if (input.cabangId !== undefined) updateData.cabangId = input.cabangId;
+    if (input.email !== undefined) updateData.email = input.email;
+    if (!wasOnboarded) updateData.onboardedAt = new Date();
+
+    const updated = await prisma.jemaat.update({
+      where: { id: existing.id },
+      data: updateData,
+      select: {
+        id: true,
+        namaLengkap: true,
+        noHp: true,
+        email: true,
+        jenisKelamin: true,
+        tanggalLahir: true,
+        alamat: true,
+        cabangId: true,
+        onboardedAt: true,
+      },
+    });
+
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'jemaat',
+      resourceId: existing.id,
+      resourceLabel: `Onboarding complete: ${existing.namaLengkap}`,
+      metadata: { firstTime: !wasOnboarded, fieldsSet: Object.keys(updateData) },
+    });
+
+    res.json({
+      success: true,
+      message: wasOnboarded ? 'Profil diperbarui' : 'Onboarding selesai',
+      data: updated,
+    });
+  },
+);

@@ -163,6 +163,18 @@ model Jemaat {
   // re-sync (kalau field ini match, UPDATE existing; kalau tidak, CREATE).
   // NULL untuk jemaat yg register organic via ECC app.
   legacyShiftsoftId     Int?      @unique @map("legacy_shiftsoft_id")
+
+  // ---- Onboarding state ----
+  // NULL = jemaat belum complete onboarding wizard. Mobile app WAJIB
+  // route ke wizard first login kalau NULL. Set otomatis ke now() saat:
+  //   - POST /auth/register sukses (jemaat baru, wizard di-skip)
+  //   - POST /auth/onboarding/complete sukses (legacy jemaat setelah wizard)
+  //
+  // Backfill logic (migration 20260731300000):
+  //   - Legacy Shiftsoft import (legacyShiftsoftId != NULL) → NULL (perlu wizard)
+  //   - Non-legacy (registered via app atau seed) → set now()
+  onboardedAt           DateTime? @map("onboarded_at")
+
   // Untuk jemaat tanpa noHp (anak balita / dependent). Guardian = jemaat
   // yang manage account ini (biasanya ortu). Mobile app: kalau guardian
   // login, dia bisa lihat/manage profil dependent ini.
@@ -210,6 +222,8 @@ model Jemaat {
   // Group (module 23 — generic grouping, dari Shiftsoft Circle import).
   groupPic                Group[]                  @relation("GroupPic")
   groupMembership         GroupMember[]            @relation("GroupMembership")
+  // Magic link email login tokens (module 24)
+  magicLinkTokens         MagicLinkToken[]         @relation("MagicLinkTokens")
   // Branch change request (mobile)
   branchChangeRequests    BranchChangeRequest[]    @relation("BranchChangeRequester")
   branchChangeReviews     BranchChangeRequest[]    @relation("BranchChangeReviewer")
@@ -491,6 +505,9 @@ enum OtpPurpose {
   LOGIN
   ENROLLMENT
   RESET_FACE
+  // Onboarding: existing jemaat (logged in via magic link) add/verify noHp
+  // supaya bisa OTP-WA login di future. Handler check jemaat sudah authenticated.
+  ONBOARDING_ADD_NOHP
 
   @@map("otp_purpose")
 }
@@ -1572,6 +1589,10 @@ model NotificationLog {
 enum NotificationType {
   IBADAH_REMINDER
   EVENT_REMINDER
+  // Group workflow notifications (module 23)
+  GROUP_MEMBER_ADDED    // jemaat di-add ke group (via PIC atau via join code)
+  GROUP_MEMBER_REMOVED  // jemaat di-remove oleh PIC
+  GROUP_DISMISSED       // group di-dismiss (soft-delete) — notif ke all members
 
   @@map("notification_type")
 }
@@ -1929,6 +1950,13 @@ model Group {
   // resolve dari Circle.CreatedBy → Jemaat via legacyShiftsoftId.
   // Setelah import, admin bisa reassign via portal.
   picJemaatId String?  @map("pic_jemaat_id") @db.Uuid
+  // Visibility: true = browse-able + direct join, false = hidden dari
+  // listing + join cuma via joinCode (invitation-only, QR scan di mobile).
+  isPublic    Boolean  @default(true) @map("is_public")
+  // Kode invitation untuk private group. 8-char alphanumeric unique.
+  // Auto-generate saat isPublic=false, NULL kalau public. Bisa di-rotate
+  // via endpoint /regenerate-code kalau kode leak.
+  joinCode    String?  @unique @map("join_code") @db.VarChar(20)
   isActive    Boolean  @default(true) @map("is_active")
   // Idempotent guard untuk sync ulang dari Shiftsoft. NULL untuk group
   // yang dibuat organic via portal (bukan hasil import legacy).
@@ -1981,4 +2009,41 @@ model GroupMember {
   @@index([groupId])
   @@index([jemaatId])
   @@map("group_member")
+}
+
+// ============================================================
+// 24. MAGIC LINK EMAIL LOGIN (module baru — support login via email)
+// ============================================================
+// Alternative login path selain OTP WhatsApp:
+//   POST /auth/email/request-magic-link  → send email dengan tautan
+//   POST /auth/email/verify-magic-link   → validate token → JWT
+//
+// Kritis untuk jemaat legacy Shiftsoft yang punya email valid tapi
+// noHp missing/invalid (~50% data legacy). Mereka gak bisa OTP WA
+// tanpa recovery via email.
+//
+// Token: 32-byte random hex (~256 bit entropy), one-time use, expire 15 menit.
+// Cleanup: cron scheduled-jobs.ts drop expired token setiap jam.
+// ============================================================
+
+model MagicLinkToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  jemaatId     String    @map("jemaat_id") @db.Uuid
+  email        String    @db.VarChar(255)
+  // Random 32-byte hex string (64 char). Unique enforced di DB.
+  token        String    @unique @db.VarChar(64)
+  expiresAt    DateTime  @map("expires_at")
+  // Set saat token di-consume (verify sukses). One-time use — kalau
+  // sudah usedAt != NULL, reject subsequent verify request.
+  usedAt       DateTime? @map("used_at")
+  // Audit: IP address requester (untuk detect abuse).
+  requestedIp  String?   @map("requested_ip") @db.VarChar(64)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  jemaat Jemaat @relation("MagicLinkTokens", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([jemaatId])
+  @@index([expiresAt]) // untuk cron cleanup
+  @@map("magic_link_token")
 }

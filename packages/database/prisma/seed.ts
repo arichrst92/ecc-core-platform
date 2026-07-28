@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
+import { MENU_KEYS } from '@ecc/shared-types';
 
 const prisma = new PrismaClient();
 
@@ -942,27 +943,10 @@ async function main() {
   }
 
   // ============== ROLE MENU ACCESS ==============
-  // Daftar semua menu key (harus sinkron dengan menu-catalog.ts).
-  const ALL_MENU_KEYS = [
-    'dashboard',
-    'sinode',
-    'cabang',
-    'jemaat',
-    'role-jemaat',
-    'tipe-relasi',
-    'ibadah',
-    'kategori-ibadah',
-    'pelayanan',
-    'kehadiran',
-    'homecell-area',
-    'homecell',
-    'event',
-    'news',
-    'renungan',
-    'api-key',
-    'audit-log',
-    'role-access',
-  ];
+  // Daftar semua menu key — auto-sync dengan menu-catalog.ts via
+  // import MENU_KEYS. Tambah menu baru di menu-catalog.ts, seed akan
+  // otomatis grant Fulltimer full access-nya.
+  const ALL_MENU_KEYS = MENU_KEYS;
 
   // Fulltimer = full access (read+write+delete) ke SEMUA menu.
   // Di-set di seed (selain migration backfill) supaya tetap berlaku

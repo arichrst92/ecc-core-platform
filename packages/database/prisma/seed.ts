@@ -175,7 +175,7 @@ async function main() {
       deskripsi: 'Anggota jemaat reguler',
       canAccessPortal: false,
       subRoles: [
-        { nama: 'New Comers', deskripsi: 'Jemaat baru yang masih dalam pembinaan awal', statuses: [] },
+        { nama: 'New Comer', deskripsi: 'Jemaat baru yang masih dalam pembinaan awal', statuses: [] },
         { nama: 'Jemaat Tetap', deskripsi: 'Jemaat aktif yang sudah terintegrasi', statuses: [] },
       ],
     },
@@ -602,7 +602,7 @@ async function main() {
     { key: 'jemaat-3', roleNama: 'Jemaat', subRoleNama: 'Jemaat Tetap' },
     { key: 'jemaat-4', roleNama: 'Jemaat', subRoleNama: 'Jemaat Tetap' },
     { key: 'jemaat-5', roleNama: 'Jemaat', subRoleNama: 'Jemaat Tetap' },
-    { key: 'jemaat-newcomer', roleNama: 'Jemaat', subRoleNama: 'New Comers' },
+    { key: 'jemaat-newcomer', roleNama: 'Jemaat', subRoleNama: 'New Comer' },
   ];
   for (const ra of roleAssignments) {
     const jemaatId = jemaatMap.get(ra.key);

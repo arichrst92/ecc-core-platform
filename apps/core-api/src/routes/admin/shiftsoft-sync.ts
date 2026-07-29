@@ -624,30 +624,53 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
     errors: [] as Array<{ legacyId: number; namaLengkap: string; message: string }>,
   };
 
+  /**
+   * Upsert dengan auto-retry P2002. Kalau intra-batch collision (2 legacy
+   * record punya noHp/email sama) atau collision baru yg belum terdeteksi
+   * di preview, null offending field lalu retry (max 3x). Pattern sama dgn
+   * CLI script run.ts.
+   */
   async function tryUpsert(
     u: shiftsoft.LegacyUser,
     override: { nullNoHp?: boolean; nullEmail?: boolean },
   ): Promise<'imported' | 'skipped' | 'error'> {
     const mapped = shiftsoft.mapLegacyUserToJemaat(u, cabangId);
-    if (!mapped) return 'skipped'; // nama kosong etc
-    const data = { ...mapped.create };
+    if (!mapped) return 'skipped';
+    let data = { ...mapped.create };
     if (override.nullNoHp) data.noHp = null;
     if (override.nullEmail) data.email = null;
-    try {
-      await prisma.jemaat.upsert({
-        where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
-        create: data,
-        update: data,
-      });
-      return 'imported';
-    } catch (e: any) {
-      results.errors.push({
-        legacyId: u.ID,
-        namaLengkap: u.Name ?? '(tanpa nama)',
-        message: e?.message?.slice(0, 300) ?? String(e).slice(0, 300),
-      });
-      return 'error';
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await prisma.jemaat.upsert({
+          where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
+          create: data,
+          update: data,
+        });
+        return 'imported';
+      } catch (e: any) {
+        // Detect P2002 unique constraint + which field. Null it + retry.
+        const code = e?.code;
+        const target: string[] = e?.meta?.target ?? [];
+        if (code === 'P2002' && attempt < 2) {
+          if (target.includes('no_hp') && data.noHp !== null) {
+            data = { ...data, noHp: null };
+            continue;
+          }
+          if (target.includes('email') && data.email !== null) {
+            data = { ...data, email: null };
+            continue;
+          }
+        }
+        results.errors.push({
+          legacyId: u.ID,
+          namaLengkap: u.Name ?? '(tanpa nama)',
+          message: e?.message?.slice(0, 300) ?? String(e).slice(0, 300),
+        });
+        return 'error';
+      }
     }
+    return 'error';
   }
 
   // Process NEW records — import as-is.

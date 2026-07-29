@@ -273,7 +273,7 @@ Setelah verify sukses, kirim ke:
 - **Deploy workflow umum:** `future-changes-deploy-workflow.md`
 - **VPS runbook:** `deployment-runbook.md`
 - **Backend notice docs (mobile):** `../../ecc-mobile-app/docs/backend-notice-shiftsoft-migration.md`, `backend-notice-magic-link-email-login.md`, `backend-notice-group-endpoints.md`
-- **Shiftsoft migration script:** `packages/database/prisma/scripts/migrate-shiftsoft/README.md`
+- **Shiftsoft migration script:** `packages/database/src/shiftsoft/README.md`
 
 ---
 

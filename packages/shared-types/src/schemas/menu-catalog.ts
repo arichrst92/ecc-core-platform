@@ -65,6 +65,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'server-health', label: 'Server Health', href: '/dashboard/server-health', group: 'Developer Tools' },
   { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
+  { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },
 
   // Website — CMS untuk landing site eccchurch.global
   { key: 'website-content', label: 'Konten Website', href: '/dashboard/website/content', group: 'Website' },

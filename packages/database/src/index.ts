@@ -17,3 +17,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 export * from '@prisma/client';
+
+// Shiftsoft legacy migration utilities — untuk consumer preview/commit UI
+// di apps/core-api. Namespaced supaya gak clash dengan Prisma types.
+export * as shiftsoft from './shiftsoft/index.js';

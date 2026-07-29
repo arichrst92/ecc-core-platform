@@ -34,6 +34,7 @@ import {
   Power,
   KeyRound,
   Stethoscope,
+  DatabaseZap,
   LayoutTemplate,
   ChevronDown,
 } from 'lucide-react';
@@ -137,6 +138,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/server-health', label: 'Server Health', icon: Gauge, menuKey: 'server-health' },
       { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
       { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
+      { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
     ],
   },
 ];

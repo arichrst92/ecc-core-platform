@@ -29,6 +29,7 @@ import { credentialRouter } from './credential.js';
 import { diagnosticsAdminRouter } from './diagnostics.js';
 import { websiteContentRouter } from './website-content.js';
 import { groupRouter } from './group.js';
+import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 
 export const adminRouter = Router();
 
@@ -72,6 +73,9 @@ adminRouter.use('/maintenance-mode', maintenanceModeRouter);
 adminRouter.use('/credential', credentialRouter);
 adminRouter.use('/diagnostics', diagnosticsAdminRouter);
 adminRouter.use('/website-content', websiteContentRouter);
+// Shiftsoft Sync (Developer Tools) — trigger + monitor migration script async.
+// Fulltimer-only (guard di dalam router).
+adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

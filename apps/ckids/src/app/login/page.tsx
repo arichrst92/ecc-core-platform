@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { Gift, Loader2, Phone, KeyRound } from 'lucide-react';
+import Image from 'next/image';
+import { Loader2, Phone, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
@@ -71,11 +72,18 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 via-kids-50 to-white p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-brand-50 via-kids-50 to-white p-4">
       <div className="bg-white border border-neutral-200 rounded-2xl shadow-xl w-full max-w-sm p-8 space-y-6">
         <div className="text-center">
-          <Gift className="w-12 h-12 text-kids-500 mx-auto" />
-          <h1 className="text-xl font-bold text-neutral-900 mt-2">CKids</h1>
+          <Image
+            src="/logo-ecc.webp"
+            alt="ECC Logo"
+            width={100}
+            height={100}
+            className="mx-auto"
+            priority
+          />
+          <h1 className="text-xl font-bold text-neutral-900 mt-3">CKids</h1>
           <p className="text-xs text-neutral-500 mt-1">
             Portal untuk kakak CKids
           </p>
@@ -157,6 +165,18 @@ export default function LoginPage() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Powered by IDEA — samain dengan portal.eccchurch.global */}
+      <div className="mt-6 flex items-center justify-center gap-2 opacity-60">
+        <span className="text-xs text-neutral-500">Powered by</span>
+        <Image
+          src="/logo-idea.webp"
+          alt="IDEA"
+          width={40}
+          height={16}
+          style={{ width: 'auto', height: '16px' }}
+        />
       </div>
     </div>
   );

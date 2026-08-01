@@ -143,9 +143,10 @@ function AdjustPointContent() {
             <label className="block text-xs font-medium text-neutral-600 mb-1">
               Kode jemaat anak
             </label>
-            <div className="flex gap-2">
-              <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3">
-                <Search className="w-4 h-4 text-neutral-400" />
+            <div className="space-y-2">
+              {/* Row 1: input full-width */}
+              <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3">
+                <Search className="w-4 h-4 text-neutral-400 shrink-0" />
                 <input
                   type="text"
                   value={kode}
@@ -153,27 +154,36 @@ function AdjustPointContent() {
                   onKeyDown={(e) => e.key === 'Enter' && kode.trim() && lookupMut.mutate()}
                   placeholder="ABCD1234"
                   autoFocus
-                  className="flex-1 py-3 outline-none text-lg font-mono tracking-widest"
+                  className="flex-1 min-w-0 py-3 outline-none text-lg font-mono tracking-widest bg-transparent"
                   maxLength={20}
                 />
               </div>
-              <button
-                onClick={() => setScannerOpen(true)}
-                className="px-4 py-3 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 flex items-center gap-1.5"
-                title="Buka camera untuk scan QR"
-              >
-                <ScanLine className="w-4 h-4" /> Scan
-              </button>
-              <button
-                onClick={() => lookupMut.mutate()}
-                disabled={!kode.trim() || lookupMut.isPending}
-                className="px-5 py-3 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 disabled:opacity-50"
-              >
-                {lookupMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cari'}
-              </button>
+              {/* Row 2: 2 tombol side-by-side, sama lebar */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setScannerOpen(true)}
+                  className="py-3 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 flex items-center justify-center gap-1.5"
+                  title="Buka camera untuk scan QR"
+                >
+                  <ScanLine className="w-4 h-4" /> Scan QR
+                </button>
+                <button
+                  onClick={() => lookupMut.mutate()}
+                  disabled={!kode.trim() || lookupMut.isPending}
+                  className="py-3 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {lookupMut.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" /> Cari
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Tekan <strong>Scan</strong> untuk pakai kamera atau ketik manual + tekan Enter.
+              Tekan <strong>Scan QR</strong> untuk kamera, atau ketik kode + Enter.
             </p>
           </div>
 

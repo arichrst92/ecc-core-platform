@@ -6,8 +6,8 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'ECC CKids Gift Stall',
-  description: 'Redeem hadiah anak — admin panel',
+  title: 'CKids',
+  description: 'Portal untuk kakak CKids',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

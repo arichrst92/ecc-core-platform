@@ -68,10 +68,10 @@ export function Header() {
             <Gift className="w-6 h-6 text-kids-500" />
             <div className="hidden sm:block">
               <div className="font-bold text-neutral-900 text-sm sm:text-base">
-                CKids Gift Stall
+                CKids
               </div>
               <div className="text-[10px] text-neutral-500 hidden sm:block">
-                ECC — Point Redeem
+                Portal untuk kakak CKids
               </div>
             </div>
             <div className="sm:hidden font-bold text-neutral-900">CKids</div>

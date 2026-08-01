@@ -75,9 +75,9 @@ export default function LoginPage() {
       <div className="bg-white border border-neutral-200 rounded-2xl shadow-xl w-full max-w-sm p-8 space-y-6">
         <div className="text-center">
           <Gift className="w-12 h-12 text-kids-500 mx-auto" />
-          <h1 className="text-xl font-bold text-neutral-900 mt-2">CKids Gift Stall</h1>
+          <h1 className="text-xl font-bold text-neutral-900 mt-2">CKids</h1>
           <p className="text-xs text-neutral-500 mt-1">
-            Login admin untuk redeem hadiah anak
+            Portal untuk kakak CKids
           </p>
         </div>
 

@@ -11,11 +11,13 @@ import {
   AlertTriangle,
   RotateCcw,
   User,
+  ScanLine,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
+import { QrScannerModal } from '@/components/qr-scanner';
 
 interface JemaatFound {
   jemaat: {
@@ -49,6 +51,7 @@ function AdjustPointContent() {
   const [amountInput, setAmountInput] = useState('');
   const [note, setNote] = useState('');
   const [direction, setDirection] = useState<'add' | 'deduct'>('add');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const lookupMut = useMutation({
     mutationFn: async () => {
@@ -138,7 +141,7 @@ function AdjustPointContent() {
         <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1">
-              Kode jemaat anak (scan QR atau ketik)
+              Kode jemaat anak
             </label>
             <div className="flex gap-2">
               <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3">
@@ -155,6 +158,13 @@ function AdjustPointContent() {
                 />
               </div>
               <button
+                onClick={() => setScannerOpen(true)}
+                className="px-4 py-3 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 flex items-center gap-1.5"
+                title="Buka camera untuk scan QR"
+              >
+                <ScanLine className="w-4 h-4" /> Scan
+              </button>
+              <button
                 onClick={() => lookupMut.mutate()}
                 disabled={!kode.trim() || lookupMut.isPending}
                 className="px-5 py-3 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 disabled:opacity-50"
@@ -162,7 +172,24 @@ function AdjustPointContent() {
                 {lookupMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cari'}
               </button>
             </div>
+            <p className="text-xs text-neutral-500 mt-2">
+              Tekan <strong>Scan</strong> untuk pakai kamera atau ketik manual + tekan Enter.
+            </p>
           </div>
+
+          {scannerOpen && (
+            <QrScannerModal
+              title="Scan QR Anak"
+              hint="Arahkan kamera ke QR code jemaat"
+              onClose={() => setScannerOpen(false)}
+              onScan={(scanned) => {
+                setKode(scanned);
+                setScannerOpen(false);
+                // Auto-fire lookup setelah scan sukses
+                setTimeout(() => lookupMut.mutate(), 100);
+              }}
+            />
+          )}
         </div>
       ) : (
         /* STEP 2 — Show jemaat + input amount */

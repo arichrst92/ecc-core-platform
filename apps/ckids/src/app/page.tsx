@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
+import { QrScannerModal } from '@/components/qr-scanner';
 
 interface Hadiah {
   id: string;
@@ -199,6 +200,7 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
   const [kode, setKode] = useState('');
   const [jemaatFound, setJemaatFound] = useState<any>(null);
   const [note, setNote] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const lookupMut = useMutation({
     mutationFn: async () => {
@@ -242,7 +244,7 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
     <div className="p-4 space-y-4">
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1">
-          Scan QR anak / input kode jemaat
+          Kode jemaat anak
         </label>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3">
@@ -259,6 +261,13 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
             />
           </div>
           <button
+            onClick={() => setScannerOpen(true)}
+            className="px-3 py-2 bg-kids-500 text-white text-sm rounded-lg flex items-center gap-1"
+            title="Buka camera QR scanner"
+          >
+            <ScanLine className="w-4 h-4" /> Scan
+          </button>
+          <button
             onClick={() => lookupMut.mutate()}
             disabled={!kode.trim() || lookupMut.isPending}
             className="px-4 py-2 bg-neutral-800 text-white text-sm rounded-lg disabled:opacity-50"
@@ -267,6 +276,19 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
           </button>
         </div>
       </div>
+
+      {scannerOpen && (
+        <QrScannerModal
+          title="Scan QR Anak"
+          hint="Arahkan kamera ke QR code jemaat"
+          onClose={() => setScannerOpen(false)}
+          onScan={(scanned) => {
+            setKode(scanned);
+            setScannerOpen(false);
+            setTimeout(() => lookupMut.mutate(), 100);
+          }}
+        />
+      )}
 
       {jemaatFound && (
         <div className="bg-neutral-50 border rounded-lg p-3">

@@ -504,6 +504,58 @@ reservasiRouter.post('/award-point', async (req, res) => {
   });
 });
 
+// ===== Active reservasi jemaat hari ini (Modul 28-P) =====
+//
+// Untuk auto-detect ibadah mana yang jemaat sudah check-in hari ini,
+// supaya admin checkout / pickup gak perlu pilih ibadah manual.
+//
+// Query params:
+//   - jemaatId (required)
+//   - mode: 'checkout' | 'pickup' (filter capability)
+//     - checkout: reservasi status=JOIN + ibadah.requiresCheckout + belum checkedOut
+//     - pickup:   reservasi status=JOIN + ibadah.isKidsIbadah + belum pickedUp
+//     - none:     semua reservasi status=JOIN hari ini
+reservasiRouter.get('/active-today', async (req, res) => {
+  const jemaatId = typeof req.query.jemaatId === 'string' ? req.query.jemaatId : '';
+  const mode = typeof req.query.mode === 'string' ? req.query.mode : '';
+  if (!jemaatId) throw BadRequest('jemaatId required');
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+  const where: any = {
+    jemaatId,
+    tanggalIbadah: { gte: today, lt: tomorrow },
+    status: 'JOIN',
+  };
+  if (mode === 'checkout') {
+    where.checkedOutAt = null;
+    where.ibadah = { requiresCheckout: true };
+  } else if (mode === 'pickup') {
+    where.pickedUpAt = null;
+    where.ibadah = { isKidsIbadah: true };
+  }
+
+  const items = await prisma.reservasi.findMany({
+    where,
+    include: {
+      ibadah: {
+        select: {
+          id: true,
+          nama: true,
+          jamMulai: true,
+          isKidsIbadah: true,
+          requiresCheckout: true,
+        },
+      },
+    },
+    orderBy: { joinedAt: 'desc' },
+  });
+
+  res.json({ success: true, data: items });
+});
+
 // ===== Walk-in check-in / checkout / pickup (Modul 28-K) =====
 //
 // Universal endpoint — jemaat identified by jemaatId (from scan QR profile

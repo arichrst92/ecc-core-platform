@@ -41,6 +41,34 @@ interface JemaatItem {
   noHp: string | null;
   kode: string | null;
   fotoUrl: string | null;
+  tanggalLahir: string | null;
+}
+
+function calcUmur(tanggalLahir: string | null): number | null {
+  if (!tanggalLahir) return null;
+  const d = new Date(tanggalLahir);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
+interface ActiveReservasi {
+  id: string;
+  tanggalIbadah: string;
+  joinedAt: string | null;
+  pickupCode: string | null;
+  checkedOutAt: string | null;
+  pickedUpAt: string | null;
+  ibadah: {
+    id: string;
+    nama: string;
+    jamMulai: string;
+    isKidsIbadah: boolean;
+    requiresCheckout: boolean;
+  };
 }
 
 const MODE_META: Record<Mode, { label: string; color: string; Icon: typeof LogIn }> = {
@@ -280,6 +308,8 @@ function ActionPanel({
     jemaatNama: string;
   }>(null);
 
+  const umur = calcUmur(jemaat.tanggalLahir);
+
   const ibadahQ = useQuery({
     queryKey: ['ibadah', 'active', cabangId],
     queryFn: async () => {
@@ -290,45 +320,68 @@ function ActionPanel({
     },
   });
 
+  // Fetch active reservasi hari ini untuk auto-detect ibadah checkout/pickup
+  const activeQ = useQuery({
+    queryKey: ['reservasi', 'active-today', jemaat.id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ActiveReservasi[] }>(
+        '/admin/reservasi/active-today',
+        { params: { jemaatId: jemaat.id } },
+      );
+      return res.data.data;
+    },
+  });
+
+  const activeReservasi = activeQ.data ?? [];
+  const checkoutable = activeReservasi.filter(
+    (r) => r.ibadah.requiresCheckout && !r.checkedOutAt,
+  );
+  const pickupable = activeReservasi.filter(
+    (r) => r.ibadah.isKidsIbadah && !r.pickedUpAt,
+  );
+
   const selectedIbadah = (ibadahQ.data ?? []).find((i) => i.id === ibadahId) ?? null;
 
   const submitMut = useMutation({
-    mutationFn: async (action: Mode) => {
-      if (!ibadahId) throw new Error('Pilih ibadah dulu');
+    mutationFn: async ({ action, targetIbadahId, targetTanggal }: {
+      action: Mode;
+      targetIbadahId?: string;
+      targetTanggal?: string;
+    }) => {
+      const finalIbadahId = targetIbadahId ?? ibadahId;
+      const finalTanggal = targetTanggal ?? tanggal;
+      if (!finalIbadahId) throw new Error('Pilih ibadah dulu');
       const res = await apiClient.post('/admin/reservasi/walk-in', {
         jemaatId: jemaat.id,
-        ibadahId,
-        tanggalIbadah: tanggal,
+        ibadahId: finalIbadahId,
+        tanggalIbadah: finalTanggal,
         action,
       });
-      return { data: res.data.data, action };
+      return { data: res.data.data, action, ibadahNama: (ibadahQ.data ?? []).find((i) => i.id === finalIbadahId)?.nama ?? '' };
     },
-    onSuccess: ({ data, action }) => {
-      // Persist context untuk quick default next scan.
-      if (selectedIbadah) {
+    onSuccess: ({ data, action, ibadahNama }) => {
+      const ib = (ibadahQ.data ?? []).find((i) => i.id === (data?.reservasi?.ibadahId ?? ibadahId));
+      if (ib && action === 'checkin') {
+        // Persist context hanya untuk check-in (sebagai default berikutnya)
         ctx.setContext({
-          ibadahId: selectedIbadah.id,
-          ibadahNama: selectedIbadah.nama,
-          isKidsIbadah: selectedIbadah.isKidsIbadah,
-          requiresCheckout: selectedIbadah.requiresCheckout,
+          ibadahId: ib.id,
+          ibadahNama: ib.nama,
+          isKidsIbadah: ib.isKidsIbadah,
+          requiresCheckout: ib.requiresCheckout,
           tanggalIbadah: tanggal,
         });
       }
       toast.success(`${MODE_META[action].label} berhasil`);
-      setLastResult({ ok: true, action, data });
+      setLastResult({ ok: true, action, data, ibadahNama });
       qc.invalidateQueries({ queryKey: ['kehadiran'] });
+      qc.invalidateQueries({ queryKey: ['reservasi', 'active-today'] });
 
-      if (
-        action === 'checkin' &&
-        selectedIbadah?.isKidsIbadah &&
-        data?.reservasi?.id
-      ) {
+      if (action === 'checkin' && data?.pickupCode && data?.reservasi?.id) {
         setPointDialog({
           reservasiId: data.reservasi.id,
           jemaatNama: jemaat.namaLengkap,
         });
       } else {
-        // Auto-back setelah 2 detik untuk scan berikutnya
         setTimeout(onDone, 2000);
       }
     },
@@ -339,10 +392,51 @@ function ActionPanel({
     },
   });
 
+  // Handler untuk action button — kalau checkout/pickup, auto-pick reservasi
+  // hari ini kalau ada. Kalau ambigu (multiple), fallback pakai ibadah selector.
+  function handleAction(action: Mode) {
+    if (action === 'checkout') {
+      const single = checkoutable[0];
+      if (checkoutable.length === 1 && single) {
+        submitMut.mutate({
+          action: 'checkout',
+          targetIbadahId: single.ibadah.id,
+          targetTanggal: single.tanggalIbadah.slice(0, 10),
+        });
+        return;
+      }
+      if (checkoutable.length === 0) {
+        toast.error('Jemaat belum check-in di ibadah manapun hari ini (yang wajib checkout)');
+        return;
+      }
+      submitMut.mutate({ action: 'checkout' });
+      return;
+    }
+    if (action === 'pickup') {
+      const single = pickupable[0];
+      if (pickupable.length === 1 && single) {
+        submitMut.mutate({
+          action: 'pickup',
+          targetIbadahId: single.ibadah.id,
+          targetTanggal: single.tanggalIbadah.slice(0, 10),
+        });
+        return;
+      }
+      if (pickupable.length === 0) {
+        toast.error('Anak belum check-in di kids ibadah hari ini');
+        return;
+      }
+      submitMut.mutate({ action: 'pickup' });
+      return;
+    }
+    // checkin: pakai ibadah selector
+    submitMut.mutate({ action: 'checkin' });
+  }
+
   return (
     <>
       <div className="space-y-3">
-        {/* Jemaat card */}
+        {/* Jemaat card dengan umur badge */}
         <div className="bg-white border border-neutral-200 rounded-xl p-3 flex items-center gap-3">
           {jemaat.fotoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -357,8 +451,20 @@ function ActionPanel({
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-neutral-900 truncate">
+            <div className="font-semibold text-neutral-900 truncate flex items-center gap-2">
               {jemaat.namaLengkap}
+              {umur !== null && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    umur < 18
+                      ? 'bg-kids-100 text-kids-700'
+                      : 'bg-neutral-100 text-neutral-700'
+                  }`}
+                  title={`Tanggal lahir: ${jemaat.tanggalLahir}`}
+                >
+                  {umur}th{umur < 18 && ' 🧒'}
+                </span>
+              )}
             </div>
             <div className="text-xs text-neutral-500">
               {jemaat.kode ?? '(no kode)'} · {jemaat.noHp ?? '-'}
@@ -373,8 +479,53 @@ function ActionPanel({
           </button>
         </div>
 
-        {/* Ibadah selector */}
+        {/* Auto-detect info: reservasi aktif hari ini */}
+        {activeQ.isLoading ? (
+          <div className="text-xs text-neutral-400 text-center py-1">
+            <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+            Cek kehadiran hari ini...
+          </div>
+        ) : activeReservasi.length > 0 ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-900">
+            <div className="font-semibold mb-1">
+              Sudah check-in hari ini ({activeReservasi.length}):
+            </div>
+            <div className="space-y-0.5">
+              {activeReservasi.map((r) => (
+                <div key={r.id} className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3 shrink-0" />
+                  <span className="flex-1">
+                    {r.ibadah.nama} ({r.ibadah.jamMulai})
+                  </span>
+                  {r.ibadah.isKidsIbadah && !r.pickedUpAt && (
+                    <span className="bg-kids-200 text-kids-800 px-1.5 rounded text-[10px]">
+                      Belum dijemput
+                    </span>
+                  )}
+                  {r.ibadah.requiresCheckout && !r.checkedOutAt && (
+                    <span className="bg-amber-200 text-amber-800 px-1.5 rounded text-[10px]">
+                      Belum checkout
+                    </span>
+                  )}
+                  {r.checkedOutAt && (
+                    <span className="text-neutral-500 text-[10px]">✓ checkout</span>
+                  )}
+                  {r.pickedUpAt && (
+                    <span className="text-neutral-500 text-[10px]">✓ dijemput</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Ibadah selector — untuk check-in (tanggal + ibadah).
+            Untuk checkout/pickup, kalau ada active reservasi hari ini,
+            otomatis pakai — no need pilih manual. */}
         <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4 space-y-3">
+          <div className="text-xs text-neutral-500 mb-1">
+            Untuk <strong>Check-in</strong> — pilih ibadah + tanggal:
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="sm:col-span-1">
               <label className="block text-xs font-medium text-neutral-600 mb-1">
@@ -415,53 +566,59 @@ function ActionPanel({
               )}
             </div>
           </div>
-
-          {selectedIbadah && (
-            <div className="text-xs text-neutral-500 flex flex-wrap gap-2">
-              {selectedIbadah.isKidsIbadah && (
-                <span className="bg-kids-100 text-kids-700 px-2 py-0.5 rounded">
-                  🧒 Kids Ibadah
-                </span>
-              )}
-              {selectedIbadah.requiresCheckout && (
-                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                  Wajib checkout
-                </span>
-              )}
-              {!selectedIbadah.isKidsIbadah && !selectedIbadah.requiresCheckout && (
-                <span className="text-neutral-400">
-                  Ibadah dewasa · cuma bisa check-in
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons dengan auto-detect logic */}
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(MODE_META) as Mode[]).map((m) => {
             const mm = MODE_META[m];
             const Icon = mm.Icon;
             const disabled =
-              !selectedIbadah ||
               submitMut.isPending ||
-              (m === 'checkout' && !selectedIbadah.requiresCheckout) ||
-              (m === 'pickup' && !selectedIbadah.isKidsIbadah);
+              (m === 'checkin' && !selectedIbadah) ||
+              (m === 'checkout' && checkoutable.length === 0) ||
+              (m === 'pickup' && pickupable.length === 0);
+            // Info hint under label
+            let hint = '';
+            if (m === 'checkout') {
+              const first = checkoutable[0];
+              hint =
+                checkoutable.length === 1 && first
+                  ? first.ibadah.nama.slice(0, 12)
+                  : checkoutable.length > 1
+                    ? `${checkoutable.length} pilihan`
+                    : 'no active';
+            } else if (m === 'pickup') {
+              const first = pickupable[0];
+              hint =
+                pickupable.length === 1 && first
+                  ? first.ibadah.nama.slice(0, 12)
+                  : pickupable.length > 1
+                    ? `${pickupable.length} pilihan`
+                    : 'no active';
+            } else {
+              hint = selectedIbadah?.nama.slice(0, 12) ?? '';
+            }
             return (
               <button
                 key={m}
-                onClick={() => submitMut.mutate(m)}
+                onClick={() => handleAction(m)}
                 disabled={disabled}
-                className={`flex flex-col items-center gap-1 py-4 rounded-lg font-bold text-white transition ${
+                className={`flex flex-col items-center gap-0.5 py-3 rounded-lg font-bold text-white transition ${
                   disabled ? 'bg-neutral-300 cursor-not-allowed' : mm.color
                 }`}
               >
-                {submitMut.isPending && submitMut.variables === m ? (
+                {submitMut.isPending && submitMut.variables?.action === m ? (
                   <Loader2 className="w-6 h-6 animate-spin" />
                 ) : (
                   <Icon className="w-6 h-6" />
                 )}
                 <span className="text-sm">{mm.label}</span>
+                {hint && (
+                  <span className="text-[9px] opacity-80 font-normal truncate max-w-full px-1">
+                    {hint}
+                  </span>
+                )}
               </button>
             );
           })}

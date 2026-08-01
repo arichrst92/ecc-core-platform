@@ -6,6 +6,7 @@ import {
   bulkReserveSchema,
   checkinByKodeSchema,
   checkoutByKodeSchema,
+  pickupByKodeSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
@@ -209,7 +210,10 @@ reservasiRouter.post('/checkin', async (req, res) => {
   const { kode } = checkinByKodeSchema.parse(req.body);
   const item = await prisma.reservasi.findUnique({
     where: { kode: kode.toUpperCase() },
-    include: { jemaat: { select: { namaLengkap: true } }, ibadah: { select: { nama: true } } },
+    include: {
+      jemaat: { select: { namaLengkap: true } },
+      ibadah: { select: { nama: true, isKidsIbadah: true } },
+    },
   });
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
   if (item.status === 'CANCEL') throw BadRequest('Reservasi sudah dibatalkan');
@@ -221,24 +225,55 @@ reservasiRouter.post('/checkin', async (req, res) => {
     });
   }
 
+  // Modul 27 — kalau ibadah anak, generate 6-digit pickup code unique
+  // dalam occurrence (ibadah + tanggal). Retry up to 5x kalau collision.
+  let pickupCode: string | null = null;
+  if (item.ibadah.isKidsIbadah) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = String(Math.floor(100000 + Math.random() * 900000));
+      const existing = await prisma.reservasi.findFirst({
+        where: {
+          ibadahId: item.ibadahId,
+          tanggalIbadah: item.tanggalIbadah,
+          pickupCode: candidate,
+        },
+        select: { id: true },
+      });
+      if (!existing) {
+        pickupCode = candidate;
+        break;
+      }
+    }
+    if (!pickupCode) {
+      throw BadRequest('Gagal generate pickup code — occurrence penuh (>900k anak?). Retry.');
+    }
+  }
+
   const updated = await prisma.reservasi.update({
     where: { id: item.id },
     data: {
       status: 'JOIN',
       joinedAt: new Date(),
       checkedInBy: req.user?.sub,
+      pickupCode,
     },
   });
   audit(req, {
     action: 'UPDATE',
     resource: 'reservasi',
     resourceId: updated.id,
-    resourceLabel: `Check-in: ${item.jemaat.namaLengkap} → ${item.ibadah.nama}`,
-    metadata: { method: 'admin-scanner' },
+    resourceLabel: `Check-in: ${item.jemaat.namaLengkap} → ${item.ibadah.nama}${pickupCode ? ` (pickup ${pickupCode})` : ''}`,
+    metadata: { method: 'admin-scanner', pickupCode: pickupCode ?? undefined },
     before: item,
     after: updated,
   });
-  res.json({ success: true, data: updated, message: 'Check-in berhasil' });
+  res.json({
+    success: true,
+    data: updated,
+    message: pickupCode
+      ? `Check-in berhasil. Kode jemput: ${pickupCode} — sampaikan ke parent`
+      : 'Check-in berhasil',
+  });
 });
 
 // ===== Checkout by kode (Modul 26 — admin scanner mirror check-in) =====
@@ -291,6 +326,102 @@ reservasiRouter.post('/checkout', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated, message: 'Checkout berhasil' });
+});
+
+// ===== Pickup Anak by Kode Jemput (Modul 27) =====
+//
+// Admin scan/input 6-digit pickup code + (opsional) scan QR jemaat parent
+// yang jemput. Backend validate + set pickedUpAt.
+//
+// Guard chain:
+//   - pickupCode ditemukan di occurrence hari ini (scope: latest 24h supaya
+//     kode kemarin gak reused hari ini)
+//   - Reservasi belum di-pickup (pickedUpAt IS NULL)
+//   - Reservasi status JOIN (sudah check-in)
+//   - Ibadah must isKidsIbadah=true
+reservasiRouter.post('/pickup', async (req, res) => {
+  const { pickupCode, kodeReservasi, pickedUpByJemaatId } = pickupByKodeSchema.parse(req.body);
+
+  // Lookup by pickupCode. Kalau kodeReservasi dikirim, extra validation
+  // untuk pastikan match anak yg benar (defensive against typo).
+  const now = new Date();
+  const yesterdayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const candidates = await prisma.reservasi.findMany({
+    where: {
+      pickupCode,
+      status: 'JOIN',
+      pickedUpAt: null,
+      joinedAt: { gte: yesterdayStart },
+      ibadah: { isKidsIbadah: true },
+    },
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+      ibadah: { select: { nama: true } },
+    },
+    orderBy: { joinedAt: 'desc' },
+  });
+
+  if (candidates.length === 0) {
+    throw NotFound(
+      'Kode jemput tidak ditemukan atau sudah kadaluarsa. Cek kode di app parent.',
+    );
+  }
+
+  // Kalau kodeReservasi dikirim, filter match — safety guard.
+  let target = candidates[0]!;
+  if (kodeReservasi) {
+    const match = candidates.find((c) => c.kode === kodeReservasi.toUpperCase());
+    if (!match) {
+      throw BadRequest(
+        'Kode reservasi anak tidak match dgn kode jemput. Cek ulang kode QR anak.',
+      );
+    }
+    target = match;
+  } else if (candidates.length > 1) {
+    // 6-digit random punya risk kecil collision cross-ibadah dalam 24h.
+    // Kalau ambiguous, minta admin kirim kodeReservasi juga.
+    throw BadRequest(
+      `Multiple match untuk kode ${pickupCode}. Scan QR anak juga untuk disambiguate.`,
+    );
+  }
+
+  // Validate pickedUpByJemaatId exist kalau dikirim.
+  if (pickedUpByJemaatId) {
+    const parent = await prisma.jemaat.findUnique({
+      where: { id: pickedUpByJemaatId },
+      select: { id: true },
+    });
+    if (!parent) throw BadRequest('Jemaat parent tidak ditemukan');
+  }
+
+  const updated = await prisma.reservasi.update({
+    where: { id: target.id },
+    data: {
+      pickedUpAt: new Date(),
+      pickedUpByJemaatId: pickedUpByJemaatId ?? null,
+    },
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'reservasi',
+    resourceId: updated.id,
+    resourceLabel: `Pickup anak: ${target.jemaat.namaLengkap} ← ${target.ibadah.nama} (kode ${pickupCode})`,
+    metadata: { pickupCode, method: 'admin-pickup', pickedUpByJemaatId },
+    before: target,
+    after: updated,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      reservasi: updated,
+      anak: target.jemaat,
+      ibadahNama: target.ibadah.nama,
+    },
+    message: `Anak ${target.jemaat.namaLengkap} berhasil di-pickup`,
+  });
 });
 
 // ===== Delete =====

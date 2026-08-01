@@ -18,6 +18,7 @@ interface Ibadah extends Record<string, unknown> {
   isOnline: boolean;
   linkOnline: string | null;
   requiresCheckout: boolean;
+  isKidsIbadah: boolean;
   isActive: boolean;
   cabang?: { id: string; nama: string };
   kategoriIbadah?: { id: string; nama: string };
@@ -138,6 +139,14 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       showIf: (v) => !!v.isOnline,
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
+    {
+      name: 'isKidsIbadah',
+      label: 'Ibadah Anak? 🧒',
+      type: 'switch',
+      defaultValue: false,
+      helperText:
+        'Kalau ON: (1) mobile tampil badge "Ibadah Anak" di list, (2) saat check-in auto-generate 6-digit kode jemput untuk parent, (3) point earn di-enable saat check-in.',
+    },
     {
       name: 'requiresCheckout',
       label: 'Wajib Checkout?',

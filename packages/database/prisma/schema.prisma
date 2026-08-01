@@ -199,6 +199,8 @@ model Jemaat {
   jemaatPelayanan         JemaatPelayanan[]
   ibadahPelayananPetugas  IbadahPelayananPetugas[]
   reservasi               Reservasi[]
+  // Modul 27 — jemaat yg pernah pick-up anak (parent/wali)
+  reservasiPickedUp       Reservasi[]              @relation("ReservasiPickedUpBy")
   areaPic                 HomecellArea[]           @relation("AreaPic")
   homecellPic             Homecell[]               @relation("HomecellPic")
   homecellMembership      HomecellMember[]         @relation("HomecellMembership")
@@ -382,6 +384,11 @@ model Ibadah {
   // biasanya wajib (security tracking), ibadah dewasa optional.
   // Added Modul 26 (2026-08-01).
   requiresCheckout Boolean     @default(false) @map("requires_checkout")
+  // Modul 27 (2026-08-01) — flag ibadah untuk anak. Kalau true:
+  //   - Mobile tampil badge 🧒 "Ibadah Anak" di list ibadah.
+  //   - Saat check-in: auto-generate 6-digit pickup code untuk parent jemput.
+  //   - Point earn saat check-in di-enable (kalau juga isKidsIbadah).
+  isKidsIbadah     Boolean     @default(false) @map("is_kids_ibadah")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -736,17 +743,29 @@ model Reservasi {
   // dan admin scan QR jemaat saat keluar. Modul 26 (2026-08-01).
   checkedOutAt  DateTime?       @map("checked_out_at")
   checkedOutBy  String?         @map("checked_out_by") @db.Uuid
+  // Modul 27 (2026-08-01) — kode jemput untuk ibadah anak.
+  //   - Auto-generated 6-digit numeric saat check-in kalau ibadah.isKidsIbadah=true
+  //   - Unique per (ibadahId, tanggalIbadah) — max 1M kids per occurrence
+  //   - Reusable sampai pickedUpAt set (kalau typo bisa retry)
+  //   - Ditampilkan di app parent (yg check-in child) untuk tunjukkan saat pickup
+  pickupCode        String?    @map("pickup_code") @db.VarChar(6)
+  pickedUpAt        DateTime?  @map("picked_up_at")
+  // Jemaat yg jemput (bisa parent, sanak famili, dll — siapapun yg pegang kode)
+  pickedUpByJemaatId String?   @map("picked_up_by_jemaat_id") @db.Uuid
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
 
   jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   ibadah Ibadah @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
+  // Modul 27 — parent yg jemput (nullable, cuma set setelah pickup)
+  pickedUpBy Jemaat? @relation("ReservasiPickedUpBy", fields: [pickedUpByJemaatId], references: [id], onDelete: SetNull)
 
   @@unique([jemaatId, ibadahId, tanggalIbadah])
   @@index([ibadahId, tanggalIbadah])
   @@index([jemaatId])
   @@index([status])
   @@index([kode])
+  @@index([pickedUpAt])
   @@map("reservasi")
 }
 

@@ -53,3 +53,20 @@ export const checkoutByKodeSchema = z
   })
   .openapi('CheckoutByKodeInput');
 export type CheckoutByKodeInput = z.infer<typeof checkoutByKodeSchema>;
+
+// ===== Pickup via Kode Jemput (Modul 27 — ibadah anak) =====
+//
+// Admin scan/input 6-digit pickup code + scan QR jemaat (parent yg jemput).
+// Backend validate: code unique dalam occurrence + belum di-pickup.
+export const pickupByKodeSchema = z
+  .object({
+    // 6-digit numeric pickup code (dari app parent).
+    pickupCode: z.string().trim().regex(/^\d{6}$/, 'Kode jemput harus 6 digit angka'),
+    // Kode reservasi anak (dari QR jemaat anak). Optional — kalau tidak dikirim,
+    // backend lookup by pickupCode saja (asal unique dalam occurrence hari ini).
+    kodeReservasi: z.string().trim().min(4).max(20).optional(),
+    // Jemaat yg jemput (parent/wali) — dari QR jemaat yg scan admin. Optional.
+    pickedUpByJemaatId: uuidSchema.optional(),
+  })
+  .openapi('PickupByKodeInput');
+export type PickupByKodeInput = z.infer<typeof pickupByKodeSchema>;

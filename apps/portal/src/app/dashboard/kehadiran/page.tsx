@@ -69,6 +69,7 @@ export default function KehadiranPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [checkoutScanOpen, setCheckoutScanOpen] = useState(false);
+  const [pickupOpen, setPickupOpen] = useState(false);
   const [showKode, setShowKode] = useState<ReservasiItem | null>(null);
   const [deleting, setDeleting] = useState<ReservasiItem | null>(null);
 
@@ -159,6 +160,13 @@ export default function KehadiranPage() {
           >
             <ScanLine className="w-4 h-4" />
             Checkout via Kode
+          </button>
+          <button
+            onClick={() => setPickupOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-pink-300 text-pink-700 hover:bg-pink-50 text-sm font-medium rounded-lg"
+            title="Ibadah anak — verify 6-digit kode jemput dari parent"
+          >
+            🧒 Pickup Anak
           </button>
           <button
             onClick={() => setCreateOpen(true)}
@@ -405,6 +413,12 @@ export default function KehadiranPage() {
       {checkoutScanOpen && (
         <ScanKodeCheckoutModal
           onClose={() => setCheckoutScanOpen(false)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['kehadiran'] })}
+        />
+      )}
+      {pickupOpen && (
+        <PickupAnakModal
+          onClose={() => setPickupOpen(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['kehadiran'] })}
         />
       )}
@@ -691,6 +705,100 @@ function ScanKodeCheckoutModal({ onClose, onSuccess }: { onClose: () => void; on
             >
               {scanMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Checkout
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============== Pickup Anak Modal (Modul 27) ==============
+//
+// Admin input 6-digit kode jemput dari parent + optional kode reservasi anak
+// untuk disambiguation. Backend akan match reservasi + set pickedUpAt.
+
+function PickupAnakModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [pickupCode, setPickupCode] = useState('');
+  const [kodeReservasi, setKodeReservasi] = useState('');
+
+  const scanMut = useMutation({
+    mutationFn: async () =>
+      apiClient.post('/admin/reservasi/pickup', {
+        pickupCode: pickupCode.trim(),
+        kodeReservasi: kodeReservasi.trim() ? kodeReservasi.trim().toUpperCase() : undefined,
+      }),
+    onSuccess: (res) => {
+      toast.success(res.data.message ?? 'Pickup berhasil');
+      setPickupCode('');
+      setKodeReservasi('');
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal pickup'),
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+              🧒 Pickup Anak
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Input 6-digit kode jemput dari parent. Optional: scan QR anak juga
+              untuk disambiguation.
+            </p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Kode Jemput (6 digit) *
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                value={pickupCode}
+                onChange={(e) => setPickupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                autoFocus
+                placeholder="123456"
+                className="w-full px-3 py-3 text-center font-mono tracking-widest text-2xl border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500"
+                maxLength={6}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Kode Reservasi Anak (opsional)
+              </label>
+              <input
+                type="text"
+                value={kodeReservasi}
+                onChange={(e) => setKodeReservasi(e.target.value.toUpperCase())}
+                placeholder="R7K2X9P (kalau ambiguous)"
+                className="w-full px-3 py-2 font-mono tracking-widest text-sm border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500"
+                maxLength={20}
+              />
+              <p className="text-xs text-neutral-400 mt-1">
+                Backend request kode ini kalau ada 2+ anak dengan kode jemput sama.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
+            >
+              Tutup
+            </button>
+            <button
+              onClick={() => scanMut.mutate()}
+              disabled={pickupCode.length !== 6 || scanMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
+            >
+              {scanMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Verify + Pickup
             </button>
           </div>
         </div>

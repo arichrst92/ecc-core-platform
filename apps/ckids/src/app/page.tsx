@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Gift, Loader2, Package, Plus, ScanLine, AlertTriangle, X, Search } from 'lucide-react';
+import { Gift, Loader2, Package, Plus, ScanLine, AlertTriangle, X, Search, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
@@ -32,6 +32,7 @@ export default function GiftStallHome() {
 function GiftStallContent() {
   const { cabangId, cabangNama } = useCabangStore();
   const [selectedHadiah, setSelectedHadiah] = useState<Hadiah | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const hadiahQ = useQuery({
     queryKey: ['hadiah', cabangId],
@@ -59,13 +60,21 @@ function GiftStallContent() {
   return (
     <>
       <main className="max-w-7xl mx-auto p-3 sm:p-4">
-        <div className="mb-4">
-          <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
-            🎁 Katalog Hadiah — {cabangNama}
-          </h1>
-          <p className="text-xs sm:text-sm text-neutral-500">
-            Klik hadiah untuk redeem atau add stock. Anak bawa QR-nya ke stall.
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
+              🎁 Katalog Hadiah — {cabangNama}
+            </h1>
+            <p className="text-xs sm:text-sm text-neutral-500">
+              Klik hadiah untuk redeem / add stock / edit. Klik + untuk tambah hadiah baru.
+            </p>
+          </div>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Tambah Hadiah</span>
+          </button>
         </div>
 
         {hadiahQ.isLoading ? (
@@ -74,7 +83,8 @@ function GiftStallContent() {
           </div>
         ) : (hadiahQ.data ?? []).length === 0 ? (
           <div className="text-center p-10 text-neutral-500 bg-white rounded-xl border">
-            Belum ada hadiah aktif di cabang ini. Tambah dulu di portal → Katalog Hadiah.
+            Belum ada hadiah aktif di cabang ini. Klik <strong>Tambah Hadiah</strong> di
+            kanan atas untuk mulai.
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -123,6 +133,13 @@ function GiftStallContent() {
           onClose={() => setSelectedHadiah(null)}
         />
       )}
+
+      {addOpen && cabangId && (
+        <AddHadiahModal
+          cabangId={cabangId}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -131,7 +148,7 @@ function GiftStallContent() {
 //  Hadiah Modal — 2 tab: Redeem / Add Stock
 // ============================================================
 function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void }) {
-  const [tab, setTab] = useState<'redeem' | 'stock'>('redeem');
+  const [tab, setTab] = useState<'redeem' | 'stock' | 'edit'>('redeem');
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
@@ -179,13 +196,21 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
           >
             <Package className="w-4 h-4 inline mr-1" /> Add Stock
           </button>
+          <button
+            onClick={() => setTab('edit')}
+            className={`flex-1 py-2.5 text-sm font-semibold ${
+              tab === 'edit'
+                ? 'text-neutral-900 border-b-2 border-neutral-900'
+                : 'text-neutral-500'
+            }`}
+          >
+            <Pencil className="w-4 h-4 inline mr-1" /> Edit
+          </button>
         </div>
 
-        {tab === 'redeem' ? (
-          <RedeemTab hadiah={hadiah} onClose={onClose} />
-        ) : (
-          <AddStockTab hadiah={hadiah} onClose={onClose} />
-        )}
+        {tab === 'redeem' && <RedeemTab hadiah={hadiah} onClose={onClose} />}
+        {tab === 'stock' && <AddStockTab hadiah={hadiah} onClose={onClose} />}
+        {tab === 'edit' && <EditHadiahTab hadiah={hadiah} onClose={onClose} />}
       </div>
     </div>
   );
@@ -430,6 +455,286 @@ function AddStockTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
         {addMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
         <Plus className="w-4 h-4" /> Add {qty || '?'} to Stock
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+//  Add Hadiah Modal — bikin katalog baru
+// ============================================================
+function AddHadiahModal({ cabangId, onClose }: { cabangId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [nama, setNama] = useState('');
+  const [deskripsi, setDeskripsi] = useState('');
+  const [fotoUrl, setFotoUrl] = useState('');
+  const [pointCost, setPointCost] = useState('');
+  const [stock, setStock] = useState('');
+
+  const createMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/admin/hadiah', {
+        cabangId,
+        nama: nama.trim(),
+        deskripsi: deskripsi.trim() || undefined,
+        fotoUrl: fotoUrl.trim() || undefined,
+        pointCost: Number(pointCost),
+        stock: Number(stock) || 0,
+        isActive: true,
+      });
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Hadiah "${data.nama}" berhasil ditambahkan`);
+      qc.invalidateQueries({ queryKey: ['hadiah'] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal tambah hadiah'),
+  });
+
+  const valid = nama.trim().length >= 2 && Number(pointCost) > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg shadow-xl max-h-[92vh] overflow-y-auto">
+        <div className="p-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Plus className="w-5 h-5 text-kids-500" />
+            <div className="font-bold">Tambah Hadiah Baru</div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              Nama Hadiah *
+            </label>
+            <input
+              type="text"
+              value={nama}
+              onChange={(e) => setNama(e.target.value)}
+              placeholder="mis. Robot LEGO, Buku Alkitab Anak"
+              autoFocus
+              maxLength={200}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              Deskripsi (opsional)
+            </label>
+            <textarea
+              value={deskripsi}
+              onChange={(e) => setDeskripsi(e.target.value)}
+              placeholder="Deskripsi singkat hadiah"
+              rows={2}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              URL Foto (opsional)
+            </label>
+            <input
+              type="url"
+              value={fotoUrl}
+              onChange={(e) => setFotoUrl(e.target.value)}
+              placeholder="https://... atau /uploads/hadiah/xxx.webp"
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
+            />
+            {fotoUrl && (
+              <div className="mt-2 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={fotoUrl}
+                  alt="Preview"
+                  className="max-h-32 rounded-lg border border-neutral-200 object-contain"
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Point Cost *
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                value={pointCost}
+                onChange={(e) => setPointCost(e.target.value)}
+                placeholder="100"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Stock Awal
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t bg-neutral-50 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-neutral-700 border border-neutral-300 rounded-lg hover:bg-white"
+          >
+            Batal
+          </button>
+          <button
+            onClick={() => createMut.mutate()}
+            disabled={!valid || createMut.isPending}
+            className="flex items-center gap-1.5 px-4 py-2 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 disabled:opacity-50"
+          >
+            {createMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            <Plus className="w-4 h-4" /> Simpan Hadiah
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+//  Edit Hadiah Tab (di dalam HadiahModal existing)
+// ============================================================
+function EditHadiahTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [nama, setNama] = useState(hadiah.nama);
+  const [deskripsi, setDeskripsi] = useState(hadiah.deskripsi ?? '');
+  const [fotoUrl, setFotoUrl] = useState(hadiah.fotoUrl ?? '');
+  const [pointCost, setPointCost] = useState(String(hadiah.pointCost));
+  const [isActive, setIsActive] = useState(hadiah.isActive);
+
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.patch(`/admin/hadiah/${hadiah.id}`, {
+        nama: nama.trim(),
+        deskripsi: deskripsi.trim() || undefined,
+        fotoUrl: fotoUrl.trim() || undefined,
+        pointCost: Number(pointCost),
+        isActive,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      toast.success('Hadiah berhasil diupdate');
+      qc.invalidateQueries({ queryKey: ['hadiah'] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal update'),
+  });
+
+  const deactivateMut = useMutation({
+    mutationFn: async () => {
+      await apiClient.delete(`/admin/hadiah/${hadiah.id}`);
+    },
+    onSuccess: () => {
+      toast.success(`Hadiah "${hadiah.nama}" di-deaktifkan (hidden dari stall)`);
+      qc.invalidateQueries({ queryKey: ['hadiah'] });
+      onClose();
+    },
+    onError: (e: any) =>
+      toast.error(e.response?.data?.error?.message ?? 'Gagal deaktifkan'),
+  });
+
+  const valid = nama.trim().length >= 2 && Number(pointCost) > 0;
+
+  return (
+    <div className="p-4 space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-neutral-600 mb-1">Nama *</label>
+        <input
+          type="text"
+          value={nama}
+          onChange={(e) => setNama(e.target.value)}
+          maxLength={200}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-600 mb-1">Deskripsi</label>
+        <textarea
+          value={deskripsi}
+          onChange={(e) => setDeskripsi(e.target.value)}
+          rows={2}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none resize-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-600 mb-1">URL Foto</label>
+        <input
+          type="url"
+          value={fotoUrl}
+          onChange={(e) => setFotoUrl(e.target.value)}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-600 mb-1">
+          Point Cost *
+        </label>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="1"
+          value={pointCost}
+          onChange={(e) => setPointCost(e.target.value)}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none font-mono"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isActive}
+          onChange={(e) => setIsActive(e.target.checked)}
+        />
+        Aktif — tampil di Gift Stall
+      </label>
+
+      <div className="flex gap-2 pt-3 border-t">
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `Deaktifkan hadiah "${hadiah.nama}"? Bakal hilang dari Gift Stall (data lama redeem tetap ada).`,
+              )
+            ) {
+              deactivateMut.mutate();
+            }
+          }}
+          disabled={deactivateMut.isPending}
+          className="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
+        >
+          Deaktifkan
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={() => updateMut.mutate()}
+          disabled={!valid || updateMut.isPending}
+          className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-sm font-semibold rounded-lg hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {updateMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+          <Save className="w-4 h-4" /> Simpan
+        </button>
+      </div>
     </div>
   );
 }

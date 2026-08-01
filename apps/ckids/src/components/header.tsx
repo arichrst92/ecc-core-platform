@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Gift, History, BarChart3, LogOut, MapPin } from 'lucide-react';
+import { Gift, History, BarChart3, LogOut, MapPin, Award } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { useCabangStore } from '@/lib/cabang-store';
@@ -50,6 +50,7 @@ export function Header() {
 
   const navItems = [
     { href: '/', label: 'Gift Stall', icon: Gift },
+    { href: '/adjust-point', label: 'Adjust Point', icon: Award },
     { href: '/history', label: 'History', icon: History },
     { href: '/report', label: 'Report', icon: BarChart3 },
   ];

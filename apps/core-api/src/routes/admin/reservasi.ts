@@ -7,6 +7,7 @@ import {
   checkinByKodeSchema,
   checkoutByKodeSchema,
   pickupByKodeSchema,
+  walkInReservasiSchema,
   awardPointSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
@@ -502,6 +503,224 @@ reservasiRouter.post('/award-point', async (req, res) => {
     message: `+${amount} point untuk ${reservasi.jemaat.namaLengkap}. Balance: ${result.balance.balance}`,
   });
 });
+
+// ===== Walk-in check-in / checkout / pickup (Modul 28-K) =====
+//
+// Universal endpoint — jemaat identified by jemaatId (from scan QR profile
+// atau search by nama), ibadah context dari admin selector.
+//
+// Backend do upsert Reservasi based on action:
+//   - checkin: create Reservasi kalau belum ada, atau flip RESERVE→JOIN kalau
+//     sudah reserved. Auto-generate kode reservasi + pickup code (kids).
+//   - checkout: cari Reservasi existing → set checkedOutAt.
+//   - pickup: cari kids Reservasi → set pickedUpAt (skip validate pickup code
+//     karena admin verify secara fisik lewat scan QR anak).
+reservasiRouter.post('/walk-in', async (req, res) => {
+  const { jemaatId, ibadahId, tanggalIbadah, action } = walkInReservasiSchema.parse(req.body);
+  const adminId = req.user?.sub;
+
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { id: true, namaLengkap: true, isActive: true, kode: true },
+  });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  if (!jemaat.isActive) throw BadRequest('Jemaat tidak aktif');
+
+  const ibadah = await prisma.ibadah.findUnique({
+    where: { id: ibadahId },
+    select: {
+      id: true,
+      nama: true,
+      isActive: true,
+      isKidsIbadah: true,
+      requiresCheckout: true,
+    },
+  });
+  if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
+
+  const tanggal = new Date(tanggalIbadah);
+  const now = new Date();
+
+  // Lookup existing reservasi untuk (jemaat, ibadah, tanggal).
+  const existing = await prisma.reservasi.findUnique({
+    where: {
+      jemaatId_ibadahId_tanggalIbadah: {
+        jemaatId,
+        ibadahId,
+        tanggalIbadah: tanggal,
+      },
+    },
+  });
+
+  // ═══════════ CHECK-IN ═══════════
+  if (action === 'checkin') {
+    if (existing) {
+      if (existing.status === 'CANCEL') {
+        throw BadRequest('Reservasi sudah dibatalkan — tidak bisa check-in');
+      }
+      if (existing.status === 'JOIN') {
+        return res.json({
+          success: true,
+          data: { reservasi: existing, jemaat, ibadahNama: ibadah.nama },
+          message: `Sudah check-in sebelumnya (${existing.joinedAt?.toISOString()})`,
+        });
+      }
+      // Status = RESERVE → flip ke JOIN
+      let pickupCode: string | null = null;
+      if (ibadah.isKidsIbadah) {
+        pickupCode = await generateUniquePickupCode(ibadahId, tanggal);
+      }
+      const updated = await prisma.reservasi.update({
+        where: { id: existing.id },
+        data: {
+          status: 'JOIN',
+          joinedAt: now,
+          checkedInBy: adminId,
+          pickupCode,
+        },
+      });
+      audit(req, {
+        action: 'UPDATE',
+        resource: 'reservasi',
+        resourceId: updated.id,
+        resourceLabel: `Walk-in check-in: ${jemaat.namaLengkap} → ${ibadah.nama}`,
+        metadata: { method: 'walk-in', flip: 'RESERVE→JOIN', pickupCode },
+        before: existing,
+        after: updated,
+      });
+      return res.json({
+        success: true,
+        data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
+        message: pickupCode
+          ? `Check-in berhasil. Kode jemput: ${pickupCode}`
+          : 'Check-in berhasil',
+      });
+    }
+    // No existing — create baru dgn status JOIN
+    const kode = await generateUniqueKode(async (k) => {
+      const r = await prisma.reservasi.findUnique({ where: { kode: k } });
+      return !!r;
+    });
+    let pickupCode: string | null = null;
+    if (ibadah.isKidsIbadah) {
+      pickupCode = await generateUniquePickupCode(ibadahId, tanggal);
+    }
+    const created = await prisma.reservasi.create({
+      data: {
+        jemaatId,
+        ibadahId,
+        tanggalIbadah: tanggal,
+        status: 'JOIN',
+        kode,
+        joinedAt: now,
+        checkedInBy: adminId,
+        pickupCode,
+      },
+    });
+    audit(req, {
+      action: 'CREATE',
+      resource: 'reservasi',
+      resourceId: created.id,
+      resourceLabel: `Walk-in check-in: ${jemaat.namaLengkap} → ${ibadah.nama}`,
+      metadata: { method: 'walk-in-create', pickupCode },
+      after: created,
+    });
+    return res.status(201).json({
+      success: true,
+      data: { reservasi: created, jemaat, ibadahNama: ibadah.nama, pickupCode },
+      message: pickupCode
+        ? `Check-in berhasil. Kode jemput: ${pickupCode}`
+        : 'Check-in berhasil',
+    });
+  }
+
+  // ═══════════ CHECKOUT ═══════════
+  if (action === 'checkout') {
+    if (!existing) throw NotFound('Jemaat belum check-in di ibadah ini');
+    if (existing.status !== 'JOIN') throw BadRequest('Jemaat belum check-in');
+    if (!ibadah.requiresCheckout) {
+      throw BadRequest('Ibadah ini tidak require checkout');
+    }
+    if (existing.checkedOutAt) {
+      return res.json({
+        success: true,
+        data: existing,
+        message: `Sudah checkout sebelumnya (${existing.checkedOutAt.toISOString()})`,
+      });
+    }
+    const updated = await prisma.reservasi.update({
+      where: { id: existing.id },
+      data: { checkedOutAt: now, checkedOutBy: adminId },
+    });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'reservasi',
+      resourceId: updated.id,
+      resourceLabel: `Walk-in checkout: ${jemaat.namaLengkap} ← ${ibadah.nama}`,
+      metadata: { method: 'walk-in' },
+      before: existing,
+      after: updated,
+    });
+    return res.json({
+      success: true,
+      data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      message: 'Checkout berhasil',
+    });
+  }
+
+  // ═══════════ PICKUP ═══════════
+  if (action === 'pickup') {
+    if (!existing) throw NotFound('Jemaat belum check-in — tidak bisa pickup');
+    if (!ibadah.isKidsIbadah) throw BadRequest('Ibadah ini bukan ibadah anak');
+    if (existing.status !== 'JOIN') throw BadRequest('Jemaat belum check-in');
+    if (existing.pickedUpAt) {
+      return res.json({
+        success: true,
+        data: existing,
+        message: `Sudah di-pickup sebelumnya (${existing.pickedUpAt.toISOString()})`,
+      });
+    }
+    const updated = await prisma.reservasi.update({
+      where: { id: existing.id },
+      data: { pickedUpAt: now },
+    });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'reservasi',
+      resourceId: updated.id,
+      resourceLabel: `Walk-in pickup: ${jemaat.namaLengkap} ← ${ibadah.nama}`,
+      metadata: { method: 'walk-in-pickup' },
+      before: existing,
+      after: updated,
+    });
+    return res.json({
+      success: true,
+      data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      message: `Anak ${jemaat.namaLengkap} berhasil di-pickup`,
+    });
+  }
+
+  throw BadRequest(`Unknown action: ${action}`);
+});
+
+/**
+ * Helper: generate 6-digit pickup code unique dalam (ibadah, tanggal) occurrence.
+ * Retry sampai 5x kalau collision.
+ */
+async function generateUniquePickupCode(
+  ibadahId: string,
+  tanggalIbadah: Date,
+): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = String(Math.floor(100000 + Math.random() * 900000));
+    const existing = await prisma.reservasi.findFirst({
+      where: { ibadahId, tanggalIbadah, pickupCode: candidate },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  throw BadRequest('Gagal generate pickup code — occurrence penuh, retry');
+}
 
 // ===== Delete =====
 

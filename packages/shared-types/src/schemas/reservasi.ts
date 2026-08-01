@@ -54,6 +54,23 @@ export const checkoutByKodeSchema = z
   .openapi('CheckoutByKodeInput');
 export type CheckoutByKodeInput = z.infer<typeof checkoutByKodeSchema>;
 
+// ===== Walk-in (Modul 28-K — check-in tanpa reservasi upfront) =====
+//
+// Endpoint universal: admin scan/pilih jemaat + pilih ibadah + tanggal,
+// backend auto-upsert Reservasi:
+//   - checkin: create/flip status JOIN + joinedAt + generate kode + pickup code
+//   - checkout: cari reservasi existing, set checkedOutAt
+//   - pickup: cari kids reservasi, set pickedUpAt
+export const walkInReservasiSchema = z
+  .object({
+    jemaatId: uuidSchema,
+    ibadahId: uuidSchema,
+    tanggalIbadah: z.string().date().openapi({ example: '2026-08-04' }),
+    action: z.enum(['checkin', 'checkout', 'pickup']),
+  })
+  .openapi('WalkInReservasiInput');
+export type WalkInReservasiInput = z.infer<typeof walkInReservasiSchema>;
+
 // ===== Pickup via Kode Jemput (Modul 27 — ibadah anak) =====
 //
 // Admin scan/input 6-digit pickup code + scan QR jemaat (parent yg jemput).

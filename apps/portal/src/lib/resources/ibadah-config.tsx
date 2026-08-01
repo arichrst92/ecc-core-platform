@@ -17,6 +17,7 @@ interface Ibadah extends Record<string, unknown> {
   lokasi: string | null;
   isOnline: boolean;
   linkOnline: string | null;
+  requiresCheckout: boolean;
   isActive: boolean;
   cabang?: { id: string; nama: string };
   kategoriIbadah?: { id: string; nama: string };
@@ -137,6 +138,14 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       showIf: (v) => !!v.isOnline,
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
+    {
+      name: 'requiresCheckout',
+      label: 'Wajib Checkout?',
+      type: 'switch',
+      defaultValue: false,
+      helperText:
+        'Kalau ON, jemaat yg sudah check-in HARUS di-scan lagi saat keluar (admin scan QR). Biasanya untuk ibadah anak — security tracking. Ibadah dewasa umumnya OFF.',
+    },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],
   createSchema: createIbadahSchema,

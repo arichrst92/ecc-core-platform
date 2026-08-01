@@ -68,6 +68,7 @@ export default function KehadiranPage() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [checkoutScanOpen, setCheckoutScanOpen] = useState(false);
   const [showKode, setShowKode] = useState<ReservasiItem | null>(null);
   const [deleting, setDeleting] = useState<ReservasiItem | null>(null);
 
@@ -150,6 +151,14 @@ export default function KehadiranPage() {
           >
             <ScanLine className="w-4 h-4" />
             Check-in via Kode
+          </button>
+          <button
+            onClick={() => setCheckoutScanOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 text-sm font-medium rounded-lg"
+            title="Untuk ibadah dengan requiresCheckout=true (biasanya ibadah anak)"
+          >
+            <ScanLine className="w-4 h-4" />
+            Checkout via Kode
           </button>
           <button
             onClick={() => setCreateOpen(true)}
@@ -393,6 +402,12 @@ export default function KehadiranPage() {
           }}
         />
       )}
+      {checkoutScanOpen && (
+        <ScanKodeCheckoutModal
+          onClose={() => setCheckoutScanOpen(false)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['kehadiran'] })}
+        />
+      )}
       {scanOpen && (
         <ScanKodeModal
           onClose={() => setScanOpen(false)}
@@ -607,6 +622,75 @@ function ScanKodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             >
               {scanMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Check-in
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============== Scan Kode CHECKOUT Modal (Modul 26) ==============
+//
+// Mirror ScanKodeModal — beda endpoint saja. Untuk ibadah dgn
+// requiresCheckout=true (biasanya ibadah anak). Backend akan reject
+// kalau ibadah-nya requiresCheckout=false atau jemaat belum check-in.
+
+function ScanKodeCheckoutModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [kode, setKode] = useState('');
+
+  const scanMut = useMutation({
+    mutationFn: async () =>
+      apiClient.post('/admin/reservasi/checkout', { kode: kode.trim().toUpperCase() }),
+    onSuccess: (res) => {
+      toast.success(res.data.message ?? 'Checkout berhasil');
+      setKode('');
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+              <ScanLine className="w-4 h-4 text-amber-600" />
+              Checkout via Kode
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Scan/input kode reservasi jemaat yg mau keluar. Hanya berlaku untuk
+              ibadah dgn <code>requiresCheckout=true</code>.
+            </p>
+          </div>
+          <div className="p-6">
+            <input
+              type="text"
+              value={kode}
+              onChange={(e) => setKode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && kode.trim() && scanMut.mutate()}
+              autoFocus
+              placeholder="R7K2X9P"
+              className="w-full px-3 py-3 text-center font-mono tracking-widest text-lg border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500"
+              maxLength={20}
+            />
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
+            >
+              Tutup
+            </button>
+            <button
+              onClick={() => scanMut.mutate()}
+              disabled={!kode.trim() || scanMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50"
+            >
+              {scanMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Checkout
             </button>
           </div>
         </div>

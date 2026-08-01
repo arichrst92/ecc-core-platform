@@ -34,6 +34,8 @@ export const createIbadahSchema = z
     lokasi: emptyToUndefined(z.string().trim()),
     isOnline: z.boolean().default(false),
     linkOnline: emptyToUndefined(z.string().url()),
+    // Modul 26 — toggle wajib checkout (biasanya untuk ibadah anak)
+    requiresCheckout: z.boolean().default(false),
     deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
@@ -60,6 +62,7 @@ export const updateIbadahSchema = z.object({
   lokasi: emptyToUndefined(z.string().trim()),
   isOnline: z.boolean().optional(),
   linkOnline: emptyToUndefined(z.string().url()),
+  requiresCheckout: z.boolean().optional(),
   deskripsi: emptyToUndefined(z.string().trim()),
   isActive: z.boolean().optional(),
 });

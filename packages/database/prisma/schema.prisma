@@ -377,6 +377,11 @@ model Ibadah {
   // Admin bisa toggle false untuk ibadah internal (mis. ibadah pengurus,
   // latihan, ibadah khusus) yang tidak boleh ditampilkan ke guest.
   isPublic         Boolean     @default(true) @map("is_public")
+  // Toggle wajib checkout — kalau true, jemaat yang sudah check-in harus
+  // di-scan lagi saat keluar (admin scan QR jemaat). Untuk ibadah anak
+  // biasanya wajib (security tracking), ibadah dewasa optional.
+  // Added Modul 26 (2026-08-01).
+  requiresCheckout Boolean     @default(false) @map("requires_checkout")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -727,6 +732,10 @@ model Reservasi {
   catatan       String?         @db.Text
   // Metadata: siapa yang trigger checkin (mobile app scan, manual admin, dll)
   checkedInBy   String?         @map("checked_in_by") @db.Uuid // userId yang scan
+  // Checkout tracking — cuma di-populate kalau ibadah.requiresCheckout=true
+  // dan admin scan QR jemaat saat keluar. Modul 26 (2026-08-01).
+  checkedOutAt  DateTime?       @map("checked_out_at")
+  checkedOutBy  String?         @map("checked_out_by") @db.Uuid
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
 

@@ -44,3 +44,12 @@ export const checkinByKodeSchema = z
   })
   .openapi('CheckinByKodeInput');
 export type CheckinByKodeInput = z.infer<typeof checkinByKodeSchema>;
+
+// ===== Checkout via Kode (Modul 26 — mirror check-in flow) =====
+// Sama shape dengan checkinByKodeSchema, alias untuk kejelasan intent.
+export const checkoutByKodeSchema = z
+  .object({
+    kode: z.string().trim().min(4).max(20).openapi({ example: 'R7K2X9P' }),
+  })
+  .openapi('CheckoutByKodeInput');
+export type CheckoutByKodeInput = z.infer<typeof checkoutByKodeSchema>;

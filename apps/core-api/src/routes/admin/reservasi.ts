@@ -5,6 +5,7 @@ import {
   updateReservasiStatusSchema,
   bulkReserveSchema,
   checkinByKodeSchema,
+  checkoutByKodeSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
@@ -238,6 +239,58 @@ reservasiRouter.post('/checkin', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated, message: 'Check-in berhasil' });
+});
+
+// ===== Checkout by kode (Modul 26 — admin scanner mirror check-in) =====
+//
+// Guard chain:
+//   - Reservasi must exist by kode
+//   - Ibadah.requiresCheckout must be true (opt-in per ibadah)
+//   - Status must be JOIN (sudah check-in)
+//   - checkedOutAt must be null (belum di-checkout)
+// Idempotent: sudah checkout return success dengan pesan info.
+reservasiRouter.post('/checkout', async (req, res) => {
+  const { kode } = checkoutByKodeSchema.parse(req.body);
+  const item = await prisma.reservasi.findUnique({
+    where: { kode: kode.toUpperCase() },
+    include: {
+      jemaat: { select: { namaLengkap: true } },
+      ibadah: { select: { nama: true, requiresCheckout: true } },
+    },
+  });
+  if (!item) throw NotFound('Kode reservasi tidak ditemukan');
+  if (!item.ibadah.requiresCheckout) {
+    throw BadRequest('Ibadah ini tidak require checkout — skip aja.');
+  }
+  if (item.status === 'CANCEL') throw BadRequest('Reservasi sudah dibatalkan');
+  if (item.status !== 'JOIN') {
+    throw BadRequest('Jemaat belum check-in — tidak bisa checkout.');
+  }
+  if (item.checkedOutAt) {
+    return res.json({
+      success: true,
+      data: item,
+      message: `Sudah checkout sebelumnya (${item.checkedOutAt.toISOString()})`,
+    });
+  }
+
+  const updated = await prisma.reservasi.update({
+    where: { id: item.id },
+    data: {
+      checkedOutAt: new Date(),
+      checkedOutBy: req.user?.sub,
+    },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'reservasi',
+    resourceId: updated.id,
+    resourceLabel: `Checkout: ${item.jemaat.namaLengkap} ← ${item.ibadah.nama}`,
+    metadata: { method: 'admin-scanner-checkout' },
+    before: item,
+    after: updated,
+  });
+  res.json({ success: true, data: updated, message: 'Checkout berhasil' });
 });
 
 // ===== Delete =====

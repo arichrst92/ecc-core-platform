@@ -15,6 +15,8 @@ import {
   User,
   X,
   Settings2,
+  Award,
+  SkipForward,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -258,6 +260,11 @@ function JemaatSelector({
   const [searchQ, setSearchQ] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
+  // Point award popup state — muncul setelah check-in kids sukses
+  const [pointDialog, setPointDialog] = useState<null | {
+    reservasiId: string;
+    jemaatNama: string;
+  }>(null);
 
   const meta = MODE_META[mode];
 
@@ -295,6 +302,19 @@ function JemaatSelector({
       setLastResult({ ok: true, msg, data: data.data });
       setSearchQ('');
       qc.invalidateQueries({ queryKey: ['kehadiran'] });
+
+      // Kalau check-in kids ibadah sukses → prompt input point.
+      if (
+        mode === 'checkin' &&
+        ibadahContext.isKidsIbadah &&
+        data.data?.reservasi?.id &&
+        data.data?.jemaat?.namaLengkap
+      ) {
+        setPointDialog({
+          reservasiId: data.data.reservasi.id,
+          jemaatNama: data.data.jemaat.namaLengkap,
+        });
+      }
     },
     onError: (err: any) => {
       const msg = err.response?.data?.error?.message ?? `Gagal ${meta.label.toLowerCase()}`;
@@ -469,6 +489,134 @@ function JemaatSelector({
           }}
         />
       )}
+
+      {pointDialog && (
+        <PointAwardDialog
+          reservasiId={pointDialog.reservasiId}
+          jemaatNama={pointDialog.jemaatNama}
+          onClose={() => setPointDialog(null)}
+        />
+      )}
     </>
+  );
+}
+
+// ============================================================
+//  Point Award Dialog — muncul post kids check-in sukses
+// ============================================================
+function PointAwardDialog({
+  reservasiId,
+  jemaatNama,
+  onClose,
+}: {
+  reservasiId: string;
+  jemaatNama: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+
+  const awardMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/admin/reservasi/award-point', {
+        reservasiId,
+        amount: Number(amount),
+        note: note.trim() || undefined,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      const newBalance = data?.data?.newBalance ?? 0;
+      toast.success(
+        `+${amount} pts untuk ${jemaatNama}. Balance: ${newBalance.toLocaleString('id-ID')}`,
+      );
+      qc.invalidateQueries({ queryKey: ['gift-stall'] });
+      onClose();
+    },
+    onError: (e: any) =>
+      toast.error(e.response?.data?.error?.message ?? 'Gagal award point'),
+  });
+
+  const amountNum = Number(amount);
+  const valid = amountNum > 0 && amountNum <= 10_000;
+
+  return (
+    <div className="fixed inset-0 z-[55] bg-black/60 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+        <div className="bg-kids-500 text-white p-4">
+          <div className="flex items-center gap-2 font-bold">
+            <Award className="w-5 h-5" /> Award Point Anak
+          </div>
+          <div className="text-sm mt-0.5 opacity-90">{jemaatNama}</div>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              Jumlah Point Kehadiran
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="10000"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && valid && awardMut.mutate()}
+              autoFocus
+              placeholder="10"
+              className="w-full px-3 py-4 border-2 border-kids-200 rounded-lg text-center font-mono text-3xl font-bold text-kids-700"
+            />
+            <div className="mt-2 flex gap-1.5 justify-center">
+              {[5, 10, 20, 50, 100].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setAmount(String(v))}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full border transition ${
+                    Number(amount) === v
+                      ? 'bg-kids-500 text-white border-kids-500'
+                      : 'bg-white text-neutral-600 border-neutral-300 hover:border-kids-400'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              Note (opsional)
+            </label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="mis. hadir tepat waktu, aktif berdoa"
+              maxLength={500}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="p-4 border-t bg-neutral-50 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center gap-1 flex-1 px-4 py-2.5 text-sm text-neutral-700 border border-neutral-300 rounded-lg hover:bg-white"
+          >
+            <SkipForward className="w-4 h-4" /> Skip (no point)
+          </button>
+          <button
+            onClick={() => awardMut.mutate()}
+            disabled={!valid || awardMut.isPending}
+            className="flex items-center justify-center gap-1.5 flex-1 px-4 py-2.5 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 disabled:opacity-50"
+          >
+            {awardMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            <Award className="w-4 h-4" /> Award {amount || '?'} pts
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -504,6 +504,52 @@ reservasiRouter.post('/award-point', async (req, res) => {
   });
 });
 
+// ===== Daftar kehadiran hari ini per cabang (Modul 28-R) =====
+//
+// Untuk halaman /hadir di ckids — admin monitor siapa saja yg sudah check-in
+// hari ini di cabang tsb, plus status checkout/pickup.
+reservasiRouter.get('/today', async (req, res) => {
+  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
+  if (!cabangId) throw BadRequest('cabangId required');
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+  const items = await prisma.reservasi.findMany({
+    where: {
+      status: 'JOIN',
+      tanggalIbadah: { gte: today, lt: tomorrow },
+      ibadah: { cabangId },
+    },
+    include: {
+      jemaat: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          fotoUrl: true,
+          tanggalLahir: true,
+          noHp: true,
+          kode: true,
+        },
+      },
+      ibadah: {
+        select: {
+          id: true,
+          nama: true,
+          jamMulai: true,
+          isKidsIbadah: true,
+          requiresCheckout: true,
+        },
+      },
+    },
+    orderBy: { joinedAt: 'desc' },
+    take: 500, // safety cap
+  });
+
+  res.json({ success: true, data: items });
+});
+
 // ===== Active reservasi jemaat hari ini (Modul 28-P) =====
 //
 // Untuk auto-detect ibadah mana yang jemaat sudah check-in hari ini,

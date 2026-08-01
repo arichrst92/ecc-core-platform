@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Gift, ScanLine, Award, History, BarChart3 } from 'lucide-react';
+import { Gift, ScanLine, Award, BarChart3, ClipboardList } from 'lucide-react';
 
 /**
  * Bottom nav bar — cuma tampil di layar `<lg` (mobile + tablet).
@@ -16,8 +16,8 @@ export function BottomNav() {
   const items = [
     { href: '/', label: 'Gift', icon: Gift },
     { href: '/ibadah', label: 'Scan', icon: ScanLine },
+    { href: '/hadir', label: 'Hadir', icon: ClipboardList },
     { href: '/adjust-point', label: 'Adjust', icon: Award },
-    { href: '/history', label: 'History', icon: History },
     { href: '/report', label: 'Report', icon: BarChart3 },
   ];
 

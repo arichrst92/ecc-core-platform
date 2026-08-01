@@ -4,19 +4,18 @@ import { useRef, useState } from 'react';
 import { Upload, Loader2, X, ImagePlus } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import toast from 'react-hot-toast';
+import { CropModal } from './crop-modal';
 
 /**
- * Photo upload untuk hadiah katalog.
+ * Photo upload untuk hadiah katalog dengan crop 1:1.
  *
- * 2 mode:
- *  - existingId: hadiah sudah ada di DB → upload langsung ke server endpoint
- *    (POST /admin/hadiah/:id/photo) + set fotoUrl-nya. Return URL final.
- *  - !existingId: (create flow) → preview aja + return base64 sementara.
- *    Setelah hadiah di-create, caller bisa upload actual foto.
+ * Flow:
+ *  1. User pilih file dari picker
+ *  2. FileReader baca sebagai data URL → open CropModal
+ *  3. User drag + zoom → confirm → dapat blob square
+ *  4. Upload blob ke server (kalau existingId ada) OR preview only (create flow)
  *
- * NOTE: create flow saat ini gak upload otomatis — user create dulu tanpa
- * foto → dapat ID → buka Edit tab → upload foto. Alternatif: 2-phase create
- * kalau butuh flow lebih smooth (nanti kalau ada waktu).
+ * Constraints: JPG/PNG/WebP, max 5 MB source.
  */
 export function PhotoUpload({
   currentUrl,
@@ -25,15 +24,17 @@ export function PhotoUpload({
   onCleared,
 }: {
   currentUrl: string | null;
-  existingId?: string; // hadiah.id
+  existingId?: string;
   onUploaded: (url: string) => void;
   onCleared: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentUrl);
+  // Data URL dari source file — di-set saat pick, di-clear saat crop confirmed/cancelled
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
-  async function handleFile(file: File) {
+  function handleFileSelect(file: File) {
     if (!file.type.startsWith('image/')) {
       toast.error('File harus image (JPG/PNG/WebP)');
       return;
@@ -42,34 +43,46 @@ export function PhotoUpload({
       toast.error('Ukuran max 5 MB');
       return;
     }
-
-    // Preview instan pakai FileReader
+    // Baca file → data URL → set jadi cropSrc → CropModal terbuka
     const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
+    reader.onload = () => setCropSrc(reader.result as string);
     reader.readAsDataURL(file);
+    // Reset input value supaya user bisa pilih file sama lagi (mis. re-crop)
+    if (inputRef.current) inputRef.current.value = '';
+  }
+
+  async function handleCropConfirm(blob: Blob) {
+    setCropSrc(null); // close modal
+
+    // Preview instan dari blob
+    const previewUrl = URL.createObjectURL(blob);
+    setPreview(previewUrl);
 
     if (!existingId) {
-      toast('Simpan hadiah dulu, baru upload foto via Edit', {
+      toast('Simpan hadiah dulu, baru upload foto via Edit tab', {
         icon: 'ℹ️',
       });
       return;
     }
 
-    // Upload ke server
+    // Upload cropped blob
     setUploading(true);
     try {
       const formData = new FormData();
+      const file = new File([blob], 'hadiah-crop.jpg', { type: 'image/jpeg' });
       formData.append('foto', file);
       const res = await apiClient.post(`/admin/hadiah/${existingId}/photo`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const newUrl = res.data.data.fotoUrl;
+      // Free the object URL — pakai URL server (dengan cache-bust) untuk final preview
+      URL.revokeObjectURL(previewUrl);
       setPreview(newUrl);
       onUploaded(newUrl);
-      toast.success('Foto ter-upload');
+      toast.success('Foto ter-upload + di-crop square');
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message ?? 'Upload gagal');
-      setPreview(currentUrl); // revert preview
+      setPreview(currentUrl); // revert
     } finally {
       setUploading(false);
     }
@@ -93,28 +106,30 @@ export function PhotoUpload({
   }
 
   return (
-    <div>
+    <>
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
       />
 
       {preview ? (
-        <div className="relative inline-block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview}
-            alt="Preview"
-            className="w-32 h-32 rounded-lg object-cover border border-neutral-200"
-          />
-          {uploading && (
-            <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-white" />
-            </div>
-          )}
+        <div className="inline-block">
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview}
+              alt="Preview"
+              className="w-32 h-32 rounded-lg object-cover border border-neutral-200"
+            />
+            {uploading && (
+              <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-white" />
+              </div>
+            )}
+          </div>
           <div className="mt-2 flex gap-2">
             <button
               type="button"
@@ -122,7 +137,7 @@ export function PhotoUpload({
               disabled={uploading}
               className="flex items-center gap-1 px-3 py-1.5 text-xs bg-neutral-100 border border-neutral-300 rounded hover:bg-neutral-200"
             >
-              <Upload className="w-3 h-3" /> Ganti
+              <Upload className="w-3 h-3" /> Ganti + Crop
             </button>
             <button
               type="button"
@@ -153,8 +168,16 @@ export function PhotoUpload({
       )}
 
       <p className="text-[10px] text-neutral-400 mt-1">
-        JPG / PNG / WebP, max 5 MB. Auto resize + convert ke WebP di server.
+        JPG/PNG/WebP, max 5 MB. Auto crop square + resize + WebP di server.
       </p>
-    </div>
+
+      {cropSrc && (
+        <CropModal
+          imageSrc={cropSrc}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={handleCropConfirm}
+        />
+      )}
+    </>
   );
 }

@@ -67,6 +67,11 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
   { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },
 
+  // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,
+  // hadiah master data di portal.
+  { key: 'hadiah', label: 'Katalog Hadiah', href: '/dashboard/hadiah', group: 'CKids' },
+  { key: 'gift-stall', label: 'Gift Stall (CKids)', href: 'https://ckids.eccchurch.global', group: 'CKids' },
+
   // Website — CMS untuk landing site eccchurch.global
   { key: 'website-content', label: 'Konten Website', href: '/dashboard/website/content', group: 'Website' },
 

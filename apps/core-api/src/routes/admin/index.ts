@@ -30,6 +30,8 @@ import { diagnosticsAdminRouter } from './diagnostics.js';
 import { websiteContentRouter } from './website-content.js';
 import { groupRouter } from './group.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
+import { hadiahRouter } from './hadiah.js';
+import { giftStallRouter } from './gift-stall.js';
 
 export const adminRouter = Router();
 
@@ -76,6 +78,9 @@ adminRouter.use('/website-content', websiteContentRouter);
 // Shiftsoft Sync (Developer Tools) — trigger + monitor migration script async.
 // Fulltimer-only (guard di dalam router).
 adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
+// CKids (Modul 28) — Hadiah katalog master + Gift Stall (redeem POS).
+adminRouter.use('/hadiah', hadiahRouter);
+adminRouter.use('/gift-stall', giftStallRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

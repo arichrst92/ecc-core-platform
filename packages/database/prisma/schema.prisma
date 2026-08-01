@@ -68,6 +68,11 @@ model CabangGereja {
   rekening      CabangRekening[]
   // Group (module 23 — generic grouping dari Shiftsoft Circle import)
   groups        Group[]
+  // Module 28 CKids relations
+  hadiahKatalog   HadiahKatalog[]         @relation("CabangHadiahKatalog")
+  pointBalances   JemaatPointBalance[]    @relation("CabangPointBalances")
+  pointTransactions PointTransaction[]    @relation("CabangPointTransactions")
+  hadiahRedeems   HadiahRedeem[]          @relation("CabangRedeems")
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -228,6 +233,12 @@ model Jemaat {
   magicLinkTokens         MagicLinkToken[]         @relation("MagicLinkTokens")
   // Shiftsoft sync jobs yg di-trigger jemaat ini dari portal (module 25)
   shiftsoftSyncJobs       ShiftsoftSyncJob[]       @relation("ShiftsoftSyncJobs")
+  // Module 28 CKids — point + hadiah relations
+  pointBalances           JemaatPointBalance[]     @relation("JemaatPointBalances")
+  pointTransactions       PointTransaction[]       @relation("JemaatPointTransactions")
+  pointTxCreated          PointTransaction[]       @relation("PointTxCreatedBy")
+  hadiahRedeems           HadiahRedeem[]           @relation("JemaatRedeems")
+  hadiahRedeemsProcessed  HadiahRedeem[]           @relation("RedeemProcessedBy")
   // Branch change request (mobile)
   branchChangeRequests    BranchChangeRequest[]    @relation("BranchChangeRequester")
   branchChangeReviews     BranchChangeRequest[]    @relation("BranchChangeReviewer")
@@ -2135,4 +2146,118 @@ enum SyncStatus {
   FAILED
 
   @@map("sync_status")
+}
+
+// ============================================================
+// Module 28: CKids Point System + Hadiah Redeem
+//
+// Scope: ibadah anak only. Point earn saat check-in (admin manual input
+// amount di stall gift). Balance per (jemaat, cabang). Redeem via POS
+// stall di ckids.eccchurch.global — admin scan QR anak → deduct point +
+// stock.
+//
+// Katalog hadiah per cabang (bukan global). Stock per cabang implicit via
+// katalog scoping. Photo di uploads/ folder standar.
+// ============================================================
+
+model HadiahKatalog {
+  id          String    @id @default(uuid()) @db.Uuid
+  cabangId    String    @map("cabang_id") @db.Uuid
+  nama        String    @db.VarChar(200)
+  deskripsi   String?   @db.Text
+  fotoUrl     String?   @map("foto_url") @db.Text
+  pointCost   Int       @map("point_cost")
+  // Stock current — di-decrement saat redeem, di-increment saat add stock.
+  // Tidak pakai table terpisah supaya simpler + transaksi atomik.
+  stock       Int       @default(0)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  cabang      CabangGereja      @relation("CabangHadiahKatalog", fields: [cabangId], references: [id], onDelete: Cascade)
+  redeems     HadiahRedeem[]    @relation("HadiahRedeems")
+
+  @@index([cabangId])
+  @@index([isActive])
+  @@map("hadiah_katalog")
+}
+
+model JemaatPointBalance {
+  jemaatId    String    @map("jemaat_id") @db.Uuid
+  cabangId    String    @map("cabang_id") @db.Uuid
+  balance     Int       @default(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  jemaat      Jemaat        @relation("JemaatPointBalances", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang      CabangGereja  @relation("CabangPointBalances", fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@id([jemaatId, cabangId])
+  @@index([cabangId, balance(sort: Desc)]) // untuk leaderboard optional
+  @@map("jemaat_point_balance")
+}
+
+model PointTransaction {
+  id            String         @id @default(uuid()) @db.Uuid
+  jemaatId      String         @map("jemaat_id") @db.Uuid
+  cabangId      String         @map("cabang_id") @db.Uuid
+  // Positive amount = EARN, negative = SPEND, ADJUST bisa positive/negative.
+  type          PointTxType
+  amount        Int
+  source        PointSource
+  // Reference optional — kehadiranId untuk EARN, redeemId untuk SPEND
+  referenceId   String?        @map("reference_id") @db.Uuid
+  note          String?        @db.Text
+  createdById   String         @map("created_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  jemaat        Jemaat         @relation("JemaatPointTransactions", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang        CabangGereja   @relation("CabangPointTransactions", fields: [cabangId], references: [id], onDelete: Cascade)
+  createdBy     Jemaat         @relation("PointTxCreatedBy", fields: [createdById], references: [id])
+
+  @@index([jemaatId, createdAt(sort: Desc)])
+  @@index([cabangId, createdAt(sort: Desc)])
+  @@index([source, referenceId])
+  @@map("point_transaction")
+}
+
+model HadiahRedeem {
+  id             String         @id @default(uuid()) @db.Uuid
+  jemaatId       String         @map("jemaat_id") @db.Uuid
+  cabangId       String         @map("cabang_id") @db.Uuid
+  hadiahId       String         @map("hadiah_id") @db.Uuid
+  // Snapshot point cost saat redeem (defensive kalau admin ubah cost nanti).
+  pointDeducted  Int            @map("point_deducted")
+  // Snapshot nama + foto — historical accuracy.
+  hadiahNama     String         @map("hadiah_nama") @db.VarChar(200)
+  hadiahFotoUrl  String?        @map("hadiah_foto_url") @db.Text
+  processedById  String         @map("processed_by_id") @db.Uuid
+  processedAt    DateTime       @default(now()) @map("processed_at")
+  note           String?        @db.Text
+
+  jemaat         Jemaat         @relation("JemaatRedeems", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang         CabangGereja   @relation("CabangRedeems", fields: [cabangId], references: [id], onDelete: Cascade)
+  hadiah         HadiahKatalog  @relation("HadiahRedeems", fields: [hadiahId], references: [id], onDelete: Restrict)
+  processedBy    Jemaat         @relation("RedeemProcessedBy", fields: [processedById], references: [id])
+
+  @@index([jemaatId, processedAt(sort: Desc)])
+  @@index([cabangId, processedAt(sort: Desc)])
+  @@index([hadiahId])
+  @@map("hadiah_redeem")
+}
+
+enum PointTxType {
+  EARN
+  SPEND
+  ADJUST
+
+  @@map("point_tx_type")
+}
+
+enum PointSource {
+  KEHADIRAN_KIDS  // dari check-in ibadah anak
+  REDEEM          // spend saat redeem hadiah
+  MANUAL_ADJUST   // koreksi admin
+  STOCK_ADD       // (not user-facing, tapi tracked)
+
+  @@map("point_source")
 }

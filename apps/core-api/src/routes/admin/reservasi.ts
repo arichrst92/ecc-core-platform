@@ -7,6 +7,7 @@ import {
   checkinByKodeSchema,
   checkoutByKodeSchema,
   pickupByKodeSchema,
+  awardPointSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
@@ -421,6 +422,84 @@ reservasiRouter.post('/pickup', async (req, res) => {
       ibadahNama: target.ibadah.nama,
     },
     message: `Anak ${target.jemaat.namaLengkap} berhasil di-pickup`,
+  });
+});
+
+// ===== Award Point (Modul 28 — Point earn saat kids ibadah check-in) =====
+//
+// Body: { reservasiId, amount, note? }
+// Award point ke jemaat berdasarkan reservasi kids ibadah. Cuma valid kalau:
+//   - Reservasi.status = JOIN (sudah check-in)
+//   - Ibadah.isKidsIbadah = true
+//   - Belum pernah di-award point untuk reservasi ini (idempotent guard via
+//     source=KEHADIRAN_KIDS + referenceId=reservasiId)
+reservasiRouter.post('/award-point', async (req, res) => {
+  const { reservasiId, amount, note } = awardPointSchema.parse(req.body);
+  const adminId = req.user?.jemaatId;
+  if (!adminId) throw BadRequest('Admin tidak punya jemaatId');
+
+  const reservasi = await prisma.reservasi.findUnique({
+    where: { id: reservasiId },
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, cabangId: true } },
+      ibadah: { select: { nama: true, isKidsIbadah: true, cabangId: true } },
+    },
+  });
+  if (!reservasi) throw NotFound('Reservasi tidak ditemukan');
+  if (reservasi.status !== 'JOIN') throw BadRequest('Jemaat belum check-in');
+  if (!reservasi.ibadah.isKidsIbadah) {
+    throw BadRequest('Point cuma untuk ibadah anak (isKidsIbadah=true)');
+  }
+
+  // Idempotency guard
+  const existing = await prisma.pointTransaction.findFirst({
+    where: {
+      source: 'KEHADIRAN_KIDS',
+      referenceId: reservasiId,
+    },
+  });
+  if (existing) {
+    throw BadRequest(`Point sudah pernah di-award (${existing.amount} pts, ${existing.createdAt.toISOString()})`);
+  }
+
+  const cabangId = reservasi.ibadah.cabangId;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const balance = await tx.jemaatPointBalance.upsert({
+      where: { jemaatId_cabangId: { jemaatId: reservasi.jemaatId, cabangId } },
+      create: { jemaatId: reservasi.jemaatId, cabangId, balance: amount },
+      update: { balance: { increment: amount } },
+    });
+    const txRow = await tx.pointTransaction.create({
+      data: {
+        jemaatId: reservasi.jemaatId,
+        cabangId,
+        type: 'EARN',
+        amount,
+        source: 'KEHADIRAN_KIDS',
+        referenceId: reservasiId,
+        note: note ?? `Kehadiran ${reservasi.ibadah.nama}`,
+        createdById: adminId,
+      },
+    });
+    return { balance, txRow };
+  });
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'point_transaction',
+    resourceId: result.txRow.id,
+    resourceLabel: `+${amount} pts untuk ${reservasi.jemaat.namaLengkap} (${reservasi.ibadah.nama})`,
+    metadata: { reservasiId, amount, newBalance: result.balance.balance },
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      transaction: result.txRow,
+      newBalance: result.balance.balance,
+    },
+    message: `+${amount} point untuk ${reservasi.jemaat.namaLengkap}. Balance: ${result.balance.balance}`,
   });
 });
 

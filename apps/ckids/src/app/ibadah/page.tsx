@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2,
@@ -9,14 +9,13 @@ import {
   LogIn,
   LogOut,
   Baby,
-  Info,
   CheckCircle2,
-  Calendar,
   User,
   X,
-  Settings2,
   Award,
   SkipForward,
+  ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -36,7 +35,7 @@ interface IbadahItem {
   requiresCheckout: boolean;
   cabangId: string;
 }
-interface JemaatSearchItem {
+interface JemaatItem {
   id: string;
   namaLengkap: string;
   noHp: string | null;
@@ -61,16 +60,7 @@ export default function IbadahScannerPage() {
 
 function ScannerContent() {
   const { cabangId } = useCabangStore();
-  const ctx = useIbadahContextStore();
-  const [mode, setMode] = useState<Mode>('checkin');
-  const [contextOpen, setContextOpen] = useState(!ctx.ibadahId);
-
-  // Auto-detect: kalau context tersimpan tapi cabang berubah, reset
-  useEffect(() => {
-    if (ctx.ibadahId && cabangId) {
-      // Just show current context — nothing to do
-    }
-  }, [ctx.ibadahId, cabangId]);
+  const [selectedJemaat, setSelectedJemaat] = useState<JemaatItem | null>(null);
 
   if (!cabangId) {
     return (
@@ -86,190 +76,39 @@ function ScannerContent() {
         <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
           <ScanLine className="w-5 h-5" /> Scanner Ibadah
         </h1>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Scan QR jemaat / search nama → pilih ibadah + action.
+        </p>
       </div>
 
-      {/* IBADAH CONTEXT */}
-      {contextOpen || !ctx.ibadahId ? (
-        <IbadahPicker
-          cabangId={cabangId}
-          onSelected={() => setContextOpen(false)}
-        />
+      {!selectedJemaat ? (
+        <JemaatSearchStep cabangId={cabangId} onPicked={setSelectedJemaat} />
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4 mb-4 flex items-center gap-3">
-          <Calendar className="w-5 h-5 text-brand-500 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-neutral-900 truncate">{ctx.ibadahNama}</div>
-            <div className="text-xs text-neutral-500">
-              {ctx.tanggalIbadah}
-              {ctx.isKidsIbadah && ' · 🧒 Kids'}
-              {ctx.requiresCheckout && ' · Wajib checkout'}
-            </div>
-          </div>
-          <button
-            onClick={() => setContextOpen(true)}
-            className="p-1.5 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded"
-            title="Ganti ibadah"
-          >
-            <Settings2 className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Mode toggle — hide kalau belum pilih context */}
-      {ctx.ibadahId && !contextOpen && (
-        <>
-          <div className="grid grid-cols-3 gap-1.5 mb-3">
-            {(Object.keys(MODE_META) as Mode[]).map((m) => {
-              const mm = MODE_META[m];
-              const active = mode === m;
-              const Icon = mm.Icon;
-              const disabled =
-                (m === 'checkout' && !ctx.requiresCheckout) ||
-                (m === 'pickup' && !ctx.isKidsIbadah);
-              return (
-                <button
-                  key={m}
-                  onClick={() => !disabled && setMode(m)}
-                  disabled={disabled}
-                  className={`flex flex-col items-center gap-1 py-3 rounded-lg font-semibold text-xs sm:text-sm border-2 transition ${
-                    disabled
-                      ? 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
-                      : active
-                        ? `${mm.color} text-white border-transparent`
-                        : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  {mm.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <JemaatSelector
-            cabangId={cabangId}
-            mode={mode}
-            ibadahContext={ctx}
-          />
-        </>
+        <ActionPanel
+          cabangId={cabangId}
+          jemaat={selectedJemaat}
+          onDone={() => setSelectedJemaat(null)}
+          onBack={() => setSelectedJemaat(null)}
+        />
       )}
     </main>
   );
 }
 
 // ============================================================
-//  Ibadah Picker — pilih ibadah + tanggal
+//  STEP 1: Search / scan / manual — pick jemaat
 // ============================================================
-function IbadahPicker({
+function JemaatSearchStep({
   cabangId,
-  onSelected,
+  onPicked,
 }: {
   cabangId: string;
-  onSelected: () => void;
+  onPicked: (j: JemaatItem) => void;
 }) {
-  const setContext = useIbadahContextStore((s) => s.setContext);
-  const [tanggal, setTanggal] = useState(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  });
-
-  const ibadahQ = useQuery({
-    queryKey: ['ibadah', 'active', cabangId],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: IbadahItem[] }>('/admin/ibadah', {
-        params: { cabangId, limit: 50, sortBy: 'nama', sortOrder: 'asc' },
-      });
-      return res.data.data;
-    },
-  });
-
-  return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 space-y-3">
-      <div>
-        <label className="block text-xs font-medium text-neutral-600 mb-1">
-          Tanggal Ibadah
-        </label>
-        <input
-          type="date"
-          value={tanggal}
-          onChange={(e) => setTanggal(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-neutral-600 mb-1">
-          Pilih Ibadah
-        </label>
-        {ibadahQ.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-neutral-500 py-3">
-            <Loader2 className="w-4 h-4 animate-spin" /> Memuat...
-          </div>
-        ) : (
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {(ibadahQ.data ?? []).map((ib) => (
-              <button
-                key={ib.id}
-                onClick={() => {
-                  setContext({
-                    ibadahId: ib.id,
-                    ibadahNama: ib.nama,
-                    isKidsIbadah: ib.isKidsIbadah,
-                    requiresCheckout: ib.requiresCheckout,
-                    tanggalIbadah: tanggal,
-                  });
-                  onSelected();
-                }}
-                className="w-full text-left p-3 border border-neutral-200 rounded-lg hover:border-brand-400 hover:bg-brand-50"
-              >
-                <div className="font-medium text-sm text-neutral-900">{ib.nama}</div>
-                <div className="text-xs text-neutral-500 flex items-center gap-2 mt-0.5">
-                  <span>
-                    {ib.jamMulai} - {ib.jamSelesai}
-                  </span>
-                  {ib.isKidsIbadah && (
-                    <span className="bg-kids-100 text-kids-700 px-1.5 rounded">🧒 Kids</span>
-                  )}
-                  {ib.requiresCheckout && (
-                    <span className="bg-amber-100 text-amber-700 px-1.5 rounded">
-                      Checkout wajib
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-//  Jemaat selector — 3 input mode: Search / Scan / Manual kode
-// ============================================================
-function JemaatSelector({
-  cabangId,
-  mode,
-  ibadahContext,
-}: {
-  cabangId: string;
-  mode: Mode;
-  ibadahContext: ReturnType<typeof useIbadahContextStore.getState>;
-}) {
-  const qc = useQueryClient();
   const [searchQ, setSearchQ] = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [lastResult, setLastResult] = useState<any>(null);
-  // Point award popup state — muncul setelah check-in kids sukses
-  const [pointDialog, setPointDialog] = useState<null | {
-    reservasiId: string;
-    jemaatNama: string;
-  }>(null);
-
-  const meta = MODE_META[mode];
-
-  // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQ.trim()), 300);
     return () => clearTimeout(t);
@@ -279,80 +118,35 @@ function JemaatSelector({
     queryKey: ['jemaat', 'search', cabangId, debouncedSearch],
     enabled: debouncedSearch.length >= 2,
     queryFn: async () => {
-      const res = await apiClient.get<{ data: JemaatSearchItem[] }>('/admin/jemaat', {
-        params: { cabangId, search: debouncedSearch, limit: 15 },
+      const res = await apiClient.get<{ data: JemaatItem[] }>('/admin/jemaat', {
+        params: { cabangId, search: debouncedSearch, limit: 20 },
       });
       return res.data.data;
     },
   });
 
-  const submitMut = useMutation({
-    mutationFn: async (jemaatId: string) => {
-      const res = await apiClient.post('/admin/reservasi/walk-in', {
-        jemaatId,
-        ibadahId: ibadahContext.ibadahId,
-        tanggalIbadah: ibadahContext.tanggalIbadah,
-        action: mode,
-      });
-      return res.data;
-    },
-    onSuccess: (data) => {
-      const msg = data.message ?? `${meta.label} berhasil`;
-      toast.success(msg);
-      setLastResult({ ok: true, msg, data: data.data });
-      setSearchQ('');
-      qc.invalidateQueries({ queryKey: ['kehadiran'] });
-
-      // Kalau check-in kids ibadah sukses → prompt input point.
-      if (
-        mode === 'checkin' &&
-        ibadahContext.isKidsIbadah &&
-        data.data?.reservasi?.id &&
-        data.data?.jemaat?.namaLengkap
-      ) {
-        setPointDialog({
-          reservasiId: data.data.reservasi.id,
-          jemaatNama: data.data.jemaat.namaLengkap,
-        });
-      }
-    },
-    onError: (err: any) => {
-      const msg = err.response?.data?.error?.message ?? `Gagal ${meta.label.toLowerCase()}`;
-      toast.error(msg);
-      setLastResult({ ok: false, msg });
-    },
-  });
-
-  // Lookup jemaat by kode (dari scan QR profile atau ketik manual kode jemaat).
   const lookupByKodeMut = useMutation({
     mutationFn: async (kode: string) => {
-      const res = await apiClient.get<{ data: JemaatSearchItem[] }>('/admin/jemaat', {
+      const res = await apiClient.get<{ data: JemaatItem[] }>('/admin/jemaat', {
         params: { cabangId, search: kode, limit: 5 },
       });
-      // Cari exact match by kode
       const match = res.data.data.find(
         (j) => j.kode?.toUpperCase() === kode.toUpperCase(),
       );
-      if (!match) throw new Error(`Kode "${kode}" tidak ditemukan di cabang ini`);
+      if (!match) throw new Error(`Kode "${kode}" tidak ditemukan`);
       return match;
     },
-    onSuccess: (jemaat) => {
-      submitMut.mutate(jemaat.id);
-    },
-    onError: (err: any) => {
-      const msg = err.response?.data?.error?.message ?? err.message ?? 'Kode tidak valid';
-      toast.error(msg);
-      setLastResult({ ok: false, msg });
-    },
+    onSuccess: (jemaat) => onPicked(jemaat),
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? err.message ?? 'Kode tidak valid'),
   });
 
   return (
     <>
       <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4 space-y-4">
-        {/* SEARCH BAR + SCAN */}
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">
-            Cari jemaat (ketik min. 2 huruf) atau scan QR profile
+            Cari nama / scan QR profile jemaat
           </label>
           <div className="flex gap-2">
             <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3 min-w-0">
@@ -366,12 +160,17 @@ function JemaatSelector({
                 className="flex-1 py-2.5 outline-none bg-transparent min-w-0"
               />
               {searchQ && (
-                <button onClick={() => setSearchQ('')} className="text-neutral-400">
+                <button
+                  type="button"
+                  onClick={() => setSearchQ('')}
+                  className="text-neutral-400"
+                >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
             <button
+              type="button"
               onClick={() => setScannerOpen(true)}
               className="px-3 py-2 bg-neutral-800 text-white text-sm rounded-lg flex items-center gap-1"
               title="Scan QR profile jemaat"
@@ -381,35 +180,33 @@ function JemaatSelector({
           </div>
         </div>
 
-        {/* SEARCH RESULTS */}
         {debouncedSearch.length >= 2 && (
           <div>
             {searchResults.isLoading ? (
-              <div className="text-center py-3 text-sm text-neutral-500">
+              <div className="text-center py-4 text-sm text-neutral-500">
                 <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Mencari...
               </div>
             ) : (searchResults.data ?? []).length === 0 ? (
-              <div className="text-center py-3 text-sm text-neutral-500">
-                Tidak ada jemaat cocok "{debouncedSearch}"
+              <div className="text-center py-4 text-sm text-neutral-500">
+                Tidak ada jemaat cocok &quot;{debouncedSearch}&quot;
               </div>
             ) : (
-              <div className="space-y-1 max-h-72 overflow-y-auto -mx-1 px-1">
+              <div className="space-y-1 max-h-80 overflow-y-auto -mx-1 px-1">
                 {(searchResults.data ?? []).map((j) => (
                   <button
                     key={j.id}
-                    onClick={() => submitMut.mutate(j.id)}
-                    disabled={submitMut.isPending}
-                    className="w-full flex items-center gap-3 p-2.5 border border-neutral-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 disabled:opacity-50 text-left"
+                    onClick={() => onPicked(j)}
+                    className="w-full flex items-center gap-3 p-2.5 border border-neutral-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 text-left"
                   >
                     {j.fotoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={j.fotoUrl}
                         alt=""
-                        className="w-9 h-9 rounded-full object-cover shrink-0"
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
                       />
                     ) : (
-                      <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold text-sm shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold text-sm shrink-0">
                         {j.namaLengkap.charAt(0)}
                       </div>
                     )}
@@ -421,7 +218,7 @@ function JemaatSelector({
                         {j.kode ?? '(no kode)'} · {j.noHp ?? '-'}
                       </div>
                     </div>
-                    <meta.Icon className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-neutral-400 shrink-0" />
                   </button>
                 ))}
               </div>
@@ -430,51 +227,15 @@ function JemaatSelector({
         )}
 
         {searchQ.length === 0 && (
-          <div className="text-xs text-neutral-500 flex items-start gap-2 bg-neutral-50 rounded p-2">
-            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            Ketik minimal 2 huruf nama, atau scan QR profile jemaat (bukan kode reservasi).
-          </div>
-        )}
-
-        {(submitMut.isPending || lookupByKodeMut.isPending) && (
-          <div className="text-center text-sm text-neutral-500">
-            <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-            Processing {meta.label.toLowerCase()}...
+          <div className="text-xs text-neutral-500 bg-neutral-50 rounded p-3 text-center">
+            Ketik minimal 2 huruf nama untuk cari, atau tap tombol scan untuk buka kamera QR.
           </div>
         )}
       </div>
 
-      {/* Last result banner */}
-      {lastResult && (
-        <div
-          className={`mt-4 rounded-lg p-4 border ${
-            lastResult.ok
-              ? 'bg-green-50 border-green-200 text-green-900'
-              : 'bg-red-50 border-red-200 text-red-900'
-          }`}
-        >
-          <div className="flex items-start gap-2">
-            {lastResult.ok && <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />}
-            <div className="flex-1 text-sm">
-              <div className="font-semibold">{lastResult.ok ? 'Sukses' : 'Gagal'}</div>
-              <div className="mt-0.5">{lastResult.msg}</div>
-              {lastResult.data?.jemaat?.namaLengkap && (
-                <div className="mt-2 pt-2 border-t border-current/20 text-xs flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" />
-                  <strong>{lastResult.data.jemaat.namaLengkap}</strong>
-                  {lastResult.data.ibadahNama && ` — ${lastResult.data.ibadahNama}`}
-                </div>
-              )}
-              {lastResult.data?.pickupCode && (
-                <div className="mt-2 bg-white/70 border border-current/20 rounded px-2 py-1.5 text-center">
-                  Kode Jemput:{' '}
-                  <strong className="font-mono tracking-widest text-lg">
-                    {lastResult.data.pickupCode}
-                  </strong>
-                </div>
-              )}
-            </div>
-          </div>
+      {lookupByKodeMut.isPending && (
+        <div className="text-center mt-3 text-sm text-neutral-500">
+          <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Cari jemaat...
         </div>
       )}
 
@@ -489,12 +250,266 @@ function JemaatSelector({
           }}
         />
       )}
+    </>
+  );
+}
+
+// ============================================================
+//  STEP 2: Jemaat picked — pilih ibadah + action
+// ============================================================
+function ActionPanel({
+  cabangId,
+  jemaat,
+  onDone,
+  onBack,
+}: {
+  cabangId: string;
+  jemaat: JemaatItem;
+  onDone: () => void;
+  onBack: () => void;
+}) {
+  const qc = useQueryClient();
+  const ctx = useIbadahContextStore();
+  const [ibadahId, setIbadahId] = useState<string | null>(ctx.ibadahId);
+  const [tanggal, setTanggal] = useState<string>(
+    ctx.tanggalIbadah ?? new Date().toISOString().slice(0, 10),
+  );
+  const [lastResult, setLastResult] = useState<any>(null);
+  const [pointDialog, setPointDialog] = useState<null | {
+    reservasiId: string;
+    jemaatNama: string;
+  }>(null);
+
+  const ibadahQ = useQuery({
+    queryKey: ['ibadah', 'active', cabangId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: IbadahItem[] }>('/admin/ibadah', {
+        params: { cabangId, limit: 50, sortBy: 'nama', sortOrder: 'asc' },
+      });
+      return res.data.data;
+    },
+  });
+
+  const selectedIbadah = (ibadahQ.data ?? []).find((i) => i.id === ibadahId) ?? null;
+
+  const submitMut = useMutation({
+    mutationFn: async (action: Mode) => {
+      if (!ibadahId) throw new Error('Pilih ibadah dulu');
+      const res = await apiClient.post('/admin/reservasi/walk-in', {
+        jemaatId: jemaat.id,
+        ibadahId,
+        tanggalIbadah: tanggal,
+        action,
+      });
+      return { data: res.data.data, action };
+    },
+    onSuccess: ({ data, action }) => {
+      // Persist context untuk quick default next scan.
+      if (selectedIbadah) {
+        ctx.setContext({
+          ibadahId: selectedIbadah.id,
+          ibadahNama: selectedIbadah.nama,
+          isKidsIbadah: selectedIbadah.isKidsIbadah,
+          requiresCheckout: selectedIbadah.requiresCheckout,
+          tanggalIbadah: tanggal,
+        });
+      }
+      toast.success(`${MODE_META[action].label} berhasil`);
+      setLastResult({ ok: true, action, data });
+      qc.invalidateQueries({ queryKey: ['kehadiran'] });
+
+      if (
+        action === 'checkin' &&
+        selectedIbadah?.isKidsIbadah &&
+        data?.reservasi?.id
+      ) {
+        setPointDialog({
+          reservasiId: data.reservasi.id,
+          jemaatNama: jemaat.namaLengkap,
+        });
+      } else {
+        // Auto-back setelah 2 detik untuk scan berikutnya
+        setTimeout(onDone, 2000);
+      }
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.error?.message ?? err.message ?? 'Gagal';
+      toast.error(msg);
+      setLastResult({ ok: false, msg });
+    },
+  });
+
+  return (
+    <>
+      <div className="space-y-3">
+        {/* Jemaat card */}
+        <div className="bg-white border border-neutral-200 rounded-xl p-3 flex items-center gap-3">
+          {jemaat.fotoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={jemaat.fotoUrl}
+              alt=""
+              className="w-12 h-12 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold shrink-0">
+              {jemaat.namaLengkap.charAt(0)}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-neutral-900 truncate">
+              {jemaat.namaLengkap}
+            </div>
+            <div className="text-xs text-neutral-500">
+              {jemaat.kode ?? '(no kode)'} · {jemaat.noHp ?? '-'}
+            </div>
+          </div>
+          <button
+            onClick={onBack}
+            className="p-1.5 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded shrink-0"
+            title="Cari jemaat lain"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Ibadah selector */}
+        <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="sm:col-span-1">
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Tanggal
+              </label>
+              <div className="flex items-center gap-1.5 border border-neutral-300 rounded-lg px-2">
+                <Calendar className="w-4 h-4 text-neutral-400 shrink-0" />
+                <input
+                  type="date"
+                  value={tanggal}
+                  onChange={(e) => setTanggal(e.target.value)}
+                  className="flex-1 py-2 outline-none bg-transparent"
+                />
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Ibadah
+              </label>
+              {ibadahQ.isLoading ? (
+                <div className="text-sm text-neutral-500 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> Memuat...
+                </div>
+              ) : (
+                <select
+                  value={ibadahId ?? ''}
+                  onChange={(e) => setIbadahId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+                >
+                  <option value="">— Pilih Ibadah —</option>
+                  {(ibadahQ.data ?? []).map((ib) => (
+                    <option key={ib.id} value={ib.id}>
+                      {ib.nama} ({ib.jamMulai})
+                      {ib.isKidsIbadah && ' 🧒'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {selectedIbadah && (
+            <div className="text-xs text-neutral-500 flex flex-wrap gap-2">
+              {selectedIbadah.isKidsIbadah && (
+                <span className="bg-kids-100 text-kids-700 px-2 py-0.5 rounded">
+                  🧒 Kids Ibadah
+                </span>
+              )}
+              {selectedIbadah.requiresCheckout && (
+                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                  Wajib checkout
+                </span>
+              )}
+              {!selectedIbadah.isKidsIbadah && !selectedIbadah.requiresCheckout && (
+                <span className="text-neutral-400">
+                  Ibadah dewasa · cuma bisa check-in
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.keys(MODE_META) as Mode[]).map((m) => {
+            const mm = MODE_META[m];
+            const Icon = mm.Icon;
+            const disabled =
+              !selectedIbadah ||
+              submitMut.isPending ||
+              (m === 'checkout' && !selectedIbadah.requiresCheckout) ||
+              (m === 'pickup' && !selectedIbadah.isKidsIbadah);
+            return (
+              <button
+                key={m}
+                onClick={() => submitMut.mutate(m)}
+                disabled={disabled}
+                className={`flex flex-col items-center gap-1 py-4 rounded-lg font-bold text-white transition ${
+                  disabled ? 'bg-neutral-300 cursor-not-allowed' : mm.color
+                }`}
+              >
+                {submitMut.isPending && submitMut.variables === m ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  <Icon className="w-6 h-6" />
+                )}
+                <span className="text-sm">{mm.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Last result banner */}
+        {lastResult && lastResult.ok && (
+          <div className="rounded-lg p-4 border bg-green-50 border-green-200 text-green-900">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />
+              <div className="flex-1 text-sm">
+                <div className="font-semibold">
+                  {MODE_META[lastResult.action as Mode].label} berhasil
+                </div>
+                <div className="text-xs mt-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" />
+                  <strong>{jemaat.namaLengkap}</strong> ·{' '}
+                  {selectedIbadah?.nama}
+                </div>
+                {lastResult.data?.pickupCode && (
+                  <div className="mt-2 bg-white/70 border border-current/20 rounded px-2 py-2 text-center">
+                    <div className="text-xs">Kode Jemput:</div>
+                    <div className="font-mono tracking-widest text-2xl font-bold">
+                      {lastResult.data.pickupCode}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {lastResult && !lastResult.ok && (
+          <div className="rounded-lg p-4 border bg-red-50 border-red-200 text-red-900">
+            <div className="font-semibold text-sm">Gagal</div>
+            <div className="text-sm mt-0.5">{lastResult.msg}</div>
+          </div>
+        )}
+      </div>
 
       {pointDialog && (
         <PointAwardDialog
           reservasiId={pointDialog.reservasiId}
           jemaatNama={pointDialog.jemaatNama}
-          onClose={() => setPointDialog(null)}
+          onClose={() => {
+            setPointDialog(null);
+            // Auto-back setelah point flow selesai
+            setTimeout(onDone, 500);
+          }}
         />
       )}
     </>
@@ -529,7 +544,7 @@ function PointAwardDialog({
     onSuccess: (data) => {
       const newBalance = data?.data?.newBalance ?? 0;
       toast.success(
-        `+${amount} pts untuk ${jemaatNama}. Balance: ${newBalance.toLocaleString('id-ID')}`,
+        `+${amount} pts. Balance: ${newBalance.toLocaleString('id-ID')}`,
       );
       qc.invalidateQueries({ queryKey: ['gift-stall'] });
       onClose();
@@ -584,7 +599,6 @@ function PointAwardDialog({
               ))}
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1">
               Note (opsional)
@@ -605,7 +619,7 @@ function PointAwardDialog({
             onClick={onClose}
             className="flex items-center justify-center gap-1 flex-1 px-4 py-2.5 text-sm text-neutral-700 border border-neutral-300 rounded-lg hover:bg-white"
           >
-            <SkipForward className="w-4 h-4" /> Skip (no point)
+            <SkipForward className="w-4 h-4" /> Skip
           </button>
           <button
             onClick={() => awardMut.mutate()}
@@ -613,7 +627,7 @@ function PointAwardDialog({
             className="flex items-center justify-center gap-1.5 flex-1 px-4 py-2.5 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 disabled:opacity-50"
           >
             {awardMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            <Award className="w-4 h-4" /> Award {amount || '?'} pts
+            <Award className="w-4 h-4" /> Award {amount || '?'}
           </button>
         </div>
       </div>

@@ -35,6 +35,7 @@ import {
   KeyRound,
   Stethoscope,
   DatabaseZap,
+  Gift,
   LayoutTemplate,
   ChevronDown,
 } from 'lucide-react';
@@ -126,6 +127,14 @@ const groups: NavGroup[] = [
     label: 'Website',
     items: [
       { href: '/dashboard/website/content', label: 'Konten Website', icon: LayoutTemplate, menuKey: 'website-content' },
+    ],
+  },
+  {
+    label: 'CKids',
+    items: [
+      { href: '/dashboard/hadiah', label: 'Katalog Hadiah', icon: Gift, menuKey: 'hadiah' },
+      // Gift Stall di subdomain terpisah — external link, tidak menuKey (guard tidak berlaku)
+      { href: 'https://ckids.eccchurch.global', label: 'Gift Stall (CKids)', icon: Store, menuKey: 'gift-stall' },
     ],
   },
   {

@@ -31,3 +31,9 @@ select {
   background-position: right 0.25rem center;
   background-size: 12px;
 }
+
+/* Safe area untuk iPhone dgn home indicator — bottom nav padding-bottom
+   ekstra di iOS PWA supaya gak ke-cover home bar. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}

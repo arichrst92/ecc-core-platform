@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Gift, History, BarChart3, LogOut, MapPin, Award, Loader2, ScanLine, Menu, X } from 'lucide-react';
+import { Gift, History, BarChart3, LogOut, MapPin, Award, Loader2, ScanLine } from 'lucide-react';
+import { BottomNav } from './bottom-nav';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { useCabangStore } from '@/lib/cabang-store';
@@ -57,8 +58,6 @@ export function Header() {
     { href: '/report', label: 'Report', icon: BarChart3 },
   ];
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   return (
     <>
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-30">
@@ -67,12 +66,17 @@ export function Header() {
           <div className="flex items-center gap-2 shrink-0">
             <Gift className="w-6 h-6 text-kids-500" />
             <div className="hidden sm:block">
-              <div className="font-bold text-neutral-900 text-sm sm:text-base">CKids Gift Stall</div>
-              <div className="text-[10px] text-neutral-500 hidden sm:block">ECC — Point Redeem</div>
+              <div className="font-bold text-neutral-900 text-sm sm:text-base">
+                CKids Gift Stall
+              </div>
+              <div className="text-[10px] text-neutral-500 hidden sm:block">
+                ECC — Point Redeem
+              </div>
             </div>
+            <div className="sm:hidden font-bold text-neutral-900">CKids</div>
           </div>
 
-          {/* Nav desktop */}
+          {/* Nav desktop — hidden di mobile (pakai BottomNav) */}
           <nav className="hidden lg:flex items-center gap-1 flex-1">
             {navItems.map((n) => {
               const active = pathname === n.href;
@@ -93,7 +97,7 @@ export function Header() {
             })}
           </nav>
 
-          {/* Spacer for mobile */}
+          {/* Spacer di mobile */}
           <div className="flex-1 lg:hidden" />
 
           {/* Cabang selector — kompak di mobile */}
@@ -115,10 +119,12 @@ export function Header() {
             </select>
           </div>
 
-          {/* User + logout (desktop) */}
+          {/* User + logout */}
           {user && (
-            <div className="hidden md:flex items-center gap-2 text-sm shrink-0">
-              <div className="text-neutral-700 font-medium max-w-[120px] truncate">{user.namaLengkap}</div>
+            <div className="flex items-center gap-1.5 text-sm shrink-0">
+              <div className="hidden md:block text-neutral-700 font-medium max-w-[120px] truncate">
+                {user.namaLengkap}
+              </div>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-100 text-neutral-600"
@@ -128,54 +134,14 @@ export function Header() {
               </button>
             </div>
           )}
-
-          {/* Mobile menu toggle */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-1.5 rounded hover:bg-neutral-100"
-            aria-label="Menu"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
         </div>
-
-        {/* Mobile nav drawer */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-neutral-200 bg-white">
-            <div className="max-w-7xl mx-auto px-3 py-2 space-y-1">
-              {navItems.map((n) => {
-                const active = pathname === n.href;
-                const Icon = n.icon;
-                return (
-                  <Link
-                    key={n.href}
-                    href={n.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                      active
-                        ? 'bg-kids-500 text-white'
-                        : 'text-neutral-700 hover:bg-neutral-100'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" /> {n.label}
-                  </Link>
-                );
-              })}
-              {user && (
-                <div className="border-t border-neutral-100 pt-2 mt-2 flex items-center justify-between px-3">
-                  <div className="text-sm text-neutral-700 font-medium">{user.namaLengkap}</div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-sm text-neutral-600 hover:bg-neutral-100"
-                  >
-                    <LogOut className="w-4 h-4" /> Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </header>
+
+      {/* Bottom nav for mobile — di-render sekali di sini */}
+      <BottomNav />
+
+      {/* Spacer supaya content gak ke-cover bottom nav (mobile only) */}
+      <div className="lg:hidden h-16" aria-hidden="true" />
     </>
   );
 }

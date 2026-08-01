@@ -14,6 +14,8 @@ import {
 import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { flexImageUpload } from '../../lib/image-upload.js';
+import { saveHadiahPhoto, deleteHadiahPhoto } from '../../lib/storage.js';
 
 export const hadiahRouter = Router();
 hadiahRouter.use(requireFulltimer);
@@ -113,6 +115,56 @@ hadiahRouter.patch('/:id', async (req, res) => {
     before,
     after: updated,
   });
+  res.json({ success: true, data: updated });
+});
+
+// ============================================================
+// POST /admin/hadiah/:id/photo — upload foto hadiah
+// Body: multipart/form-data field 'foto' (or any image field name)
+// Return updated hadiah dengan fotoUrl baru.
+// ============================================================
+hadiahRouter.post('/:id/photo', flexImageUpload(), async (req, res) => {
+  const hadiah = await prisma.hadiahKatalog.findUnique({ where: { id: req.params.id } });
+  if (!hadiah) throw NotFound('Hadiah tidak ditemukan');
+  if (!req.file) throw BadRequest('Upload file foto (field: foto)');
+
+  const fotoUrl = await saveHadiahPhoto(hadiah.id, req.file.buffer);
+  const updated = await prisma.hadiahKatalog.update({
+    where: { id: hadiah.id },
+    data: { fotoUrl },
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'hadiah_katalog',
+    resourceId: hadiah.id,
+    resourceLabel: `[photo] ${hadiah.nama}`,
+    metadata: { fotoUrl, sizeBytes: req.file.size },
+  });
+
+  res.json({ success: true, data: updated });
+});
+
+// ============================================================
+// DELETE /admin/hadiah/:id/photo — hapus foto (kosongkan fotoUrl)
+// ============================================================
+hadiahRouter.delete('/:id/photo', async (req, res) => {
+  const hadiah = await prisma.hadiahKatalog.findUnique({ where: { id: req.params.id } });
+  if (!hadiah) throw NotFound('Hadiah tidak ditemukan');
+
+  await deleteHadiahPhoto(hadiah.id);
+  const updated = await prisma.hadiahKatalog.update({
+    where: { id: hadiah.id },
+    data: { fotoUrl: null },
+  });
+
+  audit(req, {
+    action: 'DELETE',
+    resource: 'hadiah_katalog',
+    resourceId: hadiah.id,
+    resourceLabel: `[photo-delete] ${hadiah.nama}`,
+  });
+
   res.json({ success: true, data: updated });
 });
 

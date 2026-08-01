@@ -107,6 +107,38 @@ export async function deleteContentHero(kind: ContentKind, kontenId: string): Pr
 }
 
 // =====================================================
+//  Hadiah katalog photo (Modul 28)
+// =====================================================
+//
+// Layout: /uploads/hadiah/{hadiahId}.webp
+// Resize max 800px (square-ish di grid, cukup HD kalau di-zoom).
+
+export async function saveHadiahPhoto(hadiahId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'hadiah');
+  await ensureDir(dir);
+  const filename = `${hadiahId}.webp`;
+  const absPath = path.join(dir, filename);
+
+  await sharp(buffer)
+    .rotate()
+    .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(absPath);
+
+  const v = Date.now();
+  return `${PUBLIC_UPLOADS_PREFIX}/hadiah/${filename}?v=${v}`;
+}
+
+export async function deleteHadiahPhoto(hadiahId: string): Promise<void> {
+  const absPath = path.join(UPLOADS_DIR, 'hadiah', `${hadiahId}.webp`);
+  try {
+    await fs.unlink(absPath);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
+// =====================================================
 //  Event-spesifik: QRIS image (per event) + bukti transfer (per partisipasi)
 // =====================================================
 //

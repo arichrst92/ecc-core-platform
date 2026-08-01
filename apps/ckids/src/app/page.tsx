@@ -8,6 +8,7 @@ import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
+import { PhotoUpload } from '@/components/photo-upload';
 
 interface Hadiah {
   id: string;
@@ -537,26 +538,12 @@ function AddHadiahModal({ cabangId, onClose }: { cabangId: string; onClose: () =
 
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1">
-              URL Foto (opsional)
+              Foto Hadiah (opsional)
             </label>
-            <input
-              type="url"
-              value={fotoUrl}
-              onChange={(e) => setFotoUrl(e.target.value)}
-              placeholder="https://... atau /uploads/hadiah/xxx.webp"
-              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
-            />
-            {fotoUrl && (
-              <div className="mt-2 flex justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={fotoUrl}
-                  alt="Preview"
-                  className="max-h-32 rounded-lg border border-neutral-200 object-contain"
-                  onError={(e) => (e.currentTarget.style.display = 'none')}
-                />
-              </div>
-            )}
+            <p className="text-xs text-neutral-500 mb-2">
+              💡 Simpan dulu tanpa foto → buka Edit tab → upload foto via tombol.
+              (2-phase upload sementara.)
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -679,12 +666,12 @@ function EditHadiahTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => voi
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-neutral-600 mb-1">URL Foto</label>
-        <input
-          type="url"
-          value={fotoUrl}
-          onChange={(e) => setFotoUrl(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none"
+        <label className="block text-xs font-medium text-neutral-600 mb-1">Foto</label>
+        <PhotoUpload
+          existingId={hadiah.id}
+          currentUrl={fotoUrl || null}
+          onUploaded={(url) => setFotoUrl(url)}
+          onCleared={() => setFotoUrl('')}
         />
       </div>
       <div>

@@ -58,12 +58,12 @@ function GiftStallContent() {
 
   return (
     <>
-      <main className="max-w-7xl mx-auto p-4">
+      <main className="max-w-7xl mx-auto p-3 sm:p-4">
         <div className="mb-4">
-          <h1 className="text-xl font-bold text-neutral-900">
+          <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
             🎁 Katalog Hadiah — {cabangNama}
           </h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-xs sm:text-sm text-neutral-500">
             Klik hadiah untuk redeem atau add stock. Anak bawa QR-nya ke stall.
           </p>
         </div>
@@ -77,7 +77,7 @@ function GiftStallContent() {
             Belum ada hadiah aktif di cabang ini. Tambah dulu di portal → Katalog Hadiah.
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
             {(hadiahQ.data ?? []).map((h) => (
               <button
                 key={h.id}
@@ -134,8 +134,8 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
   const [tab, setTab] = useState<'redeem' | 'stock'>('redeem');
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg shadow-xl max-h-[92vh] overflow-y-auto">
         <div className="p-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-3">
             {hadiah.fotoUrl ? (

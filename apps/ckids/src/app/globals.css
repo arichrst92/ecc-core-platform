@@ -8,3 +8,26 @@ body {
   background: #fff7ed;
   color: #171717;
 }
+
+/* iOS Safari: prevent zoom saat focus input dengan font-size < 16px.
+   Force minimum 16px untuk semua text input. */
+input[type='text'],
+input[type='tel'],
+input[type='email'],
+input[type='number'],
+input[type='date'],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Native select dropdown lebih readable di mobile. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 1.5rem;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3e%3cpath d='m6 9 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.25rem center;
+  background-size: 12px;
+}

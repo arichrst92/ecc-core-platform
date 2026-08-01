@@ -4,9 +4,21 @@
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
   background: #fff7ed;
   color: #171717;
+}
+
+/* Mobile only: body bottom padding supaya content gak ke-cover BottomNav
+   (BottomNav fixed 64px + safe area iPhone). Desktop lg+ nav di header, no pad. */
+body {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
+}
+
+@media (min-width: 1024px) {
+  body {
+    padding-bottom: 0;
+  }
 }
 
 /* iOS Safari: prevent zoom saat focus input dengan font-size < 16px.

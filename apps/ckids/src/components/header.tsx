@@ -138,11 +138,10 @@ export function Header() {
         </div>
       </header>
 
-      {/* Bottom nav for mobile — di-render sekali di sini */}
+      {/* Bottom nav for mobile — di-render sekali di sini.
+          Padding bottom body untuk hindari content ke-cover di-handle
+          via globals.css (bukan spacer inline yg bikin top space bug). */}
       <BottomNav />
-
-      {/* Spacer supaya content gak ke-cover bottom nav (mobile only) */}
-      <div className="lg:hidden h-16" aria-hidden="true" />
     </>
   );
 }

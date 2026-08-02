@@ -79,11 +79,13 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
           homecell: { select: { id: true, nama: true } },
         },
       },
-      familyAsA: {
-        where: { isVerified: true },
-        select: {
-          role: true,
-          jemaatB: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+      // Family via JemaatRelasi (masuk semua tipe granular — Suami/Istri/Ayah/Ibu/dll).
+      relasiAsal: {
+        include: {
+          tipeRelasi: { select: { id: true, nama: true } },
+          jemaatTerkait: {
+            select: { id: true, namaLengkap: true, fotoUrl: true },
+          },
         },
       },
     },
@@ -113,9 +115,9 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
   } else if (requester.cabangId === target.cabangId) {
     reason = 'same-cabang';
   } else {
-    // Cek family link
-    const family = await prisma.familyRelation.findFirst({
-      where: { jemaatAId: requesterId, jemaatBId: targetId, isVerified: true },
+    // Cek family link via JemaatRelasi
+    const family = await prisma.jemaatRelasi.findFirst({
+      where: { jemaatId: requesterId, jemaatTerkaitId: targetId },
       select: { id: true },
     });
     if (family) {
@@ -169,7 +171,10 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
     tanggalLahir: isCloseRelation ? target.tanggalLahir : null,
     alamat: isCloseRelation ? target.alamat : null,
     family: isCloseRelation
-      ? target.familyAsA.map((fa) => ({ role: fa.role, jemaat: fa.jemaatB }))
+      ? target.relasiAsal.map((r) => ({
+          tipeRelasi: r.tipeRelasi,
+          jemaat: r.jemaatTerkait,
+        }))
       : null,
     visibility: {
       isCloseRelation,

@@ -8,6 +8,7 @@ import {
 } from '@ecc/shared-types';
 import { NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { upsertJemaatRelasi } from '../../lib/family-relation.js';
 
 export const keluargaRouter = Router();
 
@@ -66,25 +67,78 @@ keluargaRouter.get('/relasi/jemaat/:jemaatId', async (req, res) => {
   res.json({ success: true, data });
 });
 
+/**
+ * POST /admin/keluarga/relasi — create relasi dengan AUTO-RECIPROCAL.
+ *
+ * Body: `{ jemaatId, jemaatTerkaitId, tipeRelasiId, keterangan? }`
+ *
+ * Sama seperti mobile /me/family — backend otomatis create 2 row:
+ *   1. jemaatId → jemaatTerkaitId (tipe yang di-input)
+ *   2. jemaatTerkaitId → jemaatId (tipe reciprocal, gender-aware)
+ *
+ * Idempotent: kalau row sudah ada antara pair ini, di-hapus dulu + create fresh
+ * (update tipe kalau berbeda).
+ */
 keluargaRouter.post('/relasi', async (req, res) => {
   const input = createJemaatRelasiSchema.parse(req.body);
-  const created = await prisma.jemaatRelasi.create({
-    data: input,
-    include: { jemaat: { select: { namaLengkap: true } }, jemaatTerkait: { select: { namaLengkap: true } }, tipeRelasi: true },
+  const link = await upsertJemaatRelasi(input.jemaatId, input.jemaatTerkaitId, {
+    tipeRelasiId: input.tipeRelasiId,
   });
-  const label = `${created.jemaat.namaLengkap} → ${created.jemaatTerkait.namaLengkap} (${created.tipeRelasi.nama})`;
-  audit(req, { action: 'CREATE', resource: 'jemaat_relasi', resourceId: created.id, resourceLabel: label, after: created });
-  res.status(201).json({ success: true, data: created });
+  const withNames = await prisma.jemaatRelasi.findUnique({
+    where: { id: link.id },
+    include: {
+      jemaat: { select: { namaLengkap: true } },
+      jemaatTerkait: { select: { namaLengkap: true } },
+      tipeRelasi: true,
+    },
+  });
+  const label = withNames
+    ? `${withNames.jemaat.namaLengkap} ↔ ${withNames.jemaatTerkait.namaLengkap} (${withNames.tipeRelasi.nama}, auto-reciprocal)`
+    : `link ${link.id}`;
+  audit(req, {
+    action: 'CREATE',
+    resource: 'jemaat_relasi',
+    resourceId: link.id,
+    resourceLabel: label,
+    metadata: { autoReciprocal: true },
+    after: withNames,
+  });
+  res.status(201).json({ success: true, data: withNames });
 });
 
+/**
+ * DELETE /admin/keluarga/relasi/:id — hapus relasi + reciprocal partner-nya.
+ *
+ * Backward compat: :id boleh row A→B; backend akan hapus B→A juga supaya
+ * data konsisten (no dangling).
+ */
 keluargaRouter.delete('/relasi/:id', async (req, res) => {
   const before = await prisma.jemaatRelasi.findUnique({
     where: { id: req.params.id },
-    include: { jemaat: { select: { namaLengkap: true } }, jemaatTerkait: { select: { namaLengkap: true } }, tipeRelasi: true },
+    include: {
+      jemaat: { select: { namaLengkap: true } },
+      jemaatTerkait: { select: { namaLengkap: true } },
+      tipeRelasi: true,
+    },
   });
   if (!before) throw NotFound('Relasi tidak ditemukan');
-  await prisma.jemaatRelasi.delete({ where: { id: req.params.id } });
-  const label = `${before.jemaat.namaLengkap} → ${before.jemaatTerkait.namaLengkap} (${before.tipeRelasi.nama})`;
-  audit(req, { action: 'DELETE', resource: 'jemaat_relasi', resourceId: before.id, resourceLabel: label, before });
+  // Hapus 2 arah (idempotent — deleteMany OK kalau reciprocal hilang).
+  await prisma.jemaatRelasi.deleteMany({
+    where: {
+      OR: [
+        { jemaatId: before.jemaatId, jemaatTerkaitId: before.jemaatTerkaitId },
+        { jemaatId: before.jemaatTerkaitId, jemaatTerkaitId: before.jemaatId },
+      ],
+    },
+  });
+  const label = `${before.jemaat.namaLengkap} ↔ ${before.jemaatTerkait.namaLengkap} (${before.tipeRelasi.nama}, +reciprocal)`;
+  audit(req, {
+    action: 'DELETE',
+    resource: 'jemaat_relasi',
+    resourceId: before.id,
+    resourceLabel: label,
+    metadata: { autoReciprocal: true },
+    before,
+  });
   res.status(204).end();
 });

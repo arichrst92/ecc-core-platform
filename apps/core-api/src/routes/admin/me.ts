@@ -42,6 +42,7 @@ import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
+import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
 import { meVisitRouter } from './me-visit.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -67,160 +68,8 @@ function assertJemaatId(req: Parameters<Parameters<typeof meRouter.get>[1]>[0]):
   return req.user.jemaatId;
 }
 
-/**
- * Broad enum → nama TipeRelasiKeluarga (as seeded). Kalau granularity dibutuhkan
- * (Ayah vs Ibu, Anak L vs P), mobile kirim `tipeRelasiId` langsung — helper ini
- * cuma untuk backward compat lama.
- */
-const ROLE_TO_TIPE_NAMA: Record<FamilyRole, string> = {
-  SPOUSE: 'Suami', // Default; akan di-refine berdasarkan self gender di helper
-  CHILD: 'Anak Laki-Laki', // Default; refine berdasarkan target gender
-  PARENT: 'Ayah', // Default; refine berdasarkan target gender
-  SIBLING: 'Saudara Kandung',
-  GUARDIAN: 'Wali',
-  OTHER: 'Lainnya',
-};
-
-/**
- * Resolve tipeRelasiId dari input (role atau tipeRelasiId langsung).
- * Kalau input pakai role broad, refine ke tipe granular based on target gender.
- */
-async function resolveTipeRelasiId(
-  tx: Prisma.TransactionClient,
-  input: { role?: FamilyRole; tipeRelasiId?: string },
-  targetJenisKelamin: 'L' | 'P' | null,
-  selfJenisKelamin: 'L' | 'P' | null,
-): Promise<string> {
-  if (input.tipeRelasiId) {
-    const t = await tx.tipeRelasiKeluarga.findUnique({
-      where: { id: input.tipeRelasiId },
-      select: { id: true },
-    });
-    if (!t) throw BadRequest('tipeRelasiId tidak ditemukan');
-    return t.id;
-  }
-  if (!input.role) throw BadRequest('role atau tipeRelasiId harus dikirim');
-
-  let namaTipe = ROLE_TO_TIPE_NAMA[input.role];
-  // Refine dengan gender info
-  if (input.role === 'SPOUSE') {
-    namaTipe = selfJenisKelamin === 'P' ? 'Suami' : 'Istri';
-  } else if (input.role === 'CHILD') {
-    namaTipe = targetJenisKelamin === 'P' ? 'Anak Perempuan' : 'Anak Laki-Laki';
-  } else if (input.role === 'PARENT') {
-    namaTipe = targetJenisKelamin === 'P' ? 'Ibu' : 'Ayah';
-  }
-  const tipe = await tx.tipeRelasiKeluarga.findUnique({
-    where: { nama: namaTipe },
-    select: { id: true },
-  });
-  if (!tipe) throw BadRequest(`TipeRelasi "${namaTipe}" belum di-seed`);
-  return tipe.id;
-}
-
-/**
- * Reciprocal tipe nama — untuk create row balik B → A.
- * Pakai gender info kalau perlu (Ayah/Ibu ↔ Anak L/P, dsb).
- */
-function reciprocalTipeNama(
-  tipeNama: string,
-  reciprocalTargetGender: 'L' | 'P' | null,
-): string {
-  const M: Record<string, string> = {
-    Suami: 'Istri',
-    Istri: 'Suami',
-    Ayah: reciprocalTargetGender === 'P' ? 'Anak Perempuan' : 'Anak Laki-Laki',
-    Ibu: reciprocalTargetGender === 'P' ? 'Anak Perempuan' : 'Anak Laki-Laki',
-    'Anak Laki-Laki': reciprocalTargetGender === 'P' ? 'Ibu' : 'Ayah',
-    'Anak Perempuan': reciprocalTargetGender === 'P' ? 'Ibu' : 'Ayah',
-    'Saudara Kandung': 'Saudara Kandung',
-    Kakek: 'Cucu',
-    Nenek: 'Cucu',
-    Cucu: reciprocalTargetGender === 'P' ? 'Nenek' : 'Kakek',
-    Wali: 'Lainnya', // ward tidak ada tipe spesifik — pakai 'Lainnya'
-    Lainnya: 'Lainnya',
-  };
-  return M[tipeNama] ?? 'Lainnya';
-}
-
-/**
- * Auto-reciprocal family link — 2 row di JemaatRelasi (A → B dgn tipe X,
- * B → A dgn tipe reciprocal). Idempotent via unique(jemaatId, jemaatTerkaitId,
- * tipeRelasiId).
- *
- * Karena JemaatRelasi tidak punya unique constraint (jemaatId, jemaatTerkaitId),
- * kita deleteMany first + create supaya no duplicate.
- */
-async function upsertJemaatRelasi(
-  selfId: string,
-  targetId: string,
-  input: { role?: FamilyRole; tipeRelasiId?: string },
-): Promise<{ id: string; tipeRelasi: { id: string; nama: string } }> {
-  if (selfId === targetId) throw BadRequest('Tidak bisa link ke diri sendiri.');
-
-  return prisma.$transaction(async (tx) => {
-    const [self, target] = await Promise.all([
-      tx.jemaat.findUnique({
-        where: { id: selfId },
-        select: { id: true, jenisKelamin: true },
-      }),
-      tx.jemaat.findUnique({
-        where: { id: targetId },
-        select: { id: true, jenisKelamin: true },
-      }),
-    ]);
-    if (!self) throw NotFound('Jemaat self tidak ditemukan');
-    if (!target) throw NotFound('Jemaat target tidak ditemukan');
-
-    const tipeAId = await resolveTipeRelasiId(
-      tx,
-      input,
-      target.jenisKelamin,
-      self.jenisKelamin,
-    );
-
-    const tipeA = await tx.tipeRelasiKeluarga.findUnique({
-      where: { id: tipeAId },
-      select: { id: true, nama: true },
-    });
-    if (!tipeA) throw BadRequest('TipeRelasi tidak valid');
-
-    const recipNama = reciprocalTipeNama(tipeA.nama, self.jenisKelamin);
-    const tipeB = await tx.tipeRelasiKeluarga.findUnique({
-      where: { nama: recipNama },
-      select: { id: true, nama: true },
-    });
-    if (!tipeB) throw BadRequest(`Reciprocal tipe "${recipNama}" belum di-seed`);
-
-    // Hapus row lama antara pair ini + create fresh (idempotent update role).
-    await tx.jemaatRelasi.deleteMany({
-      where: {
-        OR: [
-          { jemaatId: selfId, jemaatTerkaitId: targetId },
-          { jemaatId: targetId, jemaatTerkaitId: selfId },
-        ],
-      },
-    });
-
-    const a = await tx.jemaatRelasi.create({
-      data: {
-        jemaatId: selfId,
-        jemaatTerkaitId: targetId,
-        tipeRelasiId: tipeA.id,
-      },
-      include: { tipeRelasi: { select: { id: true, nama: true } } },
-    });
-    await tx.jemaatRelasi.create({
-      data: {
-        jemaatId: targetId,
-        jemaatTerkaitId: selfId,
-        tipeRelasiId: tipeB.id,
-      },
-    });
-
-    return a;
-  });
-}
+// (Helper upsertJemaatRelasi + tipeNamaToBroadRole di-extract ke
+// ../../lib/family-relation.ts supaya bisa dipakai portal /admin/keluarga juga.)
 
 // ============================================================
 //  Profile (self)
@@ -662,28 +511,6 @@ meRouter.get('/homecell-area-managed', async (req, res) => {
 // ============================================================
 //  Family management (M5, auto-verify)
 // ============================================================
-
-/**
- * Map tipe nama (granular) → broad role enum. Backward compat untuk mobile
- * lama yang masih baca `role` field di response.
- */
-function tipeNamaToBroadRole(nama: string): FamilyRole {
-  const M: Record<string, FamilyRole> = {
-    Suami: 'SPOUSE',
-    Istri: 'SPOUSE',
-    Ayah: 'PARENT',
-    Ibu: 'PARENT',
-    'Anak Laki-Laki': 'CHILD',
-    'Anak Perempuan': 'CHILD',
-    'Saudara Kandung': 'SIBLING',
-    Kakek: 'GUARDIAN',
-    Nenek: 'GUARDIAN',
-    Cucu: 'OTHER',
-    Wali: 'GUARDIAN',
-    Lainnya: 'OTHER',
-  };
-  return M[nama] ?? 'OTHER';
-}
 
 meRouter.get('/family', async (req, res) => {
   const jemaatId = assertJemaatId(req);

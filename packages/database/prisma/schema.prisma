@@ -217,8 +217,7 @@ model Jemaat {
   eventVolunteer          EventPelayananPetugas[]  @relation("EventVolunteer")
   eventDonationApprovals  EventDonation[]          @relation("EventDonationApprover")
   // Family relations (untuk mobile app)
-  familyAsA               FamilyRelation[]         @relation("FamilyA")
-  familyAsB               FamilyRelation[]         @relation("FamilyB")
+  // (FamilyRelation model di-drop 2026-08-02 — mobile switch ke JemaatRelasi)
   primaryGuardian         Jemaat?                  @relation("Guardian", fields: [primaryGuardianId], references: [id], onDelete: SetNull)
   guardianOf              Jemaat[]                 @relation("Guardian")
   registeredVia           Jemaat?                  @relation("RegisteredVia", fields: [registeredViaJemaatId], references: [id], onDelete: SetNull)
@@ -1338,56 +1337,16 @@ model EventPelayananPetugas {
 // ============================================================
 // 12. FAMILY RELATION (Mobile App)
 // ============================================================
-// Relasi keluarga yang dibentuk dari mobile app (berbeda dari JemaatRelasi
-// yang sudah ada — JemaatRelasi adalah data master directional dari portal
-// admin; FamilyRelation adalah self-managed network dari mobile).
+// (Deprecated 2026-08-02) FamilyRelation + FamilyRole enum di-drop.
+// Mobile family_relation model di-consolidate ke JemaatRelasi +
+// TipeRelasiKeluarga (portal admin master data granular).
 //
-// Pola:
-//   - Direksi symmetric: kalau A link B as spouse, B otomatis link A as spouse
-//     (handled di backend dengan create 2 row, atau 1 row + lookup biarrah).
-//     Untuk simplicity, kita create 2 row reciprocal per link (A→B + B→A) dgn
-//     role yang tepat (CHILD ⇄ PARENT, SPOUSE ⇄ SPOUSE, SIBLING ⇄ SIBLING).
-//   - Per keputusan product (2026-05-19): **auto-verify** — tidak ada flow
-//     konfirmasi dua arah. Trust-based, audit log capture createdBy.
-//   - Anak balita yang di-register via "register-new" → otomatis muncul di
-//     family list parent. primaryGuardianId di Jemaat = parent yang register.
+// Migration: 20260802100000_drop_family_relation
+// Backend: apps/core-api/src/routes/admin/me.ts (endpoint /me/family/*)
+//   - Storage → jemaat_relasi table
+//   - Auto-reciprocal via reciprocalTipeNama() gender-aware
+//   - Backward compat: API terima `role` broad enum ATAU `tipeRelasiId`
 // ============================================================
-model FamilyRelation {
-  id         String     @id @default(uuid()) @db.Uuid
-  jemaatAId  String     @map("jemaat_a_id") @db.Uuid
-  jemaatBId  String     @map("jemaat_b_id") @db.Uuid
-  role       FamilyRole
-  // isVerified default true (auto-verify per decision). Kolom tetap di-keep
-  // untuk future kalau mau switch ke two-way confirm flow.
-  isVerified Boolean    @default(true) @map("is_verified")
-  // Audit: siapa yang trigger link (jemaatId user yang panggil endpoint).
-  createdBy  String?    @map("created_by") @db.Uuid
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
-
-  jemaatA Jemaat @relation("FamilyA", fields: [jemaatAId], references: [id], onDelete: Cascade)
-  jemaatB Jemaat @relation("FamilyB", fields: [jemaatBId], references: [id], onDelete: Cascade)
-
-  @@unique([jemaatAId, jemaatBId])
-  @@index([jemaatAId])
-  @@index([jemaatBId])
-  @@map("family_relation")
-}
-
-enum FamilyRole {
-  SPOUSE
-  CHILD // jemaatA adalah anak dari jemaatB
-  PARENT // jemaatA adalah ortu dari jemaatB
-  SIBLING
-  // Wali — jemaatA adalah wali dari jemaatB (non-ortu kandung, mis. paman/tante,
-  // guardian resmi). Reciprocal: CHILD (jemaatB dianggap seperti anak jemaatA).
-  GUARDIAN
-  // Fallback untuk relasi yang tidak fit di 5 role di atas.
-  // Reciprocal: OTHER (symmetric).
-  OTHER
-
-  @@map("family_role")
-}
 
 // ============================================================
 // 13. BRANCH CHANGE REQUEST (Mobile App)

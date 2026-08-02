@@ -11,15 +11,33 @@
 import { z } from 'zod';
 import { noHpSchema, uuidSchema, emptyToUndefined } from './common.js';
 
+/**
+ * Legacy enum — dipertahankan untuk backward compat mobile lama.
+ * Endpoint tetap terima `role` enum ATAU `tipeRelasiId` (preferred, granular).
+ * Backend auto-map role enum → tipeRelasiId via broad mapping.
+ */
 export const familyRoleSchema = z.enum([
   'SPOUSE',
   'CHILD',
   'PARENT',
   'SIBLING',
-  'GUARDIAN', // Wali (bukan ortu kandung)
-  'OTHER',    // Lainnya (fallback tidak spesifik)
+  'GUARDIAN',
+  'OTHER',
 ]);
 export type FamilyRole = z.infer<typeof familyRoleSchema>;
+
+/**
+ * Input dual: kirim EITHER role (enum) OR tipeRelasiId (uuid).
+ * Kalau kedua-nya kosong → error di backend.
+ */
+const roleOrTipeInput = z
+  .object({
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+  })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Harus kirim role (enum) atau tipeRelasiId (uuid)',
+  });
 
 /**
  * Link existing jemaat ke family user (current) via kode jemaat (QR scan).
@@ -38,7 +56,12 @@ export const linkFamilyByKodeSchema = z
       .max(20)
       .transform((s) => s.toUpperCase())
       .openapi({ example: 'A3K7P9XQ' }),
-    role: familyRoleSchema,
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+  })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Kirim role atau tipeRelasiId',
+    path: ['role'],
   })
   .openapi('LinkFamilyByKodeInput');
 export type LinkFamilyByKodeInput = z.infer<typeof linkFamilyByKodeSchema>;
@@ -47,7 +70,12 @@ export type LinkFamilyByKodeInput = z.infer<typeof linkFamilyByKodeSchema>;
 export const linkFamilyByPhoneSchema = z
   .object({
     noHp: noHpSchema,
-    role: familyRoleSchema,
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+  })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Kirim role atau tipeRelasiId',
+    path: ['role'],
   })
   .openapi('LinkFamilyByPhoneInput');
 export type LinkFamilyByPhoneInput = z.infer<typeof linkFamilyByPhoneSchema>;
@@ -66,18 +94,30 @@ export type LinkFamilyByPhoneInput = z.infer<typeof linkFamilyByPhoneSchema>;
 export const registerFamilyNewSchema = z
   .object({
     namaLengkap: z.string().trim().min(2).max(255),
-    role: familyRoleSchema,
-    cabangId: uuidSchema.optional(),       // default = user current's cabangId
-    noHp: emptyToUndefined(noHpSchema),     // null = dependent (anak/lansia)
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+    cabangId: uuidSchema.optional(),
+    noHp: emptyToUndefined(noHpSchema),
     tanggalLahir: emptyToUndefined(z.string().date()),
     jenisKelamin: emptyToUndefined(z.enum(['L', 'P'])),
     alamat: emptyToUndefined(z.string().trim()),
   })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Kirim role atau tipeRelasiId',
+    path: ['role'],
+  })
   .openapi('RegisterFamilyNewInput');
 export type RegisterFamilyNewInput = z.infer<typeof registerFamilyNewSchema>;
 
-/** Update role saja (mis. setelah re-marriage). */
+/** Update tipe relasi (mis. setelah re-marriage). */
 export const updateFamilyRelationSchema = z
-  .object({ role: familyRoleSchema })
+  .object({
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+  })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Kirim role atau tipeRelasiId',
+    path: ['role'],
+  })
   .openapi('UpdateFamilyRelationInput');
 export type UpdateFamilyRelationInput = z.infer<typeof updateFamilyRelationSchema>;

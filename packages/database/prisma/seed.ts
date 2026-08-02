@@ -383,6 +383,7 @@ async function main() {
     { nama: 'Nenek', deskripsi: 'Orang tua dari ayah/ibu (perempuan)' },
     { nama: 'Cucu', deskripsi: 'Anak dari anak' },
     { nama: 'Wali', deskripsi: 'Wali yang bertanggung jawab atas jemaat (non-ortu kandung)' },
+    { nama: 'Lainnya', deskripsi: 'Relasi keluarga yang tidak spesifik di kategori lain' },
   ];
 
   for (const t of tipeRelasiData) {

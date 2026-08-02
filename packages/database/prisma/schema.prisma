@@ -1379,6 +1379,12 @@ enum FamilyRole {
   CHILD // jemaatA adalah anak dari jemaatB
   PARENT // jemaatA adalah ortu dari jemaatB
   SIBLING
+  // Wali — jemaatA adalah wali dari jemaatB (non-ortu kandung, mis. paman/tante,
+  // guardian resmi). Reciprocal: CHILD (jemaatB dianggap seperti anak jemaatA).
+  GUARDIAN
+  // Fallback untuk relasi yang tidak fit di 5 role di atas.
+  // Reciprocal: OTHER (symmetric).
+  OTHER
 
   @@map("family_role")
 }

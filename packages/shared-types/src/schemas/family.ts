@@ -11,7 +11,14 @@
 import { z } from 'zod';
 import { noHpSchema, uuidSchema, emptyToUndefined } from './common.js';
 
-export const familyRoleSchema = z.enum(['SPOUSE', 'CHILD', 'PARENT', 'SIBLING']);
+export const familyRoleSchema = z.enum([
+  'SPOUSE',
+  'CHILD',
+  'PARENT',
+  'SIBLING',
+  'GUARDIAN', // Wali (bukan ortu kandung)
+  'OTHER',    // Lainnya (fallback tidak spesifik)
+]);
 export type FamilyRole = z.infer<typeof familyRoleSchema>;
 
 /**

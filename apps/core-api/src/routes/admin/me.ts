@@ -78,6 +78,14 @@ function reciprocalRole(role: FamilyRole): FamilyRole {
       return 'CHILD';
     case 'SIBLING':
       return 'SIBLING';
+    // Wali → dari sisi ward, jemaatA dianggap seperti orangtua (CHILD reciprocal).
+    // Alternatif desain: bikin enum WARD terpisah — untuk sekarang keep simple.
+    case 'GUARDIAN':
+      return 'CHILD';
+    // Lainnya → symmetric (kedua sisi punya relasi "lainnya" dengan definisi
+    // tidak spesifik). Admin bisa update role belakangan kalau ke-refine.
+    case 'OTHER':
+      return 'OTHER';
   }
 }
 

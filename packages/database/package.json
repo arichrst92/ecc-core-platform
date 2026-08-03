@@ -13,6 +13,7 @@
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "db:register": "dotenv -e ../../.env -- tsx prisma/scripts/register-jemaat.ts",
+    "db:seed-test-onboarding": "dotenv -e ../../.env -- tsx prisma/scripts/seed-test-onboarding.ts",
     "db:update-nohp": "dotenv -e ../../.env -- tsx prisma/scripts/update-jemaat-nohp.ts",
     "db:migrate-shiftsoft": "dotenv -e ../../.env -- tsx src/shiftsoft/run.ts",
     "db:migrate-shiftsoft-groups": "dotenv -e ../../.env -- tsx src/shiftsoft/run-groups.ts",

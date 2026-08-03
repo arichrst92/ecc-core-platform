@@ -137,8 +137,24 @@ export function QrScannerModal({
           </button>
         </div>
 
-        <div className="relative bg-black aspect-square">
-          <div id={containerId} className="w-full h-full" />
+        <div
+          className="relative bg-black w-full"
+          style={{ aspectRatio: '1 / 1' }}
+        >
+          {/* Inject CSS supaya <video> yg dibuat html5-qrcode fit ke container square (cover fit).
+              html5-qrcode default `object-fit: contain` bikin video letterbox → tampil rectangular. */}
+          <style>{`
+            #${containerId} video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover !important;
+            }
+            #${containerId} > div {
+              width: 100% !important;
+              height: 100% !important;
+            }
+          `}</style>
+          <div id={containerId} className="w-full h-full absolute inset-0" />
           {starting && !error && (
             <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
               Membuka kamera...

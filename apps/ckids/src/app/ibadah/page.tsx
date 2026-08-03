@@ -23,6 +23,7 @@ import { useCabangStore } from '@/lib/cabang-store';
 import { useIbadahContextStore } from '@/lib/ibadah-context-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
+import { resolveMediaUrl } from '@/lib/media';
 
 type Mode = 'checkin' | 'checkout' | 'pickup';
 
@@ -89,6 +90,7 @@ export default function IbadahScannerPage() {
 function ScannerContent() {
   const { cabangId } = useCabangStore();
   const [selectedJemaat, setSelectedJemaat] = useState<JemaatItem | null>(null);
+  const [pickupModalOpen, setPickupModalOpen] = useState(false);
 
   if (!cabangId) {
     return (
@@ -100,13 +102,23 @@ function ScannerContent() {
 
   return (
     <main className="max-w-lg mx-auto p-3 sm:p-4">
-      <div className="mb-3">
-        <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
-          <ScanLine className="w-5 h-5" /> Scanner Ibadah
-        </h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Scan QR jemaat / search nama → pilih ibadah + action.
-        </p>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
+            <ScanLine className="w-5 h-5" /> Scanner Ibadah
+          </h1>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Scan QR jemaat / search nama → pilih ibadah + action.
+          </p>
+        </div>
+        {/* Shortcut: pickup pakai kode 6-digit dari parent (tanpa scan anak) */}
+        <button
+          onClick={() => setPickupModalOpen(true)}
+          className="shrink-0 flex items-center gap-1 px-3 py-2 bg-kids-500 text-white text-xs font-semibold rounded-lg hover:bg-kids-600"
+          title="Verify pickup pakai 6-digit code dari parent"
+        >
+          <Baby className="w-3.5 h-3.5" /> Kode Jemput
+        </button>
       </div>
 
       {!selectedJemaat ? (
@@ -119,7 +131,147 @@ function ScannerContent() {
           onBack={() => setSelectedJemaat(null)}
         />
       )}
+
+      {pickupModalOpen && (
+        <PickupCodeModal onClose={() => setPickupModalOpen(false)} />
+      )}
     </main>
+  );
+}
+
+// ============================================================
+//  Pickup by Kode Jemput Modal — parent tunjukkan kode 6-digit
+// ============================================================
+function PickupCodeModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [pickupCode, setPickupCode] = useState('');
+  const [kodeReservasi, setKodeReservasi] = useState('');
+  const [result, setResult] = useState<any>(null);
+
+  const pickupMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/admin/reservasi/pickup', {
+        pickupCode: pickupCode.trim(),
+        kodeReservasi: kodeReservasi.trim() || undefined,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message ?? 'Pickup berhasil');
+      setResult({ ok: true, data: data.data });
+      qc.invalidateQueries({ queryKey: ['hadir'] });
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.error?.message ?? 'Gagal pickup';
+      toast.error(msg);
+      setResult({ ok: false, msg });
+    },
+  });
+
+  const valid = /^\d{6}$/.test(pickupCode.trim());
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+        <div className="p-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold">
+            <Baby className="w-5 h-5 text-kids-500" /> Pickup Anak — Kode Jemput
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {!result?.ok && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">
+                  Kode Jemput (6 digit dari parent) *
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  value={pickupCode}
+                  onChange={(e) =>
+                    setPickupCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
+                  onKeyDown={(e) => e.key === 'Enter' && valid && pickupMut.mutate()}
+                  autoFocus
+                  placeholder="123456"
+                  className="w-full px-3 py-4 border-2 border-kids-200 rounded-lg text-center font-mono text-3xl font-bold text-kids-700 tracking-widest"
+                  maxLength={6}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">
+                  Kode Reservasi Anak (opsional, kalau ada duplikat)
+                </label>
+                <input
+                  type="text"
+                  value={kodeReservasi}
+                  onChange={(e) => setKodeReservasi(e.target.value.toUpperCase())}
+                  placeholder="R7K2X9P"
+                  className="w-full px-3 py-2 font-mono tracking-widest text-sm border border-neutral-300 rounded-lg outline-none"
+                  maxLength={20}
+                />
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Backend request kode ini kalau 2+ anak punya kode jemput sama.
+                </p>
+              </div>
+            </>
+          )}
+
+          {result?.ok && result?.data?.anak && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto" />
+              <div className="font-bold text-green-900">Pickup Berhasil</div>
+              <div className="text-sm text-green-800">
+                <strong>{result.data.anak.namaLengkap}</strong>
+              </div>
+              <div className="text-xs text-green-700">
+                {result.data.ibadahNama}
+              </div>
+            </div>
+          )}
+
+          {result && !result.ok && (
+            <div className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg p-3">
+              <strong>Gagal:</strong> {result.msg}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t bg-neutral-50 flex gap-2">
+          {result?.ok ? (
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600"
+            >
+              Tutup
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 text-sm text-neutral-700 border border-neutral-300 rounded-lg hover:bg-white"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => pickupMut.mutate()}
+                disabled={!valid || pickupMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 disabled:opacity-50"
+              >
+                {pickupMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Verify Pickup
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -229,7 +381,7 @@ function JemaatSearchStep({
                     {j.fotoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={j.fotoUrl}
+                        src={resolveMediaUrl(j.fotoUrl) ?? ''}
                         alt=""
                         className="w-10 h-10 rounded-full object-cover shrink-0"
                       />
@@ -441,7 +593,7 @@ function ActionPanel({
           {jemaat.fotoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={jemaat.fotoUrl}
+              src={resolveMediaUrl(jemaat.fotoUrl) ?? ''}
               alt=""
               className="w-12 h-12 rounded-full object-cover shrink-0"
             />

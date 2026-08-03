@@ -18,6 +18,7 @@ import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
+import { resolveMediaUrl } from '@/lib/media';
 
 interface JemaatFound {
   jemaat: {
@@ -210,7 +211,7 @@ function AdjustPointContent() {
               {jemaatFound.jemaat.fotoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={jemaatFound.jemaat.fotoUrl}
+                  src={resolveMediaUrl(jemaatFound.jemaat.fotoUrl) ?? ''}
                   alt=""
                   className="w-14 h-14 rounded-full object-cover"
                 />

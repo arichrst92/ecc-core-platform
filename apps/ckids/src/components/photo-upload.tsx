@@ -5,6 +5,7 @@ import { Upload, Loader2, X, ImagePlus } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { CropModal } from './crop-modal';
+import { resolveMediaUrl } from '@/lib/media';
 
 /**
  * Photo upload untuk hadiah katalog dengan crop 1:1.
@@ -120,7 +121,7 @@ export function PhotoUpload({
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={preview}
+              src={preview.startsWith('blob:') || preview.startsWith('data:') ? preview : (resolveMediaUrl(preview) ?? preview)}
               alt="Preview"
               className="w-32 h-32 rounded-lg object-cover border border-neutral-200"
             />

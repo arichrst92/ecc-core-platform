@@ -16,6 +16,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
+import { resolveMediaUrl } from '@/lib/media';
 
 interface HadirItem {
   id: string;
@@ -273,7 +274,7 @@ function HadirRow({ r }: { r: HadirItem }) {
         {r.jemaat.fotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={r.jemaat.fotoUrl}
+            src={resolveMediaUrl(r.jemaat.fotoUrl) ?? ''}
             alt=""
             className="w-10 h-10 rounded-full object-cover shrink-0"
           />

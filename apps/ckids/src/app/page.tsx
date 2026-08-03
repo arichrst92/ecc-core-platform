@@ -9,6 +9,7 @@ import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
 import { PhotoUpload } from '@/components/photo-upload';
+import { resolveMediaUrl } from '@/lib/media';
 
 interface Hadiah {
   id: string;
@@ -98,7 +99,7 @@ function GiftStallContent() {
                 <div className="aspect-square bg-neutral-100 relative">
                   {h.fotoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={h.fotoUrl} alt={h.nama} className="w-full h-full object-cover" />
+                    <img src={resolveMediaUrl(h.fotoUrl) ?? ''} alt={h.nama} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Gift className="w-16 h-16 text-neutral-300" />
@@ -158,7 +159,7 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
           <div className="flex items-center gap-3">
             {hadiah.fotoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={hadiah.fotoUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+              <img src={resolveMediaUrl(hadiah.fotoUrl) ?? ''} alt="" className="w-12 h-12 rounded-lg object-cover" />
             ) : (
               <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center">
                 <Gift className="w-6 h-6 text-neutral-400" />
@@ -322,7 +323,7 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
             {jemaatFound.jemaat.fotoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={jemaatFound.jemaat.fotoUrl}
+                src={resolveMediaUrl(jemaatFound.jemaat.fotoUrl) ?? ''}
                 alt=""
                 className="w-12 h-12 rounded-full object-cover"
               />

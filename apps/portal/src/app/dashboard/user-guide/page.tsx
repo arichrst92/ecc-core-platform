@@ -216,6 +216,41 @@ const SECTIONS: Section[] = [
           'Hanya petugas dengan flag "Bisa Scan" yang boleh scan via mobile — admin bisa selalu lewat portal.',
         ],
       },
+      {
+        kind: 'paragraph',
+        text: 'Walk-in flow — scan QR profile jemaat + pilih ibadah + tanggal → sistem auto-upsert reservasi. Universal untuk SEMUA jenis ibadah (Umum, Pemuda, KKR, Doa, Anak, Retret). Backend endpoint yang sama (POST /admin/reservasi/walk-in) dipakai baik dari portal, ckids web, maupun mobile scanner.',
+      },
+      {
+        kind: 'bullet',
+        title: 'Perilaku walk-in per jenis ibadah',
+        items: [
+          'Ibadah reguler (Umum, Pemuda, Doa) — action "checkin" langsung create/flip reservasi ke JOIN. Response tidak ada pickupCode.',
+          'Ibadah Anak (isKidsIbadah=true) — action "checkin" auto-generate 6-digit pickupCode untuk parent tunjukin saat jemput. Response include pickupCode.',
+          'Ibadah dengan flag Wajib Checkout (requiresCheckout=true) — action "checkout" set checkedOutAt. Cocok untuk retret, gathering multi-sesi, atau ibadah anak.',
+          'Action "pickup" hanya untuk Ibadah Anak — set pickedUpAt post scan QR anak oleh admin ckids stall.',
+        ],
+      },
+      {
+        kind: 'tip',
+        text: 'Toggle "Ibadah Anak?" dan "Wajib Checkout?" ada di form edit ibadah. Kombinasi keduanya menentukan action apa saja yang enabled untuk ibadah tsb.',
+      },
+      {
+        kind: 'steps',
+        title: 'Kids ibadah — flow lengkap (check-in → pickup)',
+        items: [
+          'Set ibadah anak: buka detail → toggle "Ibadah Anak?" ON + "Wajib Checkout?" ON kalau perlu tracking checkout.',
+          'Saat hari H, orang tua antar anak → admin ckids scan QR profile anak di stall.',
+          'Sistem generate 6-digit pickupCode → admin sampaikan ke orang tua (atau muncul di app parent via GET /admin/me/reservasi).',
+          'Jam pulang: orang tua tunjukin kode di stall (atau scan QR anak dari admin) → admin input kode / scan → sistem set pickedUpAt.',
+          'Alternate flow: admin scan QR profile anak langsung → pilih action Pickup → auto-detect reservasi kids yang belum di-pickup hari itu.',
+        ],
+      },
+      {
+        kind: 'menu-card',
+        href: 'https://ckids.eccchurch.global',
+        label: 'CKids Web (subdomain)',
+        description: 'Aplikasi dedicated untuk admin stall ibadah anak — scanner QR jemaat, katalog hadiah point, adjust point manual, laporan kehadiran hari ini, dan pickup code verify. Login pakai akun Fulltimer yang sama.',
+      },
     ],
   },
   {
@@ -788,11 +823,13 @@ function ContentBlockRender({ block }: { block: ContentBlock }) {
         </div>
       );
 
-    case 'menu-card':
+    case 'menu-card': {
+      const isExternal = block.href.startsWith('http');
       return (
         <a
           href={block.href}
           className="block bg-neutral-50 hover:bg-brand-50/40 border border-neutral-200 hover:border-brand-200 rounded-lg px-3 py-2 transition"
+          {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-sm font-semibold text-neutral-900">{block.label}</span>
@@ -801,5 +838,6 @@ function ContentBlockRender({ block }: { block: ContentBlock }) {
           <div className="text-xs text-neutral-600">{block.description}</div>
         </a>
       );
+    }
   }
 }

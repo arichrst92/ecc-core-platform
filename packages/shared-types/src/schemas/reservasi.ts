@@ -61,12 +61,22 @@ export type CheckoutByKodeInput = z.infer<typeof checkoutByKodeSchema>;
 //   - checkin: create/flip status JOIN + joinedAt + generate kode + pickup code
 //   - checkout: cari reservasi existing, set checkedOutAt
 //   - pickup: cari kids reservasi, set pickedUpAt
+//
+// Body accept EITHER jemaatId (UUID, ckids web pakai search) ATAU kode
+// (8-char dari QR scan profile jemaat, mobile scanner pakai ini).
+// Backend resolve kode → jemaatId via lookup uppercase-normalize.
+// Kalau kirim keduanya → 400. Kalau kirim tidak keduanya → 400.
 export const walkInReservasiSchema = z
   .object({
-    jemaatId: uuidSchema,
+    jemaatId: uuidSchema.optional(),
+    kode: z.string().trim().min(4).max(20).optional().openapi({ example: 'ANAK1234' }),
     ibadahId: uuidSchema,
     tanggalIbadah: z.string().date().openapi({ example: '2026-08-04' }),
     action: z.enum(['checkin', 'checkout', 'pickup']),
+  })
+  .refine((v) => !!v.jemaatId !== !!v.kode, {
+    message: 'Kirim salah satu: jemaatId ATAU kode (bukan keduanya, bukan kosong)',
+    path: ['jemaatId'],
   })
   .openapi('WalkInReservasiInput');
 export type WalkInReservasiInput = z.infer<typeof walkInReservasiSchema>;

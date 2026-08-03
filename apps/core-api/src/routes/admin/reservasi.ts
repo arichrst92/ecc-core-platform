@@ -614,15 +614,30 @@ reservasiRouter.get('/active-today', async (req, res) => {
 //   - pickup: cari kids Reservasi → set pickedUpAt (skip validate pickup code
 //     karena admin verify secara fisik lewat scan QR anak).
 reservasiRouter.post('/walk-in', async (req, res) => {
-  const { jemaatId, ibadahId, tanggalIbadah, action } = walkInReservasiSchema.parse(req.body);
+  const parsed = walkInReservasiSchema.parse(req.body);
+  const { ibadahId, tanggalIbadah, action } = parsed;
   const adminId = req.user?.sub;
 
-  const jemaat = await prisma.jemaat.findUnique({
-    where: { id: jemaatId },
-    select: { id: true, namaLengkap: true, isActive: true, kode: true },
-  });
-  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  // Resolve jemaat via jemaatId (UUID) atau kode (8-char QR scan).
+  // Schema refine sudah guarantee exactly one is present.
+  const jemaat = parsed.jemaatId
+    ? await prisma.jemaat.findUnique({
+        where: { id: parsed.jemaatId },
+        select: { id: true, namaLengkap: true, isActive: true, kode: true },
+      })
+    : await prisma.jemaat.findUnique({
+        where: { kode: (parsed.kode as string).toUpperCase() },
+        select: { id: true, namaLengkap: true, isActive: true, kode: true },
+      });
+  if (!jemaat) {
+    throw NotFound(
+      parsed.kode
+        ? `Jemaat dgn kode ${parsed.kode.toUpperCase()} tidak ditemukan`
+        : 'Jemaat tidak ditemukan',
+    );
+  }
   if (!jemaat.isActive) throw BadRequest('Jemaat tidak aktif');
+  const jemaatId = jemaat.id;
 
   const ibadah = await prisma.ibadah.findUnique({
     where: { id: ibadahId },

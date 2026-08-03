@@ -463,6 +463,58 @@ groupRouter.post('/:id/members/:jemaatId', async (req, res) => {
 });
 
 // ============================================================
+// POST /:id/members/by-kode — helper: add member via kode 8-char jemaat
+// (mirror pattern /admin/homecell/:id/members/by-kode)
+// ============================================================
+groupRouter.post('/:id/members/by-kode', async (req, res) => {
+  const requester = await getRequester(req);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+
+  const kode = typeof req.body?.kode === 'string' ? req.body.kode.trim().toUpperCase() : '';
+  const catatan = typeof req.body?.catatan === 'string' ? req.body.catatan.trim() : undefined;
+  if (!kode) throw BadRequest('Kode jemaat wajib');
+
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { kode },
+    select: { id: true, namaLengkap: true, kode: true, isActive: true },
+  });
+  if (!jemaat || !jemaat.isActive) throw NotFound('Kode jemaat tidak ditemukan atau nonaktif');
+
+  const existing = await prisma.groupMember.findUnique({
+    where: { groupId_jemaatId: { groupId: req.params.id, jemaatId: jemaat.id } },
+    select: { id: true, isActive: true },
+  });
+  await prisma.groupMember.upsert({
+    where: { groupId_jemaatId: { groupId: req.params.id, jemaatId: jemaat.id } },
+    create: {
+      groupId: req.params.id,
+      jemaatId: jemaat.id,
+      catatan: catatan ?? null,
+      isActive: true,
+    },
+    update: { isActive: true, tanggalKeluar: null, catatan: catatan ?? null },
+  });
+
+  await notifMemberAdded(req.params.id, jemaat.id).catch(() => {});
+
+  audit(req, {
+    action: existing ? 'UPDATE' : 'CREATE',
+    resource: 'group_member',
+    resourceLabel: `Add member by-kode: ${jemaat.namaLengkap} (${kode})`,
+    metadata: { groupId: req.params.id, via: 'by-kode', kode },
+  });
+
+  res.status(existing ? 200 : 201).json({
+    success: true,
+    message: `${jemaat.namaLengkap} berhasil ditambahkan`,
+    data: {
+      alreadyMember: !!existing?.isActive,
+      jemaat: { id: jemaat.id, namaLengkap: jemaat.namaLengkap, kode: jemaat.kode },
+    },
+  });
+});
+
+// ============================================================
 // DELETE /:id/members/:jemaatId — remove member (PIC + notif)
 // ============================================================
 groupRouter.delete('/:id/members/:jemaatId', async (req, res) => {

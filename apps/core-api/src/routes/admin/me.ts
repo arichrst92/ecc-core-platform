@@ -37,7 +37,7 @@ import {
   deleteMyAccountSchema,
   type FamilyRole,
 } from '@ecc/shared-types';
-import { BadRequest, Conflict, NotFound, Unauthorized } from '../../lib/errors.js';
+import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
@@ -1018,4 +1018,166 @@ meRouter.delete('/', async (req, res) => {
       revokedSessions: result.revokedCount,
     },
   });
+});
+
+// ============================================================
+//  Parent-side reservasi (M41 — mobile Kids Bundle)
+// ============================================================
+
+/**
+ * GET /admin/me/reservasi — active reservasi user (self) + anak.
+ *
+ * Untuk parent lihat pickup code sendiri di app tanpa tanya admin.
+ * Include:
+ *   - Reservasi jemaatId=self (aktivitas diri sendiri)
+ *   - Reservasi anak yg di-check-in oleh self (Reservasi.checkedInBy=self)
+ *
+ * Query params (semua opsional):
+ *   - ibadahId, tanggal (YYYY-MM-DD), status (RESERVE|JOIN)
+ *   - activeOnly (default true) — filter 24 jam terakhir
+ */
+meRouter.get('/reservasi', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const ibadahId = typeof req.query.ibadahId === 'string' ? req.query.ibadahId : undefined;
+  const tanggalStr = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
+  const status =
+    typeof req.query.status === 'string' &&
+    ['RESERVE', 'JOIN', 'CANCEL'].includes(req.query.status)
+      ? (req.query.status as 'RESERVE' | 'JOIN' | 'CANCEL')
+      : undefined;
+  const activeOnly = req.query.activeOnly !== 'false';
+
+  const where: Prisma.ReservasiWhereInput = {
+    OR: [
+      { jemaatId },
+      { checkedInBy: jemaatId }, // anak yg di-check-in oleh user ini
+    ],
+  };
+  if (ibadahId) where.ibadahId = ibadahId;
+  if (tanggalStr) where.tanggalIbadah = new Date(tanggalStr);
+  if (status) where.status = status;
+  if (activeOnly && !tanggalStr) {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    where.OR = [
+      { jemaatId, joinedAt: { gte: cutoff } },
+      { checkedInBy: jemaatId, joinedAt: { gte: cutoff } },
+      { jemaatId, reservedAt: { gte: cutoff }, status: 'RESERVE' },
+    ];
+  }
+
+  const rows = await prisma.reservasi.findMany({
+    where,
+    orderBy: { joinedAt: 'desc' },
+    take: 100,
+    include: {
+      jemaat: {
+        select: { id: true, namaLengkap: true, kode: true, fotoUrl: true },
+      },
+      ibadah: {
+        select: {
+          id: true,
+          nama: true,
+          jamMulai: true,
+          jamSelesai: true,
+          isKidsIbadah: true,
+          requiresCheckout: true,
+        },
+      },
+    },
+  });
+
+  res.json({ success: true, data: rows });
+});
+
+// ============================================================
+//  CKids parent endpoints (M42 — mobile CKids Tab)
+// ============================================================
+
+/**
+ * Helper: get list anak dari JemaatRelasi (post-family-refactor).
+ * Tipe anak = "Anak Laki-Laki", "Anak Perempuan", atau backward-compat
+ * "Anak" (dari data legacy sebelum granular seed).
+ */
+async function getMyChildrenIds(parentJemaatId: string): Promise<string[]> {
+  const relasi = await prisma.jemaatRelasi.findMany({
+    where: {
+      jemaatId: parentJemaatId,
+      tipeRelasi: {
+        nama: { in: ['Anak Laki-Laki', 'Anak Perempuan', 'Anak'] },
+      },
+    },
+    select: { jemaatTerkaitId: true },
+  });
+  return relasi.map((r) => r.jemaatTerkaitId);
+}
+
+/**
+ * GET /admin/me/children-points — list balance point semua anak parent
+ * per cabang. Untuk CKids Tab mobile.
+ *
+ * Return flat list [{anak, cabang, balance, lastUpdate}], 1 row per (anak, cabang).
+ * Anak tanpa balance record di cabang → skip (bukan return 0).
+ */
+meRouter.get('/children-points', async (req, res) => {
+  const parentId = assertJemaatId(req);
+  const anakIds = await getMyChildrenIds(parentId);
+
+  if (anakIds.length === 0) {
+    return res.json({ success: true, data: [] });
+  }
+
+  const balances = await prisma.jemaatPointBalance.findMany({
+    where: { jemaatId: { in: anakIds } },
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      jemaat: {
+        select: { id: true, namaLengkap: true, kode: true, fotoUrl: true },
+      },
+      cabang: { select: { id: true, nama: true } },
+    },
+  });
+
+  const data = balances.map((b) => ({
+    anak: b.jemaat,
+    cabang: b.cabang,
+    balance: b.balance,
+    lastUpdate: b.updatedAt,
+  }));
+
+  res.setHeader('Cache-Control', 'private, max-age=60');
+  res.json({ success: true, data });
+});
+
+/**
+ * GET /admin/me/children-redeem-history?jemaatId=<anakId>&limit=20
+ *
+ * Parent lihat redeem history salah satu anak. Guard: verify jemaatId
+ * benar-benar anak requester (via JemaatRelasi).
+ */
+meRouter.get('/children-redeem-history', async (req, res) => {
+  const parentId = assertJemaatId(req);
+  const targetJemaatId =
+    typeof req.query.jemaatId === 'string' ? req.query.jemaatId : undefined;
+  const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : 20;
+  const limit = Math.min(Math.max(limitRaw || 20, 1), 100);
+  if (!targetJemaatId) throw BadRequest('jemaatId required');
+
+  // Guard: pastikan targetJemaatId adalah anak requester
+  const anakIds = await getMyChildrenIds(parentId);
+  if (!anakIds.includes(targetJemaatId)) {
+    throw Forbidden('jemaatId bukan anak Anda');
+  }
+
+  const rows = await prisma.hadiahRedeem.findMany({
+    where: { jemaatId: targetJemaatId },
+    orderBy: { processedAt: 'desc' },
+    take: limit,
+    include: {
+      hadiah: { select: { id: true, nama: true, fotoUrl: true } },
+      cabang: { select: { id: true, nama: true } },
+      processedBy: { select: { id: true, namaLengkap: true } },
+    },
+  });
+
+  res.json({ success: true, data: rows });
 });

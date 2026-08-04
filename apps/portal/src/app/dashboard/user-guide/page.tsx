@@ -447,6 +447,29 @@ const SECTIONS: Section[] = [
         kind: 'warning',
         text: 'Min Supported Version bikin user dengan versi lebih lama dapat FORCE UPDATE modal (tidak bisa dismiss). Naikkan hanya kalau ada breaking API change.',
       },
+      {
+        kind: 'paragraph',
+        text: 'In-App Notifications (Modul 30): backend auto-kirim notifikasi ke bell icon mobile jemaat saat 13 event: check-in / pickup anak, redeem hadiah, point earn/adjust, family link, group add/remove/dismiss, event approved/checkin, branch change approved/rejected. Mobile polling per 30 detik pakai endpoint /admin/me/notifications. Portal admin tidak punya UI notif — cuma emit dari 8 route handler.',
+      },
+      {
+        kind: 'bullet',
+        title: 'Event yang trigger notif in-app',
+        items: [
+          'CKIDS_CHECKIN: admin check-in anak → parent dapat notif dgn 6-digit kode jemput di metadata',
+          'CKIDS_PICKUP: anak dijemput → parent dapat konfirmasi + warning kalau bukan mereka yg jemput',
+          'GIFT_REDEEMED: anak redeem hadiah di stall → parent notif transaksi + sisa balance',
+          'POINT_EARNED / POINT_ADJUSTED: kehadiran kids auto award atau admin adjust manual → parent notif',
+          'FAMILY_LINKED: jemaat di-add sebagai relasi → target notif consent info',
+          'GROUP_MEMBER_ADDED / _REMOVED / _DISMISSED: PIC add/remove member atau dismiss group → member dapat notif',
+          'EVENT_APPROVED: admin approve peserta event berbayar → peserta notif "sampai jumpa di hari H"',
+          'EVENT_CHECKED_IN: scan QR di hari H → peserta notif "kehadiran tercatat"',
+          'BRANCH_CHANGE_APPROVED / _REJECTED: admin review permohonan pindah cabang → jemaat notif hasil',
+        ],
+      },
+      {
+        kind: 'tip',
+        text: 'Notif in-app terpisah dari WA queue existing (NotificationLog). Sebagian event kirim keduanya (mis. group add/remove kirim WA + in-app), sebagian cuma in-app (mis. kids check-in). Kalau mau WA delivery juga untuk event tertentu, coordinate ke IDEA dev.',
+      },
     ],
   },
   {

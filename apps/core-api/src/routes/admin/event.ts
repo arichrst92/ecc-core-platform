@@ -41,6 +41,7 @@ import {
 } from '../../lib/storage.js';
 import { idOrSlugWhere } from '../../lib/id-or-slug.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
+import { createNotification } from '../../lib/notification.js';
 
 export const eventRouter = Router();
 
@@ -1511,6 +1512,15 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     metadata: { kind: 'event-checkin', kode: input.kode, force: input.force },
   });
 
+  void createNotification({
+    jemaatId: jemaat.id,
+    type: 'EVENT_CHECKED_IN',
+    title: `Kehadiran tercatat: ${event.judul}`,
+    body: `Anda sudah check-in di event "${event.judul}" pada ${now.toLocaleString('id-ID')}. Terima kasih atas partisipasinya.`,
+    actionUrl: `/event/${event.id}`,
+    metadata: { eventId: event.id, eventJudul: event.judul, participationId: updated.id },
+  });
+
   res.json({ success: true, data: updated, meta: { alreadyCheckedIn: false } });
 });
 
@@ -1545,6 +1555,14 @@ eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
     before,
     after: updated,
     metadata: { kind: 'event-approve' },
+  });
+  void createNotification({
+    jemaatId: before.jemaatId,
+    type: 'EVENT_APPROVED',
+    title: `Pendaftaran approved: ${before.event.judul}`,
+    body: `Pembayaran Anda untuk event "${before.event.judul}" sudah dikonfirmasi. Sampai jumpa di hari H!`,
+    actionUrl: `/event/${before.eventId}`,
+    metadata: { eventId: before.eventId, eventJudul: before.event.judul, participationId: before.id },
   });
   res.json({ success: true, data: updated });
 });

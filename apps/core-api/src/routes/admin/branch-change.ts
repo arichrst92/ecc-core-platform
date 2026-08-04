@@ -19,6 +19,7 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { createNotification } from '../../lib/notification.js';
 
 export const branchChangeRouter = Router();
 
@@ -142,5 +143,35 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
     before,
     after: updated,
   });
+
+  // In-app notif ke jemaat requester
+  if (input.decision === 'APPROVED') {
+    void createNotification({
+      jemaatId: before.jemaatId,
+      type: 'BRANCH_CHANGE_APPROVED',
+      title: 'Perubahan cabang di-approve',
+      body: `Permohonan pindah cabang Anda sudah disetujui. Cabang aktif Anda sudah di-update.${input.reviewNote ? ` Catatan admin: ${input.reviewNote}` : ''}`,
+      actionUrl: `/profile/branch`,
+      metadata: {
+        requestId: updated.id,
+        targetCabangId: before.targetCabangId,
+        reviewNote: input.reviewNote ?? null,
+      },
+    });
+  } else if (input.decision === 'REJECTED') {
+    void createNotification({
+      jemaatId: before.jemaatId,
+      type: 'BRANCH_CHANGE_REJECTED',
+      title: 'Permohonan pindah cabang ditolak',
+      body: `Permohonan Anda tidak disetujui.${input.reviewNote ? ` Alasan: ${input.reviewNote}` : ' Hubungi admin cabang untuk info lebih lanjut.'}`,
+      actionUrl: `/profile/branch`,
+      metadata: {
+        requestId: updated.id,
+        targetCabangId: before.targetCabangId,
+        reviewNote: input.reviewNote ?? null,
+      },
+    });
+  }
+
   res.json({ success: true, data: updated });
 });

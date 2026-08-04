@@ -1647,6 +1647,16 @@ enum InAppNotifType {
   POINT_EARNED
   POINT_ADJUSTED
   FAMILY_LINKED
+  // Group workflow (Modul 23)
+  GROUP_MEMBER_ADDED
+  GROUP_MEMBER_REMOVED
+  GROUP_DISMISSED
+  // Event registration + attendance
+  EVENT_APPROVED
+  EVENT_CHECKED_IN
+  // Branch change request approval flow
+  BRANCH_CHANGE_APPROVED
+  BRANCH_CHANGE_REJECTED
 
   @@map("in_app_notif_type")
 }

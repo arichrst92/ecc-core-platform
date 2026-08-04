@@ -1,0 +1,10 @@
+-- Modul 30 addendum — extend InAppNotifType dgn 7 event tambahan.
+-- Idempotent: pakai ADD VALUE IF NOT EXISTS supaya safe re-run.
+
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'GROUP_MEMBER_ADDED';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'GROUP_MEMBER_REMOVED';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'GROUP_DISMISSED';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'EVENT_APPROVED';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'EVENT_CHECKED_IN';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'BRANCH_CHANGE_APPROVED';
+ALTER TYPE "in_app_notif_type" ADD VALUE IF NOT EXISTS 'BRANCH_CHANGE_REJECTED';

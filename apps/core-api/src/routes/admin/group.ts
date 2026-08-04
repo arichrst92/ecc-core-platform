@@ -48,6 +48,7 @@ import {
   notifMemberRemoved,
   notifGroupDismissed,
 } from '../../lib/group-notif.js';
+import { createNotification, createNotificationBatch } from '../../lib/notification.js';
 import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
 
 export const groupRouter = Router();
@@ -364,8 +365,22 @@ groupRouter.delete('/:id', async (req, res) => {
   if (!before) throw NotFound('Group tidak ditemukan');
   if (!before.isActive) throw BadRequest('Group sudah dismissed');
 
-  // Notif ke members SEBELUM soft-delete (query members yg masih aktif)
+  // Notif WA queue + in-app in one go — query members dulu (SEBELUM soft-delete)
+  const activeMembers = await prisma.groupMember.findMany({
+    where: { groupId: req.params.id, isActive: true },
+    select: { jemaatId: true },
+  });
   await notifGroupDismissed(req.params.id).catch(() => {});
+  void createNotificationBatch(
+    activeMembers.map((m) => m.jemaatId),
+    {
+      type: 'GROUP_DISMISSED',
+      title: `Group "${before.nama}" ditutup`,
+      body: `Grup Anda sudah tidak aktif. Untuk info lebih lanjut, hubungi PIC atau admin.`,
+      actionUrl: `/groups`,
+      metadata: { groupId: req.params.id, groupNama: before.nama },
+    },
+  );
 
   const updated = await prisma.group.update({
     where: { id: req.params.id },
@@ -447,6 +462,7 @@ groupRouter.post('/:id/members/:jemaatId', async (req, res) => {
   });
 
   await notifMemberAdded(req.params.id, req.params.jemaatId).catch(() => {});
+  void notifGroupMemberAddedInApp(req.params.id, req.params.jemaatId);
 
   audit(req, {
     action: existing ? 'UPDATE' : 'CREATE',
@@ -496,6 +512,7 @@ groupRouter.post('/:id/members/by-kode', async (req, res) => {
   });
 
   await notifMemberAdded(req.params.id, jemaat.id).catch(() => {});
+  void notifGroupMemberAddedInApp(req.params.id, jemaat.id);
 
   audit(req, {
     action: existing ? 'UPDATE' : 'CREATE',
@@ -540,6 +557,7 @@ groupRouter.delete('/:id/members/:jemaatId', async (req, res) => {
   });
 
   await notifMemberRemoved(req.params.id, req.params.jemaatId).catch(() => {});
+  void notifGroupMemberRemovedInApp(req.params.id, req.params.jemaatId);
 
   audit(req, {
     action: 'UPDATE',
@@ -633,3 +651,33 @@ groupRouter.delete('/:id/leave', async (req, res) => {
 
   res.json({ success: true, message: `Keluar dari ${existing.group.nama}` });
 });
+
+// ============================================================
+//  In-App Notification helpers (Modul 30)
+// ============================================================
+
+async function notifGroupMemberAddedInApp(groupId: string, jemaatId: string): Promise<void> {
+  const g = await prisma.group.findUnique({ where: { id: groupId }, select: { nama: true } });
+  if (!g) return;
+  await createNotification({
+    jemaatId,
+    type: 'GROUP_MEMBER_ADDED',
+    title: `Anda ditambahkan ke ${g.nama}`,
+    body: `PIC atau admin menambahkan Anda sebagai member group "${g.nama}".`,
+    actionUrl: `/groups/${groupId}`,
+    metadata: { groupId, groupNama: g.nama },
+  });
+}
+
+async function notifGroupMemberRemovedInApp(groupId: string, jemaatId: string): Promise<void> {
+  const g = await prisma.group.findUnique({ where: { id: groupId }, select: { nama: true } });
+  if (!g) return;
+  await createNotification({
+    jemaatId,
+    type: 'GROUP_MEMBER_REMOVED',
+    title: `Anda dikeluarkan dari ${g.nama}`,
+    body: `Kalau ini kekeliruan, hubungi PIC group.`,
+    actionUrl: `/groups`,
+    metadata: { groupId, groupNama: g.nama },
+  });
+}

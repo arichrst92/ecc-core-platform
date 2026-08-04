@@ -21,7 +21,14 @@ type InAppNotifType =
   | 'GIFT_REDEEMED'
   | 'POINT_EARNED'
   | 'POINT_ADJUSTED'
-  | 'FAMILY_LINKED';
+  | 'FAMILY_LINKED'
+  | 'GROUP_MEMBER_ADDED'
+  | 'GROUP_MEMBER_REMOVED'
+  | 'GROUP_DISMISSED'
+  | 'EVENT_APPROVED'
+  | 'EVENT_CHECKED_IN'
+  | 'BRANCH_CHANGE_APPROVED'
+  | 'BRANCH_CHANGE_REJECTED';
 
 interface CreateNotifArgs {
   jemaatId: string;
@@ -40,7 +47,10 @@ export async function createNotification(args: CreateNotifArgs): Promise<void> {
     await prisma.notification.create({
       data: {
         jemaatId: args.jemaatId,
-        type: args.type,
+        // Cast: schema.prisma extended dgn 7 value baru per migration
+        // 20260803110000_extend_notif_types. Prisma client type union
+        // sinkron setelah `db:generate` di Mac. Cast supaya cross-machine safe.
+        type: args.type as never,
         title: args.title,
         body: args.body,
         actionUrl: args.actionUrl ?? null,
@@ -67,7 +77,7 @@ export async function createNotificationBatch(
     await prisma.notification.createMany({
       data: recipients.map((jemaatId) => ({
         jemaatId,
-        type: args.type,
+        type: args.type as never,
         title: args.title,
         body: args.body,
         actionUrl: args.actionUrl ?? null,

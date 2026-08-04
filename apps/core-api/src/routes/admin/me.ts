@@ -1181,3 +1181,82 @@ meRouter.get('/children-redeem-history', async (req, res) => {
 
   res.json({ success: true, data: rows });
 });
+
+// ============================================================
+//  In-App Notifications (Modul 30) — mobile bell icon feed
+// ============================================================
+
+/**
+ * GET /admin/me/notifications
+ * List notifikasi user (paginated, sort by createdAt desc).
+ * Query: limit (default 20, max 100), before (createdAt ISO untuk cursor).
+ */
+meRouter.get('/notifications', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '20'), 10) || 20, 1), 100);
+  const before = typeof req.query.before === 'string' ? new Date(req.query.before) : undefined;
+
+  const where: { jemaatId: string; createdAt?: { lt: Date } } = { jemaatId };
+  if (before && !isNaN(before.getTime())) where.createdAt = { lt: before };
+
+  const rows = await prisma.notification.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: limit + 1,
+  });
+
+  const hasMore = rows.length > limit;
+  const data = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? data[data.length - 1]?.createdAt.toISOString() : null;
+
+  res.json({
+    success: true,
+    data,
+    meta: { limit, hasMore, nextCursor },
+  });
+});
+
+/**
+ * GET /admin/me/notifications/unread-count
+ * Cache 10s supaya polling 30s tidak hit DB tiap request.
+ */
+meRouter.get('/notifications/unread-count', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const count = await prisma.notification.count({
+    where: { jemaatId, readAt: null },
+  });
+  res.setHeader('Cache-Control', 'private, max-age=10');
+  res.json({ success: true, data: { count } });
+});
+
+/**
+ * POST /admin/me/notifications/:id/read
+ * Mark 1 notification as read. Idempotent.
+ */
+meRouter.post('/notifications/:id/read', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const row = await prisma.notification.findUnique({ where: { id: req.params.id } });
+  if (!row) throw NotFound('Notifikasi tidak ditemukan');
+  if (row.jemaatId !== jemaatId) throw Forbidden('Bukan notifikasi Anda');
+
+  if (row.readAt) return res.json({ success: true, data: row });
+
+  const updated = await prisma.notification.update({
+    where: { id: req.params.id },
+    data: { readAt: new Date() },
+  });
+  res.json({ success: true, data: updated });
+});
+
+/**
+ * POST /admin/me/notifications/mark-all-read
+ * Mark semua notif user sebagai read.
+ */
+meRouter.post('/notifications/mark-all-read', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const result = await prisma.notification.updateMany({
+    where: { jemaatId, readAt: null },
+    data: { readAt: new Date() },
+  });
+  res.json({ success: true, data: { markedRead: result.count } });
+});

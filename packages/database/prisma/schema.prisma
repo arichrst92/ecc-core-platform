@@ -248,6 +248,8 @@ model Jemaat {
   localBusinesses         LocalBusiness[]          @relation("LocalBusinessOwner")
   // WA Notification logs (reminder ibadah/event, dst) — recipient.
   notificationLogs        NotificationLog[]        @relation("NotificationLogTarget")
+  // In-app notification feed (Modul 30) — recipient.
+  notifications           Notification[]           @relation("NotificationRecipient")
 
   @@index([cabangId])
   @@index([noHp])
@@ -1601,6 +1603,52 @@ enum NotificationType {
   GROUP_DISMISSED       // group di-dismiss (soft-delete) — notif ke all members
 
   @@map("notification_type")
+}
+
+// ============================================================
+// In-App Notification Feed (Modul 30 — 2026-08-03)
+// ============================================================
+// Terpisah dari NotificationLog (yang untuk queue outbound WA).
+// Ini feed user-visible di mobile bell icon / notification screen.
+// Poll via GET /admin/me/notifications setiap 30s (client-side).
+//
+// Emit event → createNotification helper insert row untuk relevant jemaat(s):
+//   CKIDS_CHECKIN         → parent dapat pickup code
+//   CKIDS_PICKUP          → parent konfirmasi anak dijemput
+//   GIFT_REDEEMED         → parent notif transaksi redeem
+//   POINT_EARNED          → parent notif anak earn point (auto atau award)
+//   POINT_ADJUSTED        → parent notif koreksi manual
+//   FAMILY_LINKED         → target jemaat notif di-link sebagai relasi
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  jemaatId    String   @map("jemaat_id") @db.Uuid
+  type        InAppNotifType
+  title       String   @db.VarChar(200)
+  body        String   @db.Text
+  // Optional deep-link route (mobile route, mis. "/ckids/anak/{uuid}") untuk
+  // tap → langsung buka screen relevan. Portal ignore ini.
+  actionUrl   String?  @map("action_url") @db.VarChar(500)
+  // Additional context (mis. pickupCode, pointAmount, redeemId) — bebas.
+  metadata    Json?
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  jemaat Jemaat @relation("NotificationRecipient", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([jemaatId, createdAt(sort: Desc)])
+  @@index([jemaatId, readAt])
+  @@map("notification")
+}
+
+enum InAppNotifType {
+  CKIDS_CHECKIN
+  CKIDS_PICKUP
+  GIFT_REDEEMED
+  POINT_EARNED
+  POINT_ADJUSTED
+  FAMILY_LINKED
+
+  @@map("in_app_notif_type")
 }
 
 enum NotificationStatus {

@@ -22,6 +22,10 @@ import {
 import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import {
+  createNotificationBatch,
+  resolveGuardianJemaatIds,
+} from '../../lib/notification.js';
 
 export const giftStallRouter = Router();
 giftStallRouter.use(requireFulltimer);
@@ -161,14 +165,18 @@ giftStallRouter.post('/redeem', async (req, res) => {
     metadata: { jemaatId, hadiahId, pointDeducted: hadiah.pointCost },
   });
 
+  // Notif guardian anak — transparency + anti-fraud
+  const newBalance = currentBalance - hadiah.pointCost;
+  void notifyGiftRedeemed(jemaat.id, jemaat.namaLengkap, hadiah.nama, hadiah.pointCost, newBalance, result.id);
+
   res.status(201).json({
     success: true,
     data: {
       redeem: result,
-      newBalance: currentBalance - hadiah.pointCost,
+      newBalance,
       newStock: hadiah.stock - 1,
     },
-    message: `Redeem berhasil. Sisa balance: ${currentBalance - hadiah.pointCost}`,
+    message: `Redeem berhasil. Sisa balance: ${newBalance}`,
   });
 });
 
@@ -249,8 +257,58 @@ giftStallRouter.post('/adjust-point', async (req, res) => {
     metadata: { jemaatId, cabangId, amount, note, newBalance: result.balance.balance },
   });
 
+  void notifyPointAdjusted(jemaat.id, jemaat.namaLengkap, amount, result.balance.balance, note);
+
   res.json({ success: true, data: result });
 });
+
+// ============================================================
+//  Notification helpers (Modul 30)
+// ============================================================
+
+/**
+ * Notif guardian anak saat redeem hadiah. Transparency + anti-fraud.
+ */
+async function notifyGiftRedeemed(
+  anakId: string,
+  anakNama: string,
+  hadiahNama: string,
+  pointCost: number,
+  newBalance: number,
+  redeemId: string,
+): Promise<void> {
+  const guardians = await resolveGuardianJemaatIds(anakId);
+  if (guardians.length === 0) return;
+  await createNotificationBatch(guardians, {
+    type: 'GIFT_REDEEMED',
+    title: `${anakNama} tukar ${hadiahNama}`,
+    body: `-${pointCost} pts. Balance sekarang: ${newBalance} pts.`,
+    actionUrl: `/ckids/anak/${anakId}/history`,
+    metadata: { anakId, redeemId, hadiahNama, pointCost, newBalance },
+  });
+}
+
+/**
+ * Notif guardian anak saat point manual di-adjust admin (+/-).
+ */
+async function notifyPointAdjusted(
+  anakId: string,
+  anakNama: string,
+  amount: number,
+  newBalance: number,
+  note: string | null | undefined,
+): Promise<void> {
+  const guardians = await resolveGuardianJemaatIds(anakId);
+  if (guardians.length === 0) return;
+  const sign = amount > 0 ? '+' : '';
+  await createNotificationBatch(guardians, {
+    type: 'POINT_ADJUSTED',
+    title: `${anakNama} ${sign}${amount} point (koreksi admin)`,
+    body: `${note ? `${note}. ` : ''}Balance sekarang: ${newBalance} pts.`,
+    actionUrl: `/ckids/anak/${anakId}`,
+    metadata: { anakId, amount, newBalance, note, source: 'MANUAL_ADJUST' },
+  });
+}
 
 // ============================================================
 // GET /admin/gift-stall/redeems?cabangId=&date=&hadiahId=&adminId=

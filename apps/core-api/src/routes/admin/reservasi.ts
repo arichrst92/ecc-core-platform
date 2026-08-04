@@ -14,6 +14,10 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
+import {
+  createNotificationBatch,
+  resolveGuardianJemaatIds,
+} from '../../lib/notification.js';
 
 export const reservasiRouter = Router();
 
@@ -415,6 +419,8 @@ reservasiRouter.post('/pickup', async (req, res) => {
     after: updated,
   });
 
+  void notifyKidsPickup(target.jemaat.id, target.jemaat.namaLengkap, target.ibadah.nama, updated.id);
+
   res.json({
     success: true,
     data: {
@@ -493,6 +499,14 @@ reservasiRouter.post('/award-point', async (req, res) => {
     resourceLabel: `+${amount} pts untuk ${reservasi.jemaat.namaLengkap} (${reservasi.ibadah.nama})`,
     metadata: { reservasiId, amount, newBalance: result.balance.balance },
   });
+
+  void notifyPointEarned(
+    reservasi.jemaat.id,
+    reservasi.jemaat.namaLengkap,
+    amount,
+    result.balance.balance,
+    reservasi.ibadah.nama,
+  );
 
   res.status(201).json({
     success: true,
@@ -701,6 +715,10 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         before: existing,
         after: updated,
       });
+      // Notif in-app ke parent kalau kids ibadah
+      if (ibadah.isKidsIbadah && pickupCode) {
+        void notifyKidsCheckin(jemaat.id, jemaat.namaLengkap, ibadah.nama, pickupCode, updated.id);
+      }
       return res.json({
         success: true,
         data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
@@ -738,6 +756,9 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       metadata: { method: 'walk-in-create', pickupCode },
       after: created,
     });
+    if (ibadah.isKidsIbadah && pickupCode) {
+      void notifyKidsCheckin(jemaat.id, jemaat.namaLengkap, ibadah.nama, pickupCode, created.id);
+    }
     return res.status(201).json({
       success: true,
       data: { reservasi: created, jemaat, ibadahNama: ibadah.nama, pickupCode },
@@ -806,6 +827,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       before: existing,
       after: updated,
     });
+    void notifyKidsPickup(jemaat.id, jemaat.namaLengkap, ibadah.nama, updated.id);
     return res.json({
       success: true,
       data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama },
@@ -815,6 +837,75 @@ reservasiRouter.post('/walk-in', async (req, res) => {
 
   throw BadRequest(`Unknown action: ${action}`);
 });
+
+// ============================================================
+//  Notification helpers (Modul 30 — parent bell icon feed)
+// ============================================================
+
+/**
+ * Kirim notif in-app ke semua guardian anak saat check-in kids ibadah.
+ * Include pickup code di body + metadata untuk mobile display prominently.
+ */
+async function notifyKidsCheckin(
+  anakId: string,
+  anakNama: string,
+  ibadahNama: string,
+  pickupCode: string,
+  reservasiId: string,
+): Promise<void> {
+  const guardians = await resolveGuardianJemaatIds(anakId);
+  if (guardians.length === 0) return;
+  await createNotificationBatch(guardians, {
+    type: 'CKIDS_CHECKIN',
+    title: `${anakNama} sudah check-in`,
+    body: `Ibadah: ${ibadahNama}. Kode jemput: ${pickupCode}. Tunjukkan kode ini ke admin saat menjemput.`,
+    actionUrl: `/ckids/reservasi/${reservasiId}`,
+    metadata: { anakId, reservasiId, pickupCode, ibadahNama },
+  });
+}
+
+/**
+ * Kirim notif in-app ke semua guardian anak saat anak dijemput.
+ * Confirmation + safety net kalau kode bocor / pickup tidak-authorized.
+ */
+async function notifyKidsPickup(
+  anakId: string,
+  anakNama: string,
+  ibadahNama: string,
+  reservasiId: string,
+): Promise<void> {
+  const guardians = await resolveGuardianJemaatIds(anakId);
+  if (guardians.length === 0) return;
+  const jam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  await createNotificationBatch(guardians, {
+    type: 'CKIDS_PICKUP',
+    title: `${anakNama} sudah dijemput`,
+    body: `Ibadah: ${ibadahNama}. Dijemput jam ${jam}. Kalau bukan Anda yang menjemput, segera hubungi admin ibadah.`,
+    actionUrl: `/ckids/reservasi/${reservasiId}`,
+    metadata: { anakId, reservasiId, ibadahNama, pickedUpAt: new Date().toISOString() },
+  });
+}
+
+/**
+ * Kirim notif ke guardian saat anak earn point (kehadiran kids ibadah auto).
+ */
+async function notifyPointEarned(
+  anakId: string,
+  anakNama: string,
+  amount: number,
+  newBalance: number,
+  ibadahNama: string,
+): Promise<void> {
+  const guardians = await resolveGuardianJemaatIds(anakId);
+  if (guardians.length === 0) return;
+  await createNotificationBatch(guardians, {
+    type: 'POINT_EARNED',
+    title: `${anakNama} +${amount} point`,
+    body: `Dari kehadiran ${ibadahNama}. Balance sekarang: ${newBalance} pts.`,
+    actionUrl: `/ckids/anak/${anakId}`,
+    metadata: { anakId, amount, newBalance, source: 'KEHADIRAN_KIDS' },
+  });
+}
 
 /**
  * Helper: generate 6-digit pickup code unique dalam (ibadah, tanggal) occurrence.

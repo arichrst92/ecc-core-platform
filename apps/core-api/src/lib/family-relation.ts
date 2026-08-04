@@ -9,6 +9,7 @@
 import { prisma, Prisma } from '@ecc/database';
 import type { FamilyRole } from '@ecc/shared-types';
 import { BadRequest, NotFound } from './errors.js';
+import { createNotification } from './notification.js';
 
 /**
  * Broad enum → nama TipeRelasiKeluarga default (as seeded). Refine di
@@ -118,15 +119,15 @@ export async function upsertJemaatRelasi(
 ): Promise<{ id: string; tipeRelasi: { id: string; nama: string } }> {
   if (selfId === targetId) throw BadRequest('Tidak bisa link ke diri sendiri.');
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const [self, target] = await Promise.all([
       tx.jemaat.findUnique({
         where: { id: selfId },
-        select: { id: true, jenisKelamin: true },
+        select: { id: true, jenisKelamin: true, namaLengkap: true },
       }),
       tx.jemaat.findUnique({
         where: { id: targetId },
-        select: { id: true, jenisKelamin: true },
+        select: { id: true, jenisKelamin: true, namaLengkap: true },
       }),
     ]);
     if (!self) throw NotFound('Jemaat self tidak ditemukan');
@@ -175,6 +176,22 @@ export async function upsertJemaatRelasi(
         tipeRelasiId: tipeB.id,
       },
     });
-    return a;
+    return { a, self, target, tipeB };
   });
+
+  // Notif in-app ke target jemaat — consent info (fire-and-forget)
+  void createNotification({
+    jemaatId: targetId,
+    type: 'FAMILY_LINKED',
+    title: `Anda ditambahkan sebagai ${result.tipeB.nama}`,
+    body: `${result.self.namaLengkap} menambahkan Anda sebagai "${result.tipeB.nama}" di daftar keluarganya. Kalau ini bukan Anda / tidak benar, hubungi admin untuk hapus.`,
+    actionUrl: `/family`,
+    metadata: {
+      byJemaatId: selfId,
+      byNamaLengkap: result.self.namaLengkap,
+      tipeRelasi: result.tipeB.nama,
+    },
+  });
+
+  return result.a;
 }

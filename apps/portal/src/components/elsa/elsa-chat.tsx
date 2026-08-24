@@ -8,14 +8,23 @@
  * TTS: kalau voice enabled + voiceURI set, speak response via SpeechSynthesisUtterance.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Loader2, Sparkles, User as UserIcon, AlertCircle, RefreshCw } from 'lucide-react';
+import { Send, Loader2, Sparkles, User as UserIcon, AlertCircle, RefreshCw, ArrowRight, ExternalLink, Mail } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { VoicePicker } from './voice-picker';
+
+interface ElsaAction {
+  type: 'navigate' | 'external' | 'contact_admin';
+  label: string;
+  url?: string;
+  message?: string;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  actions?: ElsaAction[];
   usage?: { inputTokens: number; outputTokens: number };
   iterations?: number;
 }
@@ -42,11 +51,27 @@ const SAMPLE_PROMPTS_EN = [
 ];
 
 export function ElsaChat({ lang, onChangeLang }: Props) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [voiceURI, setVoiceURI] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleAction = (action: ElsaAction) => {
+    switch (action.type) {
+      case 'navigate':
+        if (action.url) router.push(action.url);
+        break;
+      case 'external':
+        if (action.url) window.open(action.url, '_blank', 'noopener,noreferrer');
+        break;
+      case 'contact_admin':
+        // Buka contact page dgn prefill message (kalau ada)
+        router.push(action.message ? `/contact?msg=${encodeURIComponent(action.message)}` : '/contact');
+        break;
+    }
+  };
 
   // Load voice prefs
   useEffect(() => {
@@ -80,7 +105,8 @@ export function ElsaChat({ lang, onChangeLang }: Props) {
       }));
       const res = await apiClient.post<{
         data: {
-          finalText: string;
+          reply: string;
+          actions: ElsaAction[];
           iterations: number;
           usage: { inputTokens: number; outputTokens: number };
         };
@@ -90,15 +116,16 @@ export function ElsaChat({ lang, onChangeLang }: Props) {
     onSuccess: ({ history, response }) => {
       const newMessage: Message = {
         role: 'assistant',
-        content: response.finalText,
+        content: response.reply,
+        actions: response.actions,
         usage: response.usage,
         iterations: response.iterations,
       };
       setMessages([...history, newMessage]);
-      // TTS
+      // TTS (baca reply saja, tanpa action block)
       if (voiceEnabled && voiceURI && window.speechSynthesis) {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(response.finalText);
+        const utter = new SpeechSynthesisUtterance(response.reply);
         const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === voiceURI);
         if (voice) utter.voice = voice;
         window.speechSynthesis.speak(utter);
@@ -210,7 +237,7 @@ export function ElsaChat({ lang, onChangeLang }: Props) {
         )}
 
         {messages.map((msg, idx) => (
-          <MessageBubble key={idx} message={msg} />
+          <MessageBubble key={idx} message={msg} onAction={handleAction} />
         ))}
 
         {chatMut.isPending && (
@@ -270,7 +297,13 @@ export function ElsaChat({ lang, onChangeLang }: Props) {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+  message,
+  onAction,
+}: {
+  message: Message;
+  onAction: (a: ElsaAction) => void;
+}) {
   const isUser = message.role === 'user';
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -283,7 +316,7 @@ function MessageBubble({ message }: { message: Message }) {
       >
         {isUser ? <UserIcon className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
       </div>
-      <div className={`flex-1 min-w-0 ${isUser ? 'flex justify-end' : ''}`}>
+      <div className={`flex-1 min-w-0 ${isUser ? 'flex justify-end flex-col items-end' : 'flex flex-col items-start'}`}>
         <div
           className={`inline-block max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${
             isUser
@@ -302,14 +335,37 @@ function MessageBubble({ message }: { message: Message }) {
             <span className="whitespace-pre-wrap">{message.content}</span>
           )}
         </div>
+
+        {/* Action buttons */}
+        {!isUser && message.actions && message.actions.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2 max-w-[80%]">
+            {message.actions.map((action, i) => (
+              <ActionButton key={i} action={action} onClick={() => onAction(action)} />
+            ))}
+          </div>
+        )}
+
         {message.usage && (
-          <div
-            className={`text-[10px] text-neutral-400 mt-1 px-1 ${isUser ? 'text-right' : ''}`}
-          >
+          <div className={`text-[10px] text-neutral-400 mt-1 px-1`}>
             {message.iterations} step · {message.usage.inputTokens}+{message.usage.outputTokens} tokens
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function ActionButton({ action, onClick }: { action: ElsaAction; onClick: () => void }) {
+  const Icon =
+    action.type === 'external' ? ExternalLink : action.type === 'contact_admin' ? Mail : ArrowRight;
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-500 text-xs font-medium rounded-lg transition"
+      title={action.url ?? action.type}
+    >
+      <span>{action.label}</span>
+      <Icon className="w-3.5 h-3.5" />
+    </button>
   );
 }

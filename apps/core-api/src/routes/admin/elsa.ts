@@ -1,21 +1,19 @@
 /**
  * Elsa (Els Agentic) — AI chat endpoint untuk ECC data.
  *
- * Modul 31. Fulltimer-only. Powered by Anthropic Claude via lib/elsa-client.ts.
+ * Modul 31. Fulltimer-only. Powered by Groq (Llama 3.3 70B versatile) via
+ * lib/elsa-client.ts. Pattern adopted dari ide.asia /agent:
+ *   - Language lock double reinforcement (system prompt + repeated per iter)
+ *   - [ACTIONS] block sanitizer di response — mobile-style action buttons
+ *   - Rate limiter 60 req/min per IP+cookie
+ *   - Message + history length limits
  *
- * Endpoint:
- *   POST /admin/elsa/chat  — { messages: ElsaMessage[], lang: 'id'|'en' }
- *                            → { finalText, usage, iterations }
- *   GET  /admin/elsa/health — cek apakah ANTHROPIC_API_KEY set + model ready
- *
- * Tools initial:
- *   - search_jemaat(query)
- *   - count_jemaat_by_cabang(cabangId?)
- *   - list_upcoming_events()
- *   - list_ibadah_today()
- *   - get_homecell_info(query)
+ * Endpoints:
+ *   POST /admin/elsa/chat   — { messages, lang } → { reply, actions, usage, iterations }
+ *   GET  /admin/elsa/health — cek GROQ_API_KEY + model ready
  */
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '@ecc/database';
 import { z } from 'zod';
 import { requireFulltimer } from '../../middleware/require-auth.js';
@@ -27,88 +25,114 @@ export const elsaRouter = Router();
 elsaRouter.use(requireFulltimer);
 
 // ============================================================
+//  Rate limit — 60 req/min per user (JWT sub) + IP fallback
+// ============================================================
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const userId = req.user?.sub ?? '';
+    const ip = ((req.headers['x-forwarded-for'] as string || '').split(',')[0] ?? '').trim() || req.ip || '';
+    return `${userId}::${ip}`;
+  },
+  message: { success: false, error: { code: 'RATE_LIMIT', message: 'Elsa sedang sibuk. Coba lagi 1 menit lagi.' } },
+});
+
+// ============================================================
 //  Health check
 // ============================================================
 elsaRouter.get('/health', (_req, res) => {
-  const hasKey = !!process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ELSA_MODEL ?? 'claude-sonnet-4-20250514';
+  const hasKey = !!process.env.GROQ_API_KEY;
+  const model = process.env.ELSA_MODEL ?? 'llama-3.3-70b-versatile';
   res.json({
     success: true,
     data: {
       ready: hasKey,
       model,
+      provider: 'groq',
       message: hasKey
         ? 'Elsa siap. Chat via POST /admin/elsa/chat'
-        : 'ANTHROPIC_API_KEY belum di-set. Cek .env di server.',
+        : 'GROQ_API_KEY belum di-set. Cek .env di server.',
     },
   });
 });
 
 // ============================================================
-//  Tool definitions
+//  Tool definitions — OpenAI-compatible format (Groq)
 // ============================================================
 
 const TOOLS: ElsaTool[] = [
   {
-    name: 'search_jemaat',
-    description:
-      'Cari jemaat berdasarkan nama, no HP, atau kode. Return max 10 hasil dgn detail dasar (nama, no HP, cabang, role). Pakai untuk pertanyaan "jemaat bernama X ada?", "cari nomor HP Ari", dll.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Kata kunci pencarian — bisa nama, no HP, atau kode jemaat.',
+    type: 'function',
+    function: {
+      name: 'search_jemaat',
+      description:
+        'Cari jemaat berdasarkan nama, no HP, atau kode. Return max 10 hasil dgn detail dasar (nama, no HP, cabang). Pakai untuk pertanyaan "jemaat bernama X ada?", "cari nomor HP Ari", dll.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Kata kunci pencarian — bisa nama, no HP, atau kode jemaat.',
+          },
         },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'count_jemaat_by_cabang',
-    description:
-      'Hitung jumlah jemaat aktif per cabang. Kalau cabangId dikirim, return count 1 cabang; kalau tidak, return breakdown semua cabang.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        cabangId: {
-          type: 'string',
-          description: 'UUID cabang, optional. Kosongkan untuk breakdown semua.',
-        },
+        required: ['query'],
       },
     },
   },
   {
-    name: 'list_upcoming_events',
-    description:
-      'List event mendatang (30 hari ke depan) dgn tanggal, judul, cabang, peserta count. Pakai untuk "event minggu depan apa saja?", "acara natal kapan?", dll.',
-    input_schema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'list_ibadah_today',
-    description:
-      'List semua ibadah yg aktif hari ini (semua cabang) dgn jam mulai, kategori, ekspektasi kehadiran.',
-    input_schema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'get_homecell_info',
-    description:
-      'Cari info homecell berdasarkan nama homecell atau nama PIC. Return detail: PIC, member count, area, jadwal pertemuan terakhir.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Nama homecell atau nama PIC.',
+    type: 'function',
+    function: {
+      name: 'count_jemaat_by_cabang',
+      description:
+        'Hitung jumlah jemaat aktif per cabang. Kalau cabangId dikirim, return count 1 cabang; kalau tidak, return breakdown semua cabang.',
+      parameters: {
+        type: 'object',
+        properties: {
+          cabangId: {
+            type: 'string',
+            description: 'UUID cabang, optional. Kosongkan untuk breakdown semua.',
+          },
         },
       },
-      required: ['query'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_upcoming_events',
+      description:
+        'List event mendatang (30 hari ke depan) dgn tanggal, judul, cabang, peserta count. Pakai untuk "event minggu depan apa saja?", "acara natal kapan?", dll.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_ibadah_today',
+      description:
+        'List semua ibadah yg aktif hari ini (semua cabang) dgn jam mulai, kategori, lokasi.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_homecell_info',
+      description:
+        'Cari info homecell berdasarkan nama homecell atau nama PIC. Return detail: PIC, member count, area, jadwal pertemuan terakhir.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Nama homecell atau nama PIC.',
+          },
+        },
+        required: ['query'],
+      },
     },
   },
 ];
@@ -161,7 +185,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         where: { id: { in: groups.map((g) => g.cabangId).filter((c): c is string => !!c) } },
         select: { id: true, nama: true },
       });
-      const cabangMap = new Map(cabangs.map((c) => [c.id, c.nama]));
+      const cabangMap = new Map(cabangs.map((c: { id: string; nama: string }) => [c.id, c.nama]));
       const breakdown = groups
         .map((g) => ({
           cabang: g.cabangId ? cabangMap.get(g.cabangId) ?? '(unknown)' : '(no cabang)',
@@ -183,6 +207,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         select: {
           id: true,
           judul: true,
+          slug: true,
           tanggalMulai: true,
           lokasi: true,
           tipeBayar: true,
@@ -195,7 +220,9 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify({
         count: events.length,
         events: events.map((e) => ({
+          id: e.id,
           judul: e.judul,
+          slug: e.slug,
           tanggal: e.tanggalMulai.toISOString().slice(0, 10),
           lokasi: e.lokasi,
           cabang: e.cabang?.nama,
@@ -207,7 +234,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
     case 'list_ibadah_today': {
       const today = new Date();
-      const dayOfWeek = today.getDay(); // 0=Minggu, 1=Senin, ...
+      const dayOfWeek = today.getDay();
       const dayEnum = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'][dayOfWeek];
       const items = await prisma.ibadah.findMany({
         where: {
@@ -225,6 +252,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
           ],
         },
         select: {
+          id: true,
           nama: true,
           jamMulai: true,
           jamSelesai: true,
@@ -240,6 +268,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         tanggal: today.toISOString().slice(0, 10),
         count: items.length,
         items: items.map((i) => ({
+          id: i.id,
           nama: i.nama,
           kategori: i.kategoriIbadah?.nama,
           cabang: i.cabang?.nama,
@@ -277,6 +306,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify({
         count: rows.length,
         results: rows.map((h) => ({
+          id: h.id,
           nama: h.nama,
           pic: h.picJemaat?.namaLengkap,
           picNoHp: h.picJemaat?.noHp,
@@ -295,7 +325,139 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 }
 
 // ============================================================
-//  POST /chat — main agent entrypoint
+//  [ACTIONS] block sanitizer — adopted dari ide.asia /agent
+// ============================================================
+
+interface ElsaAction {
+  type: 'navigate' | 'external' | 'contact_admin';
+  label: string;
+  url?: string;
+  message?: string;
+}
+
+const ALLOWED_ACTION_TYPES = ['navigate', 'external', 'contact_admin'] as const;
+
+/**
+ * Parse [ACTIONS]{"actions":[...]}[/ACTIONS] block dari LLM response.
+ * Return { cleanText, actions } — cleanText tanpa block, actions valid saja
+ * (max 2, whitelist type, sanitize url/message).
+ */
+function parseActionsBlock(raw: string): { cleanText: string; actions: ElsaAction[] } {
+  const match = raw.match(/\[ACTIONS\]\s*(\{[\s\S]*?\})\s*\[\/ACTIONS\]/);
+  if (!match) return { cleanText: raw, actions: [] };
+
+  const cleanText = raw.replace(match[0], '').trim();
+  let actions: ElsaAction[] = [];
+  try {
+    const parsed = JSON.parse(match[1] as string);
+    if (Array.isArray(parsed.actions)) {
+      actions = parsed.actions
+        .slice(0, 2)
+        .filter((a: unknown): a is Record<string, unknown> => !!a && typeof a === 'object')
+        .map((a: Record<string, unknown>): ElsaAction | null => {
+          const type = a.type as string;
+          if (!ALLOWED_ACTION_TYPES.includes(type as (typeof ALLOWED_ACTION_TYPES)[number])) return null;
+          const label = typeof a.label === 'string' ? a.label.slice(0, 60) : '';
+          if (!label) return null;
+          const action: ElsaAction = { type: type as ElsaAction['type'], label };
+          if (type === 'navigate' || type === 'external') {
+            const url = typeof a.url === 'string' ? a.url : '';
+            if (type === 'navigate' && !url.startsWith('/')) return null;
+            if (type === 'external' && !url.startsWith('https://')) return null;
+            if (url.length > 200) return null;
+            action.url = url;
+          }
+          if (typeof a.message === 'string') {
+            action.message = a.message.slice(0, 300);
+          }
+          return action;
+        })
+        .filter((a: ElsaAction | null): a is ElsaAction => a !== null);
+    }
+  } catch {
+    // Silent — return empty actions
+  }
+  return { cleanText, actions };
+}
+
+// ============================================================
+//  System prompts + language lock
+// ============================================================
+
+function baseSystemPrompt(lang: 'id' | 'en'): string {
+  const langName = lang === 'id' ? 'Bahasa Indonesia' : 'English';
+  const base = lang === 'id'
+    ? `Kamu adalah Elsa (Els Agentic), asisten AI untuk data ECC (Elshaddai Creative Community) — sebuah gereja. Kamu membantu admin fulltimer menjawab pertanyaan tentang data jemaat, ibadah, event, homecell, dan aktivitas gereja.
+
+INSTRUKSI UMUM:
+- Jawab dalam ${langName} yang natural + ringkas.
+- Selalu pakai TOOLS untuk fetch data actual — jangan pernah mengarang angka atau nama.
+- Kalau data tidak ditemukan, jujur bilang "tidak ada data yang cocok".
+- Jangan expose data sensitif seperti password, JWT token, atau financial detail.
+- Format response: pakai bullet list untuk multi-item data.`
+    : `You are Elsa (Els Agentic), an AI assistant for ECC (Elshaddai Creative Community) church data. You help fulltimer admins answer questions about members, services, events, homecells, and other church activities.
+
+GENERAL INSTRUCTIONS:
+- Answer in natural, concise ${langName}.
+- Always use TOOLS to fetch actual data — never fabricate numbers or names.
+- If data not found, honestly say "no matching data".
+- Never expose sensitive data like passwords, JWT tokens, or financial details.
+- Format: use bullet lists for multi-item data.`;
+
+  const actionsGuide = lang === 'id'
+    ? `
+
+CAPABILITIES — ACTION BUTTONS:
+Kamu bisa suggest tombol aksi clickable dgn append JSON block di baris TERAKHIR reply.
+
+Format (single line, last line):
+[ACTIONS]{"actions":[{"type":"navigate","label":"Buka daftar jemaat","url":"/dashboard/jemaat"}]}[/ACTIONS]
+
+Types tersedia:
+- "navigate" — internal portal route. Required: label, url (WAJIB start dgn "/"). Contoh URL: /dashboard/jemaat, /dashboard/jemaat/<uuid>, /dashboard/event, /dashboard/homecell, /dashboard/hadiah?cabangId=<uuid>
+- "external" — external URL. Required: label, url (WAJIB start dgn "https://")
+- "contact_admin" — trigger contact form ke tim IDEA. Required: label. Optional: message (pre-filled text)
+
+Rules:
+- Max 2 actions per reply
+- SKIP [ACTIONS] kalau reply cuma informational (tidak butuh follow-up)
+- Kalau ada URL dgn UUID dari tool result, PASTIKAN UUID dari tool result tsb (jangan buat sendiri)
+- Label ringkas (< 40 chars)
+- Place block STRICTLY di baris terakhir reply, sendirian`
+    : `
+
+CAPABILITIES — ACTION BUTTONS:
+You can suggest clickable action buttons by appending a JSON block on the LAST line of your reply.
+
+Format (single line, last line):
+[ACTIONS]{"actions":[{"type":"navigate","label":"Open members list","url":"/dashboard/jemaat"}]}[/ACTIONS]
+
+Available types:
+- "navigate" — internal portal route. Required: label, url (MUST start with "/"). Example URLs: /dashboard/jemaat, /dashboard/jemaat/<uuid>, /dashboard/event, /dashboard/homecell, /dashboard/hadiah?cabangId=<uuid>
+- "external" — external URL. Required: label, url (MUST start with "https://")
+- "contact_admin" — trigger contact form to IDEA team. Required: label. Optional: message (pre-filled text)
+
+Rules:
+- Max 2 actions per reply
+- SKIP [ACTIONS] if reply is purely informational (no follow-up needed)
+- If URL has UUID from tool result, ENSURE UUID is from tool response (never invent)
+- Label concise (< 40 chars)
+- Place block STRICTLY on the last line, alone`;
+
+  return base + actionsGuide;
+}
+
+function languageLockMessage(lang: 'id' | 'en'): string {
+  const langName = lang === 'id' ? 'Bahasa Indonesia' : 'English';
+  return lang === 'id'
+    ? `KUNCI BAHASA — SANGAT PENTING:
+User memilih ${langName} sebagai bahasa sesi. Kamu WAJIB merespons HANYA dalam ${langName} sepanjang percakapan, TIDAK PEDULI dalam bahasa apa user mengetik. Jangan pernah ganti bahasa di tengah percakapan.`
+    : `LANGUAGE LOCK — VERY IMPORTANT:
+The user has selected ${langName} as their session language. You MUST respond ONLY in ${langName} for the entire conversation, REGARDLESS of what language the user types in. Never switch languages mid-conversation.`;
+}
+
+// ============================================================
+//  POST /chat
 // ============================================================
 
 const chatSchema = z.object({
@@ -303,58 +465,47 @@ const chatSchema = z.object({
     .array(
       z.object({
         role: z.enum(['user', 'assistant']),
-        content: z.union([z.string(), z.array(z.any())]),
+        content: z.string().max(2000),
       }),
     )
     .min(1)
-    .max(50),
+    .max(20),
   lang: z.enum(['id', 'en']).default('id'),
 });
 
-function systemPrompt(lang: 'id' | 'en'): string {
-  const base = lang === 'id'
-    ? `Kamu adalah Elsa (Els Agentic), asisten AI untuk data ECC (Elshaddai Creative Community) — sebuah gereja. Kamu membantu admin fulltimer menjawab pertanyaan tentang data jemaat, ibadah, event, homecell, dan aktivitas gereja lainnya.
-
-INSTRUKSI:
-- Jawab dalam Bahasa Indonesia yang natural + ringkas.
-- Selalu pakai TOOLS yang tersedia untuk fetch data actual — jangan pernah mengarang angka atau nama.
-- Kalau data tidak ditemukan, jujur bilang "tidak ada data yang cocok".
-- Untuk pertanyaan agregat (mis. total jemaat), pakai tool count/list yang sesuai.
-- Kalau user tanya sesuatu di luar scope ECC (mis. resep masakan), sopan tolak dan arahkan ke topik data gereja.
-- Jangan expose data sensitif seperti password, JWT token, atau financial detail.
-- Format: gunakan bullet list atau tabel markdown kalau data multi-item.`
-    : `You are Elsa (Els Agentic), an AI assistant for ECC (Elshaddai Creative Community) church data. You help fulltimer admins answer questions about members, services, events, homecells, and other church activities.
-
-INSTRUCTIONS:
-- Answer in natural, concise English.
-- Always use provided TOOLS to fetch actual data — never fabricate numbers or names.
-- If data not found, honestly say "no matching data".
-- For aggregate questions (e.g. total members), use appropriate count/list tools.
-- If user asks something outside ECC scope, politely decline and redirect to church data topics.
-- Never expose sensitive data like passwords, JWT tokens, or financial details.
-- Format: use bullet lists or markdown tables for multi-item data.`;
-  return base;
-}
-
-elsaRouter.post('/chat', async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) {
+elsaRouter.post('/chat', chatLimiter, async (req, res) => {
+  if (!process.env.GROQ_API_KEY) {
     throw new ApiError(
       503,
       'ELSA_NOT_CONFIGURED',
-      'Elsa belum di-setup. Admin sistem perlu set ANTHROPIC_API_KEY di server .env dan restart core-api.',
+      'Elsa belum di-setup. Admin sistem perlu set GROQ_API_KEY di server .env dan restart core-api.',
     );
   }
 
   const input = chatSchema.parse(req.body);
+
+  // Enforce message length — last user message max 1000 chars (input-side)
+  const lastMsg = input.messages[input.messages.length - 1];
+  if (lastMsg && lastMsg.role === 'user' && lastMsg.content.length > 1000) {
+    throw BadRequest('Pesan terlalu panjang (max 1000 karakter).');
+  }
+
+  // Slice history max 10 turns (client mungkin kirim lebih)
+  const trimmedMessages = input.messages.slice(-10);
+
   const start = Date.now();
 
   try {
     const result = await runAgenticLoop({
-      system: systemPrompt(input.lang),
-      messages: input.messages as ElsaMessage[],
+      system: baseSystemPrompt(input.lang),
+      messages: trimmedMessages as ElsaMessage[],
       tools: TOOLS,
       toolExecutor: executeTool,
+      langLockMessage: languageLockMessage(input.lang),
     });
+
+    // Parse [ACTIONS] block
+    const { cleanText, actions } = parseActionsBlock(result.finalText);
 
     audit(req, {
       action: 'CREATE',
@@ -366,14 +517,16 @@ elsaRouter.post('/chat', async (req, res) => {
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
         durationMs: Date.now() - start,
-        messageCount: input.messages.length,
+        messageCount: trimmedMessages.length,
+        actionsCount: actions.length,
       },
     });
 
     res.json({
       success: true,
       data: {
-        finalText: result.finalText,
+        reply: cleanText,
+        actions,
         iterations: result.iterations,
         usage: result.usage,
         durationMs: Date.now() - start,

@@ -168,7 +168,11 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Backend: POST /admin/elsa/chat (Fulltimer-only). Butuh ANTHROPIC_API_KEY di server .env — kalau belum di-set, endpoint return 503 dengan pesan info. Model default: claude-sonnet-4.',
+        text: 'Backend: POST /admin/elsa/chat (Fulltimer-only). Butuh GROQ_API_KEY di server .env — kalau belum di-set, endpoint return 503 dengan pesan info. Model default: llama-3.3-70b-versatile via Groq (super cepat + murah, 35x lebih hemat vs Claude). Rate limit 60 req/menit per user+IP. Message max 1000 chars, history max 10 turns.',
+      },
+      {
+        kind: 'tip',
+        text: 'Elsa bisa suggest action buttons di bawah response — klik untuk navigate langsung ke menu portal (mis. "Buka daftar jemaat" → /dashboard/jemaat). Response otomatis parse [ACTIONS] block dgn sanitize whitelist type (navigate/external/contact_admin) + validasi URL start dgn "/" atau "https://". Max 2 button per response.',
       },
     ],
   },

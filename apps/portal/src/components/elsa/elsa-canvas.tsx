@@ -94,9 +94,10 @@ export function ElsaCanvas() {
       ctx.clearRect(0, 0, W, H);
 
       const audioLevel = window.__elsaAudioLevel ?? 0;
+      // Range koneksi meluas saat audio (140→220px)
       const maxDist = (140 + audioLevel * 80) * DPR;
-      // Line width lebih tebal (was 0.5 → 1.4). Extra thickness saat audio active.
-      const lineWidth = (1.4 + audioLevel * 0.8) * DPR;
+      // Line width: idle 1.4 → peak 3.0 (was 1.4 + 0.8 = 2.2)
+      const lineWidth = (1.4 + audioLevel * 1.6) * DPR;
 
       const cx = W / 2;
       const cy = H / 2;
@@ -150,7 +151,8 @@ export function ElsaCanvas() {
           const max2 = maxDist * maxDist;
           if (d2 < max2) {
             const tt = 1 - Math.sqrt(d2) / maxDist;
-            const alpha = tt * (0.3 + audioLevel * 0.45);
+            // Alpha jauh lebih terang saat audio active — idle 0.3, peak audio 1.0
+            const alpha = tt * (0.3 + audioLevel * 0.9);
             ctx.beginPath();
             ctx.strokeStyle = `rgba(242, 101, 34, ${alpha})`;
             ctx.lineWidth = lineWidth;
@@ -161,25 +163,42 @@ export function ElsaCanvas() {
         }
       }
 
-      // Nodes
+      // Nodes — brightness boost saat audio active
       for (const n of nodes) {
         const p = Math.sin(n.pulse) * 0.5 + 0.5;
-        const r = n.r * (1 + audioLevel * 0.55 + p * 0.4);
+        // Radius node: idle 1 → peak 2.2 (was 0.55)
+        const r = n.r * (1 + audioLevel * 1.0 + p * 0.4);
         ctx.beginPath();
         ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
         if (n.accent) {
-          ctx.fillStyle = `rgba(242, 101, 34, ${0.7 + p * 0.3})`;
+          // Accent (orange) — full brightness saat audio
+          ctx.fillStyle = `rgba(242, 101, 34, ${Math.min(1, 0.7 + p * 0.3 + audioLevel * 0.4)})`;
         } else {
-          ctx.fillStyle = `rgba(30, 41, 59, ${0.55 + p * 0.3})`;
+          // Regular (ink) — shift ke orange saat audio active (color mix)
+          const blendR = 30 + audioLevel * 212;
+          const blendG = 41 + audioLevel * 60;
+          const blendB = 59 - audioLevel * 25;
+          ctx.fillStyle = `rgba(${blendR}, ${blendG}, ${blendB}, ${Math.min(1, 0.55 + p * 0.3 + audioLevel * 0.35)})`;
         }
         ctx.fill();
 
-        if (n.r > 1.4 * DPR && audioLevel > 0.08) {
+        // Glow ring: expanded saat audio, ALL nodes not just large ones
+        if (audioLevel > 0.05) {
           ctx.beginPath();
-          ctx.arc(n.x, n.y, r * 3 + audioLevel * 6 * DPR, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(242, 101, 34, ${audioLevel * 0.18})`;
-          ctx.lineWidth = 1 * DPR;
+          ctx.arc(n.x, n.y, r * 3 + audioLevel * 10 * DPR, 0, Math.PI * 2);
+          // Glow alpha jauh lebih terang: idle 0 → peak 0.5 (was 0.18)
+          ctx.strokeStyle = `rgba(242, 101, 34, ${audioLevel * 0.5})`;
+          ctx.lineWidth = (1 + audioLevel * 2) * DPR;
           ctx.stroke();
+
+          // Extra outer glow ring untuk drama
+          if (audioLevel > 0.15 && n.accent) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, r * 5 + audioLevel * 18 * DPR, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(242, 101, 34, ${audioLevel * 0.2})`;
+            ctx.lineWidth = 1 * DPR;
+            ctx.stroke();
+          }
         }
       }
 

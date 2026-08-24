@@ -157,9 +157,10 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
 
     function pulse() {
       if (!speaking) return;
-      const t = performance.now() * 0.005;
-      const p = 0.45 + 0.2 * Math.sin(t) + (Math.random() - 0.5) * 0.15;
-      window.__elsaSetAudioLevel?.(Math.max(0.1, Math.min(0.75, p)));
+      const t = performance.now() * 0.006;
+      // Boost pulse: base 0.65 + swing 0.3 + jitter 0.2 → range 0.35-1.15 clamped to 0.4-1.0
+      const p = 0.65 + 0.3 * Math.sin(t) + 0.15 * Math.sin(t * 2.3) + (Math.random() - 0.5) * 0.2;
+      window.__elsaSetAudioLevel?.(Math.max(0.4, Math.min(1.0, p)));
       speakingPulseRef.current = requestAnimationFrame(pulse);
     }
 
@@ -288,25 +289,17 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
       {/* Canvas particle animation */}
       <ElsaCanvas />
 
-      {/* Header overlay — right-side controls only (branding di-remove per user request) */}
-      <header className="absolute top-0 right-0 z-20 flex items-center px-6 py-4">
-        <div className="flex items-center gap-2">
+      {/* Header overlay — reset button di kanan atas (lang picker pindah ke input row) */}
+      {history.length > 0 && (
+        <header className="absolute top-0 right-0 z-20 flex items-center px-6 py-4">
           <button
-            onClick={onChangeLang}
-            className="text-xs px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 text-neutral-700 font-medium bg-white"
+            onClick={reset}
+            className="text-xs px-3 py-1.5 text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 bg-white border border-neutral-300"
           >
-            {lang.toUpperCase()}
+            <RefreshCw className="w-3 h-3" /> Reset
           </button>
-          {history.length > 0 && (
-            <button
-              onClick={reset}
-              className="text-xs px-3 py-1.5 text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 bg-white border border-neutral-300"
-            >
-              <RefreshCw className="w-3 h-3" /> Reset
-            </button>
-          )}
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Speech bubble center */}
       <div className="absolute inset-x-0 top-24 z-10 flex justify-center pointer-events-none px-6">
@@ -349,6 +342,14 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
 
         {/* Input row */}
         <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg border border-neutral-200 flex items-end gap-2 p-2 pointer-events-auto">
+          {/* Language picker button — di kiri chatbox */}
+          <button
+            onClick={onChangeLang}
+            className="shrink-0 px-3 py-2.5 text-xs font-semibold text-neutral-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition border border-neutral-200"
+            title={lang === 'id' ? 'Ganti bahasa' : 'Change language'}
+          >
+            {lang.toUpperCase()}
+          </button>
           <textarea
             ref={inputRef}
             value={input}

@@ -37,6 +37,7 @@ import {
   DatabaseZap,
   Gift,
   LayoutTemplate,
+  Sparkles,
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -60,7 +61,7 @@ interface NavGroup {
 }
 
 const top: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Elsa (Els Agentic)', icon: Sparkles },
   // User Guide — top-level (di bawah Dashboard, di luar grup). Tanpa menuKey
   // supaya selalu visible untuk semua user yang sudah login portal — semua
   // butuh akses panduan.

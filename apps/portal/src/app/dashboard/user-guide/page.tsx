@@ -101,7 +101,7 @@ const SECTIONS: Section[] = [
         kind: 'bullet',
         title: 'Struktur navigasi sidebar',
         items: [
-          'Dashboard — ringkasan + shortcut',
+          'Elsa (Els Agentic) — AI chat untuk tanya data ECC (jemaat, ibadah, event, homecell, dll)',
           'User Guide — panduan ini',
           'Entity — Sinode, Cabang Gereja',
           'Service — Ibadah, Kategori, Pelayanan, Kehadiran',
@@ -117,6 +117,58 @@ const SECTIONS: Section[] = [
       {
         kind: 'tip',
         text: 'Setiap grup di sidebar bisa di-collapse dengan klik header-nya. State collapse tersimpan otomatis di browser.',
+      },
+    ],
+  },
+  {
+    id: 'elsa',
+    title: 'Elsa (Els Agentic) — AI Chat',
+    icon: Sparkles,
+    summary: 'AI assistant untuk tanya data ECC via chat natural language.',
+    content: [
+      {
+        kind: 'paragraph',
+        text: 'Elsa (Els Agentic) adalah AI assistant di halaman Dashboard yang bisa jawab pertanyaan tentang data ECC secara natural language. Powered by Anthropic Claude + tool calling ke database ECC — jadi jawaban selalu berdasarkan data actual, bukan tebakan.',
+      },
+      {
+        kind: 'bullet',
+        title: 'Yang bisa ditanyakan Elsa',
+        items: [
+          'Total jemaat per cabang (mis. "Berapa jemaat aktif ECC Bandung?")',
+          'Cari jemaat by nama / no HP / kode (mis. "Cari jemaat bernama Ari")',
+          'Event mendatang 30 hari (mis. "Event apa saja bulan ini?")',
+          'Ibadah hari ini semua cabang (mis. "Ibadah hari ini jam berapa?")',
+          'Info homecell + PIC (mis. "Homecell yang PIC-nya Sarah info-nya?")',
+        ],
+      },
+      {
+        kind: 'steps',
+        title: 'Cara pakai Elsa',
+        items: [
+          'Buka Dashboard (menu paling atas sidebar) — first visit muncul language picker (EN/ID).',
+          'Pilih bahasa → Elsa akan konsisten pakai bahasa itu (persisten via browser).',
+          'Ketik pertanyaan di input bawah, tekan Enter (Shift+Enter untuk newline).',
+          'Elsa akan panggil tool DB yang sesuai + tampilkan hasil dalam beberapa detik.',
+          'Toggle voice icon di header untuk aktifkan text-to-speech (Elsa baca response pakai suara browser).',
+          'Klik voice dropdown untuk pilih suara (populate dari OS/browser).',
+          'Klik Reset untuk mulai percakapan baru.',
+        ],
+      },
+      {
+        kind: 'tip',
+        text: 'Voice picker populate dari OS/browser Anda — biasanya Chrome dgn Google voice terbaik, Safari pakai Apple voice. Coba klik ▶ preview untuk test suara sebelum digunakan.',
+      },
+      {
+        kind: 'warning',
+        text: 'Elsa cuma bisa akses data ECC via 5 tool starter (jemaat search, count per cabang, event, ibadah, homecell). Untuk data lain (audit log, ministry, gift stall, dll) — pakai menu portal yang sesuai. Kalau butuh Elsa jawab lebih banyak, coordinate tambah tool baru ke tim BE.',
+      },
+      {
+        kind: 'warning',
+        text: 'Elsa bisa membuat kesalahan (halusinasi angka/nama). Untuk keputusan penting, verifikasi manual dgn menu portal yang bersangkutan. Kalau ada jawaban janggal, klik Reset + coba rephrase.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Backend: POST /admin/elsa/chat (Fulltimer-only). Butuh ANTHROPIC_API_KEY di server .env — kalau belum di-set, endpoint return 503 dengan pesan info. Model default: claude-sonnet-4.',
       },
     ],
   },
@@ -449,11 +501,11 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'In-App Notifications (Modul 30): backend auto-kirim notifikasi ke bell icon mobile jemaat saat 13 event: check-in / pickup anak, redeem hadiah, point earn/adjust, family link, group add/remove/dismiss, event approved/checkin, branch change approved/rejected. Mobile polling per 30 detik pakai endpoint /admin/me/notifications. Portal admin tidak punya UI notif — cuma emit dari 8 route handler.',
+        text: 'In-App Notifications (Modul 30): backend auto-kirim notifikasi ke bell icon mobile jemaat saat 16 event across kids, family, group, event, homecell, visit, dan branch-change flow. Mobile polling per 30 detik pakai endpoint /admin/me/notifications. Portal admin tidak punya UI notif — cuma emit dari 11 route handler.',
       },
       {
         kind: 'bullet',
-        title: 'Event yang trigger notif in-app',
+        title: 'Event yang trigger notif in-app (16 total)',
         items: [
           'CKIDS_CHECKIN: admin check-in anak → parent dapat notif dgn 6-digit kode jemput di metadata',
           'CKIDS_PICKUP: anak dijemput → parent dapat konfirmasi + warning kalau bukan mereka yg jemput',
@@ -461,8 +513,11 @@ const SECTIONS: Section[] = [
           'POINT_EARNED / POINT_ADJUSTED: kehadiran kids auto award atau admin adjust manual → parent notif',
           'FAMILY_LINKED: jemaat di-add sebagai relasi → target notif consent info',
           'GROUP_MEMBER_ADDED / _REMOVED / _DISMISSED: PIC add/remove member atau dismiss group → member dapat notif',
+          'EVENT_REGISTERED: user self-register jadi peserta → konfirmasi "registrasi diterima, tunggu bayar / sampai jumpa"',
           'EVENT_APPROVED: admin approve peserta event berbayar → peserta notif "sampai jumpa di hari H"',
           'EVENT_CHECKED_IN: scan QR di hari H → peserta notif "kehadiran tercatat"',
+          'HOMECELL_ATTENDED: PIC scan QR member di pertemuan homecell → member dapat konfirmasi',
+          'VISIT_RECORDED: jemaat lain scan QR Anda untuk record visit → target dapat notif dgn detail visit',
           'BRANCH_CHANGE_APPROVED / _REJECTED: admin review permohonan pindah cabang → jemaat notif hasil',
         ],
       },

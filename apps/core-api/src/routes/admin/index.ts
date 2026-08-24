@@ -32,6 +32,7 @@ import { groupRouter } from './group.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
+import { elsaRouter } from './elsa.js';
 
 export const adminRouter = Router();
 
@@ -81,6 +82,9 @@ adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
 // CKids (Modul 28) — Hadiah katalog master + Gift Stall (redeem POS).
 adminRouter.use('/hadiah', hadiahRouter);
 adminRouter.use('/gift-stall', giftStallRouter);
+// Modul 31 — Elsa (Els Agentic) AI chat agent untuk data ECC.
+// Fulltimer-only (guard di dalam router). Powered by Anthropic Claude.
+adminRouter.use('/elsa', elsaRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

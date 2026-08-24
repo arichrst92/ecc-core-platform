@@ -1,35 +1,49 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { Loader2 } from 'lucide-react';
-
 /**
- * Dashboard page = Globe interaktif yang plot cabang gereja.
+ * Dashboard = Elsa (Els Agentic) — AI chat agent untuk data ECC.
  *
- * react-globe.gl pakai WebGL via three.js — tidak compatible dengan SSR.
- * Pakai `next/dynamic` + `ssr: false` supaya hanya di-load di client.
+ * Modul 31. Replace globe view sebelumnya.
  *
- * Komponen visualisasi sebenarnya ada di GlobeView (file terpisah supaya
- * tree-shaking lebih bersih).
+ * Flow:
+ *   1. First visit → LanguagePicker modal (persist 'elsa-lang' localStorage)
+ *   2. Chat UI (ElsaChat) — voice picker + message history + input
+ *   3. Backend: POST /admin/elsa/chat via ElsaChat mutation
  */
-const GlobeView = dynamic(() => import('@/components/dashboard/globe-view'), {
-  ssr: false,
-  loading: () => (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 bg-white">
-      <Loader2 className="w-8 h-8 animate-spin mb-3" />
-      <p className="text-sm">Memuat globe...</p>
-    </div>
-  ),
-});
+import { useEffect, useState } from 'react';
+import { LanguagePicker } from '@/components/elsa/language-picker';
+import { ElsaChat } from '@/components/elsa/elsa-chat';
 
 export default function DashboardPage() {
-  // Dashboard layout (apps/portal/src/app/dashboard/layout.tsx) memberi padding.
-  // Untuk globe, kita ingin full-bleed; pakai negative margin + h-screen
-  // calc supaya bisa menempati seluruh viewport tinggi konten.
-  // Background putih menyesuaikan tema desain portal.
+  const [lang, setLang] = useState<'id' | 'en' | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem('elsa-lang');
+    if (saved === 'id' || saved === 'en') setLang(saved);
+  }, []);
+
+  function handleSelect(l: 'id' | 'en') {
+    localStorage.setItem('elsa-lang', l);
+    setLang(l);
+  }
+
+  function changeLang() {
+    localStorage.removeItem('elsa-lang');
+    setLang(null);
+  }
+
+  // Prevent hydration mismatch — render nothing sampai mounted
+  if (!mounted) return null;
+
   return (
-    <div className="relative -m-6 md:-m-8 bg-white overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
-      <GlobeView />
+    <div className="relative -m-6 md:-m-8 bg-white" style={{ height: 'calc(100vh - 72px)' }}>
+      {lang ? (
+        <ElsaChat lang={lang} onChangeLang={changeLang} />
+      ) : (
+        <LanguagePicker onSelect={handleSelect} />
+      )}
     </div>
   );
 }

@@ -248,13 +248,17 @@ export function BottomDock() {
         {/* Logo ECC */}
         <Link
           href="/dashboard"
-          className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl hover:bg-neutral-100 transition shrink-0"
-          title="ECC Portal"
+          className="group flex flex-col items-center gap-1 shrink-0"
         >
-          <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} className="rounded md:w-9 md:h-9" />
+          <div className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl hover:bg-neutral-100 transition group-hover:scale-110 group-hover:-translate-y-0.5 duration-200 ease-out">
+            <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} className="rounded md:w-9 md:h-9" />
+          </div>
+          <span className="text-[10px] leading-tight font-medium max-w-[76px] text-center truncate text-neutral-600 group-hover:text-brand-600 transition-colors">
+            ECC
+          </span>
         </Link>
 
-        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
+        <div className="w-px h-14 md:h-16 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Standalone left (Elsa + User Guide) */}
         {STANDALONE_LEFT.map((item) => (
@@ -267,7 +271,7 @@ export function BottomDock() {
           />
         ))}
 
-        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
+        <div className="w-px h-14 md:h-16 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Menu groups */}
         {visibleGroups.map((g) => (
@@ -289,7 +293,7 @@ export function BottomDock() {
           />
         ))}
 
-        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
+        <div className="w-px h-14 md:h-16 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Standalone right (Profile) */}
         {STANDALONE_RIGHT.map((item) => (
@@ -324,21 +328,15 @@ function DockItem({
   return (
     <Link
       href={href}
-      className="group relative flex flex-col items-center justify-end"
-      title={label}
+      className="group relative flex flex-col items-center gap-1 shrink-0"
     >
-      {/* Tooltip di atas icon */}
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] px-2.5 py-1 bg-neutral-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
-        {label}
-      </span>
-
       <button
         type="button"
         className={clsx(
           'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
           'transition-all duration-200 ease-out',
           'active:scale-90',
-          'group-hover:scale-125 group-hover:-translate-y-1',
+          'group-hover:scale-110 group-hover:-translate-y-0.5',
           active
             ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
             : 'text-neutral-700 hover:bg-neutral-100',
@@ -347,10 +345,15 @@ function DockItem({
         <Icon className="w-5 h-5 md:w-6 md:h-6" />
       </button>
 
-      {/* Active dot */}
-      {active && (
-        <span className="absolute -bottom-2 w-1 h-1 rounded-full bg-brand-600" />
-      )}
+      {/* Label di bawah icon */}
+      <span
+        className={clsx(
+          'text-[10px] leading-tight font-medium max-w-[76px] text-center truncate transition-colors',
+          active ? 'text-brand-700' : 'text-neutral-600 group-hover:text-brand-600',
+        )}
+      >
+        {label}
+      </span>
     </Link>
   );
 }
@@ -377,11 +380,11 @@ function DockGroup({
   const Icon = group.icon;
 
   return (
-    <div className="relative flex flex-col items-center justify-end group">
-      {/* Tooltip / Popover container */}
-      {open ? (
+    <div className="relative flex flex-col items-center gap-1 shrink-0 group">
+      {/* Popover submenu (only saat click) */}
+      {open && (
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[60] min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
@@ -411,10 +414,6 @@ function DockGroup({
             })}
           </div>
         </div>
-      ) : (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] px-2.5 py-1 bg-neutral-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
-          {group.label}
-        </span>
       )}
 
       <button
@@ -424,27 +423,31 @@ function DockGroup({
           'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
           'transition-all duration-200 ease-out',
           'active:scale-90',
-          !open && 'group-hover:scale-125 group-hover:-translate-y-1',
+          !open && 'group-hover:scale-110 group-hover:-translate-y-0.5',
           open
-            ? 'bg-neutral-900 text-white shadow-lg -translate-y-1'
+            ? 'bg-neutral-900 text-white shadow-lg -translate-y-0.5'
             : active
               ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
               : 'text-neutral-700 hover:bg-neutral-100',
         )}
-        title={group.label}
       >
         <Icon className="w-5 h-5 md:w-6 md:h-6" />
       </button>
 
-      {/* Active dot */}
-      {(active || open) && (
-        <span
-          className={clsx(
-            'absolute -bottom-2 w-1 h-1 rounded-full',
-            open ? 'bg-neutral-900' : 'bg-brand-600',
-          )}
-        />
-      )}
+      {/* Label di bawah icon */}
+      <span
+        className={clsx(
+          'text-[10px] leading-tight font-medium max-w-[76px] text-center truncate transition-colors',
+          open
+            ? 'text-neutral-900'
+            : active
+              ? 'text-brand-700'
+              : 'text-neutral-600 group-hover:text-brand-600',
+        )}
+      >
+        {group.label}
+      </span>
+
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, ApiError } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { runAgenticLoop, type ElsaMessage, type ElsaTool } from '../../lib/elsa-client.js';
+import { logger } from '../../lib/logger.js';
 
 export const elsaRouter = Router();
 elsaRouter.use(requireFulltimer);
@@ -535,8 +536,8 @@ elsaRouter.post('/chat', chatLimiter, async (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const stack = e instanceof Error ? e.stack : undefined;
-    // Log full stack ke server console — dev bisa cek pm2 logs
-    console.error('[elsa] chat error:', msg, stack);
+    // Log via pino supaya muncul di pm2 logs JSON
+    logger.error({ err: msg, stack, lang: input.lang, msgCount: trimmedMessages.length }, '[elsa] chat error');
 
     // Classify error → return status + code yg tepat
     if (msg.includes('Groq API error 401') || msg.includes('Invalid API Key')) {

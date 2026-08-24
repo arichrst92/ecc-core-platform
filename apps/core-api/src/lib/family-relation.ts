@@ -176,20 +176,26 @@ export async function upsertJemaatRelasi(
         tipeRelasiId: tipeB.id,
       },
     });
-    return { a, self, target, tipeB };
+    return { a, self, target, tipeA, tipeB };
   });
 
-  // Notif in-app ke target jemaat — consent info (fire-and-forget)
+  // Notif in-app ke target jemaat — consent info (fire-and-forget).
+  // Pakai tipeA (bagaimana self memandang target) untuk body notif, karena
+  // itu describe konteks "aku ditambahkan sebagai apa di daftar keluarga X".
+  // Contoh: Ari(L) add Sarah(P) SPOUSE → tipeA=Istri, tipeB=Suami.
+  //   Notif ke Sarah: "Ari menambahkan Anda sebagai Istri di daftar keluarganya"
+  //   (bukan "Suami" — Sarah perempuan).
   void createNotification({
     jemaatId: targetId,
     type: 'FAMILY_LINKED',
-    title: `Anda ditambahkan sebagai ${result.tipeB.nama}`,
-    body: `${result.self.namaLengkap} menambahkan Anda sebagai "${result.tipeB.nama}" di daftar keluarganya. Kalau ini bukan Anda / tidak benar, hubungi admin untuk hapus.`,
+    title: `Anda ditambahkan sebagai ${result.tipeA.nama}`,
+    body: `${result.self.namaLengkap} menambahkan Anda sebagai "${result.tipeA.nama}" di daftar keluarganya. Kalau ini bukan Anda / tidak benar, hubungi admin untuk hapus.`,
     actionUrl: `/family`,
     metadata: {
       byJemaatId: selfId,
       byNamaLengkap: result.self.namaLengkap,
-      tipeRelasi: result.tipeB.nama,
+      tipeRelasi: result.tipeA.nama,
+      reciprocalTipe: result.tipeB.nama,
     },
   });
 

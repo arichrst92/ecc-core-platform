@@ -198,18 +198,11 @@ export function BottomDock() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
 
-  // Close popover when clicking outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (dockRef.current && !dockRef.current.contains(e.target as Node)) {
-        setOpenGroup(null);
-      }
-    }
-    if (openGroup) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }
-  }, [openGroup]);
+  // NOTE: Outside-click detection via backdrop overlay saja (di render bawah).
+  // Sebelumnya pakai document mousedown listener yg check `dockRef.contains(target)` —
+  // tapi popover sekarang di-render via React portal ke document.body (di luar
+  // dockRef tree), jadi click item di popover ke-anggap "outside" → popover
+  // dismiss BEFORE navigate. Ganti ke backdrop-only click strategy.
 
   // Close popover on route change
   useEffect(() => {

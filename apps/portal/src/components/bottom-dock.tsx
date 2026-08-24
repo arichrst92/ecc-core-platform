@@ -1,0 +1,450 @@
+'use client';
+
+/**
+ * BottomDock — navigation dock ala macOS untuk portal ECC.
+ *
+ * Layout:
+ *   [Elsa] [User Guide] | [Entity] [Service] [People] [Community] [Movement]
+ *   [Broadcast] [App Settings] [Website] [CKids] [Dev Tools] | [Profile]
+ *
+ * Interaction:
+ *   - Hover: icon scale 1.25 + tooltip label muncul di atas
+ *   - Click standalone (Elsa/Guide/Profile): navigate langsung
+ *   - Click group icon: popover expandable muncul di atas dgn submenu items
+ *   - Click submenu item: navigate + close popover
+ *
+ * Animation:
+ *   - Icon hover: transition scale 200ms cubic-bezier bouncy
+ *   - Icon click: scale 0.9 → 1.0 spring bounce
+ *   - Popover: fade + translateY(8px→0) 180ms ease-out
+ *   - Active menu: brand-500 background dot indicator
+ *
+ * Access control: sama dgn Sidebar sebelumnya — pakai hasMenuAccess().
+ * Group ke-hidden kalau semua item tidak accessible.
+ */
+import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import {
+  LayoutDashboard,
+  Building2,
+  Church,
+  Users,
+  Shield,
+  Calendar,
+  Layers,
+  Heart,
+  Key,
+  UserCog,
+  Activity,
+  HandHeart,
+  Ticket,
+  Newspaper,
+  BookOpen,
+  Home as HomeIcon,
+  UsersRound,
+  MapPin,
+  Megaphone,
+  Handshake,
+  Store,
+  FileText,
+  Smartphone,
+  Wrench,
+  Gauge,
+  BookOpenCheck,
+  Power,
+  KeyRound,
+  Stethoscope,
+  DatabaseZap,
+  Gift,
+  LayoutTemplate,
+  Sparkles,
+} from 'lucide-react';
+import clsx from 'clsx';
+import { hasMenuAccess } from '@ecc/shared-types';
+import { useAuthStore } from '@/lib/auth-store';
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  menuKey?: string;
+}
+
+interface NavGroup {
+  label: string;
+  icon: typeof LayoutDashboard;
+  items: NavItem[];
+}
+
+// Standalone dock items (kiri + kanan)
+const STANDALONE_LEFT: NavItem[] = [
+  { href: '/dashboard', label: 'Elsa (Els Agentic)', icon: Sparkles },
+  { href: '/dashboard/user-guide', label: 'User Guide', icon: BookOpenCheck },
+];
+
+const STANDALONE_RIGHT: NavItem[] = [
+  { href: '/dashboard/profile', label: 'Profil & Keamanan', icon: UserCog },
+];
+
+const GROUPS: NavGroup[] = [
+  {
+    label: 'Entity',
+    icon: Building2,
+    items: [
+      { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, menuKey: 'sinode' },
+      { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, menuKey: 'cabang' },
+    ],
+  },
+  {
+    label: 'Service',
+    icon: Calendar,
+    items: [
+      { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, menuKey: 'ibadah' },
+      { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, menuKey: 'kategori-ibadah' },
+      { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan' },
+      { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
+    ],
+  },
+  {
+    label: 'People',
+    icon: Users,
+    items: [
+      { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, menuKey: 'jemaat' },
+      { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield, menuKey: 'role-jemaat' },
+      { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
+    ],
+  },
+  {
+    label: 'Community',
+    icon: HomeIcon,
+    items: [
+      { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin, menuKey: 'homecell-area' },
+      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell' },
+      { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group' },
+    ],
+  },
+  {
+    label: 'Movement',
+    icon: Megaphone,
+    items: [
+      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event' },
+      { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
+      { href: '/dashboard/local-business', label: 'Local Market', icon: Store, menuKey: 'local-business' },
+    ],
+  },
+  {
+    label: 'Broadcast',
+    icon: Newspaper,
+    items: [
+      { href: '/dashboard/news', label: 'News', icon: Newspaper, menuKey: 'news' },
+      { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
+    ],
+  },
+  {
+    label: 'App Settings',
+    icon: Smartphone,
+    items: [
+      { href: '/dashboard/legal', label: 'Legal Docs', icon: FileText, menuKey: 'legal' },
+      { href: '/dashboard/app-version', label: 'App Versions', icon: Smartphone, menuKey: 'app-version' },
+      { href: '/dashboard/maintenance-mode', label: 'Maintenance Mode', icon: Power, menuKey: 'maintenance-mode' },
+    ],
+  },
+  {
+    label: 'Website',
+    icon: LayoutTemplate,
+    items: [
+      { href: '/dashboard/website/content', label: 'Konten Website', icon: LayoutTemplate, menuKey: 'website-content' },
+    ],
+  },
+  {
+    label: 'CKids',
+    icon: Gift,
+    items: [
+      { href: '/dashboard/hadiah', label: 'Katalog Hadiah', icon: Gift, menuKey: 'hadiah' },
+      { href: 'https://ckids.eccchurch.global', label: 'Gift Stall (CKids)', icon: Store, menuKey: 'gift-stall' },
+    ],
+  },
+  {
+    label: 'Developer Tools',
+    icon: Wrench,
+    items: [
+      { href: '/dashboard/role-access', label: 'Role Access', icon: Shield, menuKey: 'role-access' },
+      { href: '/dashboard/api-key', label: 'API Keys', icon: Key, menuKey: 'api-key' },
+      { href: '/dashboard/audit-log', label: 'Audit Log', icon: Activity, menuKey: 'audit-log' },
+      { href: '/dashboard/maintenance', label: 'Maintenance', icon: Wrench, menuKey: 'maintenance' },
+      { href: '/dashboard/server-health', label: 'Server Health', icon: Gauge, menuKey: 'server-health' },
+      { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
+      { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
+      { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
+    ],
+  },
+];
+
+function isItemActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (pathname === href) return true;
+  if (href === '/dashboard') return false;
+  if (href.startsWith('http')) return false;
+  return pathname.startsWith(href + '/');
+}
+
+export function BottomDock() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dockRef.current && !dockRef.current.contains(e.target as Node)) {
+        setOpenGroup(null);
+      }
+    }
+    if (openGroup) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [openGroup]);
+
+  // Close popover on route change
+  useEffect(() => {
+    setOpenGroup(null);
+  }, [pathname]);
+
+  // Filter groups berdasarkan menuAccess
+  const visibleGroups = GROUPS.map((g) => {
+    const filteredItems = g.items.filter((item) => {
+      if (!item.menuKey) return true;
+      return hasMenuAccess(user?.menuAccess ?? {}, item.menuKey, 'read');
+    });
+    return { ...g, items: filteredItems };
+  }).filter((g) => g.items.length > 0);
+
+  // Check if any item in a group is active → highlight group icon
+  function isGroupActive(g: NavGroup): boolean {
+    return g.items.some((item) => isItemActive(pathname, item.href));
+  }
+
+  return (
+    <>
+      {/* Backdrop untuk close popover saat klik outside */}
+      {openGroup && (
+        <div
+          className="fixed inset-0 z-40 bg-transparent"
+          aria-hidden
+          onClick={() => setOpenGroup(null)}
+        />
+      )}
+
+      <div
+        ref={dockRef}
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1 px-3 py-2 bg-white/90 backdrop-blur-xl border border-neutral-200 rounded-2xl shadow-2xl"
+        style={{ boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)' }}
+      >
+        {/* Logo ECC */}
+        <Link
+          href="/dashboard"
+          className="flex items-center justify-center w-11 h-11 rounded-xl hover:bg-neutral-100 transition"
+          title="ECC Portal"
+        >
+          <Image src="/logo-ecc.webp" alt="ECC" width={28} height={28} className="rounded" />
+        </Link>
+
+        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+
+        {/* Standalone left (Elsa + User Guide) */}
+        {STANDALONE_LEFT.map((item) => (
+          <DockItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            Icon={item.icon}
+            active={isItemActive(pathname, item.href)}
+          />
+        ))}
+
+        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+
+        {/* Menu groups */}
+        {visibleGroups.map((g) => (
+          <DockGroup
+            key={g.label}
+            group={g}
+            open={openGroup === g.label}
+            active={isGroupActive(g)}
+            pathname={pathname}
+            onToggle={() => setOpenGroup((prev) => (prev === g.label ? null : g.label))}
+            onNavigate={(href) => {
+              setOpenGroup(null);
+              if (href.startsWith('http')) {
+                window.open(href, '_blank', 'noopener,noreferrer');
+              } else {
+                router.push(href);
+              }
+            }}
+          />
+        ))}
+
+        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+
+        {/* Standalone right (Profile) */}
+        {STANDALONE_RIGHT.map((item) => (
+          <DockItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            Icon={item.icon}
+            active={isItemActive(pathname, item.href)}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ============================================================
+// DockItem — standalone icon
+// ============================================================
+
+function DockItem({
+  href,
+  label,
+  Icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  Icon: typeof LayoutDashboard;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group relative flex flex-col items-center justify-end"
+      title={label}
+    >
+      {/* Tooltip di atas icon */}
+      <span className="absolute bottom-full mb-2 px-2 py-1 bg-neutral-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
+        {label}
+      </span>
+
+      <button
+        type="button"
+        className={clsx(
+          'flex items-center justify-center w-11 h-11 rounded-xl',
+          'transition-all duration-200 ease-out',
+          'active:scale-90',
+          'group-hover:scale-125 group-hover:-translate-y-1',
+          active
+            ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
+            : 'text-neutral-700 hover:bg-neutral-100',
+        )}
+      >
+        <Icon className="w-5 h-5" />
+      </button>
+
+      {/* Active dot */}
+      {active && (
+        <span className="absolute -bottom-2 w-1 h-1 rounded-full bg-brand-600" />
+      )}
+    </Link>
+  );
+}
+
+// ============================================================
+// DockGroup — icon + popover submenu
+// ============================================================
+
+function DockGroup({
+  group,
+  open,
+  active,
+  pathname,
+  onToggle,
+  onNavigate,
+}: {
+  group: NavGroup;
+  open: boolean;
+  active: boolean;
+  pathname: string | null;
+  onToggle: () => void;
+  onNavigate: (href: string) => void;
+}) {
+  const Icon = group.icon;
+
+  return (
+    <div className="relative flex flex-col items-center justify-end group">
+      {/* Tooltip / Popover container */}
+      {open ? (
+        <div
+          className="absolute bottom-full mb-3 min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
+            {group.label}
+          </div>
+          <div className="max-h-[70vh] overflow-y-auto py-1">
+            {group.items.map((item) => {
+              const ItemIcon = item.icon;
+              const isActive = isItemActive(pathname, item.href);
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => onNavigate(item.href)}
+                  className={clsx(
+                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors',
+                    isActive
+                      ? 'bg-brand-50 text-brand-700 font-medium'
+                      : 'text-neutral-700 hover:bg-neutral-50',
+                  )}
+                >
+                  <ItemIcon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <span className="absolute bottom-full mb-2 px-2 py-1 bg-neutral-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
+          {group.label}
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={onToggle}
+        className={clsx(
+          'flex items-center justify-center w-11 h-11 rounded-xl',
+          'transition-all duration-200 ease-out',
+          'active:scale-90',
+          !open && 'group-hover:scale-125 group-hover:-translate-y-1',
+          open
+            ? 'bg-neutral-900 text-white shadow-lg -translate-y-1'
+            : active
+              ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
+              : 'text-neutral-700 hover:bg-neutral-100',
+        )}
+        title={group.label}
+      >
+        <Icon className="w-5 h-5" />
+      </button>
+
+      {/* Active dot */}
+      {(active || open) && (
+        <span
+          className={clsx(
+            'absolute -bottom-2 w-1 h-1 rounded-full',
+            open ? 'bg-neutral-900' : 'bg-brand-600',
+          )}
+        />
+      )}
+    </div>
+  );
+}

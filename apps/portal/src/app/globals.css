@@ -20,3 +20,25 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* BottomDock popover pop-up animation */
+@keyframes elsaDockPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.elsa-dock-popover {
+  animation: elsaDockPopIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* BottomDock icon click bounce */
+@keyframes elsaDockBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}

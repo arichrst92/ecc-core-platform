@@ -1657,6 +1657,12 @@ enum InAppNotifType {
   // Branch change request approval flow
   BRANCH_CHANGE_APPROVED
   BRANCH_CHANGE_REJECTED
+  // Event registration self-service (register + cancel skip)
+  EVENT_REGISTERED
+  // Homecell attendance scan by PIC
+  HOMECELL_ATTENDED
+  // Visit — peer-to-peer scan record
+  VISIT_RECORDED
 
   @@map("in_app_notif_type")
 }

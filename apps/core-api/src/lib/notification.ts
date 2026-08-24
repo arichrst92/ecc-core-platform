@@ -28,7 +28,10 @@ type InAppNotifType =
   | 'EVENT_APPROVED'
   | 'EVENT_CHECKED_IN'
   | 'BRANCH_CHANGE_APPROVED'
-  | 'BRANCH_CHANGE_REJECTED';
+  | 'BRANCH_CHANGE_REJECTED'
+  | 'EVENT_REGISTERED'
+  | 'HOMECELL_ATTENDED'
+  | 'VISIT_RECORDED';
 
 interface CreateNotifArgs {
   jemaatId: string;

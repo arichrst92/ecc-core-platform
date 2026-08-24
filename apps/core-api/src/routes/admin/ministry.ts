@@ -19,7 +19,9 @@
  */
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
-import { NotFound } from '../../lib/errors.js';
+import { ApiError, BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
+import { createNotification } from '../../lib/notification.js';
 
 export const ministryRouter = Router();
 
@@ -135,5 +137,114 @@ ministryRouter.get('/:id', async (req, res) => {
           }
         : null,
     },
+  });
+});
+
+/**
+ * POST /admin/ministry/:id/join — self-join ministry (Phase 2, simple version).
+ *
+ * Body: { roleId?: string, motivasi?: string }
+ *   - roleId: pilih role dari ministry.roles. Kalau kosong, ambil level terendah
+ *     (biasanya "Anggota" atau setara — safest default untuk join baru).
+ *   - motivasi: optional catatan untuk leader.
+ *
+ * Behavior: langsung ACTIVE (skip approval flow — deferred karena butuh
+ * design decision status enum). Notif ke ministry leader (kalau ada) sebagai
+ * heads-up review.
+ *
+ * Guards: 409 ALREADY_MEMBER kalau JemaatPelayanan aktif exist; 400 kalau
+ * ministry isActive=false.
+ */
+ministryRouter.post('/:id/join', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const jemaatId = req.user.jemaatId;
+  const roleId = typeof req.body?.roleId === 'string' ? req.body.roleId : null;
+  const motivasi = typeof req.body?.motivasi === 'string' ? req.body.motivasi.trim() : null;
+
+  const ministry = await prisma.pelayanan.findUnique({
+    where: { id: req.params.id },
+    include: {
+      roles: {
+        where: { isActive: true },
+        orderBy: { level: 'asc' },
+        select: { id: true, nama: true, level: true },
+      },
+    },
+  });
+  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+  if (!ministry.isActive) throw BadRequest('Ministry ini tidak buka untuk join');
+  if (ministry.roles.length === 0) {
+    throw BadRequest('Ministry belum punya role yang bisa di-assign');
+  }
+
+  // Pick role: user-supplied kalau valid, else fallback level terendah
+  let targetRole = roleId ? ministry.roles.find((r) => r.id === roleId) : undefined;
+  if (roleId && !targetRole) {
+    throw BadRequest(`Role "${roleId}" tidak ditemukan di ministry ini`);
+  }
+  if (!targetRole) targetRole = ministry.roles[0];
+  if (!targetRole) throw BadRequest('Ministry belum punya role');
+
+  // Check existing membership
+  const existing = await prisma.jemaatPelayanan.findFirst({
+    where: { jemaatId, pelayananId: ministry.id, isActive: true },
+    select: { id: true },
+  });
+  if (existing) throw new ApiError(409, 'ALREADY_MEMBER', 'Anda sudah member ministry ini');
+
+  const created = await prisma.jemaatPelayanan.create({
+    data: {
+      jemaatId,
+      pelayananId: ministry.id,
+      pelayananRoleId: targetRole.id,
+      tanggalMulai: new Date(),
+      isActive: true,
+    },
+    include: {
+      jemaat: { select: { namaLengkap: true } },
+      pelayananRole: { select: { nama: true, level: true } },
+    },
+  });
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'jemaat_pelayanan',
+    resourceId: created.id,
+    resourceLabel: `Join ministry: ${created.jemaat.namaLengkap} @ ${ministry.nama} (${targetRole.nama})`,
+    metadata: { pelayananId: ministry.id, roleId: targetRole.id, motivasi, via: 'self-join' },
+    after: created,
+  });
+
+  // Notif in-app ke leader ministry (kalau ada) — heads-up ada member baru
+  const leaders = await prisma.jemaatPelayanan.findMany({
+    where: {
+      pelayananId: ministry.id,
+      isActive: true,
+      pelayananRole: { level: { gte: 5 } }, // asumsi level >=5 leader-tier
+      jemaatId: { not: jemaatId },
+    },
+    select: { jemaatId: true },
+    take: 5,
+  });
+  for (const l of leaders) {
+    void createNotification({
+      jemaatId: l.jemaatId,
+      type: 'GROUP_MEMBER_ADDED', // reuse — semantic mirip
+      title: `Member baru di ${ministry.nama}`,
+      body: `${created.jemaat.namaLengkap} join sebagai ${targetRole.nama}.${motivasi ? ` Motivasi: ${motivasi}` : ''}`,
+      actionUrl: `/ministry/${ministry.id}`,
+      metadata: { ministryId: ministry.id, newMemberJemaatId: jemaatId, motivasi },
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: {
+      membershipId: created.id,
+      status: 'ACTIVE',
+      ministry: { id: ministry.id, nama: ministry.nama },
+      posisi: targetRole.nama,
+    },
+    message: `Selamat datang di ${ministry.nama} sebagai ${targetRole.nama}`,
   });
 });

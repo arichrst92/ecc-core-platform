@@ -611,6 +611,21 @@ eventRouter.post('/:id/peserta', async (req, res) => {
     resourceLabel: `${created.jemaat.namaLengkap} @ ${event.judul}`,
     after: created,
   });
+  void createNotification({
+    jemaatId: input.jemaatId,
+    type: 'EVENT_REGISTERED',
+    title: `Registrasi diterima: ${event.judul}`,
+    body: event.tipeBayar !== 'GRATIS'
+      ? `Anda terdaftar sebagai peserta. Silakan upload bukti transfer untuk konfirmasi.`
+      : `Anda terdaftar sebagai peserta event gratis. Sampai jumpa di hari H!`,
+    actionUrl: `/event/${event.id}`,
+    metadata: {
+      eventId: event.id,
+      eventJudul: event.judul,
+      participationId: created.id,
+      nextStep: event.tipeBayar !== 'GRATIS' ? 'upload-bukti' : 'wait-attendance',
+    },
+  });
   res.status(201).json({
     success: true,
     data: created,

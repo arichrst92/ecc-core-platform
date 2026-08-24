@@ -29,6 +29,7 @@ import {
   assertCanManageHomecell,
   getJemaatIdForUser,
 } from '../../lib/homecell-pic.js';
+import { createNotification } from '../../lib/notification.js';
 
 // mergeParams: true supaya :homecellId di parent router accessible di sini.
 export const homecellScheduleRouter = Router({ mergeParams: true });
@@ -278,6 +279,21 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
       resourceLabel: `${jemaat.namaLengkap} → schedule ${scheduleId}`,
       after: attendance,
     });
+    // Notif in-app ke jemaat yg baru scan (bukan re-scan)
+    const sched = await prisma.homecellSchedule.findUnique({
+      where: { id: scheduleId },
+      include: { homecell: { select: { nama: true } } },
+    });
+    if (sched) {
+      void createNotification({
+        jemaatId: jemaat.id,
+        type: 'HOMECELL_ATTENDED',
+        title: `Kehadiran tercatat di ${sched.homecell.nama}`,
+        body: `Pertemuan ${sched.tanggal.toISOString().slice(0, 10)} @ ${sched.lokasi}. Terima kasih atas kehadirannya.`,
+        actionUrl: `/homecell/${sched.homecellId}`,
+        metadata: { homecellId: sched.homecellId, scheduleId, lokasi: sched.lokasi },
+      });
+    }
   }
 
   const total = await prisma.homecellAttendance.count({ where: { scheduleId } });

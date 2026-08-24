@@ -133,7 +133,7 @@ export default function MaintenanceModePage() {
   });
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <Power className="w-6 h-6" />

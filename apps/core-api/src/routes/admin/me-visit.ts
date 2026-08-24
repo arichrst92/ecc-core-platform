@@ -23,6 +23,7 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { createNotification } from '../../lib/notification.js';
 
 export const meVisitRouter = Router();
 
@@ -159,6 +160,22 @@ meVisitRouter.post('/', async (req, res) => {
     resourceId: created.id,
     resourceLabel: `${created.initiator.namaLengkap} → ${created.target.namaLengkap}: ${created.judul}`,
     after: created,
+  });
+
+  // Notif in-app ke target — jemaat yg di-scan tahu ada visit record
+  void createNotification({
+    jemaatId: target.id,
+    type: 'VISIT_RECORDED',
+    title: `${created.initiator.namaLengkap} mencatat visit dgn Anda`,
+    body: `${created.judul}${input.lokasi ? ` @ ${input.lokasi}` : ''}. Kalau ini keliru, buka detail visit untuk klarifikasi.`,
+    actionUrl: `/visits/${created.id}`,
+    metadata: {
+      visitId: created.id,
+      initiatorId: jemaatId,
+      initiatorNama: created.initiator.namaLengkap,
+      judul: created.judul,
+      lokasi: input.lokasi ?? null,
+    },
   });
 
   res.status(201).json({ success: true, data: shapeForCaller(created, jemaatId) });

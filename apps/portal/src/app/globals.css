@@ -42,3 +42,23 @@ body {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
+
+/* Elsa logo idle breathe animation — subtle scale pulsating */
+@keyframes elsaLogoBreathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.08); }
+}
+
+.elsa-logo-pulse {
+  animation: elsaLogoBreathe 3s ease-in-out infinite;
+  transition: transform 100ms ease-out, box-shadow 100ms ease-out;
+}
+
+/* BottomDock horizontal scroll on mobile — hide scrollbar */
+.elsa-dock-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.elsa-dock-scroll::-webkit-scrollbar {
+  display: none;
+}

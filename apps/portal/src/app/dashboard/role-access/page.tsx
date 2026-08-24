@@ -165,7 +165,7 @@ export default function RoleAccessPage() {
   const grouped = groupMenu(menuCatalog);
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
         <Shield className="w-6 h-6 text-brand-500" />
         Role Access

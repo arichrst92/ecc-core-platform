@@ -242,19 +242,19 @@ export function BottomDock() {
 
       <div
         ref={dockRef}
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1 px-3 py-2 bg-white/90 backdrop-blur-xl border border-neutral-200 rounded-2xl shadow-2xl"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto elsa-dock-scroll"
         style={{ boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)' }}
       >
         {/* Logo ECC */}
         <Link
           href="/dashboard"
-          className="flex items-center justify-center w-11 h-11 rounded-xl hover:bg-neutral-100 transition"
+          className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl hover:bg-neutral-100 transition shrink-0"
           title="ECC Portal"
         >
-          <Image src="/logo-ecc.webp" alt="ECC" width={28} height={28} className="rounded" />
+          <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} className="rounded md:w-9 md:h-9" />
         </Link>
 
-        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Standalone left (Elsa + User Guide) */}
         {STANDALONE_LEFT.map((item) => (
@@ -267,7 +267,7 @@ export function BottomDock() {
           />
         ))}
 
-        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Menu groups */}
         {visibleGroups.map((g) => (
@@ -289,7 +289,7 @@ export function BottomDock() {
           />
         ))}
 
-        <div className="w-px h-8 self-center bg-neutral-200 mx-1" />
+        <div className="w-px h-10 md:h-12 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Standalone right (Profile) */}
         {STANDALONE_RIGHT.map((item) => (
@@ -335,7 +335,7 @@ function DockItem({
       <button
         type="button"
         className={clsx(
-          'flex items-center justify-center w-11 h-11 rounded-xl',
+          'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
           'transition-all duration-200 ease-out',
           'active:scale-90',
           'group-hover:scale-125 group-hover:-translate-y-1',
@@ -344,7 +344,7 @@ function DockItem({
             : 'text-neutral-700 hover:bg-neutral-100',
         )}
       >
-        <Icon className="w-5 h-5" />
+        <Icon className="w-5 h-5 md:w-6 md:h-6" />
       </button>
 
       {/* Active dot */}
@@ -421,7 +421,7 @@ function DockGroup({
         type="button"
         onClick={onToggle}
         className={clsx(
-          'flex items-center justify-center w-11 h-11 rounded-xl',
+          'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
           'transition-all duration-200 ease-out',
           'active:scale-90',
           !open && 'group-hover:scale-125 group-hover:-translate-y-1',
@@ -433,7 +433,7 @@ function DockGroup({
         )}
         title={group.label}
       >
-        <Icon className="w-5 h-5" />
+        <Icon className="w-5 h-5 md:w-6 md:h-6" />
       </button>
 
       {/* Active dot */}

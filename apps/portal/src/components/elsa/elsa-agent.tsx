@@ -288,11 +288,6 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
       {/* Canvas particle animation */}
       <ElsaCanvas />
 
-      {/* Els logo centered — animation sync ke audio via CSS class + inline transform */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
-        <ElsaLogo />
-      </div>
-
       {/* Header overlay — right-side controls only (branding di-remove per user request) */}
       <header className="absolute top-0 right-0 z-20 flex items-center px-6 py-4">
         <div className="flex items-center gap-2">
@@ -341,8 +336,8 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
         </div>
       </div>
 
-      {/* Bottom panel */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-6 flex flex-col items-center gap-3 pointer-events-none">
+      {/* Bottom panel — pb-32 supaya clear BottomDock (dock height 64px + gap 16px + safe area) */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 px-6 pt-6 pb-32 flex flex-col items-center gap-3 pointer-events-none">
         {/* Action chips floating (kalau ada) */}
         {currentActions.length > 0 && (
           <div className="flex flex-wrap gap-2 justify-center max-w-2xl pointer-events-auto">
@@ -392,11 +387,6 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
             {chatMut.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>
         </div>
-        <p className="text-[10px] text-neutral-500 text-center max-w-md pointer-events-auto">
-          {lang === 'id'
-            ? 'Elsa bisa membuat kesalahan. Untuk keputusan penting, verifikasi dengan menu portal.'
-            : 'Elsa can make mistakes. For critical decisions, verify with portal menus.'}
-        </p>
       </div>
     </div>
   );
@@ -416,68 +406,3 @@ function ActionChip({ action, onClick }: { action: ElsaAction; onClick: () => vo
   );
 }
 
-/**
- * ElsaLogo — logo Els di tengah canvas, sync scale + glow ke audioLevel.
- *
- * Sync animation: read window.__elsaAudioLevel tiap frame via rAF loop,
- * apply transform scale + boxShadow intensity → visual "pulse" saat Elsa
- * speak (TTS) atau user bicara ke mic.
- *
- * Idle state: subtle breathe animation (scale 1 ↔ 1.03) CSS-based supaya
- * tidak flat-lifeless kalau tidak ada audio.
- */
-function ElsaLogo() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    function loop() {
-      const el = ref.current;
-      if (!el) {
-        rafRef.current = requestAnimationFrame(loop);
-        return;
-      }
-      const level = window.__elsaAudioLevel ?? 0;
-      // Scale sync: idle 1.0, max audio push ke 1.15
-      const scale = 1 + level * 0.15;
-      // Glow radius + opacity sync
-      const glowRadius = 20 + level * 40;
-      const glowAlpha = 0.15 + level * 0.35;
-      el.style.transform = `scale(${scale})`;
-      el.style.boxShadow = `0 0 ${glowRadius}px rgba(242, 101, 34, ${glowAlpha})`;
-      rafRef.current = requestAnimationFrame(loop);
-    }
-    rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      className="elsa-logo-pulse rounded-full transition-shadow"
-      style={{ width: 96, height: 96 }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logo-els.png"
-        alt="Els"
-        width={96}
-        height={96}
-        className="w-full h-full object-contain drop-shadow-md rounded-full"
-        onError={(e) => {
-          // Fallback: kalau logo tidak ada, tampil circle brand color dgn text "els."
-          const target = e.currentTarget;
-          target.style.display = 'none';
-          const parent = target.parentElement;
-          if (parent && !parent.querySelector('.elsa-logo-fallback')) {
-            const fallback = document.createElement('div');
-            fallback.className =
-              'elsa-logo-fallback w-full h-full flex items-center justify-center bg-neutral-900 rounded-full text-brand-500 font-bold italic text-3xl';
-            fallback.textContent = 'els.';
-            parent.appendChild(fallback);
-          }
-        }}
-      />
-    </div>
-  );
-}

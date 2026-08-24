@@ -230,7 +230,7 @@ export default function ShiftsoftSyncPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       <div>
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <DatabaseZap className="w-6 h-6 text-brand-500" />

@@ -755,7 +755,7 @@ export default function UserGuidePage() {
     : SECTIONS;
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full">
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">

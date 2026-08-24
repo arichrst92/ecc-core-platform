@@ -95,7 +95,8 @@ export function ElsaCanvas() {
 
       const audioLevel = window.__elsaAudioLevel ?? 0;
       const maxDist = (140 + audioLevel * 80) * DPR;
-      const lineWidth = 0.5 * DPR;
+      // Line width lebih tebal (was 0.5 → 1.4). Extra thickness saat audio active.
+      const lineWidth = (1.4 + audioLevel * 0.8) * DPR;
 
       const cx = W / 2;
       const cy = H / 2;

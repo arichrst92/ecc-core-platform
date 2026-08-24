@@ -242,7 +242,7 @@ export function BottomDock() {
 
       <div
         ref={dockRef}
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto elsa-dock-scroll"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll"
         style={{ boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)' }}
       >
         {/* Logo ECC */}
@@ -328,7 +328,7 @@ function DockItem({
       title={label}
     >
       {/* Tooltip di atas icon */}
-      <span className="absolute bottom-full mb-2 px-2 py-1 bg-neutral-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] px-2.5 py-1 bg-neutral-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
         {label}
       </span>
 
@@ -381,7 +381,7 @@ function DockGroup({
       {/* Tooltip / Popover container */}
       {open ? (
         <div
-          className="absolute bottom-full mb-3 min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
@@ -412,7 +412,7 @@ function DockGroup({
           </div>
         </div>
       ) : (
-        <span className="absolute bottom-full mb-2 px-2 py-1 bg-neutral-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[60] px-2.5 py-1 bg-neutral-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-lg">
           {group.label}
         </span>
       )}

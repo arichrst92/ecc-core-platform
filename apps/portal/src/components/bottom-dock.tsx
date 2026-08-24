@@ -26,6 +26,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   LayoutDashboard,
   Building2,
@@ -380,75 +381,82 @@ function DockGroup({
   const Icon = group.icon;
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ left: number; bottom: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Compute popover position based on button rect — pakai position:fixed
-  // supaya bypass overflow-x-auto clipping di dock container (mobile issue).
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Compute popover position based on button rect — pakai position:fixed +
+  // portal ke document.body supaya bypass:
+  //   1. Overflow-x-auto clipping di dock container (mobile)
+  //   2. Ancestor transform (dock's -translate-x-1/2) yg bikin fixed pos
+  //      relative ke ancestor, bukan viewport (CSS gotcha)
   useEffect(() => {
     if (!open || !buttonRef.current) {
       setPopoverPos(null);
       return;
     }
-    const rect = buttonRef.current.getBoundingClientRect();
-    // Popover center-aligned horizontal ke button center, bottom = window.innerHeight - button.top + 8px gap
-    setPopoverPos({
-      left: rect.left + rect.width / 2,
-      bottom: window.innerHeight - rect.top + 8,
-    });
-
-    // Re-position saat scroll / resize (defensive)
-    const reposition = () => {
+    const compute = () => {
       if (!buttonRef.current) return;
-      const r = buttonRef.current.getBoundingClientRect();
+      const rect = buttonRef.current.getBoundingClientRect();
       setPopoverPos({
-        left: r.left + r.width / 2,
-        bottom: window.innerHeight - r.top + 8,
+        left: rect.left + rect.width / 2,
+        bottom: window.innerHeight - rect.top + 8,
       });
     };
-    window.addEventListener('resize', reposition);
-    return () => window.removeEventListener('resize', reposition);
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
   }, [open]);
+
+  // Popover content — di-render via portal supaya escape transform+overflow context
+  const popoverEl = open && popoverPos ? (
+    <div
+      className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-1rem)] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+      style={{
+        left: popoverPos.left,
+        bottom: popoverPos.bottom,
+        transform: 'translateX(-50%)',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
+        {group.label}
+      </div>
+      <div className="max-h-[60vh] overflow-y-auto py-1">
+        {group.items.map((item) => {
+          const ItemIcon = item.icon;
+          const isActive = isItemActive(pathname, item.href);
+          return (
+            <button
+              key={item.href}
+              type="button"
+              onClick={() => onNavigate(item.href)}
+              className={clsx(
+                'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors',
+                isActive
+                  ? 'bg-brand-50 text-brand-700 font-medium'
+                  : 'text-neutral-700 hover:bg-neutral-50',
+              )}
+            >
+              <ItemIcon className="w-4 h-4 shrink-0" />
+              <span className="flex-1 text-left">{item.label}</span>
+              {isActive && <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
-      {/* Popover fixed di viewport — bypass any overflow container */}
-      {open && popoverPos && (
-        <div
-          className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-1rem)] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
-          style={{
-            left: popoverPos.left,
-            bottom: popoverPos.bottom,
-            transform: 'translateX(-50%)',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
-            {group.label}
-          </div>
-          <div className="max-h-[60vh] overflow-y-auto py-1">
-            {group.items.map((item) => {
-              const ItemIcon = item.icon;
-              const isActive = isItemActive(pathname, item.href);
-              return (
-                <button
-                  key={item.href}
-                  type="button"
-                  onClick={() => onNavigate(item.href)}
-                  className={clsx(
-                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors',
-                    isActive
-                      ? 'bg-brand-50 text-brand-700 font-medium'
-                      : 'text-neutral-700 hover:bg-neutral-50',
-                  )}
-                >
-                  <ItemIcon className="w-4 h-4 shrink-0" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {mounted && popoverEl && createPortal(popoverEl, document.body)}
 
       <div className="relative flex flex-col items-center gap-1 shrink-0 group">
         <button

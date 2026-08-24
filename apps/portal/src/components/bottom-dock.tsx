@@ -378,19 +378,53 @@ function DockGroup({
   onNavigate: (href: string) => void;
 }) {
   const Icon = group.icon;
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ left: number; bottom: number } | null>(null);
+
+  // Compute popover position based on button rect — pakai position:fixed
+  // supaya bypass overflow-x-auto clipping di dock container (mobile issue).
+  useEffect(() => {
+    if (!open || !buttonRef.current) {
+      setPopoverPos(null);
+      return;
+    }
+    const rect = buttonRef.current.getBoundingClientRect();
+    // Popover center-aligned horizontal ke button center, bottom = window.innerHeight - button.top + 8px gap
+    setPopoverPos({
+      left: rect.left + rect.width / 2,
+      bottom: window.innerHeight - rect.top + 8,
+    });
+
+    // Re-position saat scroll / resize (defensive)
+    const reposition = () => {
+      if (!buttonRef.current) return;
+      const r = buttonRef.current.getBoundingClientRect();
+      setPopoverPos({
+        left: r.left + r.width / 2,
+        bottom: window.innerHeight - r.top + 8,
+      });
+    };
+    window.addEventListener('resize', reposition);
+    return () => window.removeEventListener('resize', reposition);
+  }, [open]);
 
   return (
-    <div className="relative flex flex-col items-center gap-1 shrink-0 group">
-      {/* Popover submenu (only saat click) */}
-      {open && (
+    <>
+      {/* Popover fixed di viewport — bypass any overflow container */}
+      {open && popoverPos && (
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[60] min-w-[220px] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+          className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-1rem)] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+          style={{
+            left: popoverPos.left,
+            bottom: popoverPos.bottom,
+            transform: 'translateX(-50%)',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-neutral-400 border-b border-neutral-100 mb-1">
             {group.label}
           </div>
-          <div className="max-h-[70vh] overflow-y-auto py-1">
+          <div className="max-h-[60vh] overflow-y-auto py-1">
             {group.items.map((item) => {
               const ItemIcon = item.icon;
               const isActive = isItemActive(pathname, item.href);
@@ -416,38 +450,40 @@ function DockGroup({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onToggle}
-        className={clsx(
-          'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
-          'transition-all duration-200 ease-out',
-          'active:scale-90',
-          !open && 'group-hover:scale-110 group-hover:-translate-y-0.5',
-          open
-            ? 'bg-neutral-900 text-white shadow-lg -translate-y-0.5'
-            : active
-              ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
-              : 'text-neutral-700 hover:bg-neutral-100',
-        )}
-      >
-        <Icon className="w-5 h-5 md:w-6 md:h-6" />
-      </button>
+      <div className="relative flex flex-col items-center gap-1 shrink-0 group">
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={onToggle}
+          className={clsx(
+            'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
+            'transition-all duration-200 ease-out',
+            'active:scale-90',
+            !open && 'group-hover:scale-110 group-hover:-translate-y-0.5',
+            open
+              ? 'bg-neutral-900 text-white shadow-lg -translate-y-0.5'
+              : active
+                ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg'
+                : 'text-neutral-700 hover:bg-neutral-100',
+          )}
+        >
+          <Icon className="w-5 h-5 md:w-6 md:h-6" />
+        </button>
 
-      {/* Label di bawah icon */}
-      <span
-        className={clsx(
-          'text-[10px] leading-tight font-medium max-w-[76px] text-center truncate transition-colors',
-          open
-            ? 'text-neutral-900'
-            : active
-              ? 'text-brand-700'
-              : 'text-neutral-600 group-hover:text-brand-600',
-        )}
-      >
-        {group.label}
-      </span>
-
-    </div>
+        {/* Label di bawah icon */}
+        <span
+          className={clsx(
+            'text-[10px] leading-tight font-medium max-w-[76px] text-center truncate transition-colors',
+            open
+              ? 'text-neutral-900'
+              : active
+                ? 'text-brand-700'
+                : 'text-neutral-600 group-hover:text-brand-600',
+          )}
+        >
+          {group.label}
+        </span>
+      </div>
+    </>
   );
 }

@@ -35,9 +35,13 @@ elsaRouter.use(requireFulltimer);
 // ============================================================
 //  Rate limit — 60 req/min per user (JWT sub) + IP fallback
 // ============================================================
+// Rate limit: 200 req/min per user+IP. Naikkan dari 60 karena Elsa dgn tool
+// calling multi-iteration bisa hit banyak call cepat + user retry saat lambat.
+// Upstream Groq punya limit tersendiri (30-100/min tergantung tier + model) —
+// error 429 dari Groq di-forward ke client dgn code ELSA_RATE_LIMIT terpisah.
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -45,7 +49,13 @@ const chatLimiter = rateLimit({
     const ip = ((req.headers['x-forwarded-for'] as string || '').split(',')[0] ?? '').trim() || req.ip || '';
     return `${userId}::${ip}`;
   },
-  message: { success: false, error: { code: 'RATE_LIMIT', message: 'Elsa sedang sibuk. Coba lagi 1 menit lagi.' } },
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_LOCAL',
+      message: 'Terlalu banyak request Elsa (>200/menit). Tunggu 1 menit.',
+    },
+  },
 });
 
 // ============================================================
@@ -534,7 +544,13 @@ elsaRouter.post('/chat', chatLimiter, async (req, res) => {
       throw new ApiError(503, 'ELSA_INVALID_KEY', 'GROQ_API_KEY invalid. Cek key di .env server.');
     }
     if (msg.includes('Groq API error 429')) {
-      throw new ApiError(429, 'ELSA_RATE_LIMIT', 'Groq API rate limit terlampaui. Coba lagi sebentar.');
+      // Groq free tier: 30 req/menit untuk model besar (70b+), 60/menit untuk medium.
+      // Coba switch ke model lebih kecil atau upgrade tier di https://console.groq.com/settings/billing
+      throw new ApiError(
+        429,
+        'ELSA_UPSTREAM_RATE_LIMIT',
+        'Groq API rate limit terlampaui (biasanya 30/menit untuk free tier). Tunggu 60 detik atau ganti ELSA_MODEL ke yang lebih ringan (mis. openai/gpt-oss-20b).',
+      );
     }
     if (msg.includes('Groq API error 400') && msg.includes('model')) {
       throw new ApiError(

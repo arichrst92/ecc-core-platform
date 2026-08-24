@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Sparkles, Mic, RefreshCw, ArrowRight, ExternalLink, Mail, Loader2 } from 'lucide-react';
+import { Send, Mic, RefreshCw, ArrowRight, ExternalLink, Mail, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { ElsaCanvas } from './elsa-canvas';
 
@@ -283,49 +283,29 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
       ? 'Halo! Saya Elsa. Tanyakan apapun tentang data ECC — jemaat, ibadah, event, homecell, dll.'
       : "Hi! I'm Elsa. Ask me anything about ECC data — members, services, events, homecells, and more.";
 
-  const samplePrompts =
-    lang === 'id'
-      ? [
-          'Ada berapa jemaat aktif di ECC Bandung?',
-          'Event apa saja minggu depan?',
-          'Ibadah hari ini apa saja?',
-        ]
-      : [
-          'How many active members in ECC Bandung?',
-          'What events are coming up next week?',
-          "What are today's services?",
-        ];
-
   return (
     <div className="relative w-full h-full bg-white overflow-hidden">
       {/* Canvas particle animation */}
       <ElsaCanvas />
 
-      {/* Header overlay */}
-      <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-md">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-neutral-900 leading-tight">Elsa</div>
-            <div className="flex items-center gap-1.5 text-xs text-neutral-600">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Els Agentic · Online</span>
-            </div>
-          </div>
-        </div>
+      {/* Els logo centered — animation sync ke audio via CSS class + inline transform */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
+        <ElsaLogo />
+      </div>
+
+      {/* Header overlay — right-side controls only (branding di-remove per user request) */}
+      <header className="absolute top-0 right-0 z-20 flex items-center px-6 py-4">
         <div className="flex items-center gap-2">
           <button
             onClick={onChangeLang}
-            className="text-xs px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 text-neutral-700 font-medium bg-white/80 backdrop-blur"
+            className="text-xs px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 text-neutral-700 font-medium bg-white"
           >
             {lang.toUpperCase()}
           </button>
           {history.length > 0 && (
             <button
               onClick={reset}
-              className="text-xs px-3 py-1.5 text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 bg-white/80 backdrop-blur border border-neutral-300"
+              className="text-xs px-3 py-1.5 text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 bg-white border border-neutral-300"
             >
               <RefreshCw className="w-3 h-3" /> Reset
             </button>
@@ -337,7 +317,7 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
       <div className="absolute inset-x-0 top-24 z-10 flex justify-center pointer-events-none px-6">
         <div className="max-w-2xl w-full">
           {chatMut.isPending ? (
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
               <div className="flex items-center gap-2 text-neutral-600">
                 <span className="flex gap-1">
                   <span className="w-2 h-2 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: '0s' }}></span>
@@ -348,13 +328,13 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
               </div>
             </div>
           ) : currentReply ? (
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
               <div className="text-sm text-neutral-900 whitespace-pre-wrap leading-relaxed">
                 {currentReply}
               </div>
             </div>
           ) : showWelcome ? (
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg px-6 py-4 pointer-events-auto text-center">
+            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto text-center">
               <div className="text-sm text-neutral-900 leading-relaxed">{welcomeText}</div>
             </div>
           ) : null}
@@ -363,21 +343,6 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
 
       {/* Bottom panel */}
       <div className="absolute bottom-0 left-0 right-0 z-20 p-6 flex flex-col items-center gap-3 pointer-events-none">
-        {/* Sample prompts (only saat welcome + no reply yet) */}
-        {showWelcome && !currentReply && !chatMut.isPending && (
-          <div className="flex flex-wrap gap-2 justify-center max-w-2xl pointer-events-auto">
-            {samplePrompts.map((p) => (
-              <button
-                key={p}
-                onClick={() => setInput(p)}
-                className="text-xs px-3 py-1.5 border border-neutral-300 bg-white/80 backdrop-blur hover:border-brand-400 hover:bg-brand-50 rounded-full text-neutral-700"
-              >
-                💡 {p}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Action chips floating (kalau ada) */}
         {currentActions.length > 0 && (
           <div className="flex flex-wrap gap-2 justify-center max-w-2xl pointer-events-auto">
@@ -448,5 +413,71 @@ function ActionChip({ action, onClick }: { action: ElsaAction; onClick: () => vo
       <Icon className="w-3.5 h-3.5" />
       <span>{action.label}</span>
     </button>
+  );
+}
+
+/**
+ * ElsaLogo — logo Els di tengah canvas, sync scale + glow ke audioLevel.
+ *
+ * Sync animation: read window.__elsaAudioLevel tiap frame via rAF loop,
+ * apply transform scale + boxShadow intensity → visual "pulse" saat Elsa
+ * speak (TTS) atau user bicara ke mic.
+ *
+ * Idle state: subtle breathe animation (scale 1 ↔ 1.03) CSS-based supaya
+ * tidak flat-lifeless kalau tidak ada audio.
+ */
+function ElsaLogo() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    function loop() {
+      const el = ref.current;
+      if (!el) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      const level = window.__elsaAudioLevel ?? 0;
+      // Scale sync: idle 1.0, max audio push ke 1.15
+      const scale = 1 + level * 0.15;
+      // Glow radius + opacity sync
+      const glowRadius = 20 + level * 40;
+      const glowAlpha = 0.15 + level * 0.35;
+      el.style.transform = `scale(${scale})`;
+      el.style.boxShadow = `0 0 ${glowRadius}px rgba(242, 101, 34, ${glowAlpha})`;
+      rafRef.current = requestAnimationFrame(loop);
+    }
+    rafRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="elsa-logo-pulse rounded-full transition-shadow"
+      style={{ width: 96, height: 96 }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-els.png"
+        alt="Els"
+        width={96}
+        height={96}
+        className="w-full h-full object-contain drop-shadow-md rounded-full"
+        onError={(e) => {
+          // Fallback: kalau logo tidak ada, tampil circle brand color dgn text "els."
+          const target = e.currentTarget;
+          target.style.display = 'none';
+          const parent = target.parentElement;
+          if (parent && !parent.querySelector('.elsa-logo-fallback')) {
+            const fallback = document.createElement('div');
+            fallback.className =
+              'elsa-logo-fallback w-full h-full flex items-center justify-center bg-neutral-900 rounded-full text-brand-500 font-bold italic text-3xl';
+            fallback.textContent = 'els.';
+            parent.appendChild(fallback);
+          }
+        }}
+      />
+    </div>
   );
 }

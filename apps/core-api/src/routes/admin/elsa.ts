@@ -534,6 +534,28 @@ elsaRouter.post('/chat', chatLimiter, async (req, res) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    const stack = e instanceof Error ? e.stack : undefined;
+    // Log full stack ke server console — dev bisa cek pm2 logs
+    console.error('[elsa] chat error:', msg, stack);
+
+    // Classify error → return status + code yg tepat
+    if (msg.includes('Groq API error 401') || msg.includes('Invalid API Key')) {
+      throw new ApiError(503, 'ELSA_INVALID_KEY', 'GROQ_API_KEY invalid. Cek key di .env server.');
+    }
+    if (msg.includes('Groq API error 429')) {
+      throw new ApiError(429, 'ELSA_RATE_LIMIT', 'Groq API rate limit terlampaui. Coba lagi sebentar.');
+    }
+    if (msg.includes('Groq API error 400') && msg.includes('model')) {
+      throw new ApiError(
+        503,
+        'ELSA_MODEL_INVALID',
+        `Model Groq tidak valid: ${process.env.ELSA_MODEL ?? 'default'}. Cek https://console.groq.com/docs/models`,
+      );
+    }
+    if (msg.includes('tidak di-set')) {
+      throw new ApiError(503, 'ELSA_NOT_CONFIGURED', msg);
+    }
+    // Generic 500 dgn message yang expose actual error ke client (untuk dev)
     throw new ApiError(500, 'ELSA_ERROR', `Elsa error: ${msg}`);
   }
 });

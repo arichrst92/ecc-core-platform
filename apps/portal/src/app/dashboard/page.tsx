@@ -48,7 +48,7 @@ export default function DashboardPage() {
   if (!mounted) return null;
 
   return (
-    <div className="relative -m-6 md:-m-8 overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
+    <div className="relative -m-6 md:-m-8 overflow-hidden" style={{ height: '100vh' }}>
       {lang ? (
         <ElsaAgent lang={lang} voiceURI={voiceURI} onChangeLang={changeLang} />
       ) : (

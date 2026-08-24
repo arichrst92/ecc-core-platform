@@ -7,6 +7,7 @@ import {
   Upload,
   User as UserIcon,
   Smartphone,
+  LogOut,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -118,24 +119,38 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* ===== Sesi Aktif ===== */}
+      {/* ===== Sesi & Sign Out ===== */}
       <section className="mt-6 bg-white border border-neutral-200 rounded-xl p-6">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4" />
-          Sesi Aktif
+          Sesi & Sign Out
         </h2>
         <p className="text-sm text-neutral-500 mt-1">
-          Setiap login dari device baru tercatat. Anda bisa keluar dari semua sesi sekaligus.
+          Keluar dari akun (session ini) atau logout dari semua device yang pernah login.
         </p>
-        <button
-          onClick={async () => {
-            const { logout } = await import('@/lib/api-client');
-            await logout(true);
-          }}
-          className="mt-4 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium rounded-lg"
-        >
-          Logout dari Semua Sesi
-        </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={async () => {
+              const { logout } = await import('@/lib/api-client');
+              await logout(false);
+            }}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm('Yakin logout dari SEMUA device? Anda perlu OTP login ulang di setiap device.')) return;
+              const { logout } = await import('@/lib/api-client');
+              await logout(true);
+            }}
+            className="px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium rounded-lg flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout dari Semua Sesi
+          </button>
+        </div>
       </section>
     </div>
   );

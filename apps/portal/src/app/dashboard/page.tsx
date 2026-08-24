@@ -1,46 +1,56 @@
 'use client';
 
 /**
- * Dashboard = Elsa (Els Agentic) — AI chat agent untuk data ECC.
+ * Dashboard = Elsa (Els Agentic) — fullscreen AI agent interface.
  *
- * Modul 31. Replace globe view sebelumnya.
+ * Modul 31. Pattern mirror ide.asia /agent:
+ *   - Fullscreen canvas particle animation
+ *   - Language + voice picker modal (first visit)
+ *   - Speech bubble center + input at bottom + mic button
  *
- * Flow:
- *   1. First visit → LanguagePicker modal (persist 'elsa-lang' localStorage)
- *   2. Chat UI (ElsaChat) — voice picker + message history + input
- *   3. Backend: POST /admin/elsa/chat via ElsaChat mutation
+ * Persist: 'elsa-lang' + 'elsa-voice-uri' di localStorage.
+ * Ganti bahasa/voice → clear localStorage → picker muncul lagi.
  */
 import { useEffect, useState } from 'react';
 import { LanguagePicker } from '@/components/elsa/language-picker';
-import { ElsaChat } from '@/components/elsa/elsa-chat';
+import { ElsaAgent } from '@/components/elsa/elsa-agent';
 
 export default function DashboardPage() {
   const [lang, setLang] = useState<'id' | 'en' | null>(null);
+  const [voiceURI, setVoiceURI] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem('elsa-lang');
-    if (saved === 'id' || saved === 'en') setLang(saved);
+    const savedLang = localStorage.getItem('elsa-lang');
+    const savedVoice = localStorage.getItem('elsa-voice-uri');
+    if (savedLang === 'id' || savedLang === 'en') {
+      setLang(savedLang);
+    }
+    if (savedVoice) setVoiceURI(savedVoice);
   }, []);
 
-  function handleSelect(l: 'id' | 'en') {
+  function handleSelect(l: 'id' | 'en', v: string | null) {
     localStorage.setItem('elsa-lang', l);
+    if (v) localStorage.setItem('elsa-voice-uri', v);
+    else localStorage.removeItem('elsa-voice-uri');
     setLang(l);
+    setVoiceURI(v);
   }
 
   function changeLang() {
     localStorage.removeItem('elsa-lang');
+    localStorage.removeItem('elsa-voice-uri');
     setLang(null);
+    setVoiceURI(null);
   }
 
-  // Prevent hydration mismatch — render nothing sampai mounted
   if (!mounted) return null;
 
   return (
-    <div className="relative -m-6 md:-m-8 bg-white" style={{ height: 'calc(100vh - 72px)' }}>
+    <div className="relative -m-6 md:-m-8 overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
       {lang ? (
-        <ElsaChat lang={lang} onChangeLang={changeLang} />
+        <ElsaAgent lang={lang} voiceURI={voiceURI} onChangeLang={changeLang} />
       ) : (
         <LanguagePicker onSelect={handleSelect} />
       )}

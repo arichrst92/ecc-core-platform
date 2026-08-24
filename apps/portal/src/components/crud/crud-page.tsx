@@ -151,9 +151,19 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
         title={`Tambah ${config.label}`}
         schema={config.createSchema}
         fields={config.fields}
-        defaultValues={Object.fromEntries(
-          config.fields.filter((f) => f.defaultValue !== undefined).map((f) => [f.name, f.defaultValue]),
-        )}
+        // Merge (field defaults) + (extraParams from URL — mis. ?cabangId=X auto-fill
+        // dropdown cabang di form). ExtraParams menang atas field.defaultValue supaya
+        // context filter list otomatis carry-over ke create form.
+        defaultValues={{
+          ...Object.fromEntries(
+            config.fields
+              .filter((f) => f.defaultValue !== undefined)
+              .map((f) => [f.name, f.defaultValue]),
+          ),
+          ...Object.fromEntries(
+            Object.entries(extraParams ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+          ),
+        }}
         loading={createMut.isPending}
         onSubmit={async (values) => {
           await createMut.mutateAsync(values as Partial<T>);

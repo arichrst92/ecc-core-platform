@@ -2,6 +2,7 @@ import { Gift, Package } from 'lucide-react';
 import { createHadiahSchema, updateHadiahSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
+import { resolveMediaUrl } from '../media-url';
 
 interface Hadiah extends Record<string, unknown> {
   id: string;
@@ -31,7 +32,7 @@ export const hadiahResource: ResourceConfig<Hadiah> = {
         row.fotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={row.fotoUrl}
+            src={resolveMediaUrl(row.fotoUrl)}
             alt={row.nama}
             className="w-10 h-10 rounded-lg object-cover border border-neutral-200"
           />
@@ -98,11 +99,17 @@ export const hadiahResource: ResourceConfig<Hadiah> = {
     },
     {
       name: 'fotoUrl',
-      label: 'URL Foto',
-      type: 'url',
-      placeholder: '/uploads/hadiah/xxx.webp atau https://...',
+      label: 'Foto Hadiah',
+      type: 'image',
+      imageUpload: {
+        uploadEndpoint: '/admin/hadiah/:id/photo',
+        deleteEndpoint: '/admin/hadiah/:id/photo',
+        fieldName: 'file',
+        maxBytes: 5 * 1024 * 1024,
+        accept: 'image/*',
+      },
       helperText:
-        'Isi manual URL foto. Upload endpoint hadiah belum ada — sementara upload manual ke server / pakai external URL.',
+        'Upload foto hadiah (JPG/PNG/WebP, max 5MB). Untuk hadiah baru: simpan dulu, baru upload foto.',
     },
     {
       name: 'pointCost',

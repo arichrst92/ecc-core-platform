@@ -28,7 +28,12 @@ export type FieldType =
   | 'select'
   | 'switch'
   | 'relation'
-  | 'url';
+  | 'url'
+  // 'image' = file uploader dgn preview + delete button.
+  // Butuh `imageUpload.uploadEndpoint` (interpolate :id kalau edit),
+  // upload multipart POST → response `{ data: { fotoUrl } }`.
+  // Untuk create mode: field disabled dgn helper text (harus create dulu baru upload).
+  | 'image';
 
 export interface SelectOption {
   value: string;
@@ -46,6 +51,26 @@ export interface RelationConfig {
   formatLabel?: (item: Record<string, unknown>) => string;
 }
 
+export interface ImageUploadConfig {
+  /**
+   * Endpoint upload multipart, contoh: "/admin/hadiah/:id/photo"
+   * `:id` akan di-replace dgn ID row saat edit. Kalau tidak ada `:id`
+   * (mis. endpoint global), akan dipakai apa adanya.
+   */
+  uploadEndpoint: string;
+  /**
+   * Endpoint delete foto, contoh: "/admin/hadiah/:id/photo" (DELETE method).
+   * Optional — kalau tidak ada, tombol delete di-hide.
+   */
+  deleteEndpoint?: string;
+  /** Field name di multipart form (default: "file"). */
+  fieldName?: string;
+  /** Max file size in bytes (default: 5MB). */
+  maxBytes?: number;
+  /** Accept mime types (default: "image/*"). */
+  accept?: string;
+}
+
 export interface FieldConfig {
   name: string;
   label: string;
@@ -55,6 +80,7 @@ export interface FieldConfig {
   helperText?: string;
   options?: SelectOption[];        // untuk type=select
   relation?: RelationConfig;       // untuk type=relation
+  imageUpload?: ImageUploadConfig; // untuk type=image
   /** Hanya tampil saat create (false = juga di edit) */
   createOnly?: boolean;
   /** Hidden di form, biasanya untuk field yang di-set otomatis */

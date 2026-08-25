@@ -67,7 +67,7 @@ const chatLimiter = rateLimit({
 // ============================================================
 elsaRouter.get('/health', (_req, res) => {
   const hasKey = !!process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ELSA_MODEL ?? 'claude-3-haiku-20240307';
+  const model = process.env.ELSA_MODEL ?? 'claude-haiku-4-5-20251001';
   res.json({
     success: true,
     data: {

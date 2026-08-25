@@ -1,7 +1,7 @@
 /**
  * Elsa (Els Agentic) — Anthropic Claude client.
  *
- * Provider: Anthropic (was Groq). Model default `claude-3-haiku-20240307`
+ * Provider: Anthropic (was Groq). Model default `claude-haiku-4-5-20251001`
  * — model PALING MURAH dari Anthropic yg support tool calling.
  * Cost: $0.25/$1.25 per M input/output tokens (3x lebih murah dari 3.5 Haiku).
  *
@@ -66,7 +66,7 @@ export async function callClaude(args: CallArgs): Promise<ClaudeResponse> {
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY tidak di-set. Cek .env di server.');
   }
-  const model = args.model ?? process.env.ELSA_MODEL ?? 'claude-3-haiku-20240307';
+  const model = args.model ?? process.env.ELSA_MODEL ?? 'claude-haiku-4-5-20251001';
   const maxTokens = args.maxTokens ?? parseInt(process.env.ELSA_MAX_TOKENS ?? '2048', 10);
   const temperature = args.temperature ?? 0.5;
 

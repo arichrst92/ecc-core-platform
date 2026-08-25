@@ -66,6 +66,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
   { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },
+  { key: 'tech-docs', label: 'Technical Documentation', href: '/dashboard/tech-docs', group: 'Developer Tools' },
 
   // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,
   // hadiah master data di portal.

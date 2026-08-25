@@ -179,6 +179,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
       { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
+      { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: FileText, menuKey: 'tech-docs' },
     ],
   },
 ];

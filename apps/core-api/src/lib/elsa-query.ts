@@ -252,6 +252,58 @@ function stripExcluded<T extends Record<string, unknown>>(row: T, excludeFields?
   return clone as T;
 }
 
+/**
+ * Normalize noHp ke format E.164 Indonesia (+62...).
+ * Support input format: "08...", "62...", "+62...", "8...".
+ */
+function normalizeNoHp(s: string): string {
+  const cleaned = s.replace(/[\s\-()]/g, '');
+  if (cleaned.startsWith('+62')) return cleaned;
+  if (cleaned.startsWith('62')) return '+' + cleaned;
+  if (cleaned.startsWith('0')) return '+62' + cleaned.slice(1);
+  if (cleaned.startsWith('8')) return '+62' + cleaned;
+  return cleaned;
+}
+
+/**
+ * Walk filter object recursively, normalize semua value untuk field `noHp`
+ * ke E.164 format. Handle string, contains operator, OR/AND arrays, nested
+ * relation filters.
+ *
+ * Elsa user boleh tulis "0821...", "621821...", "+621821..." — backend auto
+ * translate ke format DB (+62...) sebelum query.
+ */
+function normalizeFilter(obj: unknown): unknown {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(normalizeFilter);
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if (key === 'noHp') {
+      if (typeof value === 'string') {
+        result[key] = normalizeNoHp(value);
+      } else if (value && typeof value === 'object') {
+        // Prisma operator: { contains: "..." }, { equals: "..." }, { in: [...] }
+        const nested: Record<string, unknown> = {};
+        for (const [op, v] of Object.entries(value as Record<string, unknown>)) {
+          if (typeof v === 'string') {
+            nested[op] = normalizeNoHp(v);
+          } else if (Array.isArray(v)) {
+            nested[op] = v.map((x) => (typeof x === 'string' ? normalizeNoHp(x) : x));
+          } else {
+            nested[op] = v;
+          }
+        }
+        result[key] = nested;
+      } else {
+        result[key] = value;
+      }
+    } else {
+      result[key] = normalizeFilter(value);
+    }
+  }
+  return result;
+}
+
 function buildIncludeObject(includeList: string[] | undefined, cfg: EntityConfig): Record<string, boolean> | undefined {
   if (!includeList || includeList.length === 0) return undefined;
   const obj: Record<string, boolean> = {};
@@ -343,7 +395,7 @@ export async function queryEntity(args: {
   const include = buildIncludeObject(args.include, cfg);
 
   const rows = await model.findMany({
-    ...(args.filter ? { where: args.filter } : {}),
+    ...(args.filter ? { where: normalizeFilter(args.filter) as Record<string, unknown> } : {}),
     ...(include ? { include } : {}),
     ...(args.orderBy ? { orderBy: args.orderBy } : {}),
     take,
@@ -360,7 +412,7 @@ export async function countEntity(args: {
 }): Promise<{ entity: string; count: number }> {
   const { model } = getPrismaModel(args.entity);
   const count = await model.count({
-    ...(args.filter ? { where: args.filter } : {}),
+    ...(args.filter ? { where: normalizeFilter(args.filter) as Record<string, unknown> } : {}),
   });
   return { entity: args.entity, count };
 }
@@ -384,7 +436,7 @@ export async function groupByEntity(args: {
   const take = Math.min(Math.max(args.limit ?? 20, 1), 50);
   const groups = await model.groupBy({
     by: args.by as never,
-    ...(args.filter ? { where: args.filter } : {}),
+    ...(args.filter ? { where: normalizeFilter(args.filter) as Record<string, unknown> } : {}),
     _count: true,
     take,
   });

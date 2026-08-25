@@ -148,7 +148,7 @@ export default function CabangDetailPage() {
   const stats = statsQ.data;
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="w-full space-y-6">
       <Link
         href="/dashboard/cabang"
         className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"

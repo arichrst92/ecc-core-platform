@@ -83,7 +83,7 @@ export default function HomecellScheduleDetailPage() {
     : 0;
 
   return (
-    <div className="space-y-6 p-6 max-w-5xl mx-auto">
+    <div className="space-y-6 p-6 w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button

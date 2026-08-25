@@ -220,7 +220,7 @@ export default function JemaatDetailPage() {
   const pastAssignments = assignments.filter((a) => !a.isActive);
 
   return (
-    <div className="max-w-5xl">
+    <div className="w-full">
       <Link
         href="/dashboard/jemaat"
         className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900 mb-3"

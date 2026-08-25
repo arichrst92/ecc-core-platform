@@ -208,7 +208,7 @@ export default function IbadahDetailPage() {
   const availablePelayanan = (pelayananQ.data ?? []).filter((p) => !linkedIds.has(p.id));
 
   return (
-    <div className="max-w-5xl">
+    <div className="w-full">
       <Link
         href="/dashboard/ibadah"
         className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900 mb-3"

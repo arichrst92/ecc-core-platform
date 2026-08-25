@@ -7,6 +7,8 @@ interface AuthUser {
   jemaatId: string;
   namaLengkap: string;
   noHp: string;
+  /** Optional — backend return kalau jemaat sudah verify email untuk magic link login. */
+  email?: string | null;
   isFulltimer: boolean;
   // Gate login portal — RBAC resolved (Role.canAccessPortal OR override SubRole).
   canAccessPortal: boolean;

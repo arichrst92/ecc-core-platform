@@ -141,7 +141,17 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     if (!voiceRef.current) return; // user chose no voice
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/\*\*/g, ''));
+    // Strip markdown syntax supaya TTS tidak baca simbol formatting
+    const cleaned = text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')       // bold
+      .replace(/\*([^*]+)\*/g, '$1')           // italic
+      .replace(/`([^`]+)`/g, '$1')             // code
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // link → text only
+      .replace(/^#{1,3}\s+/gm, '')             // heading marker
+      .replace(/^[-*]\s+/gm, '')               // bullet marker
+      .replace(/\n{2,}/g, '. ')                // paragraph break → pause
+      .replace(/\n/g, ' ');                    // soft break → space
+    const u = new SpeechSynthesisUtterance(cleaned);
     u.voice = voiceRef.current;
     u.lang = voiceRef.current.lang;
     u.volume = 1;
@@ -317,9 +327,7 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
             </div>
           ) : currentReply ? (
             <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
-              <div className="text-sm text-neutral-900 whitespace-pre-wrap leading-relaxed">
-                {currentReply}
-              </div>
+              <MarkdownText text={currentReply} />
             </div>
           ) : showWelcome ? (
             <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto text-center">
@@ -391,6 +399,150 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * MarkdownText — lightweight renderer untuk Elsa response.
+ * Support: **bold**, *italic*, `code`, [link](url), bullet list (- item / * item),
+ * paragraph breaks (double newline), single newline dalam paragraph.
+ * Pattern: split ke blocks (list vs paragraph), render inline formatting per line.
+ * No external dep (avoid react-markdown install).
+ */
+function MarkdownText({ text }: { text: string }) {
+  // Split ke blocks by blank line
+  const lines = text.split('\n');
+  const blocks: Array<{ type: 'p' | 'ul' | 'h'; items: string[]; level?: number }> = [];
+  let current: { type: 'p' | 'ul' | 'h'; items: string[]; level?: number } | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      // Blank line = close current block
+      if (current) {
+        blocks.push(current);
+        current = null;
+      }
+      continue;
+    }
+    // Heading (# ...)
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+    if (headingMatch) {
+      if (current) blocks.push(current);
+      blocks.push({ type: 'h', items: [headingMatch[2]!], level: headingMatch[1]!.length });
+      current = null;
+      continue;
+    }
+    // Bullet list
+    const bulletMatch = line.match(/^[-*]\s+(.+)/);
+    if (bulletMatch) {
+      if (!current || current.type !== 'ul') {
+        if (current) blocks.push(current);
+        current = { type: 'ul', items: [] };
+      }
+      current.items.push(bulletMatch[1]!);
+      continue;
+    }
+    // Paragraph
+    if (!current || current.type !== 'p') {
+      if (current) blocks.push(current);
+      current = { type: 'p', items: [] };
+    }
+    current.items.push(line);
+  }
+  if (current) blocks.push(current);
+
+  return (
+    <div className="text-sm text-neutral-900 leading-relaxed space-y-2">
+      {blocks.map((block, i) => {
+        if (block.type === 'h') {
+          const cls =
+            block.level === 1
+              ? 'text-lg font-bold'
+              : block.level === 2
+                ? 'text-base font-bold'
+                : 'text-sm font-bold';
+          return (
+            <div key={i} className={cls}>
+              {renderInline(block.items[0] ?? '')}
+            </div>
+          );
+        }
+        if (block.type === 'ul') {
+          return (
+            <ul key={i} className="list-disc pl-5 space-y-1">
+              {block.items.map((item, j) => (
+                <li key={j}>{renderInline(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+        // paragraph — join lines with soft break
+        return (
+          <p key={i}>
+            {block.items.map((line, j) => (
+              <span key={j}>
+                {renderInline(line)}
+                {j < block.items.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Render inline: **bold**, *italic*, `code`, [text](url). */
+function renderInline(text: string): React.ReactNode {
+  // Token regex: bold **...**, italic *...* (not conflicting w/ bold — greedy first),
+  // code `...`, link [text](url)
+  const tokens: Array<{ type: string; content: string; url?: string }> = [];
+  const regex = /(\*\*[^*\n]+\*\*)|(`[^`\n]+`)|(\[[^\]]+\]\([^)\s]+\))|(\*[^*\n]+\*)/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      tokens.push({ type: 'text', content: text.slice(lastIdx, match.index) });
+    }
+    const m = match[0];
+    if (m.startsWith('**')) {
+      tokens.push({ type: 'bold', content: m.slice(2, -2) });
+    } else if (m.startsWith('`')) {
+      tokens.push({ type: 'code', content: m.slice(1, -1) });
+    } else if (m.startsWith('[')) {
+      const linkMatch = m.match(/\[([^\]]+)\]\(([^)\s]+)\)/);
+      if (linkMatch) tokens.push({ type: 'link', content: linkMatch[1]!, url: linkMatch[2] });
+    } else if (m.startsWith('*')) {
+      tokens.push({ type: 'italic', content: m.slice(1, -1) });
+    }
+    lastIdx = match.index + m.length;
+  }
+  if (lastIdx < text.length) {
+    tokens.push({ type: 'text', content: text.slice(lastIdx) });
+  }
+
+  return tokens.map((tok, i) => {
+    switch (tok.type) {
+      case 'bold':
+        return <strong key={i} className="font-semibold text-neutral-900">{tok.content}</strong>;
+      case 'italic':
+        return <em key={i}>{tok.content}</em>;
+      case 'code':
+        return (
+          <code key={i} className="px-1 py-0.5 bg-neutral-100 text-brand-700 rounded text-[0.9em] font-mono">
+            {tok.content}
+          </code>
+        );
+      case 'link':
+        return (
+          <a key={i} href={tok.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">
+            {tok.content}
+          </a>
+        );
+      default:
+        return <span key={i}>{tok.content}</span>;
+    }
+  });
 }
 
 function ActionChip({ action, onClick }: { action: ElsaAction; onClick: () => void }) {

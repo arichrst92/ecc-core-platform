@@ -7,7 +7,7 @@
  * apps, database, auth, notification, Elsa AI agent, deploy workflow, env vars,
  * API conventions, mobile integration.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FileText,
   ChevronDown,
@@ -42,7 +42,8 @@ type Block =
   | { kind: 'code'; lang?: string; content: string }
   | { kind: 'list'; items: string[] }
   | { kind: 'table'; headers: string[]; rows: string[][] }
-  | { kind: 'callout'; variant: 'info' | 'warning' | 'success'; text: string };
+  | { kind: 'callout'; variant: 'info' | 'warning' | 'success'; text: string }
+  | { kind: 'mermaid'; caption?: string; content: string };
 
 const SECTIONS: Section[] = [
   {
@@ -167,6 +168,81 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
         kind: 'callout',
         variant: 'warning',
         text: 'CRITICAL: setelah edit schema.prisma, WAJIB rebuild @ecc/shared-types + restart core-api. Prisma client di apps/core-api/node_modules pakai types dari packages/database dist. Kalau tidak rebuild, type stale = runtime error.',
+      },
+      {
+        kind: 'mermaid',
+        caption: 'ERD — Core Domain (multi-tenant scope + jemaat root)',
+        content: `erDiagram
+  Sinode ||--o{ CabangGereja : has
+  CabangGereja ||--o{ Jemaat : owns
+  CabangGereja ||--o{ Ibadah : hosts
+  CabangGereja ||--o{ Event : hosts
+  CabangGereja ||--o{ HomecellArea : has
+  CabangGereja ||--o{ Group : has
+  CabangGereja ||--o{ LocalBusiness : has
+
+  Jemaat ||--o{ JemaatRelasi : "family (2-arah)"
+  Jemaat ||--o{ Reservasi : "attend ibadah"
+  Jemaat ||--o{ EventParticipation : "join event"
+  Jemaat ||--o{ HomecellAttendance : "hadir homecell"
+  Jemaat ||--o{ GroupMember : "join group"
+  Jemaat ||--o{ Visit : "visited by"
+  Jemaat ||--o{ JemaatRole : has
+  Jemaat ||--o{ Pelayanan : "melayani"
+  Jemaat ||--o{ JemaatPointBalance : owns
+  Jemaat ||--o{ PointTransaction : earns
+  Jemaat ||--o{ HadiahRedeem : redeems
+  Jemaat ||--o{ Notification : receives
+
+  Role ||--o{ JemaatRole : "assigned to"
+  Role ||--o{ RoleMenuAccess : "portal access"
+  Role ||--o{ SubRole : has
+  SubRole ||--o{ JemaatRole : "assigned to"
+
+  Ibadah }o--|| KategoriIbadah : "typed as"
+  Ibadah ||--o{ Reservasi : "has attendance"
+  Event ||--o{ EventParticipation : "has attendees"
+
+  HomecellArea ||--o{ Homecell : contains
+  Homecell ||--o{ HomecellSchedule : schedules
+  HomecellSchedule ||--o{ HomecellAttendance : records
+
+  Group ||--o{ GroupMember : has
+
+  HadiahKatalog ||--o{ HadiahRedeem : "redeemed as"`,
+      },
+      {
+        kind: 'mermaid',
+        caption: 'ERD — Auth & RBAC',
+        content: `erDiagram
+  Jemaat ||--o{ AuthSession : "logs in"
+  Jemaat ||--o{ OtpRequest : "requests OTP"
+  Jemaat ||--o{ MagicLinkToken : "email backup"
+  Jemaat ||--o{ FaceEnrollment : "mobile only"
+  Jemaat ||--o{ JemaatRole : has
+  Role ||--o{ JemaatRole : "grants"
+  SubRole }o--|| Role : "child of"
+  SubRole ||--o{ JemaatRole : "grants override"
+  Role ||--o{ RoleMenuAccess : "menu access"
+  SubRole ||--o{ SubRoleMenuAccess : "override access"
+  AuthSession ||--o{ RefreshToken : rotates`,
+      },
+      {
+        kind: 'mermaid',
+        caption: 'ERD — Notification, Audit, Integration',
+        content: `erDiagram
+  Jemaat ||--o{ Notification : receives
+  Jemaat ||--o{ AuditLog : "action by"
+  Jemaat ||--o{ ApiKey : "created by"
+  CabangGereja ||--o{ AuditLog : "scoped to"
+  Notification }o--|| NotifType : "typed as"
+  Integration ||--o{ IntegrationCredential : "has key"
+  ShiftsoftSyncJob }o--|| CabangGereja : "syncs for"`,
+      },
+      {
+        kind: 'callout',
+        variant: 'info',
+        text: 'ERD di atas versi high-level (menonjolkan cardinality + tenant scope). Untuk source of truth field-level, selalu cek packages/database/prisma/schema.prisma.',
       },
     ],
   },
@@ -760,7 +836,73 @@ function BlockRenderer({ block }: { block: Block }) {
             : 'bg-blue-50 border-blue-200 text-blue-900';
       return <div className={`border rounded-lg p-3 text-sm ${variantCls}`}>{block.text}</div>;
     }
+    case 'mermaid':
+      return <MermaidBlock caption={block.caption} content={block.content} />;
     default:
       return null;
   }
+}
+
+let mermaidLoader: Promise<any> | null = null;
+function loadMermaid(): Promise<any> {
+  if (mermaidLoader) return mermaidLoader;
+  mermaidLoader = new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject(new Error('SSR'));
+    const w = window as any;
+    if (w.mermaid) return resolve(w.mermaid);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+    s.async = true;
+    s.onload = () => {
+      try {
+        w.mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
+        resolve(w.mermaid);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    s.onerror = () => reject(new Error('Failed to load mermaid'));
+    document.head.appendChild(s);
+  });
+  return mermaidLoader;
+}
+
+function MermaidBlock({ caption, content }: { caption?: string; content: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const idRef = useRef(`mmd-${Math.random().toString(36).slice(2, 10)}`);
+
+  useEffect(() => {
+    let alive = true;
+    loadMermaid()
+      .then(async (mermaid) => {
+        if (!alive || !ref.current) return;
+        try {
+          const { svg } = await mermaid.render(idRef.current, content);
+          if (alive && ref.current) ref.current.innerHTML = svg;
+        } catch (e: any) {
+          if (alive) setErr(e?.message ?? 'Render error');
+        }
+      })
+      .catch((e) => alive && setErr(e?.message ?? 'Load error'));
+    return () => {
+      alive = false;
+    };
+  }, [content]);
+
+  return (
+    <figure className="border border-neutral-200 rounded-lg overflow-hidden bg-white">
+      <div ref={ref} className="p-4 overflow-x-auto text-center min-h-[80px]">
+        {!err && <span className="text-xs text-neutral-400">Rendering diagram…</span>}
+      </div>
+      {err && (
+        <pre className="text-xs text-red-600 px-4 pb-3 whitespace-pre-wrap">Mermaid error: {err}</pre>
+      )}
+      {caption && (
+        <figcaption className="text-xs text-neutral-500 border-t border-neutral-100 px-4 py-2 bg-neutral-50">
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutTemplate,
@@ -14,6 +14,13 @@ import {
   FileText,
   ExternalLink,
   Info,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Bold,
+  List,
+  Link as LinkIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -68,7 +75,7 @@ export default function WebsiteContentPage() {
   }, [listQ.data]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <LayoutTemplate className="w-7 h-7 text-brand-500" />
@@ -97,17 +104,16 @@ export default function WebsiteContentPage() {
           <p className="font-medium mb-1">Cara edit content</p>
           <ul className="text-xs space-y-1 text-blue-700">
             <li>
-              <strong>Markdown</strong> — tulis dengan format Markdown biasa (bold dengan
-              <code className="px-1 bg-blue-100 rounded">**text**</code>, list dengan
-              <code className="px-1 bg-blue-100 rounded">- item</code>, dll).
+              <strong>Text section</strong> — ketik langsung di editor. Pakai toolbar
+              (Bold, List, Link) untuk formatting cepat.
             </li>
             <li>
-              <strong>JSON</strong> — edit struktur JSON. Pastikan format valid (cek
-              quotes, koma, braces). Salah JSON = save di-reject.
+              <strong>Structured section</strong> — isi form setiap kolom (title, subtitle,
+              list item, dll). Klik <em>Tambah Item</em> untuk menambah entry di list.
             </li>
             <li>
-              Perubahan akan tampil di landing dalam ~10 menit (next cache refresh) atau
-              langsung kalau user hard reload.
+              Perubahan tampil di landing dalam ~10 menit (auto refresh) atau langsung
+              kalau user hard reload.
             </li>
           </ul>
         </div>
@@ -220,27 +226,24 @@ function EditModal({
   const [content, setContent] = useState(section.content);
   const [isActive, setIsActive] = useState(section.isActive);
   const [jsonError, setJsonError] = useState<string | null>(null);
-
-  // Auto-format JSON kalau contentType=json — validate saat user ketik
-  function handleContentChange(value: string) {
-    setContent(value);
-    if (section.contentType === 'json') {
-      try {
-        JSON.parse(value);
-        setJsonError(null);
-      } catch (err) {
-        setJsonError(err instanceof Error ? err.message : 'JSON tidak valid');
-      }
-    }
-  }
-
-  function formatJson() {
+  // Parsed JSON value untuk form editor (kalau contentType=json)
+  const [jsonValue, setJsonValue] = useState<unknown>(() => {
+    if (section.contentType !== 'json') return null;
     try {
-      const parsed = JSON.parse(content);
-      setContent(JSON.stringify(parsed, null, 2));
+      return JSON.parse(section.content);
+    } catch {
+      return null;
+    }
+  });
+
+  // Sync jsonValue → content string setiap kali form berubah
+  function updateJsonValue(newValue: unknown) {
+    setJsonValue(newValue);
+    try {
+      setContent(JSON.stringify(newValue, null, 2));
       setJsonError(null);
     } catch (err) {
-      setJsonError(err instanceof Error ? err.message : 'JSON tidak valid');
+      setJsonError(err instanceof Error ? err.message : 'Serialize gagal');
     }
   }
 
@@ -285,7 +288,7 @@ function EditModal({
                     : 'bg-emerald-100 text-emerald-700'
                 }`}
               >
-                {section.contentType}
+                {section.contentType === 'json' ? 'form' : 'text'}
               </span>
             </div>
           </div>
@@ -320,36 +323,23 @@ function EditModal({
             />
           </div>
 
-          {/* Content */}
+          {/* Content — Form editor untuk JSON, Textarea+toolbar untuk Markdown */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-neutral-700">
-                Content
-              </label>
-              {section.contentType === 'json' && (
-                <button
-                  type="button"
-                  onClick={formatJson}
-                  className="text-xs text-brand-600 hover:underline"
-                >
-                  Format JSON
-                </button>
-              )}
-            </div>
-            <textarea
-              value={content}
-              onChange={(e) => handleContentChange(e.target.value)}
-              rows={16}
-              className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:border-brand-500 ${
-                jsonError ? 'border-red-300 bg-red-50' : 'border-neutral-300'
-              }`}
-              spellCheck={false}
-            />
-            {jsonError && (
-              <p className="mt-1 text-xs text-red-600 flex items-start gap-1">
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                JSON tidak valid: {jsonError}
-              </p>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Content
+            </label>
+            {section.contentType === 'json' ? (
+              jsonValue === null ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                  Content JSON tidak bisa di-parse. Hubungi tim IT untuk perbaikan.
+                </div>
+              ) : (
+                <div className="border border-neutral-200 rounded-lg p-4 bg-neutral-50">
+                  <FormEditor value={jsonValue} onChange={updateJsonValue} />
+                </div>
+              )
+            ) : (
+              <MarkdownEditor value={content} onChange={setContent} />
             )}
           </div>
 
@@ -407,4 +397,363 @@ function EditModal({
       </div>
     </div>
   );
+}
+
+// ============================================================
+//  FormEditor — recursive form untuk edit JSON content sbg fields
+// ============================================================
+
+/**
+ * FormEditor generic — parse value type + render form input yg sesuai.
+ * Support: string, number, boolean, array (primitives + objects), object nested.
+ * User non-IT bisa edit tanpa touch JSON syntax.
+ */
+function FormEditor({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
+  if (value === null || value === undefined) {
+    return <FormField label="value" type="text" value="" onChange={onChange} />;
+  }
+
+  if (typeof value === 'string') {
+    return <FormField label="value" type={value.length > 100 ? 'textarea' : 'text'} value={value} onChange={onChange} />;
+  }
+
+  if (typeof value === 'number') {
+    return <FormField label="value" type="number" value={value} onChange={onChange} />;
+  }
+
+  if (typeof value === 'boolean') {
+    return <FormField label="value" type="boolean" value={value} onChange={onChange} />;
+  }
+
+  if (Array.isArray(value)) {
+    return <ArrayEditor value={value} onChange={onChange as (v: unknown[]) => void} />;
+  }
+
+  if (typeof value === 'object') {
+    return <ObjectEditor value={value as Record<string, unknown>} onChange={onChange as (v: Record<string, unknown>) => void} />;
+  }
+
+  return null;
+}
+
+function ObjectEditor({
+  value,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  const keys = Object.keys(value);
+  return (
+    <div className="space-y-3">
+      {keys.map((key) => {
+        const v = value[key];
+        return (
+          <FieldRow
+            key={key}
+            label={humanizeKey(key)}
+            value={v}
+            onChange={(newV) => onChange({ ...value, [key]: newV })}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function ArrayEditor({
+  value,
+  onChange,
+}: {
+  value: unknown[];
+  onChange: (v: unknown[]) => void;
+}) {
+  const [expanded, setExpanded] = useState<boolean[]>(() => value.map(() => true));
+
+  function addItem() {
+    const template = inferTemplate(value);
+    onChange([...value, template]);
+    setExpanded([...expanded, true]);
+  }
+
+  function removeItem(idx: number) {
+    if (!window.confirm(`Hapus item #${idx + 1}?`)) return;
+    onChange(value.filter((_, i) => i !== idx));
+    setExpanded(expanded.filter((_, i) => i !== idx));
+  }
+
+  function updateItem(idx: number, newV: unknown) {
+    onChange(value.map((item, i) => (i === idx ? newV : item)));
+  }
+
+  function toggleExpand(idx: number) {
+    setExpanded(expanded.map((e, i) => (i === idx ? !e : e)));
+  }
+
+  return (
+    <div className="space-y-2">
+      {value.map((item, idx) => {
+        const isObj = item !== null && typeof item === 'object' && !Array.isArray(item);
+        const isExpanded = expanded[idx] ?? true;
+        return (
+          <div key={idx} className="border border-neutral-200 rounded-lg bg-white">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-100">
+              {isObj && (
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(idx)}
+                  className="p-0.5 text-neutral-500 hover:text-neutral-900"
+                >
+                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+              )}
+              <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                Item #{idx + 1}
+              </span>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => removeItem(idx)}
+                className="p-1 text-red-500 hover:bg-red-50 rounded"
+                title="Hapus item"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {isExpanded && (
+              <div className="p-3">
+                <FormEditor value={item} onChange={(newV) => updateItem(idx, newV)} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={addItem}
+        className="w-full py-2 border border-dashed border-neutral-300 text-neutral-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1"
+      >
+        <Plus className="w-4 h-4" />
+        Tambah Item
+      </button>
+    </div>
+  );
+}
+
+function FieldRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  // Inline row untuk primitive values
+  if (typeof value === 'string') {
+    return <FormField label={label} type={value.length > 80 ? 'textarea' : 'text'} value={value} onChange={onChange} />;
+  }
+  if (typeof value === 'number') {
+    return <FormField label={label} type="number" value={value} onChange={onChange} />;
+  }
+  if (typeof value === 'boolean') {
+    return <FormField label={label} type="boolean" value={value} onChange={onChange} />;
+  }
+  if (value === null) {
+    return <FormField label={label} type="text" value="" onChange={onChange} />;
+  }
+
+  // Nested object / array — indent + label header
+  return (
+    <div>
+      <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">
+        {label}
+      </div>
+      <div className="pl-4 border-l-2 border-neutral-200">
+        {Array.isArray(value) ? (
+          <ArrayEditor value={value} onChange={onChange as (v: unknown[]) => void} />
+        ) : (
+          <ObjectEditor
+            value={value as Record<string, unknown>}
+            onChange={onChange as (v: Record<string, unknown>) => void}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  type,
+  value,
+  onChange,
+}: {
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'boolean';
+  value: string | number | boolean;
+  onChange: (v: string | number | boolean) => void;
+}) {
+  const isLongText = type === 'textarea' || (type === 'text' && typeof value === 'string' && value.includes('\n'));
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-neutral-600 mb-1">{label}</label>
+      {type === 'boolean' ? (
+        <button
+          type="button"
+          onClick={() => onChange(!value)}
+          className={`w-11 h-6 rounded-full transition ${value ? 'bg-brand-500' : 'bg-neutral-300'}`}
+        >
+          <span
+            className={`block w-5 h-5 bg-white rounded-full transition transform ${
+              value ? 'translate-x-5' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      ) : type === 'number' ? (
+        <input
+          type="number"
+          value={value as number}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:border-brand-500"
+        />
+      ) : isLongText ? (
+        <textarea
+          value={value as string}
+          onChange={(e) => onChange(e.target.value)}
+          rows={Math.min(6, Math.max(2, (value as string).split('\n').length))}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:border-brand-500"
+        />
+      ) : (
+        <input
+          type="text"
+          value={value as string}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:border-brand-500"
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+//  MarkdownEditor — textarea + simple toolbar (bold, list, link)
+// ============================================================
+
+function MarkdownEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function wrap(prefix: string, suffix: string = prefix) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = value.slice(start, end);
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const inserted = `${prefix}${selected || 'text'}${suffix}`;
+    onChange(before + inserted + after);
+    // Restore selection
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(start + prefix.length, start + prefix.length + (selected.length || 4));
+      }
+    }, 0);
+  }
+
+  function insertList() {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const before = value.slice(0, start);
+    const after = value.slice(start);
+    const needsNewline = before && !before.endsWith('\n') ? '\n' : '';
+    const inserted = `${needsNewline}- Item 1\n- Item 2\n- Item 3\n`;
+    onChange(before + inserted + after);
+  }
+
+  function insertLink() {
+    const url = window.prompt('URL:', 'https://');
+    if (!url) return;
+    wrap('[', `](${url})`);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-1 mb-2 p-1 bg-neutral-100 border border-neutral-200 rounded-lg">
+        <button
+          type="button"
+          onClick={() => wrap('**')}
+          className="p-1.5 text-neutral-700 hover:bg-white rounded"
+          title="Bold (Ctrl+B)"
+        >
+          <Bold className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={insertList}
+          className="p-1.5 text-neutral-700 hover:bg-white rounded"
+          title="Bullet list"
+        >
+          <List className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={insertLink}
+          className="p-1.5 text-neutral-700 hover:bg-white rounded"
+          title="Insert link"
+        >
+          <LinkIcon className="w-4 h-4" />
+        </button>
+        <div className="flex-1" />
+        <span className="text-[10px] text-neutral-500 pr-2">Markdown supported</span>
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={12}
+        placeholder="Tulis text di sini..."
+        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:border-brand-500"
+      />
+    </div>
+  );
+}
+
+// ============================================================
+//  Helpers
+// ============================================================
+
+/** Convert camelCase/snake_case → Title Case. mis. "heroTitle" → "Hero Title" */
+function humanizeKey(key: string): string {
+  return key
+    .replace(/[_-]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Infer template untuk "add item" — clone shape dari existing item pertama, or empty */
+function inferTemplate(arr: unknown[]): unknown {
+  if (arr.length === 0) return '';
+  const first = arr[0];
+  if (typeof first === 'string') return '';
+  if (typeof first === 'number') return 0;
+  if (typeof first === 'boolean') return false;
+  if (Array.isArray(first)) return [];
+  if (first !== null && typeof first === 'object') {
+    // Clone object with empty values by type
+    const template: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(first)) {
+      if (typeof v === 'string') template[k] = '';
+      else if (typeof v === 'number') template[k] = 0;
+      else if (typeof v === 'boolean') template[k] = false;
+      else if (Array.isArray(v)) template[k] = [];
+      else if (v !== null && typeof v === 'object') template[k] = {};
+      else template[k] = null;
+    }
+    return template;
+  }
+  return null;
 }

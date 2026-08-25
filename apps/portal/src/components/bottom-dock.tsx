@@ -228,7 +228,7 @@ export function BottomDock() {
       {/* Backdrop untuk close popover saat klik outside */}
       {openGroup && (
         <div
-          className="fixed inset-0 z-40 bg-transparent"
+          className="fixed inset-0 z-20 bg-transparent"
           aria-hidden
           onClick={() => setOpenGroup(null)}
         />
@@ -236,7 +236,7 @@ export function BottomDock() {
 
       <div
         ref={dockRef}
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll"
         style={{ boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)' }}
       >
         {/* Logo ECC */}
@@ -410,7 +410,7 @@ function DockGroup({
   // Popover content — di-render via portal supaya escape transform+overflow context
   const popoverEl = open && popoverPos ? (
     <div
-      className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-1rem)] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
+      className="fixed z-[45] min-w-[220px] max-w-[calc(100vw-1rem)] py-1.5 bg-white border border-neutral-200 rounded-xl shadow-2xl origin-bottom elsa-dock-popover"
       style={{
         left: popoverPos.left,
         bottom: popoverPos.bottom,

@@ -1,61 +1,48 @@
 /**
- * Elsa (Els Agentic) — Groq client (OpenAI-compatible API).
+ * Elsa (Els Agentic) — Anthropic Claude client.
  *
- * Provider swap dari Anthropic → Groq (Llama 3.3 70B versatile).
- * Alasan: 35x lebih murah, 5-10x lebih cepat, still support tool calling.
- * Model default `llama-3.3-70b-versatile` (tool calling reliable, multi-turn OK).
+ * Provider: Anthropic (was Groq). Model default `claude-3-haiku-20240307`
+ * — model PALING MURAH dari Anthropic yg support tool calling.
+ * Cost: $0.25/$1.25 per M input/output tokens (3x lebih murah dari 3.5 Haiku).
  *
  * Fetch-based (no SDK dependency). Tool loop:
- *   1. Send messages + tools ke Groq → response.choices[0].message
- *   2. Kalau message.tool_calls exist → execute → append tool result ke history
- *   3. Kalau finish_reason='stop' → return final content
+ *   1. Send messages + tools ke Anthropic messages endpoint
+ *   2. Kalau response.stop_reason === 'tool_use' → execute → append result → loop
+ *   3. Kalau 'end_turn' → return final text
  *
  * Guard: max 8 iterations untuk prevent infinite loop.
  */
 
 // ============================================================
-// Types (OpenAI-compatible schema — dipakai Groq)
+// Types — Anthropic schema
 // ============================================================
 
 export interface ElsaMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
-  name?: string;
+  role: 'user' | 'assistant';
+  content: string | ContentBlock[];
 }
 
-export interface ToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
-}
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
 
 export interface ElsaTool {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: 'object';
-      properties: Record<string, unknown>;
-      required?: string[];
-    };
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
   };
 }
 
-interface GroqResponse {
+interface ClaudeResponse {
   id: string;
-  choices: Array<{
-    index: number;
-    message: ElsaMessage;
-    finish_reason: 'stop' | 'tool_calls' | 'length' | 'content_filter';
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  role: 'assistant';
+  content: ContentBlock[];
+  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
+  usage: { input_tokens: number; output_tokens: number };
 }
 
 interface CallArgs {
@@ -68,42 +55,38 @@ interface CallArgs {
 }
 
 // ============================================================
-// Groq call helper
+// Anthropic call helper
 // ============================================================
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
 
-export async function callGroq(args: CallArgs): Promise<GroqResponse> {
-  const apiKey = process.env.GROQ_API_KEY;
+export async function callClaude(args: CallArgs): Promise<ClaudeResponse> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error('GROQ_API_KEY tidak di-set. Cek .env di server.');
+    throw new Error('ANTHROPIC_API_KEY tidak di-set. Cek .env di server.');
   }
-  const model = args.model ?? process.env.ELSA_MODEL ?? 'llama-3.3-70b-versatile';
+  const model = args.model ?? process.env.ELSA_MODEL ?? 'claude-3-haiku-20240307';
   const maxTokens = args.maxTokens ?? parseInt(process.env.ELSA_MAX_TOKENS ?? '2048', 10);
   const temperature = args.temperature ?? 0.5;
 
-  const messages: ElsaMessage[] = [
-    { role: 'system', content: args.system },
-    ...args.messages,
-  ];
-
   const body: Record<string, unknown> = {
     model,
-    messages,
     max_tokens: maxTokens,
     temperature,
-    stream: false,
+    system: args.system,
+    messages: args.messages,
   };
   if (args.tools && args.tools.length > 0) {
     body.tools = args.tools;
-    body.tool_choice = 'auto';
   }
 
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
@@ -111,20 +94,18 @@ export async function callGroq(args: CallArgs): Promise<GroqResponse> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Groq API error ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Anthropic API error ${res.status}: ${text.slice(0, 500)}`);
   }
 
-  return (await res.json()) as GroqResponse;
+  return (await res.json()) as ClaudeResponse;
 }
 
 /**
- * Agentic loop — call Groq berulang sampai finish_reason='stop'.
- * Setiap tool_calls dieksekusi via toolExecutor lalu hasilnya append ke messages
- * sebagai role='tool' dgn tool_call_id match.
+ * Agentic loop — call Claude berulang sampai stop_reason='end_turn'.
+ * Setiap tool_use dieksekusi via toolExecutor lalu hasilnya append ke messages.
  *
- * langLockMessage (optional): kalau di-supply, inject sebagai system message
- * BARU setelah tool results tiap iterasi — pattern "last instructions win"
- * dari ide.asia untuk reinforce language lock (LLM kadang drift).
+ * langLockMessage: kalau di-supply, append ke system prompt tiap iterasi
+ * untuk reinforce language lock (pattern "last instructions win").
  */
 export async function runAgenticLoop(args: {
   system: string;
@@ -147,30 +128,28 @@ export async function runAgenticLoop(args: {
   while (iterations < maxIterations) {
     iterations++;
 
-    // Language lock reinforcement — inject sebelum every LLM call kalau supplied.
-    // Prepend ke system prompt supaya combined system instruction jadi 2 layer:
-    //   [base system] + [language lock reminder]
+    // Language lock reinforcement — combine system prompt tiap call
     const systemCombined = args.langLockMessage
       ? `${args.system}\n\n---\n\n${args.langLockMessage}`
       : args.system;
 
-    const response = await callGroq({
+    const response = await callClaude({
       system: systemCombined,
       messages,
       tools: args.tools,
     });
-    totalInput += response.usage.prompt_tokens;
-    totalOutput += response.usage.completion_tokens;
-
-    const choice = response.choices[0];
-    if (!choice) throw new Error('Groq return empty choices');
-    const message = choice.message;
+    totalInput += response.usage.input_tokens;
+    totalOutput += response.usage.output_tokens;
 
     // Append assistant response ke history
-    messages.push(message);
+    messages.push({ role: 'assistant', content: response.content });
 
-    if (choice.finish_reason === 'stop' || choice.finish_reason === 'length') {
-      const finalText = (message.content ?? '').trim();
+    if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
+      // Extract final text dari content blocks
+      const textBlocks = response.content
+        .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
+        .map((b) => b.text);
+      const finalText = textBlocks.join('\n\n').trim();
       return {
         finalText: finalText || '[Elsa tidak menghasilkan text.]',
         iterations,
@@ -178,42 +157,33 @@ export async function runAgenticLoop(args: {
       };
     }
 
-    if (choice.finish_reason === 'tool_calls' && message.tool_calls) {
-      for (const tc of message.tool_calls) {
-        let parsedArgs: Record<string, unknown> = {};
+    if (response.stop_reason === 'tool_use') {
+      const toolUses = response.content.filter(
+        (b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use',
+      );
+      const toolResults: ContentBlock[] = [];
+      for (const tu of toolUses) {
         try {
-          parsedArgs = JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          messages.push({
-            role: 'tool',
-            content: `Error parsing tool arguments: ${e instanceof Error ? e.message : String(e)}`,
-            tool_call_id: tc.id,
-          });
-          continue;
-        }
-        try {
-          const result = await args.toolExecutor(tc.function.name, parsedArgs);
-          messages.push({
-            role: 'tool',
+          const result = await args.toolExecutor(tu.name, tu.input);
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: tu.id,
             content: result,
-            tool_call_id: tc.id,
           });
         } catch (e) {
-          messages.push({
-            role: 'tool',
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: tu.id,
             content: `Error: ${e instanceof Error ? e.message : String(e)}`,
-            tool_call_id: tc.id,
+            is_error: true,
           });
         }
       }
+      messages.push({ role: 'user', content: toolResults });
       continue;
     }
 
-    if (choice.finish_reason === 'content_filter') {
-      throw new Error('Groq content filter triggered.');
-    }
-
-    throw new Error(`Unexpected finish_reason: ${choice.finish_reason}`);
+    throw new Error(`Unexpected stop_reason: ${response.stop_reason}`);
   }
 
   throw new Error(`Elsa mencapai max iterations (${maxIterations}) — kemungkinan tool loop.`);

@@ -1,7 +1,7 @@
 /**
  * Elsa (Els Agentic) — AI chat endpoint untuk ECC data.
  *
- * Modul 31. Fulltimer-only. Powered by Groq (Llama 3.3 70B versatile) via
+ * Modul 31. Fulltimer-only. Powered by Anthropic (Claude 3.5 Haiku) via
  * lib/elsa-client.ts. Pattern adopted dari ide.asia /agent:
  *   - Language lock double reinforcement (system prompt + repeated per iter)
  *   - [ACTIONS] block sanitizer di response — mobile-style action buttons
@@ -10,7 +10,7 @@
  *
  * Endpoints:
  *   POST /admin/elsa/chat   — { messages, lang } → { reply, actions, usage, iterations }
- *   GET  /admin/elsa/health — cek GROQ_API_KEY + model ready
+ *   GET  /admin/elsa/health — cek ANTHROPIC_API_KEY + model ready
  */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
@@ -33,15 +33,19 @@ export const elsaRouter = Router();
 elsaRouter.use(requireFulltimer);
 
 // ============================================================
-//  Rate limit — 60 req/min per user (JWT sub) + IP fallback
+//  Rate limit — longer window (15 menit) supaya user tidak sering hit 429
 // ============================================================
-// Rate limit: 200 req/min per user+IP. Naikkan dari 60 karena Elsa dgn tool
-// calling multi-iteration bisa hit banyak call cepat + user retry saat lambat.
-// Upstream Groq punya limit tersendiri (30-100/min tergantung tier + model) —
-// error 429 dari Groq di-forward ke client dgn code ELSA_RATE_LIMIT terpisah.
+// 500 req per 15 menit per user+IP. Rate rata-rata ~33/menit sustained
+// tapi allow burst (mis. multi-iteration tool calling). Upstream Anthropic
+// tier 1 limit: 50 RPM Haiku — jika hit 429 upstream, message dgn code
+// ELSA_UPSTREAM_RATE_LIMIT terpisah.
+// Rate limit longgar: 2000 req per 30 menit per user+IP.
+// Sustained rate ~66 RPM avg — jauh di bawah Anthropic tier 1 limit (50 RPM Haiku
+// spike) tapi user bisa burst ratusan request tanpa hit local limit.
+// Upstream Anthropic 429 di-handle terpisah dgn code ELSA_UPSTREAM_RATE_LIMIT.
 const chatLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 200,
+  windowMs: 30 * 60 * 1000, // 30 menit window
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -53,7 +57,7 @@ const chatLimiter = rateLimit({
     success: false,
     error: {
       code: 'RATE_LIMIT_LOCAL',
-      message: 'Terlalu banyak request Elsa (>200/menit). Tunggu 1 menit.',
+      message: 'Terlalu banyak request Elsa (>2000 dalam 30 menit). Tunggu beberapa menit.',
     },
   },
 });
@@ -62,134 +66,119 @@ const chatLimiter = rateLimit({
 //  Health check
 // ============================================================
 elsaRouter.get('/health', (_req, res) => {
-  const hasKey = !!process.env.GROQ_API_KEY;
-  const model = process.env.ELSA_MODEL ?? 'llama-3.3-70b-versatile';
+  const hasKey = !!process.env.ANTHROPIC_API_KEY;
+  const model = process.env.ELSA_MODEL ?? 'claude-3-haiku-20240307';
   res.json({
     success: true,
     data: {
       ready: hasKey,
       model,
-      provider: 'groq',
+      provider: 'anthropic',
       message: hasKey
         ? 'Elsa siap. Chat via POST /admin/elsa/chat'
-        : 'GROQ_API_KEY belum di-set. Cek .env di server.',
+        : 'ANTHROPIC_API_KEY belum di-set. Cek .env di server.',
     },
   });
 });
 
 // ============================================================
-//  Tool definitions — OpenAI-compatible format (Groq)
+//  Tool definitions — Anthropic format
 // ============================================================
 
 const TOOLS: ElsaTool[] = [
   {
-    type: 'function',
-    function: {
-      name: 'list_entities',
-      description:
-        'List semua entity database ECC yang bisa di-query oleh Elsa. Return name + description + keyFields tiap entity. WAJIB dipanggil dulu sebelum query_entity kalau belum tahu entity apa yang tersedia.',
-      parameters: { type: 'object', properties: {} },
+    name: 'list_entities',
+    description:
+      'List semua entity database ECC yang bisa di-query oleh Elsa. Return name + description + keyFields tiap entity. WAJIB dipanggil dulu sebelum query_entity kalau belum tahu entity apa yang tersedia.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'describe_entity',
+    description:
+      'Deskripsi detail 1 entity: fields, relations yang boleh di-include, fields yang di-exclude, dan example query. Pakai ini SEBELUM query_entity kalau butuh tahu struktur data + relation yang tersedia.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: {
+          type: 'string',
+          description: 'Nama entity dari list_entities (mis. "jemaat", "ibadah", "event").',
+        },
+      },
+      required: ['entity'],
     },
   },
   {
-    type: 'function',
-    function: {
-      name: 'describe_entity',
-      description:
-        'Deskripsi detail 1 entity: fields, relations yang boleh di-include, fields yang di-exclude, dan example query. Pakai ini SEBELUM query_entity kalau butuh tahu struktur data + relation yang tersedia.',
-      parameters: {
-        type: 'object',
-        properties: {
-          entity: {
-            type: 'string',
-            description: 'Nama entity dari list_entities (mis. "jemaat", "ibadah", "event").',
-          },
+    name: 'query_entity',
+    description:
+      'Query rows dari 1 entity dgn filter + include relation + orderBy + limit. Return array of rows. Max 50 records per query. Include hanya relations yang whitelisted (cek describe_entity).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: {
+          type: 'string',
+          description: 'Nama entity target query.',
         },
-        required: ['entity'],
+        filter: {
+          type: 'object',
+          description:
+            'Prisma-style where clause. Contoh: { isActive: true, cabangId: "uuid" }, atau { namaLengkap: { contains: "Ari", mode: "insensitive" } }.',
+        },
+        include: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array nama relation. Cek allowedRelations di describe_entity.',
+        },
+        orderBy: {
+          type: 'object',
+          description: 'Prisma orderBy, mis. { createdAt: "desc" } atau { namaLengkap: "asc" }.',
+        },
+        limit: {
+          type: 'integer',
+          description: 'Max records return (default 20, max 50).',
+        },
       },
+      required: ['entity'],
     },
   },
   {
-    type: 'function',
-    function: {
-      name: 'query_entity',
-      description:
-        'Query rows dari 1 entity dgn filter + include relation + orderBy + limit. Return array of rows. Max 50 records per query. Include hanya relations yang whitelisted (cek describe_entity).',
-      parameters: {
-        type: 'object',
-        properties: {
-          entity: {
-            type: 'string',
-            description: 'Nama entity target query.',
-          },
-          filter: {
-            type: 'object',
-            description:
-              'Prisma-style where clause. Contoh: { isActive: true, cabangId: "uuid" }, atau { namaLengkap: { contains: "Ari", mode: "insensitive" } }.',
-          },
-          include: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Array nama relation. Cek allowedRelations di describe_entity.',
-          },
-          orderBy: {
-            type: 'object',
-            description: 'Prisma orderBy, mis. { createdAt: "desc" } atau { namaLengkap: "asc" }.',
-          },
-          limit: {
-            type: 'integer',
-            description: 'Max records return (default 20, max 50).',
-          },
+    name: 'count_entity',
+    description:
+      'Hitung TOTAL rows di 1 entity dgn optional filter. Return { count }. Pakai untuk pertanyaan "berapa jumlah X?" tanpa perlu load semua data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', description: 'Nama entity.' },
+        filter: {
+          type: 'object',
+          description: 'Prisma where clause. Kosongkan untuk count all.',
         },
-        required: ['entity'],
       },
+      required: ['entity'],
     },
   },
   {
-    type: 'function',
-    function: {
-      name: 'count_entity',
-      description:
-        'Hitung TOTAL rows di 1 entity dgn optional filter. Return { count }. Pakai untuk pertanyaan "berapa jumlah X?" tanpa perlu load semua data.',
-      parameters: {
-        type: 'object',
-        properties: {
-          entity: { type: 'string', description: 'Nama entity.' },
-          filter: {
-            type: 'object',
-            description: 'Prisma where clause. Kosongkan untuk count all.',
-          },
+    name: 'groupby_entity',
+    description:
+      'Aggregate groupBy — count rows di 1 entity di-group by field(s). Contoh: groupBy jemaat by cabangId → count per cabang. Return array of { <field>: value, _count: n }.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', description: 'Nama entity.' },
+        by: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array field name untuk grouping. Mis. ["cabangId"] atau ["status", "cabangId"].',
         },
-        required: ['entity'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'groupby_entity',
-      description:
-        'Aggregate groupBy — count rows di 1 entity di-group by field(s). Contoh: groupBy jemaat by cabangId → count per cabang. Return array of { <field>: value, _count: n }.',
-      parameters: {
-        type: 'object',
-        properties: {
-          entity: { type: 'string', description: 'Nama entity.' },
-          by: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Array field name untuk grouping. Mis. ["cabangId"] atau ["status", "cabangId"].',
-          },
-          filter: {
-            type: 'object',
-            description: 'Prisma where filter sebelum grouping.',
-          },
-          limit: {
-            type: 'integer',
-            description: 'Max groups return (default 20, max 50).',
-          },
+        filter: {
+          type: 'object',
+          description: 'Prisma where filter sebelum grouping.',
         },
-        required: ['entity', 'by'],
+        limit: {
+          type: 'integer',
+          description: 'Max groups return (default 20, max 50).',
+        },
       },
+      required: ['entity', 'by'],
     },
   },
 ];
@@ -475,11 +464,11 @@ const chatSchema = z.object({
 });
 
 elsaRouter.post('/chat', chatLimiter, async (req, res) => {
-  if (!process.env.GROQ_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     throw new ApiError(
       503,
       'ELSA_NOT_CONFIGURED',
-      'Elsa belum di-setup. Admin sistem perlu set GROQ_API_KEY di server .env dan restart core-api.',
+      'Elsa belum di-setup. Admin sistem perlu set ANTHROPIC_API_KEY di server .env dan restart core-api.',
     );
   }
 
@@ -540,23 +529,31 @@ elsaRouter.post('/chat', chatLimiter, async (req, res) => {
     logger.error({ err: msg, stack, lang: input.lang, msgCount: trimmedMessages.length }, '[elsa] chat error');
 
     // Classify error → return status + code yg tepat
-    if (msg.includes('Groq API error 401') || msg.includes('Invalid API Key')) {
-      throw new ApiError(503, 'ELSA_INVALID_KEY', 'GROQ_API_KEY invalid. Cek key di .env server.');
+    if (msg.includes('Anthropic API error 401') || msg.includes('Invalid API Key')) {
+      throw new ApiError(503, 'ELSA_INVALID_KEY', 'ANTHROPIC_API_KEY invalid. Cek key di .env server.');
     }
-    if (msg.includes('Groq API error 429')) {
-      // Groq free tier: 30 req/menit untuk model besar (70b+), 60/menit untuk medium.
-      // Coba switch ke model lebih kecil atau upgrade tier di https://console.groq.com/settings/billing
+    if (msg.includes('Anthropic API error 429')) {
+      // Anthropic tier 1: 50 RPM Haiku, 40K input tokens/min, 8K output tokens/min.
+      // Upgrade tier di https://console.anthropic.com/settings/limits kalau butuh higher.
       throw new ApiError(
         429,
         'ELSA_UPSTREAM_RATE_LIMIT',
-        'Groq API rate limit terlampaui (biasanya 30/menit untuk free tier). Tunggu 60 detik atau ganti ELSA_MODEL ke yang lebih ringan (mis. openai/gpt-oss-20b).',
+        'Anthropic API rate limit terlampaui (tier 1: 50 req/menit untuk Haiku). Tunggu 60 detik atau upgrade tier di console.anthropic.com.',
       );
     }
-    if (msg.includes('Groq API error 400') && msg.includes('model')) {
+    if (msg.includes('Anthropic API error 400') && msg.includes('model')) {
       throw new ApiError(
         503,
         'ELSA_MODEL_INVALID',
-        `Model Groq tidak valid: ${process.env.ELSA_MODEL ?? 'default'}. Cek https://console.groq.com/docs/models`,
+        `Model Anthropic tidak valid: ${process.env.ELSA_MODEL ?? 'default'}. Cek https://docs.anthropic.com/en/docs/about-claude/models`,
+      );
+    }
+    // Anthropic overloaded (tier server sedang penuh)
+    if (msg.includes('Anthropic API error 529')) {
+      throw new ApiError(
+        503,
+        'ELSA_UPSTREAM_OVERLOADED',
+        'Anthropic server overloaded — bukan issue di kita. Coba lagi 30 detik.',
       );
     }
     if (msg.includes('tidak di-set')) {

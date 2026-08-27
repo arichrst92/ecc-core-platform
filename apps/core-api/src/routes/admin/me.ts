@@ -514,41 +514,137 @@ meRouter.get('/homecell-area-managed', async (req, res) => {
 
 meRouter.get('/family', async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  // List semua JemaatRelasi di mana self adalah jemaatId.
-  const rows = await prisma.jemaatRelasi.findMany({
+
+  const jemaatSelect = {
+    id: true,
+    namaLengkap: true,
+    noHp: true,
+    kode: true,
+    fotoUrl: true,
+    tanggalLahir: true,
+    jenisKelamin: true,
+    cabang: { select: { id: true, nama: true } },
+    primaryGuardianId: true,
+  } as const;
+
+  // 1) Direct relations — row di JemaatRelasi where jemaatId = self.
+  const directRows = await prisma.jemaatRelasi.findMany({
     where: { jemaatId },
     orderBy: { createdAt: 'desc' },
     include: {
       tipeRelasi: { select: { id: true, nama: true } },
-      jemaatTerkait: {
-        select: {
-          id: true,
-          namaLengkap: true,
-          noHp: true,
-          kode: true,
-          fotoUrl: true,
-          tanggalLahir: true,
-          jenisKelamin: true,
-          cabang: { select: { id: true, nama: true } },
-          primaryGuardianId: true,
-        },
-      },
+      jemaatTerkait: { select: jemaatSelect },
     },
   });
-  const data = rows.map((r) => ({
+
+  // 2) Transitive via spouse — kalau salah satu direct row itu pasangan
+  //    (Suami/Istri), ambil relasi milik pasangan tsb supaya user bisa lihat
+  //    anak/orang tua pasangan tanpa harus manual re-link.
+  //    Contoh: W add C1,C2 sebagai Anak. W add H sebagai Suami. Login H:
+  //    direct = [W (Istri)], viaSpouse = [C1 (Anak via W), C2 (Anak via W)].
+  const spouseRows = directRows.filter((r) =>
+    r.tipeRelasi.nama === 'Suami' || r.tipeRelasi.nama === 'Istri',
+  );
+
+  type SpouseRelExtra = {
+    id: string;
+    tipeRelasi: { id: string; nama: string };
+    createdAt: Date;
+    jemaatTerkait: {
+      id: string;
+      namaLengkap: string;
+      noHp: string | null;
+      kode: string | null;
+      fotoUrl: string | null;
+      tanggalLahir: Date | null;
+      jenisKelamin: 'L' | 'P' | null;
+      cabang: { id: string; nama: string } | null;
+      primaryGuardianId: string | null;
+    };
+    _viaSpouse: { id: string; namaLengkap: string };
+  };
+
+  let viaSpouseRows: SpouseRelExtra[] = [];
+  if (spouseRows.length > 0) {
+    const directTargetIds = new Set(directRows.map((r) => r.jemaatTerkaitId));
+    directTargetIds.add(jemaatId); // exclude self
+
+    for (const sRow of spouseRows) {
+      const spouseId = sRow.jemaatTerkaitId;
+      const spouseFamily = await prisma.jemaatRelasi.findMany({
+        where: {
+          jemaatId: spouseId,
+          NOT: { jemaatTerkaitId: { in: Array.from(directTargetIds) } },
+          // Hanya include yg relevan sbg keluarga inti extended: anak, ortu,
+          // saudara. Skip lain-lain (Suami/Istri lain, Wali, Lainnya)
+          // supaya list tidak bocor kontak yg tidak related.
+          tipeRelasi: {
+            nama: {
+              in: [
+                'Anak Laki-Laki',
+                'Anak Perempuan',
+                'Ayah',
+                'Ibu',
+                'Saudara Kandung',
+              ],
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          tipeRelasi: { select: { id: true, nama: true } },
+          jemaatTerkait: { select: jemaatSelect },
+        },
+      });
+
+      for (const r of spouseFamily) {
+        // Guard against duplicate: kalau anak sudah muncul via spouse A,
+        // jangan re-tambah via spouse B (rare tapi mungkin edge case).
+        if (directTargetIds.has(r.jemaatTerkaitId)) continue;
+        directTargetIds.add(r.jemaatTerkaitId);
+        viaSpouseRows.push({
+          id: r.id,
+          tipeRelasi: r.tipeRelasi,
+          createdAt: r.createdAt,
+          jemaatTerkait: r.jemaatTerkait,
+          _viaSpouse: {
+            id: sRow.jemaatTerkait.id,
+            namaLengkap: sRow.jemaatTerkait.namaLengkap,
+          },
+        });
+      }
+    }
+  }
+
+  const directData = directRows.map((r) => ({
     id: r.id,
-    // Backward compat: role broad enum untuk mobile lama
     role: tipeNamaToBroadRole(r.tipeRelasi.nama),
-    // Preferred (new): tipeRelasi granular
     tipeRelasi: r.tipeRelasi,
-    isVerified: true, // JemaatRelasi implicit verified
+    isVerified: true,
+    viaSpouse: null as null | { id: string; namaLengkap: string },
     createdAt: r.createdAt,
     jemaat: {
       ...r.jemaatTerkait,
       isDependent: r.jemaatTerkait.primaryGuardianId === jemaatId,
     },
   }));
-  res.json({ success: true, data });
+
+  const spouseData = viaSpouseRows.map((r) => ({
+    id: r.id,
+    role: tipeNamaToBroadRole(r.tipeRelasi.nama),
+    tipeRelasi: r.tipeRelasi,
+    isVerified: true,
+    viaSpouse: r._viaSpouse,
+    createdAt: r.createdAt,
+    jemaat: {
+      ...r.jemaatTerkait,
+      // Note: isDependent hanya true kalau primary guardian = self.
+      // Untuk anak-via-pasangan, primaryGuardian biasanya pasangan, jadi false.
+      isDependent: r.jemaatTerkait.primaryGuardianId === jemaatId,
+    },
+  }));
+
+  res.json({ success: true, data: [...directData, ...spouseData] });
 });
 
 meRouter.post('/family/link-by-kode', async (req, res) => {

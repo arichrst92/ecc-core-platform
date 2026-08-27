@@ -50,6 +50,19 @@ function VerifyMagicLinkInner() {
     /android|iphone|ipad|ipod/i.test(navigator.userAgent);
   const mobileDeepLink = token ? `ecc://auth/email/verify?token=${token}` : '';
 
+  // Auto-redirect ke deeplink app kalau UA mobile.
+  // App diharapkan handle `ecc://auth/email/verify?token=xxx` → panggil
+  // /auth/email/verify-magic-link → set session → land di home.
+  // Kalau app tidak install, browser tetap di page ini dan auto-login web.
+  useEffect(() => {
+    if (!token || !isMobileUA) return;
+    // Delay kecil supaya browser sempat render page (kasus app tidak install).
+    const t = setTimeout(() => {
+      window.location.href = mobileDeepLink;
+    }, 100);
+    return () => clearTimeout(t);
+  }, [token, isMobileUA, mobileDeepLink]);
+
   useEffect(() => {
     if (!token) return;
     let alive = true;

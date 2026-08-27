@@ -12,7 +12,7 @@
  * Kalau UA mobile & user punya app ECC: tampilkan tombol "Buka di aplikasi ECC"
  * (deep link `ecc://auth/email/verify?token=...`) selain auto-login web.
  */
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle, CheckCircle2, Smartphone } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
@@ -20,7 +20,23 @@ import { useAuthStore } from '@/lib/auth-store';
 
 type Phase = 'verifying' | 'success' | 'error' | 'no-token';
 
+// Next 14 App Router: useSearchParams() harus di dalam Suspense boundary
+// supaya page tidak CSR-bailout waktu prerender.
 export default function VerifyMagicLinkPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-orange-50">
+          <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
+        </div>
+      }
+    >
+      <VerifyMagicLinkInner />
+    </Suspense>
+  );
+}
+
+function VerifyMagicLinkInner() {
   const router = useRouter();
   const params = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);

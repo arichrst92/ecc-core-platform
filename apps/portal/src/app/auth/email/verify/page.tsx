@@ -18,7 +18,7 @@ import { Loader2, AlertCircle, CheckCircle2, Smartphone } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 
-type Phase = 'verifying' | 'success' | 'error' | 'no-token';
+type Phase = 'verifying' | 'success' | 'error' | 'no-token' | 'mobile-deeplink';
 
 // Next 14 App Router: useSearchParams() harus di dalam Suspense boundary
 // supaya page tidak CSR-bailout waktu prerender.
@@ -42,29 +42,35 @@ function VerifyMagicLinkInner() {
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const token = params.get('token');
-  const [phase, setPhase] = useState<Phase>(token ? 'verifying' : 'no-token');
-  const [errMsg, setErrMsg] = useState<string>('');
+  // `?web=1` bypass mobile-deeplink flow (dari tombol "Login di web").
+  const forceWeb = params.get('web') === '1';
 
   const isMobileUA =
     typeof navigator !== 'undefined' &&
     /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  const useMobileFlow = token && isMobileUA && !forceWeb;
+
+  const [phase, setPhase] = useState<Phase>(
+    !token ? 'no-token' : useMobileFlow ? 'mobile-deeplink' : 'verifying',
+  );
+  const [errMsg, setErrMsg] = useState<string>('');
+
   const mobileDeepLink = token ? `ecc://auth/email/verify?token=${token}` : '';
 
-  // Auto-redirect ke deeplink app kalau UA mobile.
-  // App diharapkan handle `ecc://auth/email/verify?token=xxx` → panggil
-  // /auth/email/verify-magic-link → set session → land di home.
-  // Kalau app tidak install, browser tetap di page ini dan auto-login web.
+  // Mobile flow — trigger deep link, DO NOT verify web (biar token tidak
+  // ke-consume; app yg pakai token). Kalau user tidak switch ke app dalam
+  // beberapa detik, tampilkan tombol "Login di web" sebagai fallback.
   useEffect(() => {
-    if (!token || !isMobileUA) return;
-    // Delay kecil supaya browser sempat render page (kasus app tidak install).
+    if (!useMobileFlow) return;
     const t = setTimeout(() => {
       window.location.href = mobileDeepLink;
-    }, 100);
+    }, 300);
     return () => clearTimeout(t);
-  }, [token, isMobileUA, mobileDeepLink]);
+  }, [useMobileFlow, mobileDeepLink]);
 
+  // Web flow — verify + auto-login. HANYA jalan kalau bukan mobile flow.
   useEffect(() => {
-    if (!token) return;
+    if (!token || useMobileFlow) return;
     let alive = true;
 
     (async () => {
@@ -93,7 +99,7 @@ function VerifyMagicLinkInner() {
     return () => {
       alive = false;
     };
-  }, [token, setAuth, router]);
+  }, [token, useMobileFlow, setAuth, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center px-4">
@@ -159,16 +165,35 @@ function VerifyMagicLinkInner() {
           </div>
         )}
 
-        {isMobileUA && mobileDeepLink && (phase === 'verifying' || phase === 'success') && (
-          <div className="mt-6 pt-4 border-t border-neutral-100">
-            <p className="text-xs text-neutral-500 mb-2 text-center">Punya aplikasi ECC mobile?</p>
+        {phase === 'mobile-deeplink' && (
+          <div className="py-4">
+            <div className="text-center mb-4">
+              <Smartphone className="w-10 h-10 text-orange-500 mx-auto mb-2" />
+              <p className="text-sm font-medium text-neutral-900">Membuka aplikasi ECC…</p>
+              <p className="text-xs text-neutral-500 mt-1">
+                Kalau iOS tanya "Buka di ECC?", pilih <strong>Open</strong>.
+              </p>
+            </div>
             <a
               href={mobileDeepLink}
-              className="w-full flex items-center justify-center gap-2 py-2.5 border border-orange-300 text-orange-700 text-sm font-medium rounded-lg hover:bg-orange-50"
+              className="w-full flex items-center justify-center gap-2 py-2.5 border border-orange-300 text-orange-700 text-sm font-medium rounded-lg hover:bg-orange-50 mb-3"
             >
               <Smartphone className="w-4 h-4" />
               Buka di aplikasi ECC
             </a>
+            <button
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('web', '1');
+                window.location.replace(url.toString());
+              }}
+              className="w-full py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-sm font-medium rounded-lg"
+            >
+              Aplikasi belum install? Login di web
+            </button>
+            <p className="text-[11px] text-neutral-400 mt-3 text-center">
+              Catatan: kalau login di web, link tidak bisa dipakai lagi di app.
+            </p>
           </div>
         )}
       </div>

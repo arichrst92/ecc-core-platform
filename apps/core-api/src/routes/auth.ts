@@ -1134,9 +1134,13 @@ authRouter.post('/email/request-magic-link', magicLinkLimiter, async (req, res) 
     });
 
     // Construct URL — mobile deeplink priority, fallback web
-    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    // Email button HARUS pakai HTTPS supaya clickable di semua email client
+    // (custom URL scheme `ecc://` di-blokir sbg security risk di iOS Mail, Gmail
+    // web, Outlook, dsb). Portal `/auth/email/verify` page handle token → JWT,
+    // dan (kalau mobile UA) offer deeplink open app.
     const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
-    const magicLinkUrl = (mobileBase || webBase) + `?token=${token}`;
+    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    const magicLinkUrl = (webBase || mobileBase) + `?token=${token}`;
 
     // Send email — non-blocking-ish (still await, but silent-fail wrapped)
     try {
@@ -1221,9 +1225,13 @@ authRouter.post('/email/resend-magic-link', magicLinkLimiter, async (req, res) =
     await prisma.magicLinkToken.create({
       data: { jemaatId: jemaat.id, email, token, expiresAt, requestedIp: req.ip ?? null },
     });
-    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    // Email button HARUS pakai HTTPS supaya clickable di semua email client
+    // (custom URL scheme `ecc://` di-blokir sbg security risk di iOS Mail, Gmail
+    // web, Outlook, dsb). Portal `/auth/email/verify` page handle token → JWT,
+    // dan (kalau mobile UA) offer deeplink open app.
     const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
-    const magicLinkUrl = (mobileBase || webBase) + `?token=${token}`;
+    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+    const magicLinkUrl = (webBase || mobileBase) + `?token=${token}`;
     try {
       await sendMagicLinkEmail({
         to: email,

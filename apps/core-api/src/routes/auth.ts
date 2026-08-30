@@ -60,6 +60,38 @@ export const authRouter = Router();
 // Lihat docs/backend-request-face-confidence-threshold-and-telemetry.md.
 authRouter.use('/face', faceTelemetryRouter);
 
+// ============================================================
+// APP REVIEW BYPASS (App Store / Play Store reviewer accounts)
+// ============================================================
+// Alasan: Apple/Google reviewer test dari perangkat mereka (US/EU) tanpa
+// WhatsApp Indonesia — tidak bisa terima OTP real. Custom scheme `ecc://`
+// magic link juga di-blok iPadOS beta. Solusi: allowlist nomor demo dgn
+// OTP statik. Cuma affect nomor spesifik di list, nomor lain tetap normal.
+//
+// Config via ENV (bisa rotate tanpa deploy code):
+//   APP_REVIEW_BYPASS_NUMBERS=+6281805807807[,+62xxx...]
+//   APP_REVIEW_BYPASS_OTP=123456
+// Kalau ENV kosong → bypass disabled (behavior default).
+// ============================================================
+function getAppReviewBypass(): { numbers: Set<string>; otp: string } | null {
+  const raw = (process.env.APP_REVIEW_BYPASS_NUMBERS ?? '').trim();
+  const otp = (process.env.APP_REVIEW_BYPASS_OTP ?? '').trim();
+  if (!raw || !otp) return null;
+  const numbers = new Set(
+    raw
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean),
+  );
+  if (numbers.size === 0) return null;
+  return { numbers, otp };
+}
+
+function isBypassNumber(noHp: string): boolean {
+  const b = getAppReviewBypass();
+  return !!b && b.numbers.has(noHp);
+}
+
 /**
  * POST /auth/otp/request — kirim OTP via WhatsApp.
  *
@@ -69,6 +101,20 @@ authRouter.use('/face', faceTelemetryRouter);
  */
 authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   const { noHp, purpose } = requestOtpSchema.parse(req.body);
+
+  // APP REVIEW BYPASS — skip WA send + OtpVerification row (tidak perlu
+  // karena verify handler juga skip DB lookup untuk nomor ini). Log audit.
+  if (isBypassNumber(noHp) && purpose === 'LOGIN') {
+    logger.info(
+      { noHp, purpose, ip: req.ip },
+      '[auth-otp] app-review bypass request (no WA send)',
+    );
+    return res.json({
+      success: true,
+      message: 'OTP telah dikirim via WhatsApp',
+      data: { expiresIn: 300 },
+    });
+  }
 
   if (purpose === 'ENROLLMENT') {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
@@ -132,6 +178,28 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
  */
 authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
   const { noHp, kode, purpose } = verifyOtpSchema.parse(req.body);
+
+  // APP REVIEW BYPASS — validate static OTP + issue JWT langsung.
+  // Jemaat harus sudah di-register di DB (satu kali setup). Kalau belum,
+  // return 404 dgn pesan clear supaya reviewer / BE tahu action needed.
+  const bypass = getAppReviewBypass();
+  if (bypass && bypass.numbers.has(noHp) && purpose === 'LOGIN') {
+    if (kode !== bypass.otp) {
+      logger.warn({ noHp, ip: req.ip }, '[auth-otp] app-review bypass wrong OTP');
+      throw Unauthorized('OTP salah');
+    }
+    const jemaat = await prisma.jemaat.findUnique({ where: { noHp } });
+    if (!jemaat) {
+      throw NotFound(
+        'Reviewer account belum terdaftar di DB. Hubungi tim backend untuk register jemaat.',
+      );
+    }
+    logger.info(
+      { noHp, jemaatId: jemaat.id, ip: req.ip },
+      '[auth-otp] app-review bypass verify success',
+    );
+    return res.json(await issueAuthResponse(noHp, req, 'OTP'));
+  }
 
   const record = await prisma.otpVerification.findFirst({
     where: { noHp, purpose, usedAt: null, expiresAt: { gt: new Date() } },

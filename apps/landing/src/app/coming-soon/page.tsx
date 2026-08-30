@@ -67,28 +67,6 @@ export default function ComingSoonPage() {
                 </p>
               </div>
 
-              {/* Feature bullets */}
-              <div className="grid sm:grid-cols-3 gap-3 mb-8">
-                <div className="text-center p-3 rounded-2xl bg-orange-50/60 border border-orange-100">
-                  <div className="text-2xl mb-1">🙏</div>
-                  <p className="text-xs font-semibold text-neutral-700">
-                    Jadwal Ibadah
-                  </p>
-                </div>
-                <div className="text-center p-3 rounded-2xl bg-orange-50/60 border border-orange-100">
-                  <div className="text-2xl mb-1">🎉</div>
-                  <p className="text-xs font-semibold text-neutral-700">
-                    Event Komunitas
-                  </p>
-                </div>
-                <div className="text-center p-3 rounded-2xl bg-orange-50/60 border border-orange-100">
-                  <div className="text-2xl mb-1">❤️</div>
-                  <p className="text-xs font-semibold text-neutral-700">
-                    Pelayanan Kasih
-                  </p>
-                </div>
-              </div>
-
               {/* CTA */}
               <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl p-6 text-white text-center mb-6">
                 <Heart className="w-6 h-6 mx-auto mb-2" fill="white" />
@@ -122,16 +100,11 @@ export default function ComingSoonPage() {
             {/* Footer strip */}
             <div className="bg-neutral-50/70 px-8 py-4 border-t border-neutral-100 text-center">
               <p className="text-[11px] text-neutral-500 tracking-wide">
-                &copy; {new Date().getFullYear()} Elshaddai Creative Community · Dibangun dengan{' '}
-                <span className="text-orange-500">♥</span> untuk komunitas
+                &copy; {new Date().getFullYear()} Elshaddai Creative Community
               </p>
             </div>
           </div>
 
-          {/* Verse tagline */}
-          <p className="text-center text-xs text-neutral-500 mt-6 italic px-6">
-            &ldquo;Sebab TUHAN sendirilah yang akan berjalan di depanmu, Dia sendiri akan menyertai engkau.&rdquo; — Ulangan 31:8
-          </p>
         </div>
       </div>
     </div>

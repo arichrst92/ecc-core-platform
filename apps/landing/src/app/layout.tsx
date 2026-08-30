@@ -38,12 +38,22 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Coming-soon mode: hide Navbar/Footer, render page fullscreen. Toggle
+  // via ENV `LANDING_MODE=coming-soon` (see middleware.ts).
+  const isComingSoon = process.env.LANDING_MODE === 'coming-soon';
+
   return (
     <html lang="id">
       <body className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        {isComingSoon ? (
+          <>{children}</>
+        ) : (
+          <>
+            <Navbar />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </>
+        )}
       </body>
     </html>
   );

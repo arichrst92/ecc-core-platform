@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Church, Landmark, QrCode, ChevronLeft, Info } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { CopyRekeningButton } from '../copy-button';
+import { QrisPreview } from '@/components/qris-preview';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
@@ -150,21 +151,19 @@ export default async function PersembahanCabangPage(
 
                   {r.qrisImageUrl && (
                     <div className="mt-3 pt-3 border-t border-neutral-100 flex items-start gap-3">
-                      <div className="w-24 h-24 relative shrink-0 rounded-lg overflow-hidden border border-neutral-200">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={resolveAssetUrl(r.qrisImageUrl) ?? ''}
-                          alt={`QRIS ${r.purpose} ${cabang.nama}`}
-                          className="w-full h-full object-contain bg-white"
-                        />
-                      </div>
+                      <QrisPreview
+                        src={resolveAssetUrl(r.qrisImageUrl) ?? ''}
+                        alt={`QRIS ${r.purpose} — ${cabang.nama}`}
+                        downloadName={`qris-${cabang.kode}-${r.purpose}`.toLowerCase().replace(/\s+/g, '-')}
+                      />
                       <div className="flex-1">
                         <p className="text-xs font-semibold text-neutral-700 mb-1 flex items-center gap-1">
                           <QrCode className="w-3.5 h-3.5" /> QRIS
                         </p>
                         <p className="text-xs text-neutral-500 leading-relaxed">
-                          Scan dengan mobile banking atau e-wallet Anda
-                          (GoPay, OVO, Dana, ShopeePay, dll).
+                          Tap gambar untuk preview besar & download. Scan dengan
+                          mobile banking atau e-wallet Anda (GoPay, OVO, Dana,
+                          ShopeePay, dll).
                         </p>
                       </div>
                     </div>

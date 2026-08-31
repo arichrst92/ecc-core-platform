@@ -56,9 +56,9 @@ function formatRupiah(n: number): string {
 }
 
 export async function generateMetadata(
-  { params }: { params: { id: string } },
+  { params }: { params: { slug: string } },
 ): Promise<Metadata> {
-  const event = await apiGet<EventDetail>(`/public/event/${params.id}`);
+  const event = await apiGet<EventDetail>(`/public/event/${params.slug}`);
   if (!event) {
     return {
       title: 'Event tidak ditemukan',
@@ -73,9 +73,9 @@ export async function generateMetadata(
 }
 
 export default async function EventPembayaranPage(
-  { params }: { params: { id: string } },
+  { params }: { params: { slug: string } },
 ) {
-  const event = await apiGet<EventDetail>(`/public/event/${params.id}`);
+  const event = await apiGet<EventDetail>(`/public/event/${params.slug}`);
   if (!event) notFound();
 
   const isFree = event.tipeBayar === 'GRATIS';

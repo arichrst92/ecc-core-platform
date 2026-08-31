@@ -22,6 +22,9 @@ export function middleware(req: NextRequest) {
     pathname === '/coming-soon' ||
     pathname === '/persembahan' ||
     pathname.startsWith('/persembahan/') ||
+    pathname === '/event/pembayaran' ||
+    pathname.startsWith('/event/pembayaran/') ||
+    /^\/event\/[^/]+\/(register|payment|pembayaran)/.test(pathname) ||
     pathname === '/privacy' ||
     pathname === '/terms' ||
     pathname === '/robots.txt' ||

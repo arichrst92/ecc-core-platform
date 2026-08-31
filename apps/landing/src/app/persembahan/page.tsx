@@ -4,6 +4,19 @@ import { Church, Landmark, QrCode, Info } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { CopyRekeningButton } from './copy-button';
 
+// Backend simpan qrisImageUrl sebagai relative path `/uploads/...` — landing
+// di domain berbeda (eccchurch.global vs api.eccchurch.global), jadi harus
+// prepend API base biar image resolve.
+const API_BASE =
+  process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
+
+function resolveAssetUrl(url: string | null): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+}
+
 export const metadata: Metadata = {
   title: 'Persembahan',
   description:
@@ -127,7 +140,7 @@ export default async function PersembahanPage() {
                           <div className="w-24 h-24 relative shrink-0 rounded-lg overflow-hidden border border-neutral-200">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={r.qrisImageUrl}
+                              src={resolveAssetUrl(r.qrisImageUrl) ?? ''}
                               alt={`QRIS ${r.purpose} ${cabang.nama}`}
                               className="w-full h-full object-contain bg-white"
                             />

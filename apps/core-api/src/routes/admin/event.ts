@@ -40,6 +40,7 @@ import {
   deleteEventDonationBukti,
 } from '../../lib/storage.js';
 import { idOrSlugWhere } from '../../lib/id-or-slug.js';
+import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { createNotification } from '../../lib/notification.js';
 
@@ -198,6 +199,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
   // Tetap include field-nya (null kalau belum daftar) supaya mobile bisa
   // distinguish "belum daftar" vs "field absent karena server outdated".
   let myParticipation: unknown = null;
+  let familyParticipationsCount = 0;
   if (req.user) {
     const row = await prisma.eventParticipation.findUnique({
       where: { eventId_jemaatId: { eventId: item.id, jemaatId: req.user.jemaatId } },
@@ -216,6 +218,17 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       },
     });
     myParticipation = row ?? null;
+
+    // familyParticipationsCount (mobile UI indicator "N pendaftaran")
+    // include self + family, exclude BATAL. Cheap because scoped ke satu event.
+    const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
+    familyParticipationsCount = await prisma.eventParticipation.count({
+      where: {
+        eventId: item.id,
+        jemaatId: { in: Array.from(familyIds) },
+        status: { not: 'BATAL' },
+      },
+    });
   }
 
   res.json({
@@ -224,6 +237,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       ...item,
       pesertaCount: item._count.partisipasi,
       myParticipation,
+      familyParticipationsCount,
     },
   });
 });
@@ -883,6 +897,147 @@ eventRouter.delete('/:id/peserta/me', async (req, res) => {
 });
 
 // ============================================================
+//  Family multi-tracker — GET /admin/event/:idOrSlug/peserta/mine-and-family
+// ============================================================
+//
+// Per backend-request-family-participation-list.md (2026-08-31).
+//
+// Return semua EventParticipation di event ini yg jemaatId-nya di family set
+// (self + JemaatRelasi direct + spouse-transitive). Skip BATAL.
+// Response include `isSelf` + `relationLabel` supaya mobile langsung render.
+eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const selfId = req.user.jemaatId;
+  const key = req.params.idOrSlug;
+
+  const event = await prisma.event.findFirst({
+    where: idOrSlugWhere(key),
+    select: { id: true },
+  });
+  if (!event) throw NotFound('Event tidak ditemukan');
+
+  const familyIds = await getFamilyJemaatIds(selfId);
+
+  // Ambil relasi jemaat untuk label ("Istri", "Anak Laki-Laki", dst.)
+  const relasi = await prisma.jemaatRelasi.findMany({
+    where: { jemaatId: selfId, jemaatTerkaitId: { in: Array.from(familyIds) } },
+    select: {
+      jemaatTerkaitId: true,
+      tipeRelasi: { select: { nama: true } },
+    },
+  });
+  const relationLabelById = new Map<string, string>();
+  for (const r of relasi) relationLabelById.set(r.jemaatTerkaitId, r.tipeRelasi.nama);
+
+  const rows = await prisma.eventParticipation.findMany({
+    where: {
+      eventId: event.id,
+      jemaatId: { in: Array.from(familyIds) },
+      status: { not: 'BATAL' },
+    },
+    orderBy: { registeredAt: 'desc' },
+    select: {
+      id: true,
+      eventId: true,
+      jemaatId: true,
+      status: true,
+      nominalBayar: true,
+      catatan: true,
+      buktiTransferUrl: true,
+      registeredAt: true,
+      paidAt: true,
+      attendedAt: true,
+      cancelledAt: true,
+      jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+    },
+  });
+
+  const participations = rows.map((r) => ({
+    ...r,
+    isSelf: r.jemaatId === selfId,
+    relationLabel:
+      r.jemaatId === selfId
+        ? 'Diri sendiri'
+        : relationLabelById.get(r.jemaatId) ?? 'Keluarga',
+  }));
+
+  res.json({ success: true, data: { participations } });
+});
+
+// ============================================================
+//  Self/family cancel by participationId
+//  POST /admin/event/:idOrSlug/peserta/:participationId/self-cancel
+// ============================================================
+//
+// Per backend-request-family-participation-list.md (2026-08-31).
+//
+// Beda dgn admin `DELETE /:id/peserta/:participationId` (hard delete, admin
+// only) — endpoint ini SOFT cancel dgn auth guard:
+//   - Participation.jemaatId harus di family set requester.
+// Behavior sama seperti `/peserta/me` (BATAL, cancelledAt, idempotent, tolak HADIR).
+eventRouter.post('/:idOrSlug/peserta/:participationId/self-cancel', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const selfId = req.user.jemaatId;
+  const { idOrSlug, participationId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: idOrSlugWhere(idOrSlug),
+    select: { id: true, judul: true },
+  });
+  if (!event) throw NotFound('Event tidak ditemukan');
+
+  const existing = await prisma.eventParticipation.findUnique({
+    where: { id: participationId },
+    include: { jemaat: { select: { namaLengkap: true } } },
+  });
+  if (!existing || existing.eventId !== event.id) {
+    throw NotFound('Partisipasi tidak ditemukan di event ini.');
+  }
+
+  // Auth guard: participation harus milik self atau family
+  const familyIds = await getFamilyJemaatIds(selfId);
+  if (!familyIds.has(existing.jemaatId)) {
+    throw Forbidden('Anda tidak berhak membatalkan partisipasi ini.');
+  }
+
+  if (existing.status === 'HADIR') {
+    throw BadRequest(
+      `${existing.jemaat.namaLengkap} sudah hadir di event ini — tidak bisa dibatalkan. Hubungi admin event.`,
+    );
+  }
+
+  if (existing.status === 'BATAL') {
+    return res.json({
+      success: true,
+      data: existing,
+      meta: { alreadyCancelled: true },
+    });
+  }
+
+  const cancelled = await prisma.eventParticipation.update({
+    where: { id: existing.id },
+    data: { status: 'BATAL', cancelledAt: new Date() },
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'event_participation',
+    resourceId: cancelled.id,
+    resourceLabel: `Family-cancel: ${existing.jemaat.namaLengkap} @ ${event.judul}`,
+    before: existing,
+    after: cancelled,
+    metadata: {
+      kind: 'event-family-cancel',
+      previousStatus: existing.status,
+      cancelledBy: selfId,
+      cancelledFor: existing.jemaatId,
+    },
+  });
+
+  res.json({ success: true, data: cancelled, meta: { alreadyCancelled: false } });
+});
+
+// ============================================================
 //  Event Donations — multi-payment per participation
 // ============================================================
 //
@@ -1396,6 +1551,16 @@ eventRouter.post(
     });
     if (!before || before.eventId !== req.params.id) {
       throw NotFound('Partisipasi tidak ditemukan');
+    }
+
+    // Auth guard (per backend-request-family-participation-list.md 2026-08-31):
+    // admin (Fulltimer) allowed always; jemaat user allowed only kalau
+    // participation-nya di family set.
+    if (req.user && !req.user.isFulltimer) {
+      const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
+      if (!familyIds.has(before.jemaatId)) {
+        throw Forbidden('Anda tidak berhak upload bukti untuk partisipasi ini.');
+      }
     }
 
     const buktiTransferUrl = await saveEventBuktiTransfer(before.id, req.file.buffer);

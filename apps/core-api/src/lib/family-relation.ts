@@ -12,6 +12,64 @@ import { BadRequest, NotFound } from './errors.js';
 import { createNotification } from './notification.js';
 
 /**
+ * Return set of jemaatIds yang user boleh act on (view/edit/cancel/upload)
+ * atas nama mereka: diri sendiri + semua relasi keluarga direct (JemaatRelasi
+ * dgn jemaatId=self) + transitive via pasangan (anak/ortu/saudara pasangan,
+ * sejalan dgn GET /me/family viaSpouse behavior).
+ *
+ * Tidak include kakek/nenek/cucu extended, tidak include suami/istri
+ * pasangan (privacy). Include self.
+ *
+ * Dipakai di endpoint yang butuh authorize "act on family": mine-and-family
+ * participation list, self-cancel by id, upload bukti untuk family.
+ */
+export async function getFamilyJemaatIds(selfId: string): Promise<Set<string>> {
+  const result = new Set<string>([selfId]);
+
+  const direct = await prisma.jemaatRelasi.findMany({
+    where: { jemaatId: selfId },
+    select: {
+      jemaatTerkaitId: true,
+      tipeRelasi: { select: { nama: true } },
+    },
+  });
+
+  const spouseIds: string[] = [];
+  for (const r of direct) {
+    result.add(r.jemaatTerkaitId);
+    if (r.tipeRelasi.nama === 'Suami' || r.tipeRelasi.nama === 'Istri') {
+      spouseIds.push(r.jemaatTerkaitId);
+    }
+  }
+
+  if (spouseIds.length > 0) {
+    const spouseFamily = await prisma.jemaatRelasi.findMany({
+      where: {
+        jemaatId: { in: spouseIds },
+        NOT: { jemaatTerkaitId: { in: Array.from(result) } },
+        tipeRelasi: {
+          nama: {
+            in: [
+              'Anak Laki-Laki',
+              'Anak Perempuan',
+              'Ayah',
+              'Ibu',
+              'Saudara Kandung',
+            ],
+          },
+        },
+      },
+      select: { jemaatTerkaitId: true },
+    });
+    for (const r of spouseFamily) {
+      result.add(r.jemaatTerkaitId);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Broad enum → nama TipeRelasiKeluarga default (as seeded). Refine di
  * resolver berdasarkan gender.
  */

@@ -696,14 +696,39 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
         });
         continue;
       }
-      // Cek duplikat
+      // Cek existing (per backend-request-batch-reactivate-batal.md 2026-08-31):
+      // BATAL → reactivate. Active status → reject as ALREADY_REGISTERED.
       const existing = await prisma.eventParticipation.findUnique({
         where: { eventId_jemaatId: { eventId: event.id, jemaatId } },
       });
       if (existing) {
+        if (existing.status === 'BATAL') {
+          const reactivated = await prisma.eventParticipation.update({
+            where: { id: existing.id },
+            data: {
+              status: 'DAFTAR',
+              registeredAt: new Date(),
+              cancelledAt: null,
+              nominalBayar: nominal,
+              catatan: input.catatan,
+              // Reset payment artifacts — user daftar ulang, mulai dari nol.
+              buktiTransferUrl: null,
+              paidAt: null,
+              approvedAt: null,
+              approver: { disconnect: true },
+            },
+            include: { jemaat: { select: { id: true, namaLengkap: true, kode: true } } },
+          });
+          successful.push(reactivated);
+          acceptedSoFar += 1;
+          continue;
+        }
         failed.push({
           jemaatId,
-          error: { code: 'DUPLICATE', message: 'Jemaat sudah terdaftar di event ini.' },
+          error: {
+            code: 'ALREADY_REGISTERED',
+            message: 'Jemaat sudah terdaftar aktif di event ini.',
+          },
         });
         continue;
       }
@@ -1082,21 +1107,18 @@ eventRouter.get('/:id/donations', async (req, res) => {
   const statusFilter =
     typeof req.query.status === 'string' &&
     ['MENUNGGU_VERIFIKASI', 'BAYAR', 'BATAL'].includes(req.query.status)
-      ? req.query.status
+      ? (req.query.status as 'MENUNGGU_VERIFIKASI' | 'BAYAR' | 'BATAL')
       : undefined;
 
-  const where: Prisma.EventDonationWhereInput = {
+  const donationWhere: Prisma.EventDonationWhereInput = {
     participation: { eventId: event.id },
-    ...(statusFilter
-      ? { status: statusFilter as Prisma.EventDonationWhereInput['status'] }
-      : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
   };
 
-  const [rows, total, totalAmountAgg] = await Promise.all([
+  // 1) Real EventDonation rows
+  const [donationRows, donationTotal, donationSumAgg] = await Promise.all([
     prisma.eventDonation.findMany({
-      where,
-      skip: (q.page - 1) * q.limit,
-      take: q.limit,
+      where: donationWhere,
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       include: {
         participation: {
@@ -1110,23 +1132,113 @@ eventRouter.get('/:id/donations', async (req, res) => {
         approver: { select: { id: true, namaLengkap: true } },
       },
     }),
-    prisma.eventDonation.count({ where }),
-    // Total nominal yang sudah BAYAR untuk event ini (untuk fundraising progress).
+    prisma.eventDonation.count({ where: donationWhere }),
     prisma.eventDonation.aggregate({
       where: { participation: { eventId: event.id }, status: 'BAYAR' },
       _sum: { nominalBayar: true },
     }),
   ]);
 
+  // 2) Synthesized rows dari EventParticipation legacy single-payment.
+  //    Include participation yang punya buktiTransferUrl / paidAt tapi BELUM
+  //    punya EventDonation row (dibedakan by participationId).
+  //    Ini fix untuk kasus admin approve via /peserta/:pid/approve → cuma
+  //    update participation, tidak create donation row → payment history kosong.
+  const existingPartIds = new Set(donationRows.map((d) => d.participationId));
+  const legacyParts = await prisma.eventParticipation.findMany({
+    where: {
+      eventId: event.id,
+      OR: [
+        { buktiTransferUrl: { not: null } },
+        { paidAt: { not: null } },
+        { status: { in: ['MENUNGGU_VERIFIKASI', 'BAYAR'] } },
+      ],
+    },
+    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true, fotoUrl: true } },
+      approver: { select: { id: true, namaLengkap: true } },
+    },
+  });
+
+  const synthesized = legacyParts
+    .filter((p) => !existingPartIds.has(p.id))
+    .filter((p) => {
+      // Map participation.status → donation-eligible status
+      const mapped: 'MENUNGGU_VERIFIKASI' | 'BAYAR' | 'BATAL' | null =
+        p.status === 'BAYAR' || p.status === 'HADIR'
+          ? 'BAYAR'
+          : p.status === 'MENUNGGU_VERIFIKASI'
+            ? 'MENUNGGU_VERIFIKASI'
+            : p.status === 'BATAL'
+              ? 'BATAL'
+              : null;
+      if (!mapped) return false;
+      return !statusFilter || statusFilter === mapped;
+    })
+    .map((p) => {
+      const mapped =
+        p.status === 'BAYAR' || p.status === 'HADIR'
+          ? 'BAYAR'
+          : p.status === 'MENUNGGU_VERIFIKASI'
+            ? 'MENUNGGU_VERIFIKASI'
+            : 'BATAL';
+      return {
+        // ID stable — pakai participationId prefix supaya FE bisa distinguish
+        // (untuk approve/cancel button, FE fallback ke peserta endpoint).
+        id: `virt-${p.id}`,
+        participationId: p.id,
+        nominalBayar: p.nominalBayar ?? '0',
+        buktiTransferUrl: p.buktiTransferUrl,
+        status: mapped as 'MENUNGGU_VERIFIKASI' | 'BAYAR' | 'BATAL',
+        catatan: p.catatan,
+        paidAt: p.paidAt,
+        approvedAt: p.approvedAt,
+        createdAt: p.createdAt,
+        participation: { id: p.id, jemaat: p.jemaat },
+        approver: p.approver,
+        _synthesized: true as const,
+      };
+    });
+
+  // 3) Merge + sort + paginate
+  const merged = [
+    ...donationRows.map((d) => ({ ...d, _synthesized: false as const })),
+    ...synthesized,
+  ].sort((a, b) => {
+    // status ASC (MENUNGGU_VERIFIKASI < BAYAR < BATAL alphabet-wise not desired)
+    // Custom priority: MENUNGGU_VERIFIKASI first, then BAYAR, then BATAL.
+    const prio = { MENUNGGU_VERIFIKASI: 0, BAYAR: 1, BATAL: 2 };
+    const pa = prio[a.status] ?? 99;
+    const pb = prio[b.status] ?? 99;
+    if (pa !== pb) return pa - pb;
+    const ta = new Date(a.createdAt).getTime();
+    const tb = new Date(b.createdAt).getTime();
+    return tb - ta;
+  });
+
+  const total = merged.length;
+  const paged = merged.slice((q.page - 1) * q.limit, q.page * q.limit);
+
+  // Total confirmed = donation BAYAR + participation BAYAR (yg synthesized)
+  const donationConfirmed = Number(donationSumAgg._sum.nominalBayar ?? 0);
+  const partConfirmed = synthesized
+    .filter((s) => s.status === 'BAYAR')
+    .reduce((sum, s) => sum + Number(s.nominalBayar ?? 0), 0);
+  const totalAmountConfirmed = donationConfirmed + partConfirmed;
+
   res.json({
     success: true,
-    data: rows,
+    data: paged,
     meta: {
       page: q.page,
       limit: q.limit,
       total,
-      totalPages: Math.ceil(total / q.limit),
-      totalAmountConfirmed: totalAmountAgg._sum.nominalBayar ?? 0,
+      totalPages: Math.ceil(total / q.limit) || 1,
+      totalAmountConfirmed,
+      // Debug info: berapa yang real vs synthesized (FE bisa show badge kalau mau)
+      realCount: donationTotal,
+      synthesizedCount: synthesized.length,
     },
   });
 });

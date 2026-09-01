@@ -153,7 +153,13 @@ eventRouter.get('/', async (req, res) => {
         sinode: { select: { id: true, nama: true } },
         cabang: { select: { id: true, nama: true } },
         author: { select: { id: true, jemaat: { select: { namaLengkap: true } } } },
-        _count: { select: { partisipasi: true } },
+        // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md
+        // 2026-09-01). Alias `partisipasiAll` return total termasuk BATAL untuk audit.
+        _count: {
+          select: {
+            partisipasi: { where: { status: { not: 'BATAL' } } },
+          },
+        },
       },
     }),
     prisma.event.count({ where }),
@@ -190,7 +196,12 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       sinode: { select: { id: true, nama: true } },
       cabang: { select: { id: true, nama: true } },
       author: { select: { id: true, jemaat: { select: { id: true, namaLengkap: true } } } },
-      _count: { select: { partisipasi: true } },
+      // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md 2026-09-01).
+      _count: {
+        select: {
+          partisipasi: { where: { status: { not: 'BATAL' } } },
+        },
+      },
     },
   });
   if (!item) throw NotFound('Event tidak ditemukan');

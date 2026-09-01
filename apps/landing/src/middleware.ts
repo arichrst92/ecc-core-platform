@@ -15,10 +15,12 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Whitelist: assets, Next internals, dan route yg WAJIB tetap live saat
-  // coming-soon (mis. `/persembahan` untuk iOS App Store compliance).
+  // coming-soon (mis. `/persembahan` untuk iOS App Store compliance,
+  // `/.well-known/*` untuk Universal Links AASA + assetlinks).
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
+    pathname.startsWith('/.well-known/') ||
     pathname === '/coming-soon' ||
     pathname === '/persembahan' ||
     pathname.startsWith('/persembahan/') ||

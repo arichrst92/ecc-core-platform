@@ -248,3 +248,282 @@ ministryRouter.post('/:id/join', async (req, res) => {
     message: `Selamat datang di ${ministry.nama} sebagai ${targetRole.nama}`,
   });
 });
+
+// ============================================================
+//  Ministry Schedule / Roster
+//  Per backend-request-ministry-schedule-roster.md (2026-09-02).
+// ============================================================
+
+function parseWindow(fromRaw: unknown, toRaw: unknown): { from: Date; to: Date } {
+  const from =
+    typeof fromRaw === 'string' && fromRaw ? new Date(fromRaw) : new Date();
+  const to =
+    typeof toRaw === 'string' && toRaw
+      ? new Date(toRaw)
+      : new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
+  if (isNaN(from.getTime())) throw BadRequest('Query `from` tidak valid (YYYY-MM-DD).');
+  if (isNaN(to.getTime())) throw BadRequest('Query `to` tidak valid (YYYY-MM-DD).');
+  // End-of-day inklusif
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+// GET /admin/ministry/:id/schedule?from=&to=
+ministryRouter.get('/:id/schedule', async (req, res) => {
+  const pelayananId = req.params.id;
+  const { from, to } = parseWindow(req.query.from, req.query.to);
+
+  const ministry = await prisma.pelayanan.findUnique({
+    where: { id: pelayananId },
+    select: { id: true, nama: true, isActive: true },
+  });
+  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+
+  const rows = await prisma.pelayananSchedule.findMany({
+    where: {
+      pelayananId,
+      tanggal: { gte: from, lte: to },
+    },
+    orderBy: { tanggal: 'asc' },
+    include: {
+      ibadah: {
+        select: {
+          id: true,
+          judul: true,
+          jamMulai: true,
+          jamSelesai: true,
+          lokasi: true,
+        },
+      },
+      assignments: {
+        include: {
+          jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+          pelayananRole: { select: { id: true, nama: true, level: true } },
+        },
+        orderBy: [{ pelayananRole: { level: 'desc' } }, { createdAt: 'asc' }],
+      },
+    },
+  });
+
+  const schedules = rows.map((s) => ({
+    id: s.id,
+    tanggal: s.tanggal,
+    ibadahId: s.ibadahId,
+    ibadahNama: s.ibadah?.judul ?? null,
+    ibadahJamMulai: s.ibadah?.jamMulai ?? null,
+    ibadahJamSelesai: s.ibadah?.jamSelesai ?? null,
+    ibadahLokasi: s.ibadah?.lokasi ?? null,
+    catatan: s.catatan,
+    assignments: s.assignments.map((a) => ({
+      id: a.id,
+      jemaatId: a.jemaatId,
+      jemaatNama: a.jemaat.namaLengkap,
+      jemaatFotoUrl: a.jemaat.fotoUrl,
+      posisi: a.pelayananRole.nama,
+      posisiLevel: a.pelayananRole.level,
+      notes: a.notes,
+    })),
+  }));
+
+  res.json({ success: true, data: { schedules } });
+});
+
+// POST /admin/ministry/:id/schedule
+// Body: { tanggal, ibadahId?, catatan?, assignments: [{ jemaatId, pelayananRoleId, notes? }] }
+ministryRouter.post('/:id/schedule', async (req, res) => {
+  const pelayananId = req.params.id;
+  const body = req.body ?? {};
+  const tanggal = typeof body.tanggal === 'string' ? new Date(body.tanggal) : null;
+  const ibadahId = typeof body.ibadahId === 'string' ? body.ibadahId : null;
+  const catatan = typeof body.catatan === 'string' ? body.catatan : null;
+  const assignmentsInput = Array.isArray(body.assignments) ? body.assignments : [];
+
+  if (!tanggal || isNaN(tanggal.getTime())) {
+    throw BadRequest('tanggal wajib (YYYY-MM-DD).');
+  }
+  for (const a of assignmentsInput) {
+    if (!a || typeof a.jemaatId !== 'string' || typeof a.pelayananRoleId !== 'string') {
+      throw BadRequest('Setiap assignment harus punya jemaatId + pelayananRoleId.');
+    }
+  }
+
+  const ministry = await prisma.pelayanan.findUnique({
+    where: { id: pelayananId },
+    select: { id: true, nama: true },
+  });
+  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+
+  if (ibadahId) {
+    const ib = await prisma.ibadah.findUnique({ where: { id: ibadahId }, select: { id: true } });
+    if (!ib) throw BadRequest('ibadahId tidak valid.');
+  }
+
+  // Dedup jemaatId (cegah user submit duplicate → unique constraint error)
+  const seen = new Set<string>();
+  const dedupedAssignments = assignmentsInput.filter((a: any) => {
+    if (seen.has(a.jemaatId)) return false;
+    seen.add(a.jemaatId);
+    return true;
+  });
+
+  const created = await prisma.pelayananSchedule.create({
+    data: {
+      pelayananId,
+      ibadahId: ibadahId ?? undefined,
+      tanggal,
+      catatan: catatan ?? undefined,
+      assignments: {
+        create: dedupedAssignments.map((a: any) => ({
+          jemaatId: a.jemaatId,
+          pelayananRoleId: a.pelayananRoleId,
+          notes: typeof a.notes === 'string' ? a.notes : null,
+        })),
+      },
+    },
+    include: {
+      ibadah: { select: { id: true, judul: true, jamMulai: true, lokasi: true } },
+      assignments: {
+        include: {
+          jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+          pelayananRole: { select: { id: true, nama: true, level: true } },
+        },
+      },
+    },
+  });
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'pelayanan_schedule',
+    resourceId: created.id,
+    resourceLabel: `${ministry.nama} — ${created.tanggal.toISOString().slice(0, 10)}`,
+    metadata: {
+      kind: 'ministry-schedule-create',
+      pelayananId,
+      assignmentsCount: created.assignments.length,
+    },
+  });
+
+  // Fire notif ke setiap jemaat yang di-assign
+  for (const a of created.assignments) {
+    void createNotification({
+      jemaatId: a.jemaatId,
+      type: 'GROUP_MEMBER_ADDED',
+      title: `Anda dijadwalkan di ${ministry.nama}`,
+      body: `Tanggal ${created.tanggal.toISOString().slice(0, 10)}, posisi ${a.pelayananRole.nama}.${a.notes ? ` Catatan: ${a.notes}` : ''}`,
+      actionUrl: `/ministry/${ministry.id}`,
+      metadata: {
+        ministryId: ministry.id,
+        scheduleId: created.id,
+        posisi: a.pelayananRole.nama,
+      },
+    });
+  }
+
+  res.status(201).json({ success: true, data: created });
+});
+
+// PATCH /admin/ministry/:id/schedule/:scheduleId
+// Body: { tanggal?, ibadahId?, catatan?, assignments? }
+// Kalau assignments dikirim → REPLACE (delete all + create fresh). Kalau tidak → keep.
+ministryRouter.patch('/:id/schedule/:scheduleId', async (req, res) => {
+  const pelayananId = req.params.id;
+  const scheduleId = req.params.scheduleId;
+  const body = req.body ?? {};
+
+  const before = await prisma.pelayananSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { pelayanan: { select: { nama: true } } },
+  });
+  if (!before || before.pelayananId !== pelayananId) {
+    throw NotFound('Schedule tidak ditemukan di ministry ini.');
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (typeof body.tanggal === 'string') {
+    const d = new Date(body.tanggal);
+    if (isNaN(d.getTime())) throw BadRequest('tanggal invalid.');
+    updateData.tanggal = d;
+  }
+  if (body.ibadahId === null) updateData.ibadahId = null;
+  else if (typeof body.ibadahId === 'string') {
+    const ib = await prisma.ibadah.findUnique({ where: { id: body.ibadahId }, select: { id: true } });
+    if (!ib) throw BadRequest('ibadahId tidak valid.');
+    updateData.ibadahId = body.ibadahId;
+  }
+  if (body.catatan === null || typeof body.catatan === 'string') {
+    updateData.catatan = body.catatan;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.pelayananSchedule.update({ where: { id: scheduleId }, data: updateData });
+    if (Array.isArray(body.assignments)) {
+      await tx.pelayananScheduleAssignment.deleteMany({ where: { scheduleId } });
+      const seen = new Set<string>();
+      for (const a of body.assignments) {
+        if (!a || typeof a.jemaatId !== 'string' || typeof a.pelayananRoleId !== 'string') continue;
+        if (seen.has(a.jemaatId)) continue;
+        seen.add(a.jemaatId);
+        await tx.pelayananScheduleAssignment.create({
+          data: {
+            scheduleId,
+            jemaatId: a.jemaatId,
+            pelayananRoleId: a.pelayananRoleId,
+            notes: typeof a.notes === 'string' ? a.notes : null,
+          },
+        });
+      }
+    }
+  });
+
+  const after = await prisma.pelayananSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      ibadah: { select: { id: true, judul: true, jamMulai: true, lokasi: true } },
+      assignments: {
+        include: {
+          jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+          pelayananRole: { select: { id: true, nama: true, level: true } },
+        },
+      },
+    },
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_schedule',
+    resourceId: scheduleId,
+    resourceLabel: `${before.pelayanan.nama} — ${before.tanggal.toISOString().slice(0, 10)}`,
+    before,
+    after,
+    metadata: { kind: 'ministry-schedule-update' },
+  });
+
+  res.json({ success: true, data: after });
+});
+
+// DELETE /admin/ministry/:id/schedule/:scheduleId
+ministryRouter.delete('/:id/schedule/:scheduleId', async (req, res) => {
+  const pelayananId = req.params.id;
+  const scheduleId = req.params.scheduleId;
+
+  const before = await prisma.pelayananSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { pelayanan: { select: { nama: true } } },
+  });
+  if (!before || before.pelayananId !== pelayananId) {
+    throw NotFound('Schedule tidak ditemukan di ministry ini.');
+  }
+
+  await prisma.pelayananSchedule.delete({ where: { id: scheduleId } });
+
+  audit(req, {
+    action: 'DELETE',
+    resource: 'pelayanan_schedule',
+    resourceId: scheduleId,
+    resourceLabel: `${before.pelayanan.nama} — ${before.tanggal.toISOString().slice(0, 10)}`,
+    before,
+    metadata: { kind: 'ministry-schedule-delete' },
+  });
+
+  res.status(204).end();
+});

@@ -250,6 +250,8 @@ model Jemaat {
   notificationLogs        NotificationLog[]        @relation("NotificationLogTarget")
   // In-app notification feed (Modul 30) — recipient.
   notifications           Notification[]           @relation("NotificationRecipient")
+  // Ministry schedule assignments (per backend-request-ministry-schedule-roster.md).
+  pelayananScheduleAssignments PelayananScheduleAssignment[]
 
   @@index([cabangId])
   @@index([noHp])
@@ -409,6 +411,7 @@ model Ibadah {
   ibadahPelayanan    IbadahPelayanan[]
   reservasi          Reservasi[]
   occurrenceStatuses IbadahOccurrenceStatus[]
+  pelayananSchedules PelayananSchedule[]
 
   @@index([cabangId])
   @@index([kategoriIbadahId])
@@ -653,6 +656,7 @@ model Pelayanan {
   jemaatPelayanan JemaatPelayanan[]
   ibadahPelayanan IbadahPelayanan[]
   eventPelayanan  EventPelayanan[]
+  schedules       PelayananSchedule[]
 
   @@map("pelayanan")
 }
@@ -673,6 +677,7 @@ model PelayananRole {
   jemaatPelayanan        JemaatPelayanan[]
   ibadahPelayananPetugas IbadahPelayananPetugas[]
   eventPelayananPetugas  EventPelayananPetugas[]
+  scheduleAssignments    PelayananScheduleAssignment[]
 
   @@unique([pelayananId, nama])
   @@index([pelayananId])
@@ -2289,4 +2294,54 @@ enum PointSource {
   STOCK_ADD       // (not user-facing, tapi tracked)
 
   @@map("point_source")
+}
+
+// ============================================================
+//  Ministry Schedule / Roster
+//  Per backend-request-ministry-schedule-roster.md (2026-09-02)
+// ============================================================
+//
+// Leader ministry (worship, usher, dll) buat schedule per tanggal (biasanya
+// linked ke Ibadah tapi bisa juga standalone event/practice), lalu assign
+// jemaat + posisi ke schedule tsb. Mobile jemaat lihat "jadwal saya" cross-
+// ministry via /admin/me/ministry-schedule.
+model PelayananSchedule {
+  id          String   @id @default(uuid()) @db.Uuid
+  pelayananId String   @map("pelayanan_id") @db.Uuid
+  // Optional link ke Ibadah — kalau schedule associated dgn ibadah tertentu.
+  // Null berarti standalone (mis. rehearsal / practice / event lain).
+  ibadahId    String?  @map("ibadah_id") @db.Uuid
+  tanggal     DateTime @db.Date
+  catatan     String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  pelayanan   Pelayanan                       @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  ibadah      Ibadah?                         @relation(fields: [ibadahId], references: [id], onDelete: SetNull)
+  assignments PelayananScheduleAssignment[]
+
+  @@index([pelayananId, tanggal])
+  @@index([tanggal])
+  @@index([ibadahId])
+  @@map("pelayanan_schedule")
+}
+
+model PelayananScheduleAssignment {
+  id              String   @id @default(uuid()) @db.Uuid
+  scheduleId      String   @map("schedule_id") @db.Uuid
+  jemaatId        String   @map("jemaat_id") @db.Uuid
+  pelayananRoleId String   @map("pelayanan_role_id") @db.Uuid
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  schedule      PelayananSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  jemaat        Jemaat            @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  pelayananRole PelayananRole     @relation(fields: [pelayananRoleId], references: [id], onDelete: Restrict)
+
+  // 1 jemaat cuma boleh 1 assignment per schedule (cegah double-book).
+  @@unique([scheduleId, jemaatId])
+  @@index([jemaatId])
+  @@index([scheduleId])
+  @@map("pelayanan_schedule_assignment")
 }

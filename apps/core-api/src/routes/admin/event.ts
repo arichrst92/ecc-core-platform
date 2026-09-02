@@ -129,6 +129,24 @@ eventRouter.get('/', async (req, res) => {
   const isPublished =
     isPublishedRaw === 'true' ? true : isPublishedRaw === 'false' ? false : undefined;
 
+  // Date window filter for calendar navigation (per backend-request-event-list-
+  // month-scoped.md 2026-09-02). Kalau BOTH from + to kirim, filter server-side.
+  // Multi-day event (tanggalSelesai > tanggalMulai) yg overlap window include-in.
+  const fromRaw = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const toRaw = typeof req.query.to === 'string' ? req.query.to : undefined;
+  const fromDate = fromRaw ? new Date(fromRaw) : undefined;
+  const toDate = toRaw ? new Date(toRaw) : undefined;
+  if (fromDate && isNaN(fromDate.getTime())) {
+    throw BadRequest('Query `from` tidak valid — pakai format YYYY-MM-DD');
+  }
+  if (toDate && isNaN(toDate.getTime())) {
+    throw BadRequest('Query `to` tidak valid — pakai format YYYY-MM-DD');
+  }
+  // Include full day of `to` (end-of-day).
+  const toEndOfDay = toDate
+    ? new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999)
+    : undefined;
+
   const where: Prisma.EventWhereInput = {};
   if (sinodeId) where.sinodeId = sinodeId;
   if (cabangId) where.cabangId = cabangId;
@@ -141,6 +159,28 @@ eventRouter.get('/', async (req, res) => {
       { judul: { contains: q.search, mode: 'insensitive' } },
       { ringkasan: { contains: q.search, mode: 'insensitive' } },
     ];
+  }
+  if (fromDate || toEndOfDay) {
+    // Overlap logic:
+    //   include kalau tanggalMulai <= to  AND  (tanggalSelesai >= from OR tanggalSelesai IS NULL AND tanggalMulai >= from)
+    // Simpler DNF: tanggalMulai in window OR (tanggalSelesai != null && tanggalSelesai in window) OR (tanggalMulai < from AND tanggalSelesai > to)
+    const conds: Prisma.EventWhereInput[] = [];
+    // Case 1: tanggalMulai in window
+    conds.push({
+      tanggalMulai: {
+        ...(fromDate ? { gte: fromDate } : {}),
+        ...(toEndOfDay ? { lte: toEndOfDay } : {}),
+      },
+    });
+    // Case 2: multi-day event that starts before `from` but ends inside window
+    if (fromDate) {
+      conds.push({
+        tanggalSelesai: { not: null, gte: fromDate },
+        tanggalMulai: { lt: fromDate },
+        ...(toEndOfDay ? {} : {}),
+      });
+    }
+    where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), { OR: conds }];
   }
 
   const [rows, total] = await Promise.all([

@@ -1356,3 +1356,82 @@ meRouter.post('/notifications/mark-all-read', async (req, res) => {
   });
   res.json({ success: true, data: { markedRead: result.count } });
 });
+
+// ============================================================
+//  GET /admin/me/ministry-schedule?from=&to=
+// ============================================================
+//
+// Per backend-request-ministry-schedule-roster.md (2026-09-02).
+// Cross-ministry: return semua PelayananScheduleAssignment untuk requester,
+// grouped by tanggal. Include co-servants (assignment lain di schedule yg sama).
+// Default window: today → +4 weeks.
+meRouter.get('/ministry-schedule', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+
+  const fromRaw = req.query.from;
+  const toRaw = req.query.to;
+  const from =
+    typeof fromRaw === 'string' && fromRaw ? new Date(fromRaw) : new Date();
+  const to =
+    typeof toRaw === 'string' && toRaw
+      ? new Date(toRaw)
+      : new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
+  if (isNaN(from.getTime())) throw BadRequest('Query `from` tidak valid.');
+  if (isNaN(to.getTime())) throw BadRequest('Query `to` tidak valid.');
+  to.setHours(23, 59, 59, 999);
+
+  const rows = await prisma.pelayananScheduleAssignment.findMany({
+    where: {
+      jemaatId,
+      schedule: { tanggal: { gte: from, lte: to } },
+    },
+    include: {
+      pelayananRole: { select: { id: true, nama: true, level: true } },
+      schedule: {
+        include: {
+          pelayanan: { select: { id: true, nama: true } },
+          ibadah: {
+            select: {
+              id: true,
+              judul: true,
+              jamMulai: true,
+              jamSelesai: true,
+              lokasi: true,
+            },
+          },
+          assignments: {
+            where: { jemaatId: { not: jemaatId } },
+            include: {
+              jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+              pelayananRole: { select: { nama: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { schedule: { tanggal: 'asc' } },
+  });
+
+  const assignments = rows.map((r) => ({
+    id: r.id,
+    tanggal: r.schedule.tanggal,
+    ibadahId: r.schedule.ibadahId,
+    ibadahNama: r.schedule.ibadah?.judul ?? null,
+    ibadahJamMulai: r.schedule.ibadah?.jamMulai ?? null,
+    ibadahJamSelesai: r.schedule.ibadah?.jamSelesai ?? null,
+    ibadahLokasi: r.schedule.ibadah?.lokasi ?? null,
+    ministryId: r.schedule.pelayanan.id,
+    ministryNama: r.schedule.pelayanan.nama,
+    posisi: r.pelayananRole.nama,
+    posisiLevel: r.pelayananRole.level,
+    notes: r.notes,
+    coServants: r.schedule.assignments.map((c) => ({
+      jemaatId: c.jemaatId,
+      namaLengkap: c.jemaat.namaLengkap,
+      fotoUrl: c.jemaat.fotoUrl,
+      posisi: c.pelayananRole.nama,
+    })),
+  }));
+
+  res.json({ success: true, data: { assignments } });
+});

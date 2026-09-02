@@ -289,7 +289,7 @@ ministryRouter.get('/:id/schedule', async (req, res) => {
       ibadah: {
         select: {
           id: true,
-          judul: true,
+          nama: true,
           jamMulai: true,
           jamSelesai: true,
           lokasi: true,
@@ -309,7 +309,7 @@ ministryRouter.get('/:id/schedule', async (req, res) => {
     id: s.id,
     tanggal: s.tanggal,
     ibadahId: s.ibadahId,
-    ibadahNama: s.ibadah?.judul ?? null,
+    ibadahNama: s.ibadah?.nama ?? null,
     ibadahJamMulai: s.ibadah?.jamMulai ?? null,
     ibadahJamSelesai: s.ibadah?.jamSelesai ?? null,
     ibadahLokasi: s.ibadah?.lokasi ?? null,
@@ -381,7 +381,7 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
       },
     },
     include: {
-      ibadah: { select: { id: true, judul: true, jamMulai: true, lokasi: true } },
+      ibadah: { select: { id: true, nama: true, jamMulai: true, lokasi: true } },
       assignments: {
         include: {
           jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
@@ -478,7 +478,7 @@ ministryRouter.patch('/:id/schedule/:scheduleId', async (req, res) => {
   const after = await prisma.pelayananSchedule.findUnique({
     where: { id: scheduleId },
     include: {
-      ibadah: { select: { id: true, judul: true, jamMulai: true, lokasi: true } },
+      ibadah: { select: { id: true, nama: true, jamMulai: true, lokasi: true } },
       assignments: {
         include: {
           jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },

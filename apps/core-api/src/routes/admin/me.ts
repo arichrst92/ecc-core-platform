@@ -1393,7 +1393,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
           ibadah: {
             select: {
               id: true,
-              judul: true,
+              nama: true,
               jamMulai: true,
               jamSelesai: true,
               lokasi: true,
@@ -1416,7 +1416,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     id: r.id,
     tanggal: r.schedule.tanggal,
     ibadahId: r.schedule.ibadahId,
-    ibadahNama: r.schedule.ibadah?.judul ?? null,
+    ibadahNama: r.schedule.ibadah?.nama ?? null,
     ibadahJamMulai: r.schedule.ibadah?.jamMulai ?? null,
     ibadahJamSelesai: r.schedule.ibadah?.jamSelesai ?? null,
     ibadahLokasi: r.schedule.ibadah?.lokasi ?? null,

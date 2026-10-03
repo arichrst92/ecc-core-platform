@@ -49,6 +49,13 @@ interface Jemaat extends Record<string, unknown> {
   isActive: boolean;
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleLite[];
+  homecellMembership?: Array<{
+    homecell: { id: string; nama: string; area: { id: string; nama: string } | null };
+  }>;
+  jemaatPelayanan?: Array<{
+    pelayanan: { id: string; nama: string };
+    pelayananRole: { nama: string };
+  }>;
 }
 
 /**
@@ -108,6 +115,61 @@ export function buildJemaatResource(
               ))}
               {roles.length > 2 && (
                 <span className="text-[10px] text-neutral-400">+{roles.length - 2}</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'homecellArea',
+        label: 'Homecell Area',
+        width: '140px',
+        render: (_v, row) => {
+          const areas = Array.from(
+            new Set(
+              (row.homecellMembership ?? [])
+                .map((hm) => hm.homecell.area?.nama)
+                .filter((n): n is string => !!n),
+            ),
+          );
+          if (areas.length === 0) return <span className="text-neutral-400">-</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {areas.slice(0, 2).map((a, i) => (
+                <span
+                  key={i}
+                  className="inline-block px-1.5 py-0.5 bg-purple-50 text-purple-700 text-[10px] rounded border border-purple-200"
+                >
+                  {a}
+                </span>
+              ))}
+              {areas.length > 2 && (
+                <span className="text-[10px] text-neutral-400">+{areas.length - 2}</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'ministry',
+        label: 'Ministry',
+        width: '160px',
+        render: (_v, row) => {
+          const list = row.jemaatPelayanan ?? [];
+          if (list.length === 0) return <span className="text-neutral-400">-</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {list.slice(0, 2).map((jp, i) => (
+                <span
+                  key={i}
+                  className="inline-block px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] rounded border border-emerald-200"
+                  title={`${jp.pelayanan.nama} — ${jp.pelayananRole.nama}`}
+                >
+                  {jp.pelayanan.nama}
+                </span>
+              ))}
+              {list.length > 2 && (
+                <span className="text-[10px] text-neutral-400">+{list.length - 2}</span>
               )}
             </div>
           );

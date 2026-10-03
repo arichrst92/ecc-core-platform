@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Filter, X } from 'lucide-react';
+import { Upload, Filter, X, FileSpreadsheet, FileText } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 import { RelasiModal } from '@/components/jemaat/relasi-modal';
@@ -79,9 +79,61 @@ function JemaatPageInner() {
     ...toJemaatQueryParams(filter),
   };
 
+  // Export — forward semua filter aktif ke endpoint export.
+  const exportQS = new URLSearchParams();
+  Object.entries(extraParams).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') exportQS.set(k, String(v));
+  });
+
+  async function handleExport(format: 'csv' | 'pdf') {
+    const qs = new URLSearchParams(exportQS);
+    qs.set('format', format);
+    try {
+      // Pakai apiClient supaya Authorization header + refresh handling tetap jalan,
+      // lalu convert jadi blob + trigger download / open.
+      const res = await apiClient.get(`/admin/jemaat/export?${qs.toString()}`, {
+        responseType: 'blob',
+      });
+      const blob = res.data as Blob;
+      const url = URL.createObjectURL(blob);
+      if (format === 'pdf') {
+        // HTML print view — open new tab, user Ctrl+P untuk save PDF.
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `jemaat-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[jemaat export] failed', e);
+      alert('Gagal export. Cek console untuk detail.');
+    }
+  }
+
   return (
     <div>
-      <div className="flex justify-end mb-3 -mt-2">
+      <div className="flex justify-end mb-3 -mt-2 gap-2">
+        <button
+          onClick={() => handleExport('csv')}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200"
+          title="Download CSV (compatible dengan Excel)"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          Export Excel
+        </button>
+        <button
+          onClick={() => handleExport('pdf')}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200"
+          title="Buka print view, Ctrl+P untuk save sebagai PDF"
+        >
+          <FileText className="w-4 h-4" />
+          Export PDF
+        </button>
         <Link
           href="/dashboard/jemaat/import"
           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 rounded-lg border border-brand-200"

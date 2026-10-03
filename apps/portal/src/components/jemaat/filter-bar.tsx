@@ -16,6 +16,11 @@ export interface JemaatFilterState {
   roleId: string; // '' = semua role
   umurMin: string; // '' = no min
   umurMax: string; // '' = no max
+  // Per request 2026-10-03 — filter struktur gereja + ministry
+  cabangId: string;
+  homecellAreaId: string;
+  homecellId: string;
+  pelayananId: string;
   sortBy: 'namaLengkap' | 'tanggalLahir' | 'tanggalBergabung' | 'cabang';
   sortOrder: 'asc' | 'desc';
 }
@@ -26,6 +31,10 @@ export const defaultJemaatFilter: JemaatFilterState = {
   roleId: '',
   umurMin: '',
   umurMax: '',
+  cabangId: '',
+  homecellAreaId: '',
+  homecellId: '',
+  pelayananId: '',
   sortBy: 'namaLengkap',
   sortOrder: 'asc',
 };
@@ -41,6 +50,10 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     roleId: s.roleId || undefined,
     umurMin: s.umurMin || undefined,
     umurMax: s.umurMax || undefined,
+    cabangId: s.cabangId || undefined,
+    homecellAreaId: s.homecellAreaId || undefined,
+    homecellId: s.homecellId || undefined,
+    pelayananId: s.pelayananId || undefined,
     sortBy: s.sortBy,
     sortOrder: s.sortOrder,
   };
@@ -52,7 +65,11 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     s.jenisKelamin !== 'all' ||
     !!s.roleId ||
     !!s.umurMin ||
-    !!s.umurMax
+    !!s.umurMax ||
+    !!s.cabangId ||
+    !!s.homecellAreaId ||
+    !!s.homecellId ||
+    !!s.pelayananId
   );
 }
 
@@ -71,6 +88,59 @@ export function JemaatFilterBar({ value, onChange }: Props) {
     queryKey: ['role', 'options'],
     queryFn: async () => {
       const res = await apiClient.get<{ data: RoleOption[] }>('/admin/role');
+      return res.data.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const cabangQ = useQuery({
+    queryKey: ['cabang', 'options'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ id: string; nama: string }[]>('/auth/cabang', {
+        params: { isActive: true },
+      });
+      return res.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const homecellAreaQ = useQuery({
+    queryKey: ['homecell-area', 'options', value.cabangId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
+        '/admin/homecell-area',
+        { params: { cabangId: value.cabangId || undefined, limit: 500 } },
+      );
+      return res.data.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const homecellQ = useQuery({
+    queryKey: ['homecell', 'options', value.cabangId, value.homecellAreaId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
+        '/admin/homecell',
+        {
+          params: {
+            cabangId: value.cabangId || undefined,
+            homecellAreaId: value.homecellAreaId || undefined,
+            limit: 500,
+          },
+        },
+      );
+      return res.data.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const pelayananQ = useQuery({
+    queryKey: ['pelayanan', 'options'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
+        '/admin/pelayanan',
+        { params: { limit: 500 } },
+      );
       return res.data.data;
     },
     staleTime: 5 * 60_000,
@@ -101,7 +171,75 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
+        {/* Cabang */}
+        <Field label="Cabang">
+          <select
+            value={value.cabangId}
+            onChange={(e) => patch({ cabangId: e.target.value, homecellAreaId: '', homecellId: '' })}
+            className={selectCls}
+            disabled={cabangQ.isLoading}
+          >
+            <option value="">{cabangQ.isLoading ? 'Memuat...' : 'Semua Cabang'}</option>
+            {(cabangQ.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Homecell Area */}
+        <Field label="Homecell Area">
+          <select
+            value={value.homecellAreaId}
+            onChange={(e) => patch({ homecellAreaId: e.target.value, homecellId: '' })}
+            className={selectCls}
+            disabled={homecellAreaQ.isLoading}
+          >
+            <option value="">{homecellAreaQ.isLoading ? 'Memuat...' : 'Semua Area'}</option>
+            {(homecellAreaQ.data ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Homecell */}
+        <Field label="Homecell">
+          <select
+            value={value.homecellId}
+            onChange={(e) => patch({ homecellId: e.target.value })}
+            className={selectCls}
+            disabled={homecellQ.isLoading}
+          >
+            <option value="">{homecellQ.isLoading ? 'Memuat...' : 'Semua Homecell'}</option>
+            {(homecellQ.data ?? []).map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Ministry (Pelayanan) */}
+        <Field label="Ministry">
+          <select
+            value={value.pelayananId}
+            onChange={(e) => patch({ pelayananId: e.target.value })}
+            className={selectCls}
+            disabled={pelayananQ.isLoading}
+          >
+            <option value="">{pelayananQ.isLoading ? 'Memuat...' : 'Semua Ministry'}</option>
+            {(pelayananQ.data ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         {/* Status */}
         <Field label="Status">
           <select

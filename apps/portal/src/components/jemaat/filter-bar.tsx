@@ -88,7 +88,8 @@ export function JemaatFilterBar({ value, onChange }: Props) {
     queryKey: ['role', 'options'],
     queryFn: async () => {
       const res = await apiClient.get<{ data: RoleOption[] }>('/admin/role');
-      return res.data.data;
+      const body = res.data as any;
+      return Array.isArray(body) ? body : (body?.data ?? []);
     },
     staleTime: 5 * 60_000,
   });
@@ -96,10 +97,13 @@ export function JemaatFilterBar({ value, onChange }: Props) {
   const cabangQ = useQuery({
     queryKey: ['cabang', 'options'],
     queryFn: async () => {
-      const res = await apiClient.get<{ id: string; nama: string }[]>('/auth/cabang', {
+      const res = await apiClient.get<{ success: boolean; data: { id: string; nama: string }[] } | { id: string; nama: string }[]>('/auth/cabang', {
         params: { isActive: true },
       });
-      return res.data;
+      // /auth/cabang bisa return envelope { success, data } atau array langsung
+      // (tergantung versi). Normalize ke array supaya .map() safe.
+      const body = res.data as any;
+      return Array.isArray(body) ? body : (body?.data ?? []);
     },
     staleTime: 5 * 60_000,
   });
@@ -111,7 +115,8 @@ export function JemaatFilterBar({ value, onChange }: Props) {
         '/admin/homecell-area',
         { params: { cabangId: value.cabangId || undefined, limit: 500 } },
       );
-      return res.data.data;
+      const body = res.data as any;
+      return Array.isArray(body) ? body : (body?.data ?? []);
     },
     staleTime: 5 * 60_000,
   });
@@ -129,7 +134,8 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           },
         },
       );
-      return res.data.data;
+      const body = res.data as any;
+      return Array.isArray(body) ? body : (body?.data ?? []);
     },
     staleTime: 5 * 60_000,
   });
@@ -141,7 +147,8 @@ export function JemaatFilterBar({ value, onChange }: Props) {
         '/admin/pelayanan',
         { params: { limit: 500 } },
       );
-      return res.data.data;
+      const body = res.data as any;
+      return Array.isArray(body) ? body : (body?.data ?? []);
     },
     staleTime: 5 * 60_000,
   });
@@ -181,7 +188,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             disabled={cabangQ.isLoading}
           >
             <option value="">{cabangQ.isLoading ? 'Memuat...' : 'Semua Cabang'}</option>
-            {(cabangQ.data ?? []).map((c) => (
+            {(cabangQ.data ?? []).map((c: { id: string; nama: string }) => (
               <option key={c.id} value={c.id}>
                 {c.nama}
               </option>
@@ -198,7 +205,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             disabled={homecellAreaQ.isLoading}
           >
             <option value="">{homecellAreaQ.isLoading ? 'Memuat...' : 'Semua Area'}</option>
-            {(homecellAreaQ.data ?? []).map((a) => (
+            {(homecellAreaQ.data ?? []).map((a: { id: string; nama: string }) => (
               <option key={a.id} value={a.id}>
                 {a.nama}
               </option>
@@ -215,7 +222,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             disabled={homecellQ.isLoading}
           >
             <option value="">{homecellQ.isLoading ? 'Memuat...' : 'Semua Homecell'}</option>
-            {(homecellQ.data ?? []).map((h) => (
+            {(homecellQ.data ?? []).map((h: { id: string; nama: string }) => (
               <option key={h.id} value={h.id}>
                 {h.nama}
               </option>
@@ -232,7 +239,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             disabled={pelayananQ.isLoading}
           >
             <option value="">{pelayananQ.isLoading ? 'Memuat...' : 'Semua Ministry'}</option>
-            {(pelayananQ.data ?? []).map((p) => (
+            {(pelayananQ.data ?? []).map((p: { id: string; nama: string }) => (
               <option key={p.id} value={p.id}>
                 {p.nama}
               </option>
@@ -277,7 +284,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             disabled={rolesQ.isLoading}
           >
             <option value="">{rolesQ.isLoading ? 'Memuat...' : 'Semua'}</option>
-            {(rolesQ.data ?? []).map((r) => (
+            {(rolesQ.data ?? []).map((r: RoleOption) => (
               <option key={r.id} value={r.id}>
                 {r.nama}
               </option>

@@ -837,6 +837,197 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
   });
 });
 
+// ============================================================
+//  GET /admin/jemaat/:id/export?format=pdf
+//  Print-view HTML — user Ctrl+P → save as PDF.
+// ============================================================
+jemaatRouter.get('/:id/export', async (req, res) => {
+  const format = (getQueryString(req, 'format') ?? 'pdf').toLowerCase();
+  const jemaatId = req.params.id;
+
+  const j = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    include: {
+      cabang: true,
+      jemaatRoles: {
+        where: { isActive: true },
+        include: { role: true, subRole: true, subRoleStatus: true },
+      },
+      jemaatPelayanan: {
+        where: { isActive: true },
+        include: { pelayanan: true, pelayananRole: true },
+      },
+      homecellMembership: {
+        include: { homecell: { include: { area: true } } },
+      },
+      user: { select: { lastLoginAt: true } },
+    },
+  });
+  if (!j) throw NotFound('Jemaat tidak ditemukan');
+
+  const [events, reservasi, groups, businesses, visits] = await Promise.all([
+    prisma.eventParticipation.findMany({
+      where: { jemaatId },
+      orderBy: { registeredAt: 'desc' },
+      take: 50,
+      include: { event: { select: { judul: true, tanggalMulai: true, lokasi: true } } },
+    }),
+    prisma.reservasi.findMany({
+      where: { jemaatId },
+      orderBy: { tanggalIbadah: 'desc' },
+      take: 50,
+      include: { ibadah: { select: { nama: true, jamMulai: true, lokasi: true } } },
+    }),
+    prisma.groupMember.findMany({
+      where: { jemaatId },
+      include: { group: { select: { nama: true, jenis: true } } },
+    }),
+    prisma.localBusiness.findMany({
+      where: { ownerJemaatId: jemaatId },
+      select: { nama: true, industri: true, tipeBisnis: true, isActive: true, createdAt: true },
+    }),
+    prisma.visit.findMany({
+      where: { OR: [{ initiatorJemaatId: jemaatId }, { targetJemaatId: jemaatId }] },
+      orderBy: { tanggalVisit: 'desc' },
+      take: 50,
+      include: {
+        initiator: { select: { id: true, namaLengkap: true } },
+        target: { select: { id: true, namaLengkap: true } },
+      },
+    }),
+  ]);
+
+  if (format === 'csv') {
+    throw BadRequest('CSV export belum didukung untuk detail jemaat. Pakai format=pdf.');
+  }
+
+  const fmtDate = (d: Date | null | undefined) =>
+    d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+
+  const html = `<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<title>Profil Jemaat — ${escapeHtml(j.namaLengkap)}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 11px; color: #0f172a; margin: 0; padding: 10mm; }
+  h1 { font-size: 20px; margin: 0 0 2px; color: #0f172a; }
+  h2 { font-size: 13px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #ea580c; color: #ea580c; }
+  .meta { color: #64748b; font-size: 11px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+  th, td { border: 1px solid #e2e8f0; padding: 4px 6px; text-align: left; vertical-align: top; }
+  thead { background: #fff7ed; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  .grid { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; margin-top: 8px; }
+  .label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .value { color: #0f172a; }
+  .badge { display: inline-block; padding: 1px 6px; background: #fed7aa; color: #9a3412; border-radius: 3px; font-size: 10px; margin-right: 3px; }
+  .empty { color: #94a3b8; font-style: italic; }
+  @media print { .noprint { display: none; } }
+  .noprint { padding: 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin-bottom: 15px; }
+  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
+</style></head><body>
+<div class="noprint">
+  <strong>Print Preview — Profil Jemaat ${escapeHtml(j.namaLengkap)}</strong>
+  &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
+  <button onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<h1>${escapeHtml(j.namaLengkap)}</h1>
+<div class="meta">
+  ${j.kode ? `Kode <strong>${escapeHtml(j.kode)}</strong> · ` : ''}
+  ${j.cabang?.nama ? escapeHtml(j.cabang.nama) + ' · ' : ''}
+  ${j.isActive ? 'Aktif' : 'Nonaktif'}
+</div>
+
+<h2>Data Pribadi</h2>
+<div class="grid">
+  <div class="label">No HP</div><div class="value">${escapeHtml(j.noHp ?? '-')}</div>
+  <div class="label">Email</div><div class="value">${escapeHtml(j.email ?? '-')}</div>
+  <div class="label">Jenis Kelamin</div><div class="value">${j.jenisKelamin === 'L' ? 'Laki-laki' : j.jenisKelamin === 'P' ? 'Perempuan' : '-'}</div>
+  <div class="label">Tanggal Lahir</div><div class="value">${fmtDate(j.tanggalLahir)}</div>
+  <div class="label">Alamat</div><div class="value">${escapeHtml(j.alamat ?? '-')}</div>
+  <div class="label">Tgl Bergabung</div><div class="value">${fmtDate(j.tanggalBergabung)}</div>
+  <div class="label">Last Login</div><div class="value">${j.user?.lastLoginAt ? new Date(j.user.lastLoginAt).toLocaleString('id-ID') : '<span class="empty">Belum pernah login</span>'}</div>
+</div>
+
+<h2>Role & Pelayanan</h2>
+${
+  j.jemaatRoles.length === 0 && j.jemaatPelayanan.length === 0
+    ? '<p class="empty">Belum ada role atau pelayanan.</p>'
+    : `
+<div>
+  ${j.jemaatRoles.map((r: any) => `<span class="badge">${escapeHtml(r.role.nama)} → ${escapeHtml(r.subRole.nama)}${r.subRoleStatus ? ` → ${escapeHtml(r.subRoleStatus.nama)}` : ''}</span>`).join(' ')}
+  ${j.jemaatPelayanan.map((p: any) => `<span class="badge" style="background:#d1fae5;color:#065f46;">${escapeHtml(p.pelayanan.nama)} (${escapeHtml(p.pelayananRole.nama)})</span>`).join(' ')}
+</div>`
+}
+
+<h2>Homecell (${j.homecellMembership.length})</h2>
+${
+  j.homecellMembership.length === 0
+    ? '<p class="empty">Belum tergabung di homecell.</p>'
+    : `<table><thead><tr><th>Homecell</th><th>Area</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
+      ${j.homecellMembership.map((h: any) => `<tr><td>${escapeHtml(h.homecell.nama)}</td><td>${escapeHtml(h.homecell.area?.nama ?? '-')}</td><td>${fmtDate(h.tanggalBergabung)}</td><td>${h.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+      </tbody></table>`
+}
+
+<h2>History Event (${events.length})</h2>
+${
+  events.length === 0
+    ? '<p class="empty">Belum pernah daftar event.</p>'
+    : `<table><thead><tr><th>Event</th><th>Tanggal</th><th>Lokasi</th><th>Status</th></tr></thead><tbody>
+      ${events.map((e: any) => `<tr><td>${escapeHtml(e.event.judul)}</td><td>${fmtDate(e.event.tanggalMulai)}</td><td>${escapeHtml(e.event.lokasi ?? '-')}</td><td>${escapeHtml(e.status)}</td></tr>`).join('')}
+      </tbody></table>`
+}
+
+<h2>History Ibadah (${reservasi.length})</h2>
+${
+  reservasi.length === 0
+    ? '<p class="empty">Belum pernah reservasi ibadah.</p>'
+    : `<table><thead><tr><th>Ibadah</th><th>Tanggal</th><th>Jam</th><th>Status</th></tr></thead><tbody>
+      ${reservasi.map((r: any) => `<tr><td>${escapeHtml(r.ibadah.nama)}</td><td>${fmtDate(r.tanggalIbadah)}</td><td>${escapeHtml(r.ibadah.jamMulai ?? '-')}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}
+      </tbody></table>`
+}
+
+<h2>Group / Komunitas (${groups.length})</h2>
+${
+  groups.length === 0
+    ? '<p class="empty">Belum tergabung di group.</p>'
+    : `<table><thead><tr><th>Group</th><th>Jenis</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
+      ${groups.map((g: any) => `<tr><td>${escapeHtml(g.group.nama)}</td><td>${escapeHtml(g.group.jenis ?? '-')}</td><td>${fmtDate(g.tanggalBergabung)}</td><td>${g.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+      </tbody></table>`
+}
+
+<h2>History Visit (${visits.length})</h2>
+${
+  visits.length === 0
+    ? '<p class="empty">Belum ada riwayat visit.</p>'
+    : `<table><thead><tr><th>Judul</th><th>Dengan</th><th>Peran</th><th>Lokasi</th><th>Tanggal</th></tr></thead><tbody>
+      ${visits.map((v: any) => {
+        const isInit = v.initiatorJemaatId === jemaatId;
+        const other = isInit ? v.target : v.initiator;
+        return `<tr><td>${escapeHtml(v.judul)}</td><td>${escapeHtml(other.namaLengkap)}</td><td>${isInit ? 'Mengunjungi' : 'Dikunjungi'}</td><td>${escapeHtml(v.lokasi ?? '-')}</td><td>${fmtDate(v.tanggalVisit)}</td></tr>`;
+      }).join('')}
+      </tbody></table>`
+}
+
+<h2>Local Market (${businesses.length})</h2>
+${
+  businesses.length === 0
+    ? '<p class="empty">Belum terdaftar sebagai pemilik bisnis.</p>'
+    : `<table><thead><tr><th>Bisnis</th><th>Tipe</th><th>Industri</th><th>Terdaftar</th><th>Status</th></tr></thead><tbody>
+      ${businesses.map((b: any) => `<tr><td>${escapeHtml(b.nama)}</td><td>${escapeHtml(b.tipeBisnis)}</td><td>${escapeHtml(b.industri ?? '-')}</td><td>${fmtDate(b.createdAt)}</td><td>${b.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+      </tbody></table>`
+}
+
+<p style="color:#94a3b8;font-size:9px;margin-top:20px;text-align:right;">
+  © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
+</p>
+</body></html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
 jemaatRouter.post('/', async (req, res) => {
   const input = createJemaatSchema.parse(req.body);
   const kode = await generateUniqueKodeJemaat();

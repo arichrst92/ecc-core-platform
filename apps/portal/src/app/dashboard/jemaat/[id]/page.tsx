@@ -33,6 +33,7 @@ import {
   MessageCircle,
   Handshake,
   MapPinned,
+  FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -232,12 +233,35 @@ export default function JemaatDetailPage() {
 
   return (
     <div className="w-full">
-      <Link
-        href="/dashboard/jemaat"
-        className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900 mb-3"
-      >
-        <ArrowLeft className="w-3 h-3" /> Kembali ke daftar jemaat
-      </Link>
+      <div className="flex items-center justify-between mb-3">
+        <Link
+          href="/dashboard/jemaat"
+          className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
+        >
+          <ArrowLeft className="w-3 h-3" /> Kembali ke daftar jemaat
+        </Link>
+        <button
+          onClick={async () => {
+            try {
+              const res = await apiClient.get(`/admin/jemaat/${jemaatId}/export?format=pdf`, {
+                responseType: 'blob',
+              });
+              const url = URL.createObjectURL(res.data as Blob);
+              window.open(url, '_blank', 'noopener,noreferrer');
+              setTimeout(() => URL.revokeObjectURL(url), 10_000);
+            } catch (e) {
+              toast.error('Gagal export. Cek console.');
+              // eslint-disable-next-line no-console
+              console.error('[jemaat detail export] failed', e);
+            }
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200"
+          title="Buka print view — Ctrl+P untuk save PDF"
+        >
+          <FileText className="w-4 h-4" />
+          Export PDF
+        </button>
+      </div>
 
       {/* Profile header */}
       <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6 flex items-start gap-5">
@@ -1787,8 +1811,8 @@ function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecell
               </Link>
               {h.homecell.area && (
                 <Link
-                  href={`/dashboard/homecell-area/${h.homecell.area.id}`}
-                  className="text-xs text-neutral-500 hover:text-brand-600 hover:underline"
+                  href={`/dashboard/homecell-area?search=${encodeURIComponent(h.homecell.area.nama)}`}
+                  className="text-xs text-neutral-500 hover:text-brand-600 hover:underline block"
                 >
                   Area: {h.homecell.area.nama}
                 </Link>
@@ -2007,7 +2031,7 @@ function BusinessSection({ businesses }: { businesses: JemaatProfileData['busine
       {businesses.map((b) => (
         <Link
           key={b.id}
-          href={`/dashboard/local-business/${b.id}`}
+          href={`/dashboard/local-business?search=${encodeURIComponent(b.nama)}`}
           className="block px-5 py-3 hover:bg-neutral-50"
         >
           <div className="flex items-start justify-between gap-2">

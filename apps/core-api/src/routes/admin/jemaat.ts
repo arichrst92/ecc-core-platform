@@ -668,7 +668,7 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
   });
   if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
 
-  const [homecells, events, reservasi, groups, businesses] = await Promise.all([
+  const [homecells, events, reservasi, groups, businesses, visits] = await Promise.all([
     // Homecell memberships + aggregate attendance summary
     prisma.homecellMember.findMany({
       where: { jemaatId },
@@ -754,6 +754,18 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
         createdAt: true,
       },
     }),
+    // Visit history — baik sebagai initiator maupun target
+    prisma.visit.findMany({
+      where: {
+        OR: [{ initiatorJemaatId: jemaatId }, { targetJemaatId: jemaatId }],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        initiator: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+        target: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+      },
+    }),
   ]);
 
   // Attendance per homecell — HomecellAttendance records = present only.
@@ -820,6 +832,7 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
       ibadah: reservasi,
       groups,
       businesses,
+      visits,
     },
   });
 });

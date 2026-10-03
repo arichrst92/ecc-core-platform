@@ -30,6 +30,9 @@ import {
   Store,
   ExternalLink,
   ChevronRight,
+  MessageCircle,
+  Handshake,
+  MapPinned,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -310,13 +313,16 @@ export default function JemaatDetailPage() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => setEditOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          Edit Profile
-        </button>
+        <div className="flex flex-col gap-2 shrink-0">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit Profile
+          </button>
+          <ContactButtons noHp={j.noHp} email={j.email} nama={j.namaLengkap} />
+        </div>
       </div>
 
       {/* Kartu QR jemaat — kode untuk scan check-in event */}
@@ -733,7 +739,13 @@ function AssignPelayananModal({
 interface RelasiItem {
   id: string;
   keterangan: string | null;
-  jemaatTerkait: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
+  jemaatTerkait: {
+    id: string;
+    namaLengkap: string;
+    fotoUrl: string | null;
+    noHp: string | null;
+    email: string | null;
+  };
   tipeRelasi: { id: string; nama: string };
 }
 
@@ -841,6 +853,12 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
                     )}
                   </div>
                 </div>
+                <ContactButtons
+                  noHp={r.jemaatTerkait.noHp}
+                  email={r.jemaatTerkait.email}
+                  nama={r.jemaatTerkait.namaLengkap}
+                  compact
+                />
                 <button
                   onClick={() => setDeleting(r)}
                   className="p-1.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600 shrink-0"
@@ -1472,6 +1490,19 @@ interface JemaatProfileData {
     isActive: boolean;
     createdAt: string;
   }>;
+  visits: Array<{
+    id: string;
+    judul: string;
+    lokasi: string | null;
+    tanggalVisit: string;
+    noteDariInitiator: string | null;
+    noteDariTarget: string | null;
+    createdAt: string;
+    initiatorJemaatId: string;
+    targetJemaatId: string;
+    initiator: { id: string; namaLengkap: string; fotoUrl: string | null };
+    target: { id: string; namaLengkap: string; fotoUrl: string | null };
+  }>;
 }
 
 function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
@@ -1501,8 +1532,199 @@ function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
       <GroupSection groups={d.groups} />
       <EventHistorySection events={d.events} />
       <IbadahHistorySection ibadah={d.ibadah} />
+      <VisitSection visits={d.visits} selfJemaatId={jemaatId} />
       <BusinessSection businesses={d.businesses} />
     </div>
+  );
+}
+
+/** Normalize nomor HP ke E.164 untuk link WhatsApp (strip "+" dan non-digit). */
+function waNumber(noHp: string): string {
+  return noHp.replace(/[^\d]/g, '');
+}
+
+function ContactButtons({
+  noHp,
+  email,
+  nama,
+  compact = false,
+}: {
+  noHp: string | null;
+  email: string | null;
+  nama: string;
+  compact?: boolean;
+}) {
+  const greeting = `Halo ${nama}, `;
+  const waUrl = noHp
+    ? `https://wa.me/${waNumber(noHp)}?text=${encodeURIComponent(greeting)}`
+    : null;
+  const mailUrl = email
+    ? `mailto:${email}?subject=${encodeURIComponent('Dari Portal ECC')}&body=${encodeURIComponent(greeting)}`
+    : null;
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1 shrink-0">
+        {waUrl ? (
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
+            title={`WhatsApp ${noHp}`}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+          </a>
+        ) : (
+          <span className="p-1.5 text-neutral-300" title="No HP tidak tersedia">
+            <MessageCircle className="w-3.5 h-3.5" />
+          </span>
+        )}
+        {mailUrl ? (
+          <a
+            href={mailUrl}
+            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+            title={`Email ${email}`}
+          >
+            <Mail className="w-3.5 h-3.5" />
+          </a>
+        ) : (
+          <span className="p-1.5 text-neutral-300" title="Email tidak tersedia">
+            <Mail className="w-3.5 h-3.5" />
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {waUrl ? (
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold"
+          title={`WhatsApp ${noHp}`}
+        >
+          <MessageCircle className="w-3.5 h-3.5" />
+          WhatsApp
+        </a>
+      ) : (
+        <button
+          disabled
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
+          title="No HP tidak tersedia"
+        >
+          <MessageCircle className="w-3.5 h-3.5" />
+          WhatsApp
+        </button>
+      )}
+      {mailUrl ? (
+        <a
+          href={mailUrl}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold"
+          title={`Email ${email}`}
+        >
+          <Mail className="w-3.5 h-3.5" />
+          Email
+        </a>
+      ) : (
+        <button
+          disabled
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
+          title="Email tidak tersedia"
+        >
+          <Mail className="w-3.5 h-3.5" />
+          Email
+        </button>
+      )}
+    </div>
+  );
+}
+
+function VisitSection({
+  visits,
+  selfJemaatId,
+}: {
+  visits: JemaatProfileData['visits'];
+  selfJemaatId: string;
+}) {
+  return (
+    <HistoryCard
+      title="History Visit"
+      icon={Handshake}
+      count={visits.length}
+      emptyLabel="Belum ada riwayat visit"
+      color="from-rose-500 to-pink-600"
+    >
+      {visits.map((v) => {
+        const isInitiator = v.initiatorJemaatId === selfJemaatId;
+        const other = isInitiator ? v.target : v.initiator;
+        return (
+          <div key={v.id} className="px-5 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-neutral-900 truncate">{v.judul}</p>
+                <div className="flex items-center gap-1.5 text-xs text-neutral-600 mt-1">
+                  <span className="text-neutral-400">{isInitiator ? '→' : '←'}</span>
+                  <Link
+                    href={`/dashboard/jemaat/${other.id}`}
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    {other.namaLengkap}
+                  </Link>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      isInitiator
+                        ? 'bg-rose-50 text-rose-700'
+                        : 'bg-pink-50 text-pink-700'
+                    }`}
+                  >
+                    {isInitiator ? 'Saya kunjungi' : 'Mengunjungi saya'}
+                  </span>
+                </div>
+                {v.lokasi && (
+                  <p className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-1">
+                    <MapPinned className="w-3 h-3" />
+                    {v.lokasi}
+                  </p>
+                )}
+                {(v.noteDariInitiator || v.noteDariTarget) && (
+                  <details className="mt-1.5">
+                    <summary className="text-[11px] text-brand-600 cursor-pointer hover:underline">
+                      Catatan
+                    </summary>
+                    <div className="mt-1 pl-3 space-y-1 text-[11px] text-neutral-600 border-l-2 border-neutral-200">
+                      {v.noteDariInitiator && (
+                        <p>
+                          <span className="font-semibold">{v.initiator.namaLengkap}:</span>{' '}
+                          {v.noteDariInitiator}
+                        </p>
+                      )}
+                      {v.noteDariTarget && (
+                        <p>
+                          <span className="font-semibold">{v.target.namaLengkap}:</span>{' '}
+                          {v.noteDariTarget}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                )}
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[11px] text-neutral-500">
+                  {formatDate(v.tanggalVisit)}
+                </div>
+                <div className="text-[10px] text-neutral-400 mt-0.5">
+                  {formatRelativeTime(v.tanggalVisit)}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </HistoryCard>
   );
 }
 

@@ -182,6 +182,8 @@ jemaatRouter.get('/', async (req, res) => {
           },
           take: 3,
         },
+        // User.lastLoginAt — null kalau belum pernah login / belum ada user record.
+        user: { select: { lastLoginAt: true } },
       },
     }),
     prisma.jemaat.count({ where }),
@@ -307,9 +309,102 @@ async function fetchJemaatForExport(where: any) {
         },
         take: 3,
       },
+      user: { select: { lastLoginAt: true } },
     },
   });
 }
+
+// ============================================================
+//  GET /admin/jemaat/duplicates
+//  Scan 3 strategi: noHp, email, nama+tanggalLahir.
+//  Return array of groups, each dgn 2+ jemaat yg match + lastLoginAt.
+// ============================================================
+jemaatRouter.get('/duplicates', async (_req, res) => {
+  const include = {
+    cabang: { select: { id: true, nama: true } },
+    user: { select: { lastLoginAt: true } },
+  };
+
+  // Strategy 1: duplicate noHp (ignore null + empty)
+  const noHpGroups = await prisma.jemaat.groupBy({
+    by: ['noHp'],
+    where: { noHp: { not: null } },
+    _count: { _all: true },
+    having: { noHp: { _count: { gt: 1 } } },
+  });
+  const noHpDup = await Promise.all(
+    noHpGroups.map(async (g) => {
+      if (!g.noHp) return null;
+      const jemaats = await prisma.jemaat.findMany({
+        where: { noHp: g.noHp },
+        orderBy: { createdAt: 'asc' },
+        include,
+      });
+      return { strategy: 'noHp' as const, value: g.noHp, jemaats };
+    }),
+  );
+
+  // Strategy 2: duplicate email (ignore null + empty)
+  const emailGroups = await prisma.jemaat.groupBy({
+    by: ['email'],
+    where: { email: { not: null } },
+    _count: { _all: true },
+    having: { email: { _count: { gt: 1 } } },
+  });
+  const emailDup = await Promise.all(
+    emailGroups.map(async (g) => {
+      if (!g.email) return null;
+      const jemaats = await prisma.jemaat.findMany({
+        where: { email: g.email },
+        orderBy: { createdAt: 'asc' },
+        include,
+      });
+      return { strategy: 'email' as const, value: g.email, jemaats };
+    }),
+  );
+
+  // Strategy 3: duplicate namaLengkap + tanggalLahir (require both non-null)
+  const nameGroups = await prisma.jemaat.groupBy({
+    by: ['namaLengkap', 'tanggalLahir'],
+    where: { tanggalLahir: { not: null } },
+    _count: { _all: true },
+    having: { namaLengkap: { _count: { gt: 1 } } },
+  });
+  const nameDup = await Promise.all(
+    nameGroups.map(async (g) => {
+      if (!g.tanggalLahir) return null;
+      const jemaats = await prisma.jemaat.findMany({
+        where: { namaLengkap: g.namaLengkap, tanggalLahir: g.tanggalLahir },
+        orderBy: { createdAt: 'asc' },
+        include,
+      });
+      return {
+        strategy: 'nameAndDob' as const,
+        value: `${g.namaLengkap} / ${g.tanggalLahir.toISOString().slice(0, 10)}`,
+        jemaats,
+      };
+    }),
+  );
+
+  const groups = [
+    ...noHpDup.filter((g): g is NonNullable<typeof g> => g !== null),
+    ...emailDup.filter((g): g is NonNullable<typeof g> => g !== null),
+    ...nameDup.filter((g): g is NonNullable<typeof g> => g !== null),
+  ];
+
+  res.json({
+    success: true,
+    data: {
+      groups,
+      summary: {
+        total: groups.length,
+        byNoHp: noHpDup.filter(Boolean).length,
+        byEmail: emailDup.filter(Boolean).length,
+        byNameAndDob: nameDup.filter(Boolean).length,
+      },
+    },
+  });
+});
 
 jemaatRouter.get('/export', async (req, res) => {
   const format = (getQueryString(req, 'format') ?? 'csv').toLowerCase();
@@ -354,6 +449,9 @@ jemaatRouter.get('/export', async (req, res) => {
       tanggalBergabung: r.tanggalBergabung
         ? new Date(r.tanggalBergabung).toISOString().slice(0, 10)
         : '',
+      lastLogin: r.user?.lastLoginAt
+        ? new Date(r.user.lastLoginAt).toISOString().slice(0, 19).replace('T', ' ')
+        : 'Belum pernah login',
     };
   });
 
@@ -372,6 +470,7 @@ jemaatRouter.get('/export', async (req, res) => {
     'Ministry',
     'Status',
     'Tanggal Bergabung',
+    'Last Login',
   ];
   const KEYS: (keyof (typeof dataRows)[number])[] = [
     'kode',
@@ -388,6 +487,7 @@ jemaatRouter.get('/export', async (req, res) => {
     'ministry',
     'status',
     'tanggalBergabung',
+    'lastLogin',
   ];
   const timestamp = new Date().toISOString().slice(0, 10);
 

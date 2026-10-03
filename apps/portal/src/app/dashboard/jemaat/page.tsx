@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Filter, X, FileSpreadsheet, FileText } from 'lucide-react';
+import { Upload, Filter, X, FileSpreadsheet, FileText, Copy } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 import { RelasiModal } from '@/components/jemaat/relasi-modal';
@@ -134,6 +134,14 @@ function JemaatPageInner() {
           <FileText className="w-4 h-4" />
           Export PDF
         </button>
+        <Link
+          href="/dashboard/jemaat/duplicates"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200"
+          title="Scan duplikat berdasarkan No HP, Email, Nama+Tanggal Lahir"
+        >
+          <Copy className="w-4 h-4" />
+          Cek Duplikat
+        </Link>
         <Link
           href="/dashboard/jemaat/import"
           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 rounded-lg border border-brand-200"

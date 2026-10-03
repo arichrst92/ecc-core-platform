@@ -56,6 +56,29 @@ interface Jemaat extends Record<string, unknown> {
     pelayanan: { id: string; nama: string };
     pelayananRole: { nama: string };
   }>;
+  user?: { lastLoginAt: string | null } | null;
+}
+
+/** Format waktu login jadi relatif: "2 menit lalu", "3 jam lalu", "5 hari lalu". */
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const now = Date.now();
+  const past = new Date(iso).getTime();
+  if (isNaN(past)) return '';
+  const diffMs = now - past;
+  if (diffMs < 0) return 'baru saja';
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s lalu`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m lalu`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}j lalu`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}h lalu`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo}bln lalu`;
+  const yr = Math.floor(day / 365);
+  return `${yr}thn lalu`;
 }
 
 /**
@@ -205,6 +228,29 @@ export function buildJemaatResource(
             Lihat
           </button>
         ),
+      },
+      {
+        key: 'lastLogin',
+        label: 'Last Login',
+        width: '110px',
+        render: (_v, row) => {
+          const t = row.user?.lastLoginAt;
+          if (!t) {
+            return (
+              <span className="inline-block px-1.5 py-0.5 bg-red-50 text-red-700 text-[10px] rounded border border-red-200 font-medium">
+                Belum pernah
+              </span>
+            );
+          }
+          return (
+            <span
+              className="text-xs text-neutral-700"
+              title={new Date(t).toLocaleString('id-ID')}
+            >
+              {formatRelativeTime(t)}
+            </span>
+          );
+        },
       },
       { key: 'isActive', label: 'Status', width: '80px', render: statusBadge },
     ],

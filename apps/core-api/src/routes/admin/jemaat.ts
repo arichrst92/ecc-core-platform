@@ -668,7 +668,23 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
   });
   if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
 
-  const [homecells, events, reservasi, groups, businesses, visits] = await Promise.all([
+  // Threshold 3 bulan terakhir untuk activity indicator
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+  const [
+    homecells,
+    events,
+    reservasi,
+    groups,
+    businesses,
+    visits,
+    relasi,
+    activityHomecell3m,
+    activityEvent3m,
+    activityIbadah3m,
+    activityVisit3m,
+  ] = await Promise.all([
     // Homecell memberships + aggregate attendance summary
     prisma.homecellMember.findMany({
       where: { jemaatId },
@@ -766,7 +782,60 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
         target: { select: { id: true, namaLengkap: true, fotoUrl: true } },
       },
     }),
+    // Relasi keluarga dgn foto
+    prisma.jemaatRelasi.findMany({
+      where: { jemaatId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        tipeRelasi: { select: { nama: true } },
+        jemaatTerkait: {
+          select: {
+            id: true,
+            namaLengkap: true,
+            fotoUrl: true,
+            noHp: true,
+            email: true,
+            jenisKelamin: true,
+            tanggalLahir: true,
+          },
+        },
+      },
+    }),
+    // Activity count 3 bulan terakhir
+    prisma.homecellAttendance.count({
+      where: { jemaatId, scannedAt: { gte: threeMonthsAgo } },
+    }),
+    prisma.eventParticipation.count({
+      where: {
+        jemaatId,
+        status: { not: 'BATAL' },
+        registeredAt: { gte: threeMonthsAgo },
+      },
+    }),
+    prisma.reservasi.count({
+      where: {
+        jemaatId,
+        status: { not: 'CANCEL' },
+        tanggalIbadah: { gte: threeMonthsAgo },
+      },
+    }),
+    prisma.visit.count({
+      where: {
+        OR: [{ initiatorJemaatId: jemaatId }, { targetJemaatId: jemaatId }],
+        tanggalVisit: { gte: threeMonthsAgo },
+      },
+    }),
   ]);
+
+  // Activity score + tier
+  const activityScore =
+    activityHomecell3m + activityEvent3m + activityIbadah3m + activityVisit3m;
+  let activityTier: 'PASIF' | 'KURANG_AKTIF' | 'CUKUP_AKTIF' | 'AKTIF' | 'SANGAT_AKTIF';
+  if (activityScore <= 2) activityTier = 'PASIF';
+  else if (activityScore <= 5) activityTier = 'KURANG_AKTIF';
+  else if (activityScore <= 10) activityTier = 'CUKUP_AKTIF';
+  else if (activityScore <= 20) activityTier = 'AKTIF';
+  else activityTier = 'SANGAT_AKTIF';
 
   // Attendance per homecell — HomecellAttendance records = present only.
   // Count total scans + last attended per homecell.
@@ -833,6 +902,18 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
       groups,
       businesses,
       visits,
+      relasi,
+      activity: {
+        windowDays: 90,
+        score: activityScore,
+        tier: activityTier,
+        breakdown: {
+          homecellAttendance: activityHomecell3m,
+          eventParticipation: activityEvent3m,
+          ibadahReservasi: activityIbadah3m,
+          visit: activityVisit3m,
+        },
+      },
     },
   });
 });
@@ -865,7 +946,7 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   });
   if (!j) throw NotFound('Jemaat tidak ditemukan');
 
-  const [events, reservasi, groups, businesses, visits] = await Promise.all([
+  const [events, reservasi, groups, businesses, visits, relasi] = await Promise.all([
     prisma.eventParticipation.findMany({
       where: { jemaatId },
       orderBy: { registeredAt: 'desc' },
@@ -895,6 +976,22 @@ jemaatRouter.get('/:id/export', async (req, res) => {
         target: { select: { id: true, namaLengkap: true } },
       },
     }),
+    prisma.jemaatRelasi.findMany({
+      where: { jemaatId },
+      include: {
+        tipeRelasi: { select: { nama: true } },
+        jemaatTerkait: {
+          select: {
+            id: true,
+            namaLengkap: true,
+            fotoUrl: true,
+            noHp: true,
+            email: true,
+            tanggalLahir: true,
+          },
+        },
+      },
+    }),
   ]);
 
   if (format === 'csv') {
@@ -904,12 +1001,41 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   const fmtDate = (d: Date | null | undefined) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
+  // Base URL untuk uploads — kalau fotoUrl relative, prepend. Pakai env atau
+  // request host sebagai fallback.
+  const apiBase =
+    process.env.PUBLIC_API_URL ??
+    `${req.protocol}://${req.get('host')}`;
+  const resolveImg = (url: string | null | undefined): string => {
+    if (!url) return '';
+    if (/^https?:/i.test(url)) return url;
+    return apiBase.replace(/\/$/, '') + url;
+  };
+  const qrUrl = j.kode
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=5&data=${encodeURIComponent(j.kode)}`
+    : '';
+
+  // IDEA brand footer logo (inline SVG — bebas-dep, scalable).
+  const IDEA_LOGO_SVG = `<svg width="80" height="24" viewBox="0 0 160 48" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="40" height="40" rx="8" fill="#EA580C"/>
+    <text x="22" y="33" font-family="-apple-system,Arial,sans-serif" font-size="20" font-weight="900" fill="white" text-anchor="middle">I</text>
+    <text x="52" y="33" font-family="-apple-system,Arial,sans-serif" font-size="22" font-weight="700" fill="#0f172a">IDEA</text>
+    <text x="52" y="43" font-family="-apple-system,Arial,sans-serif" font-size="7" fill="#64748b" letter-spacing="1">PT SOLUSI INOVASI BANGSA</text>
+  </svg>`;
+
   const html = `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Profil Jemaat — ${escapeHtml(j.namaLengkap)}</title>
 <style>
   @page { size: A4; margin: 15mm; }
   body { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 11px; color: #0f172a; margin: 0; padding: 10mm; }
+  .header { display: flex; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #ea580c; margin-bottom: 10px; }
+  .avatar, .avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #e2e8f0; object-fit: cover; flex-shrink: 0; }
+  .avatar-placeholder { background: #fed7aa; color: #9a3412; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; }
+  .header-info { flex: 1; }
+  .qr-box { text-align: center; flex-shrink: 0; }
+  .qr { width: 70px; height: 70px; border: 1px solid #e2e8f0; }
+  .qr-code { font-family: monospace; font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
   h1 { font-size: 20px; margin: 0 0 2px; color: #0f172a; }
   h2 { font-size: 13px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #ea580c; color: #ea580c; }
   .meta { color: #64748b; font-size: 11px; }
@@ -932,11 +1058,28 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   <button onclick="window.print()">Print / Save as PDF</button>
 </div>
 
-<h1>${escapeHtml(j.namaLengkap)}</h1>
-<div class="meta">
-  ${j.kode ? `Kode <strong>${escapeHtml(j.kode)}</strong> · ` : ''}
-  ${j.cabang?.nama ? escapeHtml(j.cabang.nama) + ' · ' : ''}
-  ${j.isActive ? 'Aktif' : 'Nonaktif'}
+<div class="header">
+  ${
+    j.fotoUrl
+      ? `<img src="${resolveImg(j.fotoUrl)}" alt="${escapeHtml(j.namaLengkap)}" class="avatar"/>`
+      : `<div class="avatar-placeholder">${escapeHtml(j.namaLengkap.charAt(0))}</div>`
+  }
+  <div class="header-info">
+    <h1>${escapeHtml(j.namaLengkap)}</h1>
+    <div class="meta">
+      ${j.kode ? `Kode <strong>${escapeHtml(j.kode)}</strong> · ` : ''}
+      ${j.cabang?.nama ? escapeHtml(j.cabang.nama) + ' · ' : ''}
+      ${j.isActive ? 'Aktif' : '<span style="color:#dc2626;">Nonaktif</span>'}
+    </div>
+  </div>
+  ${
+    qrUrl
+      ? `<div class="qr-box">
+          <img src="${qrUrl}" alt="QR ${escapeHtml(j.kode ?? '')}" class="qr"/>
+          <div class="qr-code">${escapeHtml(j.kode ?? '')}</div>
+        </div>`
+      : ''
+  }
 </div>
 
 <h2>Data Pribadi</h2>
@@ -949,6 +1092,32 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   <div class="label">Tgl Bergabung</div><div class="value">${fmtDate(j.tanggalBergabung)}</div>
   <div class="label">Last Login</div><div class="value">${j.user?.lastLoginAt ? new Date(j.user.lastLoginAt).toLocaleString('id-ID') : '<span class="empty">Belum pernah login</span>'}</div>
 </div>
+
+<h2>Anggota Keluarga (${relasi.length})</h2>
+${
+  relasi.length === 0
+    ? '<p class="empty">Belum ada relasi keluarga.</p>'
+    : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+    ${relasi
+      .map(
+        (r: any) => `<div style="display:flex;gap:8px;padding:6px;border:1px solid #e2e8f0;border-radius:6px;">
+      ${
+        r.jemaatTerkait.fotoUrl
+          ? `<img src="${resolveImg(r.jemaatTerkait.fotoUrl)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;"/>`
+          : `<div style="width:40px;height:40px;border-radius:50%;background:#fed7aa;color:#9a3412;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">${escapeHtml(r.jemaatTerkait.namaLengkap.charAt(0))}</div>`
+      }
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:600;color:#0f172a;font-size:11px;">${escapeHtml(r.jemaatTerkait.namaLengkap)}</div>
+        <div style="font-size:9px;color:#ea580c;font-weight:600;">${escapeHtml(r.tipeRelasi.nama)}</div>
+        ${r.jemaatTerkait.noHp ? `<div style="font-size:9px;color:#64748b;">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
+        ${r.jemaatTerkait.email ? `<div style="font-size:9px;color:#64748b;">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
+        ${r.jemaatTerkait.tanggalLahir ? `<div style="font-size:9px;color:#94a3b8;">Lahir ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
+      </div>
+    </div>`,
+      )
+      .join('')}
+  </div>`
+}
 
 <h2>Role & Pelayanan</h2>
 ${
@@ -1019,9 +1188,15 @@ ${
       </tbody></table>`
 }
 
-<p style="color:#94a3b8;font-size:9px;margin-top:20px;text-align:right;">
-  © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
-</p>
+<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+  <div style="color:#94a3b8;font-size:9px;">
+    © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:9px;">
+    <span>Powered by</span>
+    ${IDEA_LOGO_SVG}
+  </div>
+</div>
 </body></html>`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

@@ -1527,6 +1527,17 @@ interface JemaatProfileData {
     initiator: { id: string; namaLengkap: string; fotoUrl: string | null };
     target: { id: string; namaLengkap: string; fotoUrl: string | null };
   }>;
+  activity: {
+    windowDays: number;
+    score: number;
+    tier: 'PASIF' | 'KURANG_AKTIF' | 'CUKUP_AKTIF' | 'AKTIF' | 'SANGAT_AKTIF';
+    breakdown: {
+      homecellAttendance: number;
+      eventParticipation: number;
+      ibadahReservasi: number;
+      visit: number;
+    };
+  };
 }
 
 function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
@@ -1551,13 +1562,114 @@ function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
   const d = q.data;
 
   return (
-    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <HomecellSection homecells={d.homecells} />
-      <GroupSection groups={d.groups} />
-      <EventHistorySection events={d.events} />
-      <IbadahHistorySection ibadah={d.ibadah} />
-      <VisitSection visits={d.visits} selfJemaatId={jemaatId} />
-      <BusinessSection businesses={d.businesses} />
+    <>
+      <ActivityIndicator activity={d.activity} />
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <HomecellSection homecells={d.homecells} />
+        <GroupSection groups={d.groups} />
+        <EventHistorySection events={d.events} />
+        <IbadahHistorySection ibadah={d.ibadah} />
+        <VisitSection visits={d.visits} selfJemaatId={jemaatId} />
+        <BusinessSection businesses={d.businesses} />
+      </div>
+    </>
+  );
+}
+
+const ACTIVITY_TIERS: Array<{
+  key: JemaatProfileData['activity']['tier'];
+  label: string;
+  color: string;
+  bar: string;
+  emoji: string;
+}> = [
+  { key: 'PASIF', label: 'Pasif', color: 'text-red-700 bg-red-50 border-red-200', bar: 'bg-red-500', emoji: '😴' },
+  { key: 'KURANG_AKTIF', label: 'Kurang Aktif', color: 'text-orange-700 bg-orange-50 border-orange-200', bar: 'bg-orange-500', emoji: '🙂' },
+  { key: 'CUKUP_AKTIF', label: 'Cukup Aktif', color: 'text-amber-700 bg-amber-50 border-amber-200', bar: 'bg-amber-500', emoji: '😊' },
+  { key: 'AKTIF', label: 'Aktif', color: 'text-lime-700 bg-lime-50 border-lime-200', bar: 'bg-lime-500', emoji: '🙌' },
+  { key: 'SANGAT_AKTIF', label: 'Sangat Aktif', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', bar: 'bg-emerald-500', emoji: '🔥' },
+];
+
+function ActivityIndicator({ activity }: { activity: JemaatProfileData['activity'] }) {
+  const currentIdx = ACTIVITY_TIERS.findIndex((t) => t.key === activity.tier);
+  const current = (ACTIVITY_TIERS[currentIdx] ?? ACTIVITY_TIERS[0]) as (typeof ACTIVITY_TIERS)[number];
+  // Percent progress: max score mapping to 100%. Cap untuk visual bar.
+  const maxForBar = 25;
+  const pct = Math.min(100, (activity.score / maxForBar) * 100);
+
+  return (
+    <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-neutral-100">
+        <h2 className="font-semibold text-neutral-900 flex items-center gap-2 text-sm">
+          <span className="text-base">{current.emoji}</span>
+          Indikator Keaktifan — 3 Bulan Terakhir
+        </h2>
+      </div>
+      <div className="p-6">
+        {/* Current tier label */}
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <div className={`inline-block px-3 py-1.5 rounded-lg border text-sm font-bold ${current.color}`}>
+              {current.label}
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">
+              Skor aktivitas: <strong className="text-neutral-900">{activity.score}</strong> aktivitas
+            </p>
+          </div>
+          <div className="text-right text-xs text-neutral-500 hidden sm:block">
+            Window: {activity.windowDays} hari terakhir
+          </div>
+        </div>
+
+        {/* Tier progression bar */}
+        <div className="relative h-2.5 bg-neutral-100 rounded-full overflow-hidden mb-2">
+          <div
+            className={`absolute top-0 left-0 h-full ${current.bar} transition-all duration-500`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[10px] text-neutral-500">
+          {ACTIVITY_TIERS.map((t, i) => (
+            <span
+              key={t.key}
+              className={`${i === currentIdx ? 'font-bold text-neutral-900' : ''}`}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Breakdown */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
+          <BreakdownStat label="Homecell" value={activity.breakdown.homecellAttendance} color="blue" />
+          <BreakdownStat label="Event" value={activity.breakdown.eventParticipation} color="orange" />
+          <BreakdownStat label="Ibadah" value={activity.breakdown.ibadahReservasi} color="indigo" />
+          <BreakdownStat label="Visit" value={activity.breakdown.visit} color="rose" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BreakdownStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: 'blue' | 'orange' | 'indigo' | 'rose';
+}) {
+  const colors = {
+    blue: 'bg-blue-50 text-blue-900 border-blue-200',
+    orange: 'bg-orange-50 text-orange-900 border-orange-200',
+    indigo: 'bg-indigo-50 text-indigo-900 border-indigo-200',
+    rose: 'bg-rose-50 text-rose-900 border-rose-200',
+  };
+  return (
+    <div className={`px-3 py-2 rounded-lg border text-center ${colors[color]}`}>
+      <div className="text-xl font-bold">{value}</div>
+      <div className="text-[10px] uppercase tracking-wide opacity-70">{label}</div>
     </div>
   );
 }

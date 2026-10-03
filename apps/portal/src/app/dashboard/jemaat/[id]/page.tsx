@@ -23,6 +23,13 @@ import {
   QrCode,
   Copy,
   Check,
+  Home as HomeIcon,
+  Megaphone,
+  Church,
+  Users as UsersGroup,
+  Store,
+  ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -56,6 +63,7 @@ interface Jemaat {
   isActive: boolean;
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleAssignment[];
+  user?: { lastLoginAt: string | null } | null;
 }
 
 interface RoleDetail {
@@ -244,11 +252,32 @@ export default function JemaatDetailPage() {
         )}
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-neutral-900">{j.namaLengkap}</h1>
-          <div className="text-sm text-neutral-500 mt-1">
-            {j.cabang?.nama && <span>{j.cabang.nama}</span>}
-            {j.jenisKelamin && <span> · {j.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</span>}
+          <div className="text-sm text-neutral-500 mt-1 flex items-center gap-2 flex-wrap">
+            {j.cabang?.nama && (
+              <Link
+                href={`/dashboard/cabang/${j.cabang.id}`}
+                className="hover:text-brand-600 hover:underline"
+              >
+                {j.cabang.nama}
+              </Link>
+            )}
+            {j.jenisKelamin && <span>· {j.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</span>}
+            {j.user?.lastLoginAt ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                title={new Date(j.user.lastLoginAt).toLocaleString('id-ID')}
+              >
+                <Clock className="w-3 h-3" />
+                Login {formatRelativeTime(j.user.lastLoginAt)}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700 border border-red-200">
+                <Clock className="w-3 h-3" />
+                Belum pernah login
+              </span>
+            )}
             {!j.isActive && (
-              <span className="ml-2 inline-block px-2 py-0.5 text-xs rounded-full bg-neutral-100 text-neutral-500">
+              <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-neutral-100 text-neutral-500">
                 Nonaktif
               </span>
             )}
@@ -429,6 +458,9 @@ export default function JemaatDetailPage() {
 
       {/* Relasi Keluarga section */}
       <RelasiSection jemaatId={jemaatId} />
+
+      {/* History sections: Homecell + Event + Ibadah + Group + Business */}
+      <JemaatHistorySections jemaatId={jemaatId} />
 
       {/* Assign modal */}
       {assignOpen && (
@@ -1333,5 +1365,451 @@ function JemaatQrCard({ kode, nama }: { kode: string; nama: string }) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ============================================================
+//  Helpers + History Sections
+// ============================================================
+
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (isNaN(diff)) return '';
+  if (diff < 0) return 'baru saja';
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}s lalu`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m lalu`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}j lalu`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}h lalu`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo}bln lalu`;
+  return `${Math.floor(day / 365)}thn lalu`;
+}
+
+function formatDate(iso: string | null | undefined, withTime = false): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  const opts: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  };
+  return d.toLocaleString('id-ID', opts);
+}
+
+interface JemaatProfileData {
+  homecells: Array<{
+    id: string;
+    tanggalBergabung: string;
+    tanggalKeluar: string | null;
+    isActive: boolean;
+    homecell: {
+      id: string;
+      nama: string;
+      area: { id: string; nama: string } | null;
+    };
+    attendance: {
+      totalHadir: number;
+      lastAttended: string | null;
+      recentHistory: Array<{
+        id: string;
+        scannedAt: string;
+        source: string;
+        schedule: { id: string; tanggal: string } | null;
+      }>;
+    };
+  }>;
+  events: Array<{
+    id: string;
+    status: string;
+    registeredAt: string;
+    attendedAt: string | null;
+    paidAt: string | null;
+    cancelledAt: string | null;
+    nominalBayar: string | null;
+    event: {
+      id: string;
+      slug: string | null;
+      judul: string;
+      tanggalMulai: string;
+      tanggalSelesai: string | null;
+      lokasi: string | null;
+      tipeBayar: string;
+    };
+  }>;
+  ibadah: Array<{
+    id: string;
+    status: string;
+    tanggalIbadah: string;
+    reservedAt: string;
+    joinedAt: string | null;
+    cancelledAt: string | null;
+    ibadah: { id: string; nama: string; jamMulai: string | null; lokasi: string | null };
+  }>;
+  groups: Array<{
+    id: string;
+    tanggalBergabung: string;
+    tanggalKeluar: string | null;
+    isActive: boolean;
+    group: {
+      id: string;
+      nama: string;
+      jenis: string | null;
+      cabang: { nama: string } | null;
+    };
+  }>;
+  businesses: Array<{
+    id: string;
+    nama: string;
+    industri: string | null;
+    tipeBisnis: string;
+    isActive: boolean;
+    createdAt: string;
+  }>;
+}
+
+function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
+  const q = useQuery({
+    queryKey: ['jemaat', 'profile', jemaatId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: JemaatProfileData }>(
+        `/admin/jemaat/${jemaatId}/profile`,
+      );
+      return res.data.data;
+    },
+  });
+
+  if (q.isLoading) {
+    return (
+      <div className="mt-6 flex justify-center py-10">
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+  if (!q.data) return null;
+  const d = q.data;
+
+  return (
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <HomecellSection homecells={d.homecells} />
+      <GroupSection groups={d.groups} />
+      <EventHistorySection events={d.events} />
+      <IbadahHistorySection ibadah={d.ibadah} />
+      <BusinessSection businesses={d.businesses} />
+    </div>
+  );
+}
+
+function HistoryCard({
+  title,
+  icon: Icon,
+  count,
+  emptyLabel,
+  color,
+  children,
+}: {
+  title: string;
+  icon: typeof HomeIcon;
+  count: number;
+  emptyLabel: string;
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className={`px-5 py-3 border-b border-neutral-100 bg-gradient-to-r ${color}`}>
+        <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
+          <Icon className="w-4 h-4" />
+          {title}
+          <span className="ml-auto text-xs bg-white/20 px-2 py-0.5 rounded-full">
+            {count}
+          </span>
+        </h2>
+      </div>
+      <div className="divide-y divide-neutral-100 max-h-96 overflow-y-auto">
+        {count === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-neutral-400">{emptyLabel}</div>
+        ) : (
+          children
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecells'] }) {
+  return (
+    <HistoryCard
+      title="Homecell"
+      icon={HomeIcon}
+      count={homecells.length}
+      emptyLabel="Belum tergabung di homecell manapun"
+      color="from-blue-600 to-blue-700"
+    >
+      {homecells.map((h) => (
+        <div key={h.id} className="px-5 py-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/dashboard/homecell/${h.homecell.id}`}
+                className="font-medium text-neutral-900 hover:text-brand-600 hover:underline flex items-center gap-1"
+              >
+                {h.homecell.nama}
+                <ExternalLink className="w-3 h-3 opacity-50" />
+              </Link>
+              {h.homecell.area && (
+                <Link
+                  href={`/dashboard/homecell-area/${h.homecell.area.id}`}
+                  className="text-xs text-neutral-500 hover:text-brand-600 hover:underline"
+                >
+                  Area: {h.homecell.area.nama}
+                </Link>
+              )}
+              <div className="text-[11px] text-neutral-500 mt-1 flex flex-wrap gap-x-3">
+                <span>Bergabung {formatDate(h.tanggalBergabung)}</span>
+                {h.tanggalKeluar && <span>Keluar {formatDate(h.tanggalKeluar)}</span>}
+                {!h.isActive && <span className="text-neutral-400 italic">Nonaktif</span>}
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-sm font-bold text-blue-700">
+                {h.attendance.totalHadir}
+              </div>
+              <div className="text-[10px] text-neutral-500 uppercase tracking-wide">Hadir</div>
+              {h.attendance.lastAttended && (
+                <div className="text-[10px] text-neutral-400 mt-0.5">
+                  Terakhir {formatRelativeTime(h.attendance.lastAttended)}
+                </div>
+              )}
+            </div>
+          </div>
+          {h.attendance.recentHistory.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-[11px] text-brand-600 cursor-pointer hover:underline">
+                Riwayat kehadiran ({h.attendance.recentHistory.length})
+              </summary>
+              <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-neutral-600">
+                {h.attendance.recentHistory.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2">
+                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                    {formatDate(a.scannedAt, true)}
+                    <span className="text-neutral-400">({a.source})</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      ))}
+    </HistoryCard>
+  );
+}
+
+function EventHistorySection({ events }: { events: JemaatProfileData['events'] }) {
+  return (
+    <HistoryCard
+      title="History Event"
+      icon={Megaphone}
+      count={events.length}
+      emptyLabel="Belum pernah mendaftar event"
+      color="from-orange-500 to-amber-500"
+    >
+      {events.map((e) => (
+        <Link
+          key={e.id}
+          href={`/dashboard/event/${e.event.id}`}
+          className="block px-5 py-3 hover:bg-neutral-50"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
+                {e.event.judul}
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+              </p>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {formatDate(e.event.tanggalMulai)}
+                {e.event.lokasi && ` · ${e.event.lokasi}`}
+              </p>
+            </div>
+            <EventStatusBadge status={e.status} />
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
+            <span>Daftar {formatRelativeTime(e.registeredAt)}</span>
+            {e.paidAt && <span>Bayar {formatRelativeTime(e.paidAt)}</span>}
+            {e.attendedAt && <span>Hadir {formatRelativeTime(e.attendedAt)}</span>}
+            {e.cancelledAt && (
+              <span className="text-red-500">Batal {formatRelativeTime(e.cancelledAt)}</span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </HistoryCard>
+  );
+}
+
+function EventStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    DAFTAR: 'bg-blue-100 text-blue-700',
+    MENUNGGU_VERIFIKASI: 'bg-amber-100 text-amber-700',
+    BAYAR: 'bg-emerald-100 text-emerald-700',
+    HADIR: 'bg-purple-100 text-purple-700',
+    BATAL: 'bg-neutral-200 text-neutral-500',
+  };
+  return (
+    <span
+      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+        map[status] ?? 'bg-neutral-100 text-neutral-700'
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function IbadahHistorySection({ ibadah }: { ibadah: JemaatProfileData['ibadah'] }) {
+  return (
+    <HistoryCard
+      title="History Ibadah"
+      icon={Church}
+      count={ibadah.length}
+      emptyLabel="Belum pernah reservasi ibadah"
+      color="from-indigo-600 to-indigo-700"
+    >
+      {ibadah.map((r) => (
+        <Link
+          key={r.id}
+          href={`/dashboard/ibadah/${r.ibadah.id}`}
+          className="block px-5 py-3 hover:bg-neutral-50"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
+                {r.ibadah.nama}
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+              </p>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {formatDate(r.tanggalIbadah)}
+                {r.ibadah.jamMulai && ` · ${r.ibadah.jamMulai}`}
+                {r.ibadah.lokasi && ` · ${r.ibadah.lokasi}`}
+              </p>
+            </div>
+            <IbadahStatusBadge status={r.status} />
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
+            <span>Reservasi {formatRelativeTime(r.reservedAt)}</span>
+            {r.joinedAt && <span>Join {formatRelativeTime(r.joinedAt)}</span>}
+            {r.cancelledAt && (
+              <span className="text-red-500">Batal {formatRelativeTime(r.cancelledAt)}</span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </HistoryCard>
+  );
+}
+
+function IbadahStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    RESERVE: 'bg-blue-100 text-blue-700',
+    JOIN: 'bg-emerald-100 text-emerald-700',
+    CANCEL: 'bg-neutral-200 text-neutral-500',
+  };
+  return (
+    <span
+      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+        map[status] ?? 'bg-neutral-100 text-neutral-700'
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function GroupSection({ groups }: { groups: JemaatProfileData['groups'] }) {
+  return (
+    <HistoryCard
+      title="Group / Komunitas"
+      icon={UsersGroup}
+      count={groups.length}
+      emptyLabel="Belum tergabung di group manapun"
+      color="from-purple-600 to-fuchsia-600"
+    >
+      {groups.map((g) => (
+        <Link
+          key={g.id}
+          href={`/dashboard/group/${g.group.id}`}
+          className="block px-5 py-3 hover:bg-neutral-50"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
+                {g.group.nama}
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+              </p>
+              <div className="text-xs text-neutral-500 mt-0.5 flex flex-wrap gap-x-2">
+                {g.group.jenis && <span>{g.group.jenis}</span>}
+                {g.group.cabang && <span>· {g.group.cabang.nama}</span>}
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-0.5">
+                Bergabung {formatDate(g.tanggalBergabung)}
+                {g.tanggalKeluar && ` · Keluar ${formatDate(g.tanggalKeluar)}`}
+              </div>
+            </div>
+            {!g.isActive && (
+              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-500">
+                Nonaktif
+              </span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </HistoryCard>
+  );
+}
+
+function BusinessSection({ businesses }: { businesses: JemaatProfileData['businesses'] }) {
+  return (
+    <HistoryCard
+      title="Local Market"
+      icon={Store}
+      count={businesses.length}
+      emptyLabel="Belum terdaftar sebagai pemilik bisnis"
+      color="from-emerald-600 to-teal-600"
+    >
+      {businesses.map((b) => (
+        <Link
+          key={b.id}
+          href={`/dashboard/local-business/${b.id}`}
+          className="block px-5 py-3 hover:bg-neutral-50"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
+                {b.nama}
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+              </p>
+              <div className="text-xs text-neutral-500 mt-0.5 flex flex-wrap gap-x-2">
+                <span className="font-medium">{b.tipeBisnis}</span>
+                {b.industri && <span>· {b.industri}</span>}
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-0.5">
+                Terdaftar {formatDate(b.createdAt)}
+              </div>
+            </div>
+            {!b.isActive && (
+              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-500">
+                Nonaktif
+              </span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </HistoryCard>
   );
 }

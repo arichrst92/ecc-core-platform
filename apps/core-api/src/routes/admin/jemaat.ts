@@ -647,10 +647,181 @@ jemaatRouter.get('/:id', async (req, res) => {
         orderBy: { tanggalMulai: 'desc' },
       },
       relasiAsal: { include: { jemaatTerkait: true, tipeRelasi: true } },
+      user: { select: { lastLoginAt: true } },
     },
   });
   if (!item) throw NotFound('Jemaat tidak ditemukan');
   res.json({ success: true, data: item });
+});
+
+// ============================================================
+//  GET /admin/jemaat/:id/profile — aggregated detail (homecell + event +
+//  ibadah + group + business). Dipakai halaman detail jemaat untuk render
+//  semua history dalam satu request.
+// ============================================================
+jemaatRouter.get('/:id/profile', async (req, res) => {
+  const jemaatId = req.params.id;
+
+  const jemaat = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { id: true, namaLengkap: true },
+  });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+
+  const [homecells, events, reservasi, groups, businesses] = await Promise.all([
+    // Homecell memberships + aggregate attendance summary
+    prisma.homecellMember.findMany({
+      where: { jemaatId },
+      orderBy: { tanggalBergabung: 'desc' },
+      include: {
+        homecell: {
+          select: {
+            id: true,
+            nama: true,
+            area: { select: { id: true, nama: true } },
+          },
+        },
+      },
+    }),
+    // Event history
+    prisma.eventParticipation.findMany({
+      where: { jemaatId },
+      orderBy: { registeredAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        status: true,
+        registeredAt: true,
+        attendedAt: true,
+        paidAt: true,
+        cancelledAt: true,
+        nominalBayar: true,
+        event: {
+          select: {
+            id: true,
+            slug: true,
+            judul: true,
+            tanggalMulai: true,
+            tanggalSelesai: true,
+            lokasi: true,
+            tipeBayar: true,
+          },
+        },
+      },
+    }),
+    // Ibadah history (via Reservasi)
+    prisma.reservasi.findMany({
+      where: { jemaatId },
+      orderBy: { tanggalIbadah: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        status: true,
+        tanggalIbadah: true,
+        reservedAt: true,
+        joinedAt: true,
+        cancelledAt: true,
+        ibadah: {
+          select: { id: true, nama: true, jamMulai: true, lokasi: true },
+        },
+      },
+    }),
+    // Group memberships
+    prisma.groupMember.findMany({
+      where: { jemaatId },
+      orderBy: { tanggalBergabung: 'desc' },
+      include: {
+        group: {
+          select: {
+            id: true,
+            nama: true,
+            jenis: true,
+            cabang: { select: { nama: true } },
+          },
+        },
+      },
+    }),
+    // Local businesses
+    prisma.localBusiness.findMany({
+      where: { ownerJemaatId: jemaatId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        nama: true,
+        industri: true,
+        tipeBisnis: true,
+        isActive: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  // Attendance per homecell — HomecellAttendance records = present only.
+  // Count total scans + last attended per homecell.
+  const homecellIds = homecells.map((h) => h.homecellId);
+  const attendanceRows = homecellIds.length
+    ? await prisma.homecellAttendance.findMany({
+        where: {
+          jemaatId,
+        },
+        orderBy: { scannedAt: 'desc' },
+        select: {
+          id: true,
+          scannedAt: true,
+          source: true,
+          scheduleId: true,
+          schedule: {
+            select: {
+              id: true,
+              homecellId: true,
+              tanggal: true,
+            },
+          },
+        },
+        take: 500,
+      })
+    : [];
+
+  const attendanceByHomecell = new Map<
+    string,
+    { total: number; last: string | null; history: typeof attendanceRows }
+  >();
+  for (const row of attendanceRows) {
+    const hcId = row.schedule?.homecellId;
+    if (!hcId) continue;
+    const cur = attendanceByHomecell.get(hcId) ?? {
+      total: 0,
+      last: null,
+      history: [],
+    };
+    cur.total += 1;
+    if (!cur.last) cur.last = row.scannedAt.toISOString();
+    cur.history.push(row);
+    attendanceByHomecell.set(hcId, cur);
+  }
+
+  const homecellsWithAttendance = homecells.map((hm) => {
+    const att = attendanceByHomecell.get(hm.homecellId);
+    return {
+      ...hm,
+      attendance: {
+        totalHadir: att?.total ?? 0,
+        lastAttended: att?.last ?? null,
+        recentHistory: (att?.history ?? []).slice(0, 10),
+      },
+    };
+  });
+
+  res.json({
+    success: true,
+    data: {
+      homecells: homecellsWithAttendance,
+      events,
+      ibadah: reservasi,
+      groups,
+      businesses,
+    },
+  });
 });
 
 jemaatRouter.post('/', async (req, res) => {

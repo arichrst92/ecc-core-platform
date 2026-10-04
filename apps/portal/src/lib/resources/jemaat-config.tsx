@@ -103,7 +103,7 @@ export function buildJemaatResource(
       {
         key: 'namaLengkap',
         label: 'Nama Lengkap',
-        width: '140px',
+        width: '210px',
         render: (_v, row) => (
           <Link
             href={`/dashboard/jemaat/${row.id}`}

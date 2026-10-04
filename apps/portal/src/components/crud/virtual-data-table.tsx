@@ -81,12 +81,19 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      {/* Outer horizontal scroll container — header + body scroll bersama secara horizontal */}
-      <div className="overflow-x-auto">
+      {/* Single scroll container (horizontal + vertical). Supaya sticky left-0
+          pada cell kolom pertama bisa anchor ke scroll yg sama dgn horizontal
+          scroll. Header di dalam dgn sticky top-0. */}
+      <div
+        ref={parentRef}
+        className="overflow-auto"
+        style={{ height: typeof height === 'number' ? `${height}px` : height }}
+      >
         <div style={{ minWidth: minTableWidth }}>
-          {/* Header — kolom pertama sticky left supaya tidak hilang saat scroll horizontal */}
+          {/* Header — sticky top supaya tetap terlihat saat scroll vertical.
+              Kolom pertama sticky left supaya tetap terlihat saat scroll horizontal. */}
           <div
-            className="grid bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs font-medium"
+            className="grid bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs font-medium sticky top-0 z-30"
             style={{ gridTemplateColumns: gridTemplate }}
           >
             {columns.map((col, idx) => (
@@ -95,7 +102,7 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
                 className={clsx(
                   'px-4 py-3 text-left truncate',
                   idx === 0 &&
-                    'sticky left-0 z-20 bg-neutral-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
+                    'sticky left-0 z-40 bg-neutral-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
                   col.className,
                 )}
               >
@@ -105,12 +112,7 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
             {hasActions && <div className="px-4 py-3 text-right">Aksi</div>}
           </div>
 
-          {/* Vertical scroll container (virtualization). Horizontal diurus parent. */}
-          <div
-            ref={parentRef}
-            className="overflow-y-auto overflow-x-hidden"
-            style={{ height: typeof height === 'number' ? `${height}px` : height }}
-          >
+          <div>
         {loading && rows.length === 0 ? (
           <div className="flex items-center justify-center py-20 text-neutral-400">
             <Loader2 className="w-5 h-5 animate-spin" />

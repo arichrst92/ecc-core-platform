@@ -14,6 +14,16 @@ export function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
 
+  // Bypass coming-soon untuk social media OG scrapers (WhatsApp, Facebook,
+  // Twitter, LinkedIn, Slack, Telegram, Discord) supaya link preview tampil
+  // konten actual (OG image, title, description) — bukan placeholder coming-soon.
+  const ua = req.headers.get('user-agent') ?? '';
+  const isSocialBot =
+    /whatsapp|facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot|telegrambot|discordbot|googlebot|bingbot|pinterest/i.test(
+      ua,
+    );
+  if (isSocialBot) return NextResponse.next();
+
   // Whitelist: assets, Next internals, dan route yg WAJIB tetap live saat
   // coming-soon (mis. `/persembahan` untuk iOS App Store compliance,
   // `/.well-known/*` untuk Universal Links AASA + assetlinks).

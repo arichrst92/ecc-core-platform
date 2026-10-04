@@ -29,9 +29,31 @@ export async function generateMetadata({
   if (!item) {
     return { title: 'Renungan tidak ditemukan' };
   }
+
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eccchurch.global').replace(/\/$/, '');
+  const url = `${siteUrl}/renungan/${params.slug}`;
+  const ogImage = `${siteUrl}/logo-ecc.webp`; // Fallback logo untuk renungan (no hero)
+  const description = item.ringkasan ?? item.ayatAlkitab ?? undefined;
+
   return {
     title: item.judul,
-    description: item.ringkasan ?? item.ayatAlkitab ?? undefined,
+    description,
+    openGraph: {
+      type: 'article',
+      title: item.judul,
+      description,
+      url,
+      siteName: 'Elshaddai Creative Community',
+      locale: 'id_ID',
+      images: [{ url: ogImage, width: 1200, height: 630, alt: item.judul }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: item.judul,
+      description,
+      images: [ogImage],
+    },
+    alternates: { canonical: url },
   };
 }
 

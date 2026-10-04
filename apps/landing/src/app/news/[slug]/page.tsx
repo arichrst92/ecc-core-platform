@@ -27,12 +27,33 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const news = await apiGet<NewsDetail>(`/public/news/${params.slug}`);
   if (!news) return { title: 'News' };
+
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eccchurch.global').replace(/\/$/, '');
+  const url = `${siteUrl}/news/${params.slug}`;
+  const ogImage = news.heroImageUrl ? absoluteUrl(news.heroImageUrl) : null;
+  const description = news.ringkasan ?? undefined;
+
   return {
     title: news.judul,
-    description: news.ringkasan ?? undefined,
-    openGraph: news.heroImageUrl
-      ? { images: [absoluteUrl(news.heroImageUrl) ?? ''] }
-      : undefined,
+    description,
+    openGraph: {
+      type: 'article',
+      title: news.judul,
+      description,
+      url,
+      siteName: 'Elshaddai Creative Community',
+      locale: 'id_ID',
+      ...(ogImage
+        ? { images: [{ url: ogImage, width: 1200, height: 630, alt: news.judul }] }
+        : {}),
+    },
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title: news.judul,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+    alternates: { canonical: url },
   };
 }
 

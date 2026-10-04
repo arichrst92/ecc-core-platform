@@ -242,14 +242,22 @@ export default function JemaatDetailPage() {
         </Link>
         <button
           onClick={async () => {
+            // Buka tab dulu di user-gesture context (iOS Safari popup fix)
+            const printWin = window.open('', '_blank');
             try {
               const res = await apiClient.get(`/admin/jemaat/${jemaatId}/export?format=pdf`, {
                 responseType: 'blob',
               });
               const url = URL.createObjectURL(res.data as Blob);
-              window.open(url, '_blank', 'noopener,noreferrer');
-              setTimeout(() => URL.revokeObjectURL(url), 10_000);
+              if (printWin) {
+                printWin.location.href = url;
+              } else {
+                // Popup blocked → fallback same-tab navigation
+                window.location.href = url;
+              }
+              setTimeout(() => URL.revokeObjectURL(url), 20_000);
             } catch (e) {
+              if (printWin) printWin.close();
               toast.error('Gagal export. Cek console.');
               // eslint-disable-next-line no-console
               console.error('[jemaat detail export] failed', e);

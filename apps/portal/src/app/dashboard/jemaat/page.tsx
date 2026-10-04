@@ -88,17 +88,30 @@ function JemaatPageInner() {
   async function handleExport(format: 'csv' | 'pdf') {
     const qs = new URLSearchParams(exportQS);
     qs.set('format', format);
+
+    // iOS Safari / mobile browser blokir popup kalau window.open dipanggil
+    // setelah await (user-gesture lost). Buka tab dulu di sync context,
+    // lalu set URL-nya setelah fetch selesai.
+    let printWin: Window | null = null;
+    if (format === 'pdf') {
+      printWin = window.open('', '_blank');
+    }
+
     try {
-      // Pakai apiClient supaya Authorization header + refresh handling tetap jalan,
-      // lalu convert jadi blob + trigger download / open.
       const res = await apiClient.get(`/admin/jemaat/export?${qs.toString()}`, {
         responseType: 'blob',
       });
       const blob = res.data as Blob;
       const url = URL.createObjectURL(blob);
+
       if (format === 'pdf') {
-        // HTML print view — open new tab, user Ctrl+P untuk save PDF.
-        window.open(url, '_blank', 'noopener,noreferrer');
+        if (printWin) {
+          // Tab sudah dibuka — navigate ke blob URL
+          printWin.location.href = url;
+        } else {
+          // Popup blocked → fallback: same-tab navigation (user press back untuk kembali)
+          window.location.href = url;
+        }
       } else {
         const a = document.createElement('a');
         a.href = url;
@@ -107,8 +120,9 @@ function JemaatPageInner() {
         a.click();
         document.body.removeChild(a);
       }
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setTimeout(() => URL.revokeObjectURL(url), 20_000);
     } catch (e) {
+      if (printWin) printWin.close();
       // eslint-disable-next-line no-console
       console.error('[jemaat export] failed', e);
       alert('Gagal export. Cek console untuk detail.');

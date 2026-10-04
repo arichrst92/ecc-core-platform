@@ -73,6 +73,8 @@ model CabangGereja {
   pointBalances   JemaatPointBalance[]    @relation("CabangPointBalances")
   pointTransactions PointTransaction[]    @relation("CabangPointTransactions")
   hadiahRedeems   HadiahRedeem[]          @relation("CabangRedeems")
+  // IT Minister — Data Minister per cabang assignment
+  itMinisterTeam    ITMinisterTeam[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -252,6 +254,8 @@ model Jemaat {
   notifications           Notification[]           @relation("NotificationRecipient")
   // Ministry schedule assignments (per backend-request-ministry-schedule-roster.md).
   pelayananScheduleAssignments PelayananScheduleAssignment[]
+  // IT Minister team assignments (Protokol IT Departemen 2026-09-02).
+  itMinisterTeam               ITMinisterTeam[]
 
   @@index([cabangId])
   @@index([noHp])
@@ -2294,6 +2298,70 @@ enum PointSource {
   STOCK_ADD       // (not user-facing, tapi tracked)
 
   @@map("point_source")
+}
+
+// ============================================================
+//  IT Minister Team — assignment jemaat ke divisi + role
+//  Per Protokol Departemen IT ECC v0.3 (2026-09-02).
+//
+//  Struktur:
+//    HEAD IT MINISTER
+//    ├── Head IT Product Minister → Specific Product Minister (per area)
+//    ├── Head IT Data Minister    → Data Minister (per cabang)
+//    └── Head IT Operation Minister → Operation Minister (tier L0/L1/L2)
+//
+//  IT Coordinator (ECC-side, non IT Minister) juga di-track di sini untuk
+//  RBAC — dia satu-satunya yang berhak Prioritize planning tickets.
+// ============================================================
+model ITMinisterTeam {
+  id          String   @id @default(uuid()) @db.Uuid
+  jemaatId    String   @map("jemaat_id") @db.Uuid
+  divisi      ITMinisterDivisi
+  roleTitle   ITMinisterRole   @map("role_title")
+  // Nullable — hanya untuk role DATA_MEMBER (assignment per cabang)
+  cabangId    String?  @map("cabang_id") @db.Uuid
+  // Nullable — hanya untuk role SPECIFIC_PRODUCT (area/produk spesifik,
+  // mis. "Els App", "Portal Admin", "Website", "Finance", "Ckids")
+  productArea String?  @map("product_area") @db.VarChar(100)
+  isActive    Boolean  @default(true) @map("is_active")
+  joinedAt    DateTime @default(now()) @map("joined_at")
+  leftAt      DateTime? @map("left_at")
+  catatan     String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  jemaat Jemaat        @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang CabangGereja? @relation(fields: [cabangId], references: [id], onDelete: SetNull)
+
+  @@index([divisi, isActive])
+  @@index([jemaatId, isActive])
+  @@index([roleTitle, isActive])
+  @@map("it_minister_team")
+}
+
+enum ITMinisterDivisi {
+  HEAD         // Head IT Minister (top)
+  COORDINATOR  // IT Coordinator (ECC-side, not IT Minister)
+  PRODUCT
+  DATA
+  OPERATION
+
+  @@map("it_minister_divisi")
+}
+
+enum ITMinisterRole {
+  HEAD_IT_MINISTER
+  IT_COORDINATOR
+  HEAD_PRODUCT
+  SPECIFIC_PRODUCT
+  HEAD_DATA
+  DATA_MEMBER
+  HEAD_OPERATION
+  OPERATION_L0
+  OPERATION_L1
+  OPERATION_L2
+
+  @@map("it_minister_role")
 }
 
 // ============================================================

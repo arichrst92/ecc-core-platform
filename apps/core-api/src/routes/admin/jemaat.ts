@@ -946,7 +946,21 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   });
   if (!j) throw NotFound('Jemaat tidak ditemukan');
 
-  const [events, reservasi, groups, businesses, visits, relasi] = await Promise.all([
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+  const [
+    events,
+    reservasi,
+    groups,
+    businesses,
+    visits,
+    relasi,
+    actHc3m,
+    actEv3m,
+    actIb3m,
+    actVi3m,
+  ] = await Promise.all([
     prisma.eventParticipation.findMany({
       where: { jemaatId },
       orderBy: { registeredAt: 'desc' },
@@ -988,11 +1002,39 @@ jemaatRouter.get('/:id/export', async (req, res) => {
             noHp: true,
             email: true,
             tanggalLahir: true,
+            jenisKelamin: true,
           },
         },
       },
     }),
+    prisma.homecellAttendance.count({
+      where: { jemaatId, scannedAt: { gte: threeMonthsAgo } },
+    }),
+    prisma.eventParticipation.count({
+      where: { jemaatId, status: { not: 'BATAL' }, registeredAt: { gte: threeMonthsAgo } },
+    }),
+    prisma.reservasi.count({
+      where: { jemaatId, status: { not: 'CANCEL' }, tanggalIbadah: { gte: threeMonthsAgo } },
+    }),
+    prisma.visit.count({
+      where: {
+        OR: [{ initiatorJemaatId: jemaatId }, { targetJemaatId: jemaatId }],
+        tanggalVisit: { gte: threeMonthsAgo },
+      },
+    }),
   ]);
+
+  const expActScore = actHc3m + actEv3m + actIb3m + actVi3m;
+  const expActTier =
+    expActScore <= 2
+      ? { label: 'Pasif', color: '#dc2626', bar: '#ef4444', emoji: '😴', pct: 10 }
+      : expActScore <= 5
+        ? { label: 'Kurang Aktif', color: '#c2410c', bar: '#f97316', emoji: '🙂', pct: 30 }
+        : expActScore <= 10
+          ? { label: 'Cukup Aktif', color: '#b45309', bar: '#f59e0b', emoji: '😊', pct: 55 }
+          : expActScore <= 20
+            ? { label: 'Aktif', color: '#4d7c0f', bar: '#84cc16', emoji: '🙌', pct: 80 }
+            : { label: 'Sangat Aktif', color: '#047857', bar: '#10b981', emoji: '🔥', pct: 100 };
 
   if (format === 'csv') {
     throw BadRequest('CSV export belum didukung untuk detail jemaat. Pakai format=pdf.');
@@ -1000,6 +1042,17 @@ jemaatRouter.get('/:id/export', async (req, res) => {
 
   const fmtDate = (d: Date | null | undefined) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+
+  const calcUsia = (d: Date | null | undefined): string => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return '';
+    const today = new Date();
+    let age = today.getFullYear() - dt.getFullYear();
+    const m = today.getMonth() - dt.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dt.getDate())) age -= 1;
+    return `${age} th`;
+  };
 
   // Base URL untuk uploads — kalau fotoUrl relative, prepend. Pakai env atau
   // request host sebagai fallback.
@@ -1015,186 +1068,290 @@ jemaatRouter.get('/:id/export', async (req, res) => {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=5&data=${encodeURIComponent(j.kode)}`
     : '';
 
-  // IDEA brand footer logo (inline SVG — bebas-dep, scalable).
-  const IDEA_LOGO_SVG = `<svg width="80" height="24" viewBox="0 0 160 48" xmlns="http://www.w3.org/2000/svg">
-    <rect x="2" y="4" width="40" height="40" rx="8" fill="#EA580C"/>
-    <text x="22" y="33" font-family="-apple-system,Arial,sans-serif" font-size="20" font-weight="900" fill="white" text-anchor="middle">I</text>
-    <text x="52" y="33" font-family="-apple-system,Arial,sans-serif" font-size="22" font-weight="700" fill="#0f172a">IDEA</text>
-    <text x="52" y="43" font-family="-apple-system,Arial,sans-serif" font-size="7" fill="#64748b" letter-spacing="1">PT SOLUSI INOVASI BANGSA</text>
-  </svg>`;
+  // IDEA logo — pakai file real dari portal public (sama dgn login page).
+  // Portal URL dari env, default production.
+  const portalBase = process.env.PORTAL_URL ?? 'https://portal.eccchurch.global';
+  const ideaLogoUrl = `${portalBase.replace(/\/$/, '')}/logo-idea.webp`;
+
+  // === Professional CV-style layout ===
+  // Sidebar (foto + QR + kontak + activity + role) | Main (anggota keluarga + histories)
+  const relasiCards = relasi
+    .map((r: any) => {
+      const usia = calcUsia(r.jemaatTerkait.tanggalLahir);
+      const sexBadge =
+        r.jemaatTerkait.jenisKelamin === 'L'
+          ? '<span class="chip" style="background:#dbeafe;color:#1e40af;">L</span>'
+          : r.jemaatTerkait.jenisKelamin === 'P'
+            ? '<span class="chip" style="background:#fce7f3;color:#be185d;">P</span>'
+            : '';
+      return `<div class="family-card">
+      ${
+        r.jemaatTerkait.fotoUrl
+          ? `<img src="${resolveImg(r.jemaatTerkait.fotoUrl)}" alt="" class="family-avatar"/>`
+          : `<div class="family-avatar placeholder">${escapeHtml(r.jemaatTerkait.namaLengkap.charAt(0))}</div>`
+      }
+      <div class="family-info">
+        <div class="family-name">${escapeHtml(r.jemaatTerkait.namaLengkap)} ${sexBadge}</div>
+        <div class="family-role">${escapeHtml(r.tipeRelasi.nama)}${usia ? ` · ${usia}` : ''}</div>
+        ${r.jemaatTerkait.noHp ? `<div class="family-contact">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
+        ${r.jemaatTerkait.email ? `<div class="family-contact">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
+        ${r.jemaatTerkait.tanggalLahir ? `<div class="family-contact">🎂 ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
+      </div>
+    </div>`;
+    })
+    .join('');
 
   const html = `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Profil Jemaat — ${escapeHtml(j.namaLengkap)}</title>
 <style>
-  @page { size: A4; margin: 15mm; }
-  body { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 11px; color: #0f172a; margin: 0; padding: 10mm; }
-  .header { display: flex; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #ea580c; margin-bottom: 10px; }
-  .avatar, .avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #e2e8f0; object-fit: cover; flex-shrink: 0; }
-  .avatar-placeholder { background: #fed7aa; color: #9a3412; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; }
-  .header-info { flex: 1; }
-  .qr-box { text-align: center; flex-shrink: 0; }
-  .qr { width: 70px; height: 70px; border: 1px solid #e2e8f0; }
-  .qr-code { font-family: monospace; font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
-  h1 { font-size: 20px; margin: 0 0 2px; color: #0f172a; }
-  h2 { font-size: 13px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #ea580c; color: #ea580c; }
-  .meta { color: #64748b; font-size: 11px; }
-  table { border-collapse: collapse; width: 100%; margin-top: 4px; }
-  th, td { border: 1px solid #e2e8f0; padding: 4px 6px; text-align: left; vertical-align: top; }
-  thead { background: #fff7ed; font-weight: 600; }
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 10.5px; color: #0f172a; margin: 0; padding: 0; line-height: 1.45; }
+  .page { padding: 8mm; }
+
+  /* Hero header */
+  .hero { background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%); color: white; padding: 16px 20px; border-radius: 10px; display: flex; align-items: center; gap: 18px; margin-bottom: 16px; }
+  .hero .avatar { width: 90px; height: 90px; border-radius: 50%; border: 3px solid white; object-fit: cover; flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+  .hero .avatar.placeholder { background: white; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 800; }
+  .hero-info { flex: 1; min-width: 0; }
+  .hero h1 { font-size: 24px; margin: 0 0 4px; font-weight: 800; letter-spacing: -0.3px; }
+  .hero-sub { font-size: 11px; opacity: 0.92; display: flex; gap: 8px; flex-wrap: wrap; }
+  .hero-sub .pill { background: rgba(255,255,255,0.22); padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .hero-sub .pill.danger { background: rgba(220,38,38,0.9); }
+  .hero .qr-box { background: white; padding: 6px; border-radius: 6px; text-align: center; flex-shrink: 0; }
+  .hero .qr-box img { width: 72px; height: 72px; display: block; }
+  .hero .qr-code { font-family: monospace; font-size: 9px; color: #0f172a; margin-top: 3px; letter-spacing: 0.5px; font-weight: 700; }
+
+  /* Grid layout */
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
+  .sidebar section, .main section { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .sidebar section h3, .main section h3 { font-size: 10px; margin: 0 0 8px; color: #ea580c; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; padding-bottom: 4px; border-bottom: 1.5px solid #fed7aa; }
+
+  /* Sidebar details */
+  .info-row { font-size: 10px; margin-bottom: 5px; }
+  .info-row .lbl { color: #64748b; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .info-row .val { color: #0f172a; font-weight: 500; }
+  .info-row .val.strong { font-weight: 700; }
+  .info-row .val.muted { color: #94a3b8; font-style: italic; }
+
+  /* Activity indicator */
+  .activity-score { font-size: 24px; font-weight: 800; line-height: 1; }
+  .activity-tier { font-size: 11px; font-weight: 700; margin-top: 2px; }
+  .activity-bar-wrap { height: 8px; background: #f1f5f9; border-radius: 4px; margin: 8px 0 4px; overflow: hidden; }
+  .activity-bar { height: 100%; border-radius: 4px; }
+  .activity-ticks { display: flex; justify-content: space-between; font-size: 7px; color: #94a3b8; }
+  .activity-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 8px; }
+  .activity-breakdown .bd { padding: 4px 6px; border-radius: 4px; text-align: center; font-size: 9px; }
+  .activity-breakdown .bd b { display: block; font-size: 14px; }
+
+  /* Role chips */
+  .chip { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 600; margin: 1px 2px 1px 0; }
+  .chip.orange { background: #fed7aa; color: #9a3412; }
+  .chip.green { background: #d1fae5; color: #065f46; }
+
+  /* Family grid */
+  .family-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .family-card { display: flex; gap: 6px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fafafa; }
+  .family-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #e2e8f0; }
+  .family-avatar.placeholder { background: #fed7aa; color: #9a3412; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .family-info { min-width: 0; flex: 1; font-size: 9px; }
+  .family-name { font-weight: 700; color: #0f172a; font-size: 10px; line-height: 1.2; margin-bottom: 1px; }
+  .family-role { color: #ea580c; font-weight: 600; font-size: 9px; margin-bottom: 2px; }
+  .family-contact { color: #64748b; font-size: 8.5px; line-height: 1.3; }
+
+  /* Tables */
+  table { border-collapse: collapse; width: 100%; margin-top: 2px; font-size: 9.5px; }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 4px 6px; text-align: left; vertical-align: top; }
+  thead th { background: #fff7ed; color: #9a3412; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #fed7aa; }
   tbody tr:nth-child(even) { background: #fafafa; }
-  .grid { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; margin-top: 8px; }
-  .label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .value { color: #0f172a; }
-  .badge { display: inline-block; padding: 1px 6px; background: #fed7aa; color: #9a3412; border-radius: 3px; font-size: 10px; margin-right: 3px; }
-  .empty { color: #94a3b8; font-style: italic; }
-  @media print { .noprint { display: none; } }
-  .noprint { padding: 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin-bottom: 15px; }
-  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
+  .empty { color: #94a3b8; font-style: italic; font-size: 9.5px; }
+
+  /* Section count badge */
+  .count { background: #ea580c; color: white; font-size: 8px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; vertical-align: middle; font-weight: 700; }
+
+  /* Footer */
+  .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+  .footer .meta-txt { color: #94a3b8; font-size: 8.5px; }
+  .footer .powered { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 9px; }
+  .footer .powered img { height: 28px; width: auto; display: block; }
+
+  @media print { .noprint { display: none; } .page { padding: 0; } body { background: white; } }
+  .noprint { padding: 12px 16px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin: 10px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .noprint button { padding: 6px 14px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 600; }
 </style></head><body>
+
 <div class="noprint">
-  <strong>Print Preview — Profil Jemaat ${escapeHtml(j.namaLengkap)}</strong>
-  &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
+  <span><strong>Print Preview</strong> — Profil ${escapeHtml(j.namaLengkap)}. Tekan <kbd>Ctrl/Cmd + P</kbd> → Save as PDF.</span>
   <button onclick="window.print()">Print / Save as PDF</button>
 </div>
 
-<div class="header">
-  ${
-    j.fotoUrl
-      ? `<img src="${resolveImg(j.fotoUrl)}" alt="${escapeHtml(j.namaLengkap)}" class="avatar"/>`
-      : `<div class="avatar-placeholder">${escapeHtml(j.namaLengkap.charAt(0))}</div>`
-  }
-  <div class="header-info">
-    <h1>${escapeHtml(j.namaLengkap)}</h1>
-    <div class="meta">
-      ${j.kode ? `Kode <strong>${escapeHtml(j.kode)}</strong> · ` : ''}
-      ${j.cabang?.nama ? escapeHtml(j.cabang.nama) + ' · ' : ''}
-      ${j.isActive ? 'Aktif' : '<span style="color:#dc2626;">Nonaktif</span>'}
+<div class="page">
+  <!-- HERO -->
+  <div class="hero">
+    ${
+      j.fotoUrl
+        ? `<img src="${resolveImg(j.fotoUrl)}" alt="${escapeHtml(j.namaLengkap)}" class="avatar"/>`
+        : `<div class="avatar placeholder">${escapeHtml(j.namaLengkap.charAt(0))}</div>`
+    }
+    <div class="hero-info">
+      <h1>${escapeHtml(j.namaLengkap)}</h1>
+      <div class="hero-sub">
+        ${j.kode ? `<span class="pill">#${escapeHtml(j.kode)}</span>` : ''}
+        ${j.cabang?.nama ? `<span class="pill">${escapeHtml(j.cabang.nama)}</span>` : ''}
+        ${j.tanggalLahir ? `<span class="pill">${calcUsia(j.tanggalLahir)}</span>` : ''}
+        ${j.jenisKelamin ? `<span class="pill">${j.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</span>` : ''}
+        <span class="pill ${j.isActive ? '' : 'danger'}">${j.isActive ? 'Aktif' : 'Nonaktif'}</span>
+      </div>
+    </div>
+    ${
+      qrUrl
+        ? `<div class="qr-box">
+            <img src="${qrUrl}" alt="QR"/>
+            <div class="qr-code">${escapeHtml(j.kode ?? '')}</div>
+          </div>`
+        : ''
+    }
+  </div>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <section>
+        <h3>Kontak</h3>
+        <div class="info-row"><div class="lbl">No HP</div><div class="val strong">${escapeHtml(j.noHp ?? '-')}</div></div>
+        <div class="info-row"><div class="lbl">Email</div><div class="val">${escapeHtml(j.email ?? '-')}</div></div>
+        <div class="info-row"><div class="lbl">Alamat</div><div class="val">${escapeHtml(j.alamat ?? '-')}</div></div>
+      </section>
+
+      <section>
+        <h3>Data Pribadi</h3>
+        <div class="info-row"><div class="lbl">Tanggal Lahir</div><div class="val">${fmtDate(j.tanggalLahir)}${j.tanggalLahir ? ` (${calcUsia(j.tanggalLahir)})` : ''}</div></div>
+        <div class="info-row"><div class="lbl">Jenis Kelamin</div><div class="val">${j.jenisKelamin === 'L' ? 'Laki-laki' : j.jenisKelamin === 'P' ? 'Perempuan' : '-'}</div></div>
+        <div class="info-row"><div class="lbl">Bergabung</div><div class="val">${fmtDate(j.tanggalBergabung)}</div></div>
+        <div class="info-row"><div class="lbl">Last Login</div><div class="val ${j.user?.lastLoginAt ? '' : 'muted'}">${j.user?.lastLoginAt ? new Date(j.user.lastLoginAt).toLocaleString('id-ID') : 'Belum pernah'}</div></div>
+      </section>
+
+      <section>
+        <h3>Keaktifan 3 Bulan ${expActTier.emoji}</h3>
+        <div class="activity-score" style="color:${expActTier.color};">${expActScore}</div>
+        <div class="activity-tier" style="color:${expActTier.color};">${expActTier.label}</div>
+        <div class="activity-bar-wrap">
+          <div class="activity-bar" style="width:${expActTier.pct}%;background:${expActTier.bar};"></div>
+        </div>
+        <div class="activity-ticks">
+          <span>Pasif</span><span>Kurang</span><span>Cukup</span><span>Aktif</span><span>Sangat</span>
+        </div>
+        <div class="activity-breakdown">
+          <div class="bd" style="background:#dbeafe;color:#1e40af;"><b>${actHc3m}</b>Homecell</div>
+          <div class="bd" style="background:#fed7aa;color:#9a3412;"><b>${actEv3m}</b>Event</div>
+          <div class="bd" style="background:#e0e7ff;color:#3730a3;"><b>${actIb3m}</b>Ibadah</div>
+          <div class="bd" style="background:#fce7f3;color:#9d174d;"><b>${actVi3m}</b>Visit</div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Role & Pelayanan</h3>
+        ${
+          j.jemaatRoles.length === 0 && j.jemaatPelayanan.length === 0
+            ? '<p class="empty">-</p>'
+            : `${j.jemaatRoles.map((r: any) => `<span class="chip orange">${escapeHtml(r.subRoleStatus?.nama ?? r.subRole.nama)}</span>`).join(' ')}
+               ${j.jemaatPelayanan.map((p: any) => `<span class="chip green">${escapeHtml(p.pelayanan.nama)}</span>`).join(' ')}`
+        }
+      </section>
+
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <section>
+        <h3>Anggota Keluarga <span class="count">${relasi.length}</span></h3>
+        ${relasi.length === 0 ? '<p class="empty">Belum ada relasi keluarga.</p>' : `<div class="family-grid">${relasiCards}</div>`}
+      </section>
+
+      <section>
+        <h3>Homecell <span class="count">${j.homecellMembership.length}</span></h3>
+        ${
+          j.homecellMembership.length === 0
+            ? '<p class="empty">Belum tergabung di homecell.</p>'
+            : `<table><thead><tr><th>Homecell</th><th>Area</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
+              ${j.homecellMembership.map((h: any) => `<tr><td><strong>${escapeHtml(h.homecell.nama)}</strong></td><td>${escapeHtml(h.homecell.area?.nama ?? '-')}</td><td>${fmtDate(h.tanggalBergabung)}</td><td>${h.isActive ? '✓ Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+              </tbody></table>`
+        }
+      </section>
+
+      <section>
+        <h3>Riwayat Event <span class="count">${events.length}</span></h3>
+        ${
+          events.length === 0
+            ? '<p class="empty">Belum pernah daftar event.</p>'
+            : `<table><thead><tr><th>Event</th><th>Tanggal</th><th>Lokasi</th><th>Status</th></tr></thead><tbody>
+              ${events.map((e: any) => `<tr><td><strong>${escapeHtml(e.event.judul)}</strong></td><td>${fmtDate(e.event.tanggalMulai)}</td><td>${escapeHtml(e.event.lokasi ?? '-')}</td><td>${escapeHtml(e.status)}</td></tr>`).join('')}
+              </tbody></table>`
+        }
+      </section>
+
+      <section>
+        <h3>Riwayat Ibadah <span class="count">${reservasi.length}</span></h3>
+        ${
+          reservasi.length === 0
+            ? '<p class="empty">Belum pernah reservasi ibadah.</p>'
+            : `<table><thead><tr><th>Ibadah</th><th>Tanggal</th><th>Jam</th><th>Status</th></tr></thead><tbody>
+              ${reservasi.map((r: any) => `<tr><td><strong>${escapeHtml(r.ibadah.nama)}</strong></td><td>${fmtDate(r.tanggalIbadah)}</td><td>${escapeHtml(r.ibadah.jamMulai ?? '-')}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}
+              </tbody></table>`
+        }
+      </section>
+
+      <section>
+        <h3>Riwayat Visit <span class="count">${visits.length}</span></h3>
+        ${
+          visits.length === 0
+            ? '<p class="empty">Belum ada riwayat visit.</p>'
+            : `<table><thead><tr><th>Judul</th><th>Dengan</th><th>Peran</th><th>Lokasi</th><th>Tanggal</th></tr></thead><tbody>
+              ${visits.map((v: any) => {
+                const isInit = v.initiatorJemaatId === jemaatId;
+                const other = isInit ? v.target : v.initiator;
+                return `<tr><td><strong>${escapeHtml(v.judul)}</strong></td><td>${escapeHtml(other.namaLengkap)}</td><td>${isInit ? 'Mengunjungi' : 'Dikunjungi'}</td><td>${escapeHtml(v.lokasi ?? '-')}</td><td>${fmtDate(v.tanggalVisit)}</td></tr>`;
+              }).join('')}
+              </tbody></table>`
+        }
+      </section>
+
+      <section>
+        <h3>Group / Komunitas <span class="count">${groups.length}</span></h3>
+        ${
+          groups.length === 0
+            ? '<p class="empty">Belum tergabung di group.</p>'
+            : `<table><thead><tr><th>Group</th><th>Jenis</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
+              ${groups.map((g: any) => `<tr><td><strong>${escapeHtml(g.group.nama)}</strong></td><td>${escapeHtml(g.group.jenis ?? '-')}</td><td>${fmtDate(g.tanggalBergabung)}</td><td>${g.isActive ? '✓ Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+              </tbody></table>`
+        }
+      </section>
+
+      <section>
+        <h3>Local Market <span class="count">${businesses.length}</span></h3>
+        ${
+          businesses.length === 0
+            ? '<p class="empty">Belum terdaftar sebagai pemilik bisnis.</p>'
+            : `<table><thead><tr><th>Bisnis</th><th>Tipe</th><th>Industri</th><th>Terdaftar</th><th>Status</th></tr></thead><tbody>
+              ${businesses.map((b: any) => `<tr><td><strong>${escapeHtml(b.nama)}</strong></td><td>${escapeHtml(b.tipeBisnis)}</td><td>${escapeHtml(b.industri ?? '-')}</td><td>${fmtDate(b.createdAt)}</td><td>${b.isActive ? '✓ Aktif' : 'Nonaktif'}</td></tr>`).join('')}
+              </tbody></table>`
+        }
+      </section>
+
     </div>
   </div>
-  ${
-    qrUrl
-      ? `<div class="qr-box">
-          <img src="${qrUrl}" alt="QR ${escapeHtml(j.kode ?? '')}" class="qr"/>
-          <div class="qr-code">${escapeHtml(j.kode ?? '')}</div>
-        </div>`
-      : ''
-  }
-</div>
 
-<h2>Data Pribadi</h2>
-<div class="grid">
-  <div class="label">No HP</div><div class="value">${escapeHtml(j.noHp ?? '-')}</div>
-  <div class="label">Email</div><div class="value">${escapeHtml(j.email ?? '-')}</div>
-  <div class="label">Jenis Kelamin</div><div class="value">${j.jenisKelamin === 'L' ? 'Laki-laki' : j.jenisKelamin === 'P' ? 'Perempuan' : '-'}</div>
-  <div class="label">Tanggal Lahir</div><div class="value">${fmtDate(j.tanggalLahir)}</div>
-  <div class="label">Alamat</div><div class="value">${escapeHtml(j.alamat ?? '-')}</div>
-  <div class="label">Tgl Bergabung</div><div class="value">${fmtDate(j.tanggalBergabung)}</div>
-  <div class="label">Last Login</div><div class="value">${j.user?.lastLoginAt ? new Date(j.user.lastLoginAt).toLocaleString('id-ID') : '<span class="empty">Belum pernah login</span>'}</div>
-</div>
-
-<h2>Anggota Keluarga (${relasi.length})</h2>
-${
-  relasi.length === 0
-    ? '<p class="empty">Belum ada relasi keluarga.</p>'
-    : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
-    ${relasi
-      .map(
-        (r: any) => `<div style="display:flex;gap:8px;padding:6px;border:1px solid #e2e8f0;border-radius:6px;">
-      ${
-        r.jemaatTerkait.fotoUrl
-          ? `<img src="${resolveImg(r.jemaatTerkait.fotoUrl)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;"/>`
-          : `<div style="width:40px;height:40px;border-radius:50%;background:#fed7aa;color:#9a3412;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">${escapeHtml(r.jemaatTerkait.namaLengkap.charAt(0))}</div>`
-      }
-      <div style="min-width:0;flex:1;">
-        <div style="font-weight:600;color:#0f172a;font-size:11px;">${escapeHtml(r.jemaatTerkait.namaLengkap)}</div>
-        <div style="font-size:9px;color:#ea580c;font-weight:600;">${escapeHtml(r.tipeRelasi.nama)}</div>
-        ${r.jemaatTerkait.noHp ? `<div style="font-size:9px;color:#64748b;">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
-        ${r.jemaatTerkait.email ? `<div style="font-size:9px;color:#64748b;">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
-        ${r.jemaatTerkait.tanggalLahir ? `<div style="font-size:9px;color:#94a3b8;">Lahir ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
-      </div>
-    </div>`,
-      )
-      .join('')}
-  </div>`
-}
-
-<h2>Role & Pelayanan</h2>
-${
-  j.jemaatRoles.length === 0 && j.jemaatPelayanan.length === 0
-    ? '<p class="empty">Belum ada role atau pelayanan.</p>'
-    : `
-<div>
-  ${j.jemaatRoles.map((r: any) => `<span class="badge">${escapeHtml(r.role.nama)} → ${escapeHtml(r.subRole.nama)}${r.subRoleStatus ? ` → ${escapeHtml(r.subRoleStatus.nama)}` : ''}</span>`).join(' ')}
-  ${j.jemaatPelayanan.map((p: any) => `<span class="badge" style="background:#d1fae5;color:#065f46;">${escapeHtml(p.pelayanan.nama)} (${escapeHtml(p.pelayananRole.nama)})</span>`).join(' ')}
-</div>`
-}
-
-<h2>Homecell (${j.homecellMembership.length})</h2>
-${
-  j.homecellMembership.length === 0
-    ? '<p class="empty">Belum tergabung di homecell.</p>'
-    : `<table><thead><tr><th>Homecell</th><th>Area</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
-      ${j.homecellMembership.map((h: any) => `<tr><td>${escapeHtml(h.homecell.nama)}</td><td>${escapeHtml(h.homecell.area?.nama ?? '-')}</td><td>${fmtDate(h.tanggalBergabung)}</td><td>${h.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
-      </tbody></table>`
-}
-
-<h2>History Event (${events.length})</h2>
-${
-  events.length === 0
-    ? '<p class="empty">Belum pernah daftar event.</p>'
-    : `<table><thead><tr><th>Event</th><th>Tanggal</th><th>Lokasi</th><th>Status</th></tr></thead><tbody>
-      ${events.map((e: any) => `<tr><td>${escapeHtml(e.event.judul)}</td><td>${fmtDate(e.event.tanggalMulai)}</td><td>${escapeHtml(e.event.lokasi ?? '-')}</td><td>${escapeHtml(e.status)}</td></tr>`).join('')}
-      </tbody></table>`
-}
-
-<h2>History Ibadah (${reservasi.length})</h2>
-${
-  reservasi.length === 0
-    ? '<p class="empty">Belum pernah reservasi ibadah.</p>'
-    : `<table><thead><tr><th>Ibadah</th><th>Tanggal</th><th>Jam</th><th>Status</th></tr></thead><tbody>
-      ${reservasi.map((r: any) => `<tr><td>${escapeHtml(r.ibadah.nama)}</td><td>${fmtDate(r.tanggalIbadah)}</td><td>${escapeHtml(r.ibadah.jamMulai ?? '-')}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}
-      </tbody></table>`
-}
-
-<h2>Group / Komunitas (${groups.length})</h2>
-${
-  groups.length === 0
-    ? '<p class="empty">Belum tergabung di group.</p>'
-    : `<table><thead><tr><th>Group</th><th>Jenis</th><th>Bergabung</th><th>Status</th></tr></thead><tbody>
-      ${groups.map((g: any) => `<tr><td>${escapeHtml(g.group.nama)}</td><td>${escapeHtml(g.group.jenis ?? '-')}</td><td>${fmtDate(g.tanggalBergabung)}</td><td>${g.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
-      </tbody></table>`
-}
-
-<h2>History Visit (${visits.length})</h2>
-${
-  visits.length === 0
-    ? '<p class="empty">Belum ada riwayat visit.</p>'
-    : `<table><thead><tr><th>Judul</th><th>Dengan</th><th>Peran</th><th>Lokasi</th><th>Tanggal</th></tr></thead><tbody>
-      ${visits.map((v: any) => {
-        const isInit = v.initiatorJemaatId === jemaatId;
-        const other = isInit ? v.target : v.initiator;
-        return `<tr><td>${escapeHtml(v.judul)}</td><td>${escapeHtml(other.namaLengkap)}</td><td>${isInit ? 'Mengunjungi' : 'Dikunjungi'}</td><td>${escapeHtml(v.lokasi ?? '-')}</td><td>${fmtDate(v.tanggalVisit)}</td></tr>`;
-      }).join('')}
-      </tbody></table>`
-}
-
-<h2>Local Market (${businesses.length})</h2>
-${
-  businesses.length === 0
-    ? '<p class="empty">Belum terdaftar sebagai pemilik bisnis.</p>'
-    : `<table><thead><tr><th>Bisnis</th><th>Tipe</th><th>Industri</th><th>Terdaftar</th><th>Status</th></tr></thead><tbody>
-      ${businesses.map((b: any) => `<tr><td>${escapeHtml(b.nama)}</td><td>${escapeHtml(b.tipeBisnis)}</td><td>${escapeHtml(b.industri ?? '-')}</td><td>${fmtDate(b.createdAt)}</td><td>${b.isActive ? 'Aktif' : 'Nonaktif'}</td></tr>`).join('')}
-      </tbody></table>`
-}
-
-<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-  <div style="color:#94a3b8;font-size:9px;">
-    © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
-  </div>
-  <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:9px;">
-    <span>Powered by</span>
-    ${IDEA_LOGO_SVG}
+  <div class="footer">
+    <div class="meta-txt">
+      © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
+    </div>
+    <div class="powered">
+      <span>Powered by</span>
+      <img src="${ideaLogoUrl}" alt="IDEA" onerror="this.style.display='none'"/>
+    </div>
   </div>
 </div>
 </body></html>`;

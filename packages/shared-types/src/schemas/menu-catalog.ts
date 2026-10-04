@@ -28,9 +28,9 @@ export const MENU_CATALOG: MenuItem[] = [
   // semua role yg boleh masuk portal punya akses ke dashboard.
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', group: null },
 
-  // Entity
-  { key: 'sinode', label: 'Sinode', href: '/dashboard/sinode', group: 'Entity' },
-  { key: 'cabang', label: 'Cabang Gereja', href: '/dashboard/cabang', group: 'Entity' },
+  // Gereja
+  { key: 'sinode', label: 'Gereja', href: '/dashboard/sinode', group: 'Gereja' },
+  { key: 'cabang', label: 'Cabang Gereja', href: '/dashboard/cabang', group: 'Gereja' },
 
   // Service
   { key: 'ibadah', label: 'Ibadah', href: '/dashboard/ibadah', group: 'Service' },
@@ -67,6 +67,10 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
   { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },
   { key: 'tech-docs', label: 'Technical Documentation', href: '/dashboard/tech-docs', group: 'Developer Tools' },
+  { key: 'it-minister-team', label: 'Team IT Minister', href: '/dashboard/it-minister-team', group: 'Developer Tools' },
+  // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
+  { key: 'ops-tickets', label: 'Operations Tickets', href: 'https://operations.eccchurch.global', group: 'Developer Tools' },
+  { key: 'planning-backlog', label: 'Planning Backlog', href: 'https://planning.eccchurch.global', group: 'Developer Tools' },
 
   // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,
   // hadiah master data di portal.

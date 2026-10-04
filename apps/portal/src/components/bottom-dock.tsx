@@ -71,6 +71,8 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   menuKey?: string;
+  /** External URL (open in new tab). Kalau true, href boleh https:// */
+  external?: boolean;
 }
 
 interface NavGroup {
@@ -180,6 +182,9 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: FileText, menuKey: 'tech-docs' },
+      { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
+      { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
+      { href: 'https://planning.eccchurch.global', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
     ],
   },
 ];

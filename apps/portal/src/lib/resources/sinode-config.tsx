@@ -17,8 +17,8 @@ interface Sinode extends Record<string, unknown> {
 
 export const sinodeResource: ResourceConfig<Sinode> = {
   name: 'sinode',
-  label: 'Sinode',
-  labelPlural: 'data sinode dalam ekosistem ECC',
+  label: 'Gereja',
+  labelPlural: 'data gereja dalam ekosistem ECC',
   endpoint: '/admin/sinode',
   displayField: 'nama',
   defaultSort: { field: 'nama', order: 'asc' },
@@ -33,7 +33,7 @@ export const sinodeResource: ResourceConfig<Sinode> = {
         <Link
           href={`/dashboard/cabang?sinodeId=${row.id}`}
           className="inline-flex items-center gap-1 text-brand-600 hover:underline font-medium"
-          title="Lihat cabang di sinode ini"
+          title="Lihat cabang di gereja ini"
         >
           <Church className="w-3.5 h-3.5" />
           {row.cabangCount ?? 0}
@@ -48,7 +48,7 @@ export const sinodeResource: ResourceConfig<Sinode> = {
         <Link
           href={`/dashboard/jemaat?sinodeId=${row.id}`}
           className="inline-flex items-center gap-1 text-brand-600 hover:underline font-medium"
-          title="Lihat jemaat di sinode ini"
+          title="Lihat jemaat di gereja ini"
         >
           <Users className="w-3.5 h-3.5" />
           {row.jemaatCount ?? 0}
@@ -59,7 +59,7 @@ export const sinodeResource: ResourceConfig<Sinode> = {
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],
   fields: [
-    { name: 'nama', label: 'Nama Sinode', type: 'text', required: true, placeholder: 'Sinode ECC' },
+    { name: 'nama', label: 'Nama Gereja', type: 'text', required: true, placeholder: 'ECC' },
     {
       name: 'kode',
       label: 'Kode',
@@ -75,7 +75,7 @@ export const sinodeResource: ResourceConfig<Sinode> = {
       label: 'Status Aktif',
       type: 'switch',
       defaultValue: true,
-      helperText: 'Sinode aktif (tampil di list publik).',
+      helperText: 'Gereja aktif (tampil di list publik).',
     },
   ],
   createSchema: createSinodeSchema,

@@ -103,10 +103,12 @@ export function buildJemaatResource(
       {
         key: 'namaLengkap',
         label: 'Nama Lengkap',
+        width: '140px',
         render: (_v, row) => (
           <Link
             href={`/dashboard/jemaat/${row.id}`}
             className="inline-flex items-center gap-2 text-brand-600 hover:underline font-medium min-w-0"
+            title={row.namaLengkap}
           >
             <JemaatAvatar nama={row.namaLengkap} fotoUrl={row.fotoUrl} />
             <span className="truncate">{row.namaLengkap}</span>

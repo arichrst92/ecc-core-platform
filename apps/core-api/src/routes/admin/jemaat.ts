@@ -505,6 +505,11 @@ jemaatRouter.get('/export', async (req, res) => {
 
   if (format === 'pdf' || format === 'html' || format === 'print') {
     // Server-side HTML print-view — user Ctrl+P → save as PDF.
+    // Detect mobile UA — di mobile, @media print tidak reliable + "Save as PDF"
+    // dari Share menu kadang screenshot plain HTML. Jadi di mobile kita hide
+    // preview bar entirely + auto-trigger print on load.
+    const uaStr = (req.get('user-agent') ?? '').toLowerCase();
+    const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(uaStr);
     const tableBody = dataRows
       .map(
         (row) => `
@@ -537,16 +542,32 @@ jemaatRouter.get('/export', async (req, res) => {
   .footer { font-size: 10px; color: #94a3b8; margin-top: 10px; text-align: right; }
   .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
   .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
-  @media print { .noprint { display: none; } }
+  @media print {
+    .noprint, .noprint * { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
+  }
   .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; }
   .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
 </style>
 </head><body>
-<div class="noprint">
+${
+  isMobileUa
+    ? ''
+    : `<div class="noprint">
   <strong>Print Preview — Daftar Jemaat</strong>
   &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
-  <button onclick="window.print()">Print / Save as PDF</button>
-</div>
+  <button onclick="doPrint()">Print / Save as PDF</button>
+</div>`
+}
+<script>
+  function doPrint() {
+    document.querySelectorAll('.noprint').forEach(el => el.remove());
+    setTimeout(() => window.print(), 50);
+  }
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none');
+  });
+  ${isMobileUa ? '// Mobile: auto-trigger print on load (preview bar hidden anyway)\nsetTimeout(() => window.print(), 600);' : ''}
+</script>
 <div style="padding: 10mm;">
 <h1>Daftar Jemaat ECC</h1>
 <div class="meta">Total ${dataRows.length} jemaat · Export ${timestamp}</div>
@@ -1109,6 +1130,9 @@ jemaatRouter.get('/:id/export', async (req, res) => {
     })
     .join('');
 
+  const uaDetailStr = (req.get('user-agent') ?? '').toLowerCase();
+  const isMobileUaDetail = /mobi|android|iphone|ipad|ipod/.test(uaDetailStr);
+
   const html = `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Profil Jemaat — ${escapeHtml(j.namaLengkap)}</title>
@@ -1184,15 +1208,32 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   .footer .powered { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 9px; }
   .footer .powered img { height: 28px; width: auto; display: block; }
 
-  @media print { .noprint { display: none; } .page { padding: 0; } body { background: white; } }
+  @media print {
+    .noprint, .noprint * { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
+    .page { padding: 0 !important; } body { background: white !important; }
+  }
   .noprint { padding: 12px 16px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin: 10px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .noprint button { padding: 6px 14px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 600; }
 </style></head><body>
 
-<div class="noprint">
+${
+  isMobileUaDetail
+    ? ''
+    : `<div class="noprint">
   <span><strong>Print Preview</strong> — Profil ${escapeHtml(j.namaLengkap)}. Tekan <kbd>Ctrl/Cmd + P</kbd> → Save as PDF.</span>
-  <button onclick="window.print()">Print / Save as PDF</button>
-</div>
+  <button onclick="doPrint()">Print / Save as PDF</button>
+</div>`
+}
+<script>
+  function doPrint() {
+    document.querySelectorAll('.noprint').forEach(el => el.remove());
+    setTimeout(() => window.print(), 50);
+  }
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none');
+  });
+  ${isMobileUaDetail ? '// Mobile: auto-trigger print on load\nsetTimeout(() => window.print(), 600);' : ''}
+</script>
 
 <div class="page">
   <!-- HERO -->

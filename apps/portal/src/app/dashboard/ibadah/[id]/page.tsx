@@ -217,8 +217,8 @@ export default function IbadahDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6">
-        <div className="flex items-start justify-between">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">{i.nama}</h1>
             <div className="text-sm text-neutral-500 mt-1">
@@ -231,8 +231,8 @@ export default function IbadahDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <input
                 type="date"
                 value={scannerTanggal}

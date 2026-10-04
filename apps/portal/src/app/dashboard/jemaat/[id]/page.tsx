@@ -354,7 +354,7 @@ export default function JemaatDetailPage() {
 
       {/* Pelayanan section */}
       <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden mt-6">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 flex-wrap gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <HandHeart className="w-4 h-4" />
@@ -418,7 +418,7 @@ export default function JemaatDetailPage() {
 
       {/* Role section */}
       <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden mt-6">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 flex-wrap gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Shield className="w-4 h-4" />
@@ -814,7 +814,7 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
 
   return (
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 flex-wrap gap-2">
         <div>
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
             <Heart className="w-4 h-4 text-pink-500" />

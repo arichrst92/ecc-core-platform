@@ -71,31 +71,46 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
 
   // Grid template columns berdasarkan config — pakai width hint atau auto
   const gridTemplate = [
-    ...columns.map((c) => c.width ?? 'minmax(120px, 1fr)'),
+    ...columns.map((c) => c.width ?? 'minmax(140px, 1fr)'),
     ...(hasActions ? ['100px'] : []),
   ].join(' ');
 
+  // Min width total supaya tabel tidak squash di mobile — pakai sum fallback.
+  // Angka ini approx; grid akan kerja selama > viewport width.
+  const minTableWidth = `${columns.length * 160 + (hasActions ? 100 : 0)}px`;
+
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      {/* Header (sticky di luar scroll container supaya tidak ikut virtualize) */}
-      <div
-        className="grid bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs font-medium"
-        style={{ gridTemplateColumns: gridTemplate }}
-      >
-        {columns.map((col) => (
-          <div key={String(col.key)} className={clsx('px-4 py-3 text-left truncate', col.className)}>
-            {col.label}
+      {/* Outer horizontal scroll container — header + body scroll bersama secara horizontal */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: minTableWidth }}>
+          {/* Header — kolom pertama sticky left supaya tidak hilang saat scroll horizontal */}
+          <div
+            className="grid bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs font-medium"
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
+            {columns.map((col, idx) => (
+              <div
+                key={String(col.key)}
+                className={clsx(
+                  'px-4 py-3 text-left truncate',
+                  idx === 0 &&
+                    'sticky left-0 z-20 bg-neutral-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
+                  col.className,
+                )}
+              >
+                {col.label}
+              </div>
+            ))}
+            {hasActions && <div className="px-4 py-3 text-right">Aksi</div>}
           </div>
-        ))}
-        {hasActions && <div className="px-4 py-3 text-right">Aksi</div>}
-      </div>
 
-      {/* Scroll container */}
-      <div
-        ref={parentRef}
-        className="overflow-auto"
-        style={{ height: typeof height === 'number' ? `${height}px` : height }}
-      >
+          {/* Vertical scroll container (virtualization). Horizontal diurus parent. */}
+          <div
+            ref={parentRef}
+            className="overflow-y-auto overflow-x-hidden"
+            style={{ height: typeof height === 'number' ? `${height}px` : height }}
+          >
         {loading && rows.length === 0 ? (
           <div className="flex items-center justify-center py-20 text-neutral-400">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -142,12 +157,17 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
                     </div>
                   ) : (
                     <>
-                      {columns.map((col) => {
+                      {columns.map((col, idx) => {
                         const value = (row as Record<string, unknown>)[col.key as string];
                         return (
                           <div
                             key={String(col.key)}
-                            className={clsx('px-4 py-3 text-neutral-900 truncate flex items-center', col.className)}
+                            className={clsx(
+                              'px-4 py-3 text-neutral-900 truncate flex items-center',
+                              idx === 0 &&
+                                'sticky left-0 z-10 bg-white shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
+                              col.className,
+                            )}
                           >
                             {col.render ? col.render(value, row as T) : (value as string) ?? '-'}
                           </div>
@@ -182,6 +202,8 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Footer status */}

@@ -38,10 +38,16 @@ export function DataTable<T extends { id: string }>({
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
             <tr>
-              {columns.map((col) => (
+              {columns.map((col, idx) => (
                 <th
                   key={String(col.key)}
-                  className={clsx('px-4 py-3 text-left font-medium', col.className)}
+                  className={clsx(
+                    'px-4 py-3 text-left font-medium',
+                    // Kolom pertama = freeze (sticky left) supaya tetap terlihat
+                    // saat tabel scroll horizontal di mobile / data lebar.
+                    idx === 0 && 'sticky left-0 z-20 bg-neutral-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
+                    col.className,
+                  )}
                   style={col.width ? { width: col.width } : undefined}
                 >
                   {col.label}
@@ -69,13 +75,18 @@ export function DataTable<T extends { id: string }>({
               </tr>
             ) : (
               data.map((row) => (
-                <tr key={row.id} className="hover:bg-neutral-50">
-                  {columns.map((col) => {
+                <tr key={row.id} className="group hover:bg-neutral-50">
+                  {columns.map((col, idx) => {
                     const value = (row as Record<string, unknown>)[col.key as string];
                     return (
                       <td
                         key={String(col.key)}
-                        className={clsx('px-4 py-3 text-neutral-900', col.className)}
+                        className={clsx(
+                          'px-4 py-3 text-neutral-900',
+                          idx === 0 &&
+                            'sticky left-0 z-10 bg-white group-hover:bg-neutral-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]',
+                          col.className,
+                        )}
                       >
                         {col.render ? col.render(value, row) : (value as string) ?? '-'}
                       </td>

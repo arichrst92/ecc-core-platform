@@ -311,11 +311,12 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
         </header>
       )}
 
-      {/* Speech bubble center */}
-      <div className="absolute inset-x-0 top-24 z-10 flex justify-center pointer-events-none px-6">
-        <div className="max-w-2xl w-full">
+      {/* Speech bubble center — scrollable area di antara header + bottom panel.
+          Mobile: top sedikit lebih dekat, bottom clear chat box + dock. */}
+      <div className="absolute inset-x-0 top-16 sm:top-24 bottom-[240px] sm:bottom-[220px] z-10 flex justify-center pointer-events-none px-4 sm:px-6">
+        <div className="max-w-2xl w-full h-full flex items-start justify-center">
           {chatMut.isPending ? (
-            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-lg px-4 sm:px-6 py-4 pointer-events-auto">
               <div className="flex items-center gap-2 text-neutral-600">
                 <span className="flex gap-1">
                   <span className="w-2 h-2 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: '0s' }}></span>
@@ -326,11 +327,11 @@ export function ElsaAgent({ lang, voiceURI, onChangeLang }: Props) {
               </div>
             </div>
           ) : currentReply ? (
-            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-lg px-4 sm:px-6 py-4 pointer-events-auto max-h-full overflow-y-auto w-full elsa-reply-scroll">
               <MarkdownText text={currentReply} />
             </div>
           ) : showWelcome ? (
-            <div className="bg-white rounded-2xl shadow-lg px-6 py-4 pointer-events-auto text-center">
+            <div className="bg-white rounded-2xl shadow-lg px-4 sm:px-6 py-4 pointer-events-auto text-center">
               <div className="text-sm text-neutral-900 leading-relaxed">{welcomeText}</div>
             </div>
           ) : null}

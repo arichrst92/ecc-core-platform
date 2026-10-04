@@ -264,16 +264,16 @@ export default function JemaatDetailPage() {
       </div>
 
       {/* Profile header */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6 flex items-start gap-5">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6 flex flex-col sm:flex-row items-stretch sm:items-start gap-4 sm:gap-5">
         {j.fotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`${apiBase}${j.fotoUrl}`}
             alt={j.namaLengkap}
-            className="w-24 h-24 rounded-full object-cover border-2 border-neutral-200"
+            className="w-24 h-24 rounded-full object-cover border-2 border-neutral-200 mx-auto sm:mx-0 shrink-0"
           />
         ) : (
-          <div className="w-24 h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center">
+          <div className="w-24 h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center mx-auto sm:mx-0 shrink-0">
             <UserIcon className="w-10 h-10" />
           </div>
         )}
@@ -337,10 +337,10 @@ export default function JemaatDetailPage() {
             )}
           </div>
         </div>
-        <div className="flex flex-col gap-2 shrink-0">
+        <div className="flex flex-row sm:flex-col gap-2 shrink-0 flex-wrap">
           <button
             onClick={() => setEditOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm flex-1 sm:flex-none"
           >
             <Pencil className="w-3.5 h-3.5" />
             Edit Profile
@@ -353,7 +353,7 @@ export default function JemaatDetailPage() {
       {j.kode && <JemaatQrCard kode={j.kode} nama={j.namaLengkap} />}
 
       {/* Pelayanan section */}
-      <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden mt-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
@@ -1734,13 +1734,13 @@ function ContactButtons({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-row sm:flex-col gap-1.5 flex-1 sm:flex-none">
       {waUrl ? (
         <a
           href={waUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold"
           title={`WhatsApp ${noHp}`}
         >
           <MessageCircle className="w-3.5 h-3.5" />
@@ -1749,7 +1749,7 @@ function ContactButtons({
       ) : (
         <button
           disabled
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
           title="No HP tidak tersedia"
         >
           <MessageCircle className="w-3.5 h-3.5" />
@@ -1759,7 +1759,7 @@ function ContactButtons({
       {mailUrl ? (
         <a
           href={mailUrl}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold"
           title={`Email ${email}`}
         >
           <Mail className="w-3.5 h-3.5" />
@@ -1768,7 +1768,7 @@ function ContactButtons({
       ) : (
         <button
           disabled
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-400 rounded-lg text-xs font-semibold cursor-not-allowed"
           title="Email tidak tersedia"
         >
           <Mail className="w-3.5 h-3.5" />

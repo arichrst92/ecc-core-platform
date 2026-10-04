@@ -117,10 +117,10 @@ function JemaatPageInner() {
 
   return (
     <div>
-      <div className="flex justify-end mb-3 -mt-2 gap-2">
+      <div className="flex flex-wrap justify-stretch sm:justify-end mb-3 -mt-2 gap-2">
         <button
           onClick={() => handleExport('csv')}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200"
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200"
           title="Download CSV (compatible dengan Excel)"
         >
           <FileSpreadsheet className="w-4 h-4" />
@@ -128,7 +128,7 @@ function JemaatPageInner() {
         </button>
         <button
           onClick={() => handleExport('pdf')}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200"
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200"
           title="Buka print view, Ctrl+P untuk save sebagai PDF"
         >
           <FileText className="w-4 h-4" />
@@ -136,7 +136,7 @@ function JemaatPageInner() {
         </button>
         <Link
           href="/dashboard/jemaat/duplicates"
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200"
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200"
           title="Scan duplikat berdasarkan No HP, Email, Nama+Tanggal Lahir"
         >
           <Copy className="w-4 h-4" />
@@ -144,7 +144,7 @@ function JemaatPageInner() {
         </Link>
         <Link
           href="/dashboard/jemaat/import"
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 rounded-lg border border-brand-200"
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 rounded-lg border border-brand-200"
         >
           <Upload className="w-4 h-4" />
           Import CSV

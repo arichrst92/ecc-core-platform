@@ -535,6 +535,8 @@ jemaatRouter.get('/export', async (req, res) => {
   thead { background: #f1f5f9; font-weight: 600; }
   tbody tr:nth-child(even) { background: #fafafa; }
   .footer { font-size: 10px; color: #94a3b8; margin-top: 10px; text-align: right; }
+  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
+  .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
   @media print { .noprint { display: none; } }
   .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; }
   .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
@@ -557,7 +559,13 @@ jemaatRouter.get('/export', async (req, res) => {
 </thead>
 <tbody>${tableBody}</tbody>
 </table>
-<div class="footer">© ${new Date().getFullYear()} Elshaddai Creative Community</div>
+<div class="footer-row">
+  <div>© ${new Date().getFullYear()} Elshaddai Creative Community</div>
+  <div class="powered">
+    <span>Powered by</span>
+    <img src="${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/>
+  </div>
+</div>
 </div>
 </body></html>`;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

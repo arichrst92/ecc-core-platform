@@ -22,6 +22,7 @@ import { prisma } from '@ecc/database';
 import { ApiError, BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
+import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 
 export const ministryRouter = Router();
 
@@ -403,7 +404,7 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
     },
   });
 
-  // Fire notif ke setiap jemaat yang di-assign
+  // Fire notif ke setiap jemaat yang di-assign (in-app + WA kalau enabled)
   for (const a of created.assignments) {
     void createNotification({
       jemaatId: a.jemaatId,
@@ -417,6 +418,24 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
         posisi: a.pelayananRole.nama,
       },
     });
+    void (async () => {
+      const j = await prisma.jemaat.findUnique({
+        where: { id: a.jemaatId },
+        select: { noHp: true, namaLengkap: true },
+      });
+      if (!j?.noHp) return;
+      await sendWaIfEnabled('MINISTRY_SCHEDULE_ASSIGNED', j.noHp, {
+        nama: j.namaLengkap,
+        ministry_nama: ministry.nama,
+        tanggal: created.tanggal.toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        posisi: a.pelayananRole.nama,
+        notes: a.notes ? `Catatan: ${a.notes}` : '',
+      });
+    })();
   }
 
   res.status(201).json({ success: true, data: created });

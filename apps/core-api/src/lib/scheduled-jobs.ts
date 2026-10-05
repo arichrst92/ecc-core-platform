@@ -14,6 +14,7 @@
  */
 import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
+import { getConfig, renderTemplate } from './wa-notif.js';
 import { logger } from './logger.js';
 
 // ===== Intervals =====
@@ -145,16 +146,23 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
       continue;
     }
 
-    const message =
-      `🙏 *Reminder Ibadah*\n\n` +
-      `Halo ${r.jemaat.namaLengkap},\n\n` +
-      `Besok ada ibadah:\n` +
-      `*${r.ibadah.nama}* (${r.ibadah.cabang.nama})\n` +
-      `🕐 ${r.ibadah.jamMulai} – ${r.ibadah.jamSelesai}\n` +
-      `${r.ibadah.isOnline ? '🌐 Online' : `📍 ${r.ibadah.lokasi ?? '-'}`}\n\n` +
-      `Status reservasi: *${r.status}*\n` +
-      `Kode: \`${r.kode}\`\n\n` +
-      `Sampai jumpa di ibadah! 🙏`;
+    // Template dari WaNotificationConfig — admin bisa toggle + edit via portal
+    const cfg = await getConfig('IBADAH_REMINDER_H1');
+    if (!cfg || !cfg.isEnabled) {
+      skipped++;
+      continue;
+    }
+    const message = renderTemplate(cfg.template, {
+      nama: r.jemaat.namaLengkap,
+      ibadah_nama: `${r.ibadah.nama} (${r.ibadah.cabang.nama})`,
+      tanggal: new Date(r.tanggalIbadah).toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }),
+      jam: `${r.ibadah.jamMulai} - ${r.ibadah.jamSelesai}`,
+      lokasi: r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-'),
+    });
 
     const log = await prisma.notificationLog.upsert({
       where: { dedupKey },
@@ -255,6 +263,11 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       continue;
     }
 
+    const cfg = await getConfig('EVENT_REMINDER_H1');
+    if (!cfg || !cfg.isEnabled) {
+      skipped++;
+      continue;
+    }
     const eventTime = new Date(p.event.tanggalMulai).toLocaleString('id-ID', {
       weekday: 'long',
       day: 'numeric',
@@ -262,15 +275,12 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       hour: '2-digit',
       minute: '2-digit',
     });
-    const message =
-      `🎉 *Reminder Event*\n\n` +
-      `Halo ${p.jemaat.namaLengkap},\n\n` +
-      `Besok ada event:\n` +
-      `*${p.event.judul}*\n` +
-      `🕐 ${eventTime}\n` +
-      `${p.event.lokasi ? `📍 ${p.event.lokasi}\n` : ''}\n` +
-      `Status pendaftaran: *${p.status}*\n\n` +
-      `Sampai jumpa! 🙏`;
+    const message = renderTemplate(cfg.template, {
+      nama: p.jemaat.namaLengkap,
+      event_judul: p.event.judul,
+      tanggal: eventTime,
+      lokasi: p.event.lokasi ?? '-',
+    });
 
     const log = await prisma.notificationLog.upsert({
       where: { dedupKey },
@@ -332,6 +342,98 @@ function inReminderWindow(): boolean {
 // Scheduler bootstrap
 // ===============================================================
 let started = false;
+// ============================================================
+// Birthday greeting dispatch — sekali per jemaat per tahun
+// ============================================================
+export async function dispatchBirthdayGreetings(): Promise<{
+  sent: number;
+  failed: number;
+  skipped: number;
+}> {
+  const cfg = await getConfig('BIRTHDAY_GREETING');
+  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
+
+  const today = new Date();
+  const month = today.getMonth() + 1; // JS 0-indexed
+  const day = today.getDate();
+
+  // Query jemaat whose birthday falls today (compare month-of-year + day-of-month)
+  // Prisma tidak support EXTRACT native, pakai raw query.
+  type Row = { id: string; nama_lengkap: string; no_hp: string | null; tanggal_lahir: Date | null };
+  const rows = await prisma.$queryRaw<Row[]>`
+    SELECT id, nama_lengkap, no_hp, tanggal_lahir
+    FROM jemaat
+    WHERE is_active = true
+      AND tanggal_lahir IS NOT NULL
+      AND no_hp IS NOT NULL
+      AND EXTRACT(MONTH FROM tanggal_lahir) = ${month}
+      AND EXTRACT(DAY FROM tanggal_lahir) = ${day}
+  `;
+
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const r of rows) {
+    if (!r.no_hp || !r.tanggal_lahir) {
+      skipped++;
+      continue;
+    }
+    const dedupKey = `BIRTHDAY_${r.id}_${today.getFullYear()}`;
+    const existing = await prisma.notificationLog.findUnique({
+      where: { dedupKey },
+      select: { status: true },
+    });
+    if (existing?.status === 'SENT') {
+      skipped++;
+      continue;
+    }
+    const usia = today.getFullYear() - new Date(r.tanggal_lahir).getFullYear();
+    const message = renderTemplate(cfg.template, {
+      nama: r.nama_lengkap,
+      usia: String(usia),
+    });
+
+    const log = await prisma.notificationLog.upsert({
+      where: { dedupKey },
+      create: {
+        jemaatId: r.id,
+        noHp: r.no_hp,
+        type: 'BIRTHDAY_GREETING' as any,
+        dedupKey,
+        status: 'PENDING',
+        messageBody: message,
+        attemptCount: 1,
+      },
+      update: { attemptCount: { increment: 1 }, status: 'PENDING' },
+    });
+
+    try {
+      const result = await sendWhatsAppText(r.no_hp, message);
+      await prisma.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'SENT',
+          messageId: result.messageId,
+          sentAt: new Date(),
+          errorReason: null,
+        },
+      });
+      sent++;
+    } catch (err: any) {
+      await prisma.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'FAILED',
+          errorReason: err?.message ? String(err.message).slice(0, 1000) : 'Unknown',
+        },
+      });
+      failed++;
+      logger.warn({ dedupKey, err: err?.message }, 'Birthday dispatch failed.');
+    }
+  }
+  return { sent, failed, skipped };
+}
+
 const intervalHandles: NodeJS.Timeout[] = [];
 
 export function startScheduledJobs() {
@@ -376,6 +478,10 @@ export function startScheduledJobs() {
     const deleted = await cleanupOldDiagnosticsErrors();
     return { deleted };
   });
+  const birthdayJob = wrap('dispatch-birthday-greeting', async () => {
+    if (!inReminderWindow()) return { skipped: true, reason: 'outside-window' };
+    return dispatchBirthdayGreetings();
+  });
 
   // Initial run (delayed) untuk semua job.
   setTimeout(() => {
@@ -385,6 +491,7 @@ export function startScheduledJobs() {
     void eventReminderJob();
     void faceTelemetryJob();
     void diagnosticsErrorJob();
+    void birthdayJob();
   }, STARTUP_DELAY_MS);
 
   const h1 = setInterval(() => void refreshTokenJob(), REFRESH_TOKEN_INTERVAL_MS);
@@ -395,7 +502,9 @@ export function startScheduledJobs() {
   // operation murah dengan index on received_at.
   const h5 = setInterval(() => void faceTelemetryJob(), AUDIT_LOG_INTERVAL_MS);
   const h6 = setInterval(() => void diagnosticsErrorJob(), AUDIT_LOG_INTERVAL_MS);
-  for (const h of [h1, h2, h3, h4, h5, h6]) {
+  // Birthday — tiap 1 jam cek, hanya kirim di window 7-10 AM supaya 1 hari sekali
+  const h7 = setInterval(() => void birthdayJob(), REMINDER_DISPATCH_INTERVAL_MS);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7]) {
     h.unref?.();
     intervalHandles.push(h);
   }

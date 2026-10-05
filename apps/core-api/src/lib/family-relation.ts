@@ -10,6 +10,7 @@ import { prisma, Prisma } from '@ecc/database';
 import type { FamilyRole } from '@ecc/shared-types';
 import { BadRequest, NotFound } from './errors.js';
 import { createNotification } from './notification.js';
+import { sendWaIfEnabled } from './wa-notif.js';
 
 /**
  * Return set of jemaatIds yang user boleh act on (view/edit/cancel/upload)
@@ -256,6 +257,20 @@ export async function upsertJemaatRelasi(
       reciprocalTipe: result.tipeB.nama,
     },
   });
+
+  // WA notif (opt-in via WaNotificationConfig admin)
+  void (async () => {
+    const targetFull = await prisma.jemaat.findUnique({
+      where: { id: targetId },
+      select: { noHp: true, namaLengkap: true },
+    });
+    if (!targetFull?.noHp) return;
+    await sendWaIfEnabled('FAMILY_LINKED', targetFull.noHp, {
+      nama: targetFull.namaLengkap,
+      by_nama: result.self.namaLengkap,
+      tipe_relasi: result.tipeA.nama,
+    });
+  })();
 
   return result.a;
 }

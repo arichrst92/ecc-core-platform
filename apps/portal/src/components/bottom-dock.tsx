@@ -183,6 +183,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: FileText, menuKey: 'tech-docs' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
+      { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: FileText, menuKey: 'wa-config' },
       { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
       { href: 'https://planning.eccchurch.global', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
     ],

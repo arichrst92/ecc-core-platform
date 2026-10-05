@@ -20,6 +20,7 @@ import {
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
+import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 
 export const branchChangeRouter = Router();
 
@@ -101,7 +102,7 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
 
   const before = await prisma.branchChangeRequest.findUnique({
     where: { id: req.params.id },
-    include: { jemaat: { select: { namaLengkap: true } } },
+    include: { jemaat: { select: { namaLengkap: true, noHp: true } } },
   });
   if (!before) throw NotFound('Permohonan tidak ditemukan');
   if (before.status !== 'PENDING') {
@@ -158,6 +159,15 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
         reviewNote: input.reviewNote ?? null,
       },
     });
+    // Fetch target cabang nama untuk message
+    const targetCab = await prisma.cabangGereja.findUnique({
+      where: { id: before.targetCabangId },
+      select: { nama: true },
+    });
+    void sendWaIfEnabled('BRANCH_CHANGE_APPROVED', before.jemaat.noHp, {
+      nama: before.jemaat.namaLengkap,
+      cabangBaru: targetCab?.nama ?? '',
+    });
   } else if (input.decision === 'REJECTED') {
     void createNotification({
       jemaatId: before.jemaatId,
@@ -170,6 +180,10 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
         targetCabangId: before.targetCabangId,
         reviewNote: input.reviewNote ?? null,
       },
+    });
+    void sendWaIfEnabled('BRANCH_CHANGE_REJECTED', before.jemaat.noHp, {
+      nama: before.jemaat.namaLengkap,
+      alasan: input.reviewNote ?? '',
     });
   }
 

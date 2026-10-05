@@ -18,6 +18,7 @@ import { meRouter } from './me.js';
 import { branchChangeRouter } from './branch-change.js';
 import { ministryRouter } from './ministry.js';
 import { itMinisterTeamRouter } from './it-minister-team.js';
+import { waConfigRouter } from './wa-config.js';
 import { jemaatPublicRouter } from './jemaat-public.js';
 import { visitRouter } from './visit.js';
 import { localBusinessRouter } from './local-business.js';
@@ -48,6 +49,7 @@ adminRouter.use('/me', meRouter);
 // Ministry (Pelayanan) — mobile-friendly read-only. Patch 2026-05-22.
 adminRouter.use('/ministry', ministryRouter);
 adminRouter.use('/it-minister-team', itMinisterTeamRouter);
+adminRouter.use('/wa-config', waConfigRouter);
 
 adminRouter.use('/sinode', sinodeRouter);
 adminRouter.use('/cabang', cabangRouter);

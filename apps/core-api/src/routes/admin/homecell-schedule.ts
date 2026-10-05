@@ -30,6 +30,7 @@ import {
   getJemaatIdForUser,
 } from '../../lib/homecell-pic.js';
 import { createNotification } from '../../lib/notification.js';
+import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 
 // mergeParams: true supaya :homecellId di parent router accessible di sini.
 export const homecellScheduleRouter = Router({ mergeParams: true });
@@ -227,7 +228,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
   // Resolve kode → jemaatId
   const jemaat = await prisma.jemaat.findUnique({
     where: { kode },
-    select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, isActive: true },
+    select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, isActive: true, noHp: true },
   });
   if (!jemaat) {
     throw new ApiError(404, 'KODE_NOT_FOUND', `Kode jemaat "${kode}" tidak ditemukan.`);
@@ -292,6 +293,11 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
         body: `Pertemuan ${sched.tanggal.toISOString().slice(0, 10)} @ ${sched.lokasi}. Terima kasih atas kehadirannya.`,
         actionUrl: `/homecell/${sched.homecellId}`,
         metadata: { homecellId: sched.homecellId, scheduleId, lokasi: sched.lokasi },
+      });
+      void sendWaIfEnabled('HOMECELL_ATTENDED', jemaat.noHp, {
+        nama: jemaat.namaLengkap,
+        homecellNama: sched.homecell.nama,
+        tanggal: sched.tanggal.toISOString().slice(0, 10),
       });
     }
   }

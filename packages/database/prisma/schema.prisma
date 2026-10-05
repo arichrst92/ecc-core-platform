@@ -2301,6 +2301,29 @@ enum PointSource {
 }
 
 // ============================================================
+//  WhatsApp Notification Config
+//  Admin toggle enable/disable + edit template per tipe notif.
+//  Rendering: template string pakai placeholder {nama}, {event_judul}, dsb.
+//  Daftar placeholder per type di-document di seed data (lihat migration).
+// ============================================================
+model WaNotificationConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  type         String   @unique @db.VarChar(64)
+  label        String   @db.VarChar(100)
+  description  String?  @db.Text
+  category     String   @db.VarChar(32)
+  isEnabled    Boolean  @default(false) @map("is_enabled")
+  template     String   @db.Text
+  placeholders String[] @default([])
+  updatedById  String?  @map("updated_by_id") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([category, isEnabled])
+  @@map("wa_notification_config")
+}
+
+// ============================================================
 //  IT Minister Team — assignment jemaat ke divisi + role
 //  Per Protokol Departemen IT ECC v0.3 (2026-09-02).
 //

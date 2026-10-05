@@ -49,6 +49,7 @@ import {
   notifGroupDismissed,
 } from '../../lib/group-notif.js';
 import { createNotification, createNotificationBatch } from '../../lib/notification.js';
+import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
 
 export const groupRouter = Router();
@@ -381,6 +382,19 @@ groupRouter.delete('/:id', async (req, res) => {
       metadata: { groupId: req.params.id, groupNama: before.nama },
     },
   );
+  // WA fan-out ke tiap member dgn noHp
+  void (async () => {
+    const members = await prisma.jemaat.findMany({
+      where: { id: { in: activeMembers.map((m) => m.jemaatId) } },
+      select: { namaLengkap: true, noHp: true },
+    });
+    for (const m of members) {
+      void sendWaIfEnabled('GROUP_DISMISSED', m.noHp, {
+        nama: m.namaLengkap,
+        groupNama: before.nama,
+      });
+    }
+  })();
 
   const updated = await prisma.group.update({
     where: { id: req.params.id },
@@ -659,6 +673,11 @@ groupRouter.delete('/:id/leave', async (req, res) => {
 async function notifGroupMemberAddedInApp(groupId: string, jemaatId: string): Promise<void> {
   const g = await prisma.group.findUnique({ where: { id: groupId }, select: { nama: true } });
   if (!g) return;
+  const j = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { namaLengkap: true, noHp: true },
+  });
+  if (!j) return;
   await createNotification({
     jemaatId,
     type: 'GROUP_MEMBER_ADDED',
@@ -667,11 +686,21 @@ async function notifGroupMemberAddedInApp(groupId: string, jemaatId: string): Pr
     actionUrl: `/groups/${groupId}`,
     metadata: { groupId, groupNama: g.nama },
   });
+  await sendWaIfEnabled('GROUP_MEMBER_ADDED', j.noHp, {
+    nama: j.namaLengkap,
+    group_nama: g.nama,
+    by_nama: 'Admin',
+  });
 }
 
 async function notifGroupMemberRemovedInApp(groupId: string, jemaatId: string): Promise<void> {
   const g = await prisma.group.findUnique({ where: { id: groupId }, select: { nama: true } });
   if (!g) return;
+  const j = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: { namaLengkap: true, noHp: true },
+  });
+  if (!j) return;
   await createNotification({
     jemaatId,
     type: 'GROUP_MEMBER_REMOVED',
@@ -679,5 +708,9 @@ async function notifGroupMemberRemovedInApp(groupId: string, jemaatId: string): 
     body: `Kalau ini kekeliruan, hubungi PIC group.`,
     actionUrl: `/groups`,
     metadata: { groupId, groupNama: g.nama },
+  });
+  await sendWaIfEnabled('GROUP_MEMBER_REMOVED', j.noHp, {
+    nama: j.namaLengkap,
+    group_nama: g.nama,
   });
 }

@@ -43,6 +43,7 @@ import { idOrSlugWhere } from '../../lib/id-or-slug.js';
 import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { createNotification } from '../../lib/notification.js';
+import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 
 export const eventRouter = Router();
 
@@ -691,6 +692,23 @@ eventRouter.post('/:id/peserta', async (req, res) => {
       nextStep: event.tipeBayar !== 'GRATIS' ? 'upload-bukti' : 'wait-attendance',
     },
   });
+  void (async () => {
+    const j = await prisma.jemaat.findUnique({
+      where: { id: input.jemaatId },
+      select: { noHp: true, namaLengkap: true },
+    });
+    if (!j?.noHp) return;
+    await sendWaIfEnabled('EVENT_REGISTERED', j.noHp, {
+      nama: j.namaLengkap,
+      event_judul: event.judul,
+      event_tanggal: new Date(event.tanggalMulai).toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }),
+      status: event.tipeBayar !== 'GRATIS' ? 'DAFTAR (menunggu pembayaran)' : 'DAFTAR',
+    });
+  })();
   res.status(201).json({
     success: true,
     data: created,
@@ -1863,6 +1881,10 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     actionUrl: `/event/${event.id}`,
     metadata: { eventId: event.id, eventJudul: event.judul, participationId: updated.id },
   });
+  void sendWaIfEnabled('EVENT_CHECKED_IN', jemaat.noHp, {
+    nama: jemaat.namaLengkap,
+    judul: event.judul,
+  });
 
   res.json({ success: true, data: updated, meta: { alreadyCheckedIn: false } });
 });
@@ -1907,6 +1929,17 @@ eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
     actionUrl: `/event/${before.eventId}`,
     metadata: { eventId: before.eventId, eventJudul: before.event.judul, participationId: before.id },
   });
+  void (async () => {
+    const j = await prisma.jemaat.findUnique({
+      where: { id: before.jemaatId },
+      select: { noHp: true, namaLengkap: true },
+    });
+    if (!j?.noHp) return;
+    await sendWaIfEnabled('EVENT_APPROVED', j.noHp, {
+      nama: j.namaLengkap,
+      event_judul: before.event.judul,
+    });
+  })();
   res.json({ success: true, data: updated });
 });
 

@@ -344,13 +344,6 @@ export default function JemaatDetailPage() {
                 {j.alamat}
               </Info>
             )}
-            {j.legacyShiftsoftId != null && j.cabang && (
-              <Info icon={Shield} label="Legacy Ref">
-                <span className="font-mono text-xs">
-                  {j.cabang.nama.replace(/\s+/g, '').toUpperCase()}{j.legacyShiftsoftId}
-                </span>
-              </Info>
-            )}
           </div>
         </div>
         <div className="flex flex-row sm:flex-col gap-2 shrink-0 flex-wrap">

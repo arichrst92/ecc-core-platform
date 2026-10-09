@@ -75,7 +75,7 @@ const groups: NavGroup[] = [
   {
     label: 'Sinode',
     items: [
-      { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, menuKey: 'sinode' },
+      { href: '/dashboard/sinode', label: 'Gereja', icon: Building2, menuKey: 'sinode' },
       { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, menuKey: 'cabang' },
     ],
   },

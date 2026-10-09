@@ -71,7 +71,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'wa-config', label: 'WhatsApp Notif Config', href: '/dashboard/wa-config', group: 'Developer Tools' },
   // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
   { key: 'ops-tickets', label: 'Operations Tickets', href: 'https://operations.eccchurch.global', group: 'Developer Tools' },
-  { key: 'planning-backlog', label: 'Planning Backlog', href: 'https://planning.eccchurch.global', group: 'Developer Tools' },
+  { key: 'planning-backlog', label: 'Planning Backlog', href: '/planning', group: 'Developer Tools' },
 
   // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,
   // hadiah master data di portal.

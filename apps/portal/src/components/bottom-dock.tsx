@@ -185,7 +185,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: FileText, menuKey: 'wa-config' },
       { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
-      { href: 'https://planning.eccchurch.global', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
+      { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
     ],
   },
 ];
@@ -283,9 +283,9 @@ export function BottomDock() {
             active={isGroupActive(g)}
             pathname={pathname}
             onToggle={() => setOpenGroup((prev) => (prev === g.label ? null : g.label))}
-            onNavigate={(href) => {
+            onNavigate={(href, external) => {
               setOpenGroup(null);
-              if (href.startsWith('http')) {
+              if (external || href.startsWith('http')) {
                 window.open(href, '_blank', 'noopener,noreferrer');
               } else {
                 router.push(href);
@@ -376,7 +376,7 @@ function DockGroup({
   active: boolean;
   pathname: string | null;
   onToggle: () => void;
-  onNavigate: (href: string) => void;
+  onNavigate: (href: string, external?: boolean) => void;
 }) {
   const Icon = group.icon;
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -436,7 +436,7 @@ function DockGroup({
             <button
               key={item.href}
               type="button"
-              onClick={() => onNavigate(item.href)}
+              onClick={() => onNavigate(item.href, item.external)}
               className={clsx(
                 'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors',
                 isActive

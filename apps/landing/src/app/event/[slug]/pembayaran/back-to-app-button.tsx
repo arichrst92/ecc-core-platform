@@ -19,25 +19,40 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
   const storeUrl = platform === 'ios' ? IOS_APP_URL : ANDROID_APP_URL;
 
   /**
-   * Strategi reliable buat dismiss SFSafariViewController / Chrome Custom Tabs
-   * dan buka app ECC:
+   * Strategi dismiss SFSafariViewController / Chrome Custom Tabs + launch app:
    *
-   * - iOS: pakai Universal Link https://eccchurch.global/event/<id>. AASA sudah
-   *   whitelist `/event/*` → iOS akan dismiss SFSafariViewController + launch
-   *   app routing ke app/event/[id].tsx. Custom scheme `ecc://` dari dalam
-   *   SFSafariViewController sering di-suppress oleh iOS 16+.
+   * - iOS: custom scheme `ecc://event/<id>`. Dari dalam SFSafariViewController
+   *   (host app = ECC), iOS TIDAK auto-launch via Universal Link (anti-circular).
+   *   Custom scheme memicu system prompt "Open in Els Global?" → user tap
+   *   "Open" → view controller dismiss, app routing ke app/event/[id].tsx.
+   *   Fallback setelah 1.5s (user tap Cancel atau app not installed) → App Store.
    *
-   * - Android: pakai Intent URL dengan fallback S.browser_fallback_url ke Play
-   *   Store. Chrome Custom Tabs resolve intent → launch native app via
-   *   intent-filter autoVerify (assetlinks.json). Kalau app not installed,
-   *   fallback ke Play Store (bukan URL web lagi).
+   * - Android: Intent URL dengan explicit package + S.browser_fallback_url ke
+   *   Play Store. Chrome Custom Tabs resolve intent → launch native app via
+   *   intent-filter autoVerify. Kalau app not installed, fallback Play Store.
    *
-   * - Desktop: just show store buttons.
+   * - Desktop: open App Store link.
    */
   function handleClick() {
     if (platform === 'ios') {
-      // Universal Link — iOS kalau app installed akan intercept & launch app
-      window.location.href = `https://eccchurch.global/event/${eventId}`;
+      const start = Date.now();
+      // Fallback: kalau app tidak terbuka dalam 1.5s (user cancel prompt /
+      // app not installed), redirect ke App Store.
+      const t = setTimeout(() => {
+        if (Date.now() - start < 2000) {
+          window.location.href = IOS_APP_URL;
+        }
+      }, 1500);
+      // Clear fallback kalau user leave page (= app opened)
+      const onBlur = () => {
+        clearTimeout(t);
+        window.removeEventListener('pagehide', onBlur);
+        window.removeEventListener('visibilitychange', onBlur);
+      };
+      window.addEventListener('pagehide', onBlur);
+      window.addEventListener('visibilitychange', onBlur);
+      // Trigger custom scheme
+      window.location.href = `ecc://event/${eventId}`;
       return;
     }
     if (platform === 'android') {

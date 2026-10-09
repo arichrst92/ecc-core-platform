@@ -37,6 +37,10 @@ export function middleware(req: NextRequest) {
     pathname === '/event/pembayaran' ||
     pathname.startsWith('/event/pembayaran/') ||
     /^\/event\/[^/]+\/(register|payment|pembayaran)/.test(pathname) ||
+    // Universal Link target: /event/{slug_or_uuid} harus live supaya "Kembali ke App"
+    // tombol di payment page bisa trigger iOS Universal Link / Android App Link.
+    // Kalau app NOT installed, user tetap bisa lihat detail event (bukan coming-soon).
+    /^\/event\/[^/]+$/.test(pathname) ||
     pathname === '/privacy' ||
     pathname === '/terms' ||
     pathname === '/robots.txt' ||

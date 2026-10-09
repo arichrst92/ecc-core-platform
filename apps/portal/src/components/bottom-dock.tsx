@@ -93,7 +93,7 @@ const STANDALONE_RIGHT: NavItem[] = [
 
 const GROUPS: NavGroup[] = [
   {
-    label: 'Entity',
+    label: 'Sinode',
     icon: Building2,
     items: [
       { href: '/dashboard/sinode', label: 'Sinode', icon: Building2, menuKey: 'sinode' },

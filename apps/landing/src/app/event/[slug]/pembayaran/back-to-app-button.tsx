@@ -61,77 +61,61 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
   }
 
   return (
-    <>
-      <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 text-center shadow-sm">
-        <Smartphone className="w-8 h-8 text-orange-500 mx-auto mb-3" />
-        <h3 className="font-semibold text-neutral-900 mb-2">Kembali ke Aplikasi ECC</h3>
-        <p className="text-xs text-neutral-500 mb-4">
-          Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di aplikasi.
-        </p>
+    <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 text-center shadow-sm">
+      <Smartphone className="w-8 h-8 text-orange-500 mx-auto mb-3" />
+      <h3 className="font-semibold text-neutral-900 mb-2">Kembali ke Els App</h3>
+      <p className="text-xs text-neutral-500 mb-4">
+        Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di aplikasi.
+      </p>
 
-        {isMobile ? (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={handleClick}
-              className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
-            >
-              Kembali ke ECC App
-            </button>
-            {platform === 'ios' && (
-              <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
-                Tidak muncul prompt? Tap tombol <strong>◁ Els App</strong> di kiri atas layar
-                untuk kembali ke aplikasi.
-              </p>
-            )}
-            <p className="text-[11px] text-neutral-400 mt-1">
-              Belum install?{' '}
-              <a
-                href={storeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-orange-600 hover:underline inline-flex items-center gap-0.5"
-              >
-                Download di {platform === 'ios' ? 'App Store' : 'Play Store'}
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </p>
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 gap-2">
-            <a
-              href={IOS_APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
-            >
-              Download di App Store
-            </a>
-            <a
-              href={ANDROID_APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
-            >
-              Download di Play Store
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* Sticky bottom bar — hanya di mobile. Selalu reachable sambil user scroll. */}
-      {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-orange-100 p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] z-50 sm:hidden">
+      {isMobile ? (
+        <div className="space-y-2">
           <button
             type="button"
             onClick={handleClick}
-            className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl shadow-md flex items-center justify-center gap-2"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
           >
-            <Smartphone className="w-4 h-4" />
-            Kembali ke ECC App
+            Kembali ke Els App
           </button>
+          {platform === 'ios' && (
+            <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
+              Tidak muncul prompt? Tap tombol <strong>◁ Els App</strong> di kiri atas
+              layar untuk kembali ke aplikasi.
+            </p>
+          )}
+          <p className="text-[11px] text-neutral-400 mt-1">
+            Belum install?{' '}
+            <a
+              href={storeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-orange-600 hover:underline inline-flex items-center gap-0.5"
+            >
+              Download di {platform === 'ios' ? 'App Store' : 'Play Store'}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-2">
+          <a
+            href={IOS_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
+          >
+            Download di App Store
+          </a>
+          <a
+            href={ANDROID_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
+          >
+            Download di Play Store
+          </a>
         </div>
       )}
-    </>
+    </div>
   );
 }

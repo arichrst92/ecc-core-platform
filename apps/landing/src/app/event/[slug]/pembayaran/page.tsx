@@ -110,7 +110,7 @@ export default async function EventPembayaranPage(
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 py-8 space-y-6 pb-32 sm:pb-8">
+      <section className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         {/* Awareness banner — WAJIB kembali ke app setelah transfer */}
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-500 rounded-r-xl p-4 flex items-start gap-3">
           <div className="shrink-0 w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold">
@@ -122,7 +122,7 @@ export default async function EventPembayaranPage(
             </p>
             <p className="text-neutral-700 leading-relaxed">
               Upload bukti transfer & konfirmasi pendaftaran hanya bisa dilakukan di
-              aplikasi ECC. Gunakan tombol <strong>"Kembali ke ECC App"</strong> di bawah.
+              Els App. Gunakan tombol <strong>"Kembali ke Els App"</strong> di bawah.
             </p>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default async function EventPembayaranPage(
           <ol className="text-sm text-neutral-700 space-y-2 list-decimal list-inside">
             {isFree ? (
               <>
-                <li>Kembali ke aplikasi ECC untuk konfirmasi pendaftaran.</li>
+                <li>Kembali ke Els App untuk konfirmasi pendaftaran.</li>
                 <li>Tunjukkan QR code kehadiran Anda saat check-in.</li>
               </>
             ) : (
@@ -261,7 +261,7 @@ export default async function EventPembayaranPage(
                 </li>
                 <li>Simpan bukti transfer (screenshot / foto struk).</li>
                 <li>
-                  Kembali ke aplikasi ECC untuk upload bukti transfer &
+                  Kembali ke Els App untuk upload bukti transfer &
                   konfirmasi pendaftaran.
                 </li>
               </>

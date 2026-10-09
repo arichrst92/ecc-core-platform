@@ -47,6 +47,7 @@ interface Jemaat extends Record<string, unknown> {
   tanggalBergabung: string | null;
   fotoUrl: string | null;
   isActive: boolean;
+  legacyShiftsoftId: number | null;
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleLite[];
   homecellMembership?: Array<{
@@ -116,6 +117,20 @@ export function buildJemaatResource(
         ),
       },
       { key: 'cabang', label: 'Cabang', render: nestedField('cabang.nama'), width: '140px' },
+      {
+        key: 'shiftsoftRef',
+        label: 'Legacy Ref',
+        width: '150px',
+        render: (_v, row) => {
+          if (row.legacyShiftsoftId == null) return <span className="text-neutral-400 text-xs italic">organic</span>;
+          const prefix = (row.cabang?.nama ?? '').replace(/\s+/g, '').toUpperCase();
+          return (
+            <span className="font-mono text-xs text-neutral-700">
+              {prefix}{row.legacyShiftsoftId}
+            </span>
+          );
+        },
+      },
       {
         key: 'jemaatRoles',
         label: 'Role',

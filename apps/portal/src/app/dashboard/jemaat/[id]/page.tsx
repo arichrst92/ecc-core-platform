@@ -65,6 +65,7 @@ interface Jemaat {
   tanggalBergabung: string | null;
   fotoUrl: string | null;
   isActive: boolean;
+  legacyShiftsoftId: number | null;
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleAssignment[];
   user?: { lastLoginAt: string | null } | null;
@@ -341,6 +342,13 @@ export default function JemaatDetailPage() {
             {j.alamat && (
               <Info icon={MapPin} label="Alamat" full>
                 {j.alamat}
+              </Info>
+            )}
+            {j.legacyShiftsoftId != null && j.cabang && (
+              <Info icon={Shield} label="Legacy Ref">
+                <span className="font-mono text-xs">
+                  {j.cabang.nama.replace(/\s+/g, '').toUpperCase()}{j.legacyShiftsoftId}
+                </span>
               </Info>
             )}
           </div>

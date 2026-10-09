@@ -110,7 +110,26 @@ export default async function EventPembayaranPage(
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      <section className="max-w-3xl mx-auto px-6 py-8 space-y-6 pb-32 sm:pb-8">
+        {/* Awareness banner — WAJIB kembali ke app setelah transfer */}
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-500 rounded-r-xl p-4 flex items-start gap-3">
+          <div className="shrink-0 w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold">
+            !
+          </div>
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-neutral-900 mb-1">
+              Setelah transfer, WAJIB kembali ke aplikasi!
+            </p>
+            <p className="text-neutral-700 leading-relaxed">
+              Upload bukti transfer & konfirmasi pendaftaran hanya bisa dilakukan di
+              aplikasi ECC. Gunakan tombol <strong>"Kembali ke ECC App"</strong> di bawah.
+            </p>
+          </div>
+        </div>
+
+        {/* Back-to-app CTA — pindah ke atas supaya lebih visible */}
+        <BackToAppButton eventId={event.id} />
+
         {/* Event info card */}
         <div className="bg-white border border-orange-100 rounded-2xl overflow-hidden">
           {event.heroImageUrl && (
@@ -249,9 +268,6 @@ export default async function EventPembayaranPage(
             )}
           </ol>
         </div>
-
-        {/* Deep-link back */}
-        <BackToAppButton eventId={event.id} />
 
         {/* Legal */}
         <div className="text-xs text-neutral-500 space-y-1">

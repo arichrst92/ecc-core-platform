@@ -242,7 +242,7 @@ export default function KanbanPage() {
               <KanbanColumn
                 key={col}
                 title={col}
-                items={grouped[col]}
+                items={grouped[col] ?? []}
                 level={level}
                 onMoveItem={(id, newStatus) =>
                   updateStatusMut.mutate({ id, status: newStatus })

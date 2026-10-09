@@ -35,28 +35,16 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
    * - Desktop: open App Store link.
    */
   function handleClick() {
-    if (platform === 'ios') {
-      // iOS: trigger custom scheme ecc://. Dari dalam SFSafariViewController yg
-      // dibuka ECC app sendiri, iOS prompt "Open in Els Global?" → user tap
-      // Open → view controller dismiss + app opens.
-      //
-      // TIDAK ADA fallback redirect ke App Store — kalau prompt gagal / di-cancel,
-      // user bisa pakai native button "◁ Els App" di kiri atas (iOS auto-inject).
-      window.location.href = `ecc://event/${eventId}`;
+    // Mobile app membuka halaman ini via WebBrowser.openAuthSessionAsync
+    // dengan redirect URL `ecc://payment-done`. Begitu browser navigate ke
+    // scheme ini, iOS SFSafariViewController / Android Chrome Custom Tabs
+    // auto-dismiss, kembalikan user ke native payment screen (yang sudah
+    // punya form upload bukti).
+    if (platform === 'ios' || platform === 'android') {
+      window.location.href = 'ecc://payment-done';
       return;
     }
-    if (platform === 'android') {
-      // Android Intent URL — Chrome Custom Tabs resolve intent → launch app.
-      // S.browser_fallback_url hanya aktif kalau app NOT installed.
-      const fallback = encodeURIComponent(ANDROID_APP_URL);
-      const intent =
-        `intent://event/${eventId}` +
-        `#Intent;scheme=ecc;package=idea.eccchurch.global;` +
-        `S.browser_fallback_url=${fallback};end`;
-      window.location.href = intent;
-      return;
-    }
-    // Desktop → open App Store page
+    // Desktop → open App Store page (user tidak datang dari app)
     window.open(IOS_APP_URL, '_blank', 'noopener');
   }
 
@@ -77,12 +65,10 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
           >
             Kembali ke Els App
           </button>
-          {platform === 'ios' && (
-            <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
-              Tidak muncul prompt? Tap tombol <strong>◁ Els App</strong> di kiri atas
-              layar untuk kembali ke aplikasi.
-            </p>
-          )}
+          <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
+            Tombol tidak respon? Tap <strong>Done</strong> di pojok kanan atas atau
+            <strong> ◁ Els App</strong> di kiri atas layar untuk kembali.
+          </p>
           <p className="text-[11px] text-neutral-400 mt-1">
             Belum install?{' '}
             <a

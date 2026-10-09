@@ -69,11 +69,21 @@ jemaatRouter.get('/', async (req, res) => {
 
   const where: any = {};
   if (q.search) {
-    where.OR = [
+    const orClauses: any[] = [
       { namaLengkap: { contains: q.search, mode: 'insensitive' } },
       { email: { contains: q.search, mode: 'insensitive' } },
       { noHp: { contains: q.search } },
+      { kode: { contains: q.search, mode: 'insensitive' } },
     ];
+    // Legacy Ref search: parse digit suffix biar bisa cari "1234" atau "ECCBANDUNG1234"
+    const digits = q.search.replace(/\D+/g, '');
+    if (digits) {
+      const num = Number(digits);
+      if (Number.isFinite(num) && num > 0 && num < 2_147_483_647) {
+        orClauses.push({ legacyShiftsoftId: num });
+      }
+    }
+    where.OR = orClauses;
   }
   if (cabangId) where.cabangId = cabangId;
   if (sinodeId) where.cabang = { sinodeId };
@@ -216,11 +226,20 @@ function buildJemaatWhereFromQuery(req: any): any {
 
   const where: any = {};
   if (search) {
-    where.OR = [
+    const orClauses: any[] = [
       { namaLengkap: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
       { noHp: { contains: search } },
+      { kode: { contains: search, mode: 'insensitive' } },
     ];
+    const digits = search.replace(/\D+/g, '');
+    if (digits) {
+      const num = Number(digits);
+      if (Number.isFinite(num) && num > 0 && num < 2_147_483_647) {
+        orClauses.push({ legacyShiftsoftId: num });
+      }
+    }
+    where.OR = orClauses;
   }
   if (cabangId) where.cabangId = cabangId;
   if (sinodeId) where.cabang = { sinodeId };
@@ -432,8 +451,14 @@ jemaatRouter.get('/export', async (req, res) => {
     const ministries = (r.jemaatPelayanan ?? [])
       .map((jp: any) => `${jp.pelayanan.nama} (${jp.pelayananRole.nama})`)
       .join('; ');
+    // Legacy Ref: cabang nama uppercase no-spaces + legacyShiftsoftId
+    const legacyRef =
+      r.legacyShiftsoftId != null && r.cabang?.nama
+        ? `${String(r.cabang.nama).replace(/\s+/g, '').toUpperCase()}${r.legacyShiftsoftId}`
+        : '';
     return {
       kode: r.kode ?? '',
+      legacyRef,
       namaLengkap: r.namaLengkap ?? '',
       jenisKelamin: r.jenisKelamin ?? '',
       usia: calcAge(r.tanggalLahir) ?? '',
@@ -457,6 +482,7 @@ jemaatRouter.get('/export', async (req, res) => {
 
   const HEADERS = [
     'Kode',
+    'Legacy Ref',
     'Nama Lengkap',
     'L/P',
     'Usia',
@@ -474,6 +500,7 @@ jemaatRouter.get('/export', async (req, res) => {
   ];
   const KEYS: (keyof (typeof dataRows)[number])[] = [
     'kode',
+    'legacyRef',
     'namaLengkap',
     'jenisKelamin',
     'usia',
@@ -515,6 +542,7 @@ jemaatRouter.get('/export', async (req, res) => {
         (row) => `
 <tr>
   <td>${escapeHtml(row.kode)}</td>
+  <td style="font-family:monospace;font-size:9px;">${escapeHtml(row.legacyRef)}</td>
   <td>${escapeHtml(row.namaLengkap)}</td>
   <td>${escapeHtml(String(row.jenisKelamin))}</td>
   <td>${escapeHtml(String(row.usia))}</td>
@@ -574,7 +602,7 @@ ${
 <table>
 <thead>
 <tr>
-  <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
+  <th>Kode</th><th>Legacy Ref</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
   <th>Cabang</th><th>Homecell Area</th><th>Homecell</th><th>Ministry</th><th>Status</th>
 </tr>
 </thead>
@@ -1247,6 +1275,13 @@ ${
       <h1>${escapeHtml(j.namaLengkap)}</h1>
       <div class="hero-sub">
         ${j.kode ? `<span class="pill">#${escapeHtml(j.kode)}</span>` : ''}
+        ${
+          j.legacyShiftsoftId != null && j.cabang?.nama
+            ? `<span class="pill" style="font-family:monospace;">${escapeHtml(
+                String(j.cabang.nama).replace(/\s+/g, '').toUpperCase() + j.legacyShiftsoftId,
+              )}</span>`
+            : ''
+        }
         ${j.cabang?.nama ? `<span class="pill">${escapeHtml(j.cabang.nama)}</span>` : ''}
         ${j.tanggalLahir ? `<span class="pill">${calcUsia(j.tanggalLahir)}</span>` : ''}
         ${j.jenisKelamin ? `<span class="pill">${j.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</span>` : ''}

@@ -134,7 +134,8 @@ export default function KanbanPage() {
   const grouped = useMemo(() => {
     const g: Record<string, CardItem[]> = { BACKLOG: [], PLANNED: [], IN_PROGRESS: [], IN_REVIEW: [], DONE: [] };
     items?.forEach((t) => {
-      if (g[t.status]) g[t.status].push(t);
+      const bucket = g[t.status];
+      if (bucket) bucket.push(t);
     });
     return g;
   }, [items]);

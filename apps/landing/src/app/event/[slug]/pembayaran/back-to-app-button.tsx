@@ -8,7 +8,6 @@ const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=idea.eccc
 
 export function BackToAppButton({ eventId }: { eventId: string }) {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
-  const deepLink = `ecc://event/${eventId}`;
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -16,8 +15,44 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
     else if (/iphone|ipad|ipod/i.test(ua)) setPlatform('ios');
   }, []);
 
-  const storeUrl = platform === 'ios' ? IOS_APP_URL : ANDROID_APP_URL;
   const isMobile = platform !== 'other';
+  const storeUrl = platform === 'ios' ? IOS_APP_URL : ANDROID_APP_URL;
+
+  /**
+   * Strategi reliable buat dismiss SFSafariViewController / Chrome Custom Tabs
+   * dan buka app ECC:
+   *
+   * - iOS: pakai Universal Link https://eccchurch.global/event/<id>. AASA sudah
+   *   whitelist `/event/*` → iOS akan dismiss SFSafariViewController + launch
+   *   app routing ke app/event/[id].tsx. Custom scheme `ecc://` dari dalam
+   *   SFSafariViewController sering di-suppress oleh iOS 16+.
+   *
+   * - Android: pakai Intent URL dengan fallback S.browser_fallback_url ke Play
+   *   Store. Chrome Custom Tabs resolve intent → launch native app via
+   *   intent-filter autoVerify (assetlinks.json). Kalau app not installed,
+   *   fallback ke Play Store (bukan URL web lagi).
+   *
+   * - Desktop: just show store buttons.
+   */
+  function handleClick() {
+    if (platform === 'ios') {
+      // Universal Link — iOS kalau app installed akan intercept & launch app
+      window.location.href = `https://eccchurch.global/event/${eventId}`;
+      return;
+    }
+    if (platform === 'android') {
+      // Intent URL dengan explicit package + fallback ke Play Store
+      const fallback = encodeURIComponent(ANDROID_APP_URL);
+      const intent =
+        `intent://event/${eventId}` +
+        `#Intent;scheme=ecc;package=idea.eccchurch.global;` +
+        `S.browser_fallback_url=${fallback};end`;
+      window.location.href = intent;
+      return;
+    }
+    // Desktop → open App Store (default iOS link)
+    window.open(IOS_APP_URL, '_blank', 'noopener');
+  }
 
   return (
     <div className="bg-white border border-orange-100 rounded-2xl p-6 text-center">
@@ -29,12 +64,13 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
 
       {isMobile ? (
         <div className="space-y-2">
-          <a
-            href={deepLink}
+          <button
+            type="button"
+            onClick={handleClick}
             className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
           >
             Kembali ke ECC App
-          </a>
+          </button>
           <p className="text-[11px] text-neutral-400">
             Belum install?{' '}
             <a

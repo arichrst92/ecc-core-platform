@@ -22,6 +22,7 @@ import {
   createHomecellScheduleSchema,
   listHomecellSchedulesQuerySchema,
   scanHomecellAttendanceSchema,
+  bulkScanHomecellAttendanceSchema,
 } from '@ecc/shared-types';
 import { ApiError, BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
@@ -314,6 +315,195 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
       scannedAt: attendance.scannedAt,
       alreadyAttended,
       attendanceCount: total,
+    },
+  });
+});
+
+// ============================================================
+// POST /:scheduleId/attendance/bulk — bulk tandai hadir banyak jemaat sekaligus
+// Per backend-request-homecell-bulk-attendance.md (2026-10-09)
+// Partial success allowed — per kode return status recorded/already_attended/error.
+// Auth check sekali di awal (PIC), lalu loop insert per kode.
+// ============================================================
+homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => {
+  const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
+  const scheduleId = req.params.scheduleId;
+  if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
+
+  const requester = await getRequester(req);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+
+  const { kodes } = bulkScanHomecellAttendanceSchema.parse(req.body);
+
+  // Verify schedule + load homecell nama for notif
+  const schedule = await prisma.homecellSchedule.findFirst({
+    where: { id: scheduleId, homecellId },
+    include: { homecell: { select: { nama: true } } },
+  });
+  if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+
+  interface BulkResultOk {
+    kode: string;
+    status: 'recorded' | 'already_attended';
+    attendance: {
+      id: string;
+      jemaat: {
+        id: string;
+        namaLengkap: string;
+        kode: string | null;
+        fotoUrl: string | null;
+      };
+      scannedAt: Date;
+    };
+  }
+  interface BulkResultErr {
+    kode: string;
+    status: 'error';
+    error: { code: string; message: string };
+  }
+  const results: Array<BulkResultOk | BulkResultErr> = [];
+
+  // Process per kode. Tidak di-transactional supaya 1 kode fail tidak rollback
+  // kode lain — partial success is intentional (per request doc).
+  for (const kode of kodes) {
+    try {
+      const jemaat = await prisma.jemaat.findUnique({
+        where: { kode },
+        select: {
+          id: true,
+          namaLengkap: true,
+          kode: true,
+          fotoUrl: true,
+          isActive: true,
+          noHp: true,
+        },
+      });
+      if (!jemaat) {
+        results.push({
+          kode,
+          status: 'error',
+          error: { code: 'KODE_NOT_FOUND', message: `Kode "${kode}" tidak ditemukan.` },
+        });
+        continue;
+      }
+      if (!jemaat.isActive) {
+        results.push({
+          kode,
+          status: 'error',
+          error: { code: 'JEMAAT_INACTIVE', message: `${jemaat.namaLengkap} sudah nonaktif.` },
+        });
+        continue;
+      }
+
+      // Verify active member of this homecell
+      const membership = await prisma.homecellMember.findFirst({
+        where: { homecellId, jemaatId: jemaat.id, isActive: true },
+        select: { id: true },
+      });
+      if (!membership) {
+        results.push({
+          kode,
+          status: 'error',
+          error: {
+            code: 'NOT_HOMECELL_MEMBER',
+            message: `${jemaat.namaLengkap} bukan anggota aktif homecell ini.`,
+          },
+        });
+        continue;
+      }
+
+      // Upsert — kalau sudah ada, status already_attended; kalau baru, create
+      const existing = await prisma.homecellAttendance.findUnique({
+        where: { scheduleId_jemaatId: { scheduleId, jemaatId: jemaat.id } },
+      });
+
+      if (existing) {
+        results.push({
+          kode,
+          status: 'already_attended',
+          attendance: {
+            id: existing.id,
+            jemaat: {
+              id: jemaat.id,
+              namaLengkap: jemaat.namaLengkap,
+              kode: jemaat.kode,
+              fotoUrl: jemaat.fotoUrl,
+            },
+            scannedAt: existing.scannedAt,
+          },
+        });
+        continue;
+      }
+
+      const attendance = await prisma.homecellAttendance.create({
+        data: {
+          scheduleId,
+          jemaatId: jemaat.id,
+          scannedBy: requester.jemaatId,
+          source: 'MANUAL',
+        },
+      });
+
+      // In-app notif + WA (fire-and-forget, same pattern as single endpoint)
+      void createNotification({
+        jemaatId: jemaat.id,
+        type: 'HOMECELL_ATTENDED',
+        title: `Kehadiran tercatat di ${schedule.homecell.nama}`,
+        body: `Pertemuan ${schedule.tanggal.toISOString().slice(0, 10)} @ ${schedule.lokasi}. Terima kasih atas kehadirannya.`,
+        actionUrl: `/homecell/${homecellId}`,
+        metadata: { homecellId, scheduleId, lokasi: schedule.lokasi },
+      });
+      void sendWaIfEnabled('HOMECELL_ATTENDED', jemaat.noHp, {
+        nama: jemaat.namaLengkap,
+        homecellNama: schedule.homecell.nama,
+        tanggal: schedule.tanggal.toISOString().slice(0, 10),
+      });
+
+      results.push({
+        kode,
+        status: 'recorded',
+        attendance: {
+          id: attendance.id,
+          jemaat: {
+            id: jemaat.id,
+            namaLengkap: jemaat.namaLengkap,
+            kode: jemaat.kode,
+            fotoUrl: jemaat.fotoUrl,
+          },
+          scannedAt: attendance.scannedAt,
+        },
+      });
+    } catch (err) {
+      results.push({
+        kode,
+        status: 'error',
+        error: {
+          code: 'INTERNAL',
+          message: (err as Error).message || 'Unexpected error.',
+        },
+      });
+    }
+  }
+
+  // Audit single entry for the whole bulk operation (not per row)
+  const newlyRecorded = results.filter((r) => r.status === 'recorded').length;
+  audit(req, {
+    action: 'CREATE',
+    resource: 'homecell_attendance',
+    resourceId: scheduleId,
+    resourceLabel: `Bulk ${newlyRecorded}/${kodes.length} di schedule ${scheduleId}`,
+    metadata: { kind: 'bulk-attendance', totalRequested: kodes.length, newlyRecorded },
+  });
+
+  const attendanceCount = await prisma.homecellAttendance.count({ where: { scheduleId } });
+
+  res.json({
+    success: true,
+    data: {
+      scheduleId,
+      attendanceCount,
+      newlyRecordedCount: newlyRecorded,
+      results,
     },
   });
 });

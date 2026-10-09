@@ -51,3 +51,15 @@ export const scanHomecellAttendanceSchema = z.object({
   kode: z.string().trim().min(1, 'Kode wajib').max(64),
 });
 export type ScanHomecellAttendanceInput = z.infer<typeof scanHomecellAttendanceSchema>;
+
+/**
+ * Bulk attendance — PIC tandai banyak jemaat sekaligus via checklist
+ * (bukan QR scan 1-per-1). Max 50 kodes per request (homecell terbesar ~30).
+ */
+export const bulkScanHomecellAttendanceSchema = z.object({
+  kodes: z
+    .array(z.string().trim().min(1).max(64))
+    .min(1, 'Minimal 1 kode')
+    .max(50, 'Maksimal 50 kode per batch'),
+});
+export type BulkScanHomecellAttendanceInput = z.infer<typeof bulkScanHomecellAttendanceSchema>;

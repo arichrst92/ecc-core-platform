@@ -154,5 +154,23 @@ module.exports = {
       error_file: '~/.pm2/logs/ecc-landing-error.log',
       time: true,
     },
+    {
+      // Planning Backlog — subdomain planning.eccchurch.global.
+      // Internal dev-team tool untuk IT Minister Team. Hirarki Epic → Story → Task.
+      name: 'ecc-planning',
+      cwd: './apps/planning',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start -p 3300',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 4000,
+      max_memory_restart: '300M',
+      env: sharedEnv,
+      out_file: '~/.pm2/logs/ecc-planning-out.log',
+      error_file: '~/.pm2/logs/ecc-planning-error.log',
+      time: true,
+    },
   ],
 };

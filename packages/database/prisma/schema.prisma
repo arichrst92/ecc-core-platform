@@ -59,20 +59,20 @@ model CabangGereja {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sinode        Sinode           @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
-  jemaat        Jemaat[]
-  ibadah        Ibadah[]
-  konten        Konten[]
-  homecellAreas HomecellArea[]
-  events        Event[]
-  rekening      CabangRekening[]
+  sinode            Sinode               @relation(fields: [sinodeId], references: [id], onDelete: Restrict)
+  jemaat            Jemaat[]
+  ibadah            Ibadah[]
+  konten            Konten[]
+  homecellAreas     HomecellArea[]
+  events            Event[]
+  rekening          CabangRekening[]
   // Group (module 23 — generic grouping dari Shiftsoft Circle import)
-  groups        Group[]
+  groups            Group[]
   // Module 28 CKids relations
-  hadiahKatalog   HadiahKatalog[]         @relation("CabangHadiahKatalog")
-  pointBalances   JemaatPointBalance[]    @relation("CabangPointBalances")
-  pointTransactions PointTransaction[]    @relation("CabangPointTransactions")
-  hadiahRedeems   HadiahRedeem[]          @relation("CabangRedeems")
+  hadiahKatalog     HadiahKatalog[]      @relation("CabangHadiahKatalog")
+  pointBalances     JemaatPointBalance[] @relation("CabangPointBalances")
+  pointTransactions PointTransaction[]   @relation("CabangPointTransactions")
+  hadiahRedeems     HadiahRedeem[]       @relation("CabangRedeems")
   // IT Minister — Data Minister per cabang assignment
   itMinisterTeam    ITMinisterTeam[]
 
@@ -169,7 +169,7 @@ model Jemaat {
   // Legacy User.ID integer dari Shiftsoft. UNIQUE — untuk idempotent
   // re-sync (kalau field ini match, UPDATE existing; kalau tidak, CREATE).
   // NULL untuk jemaat yg register organic via ECC app.
-  legacyShiftsoftId     Int?      @unique @map("legacy_shiftsoft_id")
+  legacyShiftsoftId Int? @unique @map("legacy_shiftsoft_id")
 
   // ---- Onboarding state ----
   // NULL = jemaat belum complete onboarding wizard. Mobile app WAJIB
@@ -180,7 +180,7 @@ model Jemaat {
   // Backfill logic (migration 20260731300000):
   //   - Legacy Shiftsoft import (legacyShiftsoftId != NULL) → NULL (perlu wizard)
   //   - Non-legacy (registered via app atau seed) → set now()
-  onboardedAt           DateTime? @map("onboarded_at")
+  onboardedAt DateTime? @map("onboarded_at")
 
   // Untuk jemaat tanpa noHp (anak balita / dependent). Guardian = jemaat
   // yang manage account ini (biasanya ortu). Mobile app: kalau guardian
@@ -198,64 +198,73 @@ model Jemaat {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  cabang                  CabangGereja             @relation(fields: [cabangId], references: [id], onDelete: Restrict)
-  jemaatRoles             JemaatRole[]
-  relasiAsal              JemaatRelasi[]           @relation("RelasiAsal")
-  relasiTujuan            JemaatRelasi[]           @relation("RelasiTujuan")
-  user                    User?
-  jemaatPelayanan         JemaatPelayanan[]
-  ibadahPelayananPetugas  IbadahPelayananPetugas[]
-  reservasi               Reservasi[]
+  cabang                       CabangGereja                  @relation(fields: [cabangId], references: [id], onDelete: Restrict)
+  jemaatRoles                  JemaatRole[]
+  relasiAsal                   JemaatRelasi[]                @relation("RelasiAsal")
+  relasiTujuan                 JemaatRelasi[]                @relation("RelasiTujuan")
+  user                         User?
+  jemaatPelayanan              JemaatPelayanan[]
+  ibadahPelayananPetugas       IbadahPelayananPetugas[]
+  reservasi                    Reservasi[]
   // Modul 27 — jemaat yg pernah pick-up anak (parent/wali)
-  reservasiPickedUp       Reservasi[]              @relation("ReservasiPickedUpBy")
-  areaPic                 HomecellArea[]           @relation("AreaPic")
-  homecellPic             Homecell[]               @relation("HomecellPic")
-  homecellMembership      HomecellMember[]         @relation("HomecellMembership")
-  homecellScheduleCreator HomecellSchedule[]       @relation("HomecellScheduleCreator")
-  homecellAttendance      HomecellAttendance[]     @relation("HomecellAttendanceJemaat")
-  homecellAttendanceScans HomecellAttendance[]     @relation("HomecellAttendanceScanner")
-  eventPartisipasi        EventParticipation[]     @relation("EventPartisipasi")
-  eventApprovals          EventParticipation[]     @relation("EventApprover")
-  eventVolunteer          EventPelayananPetugas[]  @relation("EventVolunteer")
-  eventDonationApprovals  EventDonation[]          @relation("EventDonationApprover")
+  reservasiPickedUp            Reservasi[]                   @relation("ReservasiPickedUpBy")
+  areaPic                      HomecellArea[]                @relation("AreaPic")
+  homecellPic                  Homecell[]                    @relation("HomecellPic")
+  homecellMembership           HomecellMember[]              @relation("HomecellMembership")
+  homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
+  homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
+  homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
+  eventPartisipasi             EventParticipation[]          @relation("EventPartisipasi")
+  eventApprovals               EventParticipation[]          @relation("EventApprover")
+  eventVolunteer               EventPelayananPetugas[]       @relation("EventVolunteer")
+  eventDonationApprovals       EventDonation[]               @relation("EventDonationApprover")
   // Family relations (untuk mobile app)
   // (FamilyRelation model di-drop 2026-08-02 — mobile switch ke JemaatRelasi)
-  primaryGuardian         Jemaat?                  @relation("Guardian", fields: [primaryGuardianId], references: [id], onDelete: SetNull)
-  guardianOf              Jemaat[]                 @relation("Guardian")
-  registeredVia           Jemaat?                  @relation("RegisteredVia", fields: [registeredViaJemaatId], references: [id], onDelete: SetNull)
-  registeredBy            Jemaat[]                 @relation("RegisteredVia")
+  primaryGuardian              Jemaat?                       @relation("Guardian", fields: [primaryGuardianId], references: [id], onDelete: SetNull)
+  guardianOf                   Jemaat[]                      @relation("Guardian")
+  registeredVia                Jemaat?                       @relation("RegisteredVia", fields: [registeredViaJemaatId], references: [id], onDelete: SetNull)
+  registeredBy                 Jemaat[]                      @relation("RegisteredVia")
   // Bapa Rohani self-relation — anak rohani (yg pilih dia sebagai mentor).
-  bapaRohani              Jemaat?                  @relation("BapaRohani", fields: [bapaRohaniJemaatId], references: [id], onDelete: SetNull)
-  anakRohani              Jemaat[]                 @relation("BapaRohani")
+  bapaRohani                   Jemaat?                       @relation("BapaRohani", fields: [bapaRohaniJemaatId], references: [id], onDelete: SetNull)
+  anakRohani                   Jemaat[]                      @relation("BapaRohani")
   // Group (module 23 — generic grouping, dari Shiftsoft Circle import).
-  groupPic                Group[]                  @relation("GroupPic")
-  groupMembership         GroupMember[]            @relation("GroupMembership")
+  groupPic                     Group[]                       @relation("GroupPic")
+  groupMembership              GroupMember[]                 @relation("GroupMembership")
   // Magic link email login tokens (module 24)
-  magicLinkTokens         MagicLinkToken[]         @relation("MagicLinkTokens")
+  magicLinkTokens              MagicLinkToken[]              @relation("MagicLinkTokens")
   // Shiftsoft sync jobs yg di-trigger jemaat ini dari portal (module 25)
-  shiftsoftSyncJobs       ShiftsoftSyncJob[]       @relation("ShiftsoftSyncJobs")
+  shiftsoftSyncJobs            ShiftsoftSyncJob[]            @relation("ShiftsoftSyncJobs")
   // Module 28 CKids — point + hadiah relations
-  pointBalances           JemaatPointBalance[]     @relation("JemaatPointBalances")
-  pointTransactions       PointTransaction[]       @relation("JemaatPointTransactions")
-  pointTxCreated          PointTransaction[]       @relation("PointTxCreatedBy")
-  hadiahRedeems           HadiahRedeem[]           @relation("JemaatRedeems")
-  hadiahRedeemsProcessed  HadiahRedeem[]           @relation("RedeemProcessedBy")
+  pointBalances                JemaatPointBalance[]          @relation("JemaatPointBalances")
+  pointTransactions            PointTransaction[]            @relation("JemaatPointTransactions")
+  pointTxCreated               PointTransaction[]            @relation("PointTxCreatedBy")
+  hadiahRedeems                HadiahRedeem[]                @relation("JemaatRedeems")
+  hadiahRedeemsProcessed       HadiahRedeem[]                @relation("RedeemProcessedBy")
   // Branch change request (mobile)
-  branchChangeRequests    BranchChangeRequest[]    @relation("BranchChangeRequester")
-  branchChangeReviews     BranchChangeRequest[]    @relation("BranchChangeReviewer")
+  branchChangeRequests         BranchChangeRequest[]         @relation("BranchChangeRequester")
+  branchChangeReviews          BranchChangeRequest[]         @relation("BranchChangeReviewer")
   // Visit (Movement) — peer-to-peer pertemuan antar jemaat via scan QR.
-  visitsAsInitiator       Visit[]                  @relation("VisitInitiator")
-  visitsAsTarget          Visit[]                  @relation("VisitTarget")
+  visitsAsInitiator            Visit[]                       @relation("VisitInitiator")
+  visitsAsTarget               Visit[]                       @relation("VisitTarget")
   // Local Market (Movement) — bisnis jemaat (UMKM directory).
-  localBusinesses         LocalBusiness[]          @relation("LocalBusinessOwner")
+  localBusinesses              LocalBusiness[]               @relation("LocalBusinessOwner")
   // WA Notification logs (reminder ibadah/event, dst) — recipient.
-  notificationLogs        NotificationLog[]        @relation("NotificationLogTarget")
+  notificationLogs             NotificationLog[]             @relation("NotificationLogTarget")
   // In-app notification feed (Modul 30) — recipient.
-  notifications           Notification[]           @relation("NotificationRecipient")
+  notifications                Notification[]                @relation("NotificationRecipient")
   // Ministry schedule assignments (per backend-request-ministry-schedule-roster.md).
   pelayananScheduleAssignments PelayananScheduleAssignment[]
   // IT Minister team assignments (Protokol IT Departemen 2026-09-02).
   itMinisterTeam               ITMinisterTeam[]
+  // Planning Backlog (apps/planning) — backrefs per role.
+  backlogSprintsCreated        BacklogSprint[]               @relation("BacklogSprintCreator")
+  backlogEpicsOwned            BacklogEpic[]                 @relation("BacklogEpicOwner")
+  backlogEpicsCreated          BacklogEpic[]                 @relation("BacklogEpicCreator")
+  backlogStoriesAssigned       BacklogStory[]                @relation("BacklogStoryAssignee")
+  backlogStoriesCreated        BacklogStory[]                @relation("BacklogStoryCreator")
+  backlogTasksAssigned         BacklogTask[]                 @relation("BacklogTaskAssignee")
+  backlogTasksCreated          BacklogTask[]                 @relation("BacklogTaskCreator")
+  backlogComments              BacklogComment[]              @relation("BacklogCommentAuthor")
 
   @@index([cabangId])
   @@index([noHp])
@@ -677,7 +686,7 @@ model PelayananRole {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  pelayanan              Pelayanan                @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  pelayanan              Pelayanan                     @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
   jemaatPelayanan        JemaatPelayanan[]
   ibadahPelayananPetugas IbadahPelayananPetugas[]
   eventPelayananPetugas  EventPelayananPetugas[]
@@ -745,39 +754,39 @@ model IbadahPelayanan {
 // ============================================================
 
 model Reservasi {
-  id            String          @id @default(uuid()) @db.Uuid
-  jemaatId      String          @map("jemaat_id") @db.Uuid
-  ibadahId      String          @map("ibadah_id") @db.Uuid
+  id                 String          @id @default(uuid()) @db.Uuid
+  jemaatId           String          @map("jemaat_id") @db.Uuid
+  ibadahId           String          @map("ibadah_id") @db.Uuid
   // Tanggal occurrence ibadah (penting karena ibadah recurring)
-  tanggalIbadah DateTime        @map("tanggal_ibadah") @db.Date
-  status        ReservasiStatus @default(RESERVE)
+  tanggalIbadah      DateTime        @map("tanggal_ibadah") @db.Date
+  status             ReservasiStatus @default(RESERVE)
   // Kode unik untuk barcode/QR — generate alphanumeric pendek (mis. "R7K2X9P")
-  kode          String          @unique @db.VarChar(20)
+  kode               String          @unique @db.VarChar(20)
   // Timestamps perubahan status
-  reservedAt    DateTime        @default(now()) @map("reserved_at")
-  joinedAt      DateTime?       @map("joined_at")
-  cancelledAt   DateTime?       @map("cancelled_at")
-  catatan       String?         @db.Text
+  reservedAt         DateTime        @default(now()) @map("reserved_at")
+  joinedAt           DateTime?       @map("joined_at")
+  cancelledAt        DateTime?       @map("cancelled_at")
+  catatan            String?         @db.Text
   // Metadata: siapa yang trigger checkin (mobile app scan, manual admin, dll)
-  checkedInBy   String?         @map("checked_in_by") @db.Uuid // userId yang scan
+  checkedInBy        String?         @map("checked_in_by") @db.Uuid // userId yang scan
   // Checkout tracking — cuma di-populate kalau ibadah.requiresCheckout=true
   // dan admin scan QR jemaat saat keluar. Modul 26 (2026-08-01).
-  checkedOutAt  DateTime?       @map("checked_out_at")
-  checkedOutBy  String?         @map("checked_out_by") @db.Uuid
+  checkedOutAt       DateTime?       @map("checked_out_at")
+  checkedOutBy       String?         @map("checked_out_by") @db.Uuid
   // Modul 27 (2026-08-01) — kode jemput untuk ibadah anak.
   //   - Auto-generated 6-digit numeric saat check-in kalau ibadah.isKidsIbadah=true
   //   - Unique per (ibadahId, tanggalIbadah) — max 1M kids per occurrence
   //   - Reusable sampai pickedUpAt set (kalau typo bisa retry)
   //   - Ditampilkan di app parent (yg check-in child) untuk tunjukkan saat pickup
-  pickupCode        String?    @map("pickup_code") @db.VarChar(6)
-  pickedUpAt        DateTime?  @map("picked_up_at")
+  pickupCode         String?         @map("pickup_code") @db.VarChar(6)
+  pickedUpAt         DateTime?       @map("picked_up_at")
   // Jemaat yg jemput (bisa parent, sanak famili, dll — siapapun yg pegang kode)
-  pickedUpByJemaatId String?   @map("picked_up_by_jemaat_id") @db.Uuid
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
+  pickedUpByJemaatId String?         @map("picked_up_by_jemaat_id") @db.Uuid
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
 
-  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
-  ibadah Ibadah @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
+  jemaat     Jemaat  @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  ibadah     Ibadah  @relation(fields: [ibadahId], references: [id], onDelete: Cascade)
   // Modul 27 — parent yg jemput (nullable, cuma set setelah pickup)
   pickedUpBy Jemaat? @relation("ReservasiPickedUpBy", fields: [pickedUpByJemaatId], references: [id], onDelete: SetNull)
 
@@ -1607,9 +1616,9 @@ enum NotificationType {
   IBADAH_REMINDER
   EVENT_REMINDER
   // Group workflow notifications (module 23)
-  GROUP_MEMBER_ADDED    // jemaat di-add ke group (via PIC atau via join code)
-  GROUP_MEMBER_REMOVED  // jemaat di-remove oleh PIC
-  GROUP_DISMISSED       // group di-dismiss (soft-delete) — notif ke all members
+  GROUP_MEMBER_ADDED // jemaat di-add ke group (via PIC atau via join code)
+  GROUP_MEMBER_REMOVED // jemaat di-remove oleh PIC
+  GROUP_DISMISSED // group di-dismiss (soft-delete) — notif ke all members
 
   @@map("notification_type")
 }
@@ -1629,18 +1638,18 @@ enum NotificationType {
 //   POINT_ADJUSTED        → parent notif koreksi manual
 //   FAMILY_LINKED         → target jemaat notif di-link sebagai relasi
 model Notification {
-  id          String   @id @default(uuid()) @db.Uuid
-  jemaatId    String   @map("jemaat_id") @db.Uuid
-  type        InAppNotifType
-  title       String   @db.VarChar(200)
-  body        String   @db.Text
+  id        String         @id @default(uuid()) @db.Uuid
+  jemaatId  String         @map("jemaat_id") @db.Uuid
+  type      InAppNotifType
+  title     String         @db.VarChar(200)
+  body      String         @db.Text
   // Optional deep-link route (mobile route, mis. "/ckids/anak/{uuid}") untuk
   // tap → langsung buka screen relevan. Portal ignore ini.
-  actionUrl   String?  @map("action_url") @db.VarChar(500)
+  actionUrl String?        @map("action_url") @db.VarChar(500)
   // Additional context (mis. pickupCode, pointAmount, redeemId) — bebas.
-  metadata    Json?
-  readAt      DateTime? @map("read_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  metadata  Json?
+  readAt    DateTime?      @map("read_at")
+  createdAt DateTime       @default(now()) @map("created_at")
 
   jemaat Jemaat @relation("NotificationRecipient", fields: [jemaatId], references: [id], onDelete: Cascade)
 
@@ -2008,40 +2017,40 @@ enum AttendanceSource {
 // ============================================================
 
 model Group {
-  id          String   @id @default(uuid()) @db.Uuid
-  cabangId    String   @map("cabang_id") @db.Uuid
+  id                      String      @id @default(uuid()) @db.Uuid
+  cabangId                String      @map("cabang_id") @db.Uuid
   // Self-relation untuk hierarchy — parent bisa Group lain (nested
   // grouping) atau null (root level). Depth tidak dibatasi; UI portal
   // biasanya render sampai 3-4 level.
-  parentId    String?  @map("parent_id") @db.Uuid
-  nama        String   @db.VarChar(200)
-  deskripsi   String?  @db.Text
-  jenis       GroupJenis @default(LAINNYA)
+  parentId                String?     @map("parent_id") @db.Uuid
+  nama                    String      @db.VarChar(200)
+  deskripsi               String?     @db.Text
+  jenis                   GroupJenis  @default(LAINNYA)
   // Lokasi bebas — bisa alamat + landmark, atau nama tempat saja.
-  alamat      String?  @db.Text
+  alamat                  String?     @db.Text
   // Koordinat GPS "lat, lng" — untuk map view di UI. Format free-text
   // supaya bisa di-copy langsung dari Google Maps.
-  gps         String?  @db.VarChar(64)
+  gps                     String?     @db.VarChar(64)
   // Jadwal pertemuan (opsional — tidak semua jenis group ada jadwal).
-  hari        HariMinggu?
-  jam         String?  @db.VarChar(5)  // HH:mm
+  hari                    HariMinggu?
+  jam                     String?     @db.VarChar(5) // HH:mm
   // PIC (leader/coordinator) — nullable. Untuk import dari Shiftsoft,
   // resolve dari Circle.CreatedBy → Jemaat via legacyShiftsoftId.
   // Setelah import, admin bisa reassign via portal.
-  picJemaatId String?  @map("pic_jemaat_id") @db.Uuid
+  picJemaatId             String?     @map("pic_jemaat_id") @db.Uuid
   // Visibility: true = browse-able + direct join, false = hidden dari
   // listing + join cuma via joinCode (invitation-only, QR scan di mobile).
-  isPublic    Boolean  @default(true) @map("is_public")
+  isPublic                Boolean     @default(true) @map("is_public")
   // Kode invitation untuk private group. 8-char alphanumeric unique.
   // Auto-generate saat isPublic=false, NULL kalau public. Bisa di-rotate
   // via endpoint /regenerate-code kalau kode leak.
-  joinCode    String?  @unique @map("join_code") @db.VarChar(20)
-  isActive    Boolean  @default(true) @map("is_active")
+  joinCode                String?     @unique @map("join_code") @db.VarChar(20)
+  isActive                Boolean     @default(true) @map("is_active")
   // Idempotent guard untuk sync ulang dari Shiftsoft. NULL untuk group
   // yang dibuat organic via portal (bukan hasil import legacy).
-  legacyShiftsoftCircleId Int? @unique @map("legacy_shiftsoft_circle_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  legacyShiftsoftCircleId Int?        @unique @map("legacy_shiftsoft_circle_id")
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
 
   cabang    CabangGereja  @relation(fields: [cabangId], references: [id], onDelete: Restrict)
   parent    Group?        @relation("GroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
@@ -2057,12 +2066,12 @@ model Group {
 }
 
 enum GroupJenis {
-  FAMILY          // Unit keluarga (mis. "Jerry - Chiqa Family")
-  MINISTRY        // Tim pelayanan (mis. "Ministry Volunteers", "Bandung Leaders")
-  COMMUNITY       // Community/fellowship group (mis. "BRIDGE", "Professional & Family")
-  HOMECELL_STYLE  // Homecell-style grouping (tapi tidak strict PIC constraint spt module Homecell)
-  SYSTEM          // Internal system group (mis. "ADMIN")
-  LAINNYA         // Fallback / uncategorized
+  FAMILY // Unit keluarga (mis. "Jerry - Chiqa Family")
+  MINISTRY // Tim pelayanan (mis. "Ministry Volunteers", "Bandung Leaders")
+  COMMUNITY // Community/fellowship group (mis. "BRIDGE", "Professional & Family")
+  HOMECELL_STYLE // Homecell-style grouping (tapi tidak strict PIC constraint spt module Homecell)
+  SYSTEM // Internal system group (mis. "ADMIN")
+  LAINNYA // Fallback / uncategorized
 
   @@map("group_jenis")
 }
@@ -2106,18 +2115,18 @@ model GroupMember {
 // ============================================================
 
 model MagicLinkToken {
-  id           String    @id @default(uuid()) @db.Uuid
-  jemaatId     String    @map("jemaat_id") @db.Uuid
-  email        String    @db.VarChar(255)
+  id          String    @id @default(uuid()) @db.Uuid
+  jemaatId    String    @map("jemaat_id") @db.Uuid
+  email       String    @db.VarChar(255)
   // Random 32-byte hex string (64 char). Unique enforced di DB.
-  token        String    @unique @db.VarChar(64)
-  expiresAt    DateTime  @map("expires_at")
+  token       String    @unique @db.VarChar(64)
+  expiresAt   DateTime  @map("expires_at")
   // Set saat token di-consume (verify sukses). One-time use — kalau
   // sudah usedAt != NULL, reject subsequent verify request.
-  usedAt       DateTime? @map("used_at")
+  usedAt      DateTime? @map("used_at")
   // Audit: IP address requester (untuk detect abuse).
-  requestedIp  String?   @map("requested_ip") @db.VarChar(64)
-  createdAt    DateTime  @default(now()) @map("created_at")
+  requestedIp String?   @map("requested_ip") @db.VarChar(64)
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   jemaat Jemaat @relation("MagicLinkTokens", fields: [jemaatId], references: [id], onDelete: Cascade)
 
@@ -2139,27 +2148,27 @@ model MagicLinkToken {
 // ============================================================
 
 model ShiftsoftSyncJob {
-  id            String        @id @default(uuid()) @db.Uuid
+  id            String     @id @default(uuid()) @db.Uuid
   // Phase pilihan operator: JEMAAT / GROUP / CLEANUP / SEED_CABANG.
   phase         SyncPhase
   // Tenant slug (mis. "eccbandung") atau "all" untuk semua tenant.
-  tenantSlug    String        @map("tenant_slug") @db.VarChar(32)
+  tenantSlug    String     @map("tenant_slug") @db.VarChar(32)
   // Options JSON snapshot: { dryRun, limit, excludeSystem, includeEmpty }.
-  options       Json          @default("{}")
-  status        SyncStatus    @default(RUNNING)
+  options       Json       @default("{}")
+  status        SyncStatus @default(RUNNING)
   // Counters populated saat job selesai (parse dari script output atau
   // hitung selisih DB pre/post). Contoh: { imported: 4202, updated: 0,
   // skipped: 1, errors: 0, collisionNulled: 92 }.
   result        Json?
   // Last ~200 lines of stdout (truncated). Untuk quick preview di UI
   // tanpa harus SSH cek pm2 log.
-  logTail       String?       @map("log_tail")
+  logTail       String?    @map("log_tail")
   // Kalau status = FAILED, alasan singkat (exception message / non-zero exit).
-  errorMessage  String?       @map("error_message")
+  errorMessage  String?    @map("error_message")
   // Jemaat yg trigger (untuk audit — siapa yg run apa kapan).
-  triggeredById String        @map("triggered_by_id") @db.Uuid
-  startedAt     DateTime      @default(now()) @map("started_at")
-  finishedAt    DateTime?     @map("finished_at")
+  triggeredById String     @map("triggered_by_id") @db.Uuid
+  startedAt     DateTime   @default(now()) @map("started_at")
+  finishedAt    DateTime?  @map("finished_at")
 
   triggeredBy Jemaat @relation("ShiftsoftSyncJobs", fields: [triggeredById], references: [id])
 
@@ -2199,21 +2208,21 @@ enum SyncStatus {
 // ============================================================
 
 model HadiahKatalog {
-  id          String    @id @default(uuid()) @db.Uuid
-  cabangId    String    @map("cabang_id") @db.Uuid
-  nama        String    @db.VarChar(200)
-  deskripsi   String?   @db.Text
-  fotoUrl     String?   @map("foto_url") @db.Text
-  pointCost   Int       @map("point_cost")
+  id        String   @id @default(uuid()) @db.Uuid
+  cabangId  String   @map("cabang_id") @db.Uuid
+  nama      String   @db.VarChar(200)
+  deskripsi String?  @db.Text
+  fotoUrl   String?  @map("foto_url") @db.Text
+  pointCost Int      @map("point_cost")
   // Stock current — di-decrement saat redeem, di-increment saat add stock.
   // Tidak pakai table terpisah supaya simpler + transaksi atomik.
-  stock       Int       @default(0)
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  stock     Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  cabang      CabangGereja      @relation("CabangHadiahKatalog", fields: [cabangId], references: [id], onDelete: Cascade)
-  redeems     HadiahRedeem[]    @relation("HadiahRedeems")
+  cabang  CabangGereja   @relation("CabangHadiahKatalog", fields: [cabangId], references: [id], onDelete: Cascade)
+  redeems HadiahRedeem[] @relation("HadiahRedeems")
 
   @@index([cabangId])
   @@index([isActive])
@@ -2221,13 +2230,13 @@ model HadiahKatalog {
 }
 
 model JemaatPointBalance {
-  jemaatId    String    @map("jemaat_id") @db.Uuid
-  cabangId    String    @map("cabang_id") @db.Uuid
-  balance     Int       @default(0)
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  cabangId  String   @map("cabang_id") @db.Uuid
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  jemaat      Jemaat        @relation("JemaatPointBalances", fields: [jemaatId], references: [id], onDelete: Cascade)
-  cabang      CabangGereja  @relation("CabangPointBalances", fields: [cabangId], references: [id], onDelete: Cascade)
+  jemaat Jemaat       @relation("JemaatPointBalances", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang CabangGereja @relation("CabangPointBalances", fields: [cabangId], references: [id], onDelete: Cascade)
 
   @@id([jemaatId, cabangId])
   @@index([cabangId, balance(sort: Desc)]) // untuk leaderboard optional
@@ -2235,22 +2244,22 @@ model JemaatPointBalance {
 }
 
 model PointTransaction {
-  id            String         @id @default(uuid()) @db.Uuid
-  jemaatId      String         @map("jemaat_id") @db.Uuid
-  cabangId      String         @map("cabang_id") @db.Uuid
+  id          String      @id @default(uuid()) @db.Uuid
+  jemaatId    String      @map("jemaat_id") @db.Uuid
+  cabangId    String      @map("cabang_id") @db.Uuid
   // Positive amount = EARN, negative = SPEND, ADJUST bisa positive/negative.
-  type          PointTxType
-  amount        Int
-  source        PointSource
+  type        PointTxType
+  amount      Int
+  source      PointSource
   // Reference optional — kehadiranId untuk EARN, redeemId untuk SPEND
-  referenceId   String?        @map("reference_id") @db.Uuid
-  note          String?        @db.Text
-  createdById   String         @map("created_by_id") @db.Uuid
-  createdAt     DateTime       @default(now()) @map("created_at")
+  referenceId String?     @map("reference_id") @db.Uuid
+  note        String?     @db.Text
+  createdById String      @map("created_by_id") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at")
 
-  jemaat        Jemaat         @relation("JemaatPointTransactions", fields: [jemaatId], references: [id], onDelete: Cascade)
-  cabang        CabangGereja   @relation("CabangPointTransactions", fields: [cabangId], references: [id], onDelete: Cascade)
-  createdBy     Jemaat         @relation("PointTxCreatedBy", fields: [createdById], references: [id])
+  jemaat    Jemaat       @relation("JemaatPointTransactions", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang    CabangGereja @relation("CabangPointTransactions", fields: [cabangId], references: [id], onDelete: Cascade)
+  createdBy Jemaat       @relation("PointTxCreatedBy", fields: [createdById], references: [id])
 
   @@index([jemaatId, createdAt(sort: Desc)])
   @@index([cabangId, createdAt(sort: Desc)])
@@ -2259,23 +2268,23 @@ model PointTransaction {
 }
 
 model HadiahRedeem {
-  id             String         @id @default(uuid()) @db.Uuid
-  jemaatId       String         @map("jemaat_id") @db.Uuid
-  cabangId       String         @map("cabang_id") @db.Uuid
-  hadiahId       String         @map("hadiah_id") @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  jemaatId      String   @map("jemaat_id") @db.Uuid
+  cabangId      String   @map("cabang_id") @db.Uuid
+  hadiahId      String   @map("hadiah_id") @db.Uuid
   // Snapshot point cost saat redeem (defensive kalau admin ubah cost nanti).
-  pointDeducted  Int            @map("point_deducted")
+  pointDeducted Int      @map("point_deducted")
   // Snapshot nama + foto — historical accuracy.
-  hadiahNama     String         @map("hadiah_nama") @db.VarChar(200)
-  hadiahFotoUrl  String?        @map("hadiah_foto_url") @db.Text
-  processedById  String         @map("processed_by_id") @db.Uuid
-  processedAt    DateTime       @default(now()) @map("processed_at")
-  note           String?        @db.Text
+  hadiahNama    String   @map("hadiah_nama") @db.VarChar(200)
+  hadiahFotoUrl String?  @map("hadiah_foto_url") @db.Text
+  processedById String   @map("processed_by_id") @db.Uuid
+  processedAt   DateTime @default(now()) @map("processed_at")
+  note          String?  @db.Text
 
-  jemaat         Jemaat         @relation("JemaatRedeems", fields: [jemaatId], references: [id], onDelete: Cascade)
-  cabang         CabangGereja   @relation("CabangRedeems", fields: [cabangId], references: [id], onDelete: Cascade)
-  hadiah         HadiahKatalog  @relation("HadiahRedeems", fields: [hadiahId], references: [id], onDelete: Restrict)
-  processedBy    Jemaat         @relation("RedeemProcessedBy", fields: [processedById], references: [id])
+  jemaat      Jemaat        @relation("JemaatRedeems", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang      CabangGereja  @relation("CabangRedeems", fields: [cabangId], references: [id], onDelete: Cascade)
+  hadiah      HadiahKatalog @relation("HadiahRedeems", fields: [hadiahId], references: [id], onDelete: Restrict)
+  processedBy Jemaat        @relation("RedeemProcessedBy", fields: [processedById], references: [id])
 
   @@index([jemaatId, processedAt(sort: Desc)])
   @@index([cabangId, processedAt(sort: Desc)])
@@ -2292,10 +2301,10 @@ enum PointTxType {
 }
 
 enum PointSource {
-  KEHADIRAN_KIDS  // dari check-in ibadah anak
-  REDEEM          // spend saat redeem hadiah
-  MANUAL_ADJUST   // koreksi admin
-  STOCK_ADD       // (not user-facing, tapi tracked)
+  KEHADIRAN_KIDS // dari check-in ibadah anak
+  REDEEM // spend saat redeem hadiah
+  MANUAL_ADJUST // koreksi admin
+  STOCK_ADD // (not user-facing, tapi tracked)
 
   @@map("point_source")
 }
@@ -2337,21 +2346,21 @@ model WaNotificationConfig {
 //  RBAC — dia satu-satunya yang berhak Prioritize planning tickets.
 // ============================================================
 model ITMinisterTeam {
-  id          String   @id @default(uuid()) @db.Uuid
-  jemaatId    String   @map("jemaat_id") @db.Uuid
+  id          String           @id @default(uuid()) @db.Uuid
+  jemaatId    String           @map("jemaat_id") @db.Uuid
   divisi      ITMinisterDivisi
   roleTitle   ITMinisterRole   @map("role_title")
   // Nullable — hanya untuk role DATA_MEMBER (assignment per cabang)
-  cabangId    String?  @map("cabang_id") @db.Uuid
+  cabangId    String?          @map("cabang_id") @db.Uuid
   // Nullable — hanya untuk role SPECIFIC_PRODUCT (area/produk spesifik,
   // mis. "Els App", "Portal Admin", "Website", "Finance", "Ckids")
-  productArea String?  @map("product_area") @db.VarChar(100)
-  isActive    Boolean  @default(true) @map("is_active")
-  joinedAt    DateTime @default(now()) @map("joined_at")
-  leftAt      DateTime? @map("left_at")
-  catatan     String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  productArea String?          @map("product_area") @db.VarChar(100)
+  isActive    Boolean          @default(true) @map("is_active")
+  joinedAt    DateTime         @default(now()) @map("joined_at")
+  leftAt      DateTime?        @map("left_at")
+  catatan     String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
   jemaat Jemaat        @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   cabang CabangGereja? @relation(fields: [cabangId], references: [id], onDelete: SetNull)
@@ -2363,8 +2372,8 @@ model ITMinisterTeam {
 }
 
 enum ITMinisterDivisi {
-  HEAD         // Head IT Minister (top)
-  COORDINATOR  // IT Coordinator (ECC-side, not IT Minister)
+  HEAD // Head IT Minister (top)
+  COORDINATOR // IT Coordinator (ECC-side, not IT Minister)
   PRODUCT
   DATA
   OPERATION
@@ -2407,8 +2416,8 @@ model PelayananSchedule {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  pelayanan   Pelayanan                       @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
-  ibadah      Ibadah?                         @relation(fields: [ibadahId], references: [id], onDelete: SetNull)
+  pelayanan   Pelayanan                     @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  ibadah      Ibadah?                       @relation(fields: [ibadahId], references: [id], onDelete: SetNull)
   assignments PelayananScheduleAssignment[]
 
   @@index([pelayananId, tanggal])
@@ -2435,4 +2444,173 @@ model PelayananScheduleAssignment {
   @@index([jemaatId])
   @@index([scheduleId])
   @@map("pelayanan_schedule_assignment")
+}
+
+// ============================================================
+//  Planning Backlog (apps/planning @ planning.eccchurch.global)
+//  Internal dev-team planning tool untuk IT Minister Team.
+//  Hirarki: Epic → Story → Task + Sprint grouping + Comments.
+//  Access control: IT Minister Team membership (gate di middleware).
+// ============================================================
+
+model BacklogSprint {
+  id          String       @id @default(uuid()) @db.Uuid
+  nama        String       @db.VarChar(100)
+  goal        String?      @db.Text
+  status      SprintStatus @default(PLANNED)
+  startDate   DateTime     @map("start_date") @db.Date
+  endDate     DateTime     @map("end_date") @db.Date
+  createdById String       @map("created_by_id") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  createdBy Jemaat         @relation("BacklogSprintCreator", fields: [createdById], references: [id])
+  epics     BacklogEpic[]
+  stories   BacklogStory[]
+  tasks     BacklogTask[]
+
+  @@index([status, startDate])
+  @@map("backlog_sprint")
+}
+
+model BacklogEpic {
+  // Human-friendly auto-increment nomor (EPIC-001, EPIC-002, ...) untuk referensi di chat/komit.
+  nomor       Int             @unique @default(autoincrement())
+  id          String          @id @default(uuid()) @db.Uuid
+  title       String          @db.VarChar(200)
+  description String?         @db.Text
+  status      BacklogStatus   @default(BACKLOG)
+  priority    BacklogPriority @default(P2)
+  // Module tag — free text (mis. "jemaat", "event", "wa-notif"). FE auto-complete dari MENU_CATALOG.
+  moduleTag   String?         @map("module_tag") @db.VarChar(50)
+  sprintId    String?         @map("sprint_id") @db.Uuid
+  ownerId     String?         @map("owner_id") @db.Uuid
+  createdById String          @map("created_by_id") @db.Uuid
+  closedAt    DateTime?       @map("closed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  sprint    BacklogSprint?   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  owner     Jemaat?          @relation("BacklogEpicOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdBy Jemaat           @relation("BacklogEpicCreator", fields: [createdById], references: [id])
+  stories   BacklogStory[]
+  comments  BacklogComment[]
+
+  @@index([status, priority])
+  @@index([sprintId])
+  @@index([ownerId])
+  @@index([moduleTag])
+  @@map("backlog_epic")
+}
+
+model BacklogStory {
+  nomor              Int             @unique @default(autoincrement())
+  id                 String          @id @default(uuid()) @db.Uuid
+  epicId             String          @map("epic_id") @db.Uuid
+  title              String          @db.VarChar(200)
+  description        String?         @db.Text
+  acceptanceCriteria String?         @map("acceptance_criteria") @db.Text
+  status             BacklogStatus   @default(BACKLOG)
+  priority           BacklogPriority @default(P2)
+  sprintId           String?         @map("sprint_id") @db.Uuid
+  assigneeId         String?         @map("assignee_id") @db.Uuid
+  createdById        String          @map("created_by_id") @db.Uuid
+  closedAt           DateTime?       @map("closed_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  epic      BacklogEpic      @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  sprint    BacklogSprint?   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee  Jemaat?          @relation("BacklogStoryAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy Jemaat           @relation("BacklogStoryCreator", fields: [createdById], references: [id])
+  tasks     BacklogTask[]
+  comments  BacklogComment[]
+
+  @@index([epicId])
+  @@index([status, priority])
+  @@index([sprintId])
+  @@index([assigneeId])
+  @@map("backlog_story")
+}
+
+model BacklogTask {
+  nomor         Int             @unique @default(autoincrement())
+  id            String          @id @default(uuid()) @db.Uuid
+  storyId       String          @map("story_id") @db.Uuid
+  title         String          @db.VarChar(200)
+  description   String?         @db.Text
+  status        BacklogStatus   @default(BACKLOG)
+  priority      BacklogPriority @default(P2)
+  sprintId      String?         @map("sprint_id") @db.Uuid
+  assigneeId    String?         @map("assignee_id") @db.Uuid
+  // Decimal(5,1) → max 9999.9 hours. Null = belum di-estimate.
+  estimateHours Decimal?        @map("estimate_hours") @db.Decimal(5, 1)
+  createdById   String          @map("created_by_id") @db.Uuid
+  closedAt      DateTime?       @map("closed_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  story     BacklogStory     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sprint    BacklogSprint?   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee  Jemaat?          @relation("BacklogTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy Jemaat           @relation("BacklogTaskCreator", fields: [createdById], references: [id])
+  comments  BacklogComment[]
+
+  @@index([storyId])
+  @@index([status, priority])
+  @@index([sprintId])
+  @@index([assigneeId])
+  @@map("backlog_task")
+}
+
+// Polymorphic comment — tepat satu dari epicId/storyId/taskId yang terisi.
+// Prisma tidak enforce exactly-one at schema level, dicek di app code & DB CHECK.
+model BacklogComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  epicId    String?  @map("epic_id") @db.Uuid
+  storyId   String?  @map("story_id") @db.Uuid
+  taskId    String?  @map("task_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  epic   BacklogEpic?  @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  story  BacklogStory? @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  task   BacklogTask?  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author Jemaat        @relation("BacklogCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([epicId, createdAt])
+  @@index([storyId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([authorId])
+  @@map("backlog_comment")
+}
+
+enum BacklogStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  ARCHIVED
+
+  @@map("backlog_status")
+}
+
+enum BacklogPriority {
+  P0 // Urgent / blocker
+  P1 // High
+  P2 // Normal
+  P3 // Nice to have
+
+  @@map("backlog_priority")
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+
+  @@map("sprint_status")
 }

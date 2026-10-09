@@ -35,6 +35,7 @@ import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
 import { elsaRouter } from './elsa.js';
+import { planningRouter } from './planning.js';
 
 export const adminRouter = Router();
 
@@ -89,6 +90,10 @@ adminRouter.use('/gift-stall', giftStallRouter);
 // Modul 31 — Elsa (Els Agentic) AI chat agent untuk data ECC.
 // Fulltimer-only (guard di dalam router). Powered by Anthropic Claude.
 adminRouter.use('/elsa', elsaRouter);
+// Modul 32 — Planning Backlog (apps/planning @ planning.eccchurch.global).
+// Internal dev tool untuk IT Minister Team. Hirarki Epic → Story → Task + Sprint.
+// Gate: IT Minister Team membership (lib/rbac-planning.ts).
+adminRouter.use('/planning', planningRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);

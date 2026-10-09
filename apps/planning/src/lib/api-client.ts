@@ -34,9 +34,9 @@ apiClient.interceptors.response.use(
     if (
       err.response?.status === 403 &&
       typeof window !== 'undefined' &&
-      !window.location.pathname.startsWith('/no-access')
+      !window.location.pathname.startsWith('/planning/no-access')
     ) {
-      window.location.href = '/no-access';
+      window.location.href = '/planning/no-access';
       return Promise.reject(err);
     }
 
@@ -51,7 +51,7 @@ apiClient.interceptors.response.use(
     const { refreshToken, setAuth, clearAuth, user } = useAuthStore.getState();
     if (!refreshToken) {
       clearAuth();
-      redirectToPortal();
+      redirectToLogin();
       return Promise.reject(err);
     }
 
@@ -84,7 +84,7 @@ apiClient.interceptors.response.use(
     } catch (refreshErr) {
       processQueue(refreshErr, null);
       clearAuth();
-      redirectToPortal();
+      redirectToLogin();
       return Promise.reject(refreshErr);
     } finally {
       isRefreshing = false;
@@ -92,12 +92,15 @@ apiClient.interceptors.response.use(
   },
 );
 
-function redirectToPortal() {
+/**
+ * Redirect ke portal /login dgn ?next=/planning/... biar balik ke tempat semula
+ * setelah login. Portal + planning sekarang same-origin.
+ */
+function redirectToLogin() {
   if (typeof window !== 'undefined') {
-    const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? 'http://localhost:3100';
-    const returnTo = encodeURIComponent(window.location.origin + '/auth/sso-in');
-    window.location.href = `${portalUrl}/auth/sso-out?return=${returnTo}`;
+    const currentPath = window.location.pathname + window.location.search;
+    window.location.href = `/login?next=${encodeURIComponent(currentPath)}`;
   }
 }
 
-export { redirectToPortal };
+export { redirectToLogin };

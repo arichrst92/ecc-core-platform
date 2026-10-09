@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { useAuthStore } from '@/lib/auth-store';
-import { redirectToPortal } from '@/lib/api-client';
 
 /**
  * Dashboard shell — gate client-side kalau belum login.
- * SSR tetap render children untuk hindari layout shift; auth check di useEffect.
+ * Same-origin dengan portal: localStorage key 'ecc-auth' auto-shared.
+ * Kalau tidak ada auth → redirect ke /login (portal) dengan next back ke sini.
  */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -19,8 +19,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    if (hydrated && (!user || !accessToken)) {
-      redirectToPortal();
+    if (hydrated && (!user || !accessToken) && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname + window.location.search;
+      window.location.href = `/login?next=${encodeURIComponent(currentPath)}`;
     }
   }, [hydrated, user, accessToken]);
 

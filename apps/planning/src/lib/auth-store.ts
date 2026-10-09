@@ -3,9 +3,9 @@ import { persist } from 'zustand/middleware';
 import type { ResolvedMenuAccess } from '@ecc/shared-types';
 
 /**
- * Auth state — shared format dengan portal.
- * SSO di-handle lewat URL hash (lihat app/auth/sso-in/page.tsx) karena
- * localStorage origin-scoped (planning.eccchurch.global ≠ portal.eccchurch.global).
+ * Auth state — SHARED dengan portal via localStorage key 'ecc-auth'.
+ * Planning dijalankan di path /planning di portal.eccchurch.global, jadi
+ * same-origin → localStorage auto-shared. Tidak perlu SSO handoff.
  */
 export interface AuthUser {
   id: string;
@@ -41,6 +41,6 @@ export const useAuthStore = create<AuthState>()(
         }),
       clearAuth: () => set({ accessToken: null, refreshToken: null, user: null }),
     }),
-    { name: 'ecc-planning-auth' },
+    { name: 'ecc-auth' },
   ),
 );

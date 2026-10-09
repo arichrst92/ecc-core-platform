@@ -5,7 +5,6 @@ import { useAuthStore } from '@/lib/auth-store';
 
 export default function NoAccessPage() {
   const user = useAuthStore((s) => s.user);
-  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? 'http://localhost:3100';
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-neutral-50">
@@ -28,7 +27,7 @@ export default function NoAccessPage() {
           Perlu akses? Minta Head IT Minister untuk assign kamu via Portal → Team IT Minister.
         </div>
         <a
-          href={portalUrl}
+          href="/dashboard"
           className="inline-block px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600"
         >
           Kembali ke Portal

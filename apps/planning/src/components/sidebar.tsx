@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, ListTree, Columns3, CalendarRange, UserCircle, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuthStore } from '@/lib/auth-store';
-import { redirectToPortal } from '@/lib/api-client';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -22,7 +21,10 @@ export function Sidebar() {
 
   function handleLogout() {
     clearAuth();
-    redirectToPortal();
+    // Portal + planning share localStorage; kirim ke portal /login untuk fresh login.
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 
   return (

@@ -1,54 +1,33 @@
-# Nginx Config — planning.eccchurch.global
+# Nginx Config — Planning Backlog di `/planning` path
 
-Reverse proxy ke PM2 process `ecc-planning` di port 3300. SSL via Let's Encrypt
-(SAN pakai `--expand` di certificate `eccchurch.global` existing, bukan cert
-baru — lebih mudah renew).
+Planning Backlog **tidak pakai subdomain**. Di-serve di
+`https://portal.eccchurch.global/planning` via nginx reverse proxy ke PM2
+process `ecc-planning` (port 3300).
 
-## Nginx server block
+Keuntungan same-origin dengan portal:
 
-File: `/etc/nginx/sites-available/planning.eccchurch.global`
+- **localStorage auto-shared** — login portal sekali, planning langsung bisa
+  diakses tanpa SSO handoff.
+- **Tidak perlu DNS record / cert SAN tambahan** — reuse `portal.eccchurch.global`.
+- **CORS tidak perlu diubah** — API call dari planning ke `api.eccchurch.global`
+  pakai origin yang sama (`portal.eccchurch.global`).
+
+## Patch nginx server block `portal.eccchurch.global`
+
+File: `/etc/nginx/sites-available/portal.eccchurch.global`
+
+Tambah **location block `/planning`** di dalam server block HTTPS existing:
 
 ```nginx
 server {
-    listen 80;
-    listen [::]:80;
-    server_name planning.eccchurch.global;
-
-    # Let's Encrypt renewal — serve challenge via webroot
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    # Redirect HTTP → HTTPS
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
     listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name planning.eccchurch.global;
+    server_name portal.eccchurch.global;
 
-    # Pakai cert yang sama dengan eccchurch.global (SAN).
-    ssl_certificate /etc/letsencrypt/live/eccchurch.global/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/eccchurch.global/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
+    # ... (ssl_certificate, headers, dll — sudah ada) ...
 
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-
-    # Max upload (walaupun planning app jarang upload, biar konsisten dgn portal)
-    client_max_body_size 20M;
-
-    # Proxy ke Next.js production server
-    location / {
+    # Planning Backlog — reverse proxy ke apps/planning (PM2 ecc-planning).
+    # Next.js basePath='/planning' udah include prefix, jadi proxy tanpa strip.
+    location /planning {
         proxy_pass http://127.0.0.1:3300;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -62,111 +41,88 @@ server {
         proxy_connect_timeout 10s;
     }
 
-    # Access + error logs terpisah per app untuk gampang debug
-    access_log /var/log/nginx/planning.eccchurch.global.access.log;
-    error_log /var/log/nginx/planning.eccchurch.global.error.log;
+    # Catch-all portal (sudah ada)
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        # ... (header set sama seperti di atas) ...
+    }
 }
 ```
 
-## Setup commands di VPS
+**PENTING**: location `/planning` HARUS **sebelum** location `/` di config file,
+karena nginx match by longest prefix tapi urutan juga penting untuk clarity.
+
+## Apply di VPS
 
 ```bash
-# 1. SSH ke VPS
 ssh deploy@187.77.118.85
 
-# 2. Tulis config file
-sudo nano /etc/nginx/sites-available/planning.eccchurch.global
-# → paste isi di atas
+# Edit server block portal
+sudo nano /etc/nginx/sites-available/portal.eccchurch.global
+# → tambah location /planning block di atas location /
 
-# 3. Enable site
-sudo ln -sf /etc/nginx/sites-available/planning.eccchurch.global \
-  /etc/nginx/sites-enabled/planning.eccchurch.global
-
-# 4. Test config (jangan apply kalau test fail!)
+# Test config
 sudo nginx -t
 
-# 5. Add subdomain ke cert via certbot --expand
-# Daftar hostname yang sudah ada di cert eccchurch.global existing:
-#   eccchurch.global, portal.eccchurch.global, api.eccchurch.global,
-#   ckids.eccchurch.global, planning.eccchurch.global (BARU)
-sudo certbot --nginx -d eccchurch.global -d portal.eccchurch.global \
-  -d api.eccchurch.global -d ckids.eccchurch.global \
-  -d planning.eccchurch.global --expand
-
-# 6. Reload nginx
+# Reload (zero-downtime)
 sudo systemctl reload nginx
 
-# 7. Verify
-curl -I https://planning.eccchurch.global
-# Harus return 200 (atau 302 redirect ke /dashboard) dgn SSL valid
+# Verify
+curl -I https://portal.eccchurch.global/planning
+# Harus return 200 (atau 307 redirect ke /planning/dashboard)
 ```
 
-## DNS record
+## Tidak ada DNS record / cert baru
 
-Tambah A record di Namecheap DNS:
+- DNS: tidak perlu A record baru (reuse `portal.eccchurch.global`)
+- SSL cert: tidak perlu `certbot --expand` (reuse cert existing)
 
-```
-Type:  A
-Host:  planning
-Value: 187.77.118.85
-TTL:   Automatic
-```
-
-Verify propagation:
-```bash
-dig planning.eccchurch.global +short
-# Harus return: 187.77.118.85
-```
-
-## Deploy flow planning app
-
-Setelah DNS + Nginx + cert ready:
+## Deploy flow planning app di VPS
 
 ```bash
-# Di VPS:
 cd /var/www/ecc-core-platform
 git pull
-
-# Install dependencies (apps/planning akan masuk workspace)
 pnpm install
 
 # Apply migration DB
 pnpm --filter @ecc/database db:migrate:deploy
+pnpm --filter @ecc/database db:generate
 
-# Build shared-types + planning app
-pnpm --filter @ecc/shared-types build
+# Build shared-types bersih (hindari tsc buildinfo corrupt)
+cd packages/shared-types && rm -rf dist tsconfig.tsbuildinfo && tsc && cd ../..
+
+# Build apps
+pnpm --filter @ecc/core-api build
+pnpm --filter @ecc/portal build
 pnpm --filter @ecc/planning build
 
-# Start via PM2 (first time)
-pm2 start ecosystem.config.cjs --only ecc-planning
-# atau reload semua kalau mau refresh env:
+# Start/reload PM2
 pm2 reload ecosystem.config.cjs --update-env
-
-# Save process list
-pm2 save
 
 # Verify
 pm2 status
-# Harus ada baris: ecc-planning   online
-curl -I https://planning.eccchurch.global
+# Harus ada: ecc-core-api, ecc-portal, ecc-landing, ecc-planning
 ```
 
-## Env vars tambahan
+## Env vars
 
-Pastikan di `.env` VPS ada:
+Pastikan di `.env` VPS ada (tidak ada env baru untuk planning subdomain lagi):
 
 ```
 NEXT_PUBLIC_CORE_API_URL=https://api.eccchurch.global
-NEXT_PUBLIC_PORTAL_URL=https://portal.eccchurch.global
-NEXT_PUBLIC_PLANNING_URL=https://planning.eccchurch.global
-
-# Tambah planning subdomain ke CORS whitelist core-api
-CORS_ALLOWED_ORIGINS=https://portal.eccchurch.global,https://planning.eccchurch.global,https://eccchurch.global
+# NEXT_PUBLIC_PLANNING_URL + NEXT_PUBLIC_OPERATIONS_URL udah TIDAK diperlukan
+# karena planning diakses via path /planning di domain portal.
 ```
 
-Kalau belum ada, tambahkan sebelum reload PM2. Core-api perlu di-restart juga
-setelah ubah `CORS_ALLOWED_ORIGINS`:
+CORS_ALLOWED_ORIGINS **tidak perlu diubah** — planning app pakai origin yang sama
+dengan portal (`portal.eccchurch.global`), bukan subdomain terpisah.
 
-```bash
-pm2 restart ecc-core-api --update-env
-```
+## User flow
+
+1. User login portal https://portal.eccchurch.global/login
+2. Click menu **Planning Backlog** di sidebar → new tab buka
+   https://portal.eccchurch.global/planning
+3. Planning app baca localStorage key `ecc-auth` (dibikin portal saat login) →
+   authed, dashboard muncul langsung.
+4. Kalau user bukan IT Minister Team: API return 403 → auto redirect ke
+   `/planning/no-access` dengan pesan jelas.

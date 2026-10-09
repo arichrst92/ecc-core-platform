@@ -7,8 +7,6 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_CORE_API_URL: process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4100',
-    NEXT_PUBLIC_PLANNING_URL: process.env.NEXT_PUBLIC_PLANNING_URL ?? 'http://localhost:3300',
-    NEXT_PUBLIC_OPERATIONS_URL: process.env.NEXT_PUBLIC_OPERATIONS_URL ?? 'http://localhost:3400',
   },
   webpack: (config, { isServer }) => {
     // Resolve `.js` import paths ke `.ts`/`.tsx` (NodeNext-style imports kita

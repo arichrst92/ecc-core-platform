@@ -155,23 +155,12 @@ const groups: NavGroup[] = [
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
-      // External subdomain apps — buka new tab via SSO handoff (/auth/sso-out).
-      // Portal SSO emitter baca localStorage auth, redirect ke app target dengan hash tokens.
-      // Tidak force re-login kalau user sudah authed di portal.
-      {
-        href: `/auth/sso-out?return=${encodeURIComponent((process.env.NEXT_PUBLIC_OPERATIONS_URL ?? 'https://operations.eccchurch.global') + '/auth/sso-in')}`,
-        label: 'Operations Tickets',
-        icon: Ticket,
-        menuKey: 'ops-tickets',
-        external: true,
-      },
-      {
-        href: `/auth/sso-out?return=${encodeURIComponent((process.env.NEXT_PUBLIC_PLANNING_URL ?? 'https://planning.eccchurch.global') + '/auth/sso-in')}`,
-        label: 'Planning Backlog',
-        icon: FileText,
-        menuKey: 'planning-backlog',
-        external: true,
-      },
+      // Planning Backlog — di-mount sebagai path /planning di portal.eccchurch.global
+      // via nginx reverse proxy ke apps/planning (port 3300). Same-origin → localStorage
+      // auto-shared, tidak perlu SSO handoff.
+      { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
+      // Operations Tickets — belum di-build, placeholder sampai apps/operations ready.
+      { href: '/operations', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
     ],
   },
 ];

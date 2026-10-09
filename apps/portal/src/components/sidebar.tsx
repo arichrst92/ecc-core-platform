@@ -54,6 +54,8 @@ interface NavItem {
    * canRead access di menu ini. Item tanpa menuKey selalu tampil (mis. Dashboard, Profile).
    */
   menuKey?: string;
+  /** External URL (open in new tab). Kalau true, href boleh https://. */
+  external?: boolean;
 }
 
 interface NavGroup {
@@ -151,6 +153,11 @@ const groups: NavGroup[] = [
       { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
+      { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
+      { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
+      // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
+      { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
+      { href: 'https://planning.eccchurch.global', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
     ],
   },
 ];
@@ -301,17 +308,31 @@ export function Sidebar() {
 }
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
-  const { href, label, icon: Icon } = item;
+  const { href, label, icon: Icon, external } = item;
+  const isExternal = external || href.startsWith('http');
+  const className = clsx(
+    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition',
+    active
+      ? 'bg-brand-500 text-white shadow-sm'
+      : 'text-neutral-600 hover:bg-neutral-100',
+  );
+
+  if (isExternal) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+      >
+        <Icon className="w-4 h-4" />
+        {label}
+      </a>
+    );
+  }
+
   return (
-    <Link
-      href={href}
-      className={clsx(
-        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition',
-        active
-          ? 'bg-brand-500 text-white shadow-sm'
-          : 'text-neutral-600 hover:bg-neutral-100',
-      )}
-    >
+    <Link href={href} className={className}>
       <Icon className="w-4 h-4" />
       {label}
     </Link>

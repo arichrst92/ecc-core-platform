@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Smartphone, ExternalLink } from 'lucide-react';
 
-const IOS_APP_URL = 'https://apps.apple.com/id/app/els-global-app/id6743088520';
+// Store URL tanpa country code (/id/) biar tidak region-locked.
+const IOS_APP_URL = 'https://apps.apple.com/app/els-global-app/id6743088520';
 const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=idea.eccchurch.global';
 
 export function BackToAppButton({ eventId }: { eventId: string }) {
@@ -35,28 +36,18 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
    */
   function handleClick() {
     if (platform === 'ios') {
-      const start = Date.now();
-      // Fallback: kalau app tidak terbuka dalam 1.5s (user cancel prompt /
-      // app not installed), redirect ke App Store.
-      const t = setTimeout(() => {
-        if (Date.now() - start < 2000) {
-          window.location.href = IOS_APP_URL;
-        }
-      }, 1500);
-      // Clear fallback kalau user leave page (= app opened)
-      const onBlur = () => {
-        clearTimeout(t);
-        window.removeEventListener('pagehide', onBlur);
-        window.removeEventListener('visibilitychange', onBlur);
-      };
-      window.addEventListener('pagehide', onBlur);
-      window.addEventListener('visibilitychange', onBlur);
-      // Trigger custom scheme
+      // iOS: trigger custom scheme ecc://. Dari dalam SFSafariViewController yg
+      // dibuka ECC app sendiri, iOS prompt "Open in Els Global?" → user tap
+      // Open → view controller dismiss + app opens.
+      //
+      // TIDAK ADA fallback redirect ke App Store — kalau prompt gagal / di-cancel,
+      // user bisa pakai native button "◁ Els App" di kiri atas (iOS auto-inject).
       window.location.href = `ecc://event/${eventId}`;
       return;
     }
     if (platform === 'android') {
-      // Intent URL dengan explicit package + fallback ke Play Store
+      // Android Intent URL — Chrome Custom Tabs resolve intent → launch app.
+      // S.browser_fallback_url hanya aktif kalau app NOT installed.
       const fallback = encodeURIComponent(ANDROID_APP_URL);
       const intent =
         `intent://event/${eventId}` +
@@ -65,7 +56,7 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
       window.location.href = intent;
       return;
     }
-    // Desktop → open App Store (default iOS link)
+    // Desktop → open App Store page
     window.open(IOS_APP_URL, '_blank', 'noopener');
   }
 
@@ -87,7 +78,13 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
             >
               Kembali ke ECC App
             </button>
-            <p className="text-[11px] text-neutral-400">
+            {platform === 'ios' && (
+              <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
+                Tidak muncul prompt? Tap tombol <strong>◁ Els App</strong> di kiri atas layar
+                untuk kembali ke aplikasi.
+              </p>
+            )}
+            <p className="text-[11px] text-neutral-400 mt-1">
               Belum install?{' '}
               <a
                 href={storeUrl}

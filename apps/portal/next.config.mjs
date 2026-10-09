@@ -16,7 +16,7 @@ const nextConfig = {
    * rewrite di sini idempotent (prod tidak akan pernah match).
    */
   async rewrites() {
-    const planningTarget = process.env.PLANNING_DEV_URL ?? 'http://localhost:3300';
+    const planningTarget = process.env.PLANNING_DEV_URL ?? 'http://localhost:3400';
     return [
       { source: '/planning', destination: `${planningTarget}/planning` },
       { source: '/planning/:path*', destination: `${planningTarget}/planning/:path*` },

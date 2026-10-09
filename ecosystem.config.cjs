@@ -160,7 +160,7 @@ module.exports = {
       name: 'ecc-planning',
       cwd: './apps/planning',
       script: 'node_modules/next/dist/bin/next',
-      args: 'start -p 3300',
+      args: 'start -p 3400',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,

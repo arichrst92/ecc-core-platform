@@ -62,7 +62,10 @@ export default function LoginPage() {
     }
     setAuth(auth);
     toast.success(`Selamat datang, ${auth.user.namaLengkap}`);
-    router.push('/dashboard');
+    // Support `?next=/path` redirect — dipakai untuk SSO handoff flow
+    // (planning / operations app) supaya setelah login balik ke sso-out.
+    const next = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
+    router.push(next && next.startsWith('/') ? next : '/dashboard');
   }
 
   return (

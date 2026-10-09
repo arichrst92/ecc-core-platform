@@ -155,9 +155,23 @@ const groups: NavGroup[] = [
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
-      // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
-      { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
-      { href: 'https://planning.eccchurch.global', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
+      // External subdomain apps — buka new tab via SSO handoff (/auth/sso-out).
+      // Portal SSO emitter baca localStorage auth, redirect ke app target dengan hash tokens.
+      // Tidak force re-login kalau user sudah authed di portal.
+      {
+        href: `/auth/sso-out?return=${encodeURIComponent((process.env.NEXT_PUBLIC_OPERATIONS_URL ?? 'https://operations.eccchurch.global') + '/auth/sso-in')}`,
+        label: 'Operations Tickets',
+        icon: Ticket,
+        menuKey: 'ops-tickets',
+        external: true,
+      },
+      {
+        href: `/auth/sso-out?return=${encodeURIComponent((process.env.NEXT_PUBLIC_PLANNING_URL ?? 'https://planning.eccchurch.global') + '/auth/sso-in')}`,
+        label: 'Planning Backlog',
+        icon: FileText,
+        menuKey: 'planning-backlog',
+        external: true,
+      },
     ],
   },
 ];

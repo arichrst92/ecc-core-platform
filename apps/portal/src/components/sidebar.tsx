@@ -159,8 +159,8 @@ const groups: NavGroup[] = [
       // via nginx reverse proxy ke apps/planning (port 3300). Same-origin → localStorage
       // auto-shared, tidak perlu SSO handoff.
       { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
-      // Operations Tickets — belum di-build, placeholder sampai apps/operations ready.
-      { href: '/operations', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
+      // Operations Tickets — DISEMBUNYIKAN sampai apps/operations dibangun (2026-10-11).
+      // { href: '/operations', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
     ],
   },
 ];

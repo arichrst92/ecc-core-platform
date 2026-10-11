@@ -70,7 +70,9 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'it-minister-team', label: 'Team IT Minister', href: '/dashboard/it-minister-team', group: 'Developer Tools' },
   { key: 'wa-config', label: 'WhatsApp Notif Config', href: '/dashboard/wa-config', group: 'Developer Tools' },
   // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
-  { key: 'ops-tickets', label: 'Operations Tickets', href: 'https://operations.eccchurch.global', group: 'Developer Tools' },
+  // ops-tickets tetap di catalog (RBAC row tidak hilang) tapi menu disembunyikan
+  // dari sidebar + bottom-dock sampai apps/operations dibangun (2026-10-11).
+  { key: 'ops-tickets', label: 'Operations Tickets (segera)', href: '/operations', group: 'Developer Tools' },
   { key: 'planning-backlog', label: 'Planning Backlog', href: '/planning', group: 'Developer Tools' },
 
   // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,

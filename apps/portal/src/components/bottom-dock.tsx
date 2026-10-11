@@ -184,7 +184,8 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: FileText, menuKey: 'tech-docs' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: FileText, menuKey: 'wa-config' },
-      { href: 'https://operations.eccchurch.global', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
+      // Operations Tickets — DISEMBUNYIKAN sampai apps/operations dibangun (2026-10-11).
+      // { href: '/operations', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
       { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
     ],
   },

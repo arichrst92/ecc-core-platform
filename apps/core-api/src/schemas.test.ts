@@ -4,6 +4,10 @@
  * bergantung pada build terakhir.
  */
 import { describe, it, expect } from 'vitest';
+// Side-effect import WAJIB duluan: common.ts memanggil extendZodWithOpenApi(z).
+// esbuild (vitest) membuang import yg binding-nya tidak dipakai, jadi tanpa ini
+// `.openapi()` belum terpasang saat homecell-schedule.ts dievaluasi.
+import '../../../packages/shared-types/src/schemas/common.js';
 import { bulkScanHomecellAttendanceSchema } from '../../../packages/shared-types/src/schemas/homecell-schedule.js';
 import {
   createSprintSchema,

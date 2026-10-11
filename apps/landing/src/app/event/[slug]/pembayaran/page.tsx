@@ -5,8 +5,17 @@ import { notFound } from 'next/navigation';
 import { Calendar, MapPin, Church, QrCode, Info, Landmark, ChevronLeft } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { CopyRekeningButton } from '../../../persembahan/copy-button';
+import { cookies } from 'next/headers';
 import { BackToAppButton } from './back-to-app-button';
+import { WebActionPanel } from './web-action-panel';
 import { QrisPreview } from '@/components/qris-preview';
+import { WA_COOKIE, WA_ERR_COOKIE } from '@/lib/web-action-cookies';
+import {
+  waGet,
+  type WaFamilyItem,
+  type WaParticipation,
+  type WaSessionInfo,
+} from '@/lib/web-action-server';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
@@ -82,6 +91,29 @@ export default async function EventPembayaranPage(
   const isFree = event.tipeBayar === 'GRATIS';
   const isFixed = event.tipeBayar === 'NOMINAL_TETAP';
   const isBebas = event.tipeBayar === 'NOMINAL_BEBAS';
+
+  // Mode ber-session (web action token dari app) — lihat middleware.ts.
+  const jar = cookies();
+  const waSessionValue = jar.get(WA_COOKIE)?.value;
+  const waExpired = jar.get(WA_ERR_COOKIE)?.value === '1';
+  let waSession: WaSessionInfo | null = null;
+  let waFamily: WaFamilyItem[] = [];
+  let waParticipations: WaParticipation[] = [];
+  if (waSessionValue && !isFree) {
+    const s = await waGet<WaSessionInfo>('session', waSessionValue);
+    if (s && s.eventId === event.id) {
+      waSession = s;
+      const [fam, mine] = await Promise.all([
+        waGet<WaFamilyItem[]>('me/family', waSessionValue),
+        waGet<{ participations: WaParticipation[] }>(
+          `event/${event.id}/peserta/mine-and-family`,
+          waSessionValue,
+        ),
+      ]);
+      waFamily = fam ?? [];
+      waParticipations = mine?.participations ?? [];
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
@@ -244,6 +276,24 @@ export default async function EventPembayaranPage(
           </div>
         )}
 
+        {/* Mode ber-session: daftar + upload bukti langsung di web */}
+        {waSession && (
+          <WebActionPanel
+            eventId={event.id}
+            tipeBayar={event.tipeBayar}
+            nominalEvent={event.nominal}
+            session={waSession}
+            family={waFamily}
+            initialParticipations={waParticipations}
+          />
+        )}
+        {!waSession && waExpired && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
+            <strong>Sesi kedaluwarsa.</strong> Buka ulang halaman ini dari Els App untuk mendaftar
+            &amp; upload bukti transfer.
+          </div>
+        )}
+
         {/* Panduan */}
         <div className="bg-white border border-orange-100 rounded-2xl p-6">
           <h3 className="font-semibold text-neutral-900 mb-3">Langkah Pendaftaran</h3>
@@ -252,6 +302,13 @@ export default async function EventPembayaranPage(
               <>
                 <li>Kembali ke Els App untuk konfirmasi pendaftaran.</li>
                 <li>Tunjukkan QR code kehadiran Anda saat check-in.</li>
+              </>
+            ) : waSession ? (
+              <>
+                <li>Pilih peserta (diri sendiri / keluarga){isBebas ? ' dan isi nominal' : ''}, lalu tekan Daftar.</li>
+                <li>Transfer ke rekening yang tercantum, atau scan QRIS.</li>
+                <li>Upload bukti transfer untuk tiap peserta di kartu Pendaftaran.</li>
+                <li>Tekan &quot;Kembali ke Els App&quot; — status akan tampil di detail event.</li>
               </>
             ) : (
               <>

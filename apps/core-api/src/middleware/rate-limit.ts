@@ -155,3 +155,30 @@ export const diagnosticsErrorLimiter = makeLimiter('diag-error', {
   windowMs: 1 * 60 * 1000,
   limit: 100,
 });
+
+/**
+ * Web action token mint (POST /auth/web-action-token) — per user.
+ * Per backend-request-event-bebas-web-action-token.md: ~10/menit/jemaat.
+ */
+export const webActionMintLimiter = makeLimiter('web-action-mint', {
+  windowMs: 60 * 1000,
+  limit: 10,
+  keyGenerator: userOrIp,
+});
+
+/**
+ * Web action endpoints (exchange + scoped session calls).
+ * Request datang dari server landing (SSR/proxy), jadi IP-nya sama untuk
+ * semua user → key per session / token, fallback IP.
+ */
+export const webActionLimiter = makeLimiter('web-action', {
+  windowMs: 60 * 1000,
+  limit: 60,
+  keyGenerator: (req) => {
+    const session = req.get('x-web-session');
+    if (session) return `s:${session.slice(0, 16)}`;
+    const token = (req.body as { token?: unknown } | undefined)?.token;
+    if (typeof token === 'string') return `t:${token.slice(0, 16)}`;
+    return req.ip ?? 'unknown';
+  },
+});

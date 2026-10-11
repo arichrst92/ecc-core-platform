@@ -748,11 +748,21 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
   }
   const nominal = resolveNominal();
 
-  const successful: unknown[] = [];
+  const successful: { id: string; jemaatId: string }[] = [];
   const failed: { jemaatId: string; error: { code: string; message: string } }[] = [];
 
   // Dedupe input (cegah double-count slot)
   const uniqueIds = [...new Set(input.jemaatIds)];
+
+  // Auth guard: jemaat (non-Fulltimer) hanya boleh mendaftarkan diri sendiri
+  // + keluarga. Sebelumnya tidak dicek — user login bisa daftarkan jemaat lain.
+  if (req.user && !req.user.isFulltimer) {
+    const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
+    const outsider = uniqueIds.find((id) => !familyIds.has(id));
+    if (outsider) {
+      throw Forbidden('Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.');
+    }
+  }
 
   let acceptedSoFar = 0;
   for (const jemaatId of uniqueIds) {
@@ -843,6 +853,43 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
       failed: failed.length,
     },
   });
+
+  // Notif EVENT_REGISTERED per peserta yg sukses (sama dgn endpoint single).
+  for (const p of successful) {
+    void createNotification({
+      jemaatId: p.jemaatId,
+      type: 'EVENT_REGISTERED',
+      title: `Registrasi diterima: ${event.judul}`,
+      body:
+        event.tipeBayar !== 'GRATIS'
+          ? `Anda terdaftar sebagai peserta. Silakan upload bukti transfer untuk konfirmasi.`
+          : `Anda terdaftar sebagai peserta event gratis. Sampai jumpa di hari H!`,
+      actionUrl: `/event/${event.id}`,
+      metadata: {
+        eventId: event.id,
+        eventJudul: event.judul,
+        participationId: p.id,
+        nextStep: event.tipeBayar !== 'GRATIS' ? 'upload-bukti' : 'wait-attendance',
+      },
+    });
+    void (async () => {
+      const j = await prisma.jemaat.findUnique({
+        where: { id: p.jemaatId },
+        select: { noHp: true, namaLengkap: true },
+      });
+      if (!j?.noHp) return;
+      await sendWaIfEnabled('EVENT_REGISTERED', j.noHp, {
+        nama: j.namaLengkap,
+        event_judul: event.judul,
+        event_tanggal: new Date(event.tanggalMulai).toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        status: event.tipeBayar !== 'GRATIS' ? 'DAFTAR (menunggu pembayaran)' : 'DAFTAR',
+      });
+    })();
+  }
 
   res.status(201).json({ success: true, data: { successful, failed } });
 });

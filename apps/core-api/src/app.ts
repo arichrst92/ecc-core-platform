@@ -19,6 +19,7 @@ import { publicRouter } from './routes/public/index.js';
 import { publicUnauthRouter } from './routes/public-unauth.js';
 import { uploadRouter } from './routes/upload.js';
 import { diagnosticsRouter } from './routes/diagnostics.js';
+import { webActionMintRouter, webActionRouter } from './routes/web-action.js';
 import { openApiSpec } from './openapi.js';
 import { UPLOADS_DIR, PUBLIC_UPLOADS_PREFIX } from './lib/storage.js';
 
@@ -109,8 +110,13 @@ export function createApp(): Express {
   );
 
   // ---------- Routes (dengan rate limiting per kategori) ----------
+  // Web action token mint (POST /auth/web-action-token) — sebelum authRouter.
+  app.use('/auth', webActionMintRouter);
   // Auth: per-endpoint limiter di dalam authRouter (lihat routes/auth.ts)
   app.use('/auth', authRouter);
+
+  // Web action session (landing web SSR, header X-Web-Session) — scoped 1 jemaat + 1 event.
+  app.use('/web-action', webActionRouter);
 
   // Admin endpoints — moderate per-user limit.
   app.use('/admin', adminLimiter, adminRouter);

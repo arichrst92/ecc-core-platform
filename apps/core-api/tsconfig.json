@@ -12,5 +12,7 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // Unit test (vitest) tidak ikut build production — vitest transform sendiri.
+  "exclude": ["src/**/*.test.ts"]
 }

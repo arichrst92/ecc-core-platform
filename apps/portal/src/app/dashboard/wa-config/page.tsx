@@ -35,6 +35,8 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
   GROUP: { label: 'Group / Komunitas', color: 'from-purple-500 to-fuchsia-600' },
   MINISTRY: { label: 'Pelayanan', color: 'from-emerald-500 to-green-600' },
   BIRTHDAY: { label: 'Ulang Tahun', color: 'from-amber-500 to-yellow-500' },
+  HOMECELL: { label: 'Homecell', color: 'from-teal-500 to-emerald-600' },
+  CABANG: { label: 'Cabang', color: 'from-sky-500 to-blue-600' },
 };
 
 export default function WaConfigPage() {

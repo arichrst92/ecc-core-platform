@@ -107,6 +107,12 @@ waConfigRouter.post('/:type/test', async (req, res) => {
     notes: '',
     status: 'MENUNGGU_VERIFIKASI',
     usia: '30',
+    // Placeholder utk type HOMECELL_ATTENDED / EVENT_CHECKED_IN / BRANCH_CHANGE_* / GROUP_DISMISSED
+    homecellNama: 'Homecell Sample',
+    judul: 'Event Sample',
+    cabangBaru: 'ECC Bandung',
+    alasan: 'Data belum lengkap',
+    groupNama: 'Group Sample',
   };
   const placeholders = { ...defaults, ...(body.placeholders ?? {}) };
   const message = renderTemplate(row.template, placeholders);

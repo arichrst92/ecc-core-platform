@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { syncAuthAcrossTabs } from './token-refresh';
 import type { ResolvedMenuAccess } from '@ecc/shared-types';
 
 interface AuthUser {
@@ -42,3 +43,6 @@ export const useAuthStore = create<AuthState>()(
     { name: 'ecc-ckids-auth' },
   ),
 );
+
+// Tab lain login / refresh token / logout → tab ini ikut sinkron.
+syncAuthAcrossTabs(useAuthStore, 'ecc-ckids-auth');

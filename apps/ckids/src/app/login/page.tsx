@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import Image from 'next/image';
@@ -19,6 +19,18 @@ export default function LoginPage() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [noHp, setNoHp] = useState('');
   const [otp, setOtp] = useState('');
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // Sudah login (token tersimpan setelah browser ditutup) → langsung ke Gift Stall.
+  // Access token kedaluwarsa di-refresh otomatis oleh api-client saat request pertama.
+  useEffect(() => {
+    const { accessToken, refreshToken, user } = useAuthStore.getState();
+    if ((accessToken || refreshToken) && user) {
+      router.replace('/');
+      return;
+    }
+    setCheckingSession(false);
+  }, [router]);
 
   function normalizePhone(raw: string): string {
     const digits = raw.replace(/\D/g, '');
@@ -70,6 +82,10 @@ export default function LoginPage() {
     onError: (e: any) =>
       toast.error(e.response?.data?.error?.message ?? 'OTP salah'),
   });
+
+  if (checkingSession) {
+    return <div className="min-h-screen bg-gradient-to-br from-brand-50 via-kids-50 to-white" />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-brand-50 via-kids-50 to-white p-4">

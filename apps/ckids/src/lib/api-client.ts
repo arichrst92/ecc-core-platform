@@ -4,6 +4,7 @@
  */
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from './auth-store';
+import { SessionExpiredError, bearerOf, createTokenRefresher } from './token-refresh';
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4100',
@@ -16,25 +17,17 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-let isRefreshing = false;
-let pendingQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}> = [];
-
-function processQueue(error: unknown, token: string | null) {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (error) reject(error);
-    else if (token) resolve(token);
-  });
-  pendingQueue = [];
-}
-
 function redirectToLogin() {
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
     window.location.href = '/login';
   }
 }
+
+const refreshTokens = createTokenRefresher(
+  useAuthStore,
+  process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4100',
+  'ecc-ckids-auth-refresh',
+);
 
 apiClient.interceptors.response.use(
   (res) => res,
@@ -49,44 +42,18 @@ apiClient.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    const { refreshToken, setAuth, clearAuth, user } = useAuthStore.getState();
-    if (!refreshToken || !user) {
-      clearAuth();
-      redirectToLogin();
-      return Promise.reject(err);
-    }
-
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        pendingQueue.push({
-          resolve: (token) => {
-            original.headers = { ...original.headers, Authorization: `Bearer ${token}` };
-            resolve(apiClient(original));
-          },
-          reject,
-        });
-      });
-    }
-
     original._retry = true;
-    isRefreshing = true;
     try {
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4100'}/auth/refresh`,
-        { refreshToken },
-      );
-      const { accessToken, refreshToken: newRefresh } = res.data.data;
-      setAuth({ accessToken, refreshToken: newRefresh, user });
-      processQueue(null, accessToken);
+      const accessToken = await refreshTokens(bearerOf(original.headers));
       original.headers = { ...original.headers, Authorization: `Bearer ${accessToken}` };
       return apiClient(original);
     } catch (refreshErr) {
-      processQueue(refreshErr, null);
-      clearAuth();
-      redirectToLogin();
+      // Logout HANYA kalau sesi benar-benar tidak valid. Error jaringan → tetap login.
+      if (refreshErr instanceof SessionExpiredError) {
+        useAuthStore.getState().clearAuth();
+        redirectToLogin();
+      }
       return Promise.reject(refreshErr);
-    } finally {
-      isRefreshing = false;
     }
   },
 );

@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from './auth-store';
+import { SessionExpiredError, bearerOf, createTokenRefresher } from './token-refresh';
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4000',
@@ -17,33 +18,19 @@ apiClient.interceptors.request.use((config) => {
 
 // ===== Response interceptor: auto-refresh on 401 =====
 //
-// Concurrency strategy:
-// Saat 5 request fire bareng dan semua kena 401, kita hanya panggil /refresh
-// SEKALI. Request lain di-queue, lalu setelah refresh sukses semua di-retry
-// dengan token baru. Kalau refresh gagal, semua queued request di-reject dan
-// user di-redirect ke /login.
-let isRefreshing = false;
-let pendingQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}> = [];
-
-function processQueue(error: unknown, token: string | null) {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (error) reject(error);
-    else if (token) resolve(token);
-  });
-  pendingQueue = [];
-}
+// Refresh aman lintas tab (lihat lib/token-refresh.ts). Planning (/planning)
+// berbagi localStorage 'ecc-auth' + lock yang sama karena satu origin.
+const refreshTokens = createTokenRefresher(
+  useAuthStore,
+  apiClient.defaults.baseURL ?? '',
+  'ecc-auth-refresh',
+);
 
 apiClient.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
     const original = err.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // Hanya handle 401 yang belum di-retry, dan bukan request refresh itu sendiri.
-    // (Catatan: cek /auth/face/login dihilangkan — portal tidak lagi expose
-    // face login, fitur tersebut hanya di mobile app.)
     if (
       err.response?.status !== 401 ||
       original?._retry ||
@@ -53,59 +40,18 @@ apiClient.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    const { refreshToken, setAuth, clearAuth, user } = useAuthStore.getState();
-    if (!refreshToken) {
-      clearAuth();
-      redirectToLogin();
-      return Promise.reject(err);
-    }
-
-    if (isRefreshing) {
-      // Antri sampai refresh selesai
-      return new Promise((resolve, reject) => {
-        pendingQueue.push({
-          resolve: (newToken: string) => {
-            if (original.headers) {
-              original.headers.Authorization = `Bearer ${newToken}`;
-            }
-            resolve(apiClient(original));
-          },
-          reject,
-        });
-      });
-    }
-
     original._retry = true;
-    isRefreshing = true;
-
     try {
-      const res = await axios.post(
-        `${apiClient.defaults.baseURL}/auth/refresh`,
-        { refreshToken },
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-      const { accessToken, refreshToken: newRefresh } = res.data.data;
-
-      // Update store (preserve user info yang sudah ada)
-      setAuth({
-        accessToken,
-        refreshToken: newRefresh,
-        user: user!,
-      });
-
-      processQueue(null, accessToken);
-
-      if (original.headers) {
-        original.headers.Authorization = `Bearer ${accessToken}`;
-      }
+      const accessToken = await refreshTokens(bearerOf(original.headers));
+      original.headers = { ...original.headers, Authorization: `Bearer ${accessToken}` };
       return apiClient(original);
     } catch (refreshErr) {
-      processQueue(refreshErr, null);
-      clearAuth();
-      redirectToLogin();
+      // Logout HANYA kalau sesi benar-benar tidak valid. Error jaringan → tetap login.
+      if (refreshErr instanceof SessionExpiredError) {
+        useAuthStore.getState().clearAuth();
+        redirectToLogin();
+      }
       return Promise.reject(refreshErr);
-    } finally {
-      isRefreshing = false;
     }
   },
 );

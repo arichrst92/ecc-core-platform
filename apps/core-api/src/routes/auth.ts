@@ -53,6 +53,7 @@ import { audit } from '../lib/audit.js';
 import { generateUniqueKode } from '../lib/kode-reservasi.js';
 import { saveProfilePhoto } from '../lib/storage.js';
 import { faceTelemetryRouter } from './face-telemetry.js';
+import { isWithinRotationGrace } from '../lib/refresh-rotation.js';
 
 export const authRouter = Router();
 
@@ -795,7 +796,15 @@ authRouter.post('/refresh', refreshLimiter, async (req, res) => {
   const tokenHash = hashToken(refreshToken);
   const record = await prisma.refreshToken.findUnique({ where: { tokenHash } });
 
-  // Reuse detection
+  // Rotation race (2026-10-12): beberapa tab / portal + planning berbagi refresh
+  // token. Tab A merotasi, tab B yg masih pegang token lama ikut refresh beberapa
+  // detik kemudian. Itu BUKAN pencurian — tolak saja (client akan baca token
+  // terbaru dari storage) tanpa me-revoke semua sesi.
+  if (record?.revokedAt && isWithinRotationGrace(record.revokedAt)) {
+    throw new ApiError(401, 'REFRESH_TOKEN_ROTATED', 'Refresh token sudah diperbarui di tab lain.');
+  }
+
+  // Reuse detection (di luar jeda toleransi) — anggap token bocor, cabut semua.
   if (record?.revokedAt) {
     logger.warn(
       { userId: payload.sub, ip: req.ip },

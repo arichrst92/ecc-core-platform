@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Phone, ShieldCheck, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -21,6 +21,20 @@ export default function LoginPage() {
   const [noHp, setNoHp] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // Sudah login (token tersimpan, mis. setelah browser ditutup lalu dibuka lagi)
+  // → langsung ke dashboard / ?next. Kalau access token kedaluwarsa, request
+  // pertama otomatis refresh pakai refresh token (365 hari).
+  useEffect(() => {
+    const { accessToken, refreshToken, user } = useAuthStore.getState();
+    if ((accessToken || refreshToken) && user && user.canAccessPortal !== false) {
+      const next = new URLSearchParams(window.location.search).get('next');
+      router.replace(next && next.startsWith('/') ? next : '/dashboard');
+      return;
+    }
+    setCheckingSession(false);
+  }, [router]);
 
   async function handleRequestOtp() {
     const normalized = normalizePhoneInput(noHp);
@@ -66,6 +80,10 @@ export default function LoginPage() {
     // (planning / operations app) supaya setelah login balik ke sso-out.
     const next = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
     router.push(next && next.startsWith('/') ? next : '/dashboard');
+  }
+
+  if (checkingSession) {
+    return <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white" />;
   }
 
   return (

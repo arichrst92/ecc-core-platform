@@ -105,7 +105,8 @@ export const errorBreadcrumbSchema = z
 
 export const diagnosticsErrorDeviceSchema = z
   .object({
-    platform: z.enum(['ios', 'android']),
+    // 'web' = Els App versi browser (elsapp.eccchurch.global). Kolom DB VarChar.
+    platform: z.enum(['ios', 'android', 'web']),
     osVersion: z.string().max(32).optional(),
     appVersion: z.string().max(32).optional(),
     release: z.string().max(64).optional(),
@@ -149,7 +150,7 @@ export type FaceTelemetryQuery = z.infer<typeof faceTelemetryQuerySchema>;
 export const errorEventQuerySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
-  platform: z.enum(['ios', 'android', 'all']).optional().default('all'),
+  platform: z.enum(['ios', 'android', 'web', 'all']).optional().default('all'),
   release: z.string().max(64).optional(),
   search: z.string().max(200).optional(),     // substring di message
   noHp: z.string().max(32).optional(),

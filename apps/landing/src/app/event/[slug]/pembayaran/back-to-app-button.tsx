@@ -7,14 +7,53 @@ import { Smartphone, ExternalLink } from 'lucide-react';
 const IOS_APP_URL = 'https://apps.apple.com/app/els-global-app/id6743088520';
 const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=idea.eccchurch.global';
 
+/**
+ * Els App versi web (elsapp.eccchurch.global) membuka halaman ini di tab yang
+ * sama dengan `?return=<url kembali>`. Hanya origin di bawah ini yang diterima
+ * (cegah open redirect). App native tidak pernah mengirim `return`.
+ */
+const WEB_APP_ORIGINS = ['https://elsapp.eccchurch.global', 'http://localhost:8081'];
+
+function readWebReturnUrl(): string | null {
+  const raw = new URLSearchParams(window.location.search).get('return');
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    return WEB_APP_ORIGINS.includes(u.origin) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function BackToAppButton({ eventId }: { eventId: string }) {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
+  const [webReturn, setWebReturn] = useState<string | null>(null);
 
   useEffect(() => {
     const ua = navigator.userAgent;
     if (/android/i.test(ua)) setPlatform('android');
     else if (/iphone|ipad|ipod/i.test(ua)) setPlatform('ios');
+    setWebReturn(readWebReturnUrl());
   }, []);
+
+  // Dari Els App web → cukup tombol kembali ke tab app (tanpa deeplink / store).
+  if (webReturn) {
+    return (
+      <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 text-center shadow-sm">
+        <Smartphone className="w-8 h-8 text-orange-500 mx-auto mb-3" />
+        <h3 className="font-semibold text-neutral-900 mb-2">Kembali ke Els App</h3>
+        <p className="text-xs text-neutral-500 mb-4">
+          Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di Els App.
+        </p>
+        <a
+          href={webReturn}
+          className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
+        >
+          Kembali ke Els App
+        </a>
+      </div>
+    );
+  }
 
   const isMobile = platform !== 'other';
   const storeUrl = platform === 'ios' ? IOS_APP_URL : ANDROID_APP_URL;

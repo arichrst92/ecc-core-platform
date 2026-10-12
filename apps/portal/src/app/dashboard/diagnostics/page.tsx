@@ -95,7 +95,7 @@ interface ErrorGroup {
 
 function ErrorEventsTab() {
   const [search, setSearch] = useState('');
-  const [platform, setPlatform] = useState<'all' | 'ios' | 'android'>('all');
+  const [platform, setPlatform] = useState<'all' | 'ios' | 'android' | 'web'>('all');
   const [selectedFp, setSelectedFp] = useState<string | null>(null);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -127,6 +127,7 @@ function ErrorEventsTab() {
           <option value="all">All</option>
           <option value="ios">iOS</option>
           <option value="android">Android</option>
+          <option value="web">Web</option>
         </Select>
         <button
           type="button"

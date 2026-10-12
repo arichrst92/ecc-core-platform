@@ -99,14 +99,14 @@ const SECTIONS: Section[] = [
         items: [
           'Elsa (Els Agentic) — AI chat untuk tanya data ECC (jemaat, ibadah, event, homecell, dll)',
           'User Guide — panduan ini',
-          'Entity — Sinode, Cabang Gereja',
-          'Service — Ibadah, Kategori, Pelayanan, Kehadiran',
+          'Sinode — Gereja, Cabang Gereja',
+          'Service — Ibadah, Kategori, Pelayanan, Permintaan Volunteer, Kehadiran',
           'People — Jemaat, Role, Relasi',
           'Community — Homecell Area, Homecell',
           'Movement — Event, Visit, Local Market',
           'Broadcast — News, Renungan',
           'App Settings — Legal Docs, App Versions',
-          'Developer Tools — Role Access, API Keys, Audit Log, Maintenance, Server Health',
+          'Developer Tools — Role Access, API Keys, Audit Log, Maintenance, Server Health, Credential, Diagnostics, Shiftsoft Sync, WhatsApp Notif Config, Technical Documentation, Team IT Minister, Planning Backlog',
           'Profil & Keamanan (bawah) — edit data sendiri',
         ],
       },
@@ -208,11 +208,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'entity',
-    title: 'Entity — Sinode & Cabang',
+    title: 'Sinode — Gereja & Cabang',
     icon: Building2,
     summary: 'Kelola struktur organisasi level atas: sinode, cabang gereja, dan rekening bank cabang.',
     content: [
-      { kind: 'menu-card', href: '/dashboard/sinode', label: 'Sinode', description: 'Top-level organisasi (mis. ECC Indonesia). Sinode menaungi banyak cabang.' },
+      { kind: 'menu-card', href: '/dashboard/sinode', label: 'Gereja', description: 'Top-level organisasi gereja/sinode (mis. ECC Indonesia) yang menaungi banyak cabang. Di sidebar ada di grup Sinode dengan nama menu "Gereja".' },
       { kind: 'menu-card', href: '/dashboard/cabang', label: 'Cabang Gereja', description: 'Cabang lokal di bawah sinode. Punya alamat, kontak, koordinat untuk peta, dan multi-rekening bank.' },
       {
         kind: 'steps',
@@ -251,6 +251,7 @@ const SECTIONS: Section[] = [
       { kind: 'menu-card', href: '/dashboard/ibadah', label: 'Ibadah', description: 'Jadwal ibadah recurring (mingguan/bulanan) atau one-time event. Toggle List/Kalender view.' },
       { kind: 'menu-card', href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', description: 'Master kategori (mis. Ibadah Umum, Pemuda, KKR, Doa).' },
       { kind: 'menu-card', href: '/dashboard/pelayanan', label: 'Pelayanan', description: 'Tim ministry (Worship, Multimedia, Usher, dll) + role per pelayanan.' },
+      { kind: 'menu-card', href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', description: 'Jemaat yang mengajukan bergabung ke ministry dari Els App. Leader/Fulltimer menyetujui (sambil menentukan peran) atau menolak.' },
       { kind: 'menu-card', href: '/dashboard/kehadiran', label: 'Kehadiran', description: 'Reservasi + check-in jemaat per ibadah per tanggal.' },
       {
         kind: 'steps',
@@ -289,7 +290,26 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'warning',
-        text: 'Petugas harus sudah jadi member Pelayanan tsb dulu (via halaman detail jemaat). Validasi backend: pelayananRole harus belong ke pelayanan yang dipilih.',
+        text: 'Petugas harus sudah jadi member Pelayanan tsb dulu (via halaman detail jemaat, atau menyetujui Permintaan Volunteer). Validasi backend: pelayananRole harus belong ke pelayanan yang dipilih.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Sejak Oktober 2026, jemaat yang bergabung ke ministry dari Els App tidak langsung jadi anggota — permintaannya berstatus menunggu sampai disetujui leader. Leader dan Fulltimer mendapat notifikasi saat ada permintaan baru.',
+      },
+      {
+        kind: 'steps',
+        title: 'Setujui / tolak permintaan volunteer',
+        items: [
+          'Buka Service → Permintaan Volunteer (atau tombol "Permintaan Volunteer" di halaman Pelayanan — angka di badge = jumlah yang menunggu).',
+          'Chip di atas: "Semua" untuk gabungan semua ministry, atau klik nama ministry untuk melihat satu ministry saja.',
+          'Periksa data pemohon: nama (klik untuk buka detail jemaat), cabang, no HP, peran yang diminta, dan motivasi.',
+          'Untuk menyetujui: pilih peran di dropdown (default = peran yang diminta, boleh diganti) → klik Setujui. Jemaat langsung jadi anggota aktif dan mendapat notifikasi.',
+          'Untuk menolak: klik Tolak → isi alasan (opsional) → Tolak. Pemohon mendapat notifikasi dan boleh mengajukan lagi.',
+        ],
+      },
+      {
+        kind: 'tip',
+        text: 'Siapa yang bisa memproses: Fulltimer (semua ministry) dan leader ministry — anggota aktif dengan peran level 5 ke atas (mis. Leader, Co-Leader) — hanya untuk ministry yang dia pimpin. Leader juga bisa memproses langsung dari Els App.',
       },
       {
         kind: 'steps',
@@ -367,6 +387,17 @@ const SECTIONS: Section[] = [
           'Pilih Role (mis. Fulltimer), Sub-Role (Pastoral, Pengabdian, dll), Sub-Role Status opsional (Pemimpin Cabang, Magang, dll).',
           'Set tanggal mulai. Kosongkan tanggal selesai untuk role aktif.',
           'Klik Tambah. Jemaat sekarang punya role itu — auto-recompute access portal.',
+        ],
+      },
+      {
+        kind: 'bullet',
+        title: 'Fitur halaman Jemaat',
+        items: [
+          'Filter: cabang, homecell, homecell area, ministry, status, jenis kelamin, role, umur. Search berdasarkan nama, email, atau no HP.',
+          'Kolom Legacy Ref: kode jemaat hasil sync Shiftsoft (nama cabang + ID lama, mis. ECCBANDUNG1234). Jemaat yang daftar langsung lewat app ditandai "organic".',
+          'Export Excel (CSV) dan PDF mengikuti filter yang aktif.',
+          'Cek Duplikat: temukan jemaat dengan no HP / email / nama + tanggal lahir yang sama.',
+          'Detail jemaat: QR card, tombol kontak WhatsApp/Email, riwayat homecell, event, ibadah, group, visit, local market, indikator keaktifan 3 bulan, dan Export PDF profil.',
         ],
       },
       {
@@ -466,6 +497,14 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
+        text: 'Event berbayar di Els App: untuk Nominal Sukarela (NOMINAL_BEBAS), pendaftaran + nominal + upload bukti transfer dilakukan di halaman web (eccchurch.global/event/…/pembayaran) sesuai aturan App Store. App membuka halaman itu dalam keadaan sudah login (token sekali pakai, sesi 30 menit), jemaat memilih diri sendiri / anggota keluarga, mengisi nominal (min Rp 1.000/orang), lalu upload bukti. Tombol "Kembali ke Els App" menutup browser dan kembali ke app.',
+      },
+      {
+        kind: 'tip',
+        text: 'Peserta yang mendaftar dari web muncul di detail event portal sama seperti dari app (status Menunggu Verifikasi setelah upload bukti). Kalau halaman dibuka tanpa dari app (mis. link share), tampil hanya info rekening/QRIS. Pesan "Sesi kedaluwarsa" berarti jemaat perlu membuka ulang dari Els App.',
+      },
+      {
+        kind: 'paragraph',
         text: 'Visit dan Local Market di portal hanya read-only + delete moderation. Aktivitas inti — jemaat scan QR untuk record visit, atau owner CRUD bisnis — dilakukan di mobile app. Portal admin berguna untuk lihat aktivitas + moderasi konten inappropriate.',
       },
     ],
@@ -534,12 +573,16 @@ const SECTIONS: Section[] = [
         text: 'Min Supported Version bikin user dengan versi lebih lama dapat FORCE UPDATE modal (tidak bisa dismiss). Naikkan hanya kalau ada breaking API change.',
       },
       {
+        kind: 'tip',
+        text: 'Oktober 2026: Min Supported Version dinaikkan ke 2.2.6 (iOS + Android) untuk mengakhiri face login sekaligus memastikan semua user dapat perbaikan hapus keluarga & pembayaran event sukarela. Download URL App Store jangan pakai /id/ (region-lock) — pakai apps.apple.com/app/els-global-app/id6743088520.',
+      },
+      {
         kind: 'paragraph',
-        text: 'In-App Notifications (Modul 30): backend auto-kirim notifikasi ke bell icon mobile jemaat saat 16 event across kids, family, group, event, homecell, visit, dan branch-change flow. Mobile polling per 30 detik pakai endpoint /admin/me/notifications. Portal admin tidak punya UI notif — cuma emit dari 11 route handler.',
+        text: 'In-App Notifications (Modul 30): backend auto-kirim notifikasi ke bell icon mobile jemaat saat 19 jenis event across kids, family, group, event, homecell, visit, branch-change, dan ministry join flow. Mobile polling per 30 detik pakai endpoint /admin/me/notifications. Portal admin tidak punya UI notif — cuma emit dari 11 route handler.',
       },
       {
         kind: 'bullet',
-        title: 'Event yang trigger notif in-app (16 total)',
+        title: 'Event yang trigger notif in-app (19 total)',
         items: [
           'CKIDS_CHECKIN: admin check-in anak → parent dapat notif dgn 6-digit kode jemput di metadata',
           'CKIDS_PICKUP: anak dijemput → parent dapat konfirmasi + warning kalau bukan mereka yg jemput',
@@ -553,11 +596,13 @@ const SECTIONS: Section[] = [
           'HOMECELL_ATTENDED: PIC scan QR member di pertemuan homecell → member dapat konfirmasi',
           'VISIT_RECORDED: jemaat lain scan QR Anda untuk record visit → target dapat notif dgn detail visit',
           'BRANCH_CHANGE_APPROVED / _REJECTED: admin review permohonan pindah cabang → jemaat notif hasil',
+          'MINISTRY_JOIN_REQUESTED: jemaat ajukan gabung ministry → leader dapat notif',
+          'MINISTRY_JOIN_APPROVED / _REJECTED: leader memproses permintaan → pemohon dapat notif hasil',
         ],
       },
       {
         kind: 'tip',
-        text: 'Notif in-app terpisah dari WA queue existing (NotificationLog). Sebagian event kirim keduanya (mis. group add/remove kirim WA + in-app), sebagian cuma in-app (mis. kids check-in). Kalau mau WA delivery juga untuk event tertentu, coordinate ke IDEA dev.',
+        text: 'WhatsApp per jenis notif bisa diaktifkan/dimatikan dan template-nya diedit sendiri di Developer Tools → WhatsApp Notif Config. Jenis baru default nonaktif. In-app tetap terkirim terlepas dari setting WA.',
       },
     ],
   },
@@ -572,6 +617,10 @@ const SECTIONS: Section[] = [
       { kind: 'menu-card', href: '/dashboard/audit-log', label: 'Audit Log', description: 'Lihat semua aktivitas CUD + auth events. Filter by user/resource/range tanggal/search.' },
       { kind: 'menu-card', href: '/dashboard/maintenance', label: 'Maintenance', description: 'Manual trigger cleanup jobs + WA reminder dispatch + diagnostic counts.' },
       { kind: 'menu-card', href: '/dashboard/server-health', label: 'Server Health', description: 'Real-time CPU/memory/DB/storage stats + troubleshooting guide untuk tim ops.' },
+      { kind: 'menu-card', href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', description: 'Aktifkan/matikan notifikasi WhatsApp per jenis (reminder, event, homecell, keluarga, ministry, dll), edit template pesan, dan kirim test ke nomor sendiri.' },
+      { kind: 'menu-card', href: '/dashboard/tech-docs', label: 'Technical Documentation', description: 'Dokumentasi teknis untuk tim dev/ops: arsitektur, database, deploy, nginx, PM2, testing.' },
+      { kind: 'menu-card', href: '/dashboard/it-minister-team', label: 'Team IT Minister', description: 'Struktur tim IT Minister (divisi + peran). Anggota aktif otomatis dapat akses Planning Backlog.' },
+      { kind: 'menu-card', href: '/planning', label: 'Planning Backlog', description: 'Aplikasi planning tim IT (Epic → Story → Task, Sprint, Kanban, komentar). Terbuka di tab baru tanpa login ulang; hanya untuk anggota IT Minister Team.' },
       {
         kind: 'steps',
         title: 'Beri akses portal ke role baru',
@@ -585,6 +634,32 @@ const SECTIONS: Section[] = [
       {
         kind: 'paragraph',
         text: 'Server Health auto-refresh 5 detik dengan alert otomatis (memory >90%, CPU overload, DB latency >500ms, dll). Termasuk troubleshooting section lengkap untuk 16 case umum di production.',
+      },
+      {
+        kind: 'steps',
+        title: 'Atur notifikasi WhatsApp',
+        items: [
+          'Buka Developer Tools → WhatsApp Notif Config. Notif dikelompokkan per kategori (Ibadah, Event, Homecell, Pelayanan, dll).',
+          'Klik satu jenis notif → aktifkan / matikan dengan toggle.',
+          'Edit template — gunakan placeholder yang tercantum, mis. {nama}, {event_judul}. Klik Simpan (berlaku maks 60 detik kemudian).',
+          'Klik Test untuk mengirim contoh pesan ke nomor Anda sebelum diaktifkan untuk semua jemaat.',
+        ],
+      },
+      {
+        kind: 'steps',
+        title: 'Pakai Planning Backlog',
+        items: [
+          'Pastikan Anda terdaftar aktif di Team IT Minister (kalau tidak, halaman menampilkan "Akses Ditolak").',
+          'Klik Developer Tools → Planning Backlog → terbuka di tab baru (portal.eccchurch.global/planning).',
+          'Sprints: buat sprint, lalu Activate (hanya 1 sprint aktif sekaligus) dan Complete saat selesai.',
+          'Backlog: buat Epic → tambah Story → tambah Task. Isi owner/assignee dari anggota IT Minister Team, priority P0–P3, sprint, estimasi jam.',
+          'Kanban: pilih level Epic/Story/Task, geser kartu antar kolom status (atau pakai dropdown di kartu). Klik kartu untuk detail + komentar.',
+          'My Items: daftar epic/story/task yang di-assign ke Anda.',
+        ],
+      },
+      {
+        kind: 'tip',
+        text: 'Menu Operations Tickets sementara disembunyikan sampai aplikasinya dibangun.',
       },
       {
         kind: 'tip',

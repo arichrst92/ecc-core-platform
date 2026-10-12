@@ -26,6 +26,7 @@ import {
   Terminal,
   Globe,
   Layers,
+  FlaskConical,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -55,7 +56,7 @@ const SECTIONS: Section[] = [
       {
         kind: 'p',
         text:
-          'ECC Master Data Platform adalah monorepo pnpm workspaces + Turborepo. Terdiri dari 4 apps (core-api, portal, ckids, landing) + shared packages (database, shared-types, auth). Semua service running di 1 VPS Hostinger dgn Nginx reverse proxy + PM2 process manager.',
+          'ECC Master Data Platform adalah monorepo pnpm workspaces + Turborepo. Terdiri dari 5 apps (core-api, portal, planning, ckids, landing) + shared packages (database, shared-types, auth). Semua service running di 1 VPS Hostinger dgn Nginx reverse proxy + PM2 process manager.',
       },
       {
         kind: 'table',
@@ -64,16 +65,17 @@ const SECTIONS: Section[] = [
           ['Backend API', 'Node.js 20 + Express 4 + TypeScript', '4100', 'api.eccchurch.global'],
           ['Portal (admin)', 'Next.js 14 App Router + Tailwind', '3100', 'portal.eccchurch.global'],
           ['CKids Web', 'Next.js 14 (subdomain)', '3300', 'ckids.eccchurch.global'],
+          ['Planning Backlog', 'Next.js 14 (basePath /planning)', '3400', 'portal.eccchurch.global/planning'],
           ['Landing Site', 'Next.js 14 (public)', '3200', 'eccchurch.global'],
           ['Database', 'PostgreSQL 16 + Prisma 5.22', '5432', 'localhost (VPS internal)'],
           ['Reverse Proxy', 'Nginx 1.24 + Certbot SSL', '443', 'all subdomains'],
-          ['Process Manager', 'PM2 (cluster mode)', '—', '—'],
+          ['Process Manager', 'PM2 (fork mode)', '—', '—'],
         ],
       },
       {
         kind: 'callout',
         variant: 'info',
-        text: 'VPS production: Hostinger 187.77.118.85 (Ubuntu 22 LTS). Deploy root: /var/www/ecc-core-platform. Mobile app (React Native Expo) di repo terpisah /Users/idea/Projects/ecc-mobile-app.',
+        text: 'VPS production: Hostinger 187.77.118.85 (Ubuntu 22 LTS). Deploy root: /var/www/ecc-core-platform. Mobile app (React Native Expo) di repo terpisah GitHub arichrst92/ecc-global-app — folder lokal ~/Projects/ecc-mobile-app (nama folder beda dari nama repo).',
       },
     ],
   },
@@ -90,6 +92,7 @@ const SECTIONS: Section[] = [
 ├── apps/
 │   ├── core-api/       Express backend, main API server
 │   ├── portal/         Admin portal (Fulltimer)
+│   ├── planning/       Planning Backlog IT Minister Team (path /planning)
 │   ├── ckids/          Kids gift stall admin (subdomain)
 │   └── landing/        Public landing site
 ├── packages/
@@ -144,18 +147,23 @@ pnpm dev`,
           'Event + EventParticipation: event satu-kali dgn quota, bayar, checkin QR.',
           'Homecell + HomecellSchedule + HomecellAttendance: cell group + jadwal pertemuan + absensi.',
           'HadiahKatalog + JemaatPointBalance + PointTransaction + HadiahRedeem: CKids gamification (kids earn point via kehadiran, redeem hadiah).',
-          'Notification (Modul 30): in-app notification feed dgn 16 InAppNotifType.',
+          'Notification (Modul 30): in-app notification feed dgn 19 InAppNotifType (termasuk MINISTRY_JOIN_REQUESTED/APPROVED/REJECTED).',
+          'WaNotificationConfig: on/off + template per tipe notif WhatsApp, dikelola di Developer Tools → WhatsApp Notif Config.',
+          'PelayananJoinRequest: permintaan bergabung ke ministry (PENDING/APPROVED/REJECTED/CANCELLED). Terpisah dari JemaatPelayanan supaya membership selalu aktif. Unique partial index: 1 PENDING per (jemaat, ministry).',
+          'WebActionToken: token sekali pakai (10 menit) → session web (30 menit) untuk daftar + upload bukti event NOMINAL_BEBAS di web. Disimpan sebagai SHA-256 hash.',
+          'ITMinisterTeam + BacklogSprint/Epic/Story/Task/Comment: IT Minister Team (RBAC planning) + Planning Backlog app.',
           'Integration (Modul 29 rollback): third-party API keys runtime editable.',
         ],
       },
       {
         kind: 'code',
         lang: 'bash',
-        content: `# Migrations dev (bikin baru + apply)
-pnpm --filter @ecc/database prisma migrate dev --name <migration_name>
+        content: `# JANGAN pakai migrate dev (lihat callout di bawah).
+# Buat folder migration manual: packages/database/prisma/migrations/<YYYYMMDDHHMMSS>_<nama>/migration.sql
+# berisi HANYA CREATE TABLE/INDEX/ALTER terkait fitur.
 
-# Production deploy (apply pending migrations)
-pnpm --filter @ecc/database prisma migrate deploy
+# Apply migration (dev lokal & production sama)
+pnpm --filter @ecc/database db:migrate:deploy
 
 # Regen Prisma client (setelah edit schema)
 pnpm --filter @ecc/database db:generate
@@ -168,6 +176,11 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
         kind: 'callout',
         variant: 'warning',
         text: 'CRITICAL: setelah edit schema.prisma, WAJIB rebuild @ecc/shared-types + restart core-api. Prisma client di apps/core-api/node_modules pakai types dari packages/database dist. Kalau tidak rebuild, type stale = runtime error.',
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'prisma migrate dev DILARANG di repo ini. Kolom diagnostics_error_event.fingerprint adalah generated column di DB tapi di schema dideklarasikan String? biasa → migrate dev mendeteksi drift, gagal ("column fingerprint is a generated column"), dan menghasilkan SQL normalisasi berbahaya (DROP DEFAULT uuid, RenameIndex). Workflow: edit schema → tulis migration.sql manual → db:migrate:deploy → db:generate. Kalau migrate dev sempat gagal: hapus folder migration-nya + DELETE FROM _prisma_migrations WHERE migration_name = ... sebelum retry.',
       },
       {
         kind: 'mermaid',
@@ -269,6 +282,8 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
           ['/auth/email/request-magic-link', 'POST', 'Email magic link (backup)'],
           ['/auth/email/verify', 'POST', 'Verify magic link token'],
           ['/auth/me', 'GET', 'Current user + roles + menuAccess'],
+          ['/auth/web-action-token', 'POST', 'Mint token sekali pakai (event-payment) untuk web'],
+          ['/web-action/exchange', 'POST', 'Tukar token → session web 30 menit (dipanggil landing SSR)'],
         ],
       },
       {
@@ -287,6 +302,21 @@ router.use(requireFulltimer); // semua endpoint di sini fulltimer-only
 import { hasMenuAccess } from '@ecc/shared-types';
 const canWrite = hasMenuAccess(user.menuAccess, 'jemaat', 'write');`,
       },
+      {
+        kind: 'table',
+        headers: ['Gate khusus', 'Aturan', 'Lokasi'],
+        rows: [
+          ['Planning Backlog', 'Anggota aktif ITMinisterTeam (cache 60s) — bukan anggota → 403, app tampil /planning/no-access', 'lib/rbac-planning.ts'],
+          ['Ministry join approval', 'Membership aktif role level ≥ 5 di ministry tsb, atau Fulltimer', 'lib/ministry-access.ts'],
+          ['Daftar event batch', 'Non-Fulltimer hanya boleh jemaatIds diri sendiri + keluarga', 'routes/admin/event.ts'],
+          ['Web action session', 'Header X-Web-Session, scope 1 jemaat + 1 event, hanya 5 endpoint /web-action/*', 'routes/web-action.ts'],
+        ],
+      },
+      {
+        kind: 'callout',
+        variant: 'info',
+        text: 'Web action session sengaja BUKAN JWT penuh. Request di-forward ke router existing (event / me) dengan req.user scoped (isFulltimer=false, roles=[]) supaya validasi, notif, dan audit identik dengan app. Landing menyimpan session di cookie httpOnly ecc_wa dan memanggil BE lewat proxy /api/web-action/*.',
+      },
     ],
   },
   {
@@ -302,9 +332,9 @@ const canWrite = hasMenuAccess(user.menuAccess, 'jemaat', 'write');`,
       {
         kind: 'list',
         items: [
-          'WhatsApp via Fonnte gateway: OTP login, reminder ibadah (WIB 7-10 pagi), reminder event, group notification.',
+          'WhatsApp via Fonnte gateway: OTP login, reminder ibadah/event H-1, ulang tahun, dan notif transaksi. Semua notif non-OTP lewat sendWaIfEnabled(type, noHp, vars) — kirim hanya kalau row WaNotificationConfig untuk type tsb ada + aktif; template di-edit dari portal (cache 60s).',
           'Email via SendGrid: magic link login backup, welcome email, notif transaksi (opsional).',
-          'In-App Notification (Modul 30): 16 InAppNotifType — kids checkin/pickup, gift redeem, point earn/adjust, family link, group add/remove, event approve/checkin, homecell attend, visit, branch change.',
+          'In-App Notification (Modul 30): 19 InAppNotifType — kids checkin/pickup, gift redeem, point earn/adjust, family link, group add/remove/dismiss, event register/approve/checkin, homecell attend, visit, branch change, ministry join requested/approved/rejected.',
         ],
       },
       {
@@ -331,6 +361,11 @@ await createNotificationBatch(guardians, {...});`,
         kind: 'p',
         text:
           'Mobile app polling GET /admin/me/notifications/unread-count setiap 30s untuk badge. GET /admin/me/notifications untuk list (cursor pagination). POST :id/read + mark-all-read.',
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'Tambah tipe WA baru = WAJIB seed row wa_notification_config di migration (default is_enabled=false). Tanpa row, getConfig() return null → notif diam-diam tidak terkirim. Guard test src/wa-notif-seed.test.ts akan gagal kalau ada type di code yang belum di-seed.',
       },
     ],
   },
@@ -403,30 +438,33 @@ curl -H "x-api-key: $ANTHROPIC_KEY" \\
         kind: 'code',
         lang: 'bash',
         content: `# Mac
-cd /Users/idea/Projects/ecc-core-platform
+cd ~/Projects/ecc-core-platform
 pnpm --filter @ecc/database db:generate  # kalau schema berubah
-pnpm --filter @ecc/shared-types build     # WAJIB kalau schema/shared type berubah
-pnpm --filter @ecc/core-api build
-pnpm --filter @ecc/portal build
-git add . && git commit -m "..." && git push origin main
+pnpm --filter @ecc/core-api test          # unit test (vitest)
+git add -A && git commit -m "..." && git push origin main
 
-# VPS
+# VPS — login root lalu pindah ke user deploy
 ssh root@187.77.118.85
+sudo su - deploy
+
 cd /var/www/ecc-core-platform
-git pull origin main
-pnpm install --frozen-lockfile
+git pull
+pnpm install
+pnpm --filter @ecc/database db:migrate:deploy   # kalau ada migration baru
 pnpm --filter @ecc/database db:generate
-pnpm --filter @ecc/database prisma migrate deploy  # apply pending migrations
+cd packages/shared-types && rm -rf dist tsconfig.tsbuildinfo && cd ../..
 pnpm --filter @ecc/shared-types build
 pnpm --filter @ecc/core-api build
-pnpm --filter @ecc/portal build
-pm2 restart ecc-core-api --update-env  # --update-env untuk reload .env
-pm2 restart ecc-portal --update-env`,
+pnpm --filter @ecc/portal build                 # sesuai app yang berubah
+pnpm --filter @ecc/landing build
+pnpm --filter @ecc/planning build
+pm2 restart ecc-core-api ecc-portal --update-env
+pm2 status`,
       },
       {
         kind: 'callout',
         variant: 'warning',
-        text: '5 deploy gotcha: (1) workspace dist harus di-rebuild kalau shared-types berubah, (2) transitive deps kadang missing di production install, (3) env loading pakai dotenv-cli via -e ../../.env, (4) NEXT_PUBLIC_* baked di build time (tidak runtime), (5) absolute paths untuk file uploads harus /var/www/... (bukan relative ./uploads).',
+        text: 'Deploy gotcha: (1) workspace dist harus di-rebuild kalau shared-types berubah, (2) tsconfig.tsbuildinfo kadang corrupt → shared-types cuma compile 1 file → error "Cannot find module @ecc/shared-types"; selalu hapus dist + tsbuildinfo sebelum build, (3) jangan pakai tsc global di VPS — pakai pnpm --filter, (4) env loading pakai dotenv-cli via -e ../../.env, (5) NEXT_PUBLIC_* baked di build time, (6) absolute paths upload harus /var/www/..., (7) pnpm-lock.yaml lokal di VPS bisa bentrok saat git pull → git checkout -- pnpm-lock.yaml.',
       },
     ],
   },
@@ -551,6 +589,24 @@ pm2 restart ecc-portal --update-env`,
       {
         kind: 'code',
         lang: 'nginx',
+        content: `# Planning Backlog TIDAK pakai subdomain — path /planning di server block portal.
+# Taruh SEBELUM location /. Next.js planning pakai basePath '/planning', jadi proxy tanpa strip prefix.
+location /planning {
+  proxy_pass http://127.0.0.1:3400;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}`,
+      },
+      {
+        kind: 'callout',
+        variant: 'info',
+        text: 'Karena same-origin dengan portal, planning membaca localStorage ecc-auth milik portal — tidak perlu SSO/login ulang. Di dev lokal, portal next.config punya rewrite /planning/* → localhost:3400 dengan efek yang sama.',
+      },
+      {
+        kind: 'code',
+        lang: 'nginx',
         content: `# /etc/nginx/sites-available/api.eccchurch.global
 server {
   listen 443 ssl http2;
@@ -593,7 +649,7 @@ sudo certbot --nginx -d ckids.eccchurch.global`,
       {
         kind: 'p',
         text:
-          'PM2 handle 3 process: ecc-core-api (cluster max), ecc-portal (fork), ecc-ckids (fork), ecc-landing (fork). Config di ecosystem.config.cjs. Auto-restart on crash, log rotation via pm2-logrotate module.',
+          'PM2 handle 5 process (semua fork mode): ecc-core-api :4100, ecc-portal :3100, ecc-landing :3200, ecc-ckids :3300, ecc-planning :3400. Config di ecosystem.config.cjs. Auto-restart on crash, log rotation via pm2-logrotate module.',
       },
       {
         kind: 'code',
@@ -615,6 +671,11 @@ pm2 start ecosystem.config.cjs --only ecc-core-api
 
 # Metrics + monitoring
 pm2 monit`,
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'Kalau log berisi "/usr/bin/bash: start: No such file or directory" dan restart count terus naik (mem 0b), config process di cache PM2 rusak → pm2 delete <nama> lalu pm2 start ecosystem.config.cjs --only <nama> && pm2 save. EADDRINUSE = port bentrok; cek dengan sudo ss -tulnp | grep :<port>.',
       },
     ],
   },
@@ -646,6 +707,40 @@ git add ... && git commit && git push
 # Terminal 2 (ecc-mobile-app)
 cd /Users/idea/Projects/ecc-mobile-app
 git add docs/backend-request-xxx.md && git commit && git push`,
+      },
+    ],
+  },
+  {
+    id: 'testing',
+    title: 'Unit Testing',
+    icon: FlaskConical,
+    summary: 'Vitest di core-api — helper murni + guard regresi.',
+    blocks: [
+      {
+        kind: 'p',
+        text: 'Unit test pakai Vitest (apps/core-api). File *.test.ts di-exclude dari tsconfig build (tidak ikut dist). Pola: logic murni diekstrak ke lib/*.ts supaya bisa dites tanpa DB; dependency Prisma/WA di-mock via vi.mock + vi.hoisted.',
+      },
+      {
+        kind: 'code',
+        lang: 'bash',
+        content: `pnpm --filter @ecc/core-api test`,
+      },
+      {
+        kind: 'table',
+        headers: ['File', 'Cakupan'],
+        rows: [
+          ['src/lib/wa-notif.test.ts', 'renderTemplate, sendWaIfEnabled (skip/kirim/error ditelan), cache config'],
+          ['src/lib/rbac-planning.test.ts', 'Gate Planning: 401/403/lolos, cache per jemaat'],
+          ['src/lib/web-action-token.test.ts', 'Token: hash, TTL, sekali pakai, expired, salah event'],
+          ['src/lib/ministry-access.test.ts', 'Hak kelola ministry, validasi join, myJoinRequest'],
+          ['src/schemas.test.ts', 'Zod: bulk attendance, planning'],
+          ['src/wa-notif-seed.test.ts', 'Guard: semua tipe WA di code wajib ter-seed di migration'],
+        ],
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'Vitest (esbuild) membuang import yang binding-nya tidak dipakai. Kalau test mengimpor schema shared-types langsung dari src, tambahkan side-effect import \'.../schemas/common.js\' paling atas supaya extendZodWithOpenApi terpasang (.openapi() tersedia).',
       },
     ],
   },

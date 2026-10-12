@@ -36,6 +36,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'ibadah', label: 'Ibadah', href: '/dashboard/ibadah', group: 'Service' },
   { key: 'kategori-ibadah', label: 'Kategori Ibadah', href: '/dashboard/kategori-ibadah', group: 'Service' },
   { key: 'pelayanan', label: 'Pelayanan', href: '/dashboard/pelayanan', group: 'Service' },
+  { key: 'ministry-join-requests', label: 'Permintaan Volunteer', href: '/dashboard/pelayanan/join-requests', group: 'Service' },
   { key: 'kehadiran', label: 'Kehadiran', href: '/dashboard/kehadiran', group: 'Service' },
 
   // People

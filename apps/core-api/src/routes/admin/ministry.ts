@@ -121,6 +121,88 @@ ministryRouter.get('/', async (req, res) => {
   res.json({ success: true, data });
 });
 
+/**
+ * GET /admin/ministry/join-requests?pelayananId=
+ * Gabungan permintaan bergabung PENDING dari semua ministry yang bisa
+ * di-manage requester (Fulltimer: semua; leader: ministry yg dipimpin).
+ * Opsional filter per ministry. Dipakai halaman portal "Permintaan Volunteer".
+ *
+ * HARUS didefinisikan sebelum GET /:id (kalau tidak, "join-requests" dianggap id).
+ */
+ministryRouter.get('/join-requests', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const managed = await managedMinistryIds(req);
+  const filterId = typeof req.query.pelayananId === 'string' ? req.query.pelayananId : undefined;
+
+  if (managed !== 'ALL' && managed.size === 0) {
+    return res.json({ success: true, data: { ministries: [], requests: [], canManageAny: false } });
+  }
+  if (filterId && !canManageMinistry(managed, filterId)) {
+    throw Forbidden('Hanya leader ministry yang dapat mengelola permintaan bergabung.');
+  }
+
+  const scopeWhere = managed === 'ALL' ? {} : { pelayananId: { in: [...managed] } };
+
+  // Ringkasan per ministry (untuk chip filter) — selalu seluruh scope.
+  const grouped = await prisma.pelayananJoinRequest.groupBy({
+    by: ['pelayananId'],
+    where: { status: 'PENDING', ...scopeWhere },
+    _count: { _all: true },
+  });
+  const ministryIds = managed === 'ALL' ? undefined : [...managed];
+  const ministries = await prisma.pelayanan.findMany({
+    where: { isActive: true, ...(ministryIds ? { id: { in: ministryIds } } : {}) },
+    orderBy: { nama: 'asc' },
+    select: {
+      id: true,
+      nama: true,
+      roles: {
+        where: { isActive: true },
+        orderBy: { level: 'desc' },
+        select: { id: true, nama: true, level: true },
+      },
+    },
+  });
+  const countById = new Map(grouped.map((g) => [g.pelayananId, g._count._all]));
+
+  const requests = await prisma.pelayananJoinRequest.findMany({
+    where: {
+      status: 'PENDING',
+      ...(filterId ? { pelayananId: filterId } : scopeWhere),
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      motivasi: true,
+      pelayanan: { select: { id: true, nama: true } },
+      requestedRole: { select: { id: true, nama: true, level: true } },
+      jemaat: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          kode: true,
+          fotoUrl: true,
+          noHp: true,
+          cabang: { select: { id: true, nama: true } },
+        },
+      },
+    },
+  });
+
+  res.json({
+    success: true,
+    data: {
+      canManageAny: true,
+      ministries: ministries.map((m) => ({
+        ...m,
+        pendingRequestCount: countById.get(m.id) ?? 0,
+      })),
+      requests,
+    },
+  });
+});
+
 ministryRouter.get('/:id', async (req, res) => {
   const item = await prisma.pelayanan.findUnique({
     where: { id: req.params.id },

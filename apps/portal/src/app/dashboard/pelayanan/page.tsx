@@ -11,7 +11,9 @@ import {
   Users as UsersIcon,
   Pencil,
   X,
+  UserPlus,
 } from 'lucide-react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
@@ -35,6 +37,35 @@ interface Pelayanan {
 type DeletingTarget =
   | { kind: 'pelayanan' | 'role'; id: string; label: string }
   | null;
+
+/** Tombol ke halaman Permintaan Volunteer + badge jumlah pending. */
+function JoinRequestsLink() {
+  const { data } = useQuery({
+    queryKey: ['ministry-join-requests', 'all'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { requests: unknown[] } }>(
+        '/admin/ministry/join-requests',
+      );
+      return res.data.data;
+    },
+    staleTime: 30_000,
+  });
+  const count = data?.requests.length ?? 0;
+  return (
+    <Link
+      href="/dashboard/pelayanan/join-requests"
+      className="mr-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+    >
+      <UserPlus className="w-4 h-4" />
+      Permintaan Volunteer
+      {count > 0 && (
+        <span className="min-w-5 h-5 px-1.5 rounded-full bg-brand-500 text-white text-[11px] font-bold inline-flex items-center justify-center">
+          {count}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 export default function PelayananPage() {
   const qc = useQueryClient();
@@ -99,6 +130,7 @@ export default function PelayananPage() {
             Tim ministry operasional dengan role per-pelayanan. Klik role untuk edit.
           </p>
         </div>
+        <JoinRequestsLink />
         <AddInline
           placeholder="Pelayanan baru, mis. Drama"
           onAdd={(nama) => createPelayanan.mutate(nama)}

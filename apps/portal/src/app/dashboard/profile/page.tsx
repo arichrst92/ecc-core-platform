@@ -186,18 +186,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
-                <UserIcon className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-neutral-900 text-sm">Login Wajah (Mobile Only)</div>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Untuk akses cepat tanpa OTP, install aplikasi ECC di HP dan daftarkan
-                  wajah dari sana. Portal web tidak mendukung face login.
-                </p>
-              </div>
-            </div>
           </div>
         </section>
 

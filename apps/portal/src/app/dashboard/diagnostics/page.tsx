@@ -10,15 +10,14 @@ import {
   Loader2,
   Search,
   ChevronRight,
-  Smartphone,
   Bug,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-type Tab = 'telemetry' | 'errors' | 'config';
+type Tab = 'errors' | 'config';
 
 export default function DiagnosticsPage() {
-  const [tab, setTab] = useState<Tab>('telemetry');
+  const [tab, setTab] = useState<Tab>('errors');
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -28,8 +27,7 @@ export default function DiagnosticsPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">Diagnostics</h1>
             <p className="text-sm text-neutral-500 mt-0.5">
-              Observability mobile app — telemetry face login (mobile only),
-              runtime errors, dan app config.
+              Observability mobile app — runtime errors dan app config.
             </p>
           </div>
         </div>
@@ -37,9 +35,6 @@ export default function DiagnosticsPage() {
 
       <div className="border-b border-neutral-200 mb-6">
         <div className="flex gap-1">
-          <TabButton active={tab === 'telemetry'} onClick={() => setTab('telemetry')} icon={Smartphone}>
-            Face Telemetry
-          </TabButton>
           <TabButton active={tab === 'errors'} onClick={() => setTab('errors')} icon={Bug}>
             Error Events
           </TabButton>
@@ -49,7 +44,6 @@ export default function DiagnosticsPage() {
         </div>
       </div>
 
-      {tab === 'telemetry' && <TelemetryTab />}
       {tab === 'errors' && <ErrorEventsTab />}
       {tab === 'config' && <AppConfigTab />}
     </div>
@@ -80,168 +74,6 @@ function TabButton({
       <Icon className="w-4 h-4" />
       {children}
     </button>
-  );
-}
-
-// ============================================================
-//  Face Telemetry Tab
-// ============================================================
-
-interface TelemetryData {
-  totalEvents: number;
-  eventCounts: { event: string; outcome: string; count: number }[];
-  failureBreakdown: { reason: string | null; count: number }[];
-  latency: { step: string; p50: number | null; p95: number | null; avg: number | null; samples: number }[];
-  confidence: { avg: number | null; p50: number | null; p95: number | null; samples: number } | null;
-}
-
-function TelemetryTab() {
-  const [platform, setPlatform] = useState<'all' | 'ios' | 'android'>('all');
-  const [flow, setFlow] = useState<'all' | 'login' | 'enroll'>('all');
-
-  const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['diagnostics', 'face-telemetry', platform, flow],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: TelemetryData }>('/admin/diagnostics/face-telemetry', {
-        params: { platform, flow },
-      });
-      return res.data.data;
-    },
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Select label="Platform" value={platform} onChange={(v) => setPlatform(v as typeof platform)}>
-          <option value="all">All</option>
-          <option value="ios">iOS</option>
-          <option value="android">Android</option>
-        </Select>
-        <Select label="Flow" value={flow} onChange={(v) => setFlow(v as typeof flow)}>
-          <option value="all">All</option>
-          <option value="login">Login</option>
-          <option value="enroll">Enroll</option>
-        </Select>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50"
-        >
-          {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Refresh
-        </button>
-      </div>
-
-      {isLoading && <LoadingBlock />}
-      {!isLoading && data && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard label="Total Events (7d)" value={data.totalEvents.toLocaleString()} />
-            <StatCard
-              label="Avg Confidence (success)"
-              value={data.confidence?.avg ? data.confidence.avg.toFixed(3) : '—'}
-              hint={data.confidence?.samples ? `${data.confidence.samples} samples` : 'no data'}
-            />
-            <StatCard
-              label="p50 / p95 Confidence"
-              value={
-                data.confidence?.p50
-                  ? `${data.confidence.p50.toFixed(2)} / ${data.confidence.p95?.toFixed(2) ?? '—'}`
-                  : '—'
-              }
-            />
-          </div>
-
-          <section className="bg-white border border-neutral-200 rounded-lg p-5">
-            <h2 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Funnel — event × outcome
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-xs text-neutral-500 uppercase border-b border-neutral-200">
-                  <tr>
-                    <th className="py-2 px-3">Event</th>
-                    <th className="py-2 px-3">Outcome</th>
-                    <th className="py-2 px-3 text-right">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.eventCounts.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-4 text-center text-neutral-400">
-                        Belum ada data. Pilot belum mulai atau filter terlalu sempit.
-                      </td>
-                    </tr>
-                  )}
-                  {data.eventCounts.map((e) => (
-                    <tr key={`${e.event}-${e.outcome}`} className="border-b border-neutral-100">
-                      <td className="py-2 px-3 font-mono text-xs">{e.event}</td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            e.outcome === 'success'
-                              ? 'bg-green-50 text-green-700'
-                              : 'bg-red-50 text-red-700'
-                          }`}
-                        >
-                          {e.outcome}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right font-medium">{e.count.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {data.failureBreakdown.length > 0 && (
-            <section className="bg-white border border-neutral-200 rounded-lg p-5">
-              <h2 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                Top Failure Reasons
-              </h2>
-              <div className="space-y-2">
-                {data.failureBreakdown.map((f) => (
-                  <div key={f.reason ?? 'unknown'} className="flex items-center justify-between py-1.5 border-b border-neutral-100 last:border-0">
-                    <span className="font-mono text-sm">{f.reason ?? '(unknown)'}</span>
-                    <span className="text-sm text-neutral-600">{f.count.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="bg-white border border-neutral-200 rounded-lg p-5">
-            <h2 className="font-semibold text-neutral-900 mb-3">Latency (ms)</h2>
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-xs text-neutral-500 uppercase border-b border-neutral-200">
-                <tr>
-                  <th className="py-2 px-3">Step</th>
-                  <th className="py-2 px-3 text-right">p50</th>
-                  <th className="py-2 px-3 text-right">p95</th>
-                  <th className="py-2 px-3 text-right">avg</th>
-                  <th className="py-2 px-3 text-right">samples</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.latency.map((l) => (
-                  <tr key={l.step} className="border-b border-neutral-100">
-                    <td className="py-2 px-3 font-medium">{l.step}</td>
-                    <td className="py-2 px-3 text-right">{l.p50 ? Math.round(l.p50) : '—'}</td>
-                    <td className="py-2 px-3 text-right">{l.p95 ? Math.round(l.p95) : '—'}</td>
-                    <td className="py-2 px-3 text-right">{l.avg ? Math.round(l.avg) : '—'}</td>
-                    <td className="py-2 px-3 text-right text-neutral-500">{l.samples}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -431,9 +263,6 @@ function ErrorDetailModal({ fingerprint, onClose }: { fingerprint: string; onClo
 // ============================================================
 
 interface AppConfig {
-  faceMatchThreshold: number;
-  lowConfidenceWarnThreshold: number;
-  telemetrySamplingRate: number;
   errorReportingEnabled: boolean;
 }
 
@@ -466,10 +295,7 @@ function AppConfigTab() {
   const isDirty =
     form !== null &&
     data !== undefined &&
-    (form.faceMatchThreshold !== data.faceMatchThreshold ||
-      form.lowConfidenceWarnThreshold !== data.lowConfidenceWarnThreshold ||
-      form.telemetrySamplingRate !== data.telemetrySamplingRate ||
-      form.errorReportingEnabled !== data.errorReportingEnabled);
+    form.errorReportingEnabled !== data.errorReportingEnabled;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -478,39 +304,6 @@ function AppConfigTab() {
         Mobile fetch saat splash + cache 1 jam. Perubahan disini akan ke-pickup di splash berikutnya
         (tidak instant). Untuk force update segera, mobile harus invalidate cache local.
       </div>
-
-      <ConfigField
-        label="Face Match Threshold (server)"
-        hint="Mirror dari env FACE_MATCH_THRESHOLD. Backend tetap baca env — field ini cuma untuk mobile reference."
-        type="number"
-        value={formData.faceMatchThreshold}
-        onChange={(v) => setForm({ ...formData, faceMatchThreshold: v as number })}
-        min={0}
-        max={1}
-        step={0.05}
-      />
-
-      <ConfigField
-        label="Low Confidence Warn Threshold (mobile)"
-        hint="Mobile show 'login berhasil dengan confidence rendah' kalau confidence < threshold ini. Range [faceMatchThreshold..1.0]."
-        type="number"
-        value={formData.lowConfidenceWarnThreshold}
-        onChange={(v) => setForm({ ...formData, lowConfidenceWarnThreshold: v as number })}
-        min={0}
-        max={1}
-        step={0.05}
-      />
-
-      <ConfigField
-        label="Telemetry Sampling Rate"
-        hint="Mobile sample event sesuai rate ini (0.0–1.0). Pilot mode 1.0, post-pilot reduce ke 0.1–0.2 untuk control storage."
-        type="number"
-        value={formData.telemetrySamplingRate}
-        onChange={(v) => setForm({ ...formData, telemetrySamplingRate: v as number })}
-        min={0}
-        max={1}
-        step={0.1}
-      />
 
       <ConfigField
         label="Error Reporting Enabled"
@@ -523,7 +316,7 @@ function AppConfigTab() {
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => form && update.mutate(form)}
+          onClick={() => form && update.mutate({ errorReportingEnabled: form.errorReportingEnabled })}
           disabled={!isDirty || update.isPending}
           className="px-4 py-2 bg-brand-500 text-white rounded-lg font-medium disabled:opacity-50 hover:bg-brand-600 transition"
         >
@@ -629,16 +422,6 @@ function Select({
         {children}
       </select>
     </label>
-  );
-}
-
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="bg-white border border-neutral-200 rounded-lg p-4">
-      <div className="text-xs text-neutral-500 uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-2xl font-semibold text-neutral-900">{value}</div>
-      {hint && <div className="text-xs text-neutral-400 mt-1">{hint}</div>}
-    </div>
   );
 }
 

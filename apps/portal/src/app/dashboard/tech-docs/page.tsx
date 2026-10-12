@@ -231,7 +231,6 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
   Jemaat ||--o{ AuthSession : "logs in"
   Jemaat ||--o{ OtpRequest : "requests OTP"
   Jemaat ||--o{ MagicLinkToken : "email backup"
-  Jemaat ||--o{ FaceEnrollment : "mobile only"
   Jemaat ||--o{ JemaatRole : has
   Role ||--o{ JemaatRole : "grants"
   SubRole }o--|| Role : "child of"

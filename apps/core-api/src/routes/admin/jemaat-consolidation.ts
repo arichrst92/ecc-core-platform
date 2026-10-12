@@ -148,7 +148,7 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
     const key = normalizeName(name);
     if (!key) return [];
     return (ix.byName.get(key) ?? [])
-      .map(jemaatOut)
+      .map((id) => ({ ...jemaatOut(id), via: ['nama'] }))
       .sort((a, b) => Number(b.cabangSama) - Number(a.cabangSama));
   };
 

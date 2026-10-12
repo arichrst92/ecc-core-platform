@@ -36,7 +36,7 @@ interface Candidate {
   tanggalBergabungGereja: string | null;
   cabang: string;
   cabangSama: boolean;
-  via: string[];
+  via?: string[];
 }
 interface Row {
   rowNo: number;
@@ -581,7 +581,9 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'gr
 }
 
 function candLabel(c: Candidate) {
-  return `${c.namaLengkap}${c.kode ? ` · ${c.kode}` : ''} · ${c.cabang}${c.via.length ? ` (via ${c.via.join(', ')})` : ''}`;
+  // Kandidat leader (tab Homecell) tidak punya `via` — jangan asumsikan ada.
+  const via = c.via ?? [];
+  return `${c.namaLengkap}${c.kode ? ` · ${c.kode}` : ''} · ${c.cabang}${via.length ? ` (via ${via.join(', ')})` : ''}`;
 }
 
 function RowCard({

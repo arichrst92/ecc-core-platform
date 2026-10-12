@@ -9,16 +9,29 @@ body {
   color: #171717;
 }
 
-/* Mobile only: body bottom padding supaya content gak ke-cover BottomNav
-   (BottomNav fixed 64px + safe area iPhone). Desktop lg+ nav di header, no pad. */
-body {
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
+/* Floating BottomNav (semua ukuran layar) — body diberi ruang bawah setinggi
+   dock + jarak 0.75rem + safe area iPhone supaya konten terakhir tidak ketutup.
+   Mobile dock ±80px (icon 44 + label + padding), sm+ ±88px. */
+:root {
+  --dock-space: 6.5rem;
+}
+@media (min-width: 640px) {
+  :root {
+    --dock-space: 7rem;
+  }
+}
+/* Hanya saat dock ada (halaman login tidak punya dock → tanpa ruang ekstra). */
+body:has(nav[data-dock]) {
+  padding-bottom: calc(var(--dock-space) + env(safe-area-inset-bottom, 0px));
 }
 
-@media (min-width: 1024px) {
-  body {
-    padding-bottom: 0;
-  }
+/* Dock scroll horizontal di layar sempit — sembunyikan scrollbar. */
+.dock-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dock-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* iOS Safari: prevent zoom saat focus input dengan font-size < 16px.

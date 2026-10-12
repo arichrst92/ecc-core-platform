@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Gift, History, BarChart3, LogOut, MapPin, Award, Loader2, ScanLine, ClipboardList } from 'lucide-react';
+import { LogOut, MapPin, Loader2 } from 'lucide-react';
 import { BottomNav } from './bottom-nav';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
@@ -20,12 +19,11 @@ interface CabangItem {
 /**
  * Header dengan:
  *  - Logo + nama app
- *  - Nav: Gift Stall (home) / History / Report
+ *  - (Navigasi utama dipindah ke BottomNav floating dock)
  *  - Cabang selector dropdown (persist localStorage)
  *  - User menu + logout
  */
 export function Header() {
-  const pathname = usePathname();
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
   const { cabangId, cabangNama, setCabang, clear } = useCabangStore();
@@ -51,15 +49,6 @@ export function Header() {
     if (c) setCabang({ cabangId: c.id, cabangNama: c.nama });
   }
 
-  const navItems = [
-    { href: '/', label: 'Gift Stall', icon: Gift },
-    { href: '/ibadah', label: 'Scanner', icon: ScanLine },
-    { href: '/hadir', label: 'Daftar Hadir', icon: ClipboardList },
-    { href: '/adjust-point', label: 'Adjust Point', icon: Award },
-    { href: '/history', label: 'History', icon: History },
-    { href: '/report', label: 'Report', icon: BarChart3 },
-  ];
-
   return (
     <>
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-30">
@@ -78,29 +67,8 @@ export function Header() {
             <div className="sm:hidden font-bold text-neutral-900">CKids</div>
           </div>
 
-          {/* Nav desktop — hidden di mobile (pakai BottomNav) */}
-          <nav className="hidden lg:flex items-center gap-1 flex-1">
-            {navItems.map((n) => {
-              const active = pathname === n.href;
-              const Icon = n.icon;
-              return (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition ${
-                    active
-                      ? 'bg-kids-500 text-white'
-                      : 'text-neutral-600 hover:bg-neutral-100'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" /> {n.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Spacer di mobile */}
-          <div className="flex-1 lg:hidden" />
+          {/* Spacer — navigasi utama ada di BottomNav (floating dock) */}
+          <div className="flex-1" />
 
           {/* Cabang selector — kompak di mobile */}
           <div className="flex items-center gap-1.5 border border-neutral-300 rounded-lg px-2 sm:px-3 py-1.5 bg-neutral-50 shrink-0">
@@ -139,9 +107,9 @@ export function Header() {
         </div>
       </header>
 
-      {/* Bottom nav for mobile — di-render sekali di sini.
-          Padding bottom body untuk hindari content ke-cover di-handle
-          via globals.css (bukan spacer inline yg bikin top space bug). */}
+      {/* Floating dock (semua ukuran layar) — di-render sekali di sini.
+          Ruang bawah supaya konten tidak ketutup di-handle body padding
+          di globals.css (--dock-space). */}
       <BottomNav />
     </>
   );

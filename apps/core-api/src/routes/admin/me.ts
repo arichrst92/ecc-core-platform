@@ -1194,17 +1194,43 @@ meRouter.get('/reservasi', async (req, res) => {
  * Tipe anak = "Anak Laki-Laki", "Anak Perempuan", atau backward-compat
  * "Anak" (dari data legacy sebelum granular seed).
  */
+const CHILD_RELASI = ['Anak Laki-Laki', 'Anak Perempuan', 'Anak'];
+
+/**
+ * Anak requester = relasi anak langsung + anak milik pasangan (spouse-transitive),
+ * sama dgn definisi family set di /admin/me/family & /peserta/mine-and-family.
+ * Per backend-request-ckids-spouse-children.md (2026-10-12): sebelumnya hanya
+ * relasi langsung → akun pasangan yg tidak menambahkan anak dapat [] / 403.
+ */
 async function getMyChildrenIds(parentJemaatId: string): Promise<string[]> {
-  const relasi = await prisma.jemaatRelasi.findMany({
+  const direct = await prisma.jemaatRelasi.findMany({
     where: {
       jemaatId: parentJemaatId,
-      tipeRelasi: {
-        nama: { in: ['Anak Laki-Laki', 'Anak Perempuan', 'Anak'] },
-      },
+      tipeRelasi: { nama: { in: [...CHILD_RELASI, 'Suami', 'Istri'] } },
     },
-    select: { jemaatTerkaitId: true },
+    select: { jemaatTerkaitId: true, tipeRelasi: { select: { nama: true } } },
   });
-  return relasi.map((r) => r.jemaatTerkaitId);
+
+  const childIds = new Set<string>();
+  const spouseIds: string[] = [];
+  for (const r of direct) {
+    if (CHILD_RELASI.includes(r.tipeRelasi.nama)) childIds.add(r.jemaatTerkaitId);
+    else spouseIds.push(r.jemaatTerkaitId);
+  }
+
+  if (spouseIds.length > 0) {
+    const viaSpouse = await prisma.jemaatRelasi.findMany({
+      where: {
+        jemaatId: { in: spouseIds },
+        tipeRelasi: { nama: { in: CHILD_RELASI } },
+      },
+      select: { jemaatTerkaitId: true },
+    });
+    for (const r of viaSpouse) childIds.add(r.jemaatTerkaitId);
+  }
+
+  childIds.delete(parentJemaatId);
+  return [...childIds];
 }
 
 /**

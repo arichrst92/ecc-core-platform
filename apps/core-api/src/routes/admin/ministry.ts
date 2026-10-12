@@ -17,16 +17,49 @@
  * dari JemaatPelayanan yang punya role dengan level tertinggi. Kalau multiple
  * tied, ambil yang earliest tanggalMulai (paling lama menjabat).
  */
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
-import { ApiError, BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
+import { z } from 'zod';
+import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import {
+  canManageMinistry,
+  checkCanRequestJoin,
+  LEADER_MIN_LEVEL,
+  pickMyJoinRequest,
+} from '../../lib/ministry-access.js';
 
 export const ministryRouter = Router();
 
-ministryRouter.get('/', async (_req, res) => {
+/**
+ * Ministry yang boleh di-manage requester (approve/reject join request).
+ * 'ALL' untuk Fulltimer; selain itu set pelayananId di mana requester punya
+ * membership aktif dengan role level >= LEADER_MIN_LEVEL.
+ */
+async function managedMinistryIds(req: Request): Promise<'ALL' | Set<string>> {
+  if (!req.user) return new Set();
+  if (req.user.isFulltimer) return 'ALL';
+  const rows = await prisma.jemaatPelayanan.findMany({
+    where: {
+      jemaatId: req.user.jemaatId,
+      isActive: true,
+      pelayananRole: { level: { gte: LEADER_MIN_LEVEL } },
+    },
+    select: { pelayananId: true },
+  });
+  return new Set(rows.map((r) => r.pelayananId));
+}
+
+async function assertCanManage(req: Request, pelayananId: string): Promise<void> {
+  const managed = await managedMinistryIds(req);
+  if (!canManageMinistry(managed, pelayananId)) {
+    throw Forbidden('Hanya leader ministry yang dapat mengelola permintaan bergabung.');
+  }
+}
+
+ministryRouter.get('/', async (req, res) => {
   const items = await prisma.pelayanan.findMany({
     where: { isActive: true },
     include: {
@@ -52,11 +85,27 @@ ministryRouter.get('/', async (_req, res) => {
     orderBy: { nama: 'asc' },
   });
 
+  // Badge pending request — hanya untuk ministry yg bisa di-manage requester.
+  const managed = await managedMinistryIds(req);
+  const pendingByMinistry = new Map<string, number>();
+  if (managed === 'ALL' || managed.size > 0) {
+    const grouped = await prisma.pelayananJoinRequest.groupBy({
+      by: ['pelayananId'],
+      where: {
+        status: 'PENDING',
+        ...(managed === 'ALL' ? {} : { pelayananId: { in: [...managed] } }),
+      },
+      _count: { _all: true },
+    });
+    for (const g of grouped) pendingByMinistry.set(g.pelayananId, g._count._all);
+  }
+
   const data = items.map((m) => ({
     id: m.id,
     nama: m.nama,
     deskripsi: m.deskripsi,
     memberCount: m._count.jemaatPelayanan,
+    pendingRequestCount: pendingByMinistry.get(m.id) ?? 0,
     // Anggap selalu open untuk MVP. Kalau ke depan ada flag isOpen di schema,
     // tinggal tukar source.
     isOpen: m.isActive,
@@ -109,6 +158,29 @@ ministryRouter.get('/:id', async (req, res) => {
     ? item.jemaatPelayanan.find((jp) => jp.jemaat.id === jemaatId)
     : undefined;
 
+  // Join approval (2026-10-12): request terakhir user + hak kelola leader.
+  const latestRequest = jemaatId
+    ? await prisma.pelayananJoinRequest.findFirst({
+        where: { jemaatId, pelayananId: item.id },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          motivasi: true,
+          createdAt: true,
+          rejectReason: true,
+          requestedRole: { select: { id: true, nama: true, level: true } },
+        },
+      })
+    : null;
+  const myJoinRequest = pickMyJoinRequest(latestRequest, Boolean(myMembership));
+  const canManageRequests = canManageMinistry(await managedMinistryIds(req), item.id);
+  const pendingRequestCount = canManageRequests
+    ? await prisma.pelayananJoinRequest.count({
+        where: { pelayananId: item.id, status: 'PENDING' },
+      })
+    : 0;
+
   res.json({
     success: true,
     data: {
@@ -137,30 +209,32 @@ ministryRouter.get('/:id', async (req, res) => {
             sinceDate: myMembership.tanggalMulai,
           }
         : null,
+      myJoinRequest,
+      canManageRequests,
+      pendingRequestCount,
     },
   });
 });
 
 /**
- * POST /admin/ministry/:id/join — self-join ministry (Phase 2, simple version).
+ * POST /admin/ministry/:id/join — ajukan bergabung (approval oleh leader).
+ * Per backend-request-ministry-join-approval.md (2026-10-12).
  *
  * Body: { roleId?: string, motivasi?: string }
- *   - roleId: pilih role dari ministry.roles. Kalau kosong, ambil level terendah
- *     (biasanya "Anggota" atau setara — safest default untuk join baru).
- *   - motivasi: optional catatan untuk leader.
+ *   - roleId: peran yang DIMINTA (leader boleh ganti saat approve). Kosong →
+ *     role level terendah.
  *
- * Behavior: langsung ACTIVE (skip approval flow — deferred karena butuh
- * design decision status enum). Notif ke ministry leader (kalau ada) sebagai
- * heads-up review.
- *
- * Guards: 409 ALREADY_MEMBER kalau JemaatPelayanan aktif exist; 400 kalau
- * ministry isActive=false.
+ * Response: { membershipId (= id request), requestId, status: 'PENDING', ministry, posisi }
+ * 409 ALREADY_MEMBER kalau sudah anggota aktif; 409 JOIN_REQUEST_PENDING kalau
+ * masih ada request PENDING. Pernah REJECTED → boleh mengajukan lagi.
+ * Notif MINISTRY_JOIN_REQUESTED ke leader (in-app + WA kalau aktif).
  */
 ministryRouter.post('/:id/join', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const jemaatId = req.user.jemaatId;
   const roleId = typeof req.body?.roleId === 'string' ? req.body.roleId : null;
-  const motivasi = typeof req.body?.motivasi === 'string' ? req.body.motivasi.trim() : null;
+  const motivasiRaw = typeof req.body?.motivasi === 'string' ? req.body.motivasi.trim() : '';
+  const motivasi = motivasiRaw ? motivasiRaw.slice(0, 1000) : null;
 
   const ministry = await prisma.pelayanan.findUnique({
     where: { id: req.params.id },
@@ -178,7 +252,6 @@ ministryRouter.post('/:id/join', async (req, res) => {
     throw BadRequest('Ministry belum punya role yang bisa di-assign');
   }
 
-  // Pick role: user-supplied kalau valid, else fallback level terendah
   let targetRole = roleId ? ministry.roles.find((r) => r.id === roleId) : undefined;
   if (roleId && !targetRole) {
     throw BadRequest(`Role "${roleId}" tidak ditemukan di ministry ini`);
@@ -186,55 +259,74 @@ ministryRouter.post('/:id/join', async (req, res) => {
   if (!targetRole) targetRole = ministry.roles[0];
   if (!targetRole) throw BadRequest('Ministry belum punya role');
 
-  // Check existing membership
-  const existing = await prisma.jemaatPelayanan.findFirst({
-    where: { jemaatId, pelayananId: ministry.id, isActive: true },
-    select: { id: true },
+  const [activeMembership, pendingRequest] = await Promise.all([
+    prisma.jemaatPelayanan.findFirst({
+      where: { jemaatId, pelayananId: ministry.id, isActive: true },
+      select: { id: true },
+    }),
+    prisma.pelayananJoinRequest.findFirst({
+      where: { jemaatId, pelayananId: ministry.id, status: 'PENDING' },
+      select: { id: true },
+    }),
+  ]);
+  const decision = checkCanRequestJoin({
+    hasActiveMembership: Boolean(activeMembership),
+    hasPendingRequest: Boolean(pendingRequest),
   });
-  if (existing) throw new ApiError(409, 'ALREADY_MEMBER', 'Anda sudah member ministry ini');
+  if (!decision.ok) throw new ApiError(409, decision.code, decision.message);
 
-  const created = await prisma.jemaatPelayanan.create({
-    data: {
-      jemaatId,
-      pelayananId: ministry.id,
-      pelayananRoleId: targetRole.id,
-      tanggalMulai: new Date(),
-      isActive: true,
-    },
-    include: {
-      jemaat: { select: { namaLengkap: true } },
-      pelayananRole: { select: { nama: true, level: true } },
-    },
-  });
+  let created;
+  try {
+    created = await prisma.pelayananJoinRequest.create({
+      data: {
+        pelayananId: ministry.id,
+        jemaatId,
+        requestedRoleId: targetRole.id,
+        motivasi,
+      },
+      include: { jemaat: { select: { namaLengkap: true } } },
+    });
+  } catch (err) {
+    // Unique partial index (1 PENDING per jemaat+ministry) — double submit.
+    if ((err as { code?: string }).code === 'P2002') {
+      throw new ApiError(409, 'JOIN_REQUEST_PENDING', 'Permintaan Anda masih menunggu persetujuan');
+    }
+    throw err;
+  }
 
   audit(req, {
     action: 'CREATE',
-    resource: 'jemaat_pelayanan',
+    resource: 'pelayanan_join_request',
     resourceId: created.id,
-    resourceLabel: `Join ministry: ${created.jemaat.namaLengkap} @ ${ministry.nama} (${targetRole.nama})`,
-    metadata: { pelayananId: ministry.id, roleId: targetRole.id, motivasi, via: 'self-join' },
-    after: created,
+    resourceLabel: `Request join: ${created.jemaat.namaLengkap} @ ${ministry.nama} (${targetRole.nama})`,
+    metadata: { pelayananId: ministry.id, roleId: targetRole.id, motivasi },
   });
 
-  // Notif in-app ke leader ministry (kalau ada) — heads-up ada member baru
+  // Notif ke leader ministry
   const leaders = await prisma.jemaatPelayanan.findMany({
     where: {
       pelayananId: ministry.id,
       isActive: true,
-      pelayananRole: { level: { gte: 5 } }, // asumsi level >=5 leader-tier
+      pelayananRole: { level: { gte: LEADER_MIN_LEVEL } },
       jemaatId: { not: jemaatId },
     },
-    select: { jemaatId: true },
-    take: 5,
+    select: { jemaat: { select: { id: true, namaLengkap: true, noHp: true } } },
+    take: 10,
   });
   for (const l of leaders) {
     void createNotification({
-      jemaatId: l.jemaatId,
-      type: 'GROUP_MEMBER_ADDED', // reuse — semantic mirip
-      title: `Member baru di ${ministry.nama}`,
-      body: `${created.jemaat.namaLengkap} join sebagai ${targetRole.nama}.${motivasi ? ` Motivasi: ${motivasi}` : ''}`,
+      jemaatId: l.jemaat.id,
+      type: 'MINISTRY_JOIN_REQUESTED',
+      title: `Permintaan bergabung: ${ministry.nama}`,
+      body: `${created.jemaat.namaLengkap} ingin bergabung sebagai ${targetRole.nama}.${motivasi ? ` Motivasi: ${motivasi}` : ''}`,
       actionUrl: `/ministry/${ministry.id}`,
-      metadata: { ministryId: ministry.id, newMemberJemaatId: jemaatId, motivasi },
+      metadata: { ministryId: ministry.id, requestId: created.id },
+    });
+    void sendWaIfEnabled('MINISTRY_JOIN_REQUESTED', l.jemaat.noHp, {
+      nama: l.jemaat.namaLengkap,
+      pemohon: created.jemaat.namaLengkap,
+      ministry_nama: ministry.nama,
+      posisi: targetRole.nama,
     });
   }
 
@@ -242,12 +334,219 @@ ministryRouter.post('/:id/join', async (req, res) => {
     success: true,
     data: {
       membershipId: created.id,
-      status: 'ACTIVE',
+      requestId: created.id,
+      status: 'PENDING',
       ministry: { id: ministry.id, nama: ministry.nama },
       posisi: targetRole.nama,
     },
-    message: `Selamat datang di ${ministry.nama} sebagai ${targetRole.nama}`,
+    message: `Permintaan bergabung ke ${ministry.nama} terkirim. Menunggu persetujuan leader.`,
   });
+});
+
+/** DELETE /admin/ministry/:id/join-request — batalkan request PENDING milik sendiri. */
+ministryRouter.delete('/:id/join-request', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const pending = await prisma.pelayananJoinRequest.findFirst({
+    where: { jemaatId: req.user.jemaatId, pelayananId: req.params.id, status: 'PENDING' },
+    select: { id: true },
+  });
+  if (!pending) throw NotFound('Tidak ada permintaan bergabung yang menunggu.');
+
+  await prisma.pelayananJoinRequest.update({
+    where: { id: pending.id },
+    data: { status: 'CANCELLED', reviewedAt: new Date() },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_join_request',
+    resourceId: pending.id,
+    resourceLabel: 'Cancel join request (self)',
+  });
+  res.json({ success: true, data: { id: pending.id, status: 'CANCELLED' } });
+});
+
+/** GET /admin/ministry/:id/join-requests — list PENDING (leader / Fulltimer). */
+ministryRouter.get('/:id/join-requests', async (req, res) => {
+  await assertCanManage(req, req.params.id);
+  const rows = await prisma.pelayananJoinRequest.findMany({
+    where: { pelayananId: req.params.id, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      motivasi: true,
+      requestedRole: { select: { id: true, nama: true, level: true } },
+      jemaat: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          kode: true,
+          fotoUrl: true,
+          noHp: true,
+          cabang: { select: { id: true, nama: true } },
+        },
+      },
+    },
+  });
+  res.json({ success: true, data: rows });
+});
+
+const approveSchema = z.object({ roleId: z.string().uuid('roleId wajib') });
+const rejectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+});
+
+/** POST /admin/ministry/:id/join-requests/:reqId/approve { roleId } */
+ministryRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  await assertCanManage(req, req.params.id);
+  const { roleId } = approveSchema.parse(req.body);
+
+  const role = await prisma.pelayananRole.findFirst({
+    where: { id: roleId, pelayananId: req.params.id, isActive: true },
+    select: { id: true, nama: true },
+  });
+  if (!role) throw BadRequest('Peran tidak ditemukan di ministry ini.');
+
+  const request = await prisma.pelayananJoinRequest.findFirst({
+    where: { id: req.params.reqId, pelayananId: req.params.id },
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      pelayanan: { select: { id: true, nama: true } },
+    },
+  });
+  if (!request) throw NotFound('Permintaan tidak ditemukan.');
+
+  const reviewerId = req.user.jemaatId;
+  const membership = await prisma.$transaction(async (tx) => {
+    // Atomic: hanya proses kalau masih PENDING (2 leader klik bersamaan → 409).
+    const claimed = await tx.pelayananJoinRequest.updateMany({
+      where: { id: request.id, status: 'PENDING' },
+      data: {
+        status: 'APPROVED',
+        approvedRoleId: role.id,
+        reviewedById: reviewerId,
+        reviewedAt: new Date(),
+      },
+    });
+    if (claimed.count === 0) {
+      throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+    }
+    const existing = await tx.jemaatPelayanan.findFirst({
+      where: { jemaatId: request.jemaatId, pelayananId: request.pelayananId, isActive: true },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ApiError(409, 'ALREADY_MEMBER', 'Jemaat ini sudah menjadi anggota aktif.');
+    }
+    const m = await tx.jemaatPelayanan.create({
+      data: {
+        jemaatId: request.jemaatId,
+        pelayananId: request.pelayananId,
+        pelayananRoleId: role.id,
+        tanggalMulai: new Date(),
+        isActive: true,
+        catatan: request.motivasi,
+      },
+      select: { id: true, tanggalMulai: true },
+    });
+    await tx.pelayananJoinRequest.update({
+      where: { id: request.id },
+      data: { membershipId: m.id },
+    });
+    return m;
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_join_request',
+    resourceId: request.id,
+    resourceLabel: `Approve join: ${request.jemaat.namaLengkap} @ ${request.pelayanan.nama} (${role.nama})`,
+    metadata: { membershipId: membership.id, roleId: role.id },
+  });
+
+  void createNotification({
+    jemaatId: request.jemaat.id,
+    type: 'MINISTRY_JOIN_APPROVED',
+    title: `Selamat bergabung di ${request.pelayanan.nama}`,
+    body: `Permintaan Anda disetujui. Peran Anda: ${role.nama}.`,
+    actionUrl: `/ministry/${request.pelayanan.id}`,
+    metadata: { ministryId: request.pelayanan.id },
+  });
+  void sendWaIfEnabled('MINISTRY_JOIN_APPROVED', request.jemaat.noHp, {
+    nama: request.jemaat.namaLengkap,
+    ministry_nama: request.pelayanan.nama,
+    posisi: role.nama,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      requestId: request.id,
+      status: 'APPROVED',
+      membershipId: membership.id,
+      posisi: role.nama,
+      sinceDate: membership.tanggalMulai,
+    },
+  });
+});
+
+/** POST /admin/ministry/:id/join-requests/:reqId/reject { reason? } */
+ministryRouter.post('/:id/join-requests/:reqId/reject', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  await assertCanManage(req, req.params.id);
+  const { reason } = rejectSchema.parse(req.body ?? {});
+
+  const request = await prisma.pelayananJoinRequest.findFirst({
+    where: { id: req.params.reqId, pelayananId: req.params.id },
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      pelayanan: { select: { id: true, nama: true } },
+    },
+  });
+  if (!request) throw NotFound('Permintaan tidak ditemukan.');
+
+  const claimed = await prisma.pelayananJoinRequest.updateMany({
+    where: { id: request.id, status: 'PENDING' },
+    data: {
+      status: 'REJECTED',
+      rejectReason: reason ?? null,
+      reviewedById: req.user.jemaatId,
+      reviewedAt: new Date(),
+    },
+  });
+  if (claimed.count === 0) {
+    throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+  }
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_join_request',
+    resourceId: request.id,
+    resourceLabel: `Reject join: ${request.jemaat.namaLengkap} @ ${request.pelayanan.nama}`,
+    metadata: { reason: reason ?? null },
+  });
+
+  void createNotification({
+    jemaatId: request.jemaat.id,
+    type: 'MINISTRY_JOIN_REJECTED',
+    title: `Permintaan bergabung ke ${request.pelayanan.nama}`,
+    body: `Permintaan Anda belum dapat disetujui.${reason ? ` Alasan: ${reason}` : ''}`,
+    actionUrl: `/ministry/${request.pelayanan.id}`,
+    metadata: { ministryId: request.pelayanan.id },
+  });
+  void sendWaIfEnabled('MINISTRY_JOIN_REJECTED', request.jemaat.noHp, {
+    nama: request.jemaat.namaLengkap,
+    ministry_nama: request.pelayanan.nama,
+    alasan: reason ? `\nAlasan: ${reason}` : '',
+  });
+
+  res.json({ success: true, data: { requestId: request.id, status: 'REJECTED' } });
 });
 
 // ============================================================

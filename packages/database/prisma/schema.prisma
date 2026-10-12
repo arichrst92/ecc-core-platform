@@ -267,6 +267,9 @@ model Jemaat {
   backlogComments              BacklogComment[]              @relation("BacklogCommentAuthor")
   // Web action token (event NOMINAL_BEBAS daftar + upload bukti di web).
   webActionTokens              WebActionToken[]
+  // Ministry join request (pemohon + leader yg review).
+  pelayananJoinRequests        PelayananJoinRequest[]        @relation("PelayananJoinRequester")
+  pelayananJoinReviews         PelayananJoinRequest[]        @relation("PelayananJoinReviewer")
 
   @@index([cabangId])
   @@index([noHp])
@@ -672,6 +675,7 @@ model Pelayanan {
   ibadahPelayanan IbadahPelayanan[]
   eventPelayanan  EventPelayanan[]
   schedules       PelayananSchedule[]
+  joinRequests    PelayananJoinRequest[]
 
   @@map("pelayanan")
 }
@@ -693,6 +697,7 @@ model PelayananRole {
   ibadahPelayananPetugas IbadahPelayananPetugas[]
   eventPelayananPetugas  EventPelayananPetugas[]
   scheduleAssignments    PelayananScheduleAssignment[]
+  joinRequests           PelayananJoinRequest[]
 
   @@unique([pelayananId, nama])
   @@index([pelayananId])
@@ -1684,6 +1689,10 @@ enum InAppNotifType {
   HOMECELL_ATTENDED
   // Visit — peer-to-peer scan record
   VISIT_RECORDED
+  // Ministry join approval (2026-10-12)
+  MINISTRY_JOIN_REQUESTED
+  MINISTRY_JOIN_APPROVED
+  MINISTRY_JOIN_REJECTED
 
   @@map("in_app_notif_type")
 }
@@ -2646,4 +2655,45 @@ model WebActionToken {
   @@index([jemaatId, createdAt])
   @@index([expiresAt])
   @@map("web_action_token")
+}
+
+// ============================================================
+//  Ministry Join Request — per backend-request-ministry-join-approval.md
+//  (2026-10-12). Jemaat ajukan join → leader approve (pilih peran) /
+//  reject. Tabel terpisah dari JemaatPelayanan supaya membership tetap
+//  selalu "aktif" dan query member/jadwal existing tidak berubah.
+// ============================================================
+enum PelayananJoinStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("pelayanan_join_status")
+}
+
+model PelayananJoinRequest {
+  id              String              @id @default(uuid()) @db.Uuid
+  pelayananId     String              @map("pelayanan_id") @db.Uuid
+  jemaatId        String              @map("jemaat_id") @db.Uuid
+  requestedRoleId String?             @map("requested_role_id") @db.Uuid
+  motivasi        String?             @db.Text
+  status          PelayananJoinStatus @default(PENDING)
+  // Diisi saat approve — peran final yg ditentukan leader + membership hasil.
+  approvedRoleId  String?             @map("approved_role_id") @db.Uuid
+  membershipId    String?             @map("membership_id") @db.Uuid
+  reviewedById    String?             @map("reviewed_by_id") @db.Uuid
+  reviewedAt      DateTime?           @map("reviewed_at")
+  rejectReason    String?             @map("reject_reason") @db.VarChar(300)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  pelayanan     Pelayanan      @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  jemaat        Jemaat         @relation("PelayananJoinRequester", fields: [jemaatId], references: [id], onDelete: Cascade)
+  requestedRole PelayananRole? @relation(fields: [requestedRoleId], references: [id], onDelete: SetNull)
+  reviewedBy    Jemaat?        @relation("PelayananJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([pelayananId, status, createdAt])
+  @@index([jemaatId, pelayananId, createdAt])
+  @@map("pelayanan_join_request")
 }

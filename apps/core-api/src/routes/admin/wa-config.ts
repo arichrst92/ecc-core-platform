@@ -113,6 +113,7 @@ waConfigRouter.post('/:type/test', async (req, res) => {
     cabangBaru: 'ECC Bandung',
     alasan: 'Data belum lengkap',
     groupNama: 'Group Sample',
+    pemohon: 'Dewi',
   };
   const placeholders = { ...defaults, ...(body.placeholders ?? {}) };
   const message = renderTemplate(row.template, placeholders);

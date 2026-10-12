@@ -36,6 +36,7 @@ import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
 import { elsaRouter } from './elsa.js';
 import { planningRouter } from './planning.js';
+import { jemaatConsolidationRouter } from './jemaat-consolidation.js';
 
 export const adminRouter = Router();
 
@@ -57,6 +58,8 @@ adminRouter.use('/cabang', cabangRouter);
 // Public profile (mobile tap-to-view) — HARUS sebelum /jemaat agar tidak
 // kepecet ke jemaatRouter (which is admin-CRUD). Patch 2026-05-22.
 adminRouter.use('/jemaat-public', jemaatPublicRouter);
+// Konsolidasi data jemaat dari spreadsheet (preview + apply, human check). Fulltimer only.
+adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
 adminRouter.use('/jemaat', jemaatRouter);
 adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);

@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Filter, X, FileSpreadsheet, FileText, Copy } from 'lucide-react';
+import { Upload, Filter, X, FileSpreadsheet, FileText, Copy, GitMerge } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 import { RelasiModal } from '@/components/jemaat/relasi-modal';
@@ -155,6 +155,14 @@ function JemaatPageInner() {
         >
           <Copy className="w-4 h-4" />
           Cek Duplikat
+        </Link>
+        <Link
+          href="/dashboard/jemaat/consolidation"
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200"
+          title="Cocokkan rekap spreadsheet (.xlsx) dengan data production, human check sebelum apply"
+        >
+          <GitMerge className="w-4 h-4" />
+          Konsolidasi Excel
         </Link>
         <Link
           href="/dashboard/jemaat/import"

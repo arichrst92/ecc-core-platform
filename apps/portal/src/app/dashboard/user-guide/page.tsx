@@ -394,7 +394,6 @@ const SECTIONS: Section[] = [
         title: 'Fitur halaman Jemaat',
         items: [
           'Filter: cabang, homecell, homecell area, ministry, status, jenis kelamin, role, umur. Search berdasarkan nama, email, atau no HP.',
-          'Kolom Legacy Ref: kode jemaat hasil sync Shiftsoft (nama cabang + ID lama, mis. ECCBANDUNG1234). Jemaat yang daftar langsung lewat app ditandai "organic".',
           'Export Excel (CSV) dan PDF mengikuti filter yang aktif.',
           'Cek Duplikat: temukan jemaat dengan no HP / email / nama + tanggal lahir yang sama.',
           'Detail jemaat: QR card, tombol kontak WhatsApp/Email, riwayat homecell, event, ibadah, group, visit, local market, indikator keaktifan 3 bulan, dan Export PDF profil.',

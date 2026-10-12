@@ -65,7 +65,6 @@ interface Jemaat {
   tanggalBergabung: string | null;
   fotoUrl: string | null;
   isActive: boolean;
-  legacyShiftsoftId: number | null;
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleAssignment[];
   user?: { lastLoginAt: string | null } | null;

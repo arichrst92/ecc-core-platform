@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { grantTrigger, isEligible, requirementLabel } from './event-role.js';
+import { grantTrigger, isEligible, notEligibleMessage, requirementLabel } from './event-role.js';
 
 const role = (roleId: string, subRoleId: string, subRoleStatusId: string | null = null) => ({
   roleId,
@@ -55,6 +55,19 @@ describe('requirementLabel', () => {
     ).toBe('Jemaat → Tetap → Aktif');
     expect(requirementLabel({ role: { nama: 'Pelayan' }, subRole: null, subRoleStatus: null })).toBe(
       'Pelayan → semua sub-role',
+    );
+  });
+});
+
+describe('notEligibleMessage', () => {
+  it('satu syarat', () => {
+    expect(notEligibleMessage(['Jemaat → Jemaat Tetap → Aktif'])).toBe(
+      'Anda belum diperbolehkan mengikuti event ini. Syaratnya Anda harus Jemaat → Jemaat Tetap → Aktif terlebih dahulu.',
+    );
+  });
+  it('beberapa syarat digabung "atau", dengan nama anggota keluarga', () => {
+    expect(notEligibleMessage(['A → B', 'C → D', 'E → F'], 'Budi')).toBe(
+      'Budi belum diperbolehkan mengikuti event ini. Syaratnya harus A → B, C → D atau E → F terlebih dahulu.',
     );
   });
 });

@@ -47,6 +47,7 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import {
   assertEventEligible,
   isEligible,
+  notEligibleMessage,
   requirementLabel,
   revokeEventRole,
   syncEventRoleForStatus,
@@ -380,6 +381,8 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       // myEligible null = tidak login / tidak diketahui.
       requirementLabels,
       myEligible,
+      // Kalimat siap tampil untuk mobile/web kalau myEligible === false.
+      eligibilityMessage: myEligible === false ? notEligibleMessage(requirementLabels) : null,
       grantLabel: item.grantRole
         ? requirementLabel({
             role: item.grantRole,
@@ -899,9 +902,10 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
         });
         continue;
       }
-      // Syarat role event per anggota.
+      // Syarat role event per anggota (pesan memakai nama anggota).
       try {
-        await assertEventEligible(event.id, jemaatId, 'Jemaat ini');
+        const nm = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { namaLengkap: true } });
+        await assertEventEligible(event.id, jemaatId, nm?.namaLengkap ?? 'Anggota ini');
       } catch (e) {
         if (e instanceof ApiError && e.code === 'NOT_ELIGIBLE') {
           failed.push({ jemaatId, error: { code: e.code, message: e.message } });

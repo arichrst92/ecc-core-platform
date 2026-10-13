@@ -90,12 +90,23 @@ export async function assertEventEligible(
   });
   if (isEligible(reqs, roles)) return;
   const labels = reqs.map(requirementLabel);
-  throw new ApiError(
-    403,
-    'NOT_ELIGIBLE',
-    `${who ? `${who} belum` : 'Anda belum'} memenuhi syarat event ini. Dibutuhkan salah satu role: ${labels.join('; ')}.`,
-    { requirements: labels },
-  );
+  throw new ApiError(403, 'NOT_ELIGIBLE', notEligibleMessage(labels, who), { requirements: labels });
+}
+
+/**
+ * Pesan untuk jemaat yang belum memenuhi syarat:
+ * "Anda belum diperbolehkan mengikuti event ini. Syaratnya Anda harus
+ *  Jemaat → Jemaat Tetap → Aktif terlebih dahulu."
+ * Beberapa syarat digabung dengan "atau" (cukup salah satu).
+ */
+export function notEligibleMessage(labels: string[], who?: string): string {
+  const syarat =
+    labels.length <= 1
+      ? (labels[0] ?? '')
+      : `${labels.slice(0, -1).join(', ')} atau ${labels[labels.length - 1]}`;
+  const subject = who ?? 'Anda';
+  const harus = who ? 'harus' : 'Anda harus';
+  return `${subject} belum diperbolehkan mengikuti event ini. Syaratnya ${harus} ${syarat} terlebih dahulu.`;
 }
 
 /** Beri role event ke jemaat (idempotent). Return id JemaatRole baru atau null. */

@@ -2,8 +2,9 @@
  * Homecell untuk SEMUA jemaat (mobile) — /admin/me/homecell/*
  *
  *   GET    /                         ringkasan: homecell yang dipimpin, homecell saya, request pending
- *   GET    /browse?lat&lng&q=        daftar homecell di cabang saya (+ jarak kalau lat/lng dikirim)
- *   GET    /nearest?lat&lng&limit=3  rekomendasi homecell terdekat (hanya yang punya lokasi)
+ *   GET    /browse?cabangId&lat&lng&q=        daftar homecell di cabang aktif (+ jarak kalau lat/lng dikirim)
+ *   GET    /nearest?cabangId&lat&lng&limit=3  rekomendasi terdekat di cabang aktif (hanya yang punya lokasi)
+ *   (cabangId = cabang aktif di app; default cabang asal jemaat)
  *   GET    /join-requests            [leader] permintaan bergabung PENDING di homecell yang saya pimpin
  *   POST   /join-requests/:reqId/approve   [leader] terima → otomatis jadi anggota
  *   POST   /join-requests/:reqId/reject    [leader] tolak { reason? }
@@ -91,7 +92,16 @@ async function myStatusMap(jemaatId: string) {
   return m;
 }
 
-async function myCabangId(jemaatId: string): Promise<string> {
+/**
+ * Cabang untuk daftar homecell: `?cabangId=` (cabang aktif yang dipilih di
+ * app) kalau valid, selain itu cabang asal jemaat.
+ */
+async function targetCabangId(req: Request, jemaatId: string): Promise<string> {
+  const q = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
+  if (UUID_RE.test(q)) {
+    const c = await prisma.cabangGereja.findFirst({ where: { id: q, isActive: true }, select: { id: true } });
+    if (c) return c.id;
+  }
   const j = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true } });
   if (!j) throw NotFound('Jemaat tidak ditemukan');
   return j.cabangId;
@@ -152,7 +162,7 @@ meHomecellRouter.get('/browse', async (req, res) => {
   const jemaatId = me(req).jemaatId;
   const from = parseLatLng(req.query as Record<string, unknown>);
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const cabangId = await myCabangId(jemaatId);
+  const cabangId = await targetCabangId(req, jemaatId);
   const rows = await prisma.homecell.findMany({
     where: {
       isActive: true,
@@ -184,7 +194,7 @@ meHomecellRouter.get('/nearest', async (req, res) => {
   const from = parseLatLng(req.query as Record<string, unknown>);
   if (!from) throw BadRequest('Lokasi (lat, lng) wajib dikirim.');
   const limit = Math.min(10, Math.max(1, Number(req.query.limit) || 3));
-  const cabangId = await myCabangId(jemaatId);
+  const cabangId = await targetCabangId(req, jemaatId);
   const rows = await prisma.homecell.findMany({
     where: { isActive: true, area: { cabangId, isActive: true } },
     select: listSelect,

@@ -60,18 +60,38 @@ async function assertCanManage(req: Request, pelayananId: string): Promise<void>
 }
 
 ministryRouter.get('/', async (req, res) => {
+  // ?cabangId= (cabang aktif di app): ministry belum terikat cabang, jadi
+  // "ada di cabang" = punya anggota aktif dari cabang itu. Ministry yang belum
+  // punya anggota sama sekali tetap tampil supaya bisa di-join. Jumlah anggota
+  // & leader yang ditampilkan ikut dibatasi ke cabang tsb.
+  const cabangIdRaw = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
+  const cabangId = /^[0-9a-f-]{36}$/i.test(cabangIdRaw) ? cabangIdRaw : null;
+  const memberWhere = {
+    isActive: true,
+    ...(cabangId ? { jemaat: { cabangId } } : {}),
+  };
   const items = await prisma.pelayanan.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(cabangId
+        ? {
+            OR: [
+              { jemaatPelayanan: { some: memberWhere } },
+              { jemaatPelayanan: { none: { isActive: true } } },
+            ],
+          }
+        : {}),
+    },
     include: {
       roles: {
         where: { isActive: true },
         orderBy: { level: 'desc' },
         select: { id: true, nama: true, level: true },
       },
-      _count: { select: { jemaatPelayanan: { where: { isActive: true } } } },
+      _count: { select: { jemaatPelayanan: { where: memberWhere } } },
       // Untuk leader proxy: ambil 1 row aktif dengan role level tertinggi.
       jemaatPelayanan: {
-        where: { isActive: true },
+        where: memberWhere,
         orderBy: [{ pelayananRole: { level: 'desc' } }, { tanggalMulai: 'asc' }],
         take: 1,
         select: {

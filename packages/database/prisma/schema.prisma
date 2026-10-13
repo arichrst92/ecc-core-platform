@@ -217,6 +217,10 @@ model Jemaat {
   homecellScheduleFiles        HomecellScheduleFile[]        @relation("HomecellScheduleFileUploader")
   groupJoinRequests            GroupJoinRequest[]            @relation("GroupJoinRequester")
   groupJoinReviews             GroupJoinRequest[]            @relation("GroupJoinReviewer")
+  groupFiles                   GroupFile[]                   @relation("GroupFileUploader")
+  groupAnnouncements           GroupAnnouncement[]           @relation("GroupAnnouncementAuthor")
+  groupPolls                   GroupPoll[]                   @relation("GroupPollAuthor")
+  groupPollVotes               GroupPollVote[]               @relation("GroupPollVoter")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -1810,6 +1814,8 @@ enum InAppNotifType {
   GROUP_JOIN_REQUESTED
   GROUP_JOIN_APPROVED
   GROUP_JOIN_REJECTED
+  GROUP_ANNOUNCEMENT
+  GROUP_POLL_CREATED
 
   @@map("in_app_notif_type")
 }
@@ -2208,8 +2214,11 @@ model Group {
   parent    Group?        @relation("GroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children  Group[]       @relation("GroupHierarchy")
   picJemaat Jemaat?       @relation("GroupPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
-  members      GroupMember[]
-  joinRequests GroupJoinRequest[]
+  members       GroupMember[]
+  joinRequests  GroupJoinRequest[]
+  files         GroupFile[]
+  announcements GroupAnnouncement[]
+  polls         GroupPoll[]
 
   @@index([cabangId])
   @@index([parentId])
@@ -2261,6 +2270,99 @@ model GroupJoinRequest {
   @@index([groupId, status, createdAt])
   @@index([jemaatId, status])
   @@map("group_join_request")
+}
+
+// ============================================================
+// Konten group: file, pengumuman, voting. Dibuat PIC/admin; dilihat
+// & di-vote anggota.
+// ============================================================
+
+model GroupFile {
+  id           String   @id @default(uuid()) @db.Uuid
+  groupId      String   @map("group_id") @db.Uuid
+  nama         String   @db.VarChar(200)
+  deskripsi    String?  @db.Text
+  fileUrl      String   @map("file_url") @db.Text
+  fileMime     String   @map("file_mime") @db.VarChar(150)
+  fileName     String?  @map("file_name") @db.VarChar(255)
+  fileSize     Int?     @map("file_size")
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  group      Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  uploadedBy Jemaat? @relation("GroupFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@map("group_file")
+}
+
+model GroupAnnouncement {
+  id          String   @id @default(uuid()) @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  judul       String   @db.VarChar(200)
+  isi         String   @db.Text
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  group     Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy Jemaat? @relation("GroupAnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, isPinned, createdAt])
+  @@map("group_announcement")
+}
+
+model GroupPoll {
+  id          String    @id @default(uuid()) @db.Uuid
+  groupId     String    @map("group_id") @db.Uuid
+  pertanyaan  String    @db.VarChar(300)
+  deskripsi   String?   @db.Text
+  // true = boleh pilih lebih dari satu opsi
+  multiple    Boolean   @default(false)
+  closesAt    DateTime? @map("closes_at")
+  isClosed    Boolean   @default(false) @map("is_closed")
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy Jemaat?         @relation("GroupPollAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  options   GroupPollOption[]
+  votes     GroupPollVote[]
+
+  @@index([groupId, createdAt])
+  @@map("group_poll")
+}
+
+model GroupPollOption {
+  id     String @id @default(uuid()) @db.Uuid
+  pollId String @map("poll_id") @db.Uuid
+  label  String @db.VarChar(200)
+  urutan Int    @default(0)
+
+  poll  GroupPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes GroupPollVote[]
+
+  @@index([pollId])
+  @@map("group_poll_option")
+}
+
+model GroupPollVote {
+  id        String   @id @default(uuid()) @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  optionId  String   @map("option_id") @db.Uuid
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  poll   GroupPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option GroupPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  jemaat Jemaat          @relation("GroupPollVoter", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, optionId, jemaatId])
+  @@index([pollId, jemaatId])
+  @@map("group_poll_vote")
 }
 
 model GroupMember {

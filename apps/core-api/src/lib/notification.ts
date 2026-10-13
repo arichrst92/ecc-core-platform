@@ -40,7 +40,9 @@ type InAppNotifType =
   | 'HOMECELL_JOIN_REJECTED'
   | 'GROUP_JOIN_REQUESTED'
   | 'GROUP_JOIN_APPROVED'
-  | 'GROUP_JOIN_REJECTED';
+  | 'GROUP_JOIN_REJECTED'
+  | 'GROUP_ANNOUNCEMENT'
+  | 'GROUP_POLL_CREATED';
 
 interface CreateNotifArgs {
   jemaatId: string;

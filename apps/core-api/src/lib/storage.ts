@@ -450,3 +450,27 @@ export async function deleteHomecellMaterial(fileUrl: string): Promise<void> {
     if (err.code !== 'ENOENT') throw err;
   }
 }
+
+/** File group (materi/dokumen) → /uploads/group-file/{groupId}/{fileId}.{ext} */
+export async function saveGroupFile(
+  groupId: string,
+  fileId: string,
+  ext: string,
+  buffer: Buffer,
+): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'group-file', groupId);
+  await ensureDir(dir);
+  const filename = `${fileId}.${ext}`;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return `${PUBLIC_UPLOADS_PREFIX}/group-file/${groupId}/${filename}`;
+}
+
+export async function deleteGroupFile(fileUrl: string): Promise<void> {
+  const rel = fileUrl.replace(/\?.*$/, '').replace(new RegExp(`^${PUBLIC_UPLOADS_PREFIX}/`), '');
+  if (!rel.startsWith('group-file/')) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, rel));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}

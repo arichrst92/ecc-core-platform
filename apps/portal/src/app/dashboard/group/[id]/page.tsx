@@ -27,6 +27,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { GroupJoinRequestsSection } from '@/components/group/group-join-requests';
+import { GroupContentSection } from '@/components/group/group-content';
 
 interface GroupMember {
   id: string;
@@ -324,6 +325,9 @@ export default function GroupDetailPage() {
 
       {/* Permintaan bergabung — PIC/admin terima atau tolak */}
       <GroupJoinRequestsSection groupId={groupId} />
+
+      {/* Pengumuman, voting, file group */}
+      <GroupContentSection groupId={groupId} />
 
       {/* Children hierarchy (kalau ada) */}
       {g.children.length > 0 && (

@@ -52,6 +52,7 @@ import {
 import { createNotification, createNotificationBatch } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
+import { groupContentRouter } from './group-content.js';
 
 export const groupRouter = Router();
 
@@ -927,3 +928,10 @@ async function notifGroupMemberRemovedInApp(groupId: string, jemaatId: string): 
     group_nama: g.nama,
   });
 }
+
+// ============================================================
+// Konten group: file, pengumuman, voting → group-content.ts
+// (path /:id/files, /:id/announcements, /:id/polls — tidak bentrok
+// dengan route di atas karena didaftarkan paling akhir).
+// ============================================================
+groupRouter.use('/:id', groupContentRouter);

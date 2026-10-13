@@ -36,6 +36,27 @@ interface CalendarEvent {
 }
 
 const HARI_HEADER = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+/**
+ * Date lokal → "YYYY-MM-DD" (calendar date di zona browser).
+ *
+ * JANGAN pakai `toISOString().slice(0, 10)` untuk sel kalender: sel dibuat di
+ * jam 00:00 lokal, dan di WIB (UTC+7) itu = 17:00 UTC hari sebelumnya → key
+ * sel mundur 1 hari, sehingga ibadah hari Minggu tampil di sel Senin.
+ * `tanggal` dari API sudah berupa calendar date (UTC midnight → YYYY-MM-DD).
+ */
+function toLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** "YYYY-MM-DD" → Date jam 00:00 lokal (bukan UTC) untuk label tanggal. */
+function parseYmd(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
+}
 const BULAN_NAMA = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
@@ -76,8 +97,8 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
     return {
       gridStart,
       gridEnd,
-      fromStr: gridStart.toISOString().slice(0, 10),
-      toStr: gridEnd.toISOString().slice(0, 10),
+      fromStr: toLocalYmd(gridStart),
+      toStr: toLocalYmd(gridEnd),
     };
   }, [cursor]);
 
@@ -114,9 +135,9 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
   // Build grid cells
   const cells: { date: Date; iso: string; inMonth: boolean; isToday: boolean }[] = [];
   const cur = new Date(gridStart);
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = toLocalYmd(today);
   while (cur.getTime() <= gridEnd.getTime()) {
-    const iso = cur.toISOString().slice(0, 10);
+    const iso = toLocalYmd(cur);
     cells.push({
       date: new Date(cur),
       iso,
@@ -281,7 +302,7 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
         <div className="mt-4 bg-white border border-neutral-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-neutral-900">
-              {new Date(selectedDate).toLocaleDateString('id-ID', {
+              {parseYmd(selectedDate).toLocaleDateString('id-ID', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -347,7 +368,7 @@ function EventActionPopup({
   onAfterCancel: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
-  const tanggalLabel = new Date(tanggal).toLocaleDateString('id-ID', {
+  const tanggalLabel = parseYmd(tanggal).toLocaleDateString('id-ID', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -614,7 +635,7 @@ function CancelOccurrenceModal({
 
   const tanggalLabel =
     tanggalLabelProp ??
-    new Date(tanggal).toLocaleDateString('id-ID', {
+    parseYmd(tanggal).toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',

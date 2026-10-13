@@ -106,9 +106,11 @@ export default function IbadahDetailPage() {
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [deletingLink, setDeletingLink] = useState<IbadahPelayananLink | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerTanggal, setScannerTanggal] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
+  // Tanggal hari ini di zona lokal (toISOString = UTC → sebelum 07:00 WIB jadi kemarin).
+  const [scannerTanggal, setScannerTanggal] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const ibadahQ = useQuery({
     queryKey: ['ibadah', 'detail', ibadahId],

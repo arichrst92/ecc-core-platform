@@ -867,30 +867,26 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
   else activityTier = 'SANGAT_AKTIF';
 
   // Attendance per homecell — HomecellAttendance records = present only.
-  // Count total scans + last attended per homecell.
-  const homecellIds = homecells.map((h) => h.homecellId);
-  const attendanceRows = homecellIds.length
-    ? await prisma.homecellAttendance.findMany({
-        where: {
-          jemaatId,
-        },
-        orderBy: { scannedAt: 'desc' },
+  // Count total scans + last attended per homecell (termasuk homecell yang
+  // dipimpin sebagai PIC, jadi query selalu dijalankan).
+  const attendanceRows = await prisma.homecellAttendance.findMany({
+    where: { jemaatId },
+    orderBy: { scannedAt: 'desc' },
+    select: {
+      id: true,
+      scannedAt: true,
+      source: true,
+      scheduleId: true,
+      schedule: {
         select: {
           id: true,
-          scannedAt: true,
-          source: true,
-          scheduleId: true,
-          schedule: {
-            select: {
-              id: true,
-              homecellId: true,
-              tanggal: true,
-            },
-          },
+          homecellId: true,
+          tanggal: true,
         },
-        take: 500,
-      })
-    : [];
+      },
+    },
+    take: 500,
+  });
 
   const attendanceByHomecell = new Map<
     string,
@@ -910,7 +906,37 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
     attendanceByHomecell.set(hcId, cur);
   }
 
-  const homecellsWithAttendance = homecells.map((hm) => {
+  // Homecell yang dipimpin (PIC) juga dihitung "tergabung", walau PIC tidak
+  // tercatat sebagai baris anggota di homecell_member.
+  const picHomecells = await prisma.homecell.findMany({
+    where: { picJemaatId: jemaatId },
+    select: {
+      id: true,
+      nama: true,
+      isActive: true,
+      createdAt: true,
+      area: { select: { id: true, nama: true } },
+    },
+  });
+  const picIds = new Set(picHomecells.map((h) => h.id));
+  const memberIds = new Set(homecells.map((h) => h.homecellId));
+  const allHomecells = [
+    ...homecells.map((hm) => ({ ...hm, peran: picIds.has(hm.homecellId) ? 'PIC' : 'ANGGOTA' })),
+    ...picHomecells
+      .filter((h) => !memberIds.has(h.id))
+      .map((h) => ({
+        id: `pic-${h.id}`,
+        homecellId: h.id,
+        jemaatId,
+        tanggalBergabung: h.createdAt,
+        tanggalKeluar: null,
+        isActive: h.isActive,
+        peran: 'PIC',
+        homecell: { id: h.id, nama: h.nama, area: h.area },
+      })),
+  ];
+
+  const homecellsWithAttendance = allHomecells.map((hm) => {
     const att = attendanceByHomecell.get(hm.homecellId);
     return {
       ...hm,

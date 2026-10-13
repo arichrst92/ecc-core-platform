@@ -1463,6 +1463,8 @@ interface JemaatProfileData {
     tanggalBergabung: string;
     tanggalKeluar: string | null;
     isActive: boolean;
+    /** PIC = pemimpin homecell, ANGGOTA = anggota biasa. */
+    peran?: 'PIC' | 'ANGGOTA';
     homecell: {
       id: string;
       nama: string;
@@ -1570,7 +1572,17 @@ function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
       </div>
     );
   }
-  if (!q.data) return null;
+  if (!q.data) {
+    // Jangan diam-diam kosong — tampilkan error supaya ketahuan kalau gagal.
+    return (
+      <div className="mt-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <span>Gagal memuat riwayat (homecell, event, ibadah, group).</span>
+        <button onClick={() => q.refetch()} className="text-xs font-semibold underline">
+          Coba lagi
+        </button>
+      </div>
+    );
+  }
   const d = q.data;
 
   return (
@@ -1933,6 +1945,11 @@ function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecell
                 {h.homecell.nama}
                 <ExternalLink className="w-3 h-3 opacity-50" />
               </Link>
+              {h.peran === 'PIC' && (
+                <span className="inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                  Pemimpin (PIC)
+                </span>
+              )}
               {h.homecell.area && (
                 <Link
                   href={`/dashboard/homecell-area?search=${encodeURIComponent(h.homecell.area.nama)}`}

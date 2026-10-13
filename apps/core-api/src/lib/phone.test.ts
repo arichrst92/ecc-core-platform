@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatPhoneDisplay, noHpSchema, normalizePhoneNumber } from '@ecc/shared-types';
+import { describeInvalidPhone, formatPhoneDisplay, noHpSchema, normalizePhoneNumber } from '@ecc/shared-types';
 
 describe('normalizePhoneNumber — semua negara', () => {
   it('nomor lokal Indonesia → +62', () => {
@@ -43,5 +43,23 @@ describe('noHpSchema', () => {
 
   it('menolak nomor tidak valid', () => {
     expect(noHpSchema.safeParse('12345').success).toBe(false);
+  });
+});
+
+describe('describeInvalidPhone — pesan per negara', () => {
+  it('Singapura 9 digit', () => {
+    expect(describeInvalidPhone('+65 328387323')).toBe(
+      'Nomor Singapura (+65) tidak valid — jumlah digit tidak sesuai. Periksa kembali nomornya.',
+    );
+  });
+  it('Indonesia kurang digit', () => {
+    expect(describeInvalidPhone('0812')).toBe(
+      'Nomor Indonesia (+62) tidak valid — jumlah digit kurang. Periksa kembali nomornya.',
+    );
+  });
+  it('dipakai noHpSchema', () => {
+    const r = noHpSchema.safeParse('+65 328387323');
+    expect(r.success).toBe(false);
+    expect(!r.success && r.error.issues[0]?.message.startsWith('Nomor Singapura (+65)')).toBe(true);
   });
 });

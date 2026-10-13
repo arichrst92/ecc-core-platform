@@ -1,6 +1,12 @@
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
-import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
+import {
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+  validatePhoneNumberLength,
+  type CountryCode,
+} from 'libphonenumber-js';
 
 // Pastikan z punya `.openapi()` method sebelum schema apa pun di-evaluate.
 // Idempotent — aman dipanggil multi kali (tsx/CJS kadang load schema sebelum index.ts).
@@ -102,6 +108,54 @@ export function normalizePhoneNumber(
   }
 }
 
+function countryName(code: string): string {
+  try {
+    return new Intl.DisplayNames(['id'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * Pesan error yang jelas untuk nomor yang tidak valid, mis.
+ * "Nomor Singapura (+65) tidak valid — jumlah digit tidak sesuai. Periksa kembali nomornya."
+ */
+export function describeInvalidPhone(input: string | null | undefined, defaultCountry: CountryCode = 'ID'): string {
+  let s = String(input ?? '').trim().replace(/[\s\-().]/g, '');
+  if (!s) return 'No HP wajib diisi.';
+  if (s.startsWith('00')) s = `+${s.slice(2)}`;
+  else if (!s.startsWith('+') && /^62\d/.test(s)) s = `+${s}`;
+  const intl = s.startsWith('+');
+  let reason: string | undefined;
+  let negara = 'Indonesia (+62)';
+  try {
+    const p = intl ? parsePhoneNumberFromString(s) : parsePhoneNumberFromString(s, defaultCountry);
+    const cc = p?.countryCallingCode ?? (intl ? null : getCountryCallingCode(defaultCountry));
+    if (cc) {
+      const region =
+        p?.country ??
+        (intl
+          ? (cc === '1' ? 'US' : getCountries().find((c) => getCountryCallingCode(c) === cc))
+          : defaultCountry);
+      negara = `${region ? countryName(region) : 'negara'} (+${cc})`;
+    } else if (intl) {
+      return 'Kode negara tidak dikenali. Periksa kembali kode negara dan nomornya.';
+    }
+    reason = intl ? validatePhoneNumberLength(s) : validatePhoneNumberLength(s, defaultCountry);
+  } catch {
+    // pakai pesan umum di bawah
+  }
+  const detail =
+    reason === 'TOO_SHORT'
+      ? 'jumlah digit kurang'
+      : reason === 'TOO_LONG'
+        ? 'jumlah digit kelebihan'
+        : reason === 'INVALID_LENGTH'
+          ? 'jumlah digit tidak sesuai'
+          : 'format nomor tidak dikenali';
+  return `Nomor ${negara} tidak valid — ${detail}. Periksa kembali nomornya.`;
+}
+
 /** E.164 → tampilan internasional, mis. `+62 812-3456-7890`, `+65 9123 4567`. */
 export function formatPhoneDisplay(e164: string | null | undefined): string {
   if (!e164) return '';
@@ -120,11 +174,7 @@ export const noHpSchema = z
   .transform((v, ctx) => {
     const n = normalizePhoneNumber(v);
     if (!n) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          'No HP tidak valid. Pakai 08… untuk Indonesia, atau sertakan kode negara (mis. +65 9123 4567, +61 412 345 678).',
-      });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: describeInvalidPhone(v) });
       return z.NEVER;
     }
     return n;

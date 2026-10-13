@@ -37,6 +37,7 @@ import { giftStallRouter } from './gift-stall.js';
 import { elsaRouter } from './elsa.js';
 import { planningRouter } from './planning.js';
 import { jemaatConsolidationRouter } from './jemaat-consolidation.js';
+import { jemaatSertifikatRouter } from './jemaat-sertifikat.js';
 
 export const adminRouter = Router();
 
@@ -60,6 +61,8 @@ adminRouter.use('/cabang', cabangRouter);
 adminRouter.use('/jemaat-public', jemaatPublicRouter);
 // Konsolidasi data jemaat dari spreadsheet (preview + apply, human check). Fulltimer only.
 adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
+// Sertifikat jemaat (gambar/PDF) — sebelum jemaatRouter.
+adminRouter.use('/jemaat/:jemaatId/sertifikat', jemaatSertifikatRouter);
 adminRouter.use('/jemaat', jemaatRouter);
 adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);

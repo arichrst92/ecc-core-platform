@@ -38,6 +38,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 
@@ -497,6 +498,9 @@ export default function JemaatDetailPage() {
       {/* Relasi Keluarga section */}
       <RelasiSection jemaatId={jemaatId} />
 
+      {/* Sertifikat (bisa lebih dari satu) */}
+      <SertifikatSection jemaatId={jemaatId} />
+
       {/* History sections: Homecell + Event + Ibadah + Group + Business */}
       <JemaatHistorySections jemaatId={jemaatId} />
 
@@ -818,6 +822,31 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
   });
 
+  // Anak yang tercatat di pasangan tapi belum terhubung langsung ke jemaat ini.
+  const anakPasanganQ = useQuery({
+    queryKey: ['relasi-jemaat', jemaatId, 'anak-pasangan'],
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: {
+            anak: { id: string; namaLengkap: string; fotoUrl: string | null };
+            tipe: string;
+            pasangan: { id: string; namaLengkap: string };
+          }[];
+        }>(`/admin/keluarga/relasi/jemaat/${jemaatId}/anak-pasangan`)
+      ).data.data,
+  });
+  const linkAnakMut = useMutation({
+    mutationFn: async (anakIds?: string[]) =>
+      apiClient.post(`/admin/keluarga/relasi/jemaat/${jemaatId}/anak-pasangan`, { anakIds }),
+    onSuccess: () => {
+      toast.success('Anak berhasil dihubungkan');
+      qc.invalidateQueries({ queryKey: ['relasi-jemaat', jemaatId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menghubungkan'),
+  });
+  const anakPasangan = anakPasanganQ.data ?? [];
+
   const relasi = relasiQ.data ?? [];
 
   return (
@@ -902,6 +931,49 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
           </div>
         )}
       </div>
+
+      {anakPasangan.length > 0 && (
+        <div className="mx-6 mb-6 -mt-2 p-3 rounded-lg border border-amber-200 bg-amber-50">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+            <div className="text-xs text-amber-900">
+              <strong>Anak dari pasangan</strong> — tercatat di data pasangan, belum terhubung langsung ke
+              jemaat ini.
+            </div>
+            <button
+              onClick={() => linkAnakMut.mutate(undefined)}
+              disabled={linkAnakMut.isPending}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
+            >
+              {linkAnakMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+              Hubungkan semua
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {anakPasangan.map((a) => (
+              <div key={a.anak.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-100">
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/dashboard/jemaat/${a.anak.id}`}
+                    className="text-sm font-medium text-neutral-900 hover:underline truncate block"
+                  >
+                    {a.anak.namaLengkap}
+                  </Link>
+                  <div className="text-[11px] text-neutral-500">
+                    {a.tipe} dari {a.pasangan.namaLengkap}
+                  </div>
+                </div>
+                <button
+                  onClick={() => linkAnakMut.mutate([a.anak.id])}
+                  disabled={linkAnakMut.isPending}
+                  className="text-xs font-medium text-amber-700 hover:text-amber-900 px-2 py-1 rounded hover:bg-amber-50"
+                >
+                  Hubungkan
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {addOpen && (
         <AddRelasiModal

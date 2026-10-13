@@ -211,6 +211,7 @@ model Jemaat {
   areaPic                      HomecellArea[]                @relation("AreaPic")
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
+  sertifikat                   JemaatSertifikat[]
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -486,6 +487,26 @@ model TipeRelasiKeluarga {
 }
 
 // Self-referencing relasi antar jemaat (satu arah, bisa di-hard-delete)
+// Sertifikat jemaat (baptis, kelas, pelatihan, dll) — bisa lebih dari satu.
+// File gambar (disimpan webp) atau PDF di {UPLOADS_DIR}/sertifikat/{jemaatId}/.
+// Ditampilkan di detail jemaat portal & profil jemaat mobile (read-only).
+model JemaatSertifikat {
+  id        String   @id @default(uuid()) @db.Uuid
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  nama      String   @db.VarChar(200)
+  tanggal   DateTime @db.Date
+  fileUrl   String?  @map("file_url") @db.Text
+  fileMime  String?  @map("file_mime") @db.VarChar(100)
+  fileName  String?  @map("file_name") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([jemaatId, tanggal])
+  @@map("jemaat_sertifikat")
+}
+
 model JemaatRelasi {
   id              String   @id @default(uuid()) @db.Uuid
   jemaatId        String   @map("jemaat_id") @db.Uuid

@@ -383,3 +383,42 @@ export async function deleteBusinessProfilePdf(businessId: string): Promise<void
     if (err.code !== 'ENOENT') throw err;
   }
 }
+
+// =====================================================
+//  Sertifikat jemaat — gambar (→ webp) atau PDF (passthrough)
+// =====================================================
+// Layout: sertifikat/{jemaat-uuid}/{sertifikat-uuid}.{webp|pdf}
+
+export async function saveSertifikatFile(
+  jemaatId: string,
+  sertifikatId: string,
+  buffer: Buffer,
+  kind: 'image' | 'pdf',
+): Promise<{ url: string; mime: string }> {
+  const dir = path.join(UPLOADS_DIR, 'sertifikat', jemaatId);
+  await ensureDir(dir);
+  await deleteSertifikatFile(jemaatId, sertifikatId);
+  const v = Date.now();
+  if (kind === 'pdf') {
+    const filename = `${sertifikatId}.pdf`;
+    await fs.writeFile(path.join(dir, filename), buffer);
+    return { url: `${PUBLIC_UPLOADS_PREFIX}/sertifikat/${jemaatId}/${filename}?v=${v}`, mime: 'application/pdf' };
+  }
+  const filename = `${sertifikatId}.webp`;
+  await sharp(buffer)
+    .rotate()
+    .resize({ width: MAX_DIM_BUKTI, height: MAX_DIM_BUKTI, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return { url: `${PUBLIC_UPLOADS_PREFIX}/sertifikat/${jemaatId}/${filename}?v=${v}`, mime: 'image/webp' };
+}
+
+export async function deleteSertifikatFile(jemaatId: string, sertifikatId: string): Promise<void> {
+  for (const ext of ['webp', 'pdf']) {
+    try {
+      await fs.unlink(path.join(UPLOADS_DIR, 'sertifikat', jemaatId, `${sertifikatId}.${ext}`));
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
+}

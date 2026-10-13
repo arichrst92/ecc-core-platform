@@ -44,6 +44,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
 import { meVisitRouter } from './me-visit.js';
+import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
 export const meRouter = Router();
@@ -74,6 +75,18 @@ function assertJemaatId(req: Parameters<Parameters<typeof meRouter.get>[1]>[0]):
 // ============================================================
 //  Profile (self)
 // ============================================================
+
+// GET /admin/me/sertifikat — sertifikat milik jemaat login (read-only, untuk
+// ditampilkan di profil mobile). Dikelola admin lewat portal.
+meRouter.get('/sertifikat', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const data = await prisma.jemaatSertifikat.findMany({
+    where: { jemaatId },
+    orderBy: [{ tanggal: 'desc' }, { createdAt: 'desc' }],
+    select: sertifikatSelect,
+  });
+  res.json({ success: true, data });
+});
 
 meRouter.get('/', async (req, res) => {
   const jemaatId = assertJemaatId(req);

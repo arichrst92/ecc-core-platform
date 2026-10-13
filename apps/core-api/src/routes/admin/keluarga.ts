@@ -67,6 +67,77 @@ keluargaRouter.get('/relasi/jemaat/:jemaatId', async (req, res) => {
   res.json({ success: true, data });
 });
 
+const ANAK_TIPE = ['Anak Laki-Laki', 'Anak Perempuan'];
+
+/** Anak dari pasangan (Suami/Istri) yang belum terhubung langsung ke jemaat ini. */
+async function findSpouseChildrenNotLinked(jemaatId: string) {
+  const direct = await prisma.jemaatRelasi.findMany({
+    where: { jemaatId },
+    select: { jemaatTerkaitId: true, tipeRelasi: { select: { nama: true } } },
+  });
+  const linked = new Set(direct.map((r) => r.jemaatTerkaitId));
+  const spouseIds = direct
+    .filter((r) => r.tipeRelasi.nama === 'Suami' || r.tipeRelasi.nama === 'Istri')
+    .map((r) => r.jemaatTerkaitId);
+  if (spouseIds.length === 0) return [];
+  const rows = await prisma.jemaatRelasi.findMany({
+    where: {
+      jemaatId: { in: spouseIds },
+      tipeRelasi: { nama: { in: ANAK_TIPE } },
+      jemaatTerkaitId: { notIn: [...linked, jemaatId] },
+    },
+    select: {
+      tipeRelasi: { select: { nama: true } },
+      jemaat: { select: { id: true, namaLengkap: true } },
+      jemaatTerkait: {
+        select: { id: true, namaLengkap: true, fotoUrl: true, jenisKelamin: true, tanggalLahir: true },
+      },
+    },
+  });
+  // Satu anak bisa muncul dari 2 pasangan (jarang) — dedupe.
+  const seen = new Set<string>();
+  return rows
+    .filter((r) => (seen.has(r.jemaatTerkait.id) ? false : (seen.add(r.jemaatTerkait.id), true)))
+    .map((r) => ({ anak: r.jemaatTerkait, tipe: r.tipeRelasi.nama, pasangan: r.jemaat }));
+}
+
+/**
+ * GET /admin/keluarga/relasi/jemaat/:jemaatId/anak-pasangan
+ * Anak yang tercatat di pasangan tapi belum terhubung langsung ke jemaat ini
+ * (mis. anak hanya diinput di data suami, tidak muncul di data istri).
+ */
+keluargaRouter.get('/relasi/jemaat/:jemaatId/anak-pasangan', async (req, res) => {
+  res.json({ success: true, data: await findSpouseChildrenNotLinked(req.params.jemaatId) });
+});
+
+/**
+ * POST /admin/keluarga/relasi/jemaat/:jemaatId/anak-pasangan
+ * Hubungkan langsung anak-anak pasangan ke jemaat ini (Ayah/Ibu ↔ Anak,
+ * auto-reciprocal, gender-aware). Body opsional `{ anakIds?: string[] }`
+ * untuk memilih sebagian; kosong = semua.
+ */
+keluargaRouter.post('/relasi/jemaat/:jemaatId/anak-pasangan', async (req, res) => {
+  const jemaatId = req.params.jemaatId;
+  const pick: string[] | undefined = Array.isArray(req.body?.anakIds) ? req.body.anakIds : undefined;
+  const candidates = (await findSpouseChildrenNotLinked(jemaatId)).filter(
+    (c) => !pick || pick.includes(c.anak.id),
+  );
+  for (const c of candidates) {
+    await upsertJemaatRelasi(jemaatId, c.anak.id, { role: 'CHILD' });
+  }
+  if (candidates.length) {
+    audit(req, {
+      action: 'CREATE',
+      resource: 'jemaat_relasi',
+      resourceId: jemaatId,
+      resourceLabel: `Hubungkan ${candidates.length} anak dari pasangan: ${candidates
+        .map((c) => c.anak.namaLengkap)
+        .join(', ')}`,
+    });
+  }
+  res.json({ success: true, data: { linked: candidates.length } });
+});
+
 /**
  * POST /admin/keluarga/relasi — create relasi dengan AUTO-RECIPROCAL.
  *

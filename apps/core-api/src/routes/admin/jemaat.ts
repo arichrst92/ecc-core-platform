@@ -75,6 +75,7 @@ jemaatRouter.get('/', async (req, res) => {
       { email: { contains: q.search, mode: 'insensitive' } },
       { noHp: { contains: q.search } },
       ...phoneSearchTerms(q.search).map((t) => ({ noHp: { contains: t } })),
+      { kode: { startsWith: q.search.trim().toUpperCase() } },
     ];
   }
   if (cabangId) where.cabangId = cabangId;
@@ -223,6 +224,7 @@ function buildJemaatWhereFromQuery(req: any): any {
       { email: { contains: search, mode: 'insensitive' } },
       { noHp: { contains: search } },
       ...phoneSearchTerms(search).map((t) => ({ noHp: { contains: t } })),
+      { kode: { startsWith: search.trim().toUpperCase() } },
     ];
   }
   if (cabangId) where.cabangId = cabangId;

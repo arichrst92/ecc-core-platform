@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Gift, Loader2, Package, Plus, ScanLine, AlertTriangle, X, Search, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { JemaatSuggestions } from '@/components/jemaat-suggestions';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
@@ -230,9 +231,10 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const lookupMut = useMutation({
-    mutationFn: async () => {
+    // k = kode terpilih dari saran pencarian (nama / no HP); default isi input.
+    mutationFn: async (k?: string) => {
       const res = await apiClient.get('/admin/gift-stall/lookup-jemaat', {
-        params: { kode: kode.trim().toUpperCase(), cabangId },
+        params: { kode: (k ?? kode).trim().toUpperCase(), cabangId },
       });
       return res.data.data;
     },
@@ -271,7 +273,7 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
     <div className="p-4 space-y-4">
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1">
-          Kode jemaat anak
+          Cari anak (kode QR / nama / no HP)
         </label>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3">
@@ -279,11 +281,11 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
             <input
               type="text"
               value={kode}
-              onChange={(e) => setKode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && kode.trim() && lookupMut.mutate()}
-              placeholder="ABCD1234"
+              onChange={(e) => setKode(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && kode.trim() && lookupMut.mutate(undefined)}
+              placeholder="Kode / nama / no HP"
               autoFocus
-              className="flex-1 py-2 outline-none text-sm font-mono tracking-widest"
+              className="flex-1 py-2 outline-none text-sm"
               maxLength={20}
             />
           </div>
@@ -295,13 +297,25 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
             <ScanLine className="w-4 h-4" /> Scan
           </button>
           <button
-            onClick={() => lookupMut.mutate()}
+            onClick={() => lookupMut.mutate(undefined)}
             disabled={!kode.trim() || lookupMut.isPending}
             className="px-4 py-2 bg-neutral-800 text-white text-sm rounded-lg disabled:opacity-50"
           >
             {lookupMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cari'}
           </button>
         </div>
+        {!jemaatFound ? (
+          <div className="mt-2">
+            <JemaatSuggestions
+              query={kode}
+              cabangId={cabangId}
+              onPick={(k) => {
+                setKode(k);
+                lookupMut.mutate(k);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
       {scannerOpen && (
@@ -312,7 +326,7 @@ function RedeemTab({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void })
           onScan={(scanned) => {
             setKode(scanned);
             setScannerOpen(false);
-            setTimeout(() => lookupMut.mutate(), 100);
+            setTimeout(() => lookupMut.mutate(undefined), 100);
           }}
         />
       )}

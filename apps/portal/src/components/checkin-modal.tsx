@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { JemaatSuggestions } from '@/components/jemaat-suggestions';
 
 interface CheckinJemaat {
   id: string;
@@ -160,7 +161,7 @@ export function CheckinModal({
           <div className="p-6 space-y-3">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">
-                Scan QR atau ketik kode jemaat
+                Scan QR, atau ketik kode / nama / no HP jemaat
               </span>
               <span className="block text-[11px] text-neutral-500 mb-1">
                 Scanner hardware otomatis kirim Enter di akhir kode.
@@ -173,11 +174,22 @@ export function CheckinModal({
                   if (e.key === 'Enter') submit(false);
                 }}
                 autoFocus
-                placeholder="ABC23XYZ"
+                placeholder="Kode QR / nama / no HP"
                 disabled={checkinMut.isPending}
-                className="mt-1 w-full px-4 py-3 border-2 border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-mono uppercase tracking-wider"
+                className="mt-1 w-full px-4 py-3 border-2 border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg"
               />
             </label>
+
+            {!pendingForce ? (
+              <JemaatSuggestions
+                query={kode}
+                cabangId={null}
+                onPick={(k) => {
+                  setKode(k);
+                  checkinMut.mutate({ kode: k, force: false });
+                }}
+              />
+            ) : null}
 
             {pendingForce && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">

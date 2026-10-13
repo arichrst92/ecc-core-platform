@@ -24,6 +24,7 @@
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
+import { phoneSearchTerms } from '../../lib/phone-search.js';
 
 export const jemaatPublicRouter = Router();
 
@@ -44,6 +45,57 @@ function birthMonthDay(d: Date | null): string | null {
   const day = String(d.getDate()).padStart(2, '0');
   return `${m}-${day}`;
 }
+
+/**
+ * GET /admin/jemaat-public/search?q=&cabangId=&limit=
+ *
+ * Cari jemaat untuk input manual di layar scan QR (absensi ibadah/event/
+ * homecell, tambah anggota group/homecell, keluarga, visit). Cocok dengan
+ * KODE jemaat, NAMA, atau NO HP (format lokal / internasional).
+ * Field yang dikembalikan minimal; no HP disamarkan.
+ * Urutan: kode persis → cabang yang sama → nama diawali kata kunci → nama.
+ */
+jemaatPublicRouter.get('/search', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : null;
+  const limit = Math.min(30, Math.max(1, Number(req.query.limit) || 20));
+  if (q.length < 2) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const upper = q.toUpperCase();
+  const rows = await prisma.jemaat.findMany({
+    where: {
+      OR: [
+        { kode: { startsWith: upper } },
+        { namaLengkap: { contains: q, mode: 'insensitive' } },
+        ...phoneSearchTerms(q).map((t) => ({ noHp: { contains: t } })),
+      ],
+    },
+    select: {
+      id: true,
+      kode: true,
+      namaLengkap: true,
+      fotoUrl: true,
+      noHp: true,
+      jenisKelamin: true,
+      cabangId: true,
+      cabang: { select: { id: true, nama: true } },
+    },
+    take: 60,
+  });
+  const lower = q.toLowerCase();
+  const score = (r: (typeof rows)[number]) =>
+    (r.kode === upper ? 0 : 10) +
+    (cabangId && r.cabangId === cabangId ? 0 : 3) +
+    (r.namaLengkap.toLowerCase().startsWith(lower) ? 0 : 1);
+  const data = rows
+    .sort((a, b) => score(a) - score(b) || a.namaLengkap.localeCompare(b.namaLengkap))
+    .slice(0, limit)
+    .map(({ noHp, cabangId: _c, ...r }) => ({ ...r, noHpMasked: maskNoHp(noHp) }));
+  res.json({ success: true, data });
+});
 
 jemaatPublicRouter.get('/:id', async (req, res) => {
   if (!req.user) throw Unauthorized();

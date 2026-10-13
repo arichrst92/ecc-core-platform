@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { JemaatSuggestions } from '@/components/jemaat-suggestions';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
@@ -55,9 +56,10 @@ function AdjustPointContent() {
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const lookupMut = useMutation({
-    mutationFn: async () => {
+    // k = kode terpilih dari saran pencarian (nama / no HP); default isi input.
+    mutationFn: async (k?: string) => {
       const res = await apiClient.get('/admin/gift-stall/lookup-jemaat', {
-        params: { kode: kode.trim().toUpperCase(), cabangId },
+        params: { kode: (k ?? kode).trim().toUpperCase(), cabangId },
       });
       return res.data.data as JemaatFound;
     },
@@ -142,7 +144,7 @@ function AdjustPointContent() {
         <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1">
-              Kode jemaat anak
+              Cari anak (kode QR / nama / no HP)
             </label>
             <div className="space-y-2">
               {/* Row 1: input full-width */}
@@ -151,11 +153,11 @@ function AdjustPointContent() {
                 <input
                   type="text"
                   value={kode}
-                  onChange={(e) => setKode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && kode.trim() && lookupMut.mutate()}
-                  placeholder="ABCD1234"
+                  onChange={(e) => setKode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && kode.trim() && lookupMut.mutate(undefined)}
+                  placeholder="Kode / nama / no HP"
                   autoFocus
-                  className="flex-1 min-w-0 py-3 outline-none text-lg font-mono tracking-widest bg-transparent"
+                  className="flex-1 min-w-0 py-3 outline-none text-base bg-transparent"
                   maxLength={20}
                 />
               </div>
@@ -169,7 +171,7 @@ function AdjustPointContent() {
                   <ScanLine className="w-4 h-4" /> Scan QR
                 </button>
                 <button
-                  onClick={() => lookupMut.mutate()}
+                  onClick={() => lookupMut.mutate(undefined)}
                   disabled={!kode.trim() || lookupMut.isPending}
                   className="py-3 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
@@ -184,8 +186,18 @@ function AdjustPointContent() {
               </div>
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Tekan <strong>Scan QR</strong> untuk kamera, atau ketik kode + Enter.
+              Tekan <strong>Scan QR</strong> untuk kamera, atau ketik kode / nama / no HP lalu pilih dari daftar.
             </p>
+            <div className="mt-2">
+              <JemaatSuggestions
+                query={kode}
+                cabangId={cabangId}
+                onPick={(k) => {
+                  setKode(k);
+                  lookupMut.mutate(k);
+                }}
+              />
+            </div>
           </div>
 
           {scannerOpen && (
@@ -197,7 +209,7 @@ function AdjustPointContent() {
                 setKode(scanned);
                 setScannerOpen(false);
                 // Auto-fire lookup setelah scan sukses
-                setTimeout(() => lookupMut.mutate(), 100);
+                setTimeout(() => lookupMut.mutate(undefined), 100);
               }}
             />
           )}

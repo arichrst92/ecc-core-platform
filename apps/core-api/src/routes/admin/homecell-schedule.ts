@@ -24,7 +24,11 @@ import {
   scanHomecellAttendanceSchema,
   bulkScanHomecellAttendanceSchema,
 } from '@ecc/shared-types';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { ApiError, BadRequest, NotFound } from '../../lib/errors.js';
+import { flexMaterialUpload, materialExt, MATERIAL_TYPES } from '../../lib/material-upload.js';
+import { deleteHomecellMaterial, saveHomecellMaterial } from '../../lib/storage.js';
 import { audit } from '../../lib/audit.js';
 import {
   assertCanManageHomecell,
@@ -35,6 +39,19 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 
 // mergeParams: true supaya :homecellId di parent router accessible di sini.
 export const homecellScheduleRouter = Router({ mergeParams: true });
+
+/** Field file materi yang dikirim ke client (portal & mobile). */
+export const scheduleFileSelect = {
+  id: true,
+  nama: true,
+  deskripsi: true,
+  fileUrl: true,
+  fileMime: true,
+  fileName: true,
+  fileSize: true,
+  createdAt: true,
+  uploadedBy: { select: { id: true, namaLengkap: true } },
+} as const;
 
 /** Helper — extract userJemaatId + isFulltimer dari req, throw 401 kalau missing. */
 async function getRequester(req: Express.Request) {
@@ -157,6 +174,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
     where: { id: scheduleId, homecellId },
     include: {
       creator: { select: { id: true, namaLengkap: true } },
+      files: { orderBy: { createdAt: 'asc' }, select: scheduleFileSelect },
       attendances: {
         orderBy: { scannedAt: 'asc' },
         include: {
@@ -201,6 +219,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       memberCount: members.length,
       attendances: schedule.attendances,
       missingMembers,
+      files: schedule.files,
     },
   });
 });
@@ -568,7 +587,13 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
     );
   }
 
+  const files = await prisma.homecellScheduleFile.findMany({
+    where: { scheduleId },
+    select: { fileUrl: true },
+  });
   await prisma.homecellSchedule.delete({ where: { id: scheduleId } });
+  // File materi ikut terhapus (row cascade) — bersihkan juga di disk.
+  for (const f of files) await deleteHomecellMaterial(f.fileUrl).catch(() => {});
 
   audit(req, {
     action: 'DELETE',
@@ -579,4 +604,104 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
   });
 
   res.json({ success: true, data: { deleted: true } });
+});
+
+// ============================================================
+// File materi pertemuan — PIC homecell / PIC area / admin
+//   POST   /:scheduleId/files            multipart: nama, deskripsi?, file
+//   PATCH  /:scheduleId/files/:fileId    JSON: nama?, deskripsi?
+//   DELETE /:scheduleId/files/:fileId
+// Anggota melihat lewat GET /admin/me/homecell/:id/materi.
+// ============================================================
+
+const fileMetaSchema = z.object({
+  nama: z.string().trim().min(2, 'Nama file minimal 2 karakter').max(200),
+  deskripsi: z.string().trim().max(2000).optional().transform((v) => (v ? v : undefined)),
+});
+
+async function loadScheduleForManage(req: import('express').Request) {
+  const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
+  const scheduleId = (req.params as { scheduleId?: string }).scheduleId ?? '';
+  const requester = await getRequester(req);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  const schedule = await prisma.homecellSchedule.findFirst({
+    where: { id: scheduleId, homecellId },
+    select: { id: true, homecellId: true, tanggal: true },
+  });
+  if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+  return { schedule, requester };
+}
+
+homecellScheduleRouter.post('/:scheduleId/files', flexMaterialUpload(), async (req, res) => {
+  const { schedule, requester } = await loadScheduleForManage(req);
+  const meta = fileMetaSchema.parse(req.body ?? {});
+  if (!req.file) throw BadRequest('File wajib diupload.');
+  const ext = materialExt(req.file.originalname, req.file.mimetype);
+  if (!ext) throw BadRequest('Tipe file tidak didukung.');
+
+  const id = randomUUID();
+  const fileUrl = await saveHomecellMaterial(schedule.homecellId, id, ext, req.file.buffer);
+  const created = await prisma.homecellScheduleFile.create({
+    data: {
+      id,
+      scheduleId: schedule.id,
+      nama: meta.nama,
+      deskripsi: meta.deskripsi ?? null,
+      fileUrl,
+      fileMime: MATERIAL_TYPES[ext]!,
+      fileName: req.file.originalname?.slice(0, 255) || null,
+      fileSize: req.file.size,
+      uploadedById: requester.jemaatId,
+    },
+    select: scheduleFileSelect,
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'homecell_schedule_file',
+    resourceId: created.id,
+    resourceLabel: created.nama,
+    after: created,
+  });
+  res.status(201).json({ success: true, data: created });
+});
+
+homecellScheduleRouter.patch('/:scheduleId/files/:fileId', async (req, res) => {
+  const { schedule } = await loadScheduleForManage(req);
+  const before = await prisma.homecellScheduleFile.findFirst({
+    where: { id: req.params.fileId, scheduleId: schedule.id },
+  });
+  if (!before) throw NotFound('File tidak ditemukan.');
+  const meta = fileMetaSchema.partial().parse(req.body ?? {});
+  const updated = await prisma.homecellScheduleFile.update({
+    where: { id: before.id },
+    data: { nama: meta.nama, deskripsi: meta.deskripsi },
+    select: scheduleFileSelect,
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_schedule_file',
+    resourceId: updated.id,
+    resourceLabel: updated.nama,
+    before,
+    after: updated,
+  });
+  res.json({ success: true, data: updated });
+});
+
+homecellScheduleRouter.delete('/:scheduleId/files/:fileId', async (req, res) => {
+  const { schedule } = await loadScheduleForManage(req);
+  const before = await prisma.homecellScheduleFile.findFirst({
+    where: { id: req.params.fileId, scheduleId: schedule.id },
+  });
+  if (!before) throw NotFound('File tidak ditemukan.');
+  await prisma.homecellScheduleFile.delete({ where: { id: before.id } });
+  await deleteHomecellMaterial(before.fileUrl).catch(() => {});
+  audit(req, {
+    action: 'DELETE',
+    resource: 'homecell_schedule_file',
+    resourceId: before.id,
+    resourceLabel: before.nama,
+    before,
+  });
+  res.status(204).end();
 });

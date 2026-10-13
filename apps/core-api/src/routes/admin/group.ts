@@ -38,6 +38,7 @@ import {
 } from '@ecc/shared-types';
 import { ApiError, BadRequest, NotFound, Conflict, Forbidden, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { z } from 'zod';
 import {
   assertCanManageGroup,
   assertCanViewGroup,
@@ -153,54 +154,138 @@ groupRouter.get('/', async (req, res) => {
 });
 
 // ============================================================
+// Join group = PERMINTAAN yang harus disetujui PIC (atau admin)
+// ============================================================
+// Jemaat join (publik / kode undangan) → GroupJoinRequest PENDING → PIC dapat
+// notifikasi → terima (otomatis jadi anggota) / tolak (dengan alasan).
+// PIC & admin yang join group sendiri → langsung jadi anggota.
+
+const joinMessageSchema = z.object({
+  pesan: z.string().trim().max(500).optional().transform((v) => (v ? v : undefined)),
+});
+
+async function requestJoinGroup(
+  req: import('express').Request,
+  group: { id: string; nama: string; picJemaatId: string | null },
+  requester: { jemaatId: string; isFulltimer: boolean },
+  via: 'PUBLIC' | 'CODE',
+  pesan?: string,
+) {
+  const existing = await prisma.groupMember.findUnique({
+    where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
+    select: { isActive: true },
+  });
+  if (existing?.isActive) {
+    return { status: 'MEMBER' as const, message: 'Anda sudah anggota group ini', alreadyMember: true };
+  }
+
+  // PIC / admin → langsung jadi anggota (tidak perlu menyetujui diri sendiri).
+  if (requester.isFulltimer || group.picJemaatId === requester.jemaatId) {
+    await prisma.groupMember.upsert({
+      where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
+      create: { groupId: group.id, jemaatId: requester.jemaatId, isActive: true },
+      update: { isActive: true, tanggalKeluar: null },
+    });
+    audit(req, {
+      action: 'CREATE',
+      resource: 'group_member',
+      resourceLabel: `Join (PIC/admin): ${group.nama}`,
+      metadata: { groupId: group.id, via },
+    });
+    return { status: 'MEMBER' as const, message: `Berhasil bergabung ke ${group.nama}`, alreadyMember: false };
+  }
+
+  const pending = await prisma.groupJoinRequest.findFirst({
+    where: { groupId: group.id, jemaatId: requester.jemaatId, status: 'PENDING' },
+    select: { id: true },
+  });
+  if (pending) {
+    return {
+      status: 'PENDING' as const,
+      requestId: pending.id,
+      message: `Permintaan bergabung ke ${group.nama} masih menunggu persetujuan PIC.`,
+    };
+  }
+
+  const created = await prisma.groupJoinRequest.create({
+    data: { groupId: group.id, jemaatId: requester.jemaatId, via, pesan },
+    include: { jemaat: { select: { namaLengkap: true } } },
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'group_join_request',
+    resourceId: created.id,
+    resourceLabel: `Request join group: ${created.jemaat.namaLengkap} @ ${group.nama}`,
+    metadata: { groupId: group.id, via },
+  });
+  if (group.picJemaatId) {
+    const pic = await prisma.jemaat.findUnique({
+      where: { id: group.picJemaatId },
+      select: { id: true, namaLengkap: true, noHp: true },
+    });
+    if (pic) {
+      void createNotification({
+        jemaatId: pic.id,
+        type: 'GROUP_JOIN_REQUESTED',
+        title: `Permintaan bergabung: ${group.nama}`,
+        body: `${created.jemaat.namaLengkap} ingin bergabung ke group Anda.${pesan ? ` Pesan: ${pesan}` : ''}`,
+        actionUrl: `/group/${group.id}`,
+        metadata: { groupId: group.id, requestId: created.id },
+      });
+      void sendWaIfEnabled('GROUP_JOIN_REQUESTED', pic.noHp, {
+        nama: pic.namaLengkap,
+        pemohon: created.jemaat.namaLengkap,
+        group_nama: group.nama,
+      });
+    }
+  }
+  return {
+    status: 'PENDING' as const,
+    requestId: created.id,
+    message: `Permintaan bergabung ke ${group.nama} terkirim. Menunggu persetujuan PIC group.`,
+  };
+}
+
+// GET /join-requests/mine — permintaan saya yang masih menunggu (semua group)
+groupRouter.get('/join-requests/mine', async (req, res) => {
+  const requester = await getRequester(req);
+  const data = await prisma.groupJoinRequest.findMany({
+    where: { jemaatId: requester.jemaatId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, createdAt: true, group: { select: { id: true, nama: true } } },
+  });
+  res.json({ success: true, data });
+});
+
+// ============================================================
 // POST /join-by-code — join private group via invitation code
 // ============================================================
 // MUST be declared before /:id supaya routing gak nyangkut ke /:id handler.
 groupRouter.post('/join-by-code', async (req, res) => {
   const { code } = joinByCodeSchema.parse(req.body);
+  const { pesan } = joinMessageSchema.parse(req.body ?? {});
   const requester = await getRequester(req);
 
   const group = await prisma.group.findUnique({
     where: { joinCode: code.toUpperCase() },
-    select: { id: true, nama: true, isActive: true },
+    select: { id: true, nama: true, isActive: true, picJemaatId: true },
   });
   if (!group || !group.isActive) throw NotFound('Kode invitation tidak valid');
 
-  // Check apakah sudah member
-  const existing = await prisma.groupMember.findUnique({
-    where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
-    select: { id: true, isActive: true },
-  });
-  if (existing?.isActive) {
-    return res.json({
-      success: true,
-      message: 'Anda sudah member group ini',
-      data: { groupId: group.id, alreadyMember: true },
-    });
-  }
-
-  // Create atau reactivate
-  await prisma.groupMember.upsert({
-    where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
-    create: { groupId: group.id, jemaatId: requester.jemaatId, isActive: true },
-    update: { isActive: true, tanggalKeluar: null },
-  });
-
-  await notifMemberAdded(group.id, requester.jemaatId).catch(() => {});
-
-  audit(req, {
-    action: 'CREATE',
-    resource: 'group_member',
-    resourceLabel: `Join by code: ${group.nama}`,
-    metadata: { groupId: group.id, via: 'invitation_code' },
-  });
-
+  const r = await requestJoinGroup(req, group, requester, 'CODE', pesan);
   res.json({
     success: true,
-    message: `Berhasil bergabung ke ${group.nama}`,
-    data: { groupId: group.id, groupNama: group.nama },
+    message: r.message,
+    data: {
+      groupId: group.id,
+      groupNama: group.nama,
+      status: r.status, // MEMBER | PENDING
+      requestId: 'requestId' in r ? r.requestId : null,
+      alreadyMember: 'alreadyMember' in r ? r.alreadyMember : false,
+    },
   });
 });
+
 
 // ============================================================
 // GET /:id — detail group
@@ -240,12 +325,25 @@ groupRouter.get('/:id', async (req, res) => {
   const isPicOrAdmin =
     requester.isFulltimer || group.picJemaatId === requester.jemaatId;
   const { _count, ...rest } = group;
+  const [myJoinRequest, pendingJoinCount] = await Promise.all([
+    prisma.groupJoinRequest.findFirst({
+      where: { groupId: group.id, jemaatId: requester.jemaatId, status: 'PENDING' },
+      select: { id: true, createdAt: true },
+    }),
+    isPicOrAdmin
+      ? prisma.groupJoinRequest.count({ where: { groupId: group.id, status: 'PENDING' } })
+      : Promise.resolve(0),
+  ]);
   res.json({
     success: true,
     data: {
       ...rest,
       memberCount: _count.members,
       joinCode: isPicOrAdmin ? group.joinCode : null,
+      // Status join user: permintaan menunggu persetujuan PIC (kalau ada).
+      myJoinRequest,
+      // [PIC/admin] jumlah permintaan bergabung yang menunggu.
+      pendingJoinCount,
     },
   });
 });
@@ -589,9 +687,10 @@ groupRouter.delete('/:id/members/:jemaatId', async (req, res) => {
 // ============================================================
 groupRouter.post('/:id/join', async (req, res) => {
   const requester = await getRequester(req);
+  const { pesan } = joinMessageSchema.parse(req.body ?? {});
   const group = await prisma.group.findUnique({
     where: { id: req.params.id },
-    select: { id: true, nama: true, isPublic: true, isActive: true },
+    select: { id: true, nama: true, isPublic: true, isActive: true, picJemaatId: true },
   });
   if (!group || !group.isActive) throw NotFound('Group tidak ditemukan');
   if (!group.isPublic) {
@@ -599,38 +698,152 @@ groupRouter.post('/:id/join', async (req, res) => {
       'Group ini private — gunakan kode invitation via POST /admin/group/join-by-code',
     );
   }
-
-  const existing = await prisma.groupMember.findUnique({
-    where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
-    select: { id: true, isActive: true },
+  const r = await requestJoinGroup(req, group, requester, 'PUBLIC', pesan);
+  res.json({
+    success: true,
+    message: r.message,
+    data: {
+      groupId: group.id,
+      status: r.status,
+      requestId: 'requestId' in r ? r.requestId : null,
+      alreadyMember: 'alreadyMember' in r ? r.alreadyMember : false,
+    },
   });
-  if (existing?.isActive) {
-    return res.json({
-      success: true,
-      message: 'Anda sudah member group ini',
-      data: { alreadyMember: true },
-    });
-  }
-
-  await prisma.groupMember.upsert({
-    where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
-    create: { groupId: group.id, jemaatId: requester.jemaatId, isActive: true },
-    update: { isActive: true, tanggalKeluar: null },
-  });
-
-  // Notif PIC untuk info (optional — deferred to avoid noise). Skip notif here
-  // supaya PIC gak spam kalau banyak yg join. Kalau perlu ada notif PIC on join,
-  // add di future extension.
-
-  audit(req, {
-    action: 'CREATE',
-    resource: 'group_member',
-    resourceLabel: `Self-join: ${group.nama}`,
-    metadata: { groupId: group.id, via: 'public_join' },
-  });
-
-  res.json({ success: true, message: `Berhasil bergabung ke ${group.nama}` });
 });
+
+// DELETE /:id/join-request — batalkan permintaan saya
+groupRouter.delete('/:id/join-request', async (req, res) => {
+  const requester = await getRequester(req);
+  const pending = await prisma.groupJoinRequest.findFirst({
+    where: { groupId: req.params.id, jemaatId: requester.jemaatId, status: 'PENDING' },
+    select: { id: true },
+  });
+  if (!pending) throw NotFound('Tidak ada permintaan bergabung yang menunggu.');
+  await prisma.groupJoinRequest.update({
+    where: { id: pending.id },
+    data: { status: 'CANCELLED', reviewedAt: new Date() },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'group_join_request',
+    resourceId: pending.id,
+    resourceLabel: 'Cancel join group (self)',
+  });
+  res.json({ success: true, data: { id: pending.id, status: 'CANCELLED' } });
+});
+
+// GET /:id/join-requests — [PIC/admin] permintaan PENDING
+groupRouter.get('/:id/join-requests', async (req, res) => {
+  const requester = await getRequester(req);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  const data = await prisma.groupJoinRequest.findMany({
+    where: { groupId: req.params.id, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      via: true,
+      pesan: true,
+      jemaat: {
+        select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, noHp: true, cabang: { select: { nama: true } } },
+      },
+    },
+  });
+  res.json({ success: true, data });
+});
+
+const groupRejectSchema = z.object({
+  reason: z.string().trim().max(300).optional().transform((v) => (v ? v : undefined)),
+});
+
+async function loadGroupRequest(groupId: string, reqId: string) {
+  const r = await prisma.groupJoinRequest.findFirst({
+    where: { id: reqId, groupId },
+    include: {
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      group: { select: { id: true, nama: true } },
+    },
+  });
+  if (!r) throw NotFound('Permintaan tidak ditemukan.');
+  return r;
+}
+
+// POST /:id/join-requests/:reqId/approve — [PIC/admin] terima → jadi anggota
+groupRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
+  const requester = await getRequester(req);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  const request = await loadGroupRequest(req.params.id, req.params.reqId);
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.groupJoinRequest.updateMany({
+      where: { id: request.id, status: 'PENDING' },
+      data: { status: 'APPROVED', reviewedById: requester.jemaatId, reviewedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+    }
+    await tx.groupMember.upsert({
+      where: { groupId_jemaatId: { groupId: request.groupId, jemaatId: request.jemaatId } },
+      create: { groupId: request.groupId, jemaatId: request.jemaatId, isActive: true, catatan: request.pesan },
+      update: { isActive: true, tanggalKeluar: null },
+    });
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'group_join_request',
+    resourceId: request.id,
+    resourceLabel: `Approve join group: ${request.jemaat.namaLengkap} @ ${request.group.nama}`,
+  });
+  void createNotification({
+    jemaatId: request.jemaat.id,
+    type: 'GROUP_JOIN_APPROVED',
+    title: `Selamat bergabung di ${request.group.nama}`,
+    body: 'Permintaan bergabung Anda diterima oleh PIC group.',
+    actionUrl: `/group/${request.group.id}`,
+    metadata: { groupId: request.group.id },
+  });
+  void sendWaIfEnabled('GROUP_JOIN_APPROVED', request.jemaat.noHp, {
+    nama: request.jemaat.namaLengkap,
+    group_nama: request.group.nama,
+  });
+  res.json({ success: true, data: { requestId: request.id, status: 'APPROVED' } });
+});
+
+// POST /:id/join-requests/:reqId/reject — [PIC/admin] tolak { reason? }
+groupRouter.post('/:id/join-requests/:reqId/reject', async (req, res) => {
+  const requester = await getRequester(req);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  const { reason } = groupRejectSchema.parse(req.body ?? {});
+  const request = await loadGroupRequest(req.params.id, req.params.reqId);
+  const claimed = await prisma.groupJoinRequest.updateMany({
+    where: { id: request.id, status: 'PENDING' },
+    data: { status: 'REJECTED', rejectReason: reason ?? null, reviewedById: requester.jemaatId, reviewedAt: new Date() },
+  });
+  if (claimed.count === 0) {
+    throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+  }
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'group_join_request',
+    resourceId: request.id,
+    resourceLabel: `Reject join group: ${request.jemaat.namaLengkap} @ ${request.group.nama}`,
+    metadata: { reason: reason ?? null },
+  });
+  void createNotification({
+    jemaatId: request.jemaat.id,
+    type: 'GROUP_JOIN_REJECTED',
+    title: `Permintaan bergabung ke ${request.group.nama}`,
+    body: `Permintaan Anda belum dapat diterima.${reason ? ` Alasan: ${reason}` : ''}`,
+    actionUrl: '/group',
+    metadata: { groupId: request.group.id },
+  });
+  void sendWaIfEnabled('GROUP_JOIN_REJECTED', request.jemaat.noHp, {
+    nama: request.jemaat.namaLengkap,
+    group_nama: request.group.nama,
+    alasan: reason ? `\nAlasan: ${reason}` : '',
+  });
+  res.json({ success: true, data: { requestId: request.id, status: 'REJECTED' } });
+});
+
 
 // ============================================================
 // DELETE /:id/leave — self leave group

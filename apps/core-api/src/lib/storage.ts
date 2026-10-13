@@ -422,3 +422,31 @@ export async function deleteSertifikatFile(jemaatId: string, sertifikatId: strin
     }
   }
 }
+
+// =====================================================
+//  Materi pertemuan homecell — file apa adanya (passthrough)
+// =====================================================
+// Layout: homecell-materi/{homecell-uuid}/{file-uuid}.{ext}
+
+export async function saveHomecellMaterial(
+  homecellId: string,
+  fileId: string,
+  ext: string,
+  buffer: Buffer,
+): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'homecell-materi', homecellId);
+  await ensureDir(dir);
+  const filename = `${fileId}.${ext}`;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return `${PUBLIC_UPLOADS_PREFIX}/homecell-materi/${homecellId}/${filename}`;
+}
+
+export async function deleteHomecellMaterial(fileUrl: string): Promise<void> {
+  const rel = fileUrl.replace(/\?.*$/, '').replace(new RegExp(`^${PUBLIC_UPLOADS_PREFIX}/`), '');
+  if (!rel.startsWith('homecell-materi/')) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, rel));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}

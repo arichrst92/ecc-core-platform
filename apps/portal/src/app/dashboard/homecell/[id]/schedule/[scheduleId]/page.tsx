@@ -16,8 +16,10 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { ScheduleFilesSection, type ScheduleFile } from '@/components/homecell/schedule-files';
 
 interface ScheduleDetail {
+  files?: ScheduleFile[];
   id: string;
   homecellId: string;
   tanggal: string;
@@ -282,6 +284,14 @@ export default function HomecellScheduleDetailPage() {
           </table>
         </div>
       )}
+
+      {/* Materi pertemuan — dilihat anggota di app */}
+      <ScheduleFilesSection
+        homecellId={homecellId}
+        scheduleId={scheduleId}
+        files={s.files ?? []}
+        queryKey={['homecell', 'schedule', 'detail', homecellId, scheduleId]}
+      />
 
       {/* CTA — pancing PIC scan via mobile */}
       <div className="p-5 bg-brand-50 border border-brand-200 rounded-xl flex items-start gap-3">

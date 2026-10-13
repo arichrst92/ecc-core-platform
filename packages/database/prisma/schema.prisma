@@ -214,6 +214,9 @@ model Jemaat {
   sertifikat                   JemaatSertifikat[]
   homecellJoinRequests         HomecellJoinRequest[]         @relation("HomecellJoinRequester")
   homecellJoinReviews          HomecellJoinRequest[]         @relation("HomecellJoinReviewer")
+  homecellScheduleFiles        HomecellScheduleFile[]        @relation("HomecellScheduleFileUploader")
+  groupJoinRequests            GroupJoinRequest[]            @relation("GroupJoinRequester")
+  groupJoinReviews             GroupJoinRequest[]            @relation("GroupJoinReviewer")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -1804,6 +1807,9 @@ enum InAppNotifType {
   HOMECELL_JOIN_REQUESTED
   HOMECELL_JOIN_APPROVED
   HOMECELL_JOIN_REJECTED
+  GROUP_JOIN_REQUESTED
+  GROUP_JOIN_APPROVED
+  GROUP_JOIN_REJECTED
 
   @@map("in_app_notif_type")
 }
@@ -2083,9 +2089,32 @@ model HomecellSchedule {
   homecell    Homecell             @relation(fields: [homecellId], references: [id], onDelete: Cascade)
   creator     Jemaat?              @relation("HomecellScheduleCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   attendances HomecellAttendance[]
+  files       HomecellScheduleFile[]
 
   @@index([homecellId, tanggal(sort: Desc)])
   @@map("homecell_schedule")
+}
+
+// File materi pertemuan homecell (PDF, gambar, dokumen) — diupload PIC/admin,
+// bisa dilihat & dibuka semua anggota homecell.
+model HomecellScheduleFile {
+  id           String   @id @default(uuid()) @db.Uuid
+  scheduleId   String   @map("schedule_id") @db.Uuid
+  nama         String   @db.VarChar(200)
+  deskripsi    String?  @db.Text
+  fileUrl      String   @map("file_url") @db.Text
+  fileMime     String   @map("file_mime") @db.VarChar(150)
+  fileName     String?  @map("file_name") @db.VarChar(255)
+  fileSize     Int?     @map("file_size")
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  schedule   HomecellSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  uploadedBy Jemaat?          @relation("HomecellScheduleFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([scheduleId])
+  @@map("homecell_schedule_file")
 }
 
 model HomecellAttendance {
@@ -2179,7 +2208,8 @@ model Group {
   parent    Group?        @relation("GroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children  Group[]       @relation("GroupHierarchy")
   picJemaat Jemaat?       @relation("GroupPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
-  members   GroupMember[]
+  members      GroupMember[]
+  joinRequests GroupJoinRequest[]
 
   @@index([cabangId])
   @@index([parentId])
@@ -2200,6 +2230,39 @@ enum GroupJenis {
 }
 
 // Junction M:N Group ↔ Jemaat.
+// Permintaan bergabung ke group (join publik / kode undangan) — harus
+// disetujui PIC group (atau admin). Maks 1 PENDING per (jemaat, group).
+enum GroupJoinStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("group_join_status")
+}
+
+model GroupJoinRequest {
+  id           String          @id @default(uuid()) @db.Uuid
+  groupId      String          @map("group_id") @db.Uuid
+  jemaatId     String          @map("jemaat_id") @db.Uuid
+  via          String          @default("PUBLIC") @db.VarChar(20) // PUBLIC | CODE
+  pesan        String?         @db.VarChar(500)
+  status       GroupJoinStatus @default(PENDING)
+  reviewedById String?         @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?       @map("reviewed_at")
+  rejectReason String?         @map("reject_reason") @db.VarChar(300)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  group      Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  jemaat     Jemaat  @relation("GroupJoinRequester", fields: [jemaatId], references: [id], onDelete: Cascade)
+  reviewedBy Jemaat? @relation("GroupJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, status, createdAt])
+  @@index([jemaatId, status])
+  @@map("group_join_request")
+}
+
 model GroupMember {
   id               String    @id @default(uuid()) @db.Uuid
   groupId          String    @map("group_id") @db.Uuid

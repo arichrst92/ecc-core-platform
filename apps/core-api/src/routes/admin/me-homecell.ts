@@ -23,6 +23,7 @@ import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { distanceKm, resolveMapsLocation, type LatLng } from '../../lib/geo.js';
+import { scheduleFileSelect } from './homecell-schedule.js';
 
 export const meHomecellRouter = Router();
 
@@ -411,6 +412,45 @@ meHomecellRouter.get('/:id', async (req, res) => {
       myPendingRequest: myPending,
     },
   });
+});
+
+// ------------------------------------------------------------------ materi pertemuan
+
+/**
+ * GET /:id/materi — jadwal (berikutnya + 10 terakhir) yang punya file materi.
+ * Hanya anggota / pemimpin homecell (dan admin).
+ */
+meHomecellRouter.get('/:id/materi', async (req, res) => {
+  const u = me(req);
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  const status = (await myStatusMap(u.jemaatId)).get(req.params.id);
+  if (status !== 'MEMBER' && status !== 'LEADER' && !u.isFulltimer) {
+    throw Forbidden('Materi hanya bisa dilihat anggota homecell ini.');
+  }
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const select = {
+    id: true,
+    tanggal: true,
+    lokasi: true,
+    catatan: true,
+    files: { orderBy: { createdAt: 'asc' as const }, select: scheduleFileSelect },
+  };
+  const [upcoming, past] = await Promise.all([
+    prisma.homecellSchedule.findMany({
+      where: { homecellId: req.params.id, tanggal: { gte: today }, files: { some: {} } },
+      orderBy: { tanggal: 'asc' },
+      take: 5,
+      select,
+    }),
+    prisma.homecellSchedule.findMany({
+      where: { homecellId: req.params.id, tanggal: { lt: today }, files: { some: {} } },
+      orderBy: { tanggal: 'desc' },
+      take: 10,
+      select,
+    }),
+  ]);
+  res.json({ success: true, data: { upcoming, past } });
 });
 
 // ------------------------------------------------------------------ jemaat: minta bergabung

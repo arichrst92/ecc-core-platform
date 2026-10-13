@@ -7,6 +7,7 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
+import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { audit } from '../../lib/audit.js';
 import {
   parseCsv,
@@ -73,6 +74,7 @@ jemaatRouter.get('/', async (req, res) => {
       { namaLengkap: { contains: q.search, mode: 'insensitive' } },
       { email: { contains: q.search, mode: 'insensitive' } },
       { noHp: { contains: q.search } },
+      ...phoneSearchTerms(q.search).map((t) => ({ noHp: { contains: t } })),
     ];
   }
   if (cabangId) where.cabangId = cabangId;
@@ -220,6 +222,7 @@ function buildJemaatWhereFromQuery(req: any): any {
       { namaLengkap: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
       { noHp: { contains: search } },
+      ...phoneSearchTerms(search).map((t) => ({ noHp: { contains: t } })),
     ];
   }
   if (cabangId) where.cabangId = cabangId;

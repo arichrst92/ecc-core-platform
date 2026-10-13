@@ -7,7 +7,7 @@
  */
 
 // ============================================================
-// Phone normalizer — Indonesia E.164
+// Phone normalizer — E.164 (default Indonesia untuk nomor lokal)
 // ============================================================
 /**
  * Convert "0812xxx" / "62812xxx" / "+62812xxx" ke `+62812xxx`.
@@ -33,6 +33,12 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   }
   // "62812..." → "+62812..."
   else if (s.startsWith('62')) {
+    s = '+' + s;
+  }
+  // Nomor lokal Indonesia diawali 8 ("812…"). Digit lain di depan (mis.
+  // "6591234567", "60123456789", "61412…") = sudah berkode negara → jangan
+  // dipaksa jadi +62.
+  else if (/^[1-79]\d{7,}$/.test(s)) {
     s = '+' + s;
   }
   // "812..." (missing prefix) → assume Indonesia

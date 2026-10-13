@@ -14,6 +14,7 @@ import {
   type WaNotifType,
 } from '../../lib/wa-notif.js';
 import { sendWhatsAppText } from '@ecc/auth';
+import { describeInvalidPhone, normalizePhoneNumber } from '@ecc/shared-types';
 
 export const waConfigRouter = Router();
 
@@ -80,7 +81,12 @@ waConfigRouter.post('/:type/test', async (req, res) => {
   if (!row) throw NotFound('Config tidak ditemukan');
 
   const body = req.body ?? {};
-  let noHp: string | null = typeof body.noHp === 'string' ? body.noHp : null;
+  let noHp: string | null = null;
+  if (typeof body.noHp === 'string' && body.noHp.trim()) {
+    // Boleh 08… / +65 … — kirim ke format internasional yang dipakai Fonnte.
+    noHp = normalizePhoneNumber(body.noHp);
+    if (!noHp) throw BadRequest(describeInvalidPhone(body.noHp));
+  }
   if (!noHp) {
     const self = await prisma.jemaat.findUnique({
       where: { id: req.user.jemaatId },

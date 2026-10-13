@@ -18,6 +18,7 @@ import {
   verifyAccessToken,
 } from '@ecc/auth';
 import {
+  normalizePhoneNumber,
   requestOtpSchema,
   verifyOtpSchema,
   faceLoginSchema,
@@ -81,7 +82,8 @@ function getAppReviewBypass(): { numbers: Set<string>; otp: string } | null {
   const numbers = new Set(
     raw
       .split(',')
-      .map((n) => n.trim())
+      // Normalisasi supaya "+62 818-…" / "0818…" di ENV tetap cocok dgn E.164.
+      .map((n) => normalizePhoneNumber(n) ?? n.trim())
       .filter(Boolean),
   );
   if (numbers.size === 0) return null;

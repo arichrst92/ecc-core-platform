@@ -12,7 +12,14 @@ import { audit } from '../../lib/audit.js';
 import { resolveMapsLocation } from '../../lib/geo.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { homecellBoardRouter } from './homecell-board.js';
-import { getLastAttendanceMap, withLastAttendance } from '../../lib/homecell-last-attendance.js';
+import {
+  getLastAttendanceMap,
+  getLastMeetingMap,
+  getMemberLastAttendanceMulti,
+  lastMeetingOf,
+  withLastAttendance,
+} from '../../lib/homecell-last-attendance.js';
+import { resolvePeriod, ymd } from '../../lib/last-attendance.js';
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
@@ -23,21 +30,61 @@ homecellRouter.use('/:homecellId/schedule', homecellScheduleRouter);
 // Pengumuman & voting homecell → homecell-board.ts
 homecellRouter.use('/:homecellId', homecellBoardRouter);
 
-// ===== List =====
-homecellRouter.get('/', async (req, res) => {
-  const q = paginationQuerySchema.parse(req.query);
-  const areaId = typeof req.query.areaId === 'string' ? req.query.areaId : undefined;
-  const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
-  const sinodeId = typeof req.query.sinodeId === 'string' ? req.query.sinodeId : undefined;
+// ===== Filter bersama (list + export) =====
+// Query:
+//   search, areaId, cabangId, sinodeId
+//   status=aktif|nonaktif
+//   periode=last_7d|this_week|last_week|last_30d|this_month|last_month|custom (+ from, to YYYY-MM-DD)
+//   pertemuan=ada|tidak   → homecell yang ADA / TIDAK ADA pertemuan (jadwal
+//                           dengan ≥1 kehadiran) dalam periode. Tanpa periode
+//                           → "tidak" = belum pernah ada pertemuan sama sekali.
+function homecellFilter(req: import('express').Request, search?: string) {
+  const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : undefined);
+  const areaId = str('areaId');
+  const cabangId = str('cabangId');
+  const sinodeId = str('sinodeId');
+  const status = str('status');
+  const pertemuan = str('pertemuan');
+  const period = resolvePeriod(str('periode'), str('from'), str('to'));
 
   const where: Prisma.HomecellWhereInput = {};
-  if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
+  if (search) where.nama = { contains: search, mode: 'insensitive' };
   if (areaId) where.areaId = areaId;
   // area filter — gabungkan cabang & sinode kalau keduanya disebut.
   const areaFilter: Prisma.HomecellAreaWhereInput = {};
   if (cabangId) areaFilter.cabangId = cabangId;
   if (sinodeId) areaFilter.cabang = { sinodeId };
   if (Object.keys(areaFilter).length > 0) where.area = areaFilter;
+  if (status === 'aktif') where.isActive = true;
+  if (status === 'nonaktif') where.isActive = false;
+
+  const heldSchedule: Prisma.HomecellScheduleWhereInput = {
+    attendances: { some: {} },
+    ...(period ? { tanggal: { gte: period.from, lte: period.to } } : {}),
+  };
+  if (pertemuan === 'ada') where.schedules = { some: heldSchedule };
+  if (pertemuan === 'tidak') where.schedules = { none: heldSchedule };
+
+  return { where, period, heldSchedule };
+}
+
+/** Jumlah pertemuan (jadwal dengan ≥1 hadir) per homecell dalam periode. */
+async function periodMeetingCounts(ids: string[], heldSchedule: Prisma.HomecellScheduleWhereInput) {
+  const m = new Map<string, number>();
+  if (ids.length === 0) return m;
+  const g = await prisma.homecellSchedule.groupBy({
+    by: ['homecellId'],
+    where: { ...heldSchedule, homecellId: { in: ids } },
+    _count: { _all: true },
+  });
+  for (const x of g) m.set(x.homecellId, x._count._all);
+  return m;
+}
+
+// ===== List =====
+homecellRouter.get('/', async (req, res) => {
+  const q = paginationQuerySchema.parse(req.query);
+  const { where, period, heldSchedule } = homecellFilter(req, q.search);
 
   const [rows, total] = await Promise.all([
     prisma.homecell.findMany({
@@ -70,6 +117,12 @@ homecellRouter.get('/', async (req, res) => {
     prisma.homecell.count({ where }),
   ]);
 
+  const ids = rows.map((r) => r.id);
+  const [lastMap, periodCounts] = await Promise.all([
+    getLastMeetingMap(ids),
+    period ? periodMeetingCounts(ids, heldSchedule) : Promise.resolve(null),
+  ]);
+
   const data = rows.map((r) => {
     const memberCount = r._count.members;
     const scheduleCount = r._count.schedules;
@@ -95,6 +148,8 @@ homecellRouter.get('/', async (req, res) => {
       scheduleCount,
       totalAttendance,
       avgAttendancePercent,
+      ...lastMeetingOf(r.id, lastMap),
+      periodMeetingCount: periodCounts ? (periodCounts.get(r.id) ?? 0) : null,
     };
   });
 
@@ -103,6 +158,208 @@ homecellRouter.get('/', async (req, res) => {
     data,
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
   });
+});
+
+// ===== Export laporan (PDF via print view) =====
+// GET /admin/homecell/export?format=pdf&<filter sama dengan list>
+// Per homecell: info + pertemuan terakhir, lalu daftar anggota aktif lengkap
+// dengan kehadiran terakhir masing-masing.
+const PERIOD_LABEL: Record<string, string> = {
+  last_7d: '7 hari terakhir',
+  this_week: 'Minggu ini',
+  last_week: 'Minggu lalu',
+  last_30d: '30 hari terakhir',
+  this_month: 'Bulan ini',
+  last_month: 'Bulan lalu',
+  custom: 'Rentang tanggal',
+};
+
+function esc(s: unknown): string {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const fmtTgl = (ymdStr: string | null) =>
+  ymdStr
+    ? new Date(`${ymdStr}T00:00:00Z`).toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '—';
+
+function relHari(days: number | null): string {
+  if (days == null) return '<span class="muted">belum pernah</span>';
+  const cls = days <= 7 ? 'ok' : days <= 30 ? 'warn' : 'bad';
+  const txt = days === 0 ? 'hari ini' : days === 1 ? 'kemarin' : `${days} hari lalu`;
+  return `<span class="${cls}">${txt}</span>`;
+}
+
+homecellRouter.get('/export', async (req, res) => {
+  const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
+  if (!['pdf', 'html', 'print'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf.');
+  const search = typeof req.query.search === 'string' && req.query.search.trim() ? req.query.search.trim() : undefined;
+  const { where, period, heldSchedule } = homecellFilter(req, search);
+
+  const rows = await prisma.homecell.findMany({
+    where,
+    orderBy: [{ area: { cabang: { nama: 'asc' } } }, { area: { nama: 'asc' } }, { nama: 'asc' }],
+    take: 1000,
+    select: {
+      id: true,
+      nama: true,
+      isActive: true,
+      area: { select: { nama: true, cabang: { select: { nama: true } } } },
+      picJemaat: { select: { namaLengkap: true, noHp: true } },
+      members: {
+        where: { isActive: true },
+        orderBy: { jemaat: { namaLengkap: 'asc' } },
+        select: {
+          tanggalBergabung: true,
+          jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true } },
+        },
+      },
+    },
+  });
+  const ids = rows.map((r) => r.id);
+  const [lastMap, memberMap, periodCounts] = await Promise.all([
+    getLastMeetingMap(ids),
+    getMemberLastAttendanceMulti(ids),
+    period ? periodMeetingCounts(ids, heldSchedule) : Promise.resolve(null),
+  ]);
+
+  // Ringkasan filter untuk header laporan.
+  const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : undefined);
+  const [cabang, area] = await Promise.all([
+    str('cabangId') ? prisma.cabangGereja.findUnique({ where: { id: str('cabangId')! }, select: { nama: true } }) : null,
+    str('areaId') ? prisma.homecellArea.findUnique({ where: { id: str('areaId')! }, select: { nama: true } }) : null,
+  ]);
+  const filterParts = [
+    cabang ? `Cabang: ${cabang.nama}` : null,
+    area ? `Area: ${area.nama}` : null,
+    period
+      ? `Periode: ${PERIOD_LABEL[str('periode') ?? ''] ?? ''} (${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))})`
+      : null,
+    str('pertemuan') === 'ada' ? 'Ada pertemuan' : str('pertemuan') === 'tidak' ? 'Tidak ada pertemuan' : null,
+    str('status') === 'aktif' ? 'Status: aktif' : str('status') === 'nonaktif' ? 'Status: nonaktif' : null,
+    search ? `Cari: "${search}"` : null,
+  ].filter(Boolean);
+
+  const totalMembers = rows.reduce((n, r) => n + r.members.length, 0);
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const uaStr = (req.get('user-agent') ?? '').toLowerCase();
+  const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(uaStr);
+  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
+
+  const sections = rows
+    .map((h) => {
+      const lm = lastMeetingOf(h.id, lastMap);
+      const memberRows = h.members
+        .map((m, i) => {
+          const la = memberMap.get(`${h.id}:${m.jemaat.id}`);
+          return `<tr>
+  <td class="num">${i + 1}</td>
+  <td>${esc(m.jemaat.namaLengkap)}</td>
+  <td>${esc(m.jemaat.kode ?? '')}</td>
+  <td>${esc(m.jemaat.noHp ?? '')}</td>
+  <td>${fmtTgl(ymd(m.tanggalBergabung))}</td>
+  <td>${la ? fmtTgl(ymd(la.lastAttendedAt)) : '—'}</td>
+  <td>${relHari(la ? la.lastAttendedDaysAgo : null)}</td>
+</tr>`;
+        })
+        .join('');
+      return `<section class="hc">
+  <div class="hc-head">
+    <div>
+      <h2>${esc(h.nama)}${h.isActive ? '' : ' <span class="tag">nonaktif</span>'}</h2>
+      <div class="sub">${esc(h.area?.nama ?? '')} · ${esc(h.area?.cabang?.nama ?? '')} · PIC: ${esc(h.picJemaat?.namaLengkap ?? '—')}</div>
+    </div>
+    <div class="last">
+      <div>Terakhir homecell: <strong>${fmtTgl(lm.lastMeetingAt)}</strong></div>
+      <div>${relHari(lm.lastMeetingDaysAgo)}</div>
+      ${periodCounts ? `<div class="muted">${periodCounts.get(h.id) ?? 0} pertemuan dalam periode</div>` : ''}
+    </div>
+  </div>
+  ${
+    h.members.length === 0
+      ? '<p class="muted">Belum ada anggota aktif.</p>'
+      : `<table>
+  <thead><tr><th class="num">#</th><th>Nama</th><th>Kode</th><th>No HP</th><th>Bergabung</th><th>Terakhir hadir</th><th></th></tr></thead>
+  <tbody>${memberRows}</tbody>
+</table>`
+  }
+</section>`;
+    })
+    .join('');
+
+  const html = `<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<title>Laporan Homecell — ${timestamp}</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; color: #0f172a; margin: 0; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h2 { font-size: 12.5px; margin: 0; }
+  .meta { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .filters { font-size: 10.5px; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 4px 8px; margin: 6px 0 12px; }
+  .hc { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; page-break-inside: avoid; }
+  .hc-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .sub { color: #64748b; font-size: 10px; margin-top: 2px; }
+  .last { text-align: right; font-size: 10px; white-space: nowrap; }
+  .tag { font-size: 9px; background: #e2e8f0; color: #475569; border-radius: 4px; padding: 1px 4px; font-weight: 500; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #e2e8f0; padding: 3px 5px; text-align: left; vertical-align: top; }
+  thead { background: #f8fafc; font-weight: 600; }
+  td.num, th.num { width: 18px; text-align: right; color: #94a3b8; }
+  .ok { color: #15803d; font-weight: 600; }
+  .warn { color: #b45309; font-weight: 600; }
+  .bad { color: #dc2626; font-weight: 600; }
+  .muted { color: #94a3b8; }
+  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
+  .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
+  @media print {
+    .noprint, .noprint * { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
+  }
+  .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; }
+  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
+</style>
+</head><body>
+${
+  isMobileUa
+    ? ''
+    : `<div class="noprint">
+  <strong>Print Preview — Laporan Homecell</strong>
+  &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
+  <button onclick="doPrint()">Print / Save as PDF</button>
+</div>`
+}
+<script>
+  function doPrint() {
+    document.querySelectorAll('.noprint').forEach(el => el.remove());
+    setTimeout(() => window.print(), 50);
+  }
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none');
+  });
+  ${isMobileUa ? 'setTimeout(() => window.print(), 600);' : ''}
+</script>
+<div style="padding: 10mm;">
+<h1>Laporan Homecell ECC</h1>
+<div class="meta">${rows.length} homecell · ${totalMembers} anggota aktif · Export ${timestamp}</div>
+${filterParts.length ? `<div class="filters">${filterParts.map(esc).join(' · ')}</div>` : ''}
+${sections || '<p class="muted">Tidak ada homecell yang sesuai filter.</p>'}
+<div class="footer-row">
+  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Keterangan warna: hijau ≤7 hari, kuning ≤30 hari, merah &gt;30 hari</div>
+  <div class="powered">
+    <span>Powered by</span>
+    <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/>
+  </div>
+</div>
+</div>
+</body></html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 // ===== Detail =====

@@ -15,7 +15,13 @@
  *
  * Aturan: 1 jemaat hanya boleh punya 1 homecell aktif & 1 permintaan PENDING.
  */
-import { getLastAttendanceMap, withLastAttendance } from '../../lib/homecell-last-attendance.js';
+import {
+  getLastAttendanceMap,
+  getLastMeetingMap,
+  lastMeetingOf,
+  withLastAttendance,
+  type LastMeeting,
+} from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -60,7 +66,12 @@ const listSelect = {
 
 type ListRow = Prisma.HomecellGetPayload<{ select: typeof listSelect }>;
 
-function toListItem(r: ListRow, from: LatLng | null, myStatus: Map<string, 'MEMBER' | 'PENDING' | 'LEADER'>) {
+function toListItem(
+  r: ListRow,
+  from: LatLng | null,
+  myStatus: Map<string, 'MEMBER' | 'PENDING' | 'LEADER'>,
+  lastMap?: Map<string, LastMeeting>,
+) {
   const { _count, latitude, longitude, ...rest } = r;
   const hasLocation = latitude != null && longitude != null;
   return {
@@ -74,6 +85,8 @@ function toListItem(r: ListRow, from: LatLng | null, myStatus: Map<string, 'MEMB
         ? Math.round(distanceKm(from, { lat: latitude!, lng: longitude! }) * 10) / 10
         : null,
     myStatus: myStatus.get(r.id) ?? null,
+    // Pertemuan terakhir (≥1 hadir) + berapa hari lalu.
+    ...(lastMap ? lastMeetingOf(r.id, lastMap) : { lastMeetingAt: null, lastMeetingDaysAgo: null }),
   };
 }
 
@@ -153,6 +166,7 @@ meHomecellRouter.get('/', async (req, res) => {
     : [];
   const nextByHc = new Map<string, (typeof upcoming)[number]>();
   for (const sc of upcoming) if (!nextByHc.has(sc.homecellId)) nextByHc.set(sc.homecellId, sc);
+  const lastMap = await getLastMeetingMap(hcIds);
   const next = (id: string) => {
     const sc = nextByHc.get(id);
     return sc ? { id: sc.id, tanggal: sc.tanggal, lokasi: sc.lokasi, catatan: sc.catatan } : null;
@@ -163,13 +177,13 @@ meHomecellRouter.get('/', async (req, res) => {
       role: managed.length > 0 ? 'LEADER' : memberships.length > 0 ? 'MEMBER' : 'NONE',
       cabang: jemaat?.cabang ?? null,
       managed: managed.map((h) => ({
-        ...toListItem(h as unknown as ListRow, null, status),
+        ...toListItem(h as unknown as ListRow, null, status, lastMap),
         pendingJoinCount: h._count.joinRequests,
         nextSchedule: next(h.id),
       })),
       memberships: memberships.map((m) => ({
         tanggalBergabung: m.tanggalBergabung,
-        homecell: { ...toListItem(m.homecell, null, status), nextSchedule: next(m.homecell.id) },
+        homecell: { ...toListItem(m.homecell, null, status, lastMap), nextSchedule: next(m.homecell.id) },
       })),
       pendingRequests: pending,
     },
@@ -201,8 +215,8 @@ meHomecellRouter.get('/browse', async (req, res) => {
     orderBy: { nama: 'asc' },
     take: 300,
   });
-  const status = await myStatusMap(jemaatId);
-  const items = rows.map((r) => toListItem(r, from, status));
+  const [status, lastMap] = await Promise.all([myStatusMap(jemaatId), getLastMeetingMap(rows.map((r) => r.id))]);
+  const items = rows.map((r) => toListItem(r, from, status, lastMap));
   if (from) {
     items.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || a.nama.localeCompare(b.nama));
   }
@@ -221,10 +235,12 @@ meHomecellRouter.get('/nearest', async (req, res) => {
   });
   const status = await myStatusMap(jemaatId);
   const withLoc = rows.filter((r) => r.latitude != null && r.longitude != null);
-  const items = withLoc
+  const nearest = withLoc
     .map((r) => toListItem(r, from, status))
     .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
     .slice(0, limit);
+  const lastMap = await getLastMeetingMap(nearest.map((x) => x.id));
+  const items = nearest.map((x) => ({ ...x, ...lastMeetingOf(x.id, lastMap) }));
   res.json({
     success: true,
     // withoutLocation: mobile tampilkan info kalau sebagian homecell belum punya lokasi.
@@ -402,7 +418,7 @@ meHomecellRouter.get('/:id', async (req, res) => {
       select: { id: true, createdAt: true },
     }),
   ]);
-  const item = toListItem(hc, null, status);
+  const item = toListItem(hc, null, status, await getLastMeetingMap([hc.id]));
   const lastMap = isInside ? await getLastAttendanceMap(hc.id) : new Map();
   res.json({
     success: true,

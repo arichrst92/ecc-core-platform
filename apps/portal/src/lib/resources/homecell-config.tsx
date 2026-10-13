@@ -18,6 +18,26 @@ interface Homecell extends Record<string, unknown> {
   totalAttendance?: number;
   /** Persen rata-rata kehadiran (0–100), null kalau belum ada data. */
   avgAttendancePercent?: number | null;
+  /** Pertemuan terakhir (jadwal ≤ hari ini dengan ≥1 hadir), YYYY-MM-DD. */
+  lastMeetingAt?: string | null;
+  lastMeetingDaysAgo?: number | null;
+  /** Jumlah pertemuan dalam periode filter; null kalau tidak ada filter periode. */
+  periodMeetingCount?: number | null;
+}
+
+/** "Terakhir homecell: 6 Okt 2026 · 7 hari lalu" di bawah nama homecell. */
+function LastMeeting({ date, daysAgo }: { date?: string | null; daysAgo?: number | null }) {
+  if (!date || daysAgo == null) {
+    return <div className="text-[11px] text-neutral-400 mt-0.5 font-normal">Belum ada pertemuan tercatat</div>;
+  }
+  const tgl = new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const rel = daysAgo === 0 ? 'hari ini' : daysAgo === 1 ? 'kemarin' : `${daysAgo} hari lalu`;
+  const color = daysAgo <= 7 ? 'text-green-700' : daysAgo <= 30 ? 'text-amber-700' : 'text-red-600';
+  return (
+    <div className="text-[11px] text-neutral-500 mt-0.5 font-normal">
+      Terakhir homecell: {tgl} · <span className={`font-semibold ${color}`}>{rel}</span>
+    </div>
+  );
 }
 
 // Catatan: kolom alamat / hari / jam dihapus dari form & display. Jadwal
@@ -35,13 +55,16 @@ export const homecellResource: ResourceConfig<Homecell> = {
       key: 'nama',
       label: 'Nama Homecell',
       render: (_v, row) => (
-        <Link
-          href={`/dashboard/homecell/${row.id}`}
-          className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
-        >
-          <Eye className="w-3.5 h-3.5 shrink-0" />
-          {row.nama}
-        </Link>
+        <div>
+          <Link
+            href={`/dashboard/homecell/${row.id}`}
+            className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+          >
+            <Eye className="w-3.5 h-3.5 shrink-0" />
+            {row.nama}
+          </Link>
+          <LastMeeting date={row.lastMeetingAt} daysAgo={row.lastMeetingDaysAgo} />
+        </div>
       ),
     },
     { key: 'area', label: 'Area', render: nestedField('area.nama'), width: '160px' },
@@ -67,7 +90,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
     {
       key: 'scheduleCount',
       label: 'Pertemuan',
-      width: '110px',
+      width: '150px',
       render: (_v, row) => (
         <span
           className="inline-flex items-center gap-1 text-neutral-700"
@@ -75,6 +98,14 @@ export const homecellResource: ResourceConfig<Homecell> = {
         >
           <CalendarDays className="w-3.5 h-3.5" />
           {row.scheduleCount ?? 0}
+          {row.periodMeetingCount != null ? (
+            <span
+              className="ml-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 text-[11px] font-semibold"
+              title="Jumlah pertemuan dalam periode filter"
+            >
+              {row.periodMeetingCount} di periode
+            </span>
+          ) : null}
         </span>
       ),
     },

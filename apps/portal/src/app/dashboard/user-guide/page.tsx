@@ -752,7 +752,7 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'A: Cek (1) WhatsApp aktif & punya internet, (2) nomor Anda di portal sudah dalam format E.164 (+62...), (3) Fonnte gateway aktif (cek Server Health → Env config → Fonnte). Cooldown OTP 60 detik antar request — tunggu sebelum retry.',
+        text: 'A: Cek (1) WhatsApp aktif & punya internet, (2) nomor Anda di portal sudah benar beserta kode negaranya (mis. +62…, +65…), (3) Fonnte gateway aktif (cek Server Health → Env config → Fonnte). Cooldown OTP 60 detik antar request — tunggu sebelum retry.',
       },
       {
         kind: 'paragraph',

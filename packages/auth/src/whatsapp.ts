@@ -15,6 +15,8 @@
  * `sendOtpViaWhatsApp()` — interface tetap sama.
  */
 
+import { normalizePhoneNumber } from '@ecc/shared-types';
+
 const FONNTE_URL = 'https://api.fonnte.com/send';
 const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
 
@@ -55,7 +57,7 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
   const formData = new URLSearchParams();
   formData.append('target', target);
   formData.append('message', message);
-  formData.append('countryCode', '62');
+  formData.append('countryCode', fonnteCountryCode(target));
 
   const res = await fetch(FONNTE_URL, {
     method: 'POST',
@@ -109,7 +111,7 @@ export async function sendWhatsAppText(
   const formData = new URLSearchParams();
   formData.append('target', target);
   formData.append('message', finalMessage);
-  formData.append('countryCode', '62');
+  formData.append('countryCode', fonnteCountryCode(target));
 
   const res = await fetch(FONNTE_URL, {
     method: 'POST',
@@ -136,12 +138,20 @@ export async function sendWhatsAppText(
   return { messageId, to: target };
 }
 
-/** Normalisasi no HP ke format E.164 Indonesia (+62...). */
+/**
+ * Normalisasi no HP ke E.164 — semua negara (lihat `normalizePhoneNumber`
+ * di @ecc/shared-types). Nomor lokal tanpa kode negara dianggap Indonesia.
+ * Kalau tidak valid, kembalikan input yang sudah dibersihkan (caller validasi).
+ */
 export function normalizeNoHp(input: string): string {
-  let s = input.trim().replace(/[\s\-()]/g, '');
-  if (s.startsWith('+62')) return s;
-  if (s.startsWith('62')) return `+${s}`;
-  if (s.startsWith('0')) return `+62${s.slice(1)}`;
-  if (s.startsWith('8')) return `+62${s}`;
-  return s;
+  return normalizePhoneNumber(input) ?? input.trim().replace(/[\s\-()]/g, '');
+}
+
+/**
+ * Field `countryCode` Fonnte: kode negara untuk nomor yang diawali 0.
+ * Target kita selalu internasional penuh (tanpa "+"), jadi untuk nomor
+ * non-Indonesia kirim "0" supaya Fonnte tidak menambahkan prefix 62.
+ */
+function fonnteCountryCode(target: string): string {
+  return target.startsWith('62') ? '62' : '0';
 }

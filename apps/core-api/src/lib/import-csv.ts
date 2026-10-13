@@ -14,7 +14,7 @@
  */
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
-import { normalizeNoHp } from '@ecc/auth';
+import { normalizePhoneNumber } from '@ecc/shared-types';
 
 export const CSV_HEADERS = [
   'nama_lengkap',
@@ -112,9 +112,9 @@ export function validateRows(rows: CsvRow[]): RowValidation[] {
     // Normalize
     let noHp: string | null = null;
     if (parsed.data.no_hp && parsed.data.no_hp !== '') {
-      const normalized = normalizeNoHp(parsed.data.no_hp);
-      if (!/^\+62\d{8,13}$/.test(normalized)) {
-        errors.push('no_hp: format tidak valid setelah normalisasi');
+      const normalized = normalizePhoneNumber(parsed.data.no_hp);
+      if (!normalized) {
+        errors.push('no_hp: format tidak valid (pakai 08… atau kode negara, mis. +65…)');
       } else {
         noHp = normalized;
       }

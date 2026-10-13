@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import Image from 'next/image';
 import { Loader2, Phone, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { normalizePhoneNumber } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -32,11 +33,10 @@ export default function LoginPage() {
     setCheckingSession(false);
   }, [router]);
 
+  // Semua negara; nomor lokal (08…) dianggap Indonesia. Kalau tidak valid,
+  // kirim apa adanya supaya pesan error validasi dari server yang tampil.
   function normalizePhone(raw: string): string {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('62')) return '+' + digits;
-    if (digits.startsWith('0')) return '+62' + digits.slice(1);
-    return '+' + digits;
+    return normalizePhoneNumber(raw) ?? raw.trim();
   }
 
   const requestMut = useMutation({
@@ -117,7 +117,7 @@ export default function LoginPage() {
                 value={noHp}
                 onChange={(e) => setNoHp(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && noHp && requestMut.mutate()}
-                placeholder="+6281234567890 atau 08123..."
+                placeholder="08123… atau +65 9123…"
                 autoFocus
                 className="flex-1 py-2.5 outline-none text-sm"
               />

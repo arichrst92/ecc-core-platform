@@ -166,7 +166,7 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
         <Phone className="w-4 h-4 text-neutral-400" />
         <input
           type="tel"
-          placeholder="+62812..."
+          placeholder="0812… atau +65 9123…"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="flex-1 py-2 outline-none"

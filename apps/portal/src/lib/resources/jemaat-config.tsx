@@ -272,7 +272,7 @@ export function buildJemaatResource(
         type: 'tel',
         required: true,
         placeholder: '+628123456789',
-        helperText: 'Format E.164 (+62...). Dipakai untuk login OTP.',
+        helperText: 'Boleh 08… (Indonesia) atau dengan kode negara, mis. +65 9123 4567. Dipakai untuk login OTP.',
       },
       { name: 'email', label: 'Email', type: 'email' },
       {

@@ -11,6 +11,8 @@ import {
   XCircle,
   RotateCcw,
   Info,
+  Unlock,
+  Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { MenuItem } from '@ecc/shared-types';
@@ -147,6 +149,23 @@ export default function RoleAccessPage() {
       toast.error(err.response?.data?.error?.message ?? 'Gagal update menu access'),
   });
 
+  // Buka / tutup SEMUA menu sekaligus (Role-level atau SubRole-level)
+  const bulkMut = useMutation({
+    mutationFn: async (input: { target: 'role' | 'sub'; id: string; grant: boolean }) =>
+      apiClient.put(
+        input.target === 'role'
+          ? `/admin/role/${input.id}/access/menu/all`
+          : `/admin/role/sub/${input.id}/access/menu/all`,
+        { grant: input.grant },
+      ),
+    onSuccess: (_res, input) => {
+      toast.success(input.grant ? 'Semua akses menu dibuka' : 'Semua akses menu ditutup');
+      invalidateAfterEdit();
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal update akses menu'),
+  });
+
   if (matrixQ.isLoading) {
     return (
       <div className="flex justify-center py-20">
@@ -205,6 +224,8 @@ export default function RoleAccessPage() {
             onSubMenuChange={(subId, menuKey, levels) =>
               subMenuMut.mutate({ subRoleId: subId, menuKey, ...levels })
             }
+            onBulk={(target, id, grant) => bulkMut.mutate({ target, id, grant })}
+            bulkPending={bulkMut.isPending}
             currentUserJemaatId={authUser?.jemaatId}
           />
         ))}
@@ -251,6 +272,8 @@ function RoleCard({
   onSubTogglePortal,
   onRoleMenuChange,
   onSubMenuChange,
+  onBulk,
+  bulkPending,
   currentUserJemaatId: _currentUserJemaatId,
 }: {
   role: RoleRow;
@@ -269,9 +292,26 @@ function RoleCard({
     menuKey: string,
     levels: { canRead: boolean; canWrite: boolean; canDelete: boolean },
   ) => void;
+  onBulk: (target: 'role' | 'sub', id: string, grant: boolean) => void;
+  bulkPending: boolean;
   currentUserJemaatId?: string;
 }) {
   const [activeSubRole, setActiveSubRole] = useState<string | null>(null);
+  const activeSub = activeSubRole ? role.subRoles.find((s) => s.id === activeSubRole) : undefined;
+  const contextRows = activeSub ? activeSub.menuAccesses : role.menuAccesses;
+  const contextName = activeSub ? `${role.nama} → ${activeSub.nama}` : `${role.nama} (Role-level)`;
+  const fullCount = menuCatalog.filter((m) => {
+    const a = accessRowFor(contextRows, m.key);
+    return a.canRead && a.canWrite && a.canDelete;
+  }).length;
+
+  function bulk(grant: boolean) {
+    const msg = grant
+      ? `Buka SEMUA akses menu (Read, Write, Delete — ${menuCatalog.length} menu) untuk ${contextName}?`
+      : `Tutup SEMUA akses menu untuk ${contextName}?`;
+    if (!confirm(msg)) return;
+    onBulk(activeSub ? 'sub' : 'role', activeSub ? activeSub.id : role.id, grant);
+  }
 
   const totalAccessibleMenus = menuCatalog.filter((m) => {
     const a = accessRowFor(role.menuAccesses, m.key);
@@ -347,6 +387,31 @@ function RoleCard({
               onChange={(v) => onSubTogglePortal(activeSubRole, v)}
             />
           )}
+
+          {/* Aksi massal untuk konteks aktif */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs text-neutral-500">
+              {contextName}: akses penuh {fullCount}/{menuCatalog.length} menu
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => bulk(true)}
+                disabled={bulkPending || fullCount === menuCatalog.length}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-40"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                Buka semua akses
+              </button>
+              <button
+                onClick={() => bulk(false)}
+                disabled={bulkPending || contextRows.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Tutup semua
+              </button>
+            </div>
+          </div>
 
           {/* Menu access table */}
           <div className="overflow-x-auto">

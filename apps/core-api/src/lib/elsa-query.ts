@@ -17,6 +17,7 @@
  *   - groupByEntity(entity, by, filter?) → grouped counts
  */
 import { prisma } from '@ecc/database';
+import { normalizePhoneNumber } from '@ecc/shared-types';
 
 // ============================================================
 // ENTITY_MAP — 30 whitelisted entities
@@ -257,12 +258,9 @@ function stripExcluded<T extends Record<string, unknown>>(row: T, excludeFields?
  * Support input format: "08...", "62...", "+62...", "8...".
  */
 function normalizeNoHp(s: string): string {
-  const cleaned = s.replace(/[\s\-()]/g, '');
-  if (cleaned.startsWith('+62')) return cleaned;
-  if (cleaned.startsWith('62')) return '+' + cleaned;
-  if (cleaned.startsWith('0')) return '+62' + cleaned.slice(1);
-  if (cleaned.startsWith('8')) return '+62' + cleaned;
-  return cleaned;
+  // Nomor lengkap (semua negara) → E.164. Potongan nomor untuk `contains`
+  // (mis. "5678") tidak valid → dibiarkan apa adanya.
+  return normalizePhoneNumber(s) ?? s.replace(/[\s\-()]/g, '');
 }
 
 /**

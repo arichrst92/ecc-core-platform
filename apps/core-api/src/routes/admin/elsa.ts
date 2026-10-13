@@ -346,7 +346,7 @@ CONTOH:
 - "point balance semua anak" → query_entity({ entity: "jemaat_point_balance", include: ["jemaat", "cabang"], orderBy: { balance: "desc" } })
 - "homecell paling aktif" → groupby_entity({ entity: "homecell_attendance", by: ["scheduleId"], limit: 10 })
 
-CATATAN noHp: Field noHp di DB pakai format E.164 (+62...). User bisa tulis "08...", "62...", atau "+62..." — backend auto-normalize sebelum query. Contoh filter valid semua: { noHp: "081234567890" }, { noHp: { contains: "0812" } }, { noHp: "+6281234567890" }.
+CATATAN noHp: Field noHp di DB pakai format E.164 internasional (+62..., +65..., +61..., dll). User bisa tulis "08...", "62...", "+62..." atau nomor luar negeri dengan kode negara — backend auto-normalize sebelum query. Contoh filter valid semua: { noHp: "081234567890" }, { noHp: { contains: "0812" } }, { noHp: "+6281234567890" }.
 
 Prisma filter syntax:
 - Equality: { field: value }
@@ -389,7 +389,7 @@ EXAMPLES:
 - "all kids point balances" → query_entity({ entity: "jemaat_point_balance", include: ["jemaat", "cabang"], orderBy: { balance: "desc" } })
 - "most active homecells" → groupby_entity({ entity: "homecell_attendance", by: ["scheduleId"], limit: 10 })
 
-CATATAN noHp: Field noHp di DB pakai format E.164 (+62...). User bisa tulis "08...", "62...", atau "+62..." — backend auto-normalize sebelum query. Contoh filter valid semua: { noHp: "081234567890" }, { noHp: { contains: "0812" } }, { noHp: "+6281234567890" }.
+CATATAN noHp: Field noHp di DB pakai format E.164 internasional (+62..., +65..., +61..., dll). User bisa tulis "08...", "62...", "+62..." atau nomor luar negeri dengan kode negara — backend auto-normalize sebelum query. Contoh filter valid semua: { noHp: "081234567890" }, { noHp: { contains: "0812" } }, { noHp: "+6281234567890" }.
 
 Prisma filter syntax:
 - Equality: { field: value }

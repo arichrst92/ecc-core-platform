@@ -44,6 +44,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
 import { meVisitRouter } from './me-visit.js';
+import { meHomecellRouter } from './me-homecell.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -52,6 +53,8 @@ export const meRouter = Router();
 // Sub-router untuk Movement → Visit (scan QR antar jemaat).
 // Mount dulu di atas supaya path /me/visits ke-resolve sebelum route lain.
 meRouter.use('/visits', meVisitRouter);
+// Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
+meRouter.use('/homecell', meHomecellRouter);
 // Local Business — CRUD owner + browse public.
 meRouter.use('/businesses', meBusinessRouter);
 meRouter.use('/local-market', meLocalMarketRouter);

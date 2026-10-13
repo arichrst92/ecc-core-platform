@@ -127,6 +127,15 @@ export const homecellResource: ResourceConfig<Homecell> = {
       helperText: 'Hanya jemaat dengan Pelayanan Penggembalaan + role Homecell Leader yang tampil.',
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
+    { name: 'alamat', label: 'Alamat Pertemuan', type: 'textarea', placeholder: 'Mis. Rumah Pak Yohanes, Jl. Mawar 5' },
+    {
+      name: 'mapsUrl',
+      label: 'Lokasi (link Google Maps)',
+      type: 'text',
+      placeholder: 'https://maps.app.goo.gl/… atau -6.2088, 106.8456',
+      helperText:
+        'Dipakai fitur "Cari homecell terdekat" di app. Buka Google Maps → tekan lama titik lokasi → salin koordinat atau tautan Bagikan.',
+    },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],
   createSchema: createHomecellSchema,

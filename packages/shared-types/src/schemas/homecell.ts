@@ -44,6 +44,9 @@ export const createHomecellSchema = z
     areaId: uuidSchema,
     nama: z.string().trim().min(2).max(150),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
+    alamat: emptyToUndefined(z.string().trim().max(1000)),
+    // Link / koordinat Google Maps → lat/lng di-parse server (Cari homecell terdekat).
+    mapsUrl: emptyToUndefined(z.string().trim().max(2000)),
     picJemaatId: emptyToUndefined(uuidSchema),
     isActive: z.boolean().default(true),
   })
@@ -55,6 +58,9 @@ export const updateHomecellSchema = z
     areaId: emptyToUndefined(uuidSchema),
     nama: z.string().trim().min(2).max(150).optional(),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
+    alamat: emptyToUndefined(z.string().trim().max(1000)),
+    // '' / null = hapus lokasi; undefined = tidak diubah.
+    mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
     picJemaatId: emptyToUndefined(uuidSchema),
     isActive: z.boolean().optional(),
   })

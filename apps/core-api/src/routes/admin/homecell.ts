@@ -9,6 +9,7 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { resolveMapsLocation } from '../../lib/geo.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
@@ -169,13 +170,26 @@ homecellRouter.get('/:id', async (req, res) => {
   });
 });
 
+/** Link/koordinat Google Maps → { mapsUrl, latitude, longitude }. Kosong = hapus. */
+async function resolveLokasi(mapsUrl: string | null | undefined) {
+  if (!mapsUrl) return { mapsUrl: null, latitude: null, longitude: null };
+  const loc = await resolveMapsLocation(mapsUrl);
+  if (!loc) {
+    throw BadRequest(
+      'Koordinat tidak ditemukan di link Google Maps. Tempel koordinat (mis. -6.2088, 106.8456) atau link "Bagikan" dari Google Maps.',
+    );
+  }
+  return { mapsUrl, latitude: loc.lat, longitude: loc.lng };
+}
+
 // ===== Create =====
 homecellRouter.post('/', async (req, res) => {
   const input = createHomecellSchema.parse(req.body);
   if (input.picJemaatId) {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.HOMECELL_LEADER);
   }
-  const created = await prisma.homecell.create({ data: input });
+  const { mapsUrl, ...rest } = input;
+  const created = await prisma.homecell.create({ data: { ...rest, ...(await resolveLokasi(mapsUrl)) } });
   audit(req, {
     action: 'CREATE',
     resource: 'homecell',
@@ -194,7 +208,11 @@ homecellRouter.patch('/:id', async (req, res) => {
   }
   const before = await prisma.homecell.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Homecell tidak ditemukan');
-  const updated = await prisma.homecell.update({ where: { id: req.params.id }, data: input });
+  const { mapsUrl, ...rest } = input;
+  const updated = await prisma.homecell.update({
+    where: { id: req.params.id },
+    data: { ...rest, ...(mapsUrl === undefined ? {} : await resolveLokasi(mapsUrl)) },
+  });
   audit(req, {
     action: 'UPDATE',
     resource: 'homecell',

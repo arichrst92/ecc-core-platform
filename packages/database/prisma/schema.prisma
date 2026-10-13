@@ -212,6 +212,8 @@ model Jemaat {
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
   sertifikat                   JemaatSertifikat[]
+  homecellJoinRequests         HomecellJoinRequest[]         @relation("HomecellJoinRequester")
+  homecellJoinReviews          HomecellJoinRequest[]         @relation("HomecellJoinReviewer")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -959,19 +961,58 @@ model Homecell {
   alamat      String?     @db.Text // lokasi pertemuan
   hari        HariMinggu? // jadwal hari pertemuan
   jam         String?     @db.VarChar(5) // HH:mm
+  // Lokasi pertemuan untuk "Cari homecell terdekat". Diisi leader/admin dengan
+  // menempel link / koordinat Google Maps → lat/lng di-parse server (WGS84).
+  latitude    Float?
+  longitude   Float?
+  mapsUrl     String?     @map("maps_url") @db.Text
   picJemaatId String?     @map("pic_jemaat_id") @db.Uuid
   isActive    Boolean     @default(true) @map("is_active")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  area      HomecellArea       @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  picJemaat Jemaat?            @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
-  members   HomecellMember[]
-  schedules HomecellSchedule[]
+  area         HomecellArea          @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  picJemaat    Jemaat?               @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
+  members      HomecellMember[]
+  schedules    HomecellSchedule[]
+  joinRequests HomecellJoinRequest[]
 
   @@index([areaId])
   @@index([picJemaatId])
   @@map("homecell")
+}
+
+// Permintaan jemaat untuk bergabung ke homecell (dari app: daftar homecell
+// cabang / "Cari homecell terdekat"). Leader (PIC) approve → otomatis jadi
+// HomecellMember. Maksimal 1 PENDING per (jemaat, homecell).
+enum HomecellJoinStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("homecell_join_status")
+}
+
+model HomecellJoinRequest {
+  id           String             @id @default(uuid()) @db.Uuid
+  homecellId   String             @map("homecell_id") @db.Uuid
+  jemaatId     String             @map("jemaat_id") @db.Uuid
+  pesan        String?            @db.VarChar(500)
+  status       HomecellJoinStatus @default(PENDING)
+  reviewedById String?            @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?          @map("reviewed_at")
+  rejectReason String?            @map("reject_reason") @db.VarChar(300)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  homecell   Homecell @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  jemaat     Jemaat   @relation("HomecellJoinRequester", fields: [jemaatId], references: [id], onDelete: Cascade)
+  reviewedBy Jemaat?  @relation("HomecellJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([homecellId, status, createdAt])
+  @@index([jemaatId, status])
+  @@map("homecell_join_request")
 }
 
 model HomecellMember {
@@ -1760,6 +1801,9 @@ enum InAppNotifType {
   MINISTRY_JOIN_REQUESTED
   MINISTRY_JOIN_APPROVED
   MINISTRY_JOIN_REJECTED
+  HOMECELL_JOIN_REQUESTED
+  HOMECELL_JOIN_APPROVED
+  HOMECELL_JOIN_REJECTED
 
   @@map("in_app_notif_type")
 }

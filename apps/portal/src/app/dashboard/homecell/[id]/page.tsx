@@ -22,6 +22,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { HomecellBoardSection } from '@/components/group/group-content';
 
 interface Homecell {
   id: string;
@@ -186,6 +187,9 @@ export default function HomecellDetailPage() {
           <p className="text-sm text-neutral-700 whitespace-pre-line">{h.deskripsi}</p>
         </div>
       )}
+
+      {/* Pengumuman & voting homecell */}
+      <HomecellBoardSection homecellId={homecellId} />
 
       {/* Members section */}
       <div className="bg-white border border-neutral-200 rounded-xl">

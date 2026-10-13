@@ -474,3 +474,24 @@ export async function deleteGroupFile(fileUrl: string): Promise<void> {
     if (err.code !== 'ENOENT') throw err;
   }
 }
+
+/** Hero/banner group → /uploads/group-hero/{groupId}.webp?v=… */
+export async function saveGroupHero(groupId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'group-hero');
+  await ensureDir(dir);
+  const filename = `${groupId}.webp`;
+  await sharp(buffer)
+    .rotate()
+    .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return `${PUBLIC_UPLOADS_PREFIX}/group-hero/${filename}?v=${Date.now()}`;
+}
+
+export async function deleteGroupHero(groupId: string): Promise<void> {
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, 'group-hero', `${groupId}.webp`));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}

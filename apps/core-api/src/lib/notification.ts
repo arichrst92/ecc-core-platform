@@ -15,7 +15,7 @@
 import { prisma } from '@ecc/database';
 import { logger } from './logger.js';
 
-type InAppNotifType =
+export type InAppNotifType =
   | 'CKIDS_CHECKIN'
   | 'CKIDS_PICKUP'
   | 'GIFT_REDEEMED'
@@ -42,7 +42,9 @@ type InAppNotifType =
   | 'GROUP_JOIN_APPROVED'
   | 'GROUP_JOIN_REJECTED'
   | 'GROUP_ANNOUNCEMENT'
-  | 'GROUP_POLL_CREATED';
+  | 'GROUP_POLL_CREATED'
+  | 'HOMECELL_ANNOUNCEMENT'
+  | 'HOMECELL_POLL_CREATED';
 
 interface CreateNotifArgs {
   jemaatId: string;

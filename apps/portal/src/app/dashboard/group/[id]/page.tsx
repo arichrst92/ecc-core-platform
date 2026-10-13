@@ -28,6 +28,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { GroupJoinRequestsSection } from '@/components/group/group-join-requests';
 import { GroupContentSection } from '@/components/group/group-content';
+import { GroupHero } from '@/components/group/group-hero';
 
 interface GroupMember {
   id: string;
@@ -52,6 +53,7 @@ interface GroupDetail {
   hari: string | null;
   jam: string | null;
   picJemaatId: string | null;
+  heroImageUrl: string | null;
   isPublic: boolean;
   joinCode: string | null;
   isActive: boolean;
@@ -160,6 +162,8 @@ export default function GroupDetailPage() {
 
   return (
     <div className="space-y-6 w-full">
+      <GroupHero groupId={g.id} nama={g.nama} heroImageUrl={g.heroImageUrl ?? null} picJemaatId={g.picJemaatId} />
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <button

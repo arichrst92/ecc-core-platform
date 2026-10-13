@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Konten group: Pengumuman, Voting, File (nama + deskripsi).
+ * Konten group & homecell: Pengumuman, Voting, File (group saja).
  * PIC / admin bisa membuat & mengelola; anggota melihat & memilih di aplikasi.
  * API: /admin/group/:id/{announcements,polls,files}
  */
@@ -86,11 +86,41 @@ const inputCls =
 type Tab = 'announcements' | 'polls' | 'files';
 
 export function GroupContentSection({ groupId }: { groupId: string }) {
+  return <ContentBoardSection root={`/admin/group/${groupId}`} showFiles />;
+}
+
+/** Homecell: pengumuman + voting (tanpa tab file). */
+export function HomecellBoardSection({ homecellId }: { homecellId: string }) {
+  return (
+    <ContentBoardSection
+      root={`/admin/homecell/${homecellId}`}
+      showFiles={false}
+      notes={{
+        announcements: 'Pengumuman dikirim sebagai notifikasi ke semua anggota homecell.',
+        files: '',
+      }}
+    />
+  );
+}
+
+/**
+ * Papan konten generik. `root` = prefix API, mis. `/admin/group/:id`
+ * atau `/admin/homecell/:id`.
+ */
+export function ContentBoardSection({
+  root,
+  showFiles,
+  notes,
+}: {
+  root: string;
+  showFiles: boolean;
+  notes?: { announcements?: string; files?: string };
+}) {
   const [tab, setTab] = useState<Tab>('announcements');
   const tabs: { key: Tab; label: string; icon: typeof Megaphone }[] = [
     { key: 'announcements', label: 'Pengumuman', icon: Megaphone },
     { key: 'polls', label: 'Voting', icon: BarChart3 },
-    { key: 'files', label: 'File', icon: Paperclip },
+    ...(showFiles ? [{ key: 'files' as Tab, label: 'File', icon: Paperclip }] : []),
   ];
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
@@ -107,9 +137,9 @@ export function GroupContentSection({ groupId }: { groupId: string }) {
           </button>
         ))}
       </div>
-      {tab === 'announcements' && <AnnouncementsTab groupId={groupId} />}
-      {tab === 'polls' && <PollsTab groupId={groupId} />}
-      {tab === 'files' && <FilesTab groupId={groupId} />}
+      {tab === 'announcements' && <AnnouncementsTab root={root} note={notes?.announcements} />}
+      {tab === 'polls' && <PollsTab root={root} />}
+      {tab === 'files' && showFiles && <FilesTab root={root} />}
     </div>
   );
 }
@@ -172,10 +202,10 @@ const Empty = ({ text }: { text: string }) => <p className="text-sm text-neutral
 
 // ============================================================ Pengumuman
 
-function AnnouncementsTab({ groupId }: { groupId: string }) {
+function AnnouncementsTab({ root, note }: { root: string; note?: string }) {
   const qc = useQueryClient();
-  const key = ['group', 'announcements', groupId];
-  const base = `/admin/group/${groupId}/announcements`;
+  const key = ['board', root, 'announcements'];
+  const base = `${root}/announcements`;
   const q = useQuery({ queryKey: key, queryFn: async () => (await apiClient.get<ListResp<Announcement>>(base)).data, retry: false });
   const [form, setForm] = useState<{ item: Announcement | null } | null>(null);
   const [deleting, setDeleting] = useState<Announcement | null>(null);
@@ -202,7 +232,7 @@ function AnnouncementsTab({ groupId }: { groupId: string }) {
   return (
     <div>
       <Header
-        text="Pengumuman dikirim sebagai notifikasi ke semua anggota group."
+        text={note ?? 'Pengumuman dikirim sebagai notifikasi ke semua anggota group.'}
         onAdd={() => setForm({ item: null })}
         addLabel="Buat Pengumuman"
         canManage={canManage}
@@ -301,10 +331,10 @@ function AnnouncementForm({ base, item, onClose, onSaved }: { base: string; item
 
 // ============================================================ Voting
 
-function PollsTab({ groupId }: { groupId: string }) {
+function PollsTab({ root }: { root: string }) {
   const qc = useQueryClient();
-  const key = ['group', 'polls', groupId];
-  const base = `/admin/group/${groupId}/polls`;
+  const key = ['board', root, 'polls'];
+  const base = `${root}/polls`;
   const q = useQuery({ queryKey: key, queryFn: async () => (await apiClient.get<ListResp<Poll>>(base)).data, retry: false });
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Poll | null>(null);
@@ -507,10 +537,10 @@ function PollForm({ base, onClose, onSaved }: { base: string; onClose: () => voi
 
 // ============================================================ File
 
-function FilesTab({ groupId }: { groupId: string }) {
+function FilesTab({ root }: { root: string }) {
   const qc = useQueryClient();
-  const key = ['group', 'files', groupId];
-  const base = `/admin/group/${groupId}/files`;
+  const key = ['board', root, 'files'];
+  const base = `${root}/files`;
   const q = useQuery({ queryKey: key, queryFn: async () => (await apiClient.get<ListResp<GroupFile>>(base)).data, retry: false });
   const [form, setForm] = useState<{ item: GroupFile | null } | null>(null);
   const [deleting, setDeleting] = useState<GroupFile | null>(null);

@@ -11,6 +11,7 @@ import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { resolveMapsLocation } from '../../lib/geo.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { homecellBoardRouter } from './homecell-board.js';
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
@@ -18,6 +19,8 @@ export const homecellRouter = Router();
 // Sub-router: /:homecellId/schedule/* — jadwal pertemuan + QR attendance.
 // Lihat docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
 homecellRouter.use('/:homecellId/schedule', homecellScheduleRouter);
+// Pengumuman & voting homecell → homecell-board.ts
+homecellRouter.use('/:homecellId', homecellBoardRouter);
 
 // ===== List =====
 homecellRouter.get('/', async (req, res) => {

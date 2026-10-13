@@ -221,6 +221,9 @@ model Jemaat {
   groupAnnouncements           GroupAnnouncement[]           @relation("GroupAnnouncementAuthor")
   groupPolls                   GroupPoll[]                   @relation("GroupPollAuthor")
   groupPollVotes               GroupPollVote[]               @relation("GroupPollVoter")
+  homecellAnnouncements        HomecellAnnouncement[]        @relation("HomecellAnnouncementAuthor")
+  homecellPolls                HomecellPoll[]                @relation("HomecellPollAuthor")
+  homecellPollVotes            HomecellPollVote[]            @relation("HomecellPollVoter")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -980,9 +983,11 @@ model Homecell {
 
   area         HomecellArea          @relation(fields: [areaId], references: [id], onDelete: Restrict)
   picJemaat    Jemaat?               @relation("HomecellPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
-  members      HomecellMember[]
-  schedules    HomecellSchedule[]
-  joinRequests HomecellJoinRequest[]
+  members       HomecellMember[]
+  schedules     HomecellSchedule[]
+  joinRequests  HomecellJoinRequest[]
+  announcements HomecellAnnouncement[]
+  polls         HomecellPoll[]
 
   @@index([areaId])
   @@index([picJemaatId])
@@ -1020,6 +1025,75 @@ model HomecellJoinRequest {
   @@index([homecellId, status, createdAt])
   @@index([jemaatId, status])
   @@map("homecell_join_request")
+}
+
+// Pengumuman & voting homecell (level homecell, bukan per jadwal).
+// Struktur sama dengan GroupAnnouncement / GroupPoll.
+model HomecellAnnouncement {
+  id          String   @id @default(uuid()) @db.Uuid
+  homecellId  String   @map("homecell_id") @db.Uuid
+  judul       String   @db.VarChar(200)
+  isi         String   @db.Text
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  homecell  Homecell @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  createdBy Jemaat?  @relation("HomecellAnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([homecellId, isPinned, createdAt])
+  @@map("homecell_announcement")
+}
+
+model HomecellPoll {
+  id          String    @id @default(uuid()) @db.Uuid
+  homecellId  String    @map("homecell_id") @db.Uuid
+  pertanyaan  String    @db.VarChar(300)
+  deskripsi   String?   @db.Text
+  multiple    Boolean   @default(false)
+  closesAt    DateTime? @map("closes_at")
+  isClosed    Boolean   @default(false) @map("is_closed")
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  homecell  Homecell             @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  createdBy Jemaat?              @relation("HomecellPollAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  options   HomecellPollOption[]
+  votes     HomecellPollVote[]
+
+  @@index([homecellId, createdAt])
+  @@map("homecell_poll")
+}
+
+model HomecellPollOption {
+  id     String @id @default(uuid()) @db.Uuid
+  pollId String @map("poll_id") @db.Uuid
+  label  String @db.VarChar(200)
+  urutan Int    @default(0)
+
+  poll  HomecellPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes HomecellPollVote[]
+
+  @@index([pollId])
+  @@map("homecell_poll_option")
+}
+
+model HomecellPollVote {
+  id        String   @id @default(uuid()) @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  optionId  String   @map("option_id") @db.Uuid
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  poll   HomecellPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option HomecellPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  jemaat Jemaat             @relation("HomecellPollVoter", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, optionId, jemaatId])
+  @@index([pollId, jemaatId])
+  @@map("homecell_poll_vote")
 }
 
 model HomecellMember {
@@ -1816,6 +1890,8 @@ enum InAppNotifType {
   GROUP_JOIN_REJECTED
   GROUP_ANNOUNCEMENT
   GROUP_POLL_CREATED
+  HOMECELL_ANNOUNCEMENT
+  HOMECELL_POLL_CREATED
 
   @@map("in_app_notif_type")
 }
@@ -2199,6 +2275,8 @@ model Group {
   // Visibility: true = browse-able + direct join, false = hidden dari
   // listing + join cuma via joinCode (invitation-only, QR scan di mobile).
   isPublic                Boolean     @default(true) @map("is_public")
+  // Hero/banner group (webp) — hanya PIC yang boleh ganti.
+  heroImageUrl            String?     @map("hero_image_url") @db.Text
   // Kode invitation untuk private group. 8-char alphanumeric unique.
   // Auto-generate saat isPublic=false, NULL kalau public. Bisa di-rotate
   // via endpoint /regenerate-code kalau kode leak.

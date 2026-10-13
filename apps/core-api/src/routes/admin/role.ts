@@ -14,7 +14,7 @@ import {
   MENU_CATALOG,
 } from '@ecc/shared-types';
 import { z } from 'zod';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 
 export const roleRouter = Router();
@@ -105,6 +105,21 @@ roleRouter.delete('/sub-role-status/:id', async (req, res) => {
 // ===== Assignment ke jemaat =====
 roleRouter.post('/assign', async (req, res) => {
   const input = assignJemaatRoleSchema.parse(req.body);
+  // Role + Sub-Role yang sama boleh dobel asal Status berbeda; tolak hanya
+  // kalau Role + Sub-Role + Status persis sama dan masih aktif.
+  const dup = await prisma.jemaatRole.findFirst({
+    where: {
+      jemaatId: input.jemaatId,
+      roleId: input.roleId,
+      subRoleId: input.subRoleId,
+      subRoleStatusId: input.subRoleStatusId ?? null,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  if (dup) {
+    throw Conflict('Jemaat sudah punya role aktif dengan Role, Sub-Role, dan Status yang sama.');
+  }
   const data = {
     ...input,
     tanggalMulai: input.tanggalMulai ? new Date(input.tanggalMulai) : new Date(),

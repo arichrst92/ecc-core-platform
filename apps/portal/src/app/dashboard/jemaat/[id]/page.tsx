@@ -1193,13 +1193,17 @@ function AddJemaatRoleModal({
   const selectedSubRole = selectedRole?.subRoles.find((s) => s.id === subRoleId);
   const availableStatuses = selectedSubRole?.statuses ?? [];
 
-  // Cek duplikat aktif: jemaat tidak boleh punya 2 row aktif untuk
-  // (role, subRole) yang sama. Hanya warning di UI; backend tetap final guard.
+  // Cek duplikat aktif: Role + Sub-Role yang sama BOLEH asal Status-nya
+  // berbeda. Yang ditolak hanya kombinasi Role + Sub-Role + Status yang
+  // persis sama dan masih aktif. Backend tetap jadi final guard.
+  const roleKey = (r: string, s: string, st: string | null | undefined) => `${r}:${s}:${st ?? ''}`;
   const existingActiveKey = new Set(
-    existing.filter((e) => e.isActive).map((e) => `${e.role.id}:${e.subRole.id}`),
+    existing
+      .filter((e) => e.isActive)
+      .map((e) => roleKey(e.role.id, e.subRole.id, e.subRoleStatus?.id)),
   );
   const duplicateActive =
-    !!(roleId && subRoleId && existingActiveKey.has(`${roleId}:${subRoleId}`));
+    !!(roleId && subRoleId && existingActiveKey.has(roleKey(roleId, subRoleId, subRoleStatusId)));
 
   const createMut = useMutation({
     mutationFn: async () =>
@@ -1318,8 +1322,8 @@ function AddJemaatRoleModal({
 
             {duplicateActive && (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                Jemaat ini sudah memiliki role aktif untuk kombinasi tersebut.
-                Akhiri yang lama dulu atau pilih sub-role berbeda.
+                Jemaat ini sudah memiliki role aktif dengan Role, Sub-Role, dan Status yang
+                sama. Pilih status berbeda, atau akhiri yang lama dulu.
               </div>
             )}
           </div>

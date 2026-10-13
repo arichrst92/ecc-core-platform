@@ -172,5 +172,24 @@ module.exports = {
       error_file: '~/.pm2/logs/ecc-planning-error.log',
       time: true,
     },
+    {
+      // CKids (Children Kids check-in) — subdomain ckids. Sebelumnya dijalankan
+      // manual (`pm2 start "npm start"`), sehingga hilang saat ecosystem
+      // di-reload/delete → 502. Sekarang ikut dikelola ecosystem.
+      name: 'ecc-ckids',
+      cwd: './apps/ckids',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start -p 3300',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 4000,
+      max_memory_restart: '300M',
+      env: sharedEnv,
+      out_file: '~/.pm2/logs/ecc-ckids-out.log',
+      error_file: '~/.pm2/logs/ecc-ckids-error.log',
+      time: true,
+    },
   ],
 };

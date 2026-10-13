@@ -12,6 +12,7 @@ import { audit } from '../../lib/audit.js';
 import { resolveMapsLocation } from '../../lib/geo.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { homecellBoardRouter } from './homecell-board.js';
+import { getLastAttendanceMap, withLastAttendance } from '../../lib/homecell-last-attendance.js';
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
@@ -153,7 +154,9 @@ homecellRouter.get('/:id', async (req, res) => {
   if (!item) throw NotFound('Homecell tidak ditemukan');
 
   // Flatten _count + lastSchedule untuk response yang clean.
-  const { _count, schedules, ...rest } = item;
+  const { _count, schedules, members, ...rest } = item;
+  // Kehadiran terakhir tiap anggota di homecell ini (+ berapa hari lalu).
+  const lastMap = await getLastAttendanceMap(item.id);
   const lastSchedule = schedules[0]
     ? {
         id: schedules[0].id,
@@ -167,6 +170,7 @@ homecellRouter.get('/:id', async (req, res) => {
     success: true,
     data: {
       ...rest,
+      members: members.map((m) => withLastAttendance(m.jemaatId, m, lastMap)),
       scheduleCount: _count.schedules,
       lastSchedule,
     },

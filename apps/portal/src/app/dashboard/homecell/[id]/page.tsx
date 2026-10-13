@@ -44,6 +44,9 @@ interface Homecell {
     tanggalKeluar: string | null;
     catatan: string | null;
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
+    /** Tanggal pertemuan terakhir yang dihadiri (YYYY-MM-DD) di homecell ini. */
+    lastAttendedAt?: string | null;
+    lastAttendedDaysAgo?: number | null;
   }[];
   scheduleCount?: number;
   lastSchedule?: {
@@ -237,6 +240,7 @@ export default function HomecellDetailPage() {
                     >
                       {m.jemaat.namaLengkap}
                     </Link>
+                    <LastAttendance date={m.lastAttendedAt ?? null} daysAgo={m.lastAttendedDaysAgo ?? null} />
                   </td>
                   <td className="px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
                   <td className="px-5 py-3 text-neutral-600">
@@ -561,6 +565,21 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+/** "Terakhir hadir: 6 Okt 2026 · 7 hari lalu" — warna sesuai lamanya absen. */
+function LastAttendance({ date, daysAgo }: { date: string | null; daysAgo: number | null }) {
+  if (!date || daysAgo == null) {
+    return <div className="text-xs text-neutral-400 mt-0.5">Belum pernah hadir homecell</div>;
+  }
+  const tgl = new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const rel = daysAgo === 0 ? 'hari ini' : daysAgo === 1 ? 'kemarin' : `${daysAgo} hari lalu`;
+  const color = daysAgo <= 7 ? 'text-green-700' : daysAgo <= 30 ? 'text-amber-700' : 'text-red-600';
+  return (
+    <div className="text-xs text-neutral-500 mt-0.5">
+      Terakhir hadir: {tgl} · <span className={`font-semibold ${color}`}>{rel}</span>
     </div>
   );
 }

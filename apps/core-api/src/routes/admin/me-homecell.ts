@@ -15,6 +15,7 @@
  *
  * Aturan: 1 jemaat hanya boleh punya 1 homecell aktif & 1 permintaan PENDING.
  */
+import { getLastAttendanceMap, withLastAttendance } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -402,13 +403,14 @@ meHomecellRouter.get('/:id', async (req, res) => {
     }),
   ]);
   const item = toListItem(hc, null, status);
+  const lastMap = isInside ? await getLastAttendanceMap(hc.id) : new Map();
   res.json({
     success: true,
     data: {
       ...item,
       picJemaat: hc.picJemaat ? { ...hc.picJemaat, noHp: pic?.noHp ?? null } : null,
       upcomingSchedules: schedules,
-      members: members.map((m) => m.jemaat),
+      members: members.map((m) => withLastAttendance(m.jemaat.id, m.jemaat, lastMap)),
       myPendingRequest: myPending,
     },
   });

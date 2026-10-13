@@ -304,6 +304,8 @@ model Role {
   subRoles     SubRole[]
   jemaatRoles  JemaatRole[]
   menuAccesses RoleMenuAccess[]
+  eventRequirements EventRoleRequirement[]
+  eventGrants       Event[]                @relation("EventGrantRole")
 
   @@map("role")
 }
@@ -323,6 +325,8 @@ model SubRole {
   statuses     SubRoleStatus[]
   jemaatRoles  JemaatRole[]
   menuAccesses SubRoleMenuAccess[]
+  eventRequirements EventRoleRequirement[]
+  eventGrants       Event[]                @relation("EventGrantSubRole")
 
   @@unique([roleId, nama])
   @@index([roleId])
@@ -340,6 +344,8 @@ model SubRoleStatus {
 
   subRole     SubRole      @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
   jemaatRoles JemaatRole[]
+  eventRequirements EventRoleRequirement[]
+  eventGrants       Event[]                @relation("EventGrantSubRoleStatus")
 
   @@unique([subRoleId, nama])
   @@index([subRoleId])
@@ -357,9 +363,13 @@ model JemaatRole {
   tanggalSelesai  DateTime? @map("tanggal_selesai") @db.Date
   isActive        Boolean   @default(true) @map("is_active")
   catatan         String?   @db.Text
+  // Diisi kalau role ini diberikan otomatis oleh event (Event.grantRoleId) —
+  // dipakai untuk mencabut role saat partisipasi BATAL.
+  sourceEventId   String?   @map("source_event_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  sourceEvent   Event?         @relation("JemaatRoleSourceEvent", fields: [sourceEventId], references: [id], onDelete: SetNull)
   jemaat        Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   role          Role           @relation(fields: [roleId], references: [id], onDelete: Restrict)
   subRole       SubRole        @relation(fields: [subRoleId], references: [id], onDelete: Restrict)
@@ -368,6 +378,7 @@ model JemaatRole {
   @@index([jemaatId])
   @@index([roleId])
   @@index([isActive])
+  @@index([sourceEventId])
   @@map("jemaat_role")
 }
 
@@ -1110,6 +1121,13 @@ model Event {
   // (DAFTAR / BAYAR / BATAL), tidak ada tracking kehadiran.
   butuhKehadiran Boolean @default(false) @map("butuh_kehadiran")
 
+  // Role yang diberikan otomatis ke peserta (saat HADIR; kalau event tanpa
+  // absensi → saat daftar). Dicabut (diakhiri) kalau partisipasi BATAL.
+  // Syarat ikut event ada di EventRoleRequirement (salah satu harus cocok).
+  grantRoleId          String? @map("grant_role_id") @db.Uuid
+  grantSubRoleId       String? @map("grant_sub_role_id") @db.Uuid
+  grantSubRoleStatusId String? @map("grant_sub_role_status_id") @db.Uuid
+
   // Publish state
   isPublished Boolean   @default(false) @map("is_published")
   publishedAt DateTime? @map("published_at")
@@ -1133,6 +1151,11 @@ model Event {
   partisipasi EventParticipation[]
   pelayanan   EventPelayanan[]
   webActionTokens WebActionToken[]
+  roleRequirements  EventRoleRequirement[]
+  grantRole          Role?           @relation("EventGrantRole", fields: [grantRoleId], references: [id], onDelete: SetNull)
+  grantSubRole       SubRole?        @relation("EventGrantSubRole", fields: [grantSubRoleId], references: [id], onDelete: SetNull)
+  grantSubRoleStatus SubRoleStatus?  @relation("EventGrantSubRoleStatus", fields: [grantSubRoleStatusId], references: [id], onDelete: SetNull)
+  grantedJemaatRoles JemaatRole[]    @relation("JemaatRoleSourceEvent")
 
   @@index([cabangId])
   @@index([sinodeId])
@@ -1213,6 +1236,29 @@ enum EventParticipationStatus {
   BATAL
 
   @@map("event_participation_status")
+}
+
+// ============================================================
+// EventRoleRequirement — syarat role untuk mendaftar event
+// ============================================================
+// Jemaat boleh daftar kalau punya role AKTIF yang cocok dengan SALAH SATU
+// baris. subRoleId / subRoleStatusId NULL = semua sub-role / status.
+// Event tanpa baris requirement = terbuka untuk semua.
+model EventRoleRequirement {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventId         String   @map("event_id") @db.Uuid
+  roleId          String   @map("role_id") @db.Uuid
+  subRoleId       String?  @map("sub_role_id") @db.Uuid
+  subRoleStatusId String?  @map("sub_role_status_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  role          Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  subRole       SubRole?       @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
+  subRoleStatus SubRoleStatus? @relation(fields: [subRoleStatusId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_role_requirement")
 }
 
 // ============================================================

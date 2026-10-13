@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 export type EventFormValues = {
@@ -27,7 +27,31 @@ export type EventFormValues = {
   tags?: string[];
   butuhKehadiran?: boolean;
   isPublished?: boolean;
+  // Syarat role untuk daftar (salah satu cocok) + role yang diberikan ke peserta.
+  // Tidak dikirim (undefined) kalau data role event belum termuat — supaya
+  // edit dari list tidak menghapus syarat yang sudah ada.
+  roleRequirements?: RoleTriple[];
+  grantRoleId?: string | null;
+  grantSubRoleId?: string | null;
+  grantSubRoleStatusId?: string | null;
 };
+
+type RoleTriple = { roleId: string; subRoleId: string | null; subRoleStatusId: string | null };
+
+interface RoleOption {
+  id: string;
+  nama: string;
+  subRoles: { id: string; nama: string; statuses: { id: string; nama: string }[] }[];
+}
+
+interface EventRoleConfig {
+  roleRequirements: { roleId: string; subRoleId: string | null; subRoleStatusId: string | null }[];
+  grantRoleId: string | null;
+  grantSubRoleId: string | null;
+  grantSubRoleStatusId: string | null;
+}
+
+const EMPTY_TRIPLE: RoleTriple = { roleId: '', subRoleId: null, subRoleStatusId: null };
 
 interface Props {
   open: boolean;
@@ -77,6 +101,51 @@ export function EventFormModal({
 }: Props) {
   const [values, setValues] = useState<EventFormValues>(EMPTY);
   const [tagsInput, setTagsInput] = useState('');
+  const [reqs, setReqs] = useState<RoleTriple[]>([]);
+  const [grant, setGrant] = useState<RoleTriple>(EMPTY_TRIPLE);
+  const [roleConfigReady, setRoleConfigReady] = useState(false);
+  const editId = isEdit ? ((defaultValues as { id?: string } | undefined)?.id ?? null) : null;
+
+  const rolesQ = useQuery({
+    queryKey: ['role', 'with-subroles'],
+    enabled: open,
+    queryFn: async () => (await apiClient.get<{ data: RoleOption[] }>('/admin/role')).data.data,
+    staleTime: 5 * 60_000,
+  });
+
+  // Edit: data list belum berisi syarat role → ambil dari detail event.
+  const roleConfigQ = useQuery({
+    queryKey: ['event', 'role-config', editId],
+    enabled: open && !!editId,
+    queryFn: async () =>
+      (await apiClient.get<{ data: EventRoleConfig }>(`/admin/event/${editId}`)).data.data,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    if (!editId) {
+      setReqs([]);
+      setGrant(EMPTY_TRIPLE);
+      setRoleConfigReady(true);
+      return;
+    }
+    setRoleConfigReady(false);
+    const d = roleConfigQ.data;
+    if (!d) return;
+    setReqs(
+      (d.roleRequirements ?? []).map((r) => ({
+        roleId: r.roleId,
+        subRoleId: r.subRoleId,
+        subRoleStatusId: r.subRoleStatusId,
+      })),
+    );
+    setGrant({
+      roleId: d.grantRoleId ?? '',
+      subRoleId: d.grantSubRoleId,
+      subRoleStatusId: d.grantSubRoleStatusId,
+    });
+    setRoleConfigReady(true);
+  }, [open, editId, roleConfigQ.data]);
 
   // Reset state setiap modal dibuka. defaultValues mungkin punya `cabang`/`sinode`
   // object dari list endpoint — kita ekstrak id-nya saja.
@@ -173,6 +242,12 @@ export function EventFormModal({
       bankAtasNama: values.bankAtasNama || undefined,
       quotaPeserta: values.quotaPeserta === '' ? undefined : values.quotaPeserta,
     };
+    if (roleConfigReady) {
+      payload.roleRequirements = reqs.filter((r) => r.roleId);
+      payload.grantRoleId = grant.roleId || null;
+      payload.grantSubRoleId = grant.roleId ? grant.subRoleId : null;
+      payload.grantSubRoleStatusId = grant.roleId ? grant.subRoleStatusId : null;
+    }
     onSubmit(payload).catch(() => {});
   }
 
@@ -438,6 +513,66 @@ export function EventFormModal({
               </label>
             </Section>
 
+            {/* Syarat & role peserta */}
+            <Section
+              title="Syarat & Role Peserta"
+              helper="Batasi siapa yang boleh mendaftar, dan beri role otomatis ke peserta."
+            >
+              {!roleConfigReady ? (
+                <div className="flex items-center gap-2 text-xs text-neutral-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Memuat pengaturan role…
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 border border-neutral-200 rounded-lg space-y-2">
+                    <div className="text-sm font-medium text-neutral-900">Syarat pendaftaran</div>
+                    <p className="text-[11px] text-neutral-500">
+                      Jemaat harus punya role aktif yang cocok dengan <b>salah satu</b> baris. Sub-role / status
+                      kosong = semua. Tanpa baris = terbuka untuk semua jemaat. Berlaku juga saat admin
+                      mendaftarkan peserta.
+                    </p>
+                    {reqs.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <RoleTripleSelect
+                          roles={rolesQ.data ?? []}
+                          value={r}
+                          optionalSub
+                          onChange={(v) => setReqs((arr) => arr.map((x, j) => (j === i ? v : x)))}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setReqs((arr) => arr.filter((_, j) => j !== i))}
+                          className="p-2 text-neutral-400 hover:text-red-600"
+                          title="Hapus syarat"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setReqs((arr) => [...arr, EMPTY_TRIPLE])}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah syarat
+                    </button>
+                  </div>
+
+                  <div className="p-3 border border-neutral-200 rounded-lg space-y-2">
+                    <div className="text-sm font-medium text-neutral-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-brand-500" /> Role yang diberikan ke peserta
+                    </div>
+                    <p className="text-[11px] text-neutral-500">
+                      Diberikan saat peserta {values.butuhKehadiran ? <b>HADIR (di-scan)</b> : <b>mendaftar</b>}
+                      {values.butuhKehadiran ? '' : ' (event tanpa absensi)'}. Dicabut otomatis kalau peserta batal.
+                      Kosongkan kalau tidak ada.
+                    </p>
+                    <RoleTripleSelect roles={rolesQ.data ?? []} value={grant} onChange={setGrant} />
+                  </div>
+                </>
+              )}
+            </Section>
+
             {/* Publish toggle */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -460,7 +595,13 @@ export function EventFormModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading || !values.judul || !values.deskripsi || !values.tanggalMulai}
+              disabled={
+                loading ||
+                !values.judul ||
+                !values.deskripsi ||
+                !values.tanggalMulai ||
+                (!!grant.roleId && !grant.subRoleId)
+              }
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -470,6 +611,64 @@ export function EventFormModal({
         </div>
       </div>
     </>
+  );
+}
+
+function RoleTripleSelect({
+  roles,
+  value,
+  onChange,
+  optionalSub,
+}: {
+  roles: RoleOption[];
+  value: RoleTriple;
+  onChange: (v: RoleTriple) => void;
+  /** true = sub-role boleh kosong (semua sub-role). */
+  optionalSub?: boolean;
+}) {
+  const role = roles.find((r) => r.id === value.roleId);
+  const sub = role?.subRoles.find((s) => s.id === value.subRoleId);
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
+      <select
+        value={value.roleId}
+        onChange={(e) => onChange({ roleId: e.target.value, subRoleId: null, subRoleStatusId: null })}
+        className={inputCls}
+      >
+        <option value="">— role —</option>
+        {roles.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.nama}
+          </option>
+        ))}
+      </select>
+      <select
+        value={value.subRoleId ?? ''}
+        onChange={(e) => onChange({ ...value, subRoleId: e.target.value || null, subRoleStatusId: null })}
+        disabled={!role}
+        className={`${inputCls} disabled:opacity-50`}
+      >
+        <option value="">{optionalSub ? 'Semua sub-role' : '— sub-role —'}</option>
+        {(role?.subRoles ?? []).map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.nama}
+          </option>
+        ))}
+      </select>
+      <select
+        value={value.subRoleStatusId ?? ''}
+        onChange={(e) => onChange({ ...value, subRoleStatusId: e.target.value || null })}
+        disabled={!sub || sub.statuses.length === 0}
+        className={`${inputCls} disabled:opacity-50`}
+      >
+        <option value="">{optionalSub ? 'Semua status' : 'Tanpa status'}</option>
+        {(sub?.statuses ?? []).map((st) => (
+          <option key={st.id} value={st.id}>
+            {st.nama}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

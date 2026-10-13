@@ -44,6 +44,13 @@ import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import {
+  assertEventEligible,
+  isEligible,
+  requirementLabel,
+  revokeEventRole,
+  syncEventRoleForStatus,
+} from '../../lib/event-role.js';
 
 export const eventRouter = Router();
 
@@ -93,6 +100,74 @@ async function resolveEventByIdOrSlug(idOrSlug: string) {
   if (!event) throw NotFound('Event tidak ditemukan');
   return event;
 }
+
+// ------------------------------------------------------------
+//  Role jemaat: syarat daftar + role yang diberikan
+// ------------------------------------------------------------
+
+/** Pastikan sub-role milik role, dan status milik sub-role. */
+async function validateRoleTriple(
+  roleId: string,
+  subRoleId: string | null | undefined,
+  statusId: string | null | undefined,
+  label: string,
+) {
+  const role = await prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
+  if (!role) throw BadRequest(`${label}: role tidak ditemukan`);
+  if (subRoleId) {
+    const sub = await prisma.subRole.findUnique({ where: { id: subRoleId }, select: { roleId: true } });
+    if (!sub || sub.roleId !== roleId) throw BadRequest(`${label}: sub-role tidak sesuai role`);
+  } else if (statusId) {
+    throw BadRequest(`${label}: status butuh sub-role`);
+  }
+  if (statusId) {
+    const st = await prisma.subRoleStatus.findUnique({ where: { id: statusId }, select: { subRoleId: true } });
+    if (!st || st.subRoleId !== subRoleId) throw BadRequest(`${label}: status tidak sesuai sub-role`);
+  }
+}
+
+type RoleConfigInput = {
+  roleRequirements?: { roleId: string; subRoleId?: string | null; subRoleStatusId?: string | null }[];
+  grantRoleId?: string | null;
+  grantSubRoleId?: string | null;
+  grantSubRoleStatusId?: string | null;
+};
+
+/** Validasi lalu simpan syarat (replace all) — grant field disimpan oleh caller. */
+async function saveRoleConfig(eventId: string, input: RoleConfigInput) {
+  if (input.grantRoleId) {
+    await validateRoleTriple(input.grantRoleId, input.grantSubRoleId, input.grantSubRoleStatusId, 'Role yang diberikan');
+  }
+  if (input.roleRequirements === undefined) return;
+  for (const [i, r] of input.roleRequirements.entries()) {
+    await validateRoleTriple(r.roleId, r.subRoleId, r.subRoleStatusId, `Syarat #${i + 1}`);
+  }
+  await prisma.$transaction([
+    prisma.eventRoleRequirement.deleteMany({ where: { eventId } }),
+    prisma.eventRoleRequirement.createMany({
+      data: input.roleRequirements.map((r) => ({
+        eventId,
+        roleId: r.roleId,
+        subRoleId: r.subRoleId ?? null,
+        subRoleStatusId: r.subRoleStatusId ?? null,
+      })),
+    }),
+  ]);
+}
+
+const roleConfigInclude = {
+  roleRequirements: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      role: { select: { id: true, nama: true } },
+      subRole: { select: { id: true, nama: true } },
+      subRoleStatus: { select: { id: true, nama: true } },
+    },
+  },
+  grantRole: { select: { id: true, nama: true } },
+  grantSubRole: { select: { id: true, nama: true } },
+  grantSubRoleStatus: { select: { id: true, nama: true } },
+};
 
 function slugify(input: string): string {
   return input
@@ -237,6 +312,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       sinode: { select: { id: true, nama: true } },
       cabang: { select: { id: true, nama: true } },
       author: { select: { id: true, jemaat: { select: { id: true, namaLengkap: true } } } },
+      ...roleConfigInclude,
       // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md 2026-09-01).
       _count: {
         select: {
@@ -252,6 +328,16 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
   // distinguish "belum daftar" vs "field absent karena server outdated".
   let myParticipation: unknown = null;
   let familyParticipationsCount = 0;
+  // Syarat role: label untuk ditampilkan + apakah user boleh daftar.
+  const requirementLabels = item.roleRequirements.map(requirementLabel);
+  let myEligible: boolean | null = item.roleRequirements.length === 0 ? true : null;
+  if (req.user && item.roleRequirements.length > 0) {
+    const roles = await prisma.jemaatRole.findMany({
+      where: { jemaatId: req.user.jemaatId, isActive: true },
+      select: { roleId: true, subRoleId: true, subRoleStatusId: true },
+    });
+    myEligible = isEligible(item.roleRequirements, roles);
+  }
   if (req.user) {
     const row = await prisma.eventParticipation.findUnique({
       where: { eventId_jemaatId: { eventId: item.id, jemaatId: req.user.jemaatId } },
@@ -290,6 +376,17 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       pesertaCount: item._count.partisipasi,
       myParticipation,
       familyParticipationsCount,
+      // Syarat role (kosong = terbuka untuk semua) + kelayakan user login.
+      // myEligible null = tidak login / tidak diketahui.
+      requirementLabels,
+      myEligible,
+      grantLabel: item.grantRole
+        ? requirementLabel({
+            role: item.grantRole,
+            subRole: item.grantSubRole,
+            subRoleStatus: item.grantSubRoleStatus,
+          })
+        : null,
     },
   });
 });
@@ -326,6 +423,13 @@ eventRouter.post('/', async (req, res) => {
     sinodeId = cabang?.sinodeId;
   }
 
+  // Validasi konfigurasi role SEBELUM event dibuat (hindari event setengah jadi).
+  if (input.grantRoleId) {
+    await validateRoleTriple(input.grantRoleId, input.grantSubRoleId, input.grantSubRoleStatusId, 'Role yang diberikan');
+  }
+  for (const [i, r] of (input.roleRequirements ?? []).entries()) {
+    await validateRoleTriple(r.roleId, r.subRoleId, r.subRoleStatusId, `Syarat #${i + 1}`);
+  }
   const created = await prisma.event.create({
     data: {
       judul: input.judul,
@@ -351,8 +455,12 @@ eventRouter.post('/', async (req, res) => {
       isPublished: input.isPublished ?? false,
       publishedAt: input.isPublished ? new Date() : null,
       authorId: req.user.sub,
+      grantRoleId: input.grantRoleId ?? null,
+      grantSubRoleId: input.grantRoleId ? (input.grantSubRoleId ?? null) : null,
+      grantSubRoleStatusId: input.grantRoleId ? (input.grantSubRoleStatusId ?? null) : null,
     },
   });
+  await saveRoleConfig(created.id, { roleRequirements: input.roleRequirements });
   audit(req, {
     action: 'CREATE',
     resource: 'event',
@@ -413,6 +521,17 @@ eventRouter.patch('/:id', async (req, res) => {
     butuhKehadiran: input.butuhKehadiran,
     isActive: input.isActive,
   };
+  // Role yang diberikan: undefined = tidak diubah, null = hapus.
+  await saveRoleConfig(before.id, input);
+  if (input.grantRoleId !== undefined) {
+    data.grantRole = input.grantRoleId ? { connect: { id: input.grantRoleId } } : { disconnect: true };
+    data.grantSubRole =
+      input.grantRoleId && input.grantSubRoleId ? { connect: { id: input.grantSubRoleId } } : { disconnect: true };
+    data.grantSubRoleStatus =
+      input.grantRoleId && input.grantSubRoleStatusId
+        ? { connect: { id: input.grantSubRoleStatusId } }
+        : { disconnect: true };
+  }
   // Publish toggle: set/clear publishedAt
   if (input.isPublished === true && !before.isPublished) {
     data.isPublished = true;
@@ -611,6 +730,9 @@ eventRouter.post('/:id/peserta', async (req, res) => {
     );
   }
 
+  // Syarat role event (salah satu cocok). Berlaku juga untuk admin.
+  await assertEventEligible(event.id, input.jemaatId);
+
   // Quota guard — applies untuk new registration & reactivate BATAL.
   if (event.quotaPeserta != null && event._count.partisipasi >= event.quotaPeserta) {
     throw Conflict(
@@ -652,6 +774,7 @@ eventRouter.post('/:id/peserta', async (req, res) => {
       after: reactivated,
       metadata: { kind: 'event-reactivate' },
     });
+    await syncEventRoleForStatus(event, reactivated.jemaatId, 'DAFTAR');
     return res.status(201).json({
       success: true,
       data: reactivated,
@@ -677,6 +800,7 @@ eventRouter.post('/:id/peserta', async (req, res) => {
     resourceLabel: `${created.jemaat.namaLengkap} @ ${event.judul}`,
     after: created,
   });
+  await syncEventRoleForStatus(event, created.jemaatId, 'DAFTAR');
   void createNotification({
     jemaatId: input.jemaatId,
     type: 'EVENT_REGISTERED',
@@ -775,6 +899,16 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
         });
         continue;
       }
+      // Syarat role event per anggota.
+      try {
+        await assertEventEligible(event.id, jemaatId, 'Jemaat ini');
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'NOT_ELIGIBLE') {
+          failed.push({ jemaatId, error: { code: e.code, message: e.message } });
+          continue;
+        }
+        throw e;
+      }
       // Cek existing (per backend-request-batch-reactivate-batal.md 2026-08-31):
       // BATAL → reactivate. Active status → reject as ALREADY_REGISTERED.
       const existing = await prisma.eventParticipation.findUnique({
@@ -800,6 +934,7 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
           });
           successful.push(reactivated);
           acceptedSoFar += 1;
+          await syncEventRoleForStatus(event, jemaatId, 'DAFTAR');
           continue;
         }
         failed.push({
@@ -835,6 +970,7 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
       });
       successful.push(created);
       acceptedSoFar += 1;
+      await syncEventRoleForStatus(event, jemaatId, 'DAFTAR');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       failed.push({ jemaatId, error: { code: 'INTERNAL', message: msg } });
@@ -1020,6 +1156,7 @@ eventRouter.delete('/:id/peserta/me', async (req, res) => {
       cancelledAt: new Date(),
     },
   });
+  await revokeEventRole(existing.eventId, existing.jemaatId).catch(() => 0);
 
   audit(req, {
     action: 'UPDATE',
@@ -1159,6 +1296,7 @@ eventRouter.post('/:idOrSlug/peserta/:participationId/self-cancel', async (req, 
     where: { id: existing.id },
     data: { status: 'BATAL', cancelledAt: new Date() },
   });
+  await revokeEventRole(existing.eventId, existing.jemaatId).catch(() => 0);
 
   audit(req, {
     action: 'UPDATE',
@@ -1206,13 +1344,17 @@ async function ensureParticipation(eventId: string, jemaatId: string) {
     where: { eventId_jemaatId: { eventId, jemaatId } },
   });
   if (existing) return existing;
-  return prisma.eventParticipation.create({
+  await assertEventEligible(eventId, jemaatId);
+  const created = await prisma.eventParticipation.create({
     data: {
       eventId,
       jemaatId,
       status: 'DAFTAR',
     },
+    include: { event: { select: { id: true, butuhKehadiran: true } } },
   });
+  await syncEventRoleForStatus(created.event, jemaatId, 'DAFTAR');
+  return created;
 }
 
 // List semua donations event (admin view). Paginated, dengan info jemaat.
@@ -1677,7 +1819,10 @@ eventRouter.delete('/:id/donations/:donationId', async (req, res) => {
 eventRouter.patch('/:id/peserta/:participationId', async (req, res) => {
   const before = await prisma.eventParticipation.findUnique({
     where: { id: req.params.participationId },
-    include: { event: { select: { id: true, judul: true } }, jemaat: { select: { namaLengkap: true } } },
+    include: {
+      event: { select: { id: true, judul: true, butuhKehadiran: true } },
+      jemaat: { select: { namaLengkap: true } },
+    },
   });
   if (!before || before.eventId !== req.params.id) {
     throw NotFound('Partisipasi tidak ditemukan');
@@ -1729,6 +1874,9 @@ eventRouter.patch('/:id/peserta/:participationId', async (req, res) => {
     before,
     after: updated,
   });
+  if (input.status && input.status !== before.status) {
+    await syncEventRoleForStatus(before.event, before.jemaatId, input.status);
+  }
   res.json({ success: true, data: updated });
 });
 
@@ -1743,6 +1891,7 @@ eventRouter.delete('/:id/peserta/:participationId', async (req, res) => {
   }
   await prisma.eventParticipation.delete({ where: { id: before.id } });
   await deleteEventBuktiTransfer(before.id).catch(() => {});
+  await revokeEventRole(before.eventId, before.jemaatId).catch(() => 0);
   audit(req, {
     action: 'DELETE',
     resource: 'event_participation',
@@ -1909,6 +2058,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
     },
   });
+  await syncEventRoleForStatus(event, updated.jemaatId, 'HADIR');
 
   audit(req, {
     action: 'UPDATE',

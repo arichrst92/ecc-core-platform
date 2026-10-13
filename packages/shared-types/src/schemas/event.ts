@@ -29,6 +29,47 @@ const nominalSchema = z.union([
 ]);
 
 // ============================================================
+//  Event × Role jemaat
+// ============================================================
+// Syarat daftar: jemaat harus punya role aktif yang cocok dengan SALAH SATU
+// baris. subRoleId / subRoleStatusId null = semua sub-role / status.
+export const eventRoleRequirementSchema = z.object({
+  roleId: uuidSchema,
+  subRoleId: uuidSchema.nullable().optional(),
+  subRoleStatusId: uuidSchema.nullable().optional(),
+});
+export type EventRoleRequirementInput = z.infer<typeof eventRoleRequirementSchema>;
+
+// Role yang diberikan ke peserta (saat HADIR; event tanpa absensi → saat
+// daftar). null = hapus. Role + Sub-Role wajib berpasangan.
+const eventRoleFields = {
+  roleRequirements: z.array(eventRoleRequirementSchema).max(20).optional(),
+  grantRoleId: uuidSchema.nullable().optional(),
+  grantSubRoleId: uuidSchema.nullable().optional(),
+  grantSubRoleStatusId: uuidSchema.nullable().optional(),
+};
+
+function refineGrant(
+  data: { grantRoleId?: string | null; grantSubRoleId?: string | null; grantSubRoleStatusId?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (data.grantRoleId && !data.grantSubRoleId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Sub-role wajib dipilih untuk role yang diberikan',
+      path: ['grantSubRoleId'],
+    });
+  }
+  if (!data.grantRoleId && (data.grantSubRoleId || data.grantSubRoleStatusId)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Pilih role terlebih dahulu',
+      path: ['grantRoleId'],
+    });
+  }
+}
+
+// ============================================================
 //  Event CRUD
 // ============================================================
 
@@ -79,8 +120,10 @@ export const createEventSchema = z
     butuhKehadiran: z.boolean().default(false),
 
     isPublished: z.boolean().default(false),
+    ...eventRoleFields,
   })
   .superRefine((data, ctx) => {
+    refineGrant(data, ctx);
     // tanggalSelesai harus ≥ tanggalMulai
     if (data.tanggalSelesai && data.tanggalSelesai < data.tanggalMulai) {
       ctx.addIssue({
@@ -141,7 +184,9 @@ export const updateEventSchema = z
     butuhKehadiran: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     isActive: z.boolean().optional(),
+    ...eventRoleFields,
   })
+  .superRefine(refineGrant)
   .openapi('UpdateEventInput');
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 

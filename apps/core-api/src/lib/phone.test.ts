@@ -17,6 +17,11 @@ describe('normalizePhoneNumber — semua negara', () => {
     expect(normalizePhoneNumber('+60 12-345 6789')).toBe('+60123456789');
   });
 
+  it('kode negara terketik dobel tetap dikenali', () => {
+    expect(normalizePhoneNumber('+65 65 9123 4567')).toBe('+6591234567');
+    expect(normalizePhoneNumber('+62 62 812 3456 7890')).toBe('+6281234567890');
+  });
+
   it('tidak valid → null', () => {
     expect(normalizePhoneNumber('123')).toBe(null);
     expect(normalizePhoneNumber('')).toBe(null);

@@ -41,11 +41,20 @@ function labelFor(modelName: string | undefined): string {
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // Zod validation
   if (err instanceof ZodError) {
+    // Pakai pesan validasi pertama sebagai `message` supaya client (portal,
+    // mobile, ckids) langsung bisa tampilkan alasan yang jelas, mis.
+    // "No HP tidak valid. Pakai 08… untuk Indonesia, atau sertakan kode negara".
+    const first = err.issues[0];
+    const message = first?.message
+      ? first.code === 'custom' || first.path.length === 0
+        ? first.message
+        : `${first.path.join('.')}: ${first.message}`
+      : 'Input tidak valid';
     res.status(400).json({
       success: false,
       error: {
         code: 'VALIDATION_ERROR',
-        message: 'Input tidak valid',
+        message,
         details: err.flatten(),
       },
     });

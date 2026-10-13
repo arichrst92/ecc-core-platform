@@ -85,7 +85,18 @@ export function normalizePhoneNumber(
     const p = s.startsWith('+')
       ? parsePhoneNumberFromString(s)
       : parsePhoneNumberFromString(s, defaultCountry);
-    return p && p.isValid() ? p.number : null;
+    if (p?.isValid()) return p.number;
+    // Kode negara terketik dobel (pilih +65 di app lalu ketik "65 9123 4567"
+    // → "+656591234567"): coba buang pengulangan kode negaranya.
+    if (p && s.startsWith('+')) {
+      const cc = p.countryCallingCode;
+      const rest = s.slice(1 + cc.length);
+      if (rest.startsWith(cc)) {
+        const retry = parsePhoneNumberFromString(`+${cc}${rest.slice(cc.length)}`);
+        if (retry?.isValid()) return retry.number;
+      }
+    }
+    return null;
   } catch {
     return null;
   }

@@ -43,6 +43,7 @@ import {
   assertCanManageGroup,
   assertCanViewGroup,
   generateUniqueJoinCode,
+  ensurePicMember,
 } from '../../lib/group-authz.js';
 import {
   notifMemberAdded,
@@ -379,6 +380,8 @@ groupRouter.post('/', async (req, res) => {
       joinCode,
     },
   });
+  // Pembuat/PIC langsung jadi anggota → muncul di "My Groups".
+  await ensurePicMember(created.id, created.picJemaatId);
 
   audit(req, {
     action: 'CREATE',
@@ -438,6 +441,9 @@ groupRouter.patch('/:id', async (req, res) => {
     where: { id: req.params.id },
     data: updateData,
   });
+  if (input.picJemaatId && input.picJemaatId !== before.picJemaatId) {
+    await ensurePicMember(updated.id, input.picJemaatId);
+  }
 
   audit(req, {
     action: 'UPDATE',

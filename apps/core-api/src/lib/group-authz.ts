@@ -96,3 +96,17 @@ export async function generateUniqueJoinCode(): Promise<string> {
   }
   throw new Error('Failed generate unique join code after 5 attempts');
 }
+
+/**
+ * PIC otomatis jadi anggota aktif group (supaya muncul di "My Groups",
+ * menerima notifikasi, dan terhitung di jumlah anggota). Idempotent:
+ * anggota yang pernah keluar diaktifkan kembali.
+ */
+export async function ensurePicMember(groupId: string, picJemaatId: string | null | undefined): Promise<void> {
+  if (!picJemaatId) return;
+  await prisma.groupMember.upsert({
+    where: { groupId_jemaatId: { groupId, jemaatId: picJemaatId } },
+    create: { groupId, jemaatId: picJemaatId },
+    update: { isActive: true, tanggalKeluar: null },
+  });
+}

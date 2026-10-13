@@ -472,29 +472,45 @@ meRouter.get('/scanner-ibadah', async (req, res) => {
 // ============================================================
 //  Group membership — list group yg current jemaat ikut (module 23)
 // ============================================================
-// Untuk mobile "My Groups" tab. Filter isActive=true group + member.
+// Untuk mobile "My Groups" tab: group aktif tempat saya anggota aktif ATAU PIC.
+// `isPic` = saya PIC group tsb.
 meRouter.get('/group-membership', async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  const memberships = await prisma.groupMember.findMany({
-    where: { jemaatId, isActive: true },
-    include: {
-      group: {
-        include: {
-          cabang: { select: { id: true, nama: true } },
-          picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
-          _count: { select: { members: { where: { isActive: true } } } },
-        },
-      },
-    },
-    orderBy: { tanggalBergabung: 'desc' },
-  });
-  const data = memberships
-    .filter((m) => m.group.isActive)
-    .map((m) => ({
-      membershipId: m.id,
-      tanggalBergabung: m.tanggalBergabung,
-      group: { ...m.group, memberCount: m.group._count.members },
-    }));
+  const groupInclude = {
+    cabang: { select: { id: true, nama: true } },
+    picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+    _count: { select: { members: { where: { isActive: true } } } },
+  } as const;
+  const [memberships, picGroups] = await Promise.all([
+    prisma.groupMember.findMany({
+      where: { jemaatId, isActive: true },
+      include: { group: { include: groupInclude } },
+      orderBy: { tanggalBergabung: 'desc' },
+    }),
+    // Group yang saya pimpin (PIC) tapi belum tercatat sebagai anggota —
+    // mis. group lama sebelum PIC otomatis jadi anggota.
+    prisma.group.findMany({
+      where: { picJemaatId: jemaatId, isActive: true, members: { none: { jemaatId, isActive: true } } },
+      include: groupInclude,
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+  const data = [
+    ...picGroups.map((g) => ({
+      membershipId: `pic-${g.id}`,
+      tanggalBergabung: g.createdAt,
+      isPic: true,
+      group: { ...g, memberCount: g._count.members },
+    })),
+    ...memberships
+      .filter((m) => m.group.isActive)
+      .map((m) => ({
+        membershipId: m.id,
+        tanggalBergabung: m.tanggalBergabung,
+        isPic: m.group.picJemaatId === jemaatId,
+        group: { ...m.group, memberCount: m.group._count.members },
+      })),
+  ];
   res.json({ success: true, data });
 });
 

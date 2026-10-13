@@ -138,6 +138,23 @@ meHomecellRouter.get('/', async (req, res) => {
     }),
   ]);
   const status = await myStatusMap(jemaatId);
+  // Pertemuan berikutnya per homecell (untuk kartu Homecell di beranda/profil).
+  const hcIds = [...managed.map((h) => h.id), ...memberships.map((m) => m.homecell.id)];
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const upcoming = hcIds.length
+    ? await prisma.homecellSchedule.findMany({
+        where: { homecellId: { in: hcIds }, tanggal: { gte: today } },
+        orderBy: { tanggal: 'asc' },
+        select: { id: true, homecellId: true, tanggal: true, lokasi: true, catatan: true },
+      })
+    : [];
+  const nextByHc = new Map<string, (typeof upcoming)[number]>();
+  for (const sc of upcoming) if (!nextByHc.has(sc.homecellId)) nextByHc.set(sc.homecellId, sc);
+  const next = (id: string) => {
+    const sc = nextByHc.get(id);
+    return sc ? { id: sc.id, tanggal: sc.tanggal, lokasi: sc.lokasi, catatan: sc.catatan } : null;
+  };
   res.json({
     success: true,
     data: {
@@ -146,10 +163,11 @@ meHomecellRouter.get('/', async (req, res) => {
       managed: managed.map((h) => ({
         ...toListItem(h as unknown as ListRow, null, status),
         pendingJoinCount: h._count.joinRequests,
+        nextSchedule: next(h.id),
       })),
       memberships: memberships.map((m) => ({
         tanggalBergabung: m.tanggalBergabung,
-        homecell: toListItem(m.homecell, null, status),
+        homecell: { ...toListItem(m.homecell, null, status), nextSchedule: next(m.homecell.id) },
       })),
       pendingRequests: pending,
     },

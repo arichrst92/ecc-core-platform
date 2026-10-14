@@ -118,6 +118,8 @@ export const createEventSchema = z
 
     // Apakah event butuh absensi pada hari H (admin scan QR kode jemaat).
     butuhKehadiran: z.boolean().default(false),
+    // Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran=true).
+    allowSelfCheckin: z.boolean().default(false),
 
     isPublished: z.boolean().default(false),
     ...eventRoleFields,
@@ -182,6 +184,7 @@ export const updateEventSchema = z
     quotaPeserta: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
     butuhKehadiran: z.boolean().optional(),
+    allowSelfCheckin: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     isActive: z.boolean().optional(),
     ...eventRoleFields,

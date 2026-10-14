@@ -54,6 +54,7 @@ interface EventDetail {
   quotaPeserta: number | null;
   tags: string[];
   butuhKehadiran: boolean;
+  allowSelfCheckin?: boolean;
   isPublished: boolean;
   pesertaCount: number;
 }
@@ -484,7 +485,9 @@ export default function EventDetailPage() {
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               {e.butuhKehadiran
-                ? 'Event ini butuh kehadiran — gunakan tombol Check-in untuk scan QR jemaat.'
+                ? e.allowSelfCheckin
+                  ? 'Event ini butuh kehadiran — scan QR jemaat, atau peserta self check-in dari aplikasi (15 menit sebelum mulai s.d. selesai).'
+                  : 'Event ini butuh kehadiran — gunakan tombol Check-in untuk scan QR jemaat.'
                 : 'Jemaat yang berpartisipasi di event ini.'}
             </p>
           </div>

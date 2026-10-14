@@ -1263,6 +1263,9 @@ model Event {
   // kode jemaat untuk set partisipasi ke HADIR. Kalau false → cukup partisipasi
   // (DAFTAR / BAYAR / BATAL), tidak ada tracking kehadiran.
   butuhKehadiran Boolean @default(false) @map("butuh_kehadiran")
+  // Peserta boleh check-in sendiri dari aplikasi (dirinya + keluarga yang
+  // terdaftar) mulai 15 menit sebelum event s.d. selesai. Butuh butuhKehadiran.
+  allowSelfCheckin Boolean @default(false) @map("allow_self_checkin")
 
   // Role yang diberikan otomatis ke peserta (saat HADIR; kalau event tanpa
   // absensi → saat daftar). Dicabut (diakhiri) kalau partisipasi BATAL.

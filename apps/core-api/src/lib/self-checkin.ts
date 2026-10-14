@@ -81,3 +81,57 @@ export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
   TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum ibadah dimulai.`,
   ENDED: 'Ibadah hari ini sudah selesai.',
 };
+
+// ============================================================
+// Event
+// ============================================================
+
+export type EventSelfCheckinReason = 'DISABLED' | 'NO_ATTENDANCE' | 'INACTIVE' | 'TOO_EARLY' | 'ENDED';
+
+/** Tanggal kalender WIB (sebagai UTC midnight) dari sebuah instant. */
+function wibDate(d: Date): Date {
+  const w = new Date(d.getTime() + WIB_OFFSET_MS);
+  return new Date(Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate()));
+}
+
+/**
+ * Jendela self check-in event: 15 menit sebelum (tanggalMulai + jamMulai)
+ * s.d. (tanggalSelesai|tanggalMulai + jamSelesai), jam dinding WIB.
+ * Tanpa jamMulai → 00:00; tanpa jamSelesai → 23:59 hari terakhir.
+ */
+export function eventSelfCheckinWindow(
+  ev: {
+    allowSelfCheckin: boolean;
+    butuhKehadiran: boolean;
+    isActive: boolean;
+    tanggalMulai: Date;
+    tanggalSelesai: Date | null;
+    jamMulai: string | null;
+    jamSelesai: string | null;
+  },
+  now: Date = new Date(),
+): { available: boolean; reason: EventSelfCheckinReason | null; tanggal: string; opensAt: string | null; closesAt: string | null } {
+  const tanggal = todayWib(now).toISOString().slice(0, 10);
+  const startDay = wibDate(ev.tanggalMulai);
+  const endDay = wibDate(ev.tanggalSelesai ?? ev.tanggalMulai);
+  const start = hhmmToMin(ev.jamMulai) ?? 0;
+  let end = hhmmToMin(ev.jamSelesai) ?? 24 * 60 - 1;
+  if (!ev.tanggalSelesai && end <= start) end = 24 * 60 - 1;
+  const opens = new Date(startDay.getTime() + Math.max(0, start - OPEN_BEFORE_MIN) * 60_000 - WIB_OFFSET_MS);
+  const closes = new Date(endDay.getTime() + end * 60_000 - WIB_OFFSET_MS);
+  const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
+  if (!ev.allowSelfCheckin) return { ...win, available: false, reason: 'DISABLED' };
+  if (!ev.butuhKehadiran) return { ...win, available: false, reason: 'NO_ATTENDANCE' };
+  if (!ev.isActive) return { ...win, available: false, reason: 'INACTIVE' };
+  if (now < opens) return { ...win, available: false, reason: 'TOO_EARLY' };
+  if (now > closes) return { ...win, available: false, reason: 'ENDED' };
+  return { ...win, available: true, reason: null };
+}
+
+export const EVENT_SELF_CHECKIN_REASON_TEXT: Record<EventSelfCheckinReason, string> = {
+  DISABLED: 'Event ini tidak mengizinkan self check-in.',
+  NO_ATTENDANCE: 'Event ini tidak mencatat kehadiran.',
+  INACTIVE: 'Event ini tidak aktif.',
+  TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum event dimulai.`,
+  ENDED: 'Event sudah selesai.',
+};

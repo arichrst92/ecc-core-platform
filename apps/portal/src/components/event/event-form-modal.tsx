@@ -26,6 +26,8 @@ export type EventFormValues = {
   quotaPeserta?: number | string;
   tags?: string[];
   butuhKehadiran?: boolean;
+  /** Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran). */
+  allowSelfCheckin?: boolean;
   isPublished?: boolean;
   // Syarat role untuk daftar (salah satu cocok) + role yang diberikan ke peserta.
   // Tidak dikirim (undefined) kalau data role event belum termuat — supaya
@@ -81,6 +83,7 @@ const EMPTY: EventFormValues = {
   tipeBayar: 'GRATIS',
   tags: [],
   butuhKehadiran: false,
+  allowSelfCheckin: false,
   isPublished: false,
 };
 
@@ -178,6 +181,7 @@ export function EventFormModal({
         quotaPeserta: (dv.quotaPeserta as number | string | undefined) ?? '',
         tags: (dv.tags as string[]) ?? [],
         butuhKehadiran: (dv.butuhKehadiran as boolean) ?? false,
+        allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
         isPublished: (dv.isPublished as boolean) ?? false,
       });
       setTagsInput(((dv.tags as string[]) ?? []).join(', '));
@@ -498,7 +502,9 @@ export function EventFormModal({
                 <input
                   type="checkbox"
                   checked={!!values.butuhKehadiran}
-                  onChange={(e) => patch({ butuhKehadiran: e.target.checked })}
+                  onChange={(e) =>
+                    patch({ butuhKehadiran: e.target.checked, ...(e.target.checked ? {} : { allowSelfCheckin: false }) })
+                  }
                   className="w-4 h-4 accent-brand-500 mt-0.5"
                 />
                 <div>
@@ -508,6 +514,27 @@ export function EventFormModal({
                   <div className="text-xs text-neutral-500 mt-0.5">
                     Admin bisa scan QR kode jemaat di hari H untuk mark peserta sebagai HADIR.
                     Kalau tidak diaktifkan, lifecycle berhenti di DAFTAR / BAYAR — tidak ada absensi.
+                  </div>
+                </div>
+              </label>
+              <label
+                className={`flex items-start gap-2 p-3 border border-neutral-200 rounded-lg mt-2 ${
+                  values.butuhKehadiran ? 'cursor-pointer hover:bg-neutral-50' : 'opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={!!values.allowSelfCheckin}
+                  disabled={!values.butuhKehadiran}
+                  onChange={(e) => patch({ allowSelfCheckin: e.target.checked })}
+                  className="w-4 h-4 accent-brand-500 mt-0.5"
+                />
+                <div>
+                  <div className="text-sm font-medium text-neutral-900">Perbolehkan self check-in</div>
+                  <div className="text-xs text-neutral-500 mt-0.5">
+                    Peserta bisa check-in sendiri dari aplikasi (dirinya + keluarga yang terdaftar di event ini),
+                    mulai 15 menit sebelum event sampai event selesai. Event berbayar: hanya peserta yang
+                    pembayarannya sudah terverifikasi.
                   </div>
                 </div>
               </label>

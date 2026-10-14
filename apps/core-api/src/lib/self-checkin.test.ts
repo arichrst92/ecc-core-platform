@@ -48,3 +48,40 @@ describe('selfCheckinWindow', () => {
   it('ibadah malam WIB (UTC hari sebelumnya tidak menggeser tanggal)', () =>
     expect(selfCheckinWindow({ ...base, jamMulai: '18:00', jamSelesai: '20:00' }, [], wib('2026-10-18T18:30:00')).available).toBe(true));
 });
+
+import { eventSelfCheckinWindow } from './self-checkin.js';
+
+describe('eventSelfCheckinWindow', () => {
+  const ev = {
+    allowSelfCheckin: true,
+    butuhKehadiran: true,
+    isActive: true,
+    // disimpan sebagai tanggal (UTC midnight)
+    tanggalMulai: new Date('2026-10-20T00:00:00Z'),
+    tanggalSelesai: null,
+    jamMulai: '18:00',
+    jamSelesai: '21:00',
+  };
+  it('dibuka 17:45 WIB', () => {
+    const w = eventSelfCheckinWindow(ev, wib('2026-10-20T17:45:00'));
+    expect(w.available).toBe(true);
+    expect(w.opensAt).toBe('2026-10-20T10:45:00.000Z');
+  });
+  it('17:44 belum', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T17:44:00')).reason).toBe('TOO_EARLY'));
+  it('21:01 selesai', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T21:01:00')).reason).toBe('ENDED'));
+  it('tidak diizinkan', () =>
+    expect(eventSelfCheckinWindow({ ...ev, allowSelfCheckin: false }, wib('2026-10-20T18:30:00')).reason).toBe('DISABLED'));
+  it('tanpa absensi', () =>
+    expect(eventSelfCheckinWindow({ ...ev, butuhKehadiran: false }, wib('2026-10-20T18:30:00')).reason).toBe('NO_ATTENDANCE'));
+  it('tanggalMulai disimpan sebagai tengah malam WIB (17:00Z hari sebelumnya)', () =>
+    expect(
+      eventSelfCheckinWindow({ ...ev, tanggalMulai: new Date('2026-10-19T17:00:00Z') }, wib('2026-10-20T18:00:00')).available,
+    ).toBe(true));
+  it('multi-hari: hari ke-2 masih terbuka sampai jam selesai hari terakhir', () => {
+    const multi = { ...ev, tanggalSelesai: new Date('2026-10-22T00:00:00Z'), jamMulai: '08:00', jamSelesai: '17:00' };
+    expect(eventSelfCheckinWindow(multi, wib('2026-10-21T12:00:00')).available).toBe(true);
+    expect(eventSelfCheckinWindow(multi, wib('2026-10-22T17:01:00')).reason).toBe('ENDED');
+  });
+  it('tanpa jam → sepanjang hari', () =>
+    expect(eventSelfCheckinWindow({ ...ev, jamMulai: null, jamSelesai: null }, wib('2026-10-20T23:30:00')).available).toBe(true));
+});

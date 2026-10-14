@@ -45,6 +45,7 @@ import { flexImageUpload } from '../../lib/image-upload.js';
 import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
 import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
+import { meEventCheckinRouter } from './me-event-checkin.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -58,6 +59,8 @@ meRouter.use('/visits', meVisitRouter);
 meRouter.use('/homecell', meHomecellRouter);
 // Self check-in ibadah (saya + keluarga) → me-ibadah.ts
 meRouter.use('/ibadah', meIbadahRouter);
+// Self check-in event (saya + keluarga terdaftar) → me-event-checkin.ts
+meRouter.use('/event-checkin', meEventCheckinRouter);
 // Local Business — CRUD owner + browse public.
 meRouter.use('/businesses', meBusinessRouter);
 meRouter.use('/local-market', meLocalMarketRouter);

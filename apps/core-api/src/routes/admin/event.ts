@@ -455,6 +455,7 @@ eventRouter.post('/', async (req, res) => {
       quotaPeserta: input.quotaPeserta ?? null,
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
+      allowSelfCheckin: input.allowSelfCheckin ?? false,
       isPublished: input.isPublished ?? false,
       publishedAt: input.isPublished ? new Date() : null,
       authorId: req.user.sub,
@@ -522,6 +523,7 @@ eventRouter.patch('/:id', async (req, res) => {
     quotaPeserta: input.quotaPeserta,
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
+    allowSelfCheckin: input.allowSelfCheckin,
     isActive: input.isActive,
   };
   // Role yang diberikan: undefined = tidak diubah, null = hapus.

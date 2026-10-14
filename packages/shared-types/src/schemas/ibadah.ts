@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
+/** Radius self check-in (meter). '' / null = boleh di mana saja; undefined = tidak diubah. */
+const selfCheckinRadiusSchema = z
+  .preprocess(
+    (v) => (v === '' ? null : v),
+    z.union([z.null(), z.coerce.number().int().min(10, 'Radius minimal 10 m').max(50000, 'Radius maksimal 50 km')]),
+  )
+  .optional();
+
 export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY', 'ONCE']);
 export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']);
 
@@ -32,6 +40,10 @@ export const createIbadahSchema = z
     jamMulai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     jamSelesai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     lokasi: emptyToUndefined(z.string().trim()),
+    // Link Google Maps / koordinat "lat, lng" — untuk cek radius self check-in.
+    mapsUrl: emptyToUndefined(z.string().trim().max(2000)),
+    // Radius self check-in (meter). null/'' = boleh di mana saja.
+    selfCheckinRadiusM: selfCheckinRadiusSchema,
     isOnline: z.boolean().default(false),
     linkOnline: emptyToUndefined(z.string().url()),
     // Modul 26 — toggle wajib checkout (biasanya untuk ibadah anak)
@@ -62,6 +74,9 @@ export const updateIbadahSchema = z.object({
   jamMulai: emptyToUndefined(z.string().regex(jamRegex)),
   jamSelesai: emptyToUndefined(z.string().regex(jamRegex)),
   lokasi: emptyToUndefined(z.string().trim()),
+  mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
+  // Radius self check-in (meter). null/'' = boleh di mana saja.
+  selfCheckinRadiusM: selfCheckinRadiusSchema,
   isOnline: z.boolean().optional(),
   linkOnline: emptyToUndefined(z.string().url()),
   requiresCheckout: z.boolean().optional(),

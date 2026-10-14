@@ -1,3 +1,4 @@
+import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
@@ -296,7 +297,16 @@ ibadahRouter.get('/:id', async (req, res) => {
 
 ibadahRouter.post('/', async (req, res) => {
   const input = createIbadahSchema.parse(req.body);
-  const data = { ...input, tanggalMulai: new Date(input.tanggalMulai) };
+  const loc = await mapsUrlToFields(input.mapsUrl);
+  if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+  const data = { ...input, ...(loc ?? {}), tanggalMulai: new Date(input.tanggalMulai) };
+  const pointErr = await radiusPointError({
+    radiusM: input.selfCheckinRadiusM,
+    latitude: loc?.latitude,
+    longitude: loc?.longitude,
+    cabangId: input.cabangId,
+  });
+  if (pointErr) throw BadRequest(pointErr);
   const created = await prisma.ibadah.create({ data });
   audit(req, { action: 'CREATE', resource: 'ibadah', resourceId: created.id, resourceLabel: created.nama, after: created });
   res.status(201).json({ success: true, data: created });
@@ -304,12 +314,22 @@ ibadahRouter.post('/', async (req, res) => {
 
 ibadahRouter.patch('/:id', async (req, res) => {
   const input = updateIbadahSchema.parse(req.body);
+  const loc = await mapsUrlToFields(input.mapsUrl);
+  if (loc === null) throw BadRequest(MAPS_URL_ERROR);
   const data = {
     ...input,
+    ...(loc ?? {}),
     tanggalMulai: input.tanggalMulai ? new Date(input.tanggalMulai) : undefined,
   };
   const before = await prisma.ibadah.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Ibadah tidak ditemukan');
+  const pointErr = await radiusPointError({
+    radiusM: input.selfCheckinRadiusM !== undefined ? input.selfCheckinRadiusM : before.selfCheckinRadiusM,
+    latitude: loc ? loc.latitude : before.latitude,
+    longitude: loc ? loc.longitude : before.longitude,
+    cabangId: input.cabangId ?? before.cabangId,
+  });
+  if (pointErr) throw BadRequest(pointErr);
   const updated = await prisma.ibadah.update({ where: { id: req.params.id }, data });
   audit(req, { action: 'UPDATE', resource: 'ibadah', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
   res.json({ success: true, data: updated });

@@ -15,7 +15,14 @@ import { z } from 'zod';
 import { ApiError, BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
-import { SELF_CHECKIN_REASON_TEXT, selfCheckinWindow } from '../../lib/self-checkin.js';
+import {
+  SELF_CHECKIN_REASON_TEXT,
+  checkSelfCheckinRadius,
+  radiusErrorMessage,
+  selfCheckinWindow,
+  venueInfo,
+  venuePoint,
+} from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
 
 export const meIbadahRouter = Router();
@@ -42,6 +49,10 @@ async function loadIbadahWindow(ibadahId: string) {
       jamMulai: true,
       jamSelesai: true,
       lokasi: true,
+      latitude: true,
+      longitude: true,
+      selfCheckinRadiusM: true,
+      cabang: { select: { latitude: true, longitude: true } },
     },
   });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
@@ -101,19 +112,40 @@ meIbadahRouter.get('/:id/self-checkin', async (req, res) => {
       serverNow: new Date().toISOString(),
       reasonText: window.reason ? SELF_CHECKIN_REASON_TEXT[window.reason] : null,
       ibadah: { id: ibadah.id, nama: ibadah.nama, jamMulai: ibadah.jamMulai, jamSelesai: ibadah.jamSelesai, lokasi: ibadah.lokasi },
+      // Cek radius: app wajib kirim lokasi kalau requiresLocation=true.
+      // radiusM null = self check-in boleh di mana saja.
+      venue: venueInfo(ibadah.selfCheckinRadiusM, venuePoint(ibadah, ibadah.cabang)),
       members,
     },
   });
 });
 
-const bodySchema = z.object({ jemaatIds: z.array(z.string().uuid()).min(1).max(20) });
+const bodySchema = z.object({
+  jemaatIds: z.array(z.string().uuid()).min(1).max(20),
+  // Posisi HP saat check-in (wajib kalau venue punya titik lokasi).
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+});
 
 meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
   const u = me(req);
-  const { jemaatIds } = bodySchema.parse(req.body ?? {});
+  const { jemaatIds, lat, lng } = bodySchema.parse(req.body ?? {});
   const { ibadah, window } = await loadIbadahWindow(req.params.id);
   if (!window.available) {
     throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, SELF_CHECKIN_REASON_TEXT[window.reason!]);
+  }
+  // Radius sesuai pengaturan ibadah (null = di mana saja), dari titik ibadah
+  // atau titik cabang. Di luar radius → arahkan ke usher (QR).
+  const radius = checkSelfCheckinRadius(
+    venuePoint(ibadah, ibadah.cabang),
+    lat != null && lng != null ? { lat, lng } : null,
+    ibadah.selfCheckinRadiusM,
+  );
+  if (!radius.ok) {
+    throw new ApiError(400, `SELF_CHECKIN_${radius.code}`, radiusErrorMessage(radius.code, 'ibadah', radius.distanceM, ibadah.selfCheckinRadiusM!), {
+      distanceM: radius.distanceM,
+      radiusM: ibadah.selfCheckinRadiusM,
+    });
   }
   const fam = await familyOf(u.jemaatId);
   const allowed = new Set([u.jemaatId, ...fam.keys()]);

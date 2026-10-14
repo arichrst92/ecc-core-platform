@@ -18,7 +18,14 @@ import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { syncEventRoleForStatus } from '../../lib/event-role.js';
 import { familyOf } from '../../lib/family.js';
-import { EVENT_SELF_CHECKIN_REASON_TEXT, eventSelfCheckinWindow } from '../../lib/self-checkin.js';
+import {
+  EVENT_SELF_CHECKIN_REASON_TEXT,
+  checkSelfCheckinRadius,
+  eventSelfCheckinWindow,
+  radiusErrorMessage,
+  venueInfo,
+  venuePoint,
+} from '../../lib/self-checkin.js';
 
 export const meEventCheckinRouter = Router();
 
@@ -45,6 +52,10 @@ async function loadEvent(eventId: string) {
       tanggalSelesai: true,
       jamMulai: true,
       jamSelesai: true,
+      latitude: true,
+      longitude: true,
+      selfCheckinRadiusM: true,
+      cabang: { select: { latitude: true, longitude: true } },
     },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
@@ -107,18 +118,37 @@ meEventCheckinRouter.get('/:eventId', async (req, res) => {
         jamSelesai: event.jamSelesai,
       },
       members: rows.map((r) => r.member),
+      // radiusM null = self check-in boleh di mana saja.
+      venue: venueInfo(event.selfCheckinRadiusM, venuePoint(event, event.cabang)),
     },
   });
 });
 
-const bodySchema = z.object({ jemaatIds: z.array(z.string().uuid()).min(1).max(20) });
+const bodySchema = z.object({
+  jemaatIds: z.array(z.string().uuid()).min(1).max(20),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+});
 
 meEventCheckinRouter.post('/:eventId', async (req, res) => {
   const u = me(req);
-  const { jemaatIds } = bodySchema.parse(req.body ?? {});
+  const { jemaatIds, lat, lng } = bodySchema.parse(req.body ?? {});
   const { event, window } = await loadEvent(req.params.eventId);
   if (!window.available) {
     throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, EVENT_SELF_CHECKIN_REASON_TEXT[window.reason!]);
+  }
+  // Radius sesuai pengaturan event (null = di mana saja), dari titik event
+  // atau titik cabang. Di luar radius → arahkan ke usher (QR).
+  const radius = checkSelfCheckinRadius(
+    venuePoint(event, event.cabang),
+    lat != null && lng != null ? { lat, lng } : null,
+    event.selfCheckinRadiusM,
+  );
+  if (!radius.ok) {
+    throw new ApiError(400, `SELF_CHECKIN_${radius.code}`, radiusErrorMessage(radius.code, 'event', radius.distanceM, event.selfCheckinRadiusM!), {
+      distanceM: radius.distanceM,
+      radiusM: event.selfCheckinRadiusM,
+    });
   }
   const rows = await registeredMembers(u.jemaatId, event);
   const byId = new Map(rows.map((r) => [r.member.id, r]));

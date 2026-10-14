@@ -129,6 +129,33 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
     { name: 'jamMulai', label: 'Jam Mulai', type: 'time', required: true, placeholder: '08:00' },
     { name: 'jamSelesai', label: 'Jam Selesai', type: 'time', required: true, placeholder: '10:00' },
     { name: 'lokasi', label: 'Lokasi', type: 'text', placeholder: 'Sanctuary Lt. 2' },
+    {
+      name: 'mapsUrl',
+      label: 'Titik lokasi (link Google Maps)',
+      type: 'text',
+      placeholder: 'https://maps.app.goo.gl/… atau -6.2088, 106.8456',
+      helperText:
+        'Titik untuk cek radius self check-in. Kosong → memakai titik cabang (kalau ada).',
+    },
+    {
+      name: 'selfCheckinRadiusM',
+      label: 'Self check-in jemaat',
+      type: 'select',
+      defaultValue: '',
+      options: [
+        { value: '', label: 'Di mana saja (tanpa cek lokasi)' },
+        { value: '50', label: 'Dalam radius 50 m' },
+        { value: '100', label: 'Dalam radius 100 m' },
+        { value: '200', label: 'Dalam radius 200 m' },
+        { value: '300', label: 'Dalam radius 300 m' },
+        { value: '500', label: 'Dalam radius 500 m' },
+        { value: '1000', label: 'Dalam radius 1 km' },
+        { value: '2000', label: 'Dalam radius 2 km' },
+        { value: '5000', label: 'Dalam radius 5 km' },
+      ],
+      helperText:
+        'Dengan radius: jemaat harus berada di dekat titik lokasi (GPS HP dicek). Di luar radius diarahkan ke usher untuk scan QR. Radius butuh titik lokasi ibadah atau cabang.',
+    },
     { name: 'isOnline', label: 'Online?', type: 'switch', defaultValue: false },
     {
       name: 'linkOnline',

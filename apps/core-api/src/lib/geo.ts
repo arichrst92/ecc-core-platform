@@ -95,3 +95,44 @@ export function distanceKm(a: LatLng, b: LatLng): number {
     Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
+
+/**
+ * Link Google Maps / koordinat → kolom { mapsUrl, latitude, longitude }.
+ * `null`/'' = hapus lokasi. `undefined` = tidak diubah (return undefined).
+ * Link tanpa koordinat terbaca → null (pemanggil memutuskan error).
+ */
+export async function mapsUrlToFields(
+  mapsUrl: string | null | undefined,
+): Promise<{ mapsUrl: string | null; latitude: number | null; longitude: number | null } | null | undefined> {
+  if (mapsUrl === undefined) return undefined;
+  if (!mapsUrl || !mapsUrl.trim()) return { mapsUrl: null, latitude: null, longitude: null };
+  const loc = await resolveMapsLocation(mapsUrl.trim());
+  if (!loc) return null;
+  return { mapsUrl: mapsUrl.trim(), latitude: loc.lat, longitude: loc.lng };
+}
+
+export const MAPS_URL_ERROR =
+  'Koordinat tidak ditemukan di link Google Maps. Tempel koordinat (mis. -6.2088, 106.8456) atau link "Bagikan" dari Google Maps.';
+
+/**
+ * Radius self check-in butuh titik lokasi: titik ibadah/event sendiri, atau
+ * titik cabang. Lempar pesan (string) kalau tidak ada titik sama sekali.
+ */
+export async function radiusPointError(args: {
+  radiusM: number | null | undefined;
+  latitude: number | null | undefined;
+  longitude: number | null | undefined;
+  cabangId: string | null | undefined;
+}): Promise<string | null> {
+  if (args.radiusM == null) return null;
+  if (args.latitude != null && args.longitude != null) return null;
+  if (args.cabangId) {
+    const { prisma } = await import('@ecc/database');
+    const c = await prisma.cabangGereja.findUnique({
+      where: { id: args.cabangId },
+      select: { latitude: true, longitude: true },
+    });
+    if (c?.latitude != null && c?.longitude != null) return null;
+  }
+  return 'Self check-in dengan radius butuh titik lokasi. Isi "Titik lokasi (link Google Maps)", atau pilih "Di mana saja".';
+}

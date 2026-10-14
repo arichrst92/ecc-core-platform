@@ -433,6 +433,12 @@ model Ibadah {
   jamMulai         String      @map("jam_mulai") @db.VarChar(5) // HH:mm
   jamSelesai       String      @map("jam_selesai") @db.VarChar(5)
   lokasi           String?     @db.Text
+  // Titik lokasi (dari link Google Maps) — dipakai cek radius self check-in.
+  latitude         Float?
+  longitude        Float?
+  mapsUrl          String?     @map("maps_url") @db.Text
+  // Radius self check-in (meter). NULL = boleh self check-in di mana saja.
+  selfCheckinRadiusM Int?      @map("self_checkin_radius_m")
   isOnline         Boolean     @default(false) @map("is_online")
   // URL Zoom/YouTube Live/Meet untuk akses streaming. DB column tetap
   // `link_stream` (existing), Prisma field rename ke `linkOnline` 2026-05-24
@@ -1252,6 +1258,12 @@ model Event {
   jamMulai       String?   @map("jam_mulai") @db.VarChar(5) // "HH:mm" 24-hour WIB
   jamSelesai     String?   @map("jam_selesai") @db.VarChar(5)
   lokasi         String?   @db.Text
+  // Titik lokasi (dari link Google Maps) — dipakai cek radius self check-in.
+  latitude       Float?
+  longitude      Float?
+  mapsUrl        String?   @map("maps_url") @db.Text
+  // Radius self check-in (meter). NULL = boleh self check-in di mana saja.
+  selfCheckinRadiusM Int?    @map("self_checkin_radius_m")
 
   // Audience scope (pola Konten)
   sinodeId String? @map("sinode_id") @db.Uuid

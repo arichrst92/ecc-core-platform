@@ -85,3 +85,48 @@ describe('eventSelfCheckinWindow', () => {
   it('tanpa jam → sepanjang hari', () =>
     expect(eventSelfCheckinWindow({ ...ev, jamMulai: null, jamSelesai: null }, wib('2026-10-20T23:30:00')).available).toBe(true));
 });
+
+import { checkSelfCheckinRadius, distanceMeters, venuePoint } from './self-checkin.js';
+
+describe('radius self check-in', () => {
+  const gereja = { lat: -6.2088, lng: 106.8456 };
+  it('jarak ~0', () => expect(Math.round(distanceMeters(gereja, gereja))).toBe(0));
+  it('±500 m → boleh', () => {
+    const r = checkSelfCheckinRadius(gereja, { lat: -6.2088 + 0.0045, lng: 106.8456 }, 1000);
+    expect(r.ok).toBe(true);
+  });
+  it('±1.5 km → TOO_FAR', () => {
+    const r = checkSelfCheckinRadius(gereja, { lat: -6.2088 + 0.0135, lng: 106.8456 }, 1000);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe('TOO_FAR');
+  });
+  it('venue tanpa titik → dilewati', () => expect(checkSelfCheckinRadius(null, null, 100)).toEqual({ ok: true, skipped: true, distanceM: null }));
+  it('venue bertitik tapi user tanpa lokasi → LOCATION_REQUIRED', () => {
+    const r = checkSelfCheckinRadius(gereja, null, 100);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe('LOCATION_REQUIRED');
+  });
+  it('fallback titik cabang', () =>
+    expect(venuePoint({ latitude: null, longitude: null }, { latitude: 1, longitude: 2 })).toEqual({ lat: 1, lng: 2 }));
+  it('titik sendiri diutamakan', () =>
+    expect(venuePoint({ latitude: 3, longitude: 4 }, { latitude: 1, longitude: 2 })).toEqual({ lat: 3, lng: 4 }));
+});
+
+import { radiusErrorMessage, venueInfo } from './self-checkin.js';
+
+describe('radius dapat diatur', () => {
+  const gereja = { lat: -6.2088, lng: 106.8456 };
+  const dekat150 = { lat: -6.2088 + 0.00135, lng: 106.8456 }; // ±150 m
+  it('di mana saja (null) → tidak dicek walau tanpa lokasi', () =>
+    expect(checkSelfCheckinRadius(gereja, null, null)).toEqual({ ok: true, skipped: true, distanceM: null }));
+  it('radius 100 m, user ±150 m → TOO_FAR', () => {
+    const r = checkSelfCheckinRadius(gereja, dekat150, 100);
+    expect(r.ok).toBe(false);
+  });
+  it('radius 200 m, user ±150 m → boleh', () => expect(checkSelfCheckinRadius(gereja, dekat150, 200).ok).toBe(true));
+  it('pesan memuat radius', () =>
+    expect(radiusErrorMessage('TOO_FAR', 'event', 1500, 300).includes('maks. 300 m, posisi Anda sekitar 1.5 km')).toBe(true));
+  it('venueInfo: tanpa titik → tidak wajib lokasi', () => expect(venueInfo(100, null)).toEqual({ requiresLocation: false, radiusM: null }));
+  it('venueInfo: di mana saja', () => expect(venueInfo(null, gereja)).toEqual({ requiresLocation: false, radiusM: null }));
+  it('venueInfo: radius + titik', () => expect(venueInfo(250, gereja)).toEqual({ requiresLocation: true, radiusM: 250 }));
+});

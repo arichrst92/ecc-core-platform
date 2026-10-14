@@ -29,6 +29,7 @@ import {
 } from '@ecc/shared-types';
 import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo.js';
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 import {
@@ -435,6 +436,17 @@ eventRouter.post('/', async (req, res) => {
   for (const [i, r] of (input.roleRequirements ?? []).entries()) {
     await validateRoleTriple(r.roleId, r.subRoleId, r.subRoleStatusId, `Syarat #${i + 1}`);
   }
+  const loc = await mapsUrlToFields(input.mapsUrl);
+  if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+  {
+    const pointErr = await radiusPointError({
+      radiusM: input.selfCheckinRadiusM,
+      latitude: loc?.latitude,
+      longitude: loc?.longitude,
+      cabangId: input.cabangId,
+    });
+    if (pointErr) throw BadRequest(pointErr);
+  }
   const created = await prisma.event.create({
     data: {
       judul: input.judul,
@@ -458,6 +470,8 @@ eventRouter.post('/', async (req, res) => {
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
       allowSelfCheckin: input.allowSelfCheckin ?? false,
+      selfCheckinRadiusM: input.selfCheckinRadiusM ?? null,
+      ...(loc ?? {}),
       isPublished: input.isPublished ?? false,
       publishedAt: input.isPublished ? new Date() : null,
       authorId: req.user.sub,
@@ -526,8 +540,21 @@ eventRouter.patch('/:id', async (req, res) => {
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
     allowSelfCheckin: input.allowSelfCheckin,
+    selfCheckinRadiusM: input.selfCheckinRadiusM,
     isActive: input.isActive,
   };
+  {
+    const loc = await mapsUrlToFields(input.mapsUrl);
+    if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+    if (loc) Object.assign(data, loc);
+    const pointErr = await radiusPointError({
+      radiusM: input.selfCheckinRadiusM !== undefined ? input.selfCheckinRadiusM : before.selfCheckinRadiusM,
+      latitude: loc ? loc.latitude : before.latitude,
+      longitude: loc ? loc.longitude : before.longitude,
+      cabangId: input.cabangId !== undefined ? input.cabangId : before.cabangId,
+    });
+    if (pointErr) throw BadRequest(pointErr);
+  }
   // Role yang diberikan: undefined = tidak diubah, null = hapus.
   await saveRoleConfig(before.id, input);
   if (input.grantRoleId !== undefined) {

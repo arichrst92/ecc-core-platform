@@ -2,6 +2,14 @@ import './common.js';
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
+/** Radius self check-in (meter). '' / null = boleh di mana saja; undefined = tidak diubah. */
+const selfCheckinRadiusSchema = z
+  .preprocess(
+    (v) => (v === '' ? null : v),
+    z.union([z.null(), z.coerce.number().int().min(10, 'Radius minimal 10 m').max(50000, 'Radius maksimal 50 km')]),
+  )
+  .optional();
+
 // Slug: kebab-case alphanumeric (sama pattern dengan Konten)
 const slugSchema = z
   .string()
@@ -101,6 +109,10 @@ export const createEventSchema = z
         .openapi({ example: '12:00' }),
     ),
     lokasi: emptyToUndefined(z.string().trim().max(500)),
+    // Link Google Maps / koordinat "lat, lng" — untuk cek radius self check-in.
+    mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
+    // Radius self check-in (meter). null/'' = boleh di mana saja.
+    selfCheckinRadiusM: selfCheckinRadiusSchema,
 
     // Targeting — null/null = global
     sinodeId: emptyToUndefined(uuidSchema),
@@ -174,6 +186,10 @@ export const updateEventSchema = z
         .openapi({ example: '12:00' }),
     ),
     lokasi: emptyToUndefined(z.string().trim().max(500)),
+    // Link Google Maps / koordinat "lat, lng" — untuk cek radius self check-in.
+    mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
+    // Radius self check-in (meter). null/'' = boleh di mana saja.
+    selfCheckinRadiusM: selfCheckinRadiusSchema,
     sinodeId: emptyToUndefined(uuidSchema),
     cabangId: emptyToUndefined(uuidSchema),
     tipeBayar: eventTipeBayarSchema.optional(),

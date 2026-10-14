@@ -16,6 +16,8 @@ export type EventFormValues = {
   jamMulai?: string;
   jamSelesai?: string;
   lokasi?: string;
+  /** Link Google Maps / "lat, lng" — titik untuk cek radius self check-in. */
+  mapsUrl?: string | null;
   sinodeId?: string;
   cabangId?: string;
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS';
@@ -28,6 +30,8 @@ export type EventFormValues = {
   butuhKehadiran?: boolean;
   /** Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran). */
   allowSelfCheckin?: boolean;
+  /** Radius self check-in (meter). '' / null = di mana saja. */
+  selfCheckinRadiusM?: number | string | null;
   isPublished?: boolean;
   // Syarat role untuk daftar (salah satu cocok) + role yang diberikan ke peserta.
   // Tidak dikirim (undefined) kalau data role event belum termuat — supaya
@@ -167,6 +171,7 @@ export function EventFormModal({
         jamMulai: (dv.jamMulai as string) ?? '',
         jamSelesai: (dv.jamSelesai as string) ?? '',
         lokasi: (dv.lokasi as string) ?? '',
+        mapsUrl: (dv.mapsUrl as string) ?? '',
         sinodeId:
           (dv.sinodeId as string) ??
           ((dv.sinode as { id?: string } | null | undefined)?.id ?? ''),
@@ -182,6 +187,7 @@ export function EventFormModal({
         tags: (dv.tags as string[]) ?? [],
         butuhKehadiran: (dv.butuhKehadiran as boolean) ?? false,
         allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
+        selfCheckinRadiusM: (dv.selfCheckinRadiusM as number | null | undefined) ?? '',
         isPublished: (dv.isPublished as boolean) ?? false,
       });
       setTagsInput(((dv.tags as string[]) ?? []).join(', '));
@@ -238,6 +244,8 @@ export function EventFormModal({
       jamMulai: values.jamMulai || undefined,
       jamSelesai: values.jamSelesai || undefined,
       lokasi: values.lokasi || undefined,
+      // '' → null (hapus titik) saat edit; undefined saat create kosong.
+      mapsUrl: (values.mapsUrl ? values.mapsUrl : isEdit ? null : undefined) as string | undefined,
       sinodeId: values.sinodeId || undefined,
       cabangId: values.cabangId || undefined,
       nominal: values.nominal === '' ? undefined : values.nominal,
@@ -366,6 +374,17 @@ export function EventFormModal({
                   className={inputCls}
                   placeholder="Mis. Bali · Hotel XYZ"
                 />
+              </Field>
+              <Field label="Titik lokasi (link Google Maps)">
+                <input
+                  value={values.mapsUrl ?? ''}
+                  onChange={(e) => patch({ mapsUrl: e.target.value })}
+                  className={inputCls}
+                  placeholder="https://maps.app.goo.gl/… atau -6.2088, 106.8456"
+                />
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Titik untuk cek radius self check-in. Kosong → memakai titik cabang (kalau ada).
+                </p>
               </Field>
             </Section>
 
@@ -538,6 +557,44 @@ export function EventFormModal({
                   </div>
                 </div>
               </label>
+              {values.butuhKehadiran && values.allowSelfCheckin ? (
+                <div className="mt-2 p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div className="text-sm font-medium text-neutral-900">Lokasi self check-in</div>
+                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={values.selfCheckinRadiusM === '' || values.selfCheckinRadiusM == null}
+                      onChange={() => patch({ selfCheckinRadiusM: '' })}
+                      className="accent-brand-500"
+                    />
+                    Di mana saja (tanpa cek lokasi)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer flex-wrap">
+                    <input
+                      type="radio"
+                      checked={values.selfCheckinRadiusM !== '' && values.selfCheckinRadiusM != null}
+                      onChange={() => patch({ selfCheckinRadiusM: 200 })}
+                      className="accent-brand-500"
+                    />
+                    Dalam radius
+                    <input
+                      type="number"
+                      min={10}
+                      max={50000}
+                      step={10}
+                      disabled={values.selfCheckinRadiusM === '' || values.selfCheckinRadiusM == null}
+                      value={values.selfCheckinRadiusM ?? ''}
+                      onChange={(e) => patch({ selfCheckinRadiusM: e.target.value === '' ? 200 : Number(e.target.value) })}
+                      className="w-24 px-2 py-1 border border-neutral-300 rounded text-sm disabled:bg-neutral-100"
+                    />
+                    meter dari titik lokasi
+                  </label>
+                  <p className="text-[11px] text-neutral-500">
+                    Dengan radius, GPS HP peserta dicek. Di luar radius, peserta diarahkan ke usher untuk scan QR. Butuh
+                    titik lokasi event (isi link Google Maps di bagian Lokasi) atau titik cabang.
+                  </p>
+                </div>
+              ) : null}
             </Section>
 
             {/* Syarat & role peserta */}

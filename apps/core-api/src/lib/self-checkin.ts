@@ -135,3 +135,74 @@ export const EVENT_SELF_CHECKIN_REASON_TEXT: Record<EventSelfCheckinReason, stri
   TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum event dimulai.`,
   ENDED: 'Event sudah selesai.',
 };
+
+// ============================================================
+// Radius lokasi (geofence) self check-in
+// ============================================================
+
+/** Pilihan radius yang ditawarkan di portal (meter). null = di mana saja. */
+export const SELF_CHECKIN_RADIUS_PRESETS = [50, 100, 200, 300, 500, 1000, 2000, 5000] as const;
+
+export type RadiusCheck =
+  | { ok: true; skipped: boolean; distanceM: number | null }
+  | { ok: false; code: 'LOCATION_REQUIRED' | 'TOO_FAR'; distanceM: number | null };
+
+/** Jarak 2 titik (meter, haversine). */
+export function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * radiusM null = self check-in boleh di mana saja (tidak dicek).
+ * Venue tanpa titik lokasi → tidak bisa dicek (skipped).
+ * Selain itu posisi user wajib ada & harus ≤ radius.
+ */
+export function checkSelfCheckinRadius(
+  venue: { lat: number; lng: number } | null,
+  user: { lat: number; lng: number } | null,
+  radiusM: number | null,
+): RadiusCheck {
+  if (radiusM == null || !venue) return { ok: true, skipped: true, distanceM: null };
+  if (!user) return { ok: false, code: 'LOCATION_REQUIRED', distanceM: null };
+  const d = Math.round(distanceMeters(venue, user));
+  return d <= radiusM ? { ok: true, skipped: false, distanceM: d } : { ok: false, code: 'TOO_FAR', distanceM: d };
+}
+
+/** Titik venue: milik ibadah/event sendiri, kalau tidak ada pakai titik cabang. */
+export function venuePoint(
+  own: { latitude: number | null; longitude: number | null },
+  cabang: { latitude: number | null; longitude: number | null } | null | undefined,
+): { lat: number; lng: number } | null {
+  if (own.latitude != null && own.longitude != null) return { lat: own.latitude, lng: own.longitude };
+  if (cabang?.latitude != null && cabang?.longitude != null) return { lat: cabang.latitude, lng: cabang.longitude };
+  return null;
+}
+
+export const formatMeters = (m: number) => (m >= 1000 ? `${Number((m / 1000).toFixed(1))} km` : `${m} m`);
+
+export function radiusErrorMessage(
+  code: 'LOCATION_REQUIRED' | 'TOO_FAR',
+  kind: 'ibadah' | 'event',
+  distanceM: number | null,
+  radiusM: number,
+): string {
+  const tempat = kind === 'ibadah' ? 'ibadah' : 'event';
+  if (code === 'LOCATION_REQUIRED') {
+    return `Self check-in butuh lokasi Anda (maks. ${formatMeters(radiusM)} dari lokasi ${tempat}). Aktifkan izin lokasi, atau cari usher untuk check-in dengan QR code.`;
+  }
+  const jarak = distanceM != null ? formatMeters(distanceM) : '';
+  return `Lokasi Anda harus dekat dengan lokasi ${tempat} (maks. ${formatMeters(radiusM)}${jarak ? `, posisi Anda sekitar ${jarak}` : ''}). Cari usher untuk check-in dengan QR code.`;
+}
+
+/** Info untuk app: perlu kirim lokasi? radius berapa? */
+export function venueInfo(
+  radiusM: number | null,
+  point: { lat: number; lng: number } | null,
+): { requiresLocation: boolean; radiusM: number | null } {
+  return { requiresLocation: radiusM != null && !!point, radiusM: radiusM != null && point ? radiusM : null };
+}

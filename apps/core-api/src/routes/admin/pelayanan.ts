@@ -16,6 +16,7 @@ import { NotFound, BadRequest } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 
 export const pelayananRouter = Router();
+const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ===== Pelayanan (master) =====
 
@@ -44,7 +45,10 @@ pelayananRouter.get('/', async (req, res) => {
   });
 });
 
-pelayananRouter.get('/:id', async (req, res) => {
+// Path literal (mis. /by-kode, /role, /today) didaftarkan SETELAH route :param ini;
+// non-UUID diteruskan ke route berikutnya supaya tidak jadi query UUID invalid (P2023).
+pelayananRouter.get('/:id', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.id)) return next(); // mis. /role
   const item = await prisma.pelayanan.findUnique({
     where: { id: req.params.id },
     include: {

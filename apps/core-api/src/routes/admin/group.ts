@@ -56,6 +56,7 @@ import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
 import { groupContentRouter } from './group-content.js';
 
 export const groupRouter = Router();
+const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Helper — extract requester context (jemaatId + isFulltimer) dari JWT. */
 async function getRequester(req: import('express').Request) {
@@ -557,7 +558,10 @@ groupRouter.post('/:id/regenerate-code', async (req, res) => {
 // ============================================================
 // POST /:id/members/:jemaatId — PIC add member (auto-approve)
 // ============================================================
-groupRouter.post('/:id/members/:jemaatId', async (req, res) => {
+// Path literal (mis. /by-kode, /role, /today) didaftarkan SETELAH route :param ini;
+// non-UUID diteruskan ke route berikutnya supaya tidak jadi query UUID invalid (P2023).
+groupRouter.post('/:id/members/:jemaatId', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.jemaatId)) return next(); // mis. /members/by-kode
   const requester = await getRequester(req);
   await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
 

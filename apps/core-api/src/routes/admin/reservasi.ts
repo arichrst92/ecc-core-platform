@@ -20,6 +20,7 @@ import {
 } from '../../lib/notification.js';
 
 export const reservasiRouter = Router();
+const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ===== List dengan filter =====
 
@@ -82,7 +83,10 @@ reservasiRouter.get('/by-kode/:kode', async (req, res) => {
 
 // ===== Detail =====
 
-reservasiRouter.get('/:id', async (req, res) => {
+// Path literal (mis. /by-kode, /role, /today) didaftarkan SETELAH route :param ini;
+// non-UUID diteruskan ke route berikutnya supaya tidak jadi query UUID invalid (P2023).
+reservasiRouter.get('/:id', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.id)) return next(); // mis. /today, /active-today
   const item = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
     include: {

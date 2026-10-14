@@ -81,6 +81,7 @@ jemaatPublicRouter.get('/search', async (req, res) => {
       noHp: true,
       jenisKelamin: true,
       cabangId: true,
+      isTamu: true,
       cabang: { select: { id: true, nama: true } },
     },
     take: 60,

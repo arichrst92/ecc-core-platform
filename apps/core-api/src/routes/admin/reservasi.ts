@@ -14,6 +14,8 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
+import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { z } from 'zod';
 import {
   createNotificationBatch,
   resolveGuardianJemaatIds,
@@ -947,4 +949,68 @@ reservasiRouter.delete('/:id', async (req, res) => {
     before,
   });
   res.status(204).end();
+});
+
+// ===== Walk-in TAMU ibadah (Tamu tahap 1) =====
+//
+// POST /admin/reservasi/walk-in-guest { ibadahId, tanggalIbadah, nama, noHp }
+// Petugas mencatat orang yang datang tanpa akun. No HP milik anggota →
+// anggota itu yang di-check-in. Selain itu dibuat/dipakai record tamu.
+// Ibadah anak (CKids) tidak menerima tamu walk-in.
+const walkInGuestIbadahSchema = tamuInputSchema.extend({
+  ibadahId: z.string().uuid(),
+  tanggalIbadah: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD'),
+});
+
+reservasiRouter.post('/walk-in-guest', async (req, res) => {
+  const input = walkInGuestIbadahSchema.parse(req.body ?? {});
+  const ibadah = await prisma.ibadah.findUnique({
+    where: { id: input.ibadahId },
+    select: { id: true, nama: true, isActive: true, isKidsIbadah: true, cabangId: true },
+  });
+  if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
+  if (ibadah.isKidsIbadah) throw BadRequest('Ibadah anak tidak menerima tamu walk-in — gunakan meja CKids.');
+
+  const { tamu, created, member } = await resolveTamu(input, ibadah.cabangId);
+  const tanggal = new Date(`${input.tanggalIbadah}T00:00:00.000Z`);
+  const now = new Date();
+  const existing = await prisma.reservasi.findUnique({
+    where: { jemaatId_ibadahId_tanggalIbadah: { jemaatId: tamu.id, ibadahId: ibadah.id, tanggalIbadah: tanggal } },
+  });
+  if (existing?.status === 'JOIN') {
+    return res.json({ success: true, data: { reservasi: existing, jemaat: tamu, isMember: member }, meta: { alreadyCheckedIn: true } });
+  }
+  const guestData = member ? {} : { guestSource: 'WALK_IN' };
+  const reservasi = existing
+    ? await prisma.reservasi.update({
+        where: { id: existing.id },
+        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: req.user?.sub ?? null, ...guestData },
+      })
+    : await prisma.reservasi.create({
+        data: {
+          jemaatId: tamu.id,
+          ibadahId: ibadah.id,
+          tanggalIbadah: tanggal,
+          status: 'JOIN',
+          kode: await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } }))),
+          joinedAt: now,
+          checkedInBy: req.user?.sub ?? null,
+          ...guestData,
+        },
+      });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'reservasi',
+    resourceId: reservasi.id,
+    resourceLabel: `Walk-in ${member ? 'jemaat' : 'tamu'} ${tamu.namaLengkap} → ${ibadah.nama}`,
+    metadata: { kind: 'ibadah-walk-in-guest', tamuBaru: created },
+  });
+  res.status(201).json({
+    success: true,
+    data: { reservasi, jemaat: tamu, isMember: member, isReturningGuest: !member && !created },
+    meta: { alreadyCheckedIn: false },
+    message: member
+      ? `${tamu.namaLengkap} ternyata sudah terdaftar sebagai jemaat — tercatat hadir.`
+      : `Tamu ${tamu.namaLengkap} tercatat hadir.`,
+  });
 });

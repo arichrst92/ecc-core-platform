@@ -1,5 +1,6 @@
 'use client';
 
+import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
 import { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ import {
   ExternalLink,
   ScanLine,
   AlertTriangle,
+  UserPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -82,9 +84,13 @@ interface Peserta {
     namaLengkap: string;
     noHp: string | null;
     fotoUrl: string | null;
+    isTamu?: boolean;
     cabang: { id: string; nama: string } | null;
   };
   approver: { id: string; namaLengkap: string } | null;
+  /** Tamu: pengundang (DIUNDANG) atau null untuk walk-in. */
+  invitedBy?: { id: string; namaLengkap: string } | null;
+  guestSource?: 'DIUNDANG' | 'WALK_IN' | null;
 }
 
 const STATUS_LABEL: Record<ParticipationStatus, string> = {
@@ -125,6 +131,7 @@ export default function EventDetailPage() {
 
   const [addPesertaOpen, setAddPesertaOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [walkInOpen, setWalkInOpen] = useState(false);
   const [deletingPeserta, setDeletingPeserta] = useState<Peserta | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | ParticipationStatus>('all');
   const heroFileRef = useRef<HTMLInputElement>(null);
@@ -494,6 +501,16 @@ export default function EventDetailPage() {
           <div className="flex items-center gap-2">
             {e.butuhKehadiran && (
               <button
+                onClick={() => setWalkInOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg"
+                title="Catat orang yang datang tanpa daftar"
+              >
+                <UserPlus className="w-4 h-4" />
+                Tamu Walk-in
+              </button>
+            )}
+            {e.butuhKehadiran && (
+              <button
                 onClick={() => setScannerOpen(true)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
               >
@@ -567,6 +584,20 @@ export default function EventDetailPage() {
             qc.invalidateQueries({ queryKey: ['event', eventId, 'peserta'] });
             qc.invalidateQueries({ queryKey: ['event', 'detail', eventId] });
             setAddPesertaOpen(false);
+          }}
+        />
+      )}
+
+      {walkInOpen && (
+        <WalkInGuestModal
+          eventId={eventId}
+          eventNama={e.judul}
+          tipeBayar={e.tipeBayar}
+          nominal={e.nominal}
+          onClose={() => setWalkInOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['event', eventId, 'peserta'] });
+            qc.invalidateQueries({ queryKey: ['event', 'detail', eventId] });
           }}
         />
       )}
@@ -691,6 +722,15 @@ function PesertaRow({
           >
             {STATUS_LABEL[p.status]}
           </span>
+          {p.jemaat.isTamu ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-violet-100 text-violet-700">
+              {p.guestSource === 'WALK_IN'
+                ? 'Tamu · walk-in'
+                : p.invitedBy
+                  ? `Tamu · dibawa ${p.invitedBy.namaLengkap}`
+                  : 'Tamu'}
+            </span>
+          ) : null}
         </div>
         <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
           {p.jemaat.cabang && <span>{p.jemaat.cabang.nama}</span>}

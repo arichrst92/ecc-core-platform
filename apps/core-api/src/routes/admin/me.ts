@@ -47,6 +47,7 @@ import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
 import { meEventCheckinRouter } from './me-event-checkin.js';
 import { meFeedbackRouter } from './me-feedback.js';
+import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -64,6 +65,8 @@ meRouter.use('/ibadah', meIbadahRouter);
 meRouter.use('/event-checkin', meEventCheckinRouter);
 // Kritik & Saran saya → me-feedback.ts
 meRouter.use('/feedback', meFeedbackRouter);
+// Tamu saya (non-anggota yang saya ajak) → me-tamu.ts
+meRouter.use('/tamu', meTamuRouter);
 // Local Business — CRUD owner + browse public.
 meRouter.use('/businesses', meBusinessRouter);
 meRouter.use('/local-market', meLocalMarketRouter);

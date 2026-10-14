@@ -11,6 +11,8 @@ import { apiClient } from '@/lib/api-client';
  * params backend (lihat `toQueryParams`).
  */
 export interface JemaatFilterState {
+  /** Anggota (default) / Tamu (non-anggota yang dibawa / walk-in) / Semua. */
+  jenis: 'jemaat' | 'tamu' | 'semua';
   status: 'all' | 'true' | 'false';
   jenisKelamin: 'all' | 'L' | 'P';
   roleId: string; // '' = semua role
@@ -26,6 +28,7 @@ export interface JemaatFilterState {
 }
 
 export const defaultJemaatFilter: JemaatFilterState = {
+  jenis: 'jemaat',
   status: 'all',
   jenisKelamin: 'all',
   roleId: '',
@@ -45,6 +48,7 @@ export const defaultJemaatFilter: JemaatFilterState = {
  */
 export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string | undefined> {
   return {
+    jenis: s.jenis === 'jemaat' ? undefined : s.jenis,
     isActive: s.status === 'all' ? undefined : s.status,
     jenisKelamin: s.jenisKelamin === 'all' ? undefined : s.jenisKelamin,
     roleId: s.roleId || undefined,
@@ -61,6 +65,7 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
 
 export function isFilterActive(s: JemaatFilterState): boolean {
   return (
+    s.jenis !== 'jemaat' ||
     s.status !== 'all' ||
     s.jenisKelamin !== 'all' ||
     !!s.roleId ||
@@ -179,6 +184,19 @@ export function JemaatFilterBar({ value, onChange }: Props) {
         )}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
+        {/* Jenis: anggota / tamu */}
+        <Field label="Jenis">
+          <select
+            value={value.jenis}
+            onChange={(e) => patch({ jenis: e.target.value as JemaatFilterState['jenis'] })}
+            className={selectCls}
+          >
+            <option value="jemaat">Jemaat (anggota)</option>
+            <option value="tamu">Tamu (non-anggota)</option>
+            <option value="semua">Semua</option>
+          </select>
+        </Field>
+
         {/* Cabang */}
         <Field label="Cabang">
           <select

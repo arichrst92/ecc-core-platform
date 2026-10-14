@@ -29,6 +29,9 @@ export async function familyOf(jemaatId: string): Promise<Map<string, string>> {
     select: { id: true },
   });
   for (const d of dependents) if (!out.has(d.id)) out.set(d.id, 'Tanggungan');
+  // Tamu saya (non-anggota yang saya bawa).
+  const tamu = await prisma.jemaatTamu.findMany({ where: { inviterId: jemaatId }, select: { tamuId: true } });
+  for (const t of tamu) if (!out.has(t.tamuId)) out.set(t.tamuId, 'Tamu');
   out.delete(jemaatId);
   return out;
 }

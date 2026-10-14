@@ -29,7 +29,7 @@ cabangRouter.get('/', async (req, res) => {
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
       include: {
         sinode: { select: { id: true, nama: true, kode: true } },
-        _count: { select: { jemaat: true, ibadah: true, homecellAreas: true } },
+        _count: { select: { jemaat: { where: { isTamu: false } }, ibadah: true, homecellAreas: true } },
       },
     }),
     prisma.cabangGereja.count({ where }),
@@ -91,7 +91,7 @@ cabangRouter.get('/locations', async (_req, res) => {
       longitude: true,
       kontak: true,
       sinode: { select: { id: true, nama: true } },
-      _count: { select: { jemaat: { where: { isActive: true } } } },
+      _count: { select: { jemaat: { where: { isActive: true, isTamu: false } } } },
     },
     orderBy: { nama: 'asc' },
   });
@@ -202,7 +202,7 @@ cabangRouter.get('/:id/stats', async (req, res) => {
     homecellAreaCount,
     eventDiPeriodeCount,
   ] = await Promise.all([
-    prisma.jemaat.count({ where: { cabangId: cabang.id, isActive: true } }),
+    prisma.jemaat.count({ where: { cabangId: cabang.id, isActive: true, isTamu: false } }),
     prisma.ibadah.count({ where: { cabangId: cabang.id, isActive: true } }),
     prisma.homecell.count({
       where: { area: { cabangId: cabang.id }, isActive: true },

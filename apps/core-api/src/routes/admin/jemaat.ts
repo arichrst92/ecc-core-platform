@@ -69,6 +69,7 @@ jemaatRouter.get('/', async (req, res) => {
   const pelayananId = getQueryString(req, 'pelayananId');
 
   const where: any = {};
+  applyJenisFilter(req, where);
   if (q.search) {
     where.OR = [
       { namaLengkap: { contains: q.search, mode: 'insensitive' } },
@@ -204,6 +205,13 @@ jemaatRouter.get('/', async (req, res) => {
 //  supaya filter konsisten (cabang, homecell, pelayanan, usia, dst).
 // ============================================================
 
+/** Filter jenis: default hanya anggota; `jenis=tamu` → tamu; `jenis=semua` → keduanya. */
+function applyJenisFilter(req: any, where: any) {
+  const jenis = getQueryString(req, 'jenis');
+  if (jenis === 'tamu') where.isTamu = true;
+  else if (jenis !== 'semua') where.isTamu = false;
+}
+
 function buildJemaatWhereFromQuery(req: any): any {
   const cabangId = getQueryString(req, 'cabangId');
   const sinodeId = getQueryString(req, 'sinodeId');
@@ -218,6 +226,7 @@ function buildJemaatWhereFromQuery(req: any): any {
   const search = getQueryString(req, 'search');
 
   const where: any = {};
+  applyJenisFilter(req, where);
   if (search) {
     where.OR = [
       { namaLengkap: { contains: search, mode: 'insensitive' } },

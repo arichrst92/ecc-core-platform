@@ -54,6 +54,8 @@ interface JemaatRoleAssignment {
 }
 
 interface Jemaat {
+  /** Tamu (non-anggota tanpa akun) — dibawa jemaat / walk-in ke event/ibadah. */
+  isTamu?: boolean;
   id: string;
   cabangId: string;
   namaLengkap: string;
@@ -287,7 +289,17 @@ export default function JemaatDetailPage() {
           </div>
         )}
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-neutral-900">{j.namaLengkap}</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2 flex-wrap">
+            {j.namaLengkap}
+            {j.isTamu ? (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700"
+                title="Non-anggota tanpa akun Els App (dibawa jemaat / walk-in). Otomatis jadi anggota saat mendaftar Els App dengan no HP yang sama."
+              >
+                Tamu
+              </span>
+            ) : null}
+          </h1>
           <div className="text-sm text-neutral-500 mt-1 flex items-center gap-2 flex-wrap">
             {j.cabang?.nama && (
               <Link

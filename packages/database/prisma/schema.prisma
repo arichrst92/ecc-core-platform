@@ -172,6 +172,11 @@ model Jemaat {
   // NULL untuk jemaat yg register organic via ECC app.
   legacyShiftsoftId Int? @unique @map("legacy_shiftsoft_id")
 
+  // TAMU — orang yang dibawa jemaat / datang walk-in ke event/ibadah, BUKAN
+  // anggota & tanpa akun. Disembunyikan dari daftar jemaat default. Saat ia
+  // mendaftar Els App dengan no HP yang sama, record ini di-upgrade (false).
+  isTamu Boolean @default(false) @map("is_tamu")
+
   // ---- Onboarding state ----
   // NULL = jemaat belum complete onboarding wizard. Mobile app WAJIB
   // route ke wizard first login kalau NULL. Set otomatis ke now() saat:
@@ -227,6 +232,8 @@ model Jemaat {
   homecellPollVotes            HomecellPollVote[]            @relation("HomecellPollVoter")
   feedbacks                    Feedback[]                    @relation("FeedbackSender")
   feedbackReplies              FeedbackReply[]               @relation("FeedbackReplyAuthor")
+  tamuSaya                     JemaatTamu[]                  @relation("TamuInviter")
+  diundangSebagaiTamu          JemaatTamu[]                  @relation("TamuGuest")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -823,6 +830,9 @@ model Reservasi {
   catatan            String?         @db.Text
   // Metadata: siapa yang trigger checkin (mobile app scan, manual admin, dll)
   checkedInBy        String?         @map("checked_in_by") @db.Uuid // userId yang scan
+  // Tamu: jemaat yang membawa (DIUNDANG) atau WALK_IN oleh petugas.
+  invitedByJemaatId  String?         @map("invited_by_jemaat_id") @db.Uuid
+  guestSource        String?         @map("guest_source") @db.VarChar(20)
   // Checkout tracking — cuma di-populate kalau ibadah.requiresCheckout=true
   // dan admin scan QR jemaat saat keluar. Modul 26 (2026-08-01).
   checkedOutAt       DateTime?       @map("checked_out_at")
@@ -1347,6 +1357,10 @@ model EventParticipation {
   buktiTransferUrl String?                  @map("bukti_transfer_url") @db.Text
   // Field bebas untuk pertanyaan custom event (ukuran kaos, makanan, dst.)
   catatan          String?                  @db.Text
+
+  // Tamu: siapa yang mendaftarkan (DIUNDANG) atau WALK_IN oleh petugas.
+  invitedByJemaatId String? @map("invited_by_jemaat_id") @db.Uuid
+  guestSource       String? @map("guest_source") @db.VarChar(20)
 
   // Lifecycle timestamps
   registeredAt DateTime  @default(now()) @map("registered_at")
@@ -3120,4 +3134,20 @@ model FeedbackReply {
 
   @@index([feedbackId, createdAt])
   @@map("feedback_reply")
+}
+
+// "Tamu saya" — jemaat (inviter) menyimpan tamu yang pernah/akan ia bawa.
+// Tamu ikut diperlakukan seperti keluarga untuk daftar event & self check-in.
+model JemaatTamu {
+  id        String   @id @default(uuid()) @db.Uuid
+  inviterId String   @map("inviter_id") @db.Uuid
+  tamuId    String   @map("tamu_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  inviter Jemaat @relation("TamuInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  tamu    Jemaat @relation("TamuGuest", fields: [tamuId], references: [id], onDelete: Cascade)
+
+  @@unique([inviterId, tamuId])
+  @@index([tamuId])
+  @@map("jemaat_tamu")
 }

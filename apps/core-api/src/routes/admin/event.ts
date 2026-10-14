@@ -28,6 +28,8 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 import {
   saveContentHero,
@@ -662,13 +664,26 @@ eventRouter.get('/:id/peserta', async (req, res) => {
           namaLengkap: true,
           noHp: true,
           fotoUrl: true,
+          isTamu: true,
           cabang: { select: { id: true, nama: true } },
         },
       },
       approver: { select: { id: true, namaLengkap: true } },
     },
   });
-  res.json({ success: true, data });
+  // Nama pengundang tamu ("dibawa oleh").
+  const inviterIds = [...new Set(data.map((p) => p.invitedByJemaatId).filter((x): x is string => !!x))];
+  const inviters = inviterIds.length
+    ? await prisma.jemaat.findMany({ where: { id: { in: inviterIds } }, select: { id: true, namaLengkap: true } })
+    : [];
+  const inviterName = new Map(inviters.map((j) => [j.id, j.namaLengkap]));
+  res.json({
+    success: true,
+    data: data.map((p) => ({
+      ...p,
+      invitedBy: p.invitedByJemaatId ? { id: p.invitedByJemaatId, namaLengkap: inviterName.get(p.invitedByJemaatId) ?? '—' } : null,
+    })),
+  });
 });
 
 // Register peserta — idempotent + reactivate BATAL.
@@ -964,6 +979,7 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
         });
         continue;
       }
+      const isTamu = (await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { isTamu: true } }))?.isTamu;
       const created = await prisma.eventParticipation.create({
         data: {
           eventId: event.id,
@@ -971,6 +987,8 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
           status: 'DAFTAR',
           nominalBayar: nominal,
           catatan: input.catatan,
+          // Tamu (non-anggota) yang didaftarkan pengundang.
+          ...(isTamu && req.user ? { invitedByJemaatId: req.user.jemaatId, guestSource: 'DIUNDANG' } : {}),
         },
         include: { jemaat: { select: { id: true, namaLengkap: true, kode: true } } },
       });
@@ -997,7 +1015,17 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
   });
 
   // Notif EVENT_REGISTERED per peserta yg sukses (sama dgn endpoint single).
+  // Tamu (tanpa akun) tidak dikirimi notifikasi.
+  const tamuIds = new Set(
+    (
+      await prisma.jemaat.findMany({
+        where: { id: { in: successful.map((p) => p.jemaatId) }, isTamu: true },
+        select: { id: true },
+      })
+    ).map((j) => j.id),
+  );
   for (const p of successful) {
+    if (tamuIds.has(p.jemaatId)) continue;
     void createNotification({
       jemaatId: p.jemaatId,
       type: 'EVENT_REGISTERED',
@@ -1236,13 +1264,19 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
     },
   });
 
+  const tamuSet = new Set(
+    (await prisma.jemaatTamu.findMany({ where: { inviterId: selfId }, select: { tamuId: true } })).map((t) => t.tamuId),
+  );
   const participations = rows.map((r) => ({
     ...r,
     isSelf: r.jemaatId === selfId,
+    isTamu: tamuSet.has(r.jemaatId),
     relationLabel:
       r.jemaatId === selfId
         ? 'Diri sendiri'
-        : relationLabelById.get(r.jemaatId) ?? 'Keluarga',
+        : tamuSet.has(r.jemaatId)
+          ? 'Tamu'
+          : relationLabelById.get(r.jemaatId) ?? 'Keluarga',
   }));
 
   res.json({ success: true, data: { participations } });
@@ -2090,6 +2124,114 @@ eventRouter.post('/:id/checkin', async (req, res) => {
   });
 
   res.json({ success: true, data: updated, meta: { alreadyCheckedIn: false } });
+});
+
+// ============================================================
+//  Walk-in TAMU (hari H) — POST /admin/event/:id/walk-in-guest
+// ============================================================
+// Petugas (volunteer scan / fulltimer) mencatat orang yang datang tanpa
+// daftar: { nama, noHp, pembayaran?, nominal?, force? }.
+//   - No HP milik anggota → anggota itu yang didaftarkan + HADIR.
+//   - Selain itu → tamu (isTamu) + partisipasi HADIR, guestSource=WALK_IN.
+//   - Event berbayar: wajib `pembayaran` (TUNAI/TRANSFER/QRIS/GRATIS).
+//     Selain GRATIS → dicatat sebagai donation BAYAR (diterima petugas).
+//   - Kuota penuh → 409 QUOTA_FULL kecuali force=true.
+const walkInGuestSchema = tamuInputSchema.extend({
+  pembayaran: z.enum(['TUNAI', 'TRANSFER', 'QRIS', 'GRATIS']).optional(),
+  nominal: z.coerce.number().nonnegative().optional(),
+  force: z.boolean().optional(),
+});
+
+eventRouter.post('/:id/walk-in-guest', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+  if (!event) throw NotFound('Event tidak ditemukan');
+  if (!event.butuhKehadiran) throw BadRequest('Event ini tidak mencatat kehadiran.');
+  const caller = await prisma.user.findUnique({
+    where: { id: req.user.sub },
+    select: { jemaatId: true },
+  });
+  if (!caller) throw Forbidden('User tidak terkait jemaat');
+  if (!req.user.isFulltimer) {
+    const ok = await prisma.eventPelayananPetugas.findFirst({
+      where: { jemaatId: caller.jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
+      select: { id: true },
+    });
+    if (!ok) throw Forbidden('Anda tidak berwenang mencatat kehadiran di event ini.');
+  }
+  const input = walkInGuestSchema.parse(req.body ?? {});
+  const paid = event.tipeBayar !== 'GRATIS';
+  if (paid && !input.pembayaran) {
+    throw BadRequest('Event berbayar: pilih metode pembayaran tamu (Tunai/Transfer/QRIS) atau Gratis.');
+  }
+
+  const cabangId = event.cabangId ?? (await prisma.jemaat.findUnique({ where: { id: caller.jemaatId }, select: { cabangId: true } }))!.cabangId;
+  const { tamu, created, member } = await resolveTamu(input, cabangId);
+
+  const existing = await prisma.eventParticipation.findUnique({
+    where: { eventId_jemaatId: { eventId: event.id, jemaatId: tamu.id } },
+  });
+  if (existing?.status === 'HADIR') {
+    return res.json({ success: true, data: { participation: existing, jemaat: tamu, isMember: member }, meta: { alreadyCheckedIn: true } });
+  }
+  if (!existing || existing.status === 'BATAL') {
+    if (event.quotaPeserta != null && !input.force) {
+      const count = await prisma.eventParticipation.count({ where: { eventId: event.id, status: { not: 'BATAL' } } });
+      if (count >= event.quotaPeserta) {
+        throw new ApiError(409, 'QUOTA_FULL', 'Kuota peserta penuh. Kirim ulang dengan force=true untuk tetap memasukkan.');
+      }
+    }
+  }
+
+  const now = new Date();
+  const nominal =
+    event.tipeBayar === 'NOMINAL_TETAP' ? Number(event.nominal ?? 0) : Math.max(Number(event.nominal ?? 0), input.nominal ?? 0);
+  const guestData = member ? {} : { guestSource: 'WALK_IN', invitedByJemaatId: null };
+  const participation = existing
+    ? await prisma.eventParticipation.update({
+        where: { id: existing.id },
+        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, ...(paid ? { paidAt: now } : {}), ...guestData },
+      })
+    : await prisma.eventParticipation.create({
+        data: {
+          eventId: event.id,
+          jemaatId: tamu.id,
+          status: 'HADIR',
+          attendedAt: now,
+          nominalBayar: paid ? nominal : null,
+          ...(paid ? { paidAt: now } : {}),
+          ...guestData,
+        },
+      });
+  if (paid && input.pembayaran && input.pembayaran !== 'GRATIS' && nominal > 0) {
+    await prisma.eventDonation.create({
+      data: {
+        participationId: participation.id,
+        nominalBayar: nominal,
+        status: 'BAYAR',
+        paidAt: now,
+        approvedBy: caller.jemaatId,
+        approvedAt: now,
+        catatan: `Walk-in — diterima petugas (${input.pembayaran})`,
+      },
+    });
+  }
+  await syncEventRoleForStatus(event, tamu.id, 'HADIR');
+  audit(req, {
+    action: 'CREATE',
+    resource: 'event_participation',
+    resourceId: participation.id,
+    resourceLabel: `Walk-in ${member ? 'jemaat' : 'tamu'} ${tamu.namaLengkap} @ ${event.judul}`,
+    metadata: { kind: 'event-walk-in-guest', pembayaran: input.pembayaran ?? null, force: !!input.force, tamuBaru: created },
+  });
+  res.status(201).json({
+    success: true,
+    data: { participation, jemaat: tamu, isMember: member, isReturningGuest: !member && !created },
+    meta: { alreadyCheckedIn: false },
+    message: member
+      ? `${tamu.namaLengkap} ternyata sudah terdaftar sebagai jemaat — tercatat hadir.`
+      : `Tamu ${tamu.namaLengkap} tercatat hadir.`,
+  });
 });
 
 // Approve = set status BAYAR + approvedBy + approvedAt + paidAt.

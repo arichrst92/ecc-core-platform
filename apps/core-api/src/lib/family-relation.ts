@@ -67,6 +67,11 @@ export async function getFamilyJemaatIds(selfId: string): Promise<Set<string>> {
     }
   }
 
+  // Tamu saya (non-anggota yang saya bawa) — boleh saya daftarkan, batalkan,
+  // bayarkan, dan check-in-kan seperti keluarga.
+  const tamu = await prisma.jemaatTamu.findMany({ where: { inviterId: selfId }, select: { tamuId: true } });
+  for (const t of tamu) result.add(t.tamuId);
+
   return result;
 }
 

@@ -122,7 +122,9 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   if (purpose === 'ENROLLMENT') {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
     const existing = await prisma.jemaat.findUnique({ where: { noHp } });
-    if (existing) throw Conflict('Nomor HP sudah terdaftar — gunakan login OTP.');
+    // Tamu (pernah dibawa ke event/ibadah, tanpa akun) boleh mendaftar —
+    // record tamunya di-upgrade jadi anggota di /auth/register.
+    if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar — gunakan login OTP.');
   } else if (purpose === 'ONBOARDING_ADD_NOHP') {
     // Onboarding — existing jemaat (via magic link) mau set noHp baru.
     // Cek noHp belum dipakai jemaat lain (unique constraint akan enforce juga).
@@ -134,7 +136,8 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     }
   } else {
     const jemaat = await prisma.jemaat.findUnique({ where: { noHp } });
-    if (!jemaat) throw NotFound('Nomor HP belum terdaftar sebagai jemaat');
+    // Tamu belum punya akun → arahkan ke pendaftaran.
+    if (!jemaat || jemaat.isTamu) throw NotFound('Nomor HP belum terdaftar sebagai jemaat');
   }
 
   const recent = await prisma.otpVerification.findFirst({
@@ -317,9 +320,10 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
 authRouter.post('/register', registerLimiter, async (req, res) => {
   const input = registerJemaatSchema.parse(req.body);
 
-  // 1. Cek nomor belum terdaftar
+  // 1. Cek nomor belum terdaftar. Tamu (tanpa akun) → record-nya di-upgrade.
   const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
-  if (existing) throw Conflict('Nomor HP sudah terdaftar.');
+  if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar.');
+  const upgradeTamu = existing?.isTamu ? existing : null;
 
   // 2. Verify OTP enrollment sudah pernah usedAt dalam window 15 menit
   const enrollmentWindow = 15 * 60 * 1000; // 15 min
@@ -346,8 +350,8 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     throw BadRequest('Cabang tidak valid atau nonaktif.');
   }
 
-  // 4. Generate kode jemaat unique
-  const kode = await generateUniqueKode(
+  // 4. Generate kode jemaat unique (tamu yang di-upgrade memakai kode lamanya)
+  const kode = upgradeTamu?.kode ?? await generateUniqueKode(
     async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
   );
 
@@ -374,9 +378,8 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     },
   });
 
-  // 6. Create Jemaat
-  const created = await prisma.jemaat.create({
-    data: {
+  // 6. Create Jemaat — atau upgrade record tamu (riwayat event/ibadah tetap).
+  const jemaatData = {
       cabangId: cabang.id,
       namaLengkap: input.namaLengkap,
       noHp: input.noHp,
@@ -401,8 +404,13 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
             },
           }
         : undefined,
-    },
-  });
+  };
+  const created = upgradeTamu
+    ? await prisma.jemaat.update({
+        where: { id: upgradeTamu.id },
+        data: { ...jemaatData, isTamu: false },
+      })
+    : await prisma.jemaat.create({ data: jemaatData });
 
   // 7. Optional homecell membership
   if (input.homecellId) {

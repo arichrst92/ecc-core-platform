@@ -108,7 +108,7 @@ serverHealthRouter.get('/', async (_req, res) => {
 
   // ===== Entity counts (untuk quick sanity) =====
   const [jemaatAktif, ibadahAktif, cabangAktif, eventPublished, activeSessions] = await Promise.all([
-    prisma.jemaat.count({ where: { isActive: true } }).catch(() => -1),
+    prisma.jemaat.count({ where: { isActive: true, isTamu: false } }).catch(() => -1),
     prisma.ibadah.count({ where: { isActive: true } }).catch(() => -1),
     prisma.cabangGereja.count({ where: { isActive: true } }).catch(() => -1),
     prisma.event.count({ where: { isPublished: true } }).catch(() => -1),

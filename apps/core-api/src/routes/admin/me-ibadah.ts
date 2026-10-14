@@ -125,7 +125,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
   const now = new Date();
   const people = await prisma.jemaat.findMany({
     where: { id: { in: unique } },
-    select: { id: true, namaLengkap: true, isActive: true },
+    select: { id: true, namaLengkap: true, isActive: true, isTamu: true },
   });
   const results: { jemaatId: string; namaLengkap: string; result: 'CHECKED_IN' | 'ALREADY' | 'FAILED'; message?: string }[] = [];
 
@@ -163,6 +163,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
           kode,
           joinedAt: now,
           checkedInBy: u.sub,
+          ...(p.isTamu ? { invitedByJemaatId: u.jemaatId, guestSource: 'DIUNDANG' } : {}),
         },
       });
     }

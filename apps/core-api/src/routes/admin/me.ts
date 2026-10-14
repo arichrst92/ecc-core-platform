@@ -44,6 +44,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
 import { meVisitRouter } from './me-visit.js';
+import { meIbadahRouter } from './me-ibadah.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -55,6 +56,8 @@ export const meRouter = Router();
 meRouter.use('/visits', meVisitRouter);
 // Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
 meRouter.use('/homecell', meHomecellRouter);
+// Self check-in ibadah (saya + keluarga) → me-ibadah.ts
+meRouter.use('/ibadah', meIbadahRouter);
 // Local Business — CRUD owner + browse public.
 meRouter.use('/businesses', meBusinessRouter);
 meRouter.use('/local-market', meLocalMarketRouter);

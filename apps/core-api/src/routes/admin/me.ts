@@ -46,6 +46,7 @@ import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relati
 import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
 import { meEventCheckinRouter } from './me-event-checkin.js';
+import { meFeedbackRouter } from './me-feedback.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -61,6 +62,8 @@ meRouter.use('/homecell', meHomecellRouter);
 meRouter.use('/ibadah', meIbadahRouter);
 // Self check-in event (saya + keluarga terdaftar) → me-event-checkin.ts
 meRouter.use('/event-checkin', meEventCheckinRouter);
+// Kritik & Saran saya → me-feedback.ts
+meRouter.use('/feedback', meFeedbackRouter);
 // Local Business — CRUD owner + browse public.
 meRouter.use('/businesses', meBusinessRouter);
 meRouter.use('/local-market', meLocalMarketRouter);

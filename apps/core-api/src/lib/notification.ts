@@ -44,7 +44,8 @@ export type InAppNotifType =
   | 'GROUP_ANNOUNCEMENT'
   | 'GROUP_POLL_CREATED'
   | 'HOMECELL_ANNOUNCEMENT'
-  | 'HOMECELL_POLL_CREATED';
+  | 'HOMECELL_POLL_CREATED'
+  | 'FEEDBACK_REPLIED';
 
 interface CreateNotifArgs {
   jemaatId: string;

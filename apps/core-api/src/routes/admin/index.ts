@@ -31,6 +31,7 @@ import { credentialRouter } from './credential.js';
 import { diagnosticsAdminRouter } from './diagnostics.js';
 import { websiteContentRouter } from './website-content.js';
 import { groupRouter } from './group.js';
+import { feedbackRouter } from './feedback.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
@@ -64,6 +65,8 @@ adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
 // Sertifikat jemaat (gambar/PDF) — sebelum jemaatRouter.
 adminRouter.use('/jemaat/:jemaatId/sertifikat', jemaatSertifikatRouter);
 adminRouter.use('/jemaat', jemaatRouter);
+// Kritik & Saran jemaat (inbox admin portal).
+adminRouter.use('/feedback', feedbackRouter);
 adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);
 adminRouter.use('/keluarga', keluargaRouter);

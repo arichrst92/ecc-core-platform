@@ -41,6 +41,7 @@ import {
   ChevronDown,
   MessageCircle,
   UserPlus,
+  MessageSquareText,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -96,6 +97,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, menuKey: 'jemaat' },
       { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield, menuKey: 'role-jemaat' },
       { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
+      { href: '/dashboard/feedback', label: 'Kritik & Saran', icon: MessageSquareText, menuKey: 'feedback' },
     ],
   },
   {

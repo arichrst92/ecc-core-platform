@@ -76,6 +76,7 @@ model CabangGereja {
   // IT Minister — Data Minister per cabang assignment
   itMinisterTeam    ITMinisterTeam[]
 
+  feedbacks Feedback[]
   @@unique([sinodeId, kode])
   @@index([sinodeId])
   @@map("cabang_gereja")
@@ -224,6 +225,8 @@ model Jemaat {
   homecellAnnouncements        HomecellAnnouncement[]        @relation("HomecellAnnouncementAuthor")
   homecellPolls                HomecellPoll[]                @relation("HomecellPollAuthor")
   homecellPollVotes            HomecellPollVote[]            @relation("HomecellPollVoter")
+  feedbacks                    Feedback[]                    @relation("FeedbackSender")
+  feedbackReplies              FeedbackReply[]               @relation("FeedbackReplyAuthor")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -1895,6 +1898,7 @@ enum InAppNotifType {
   GROUP_POLL_CREATED
   HOMECELL_ANNOUNCEMENT
   HOMECELL_POLL_CREATED
+  FEEDBACK_REPLIED
 
   @@map("in_app_notif_type")
 }
@@ -3053,4 +3057,67 @@ model PelayananJoinRequest {
   @@index([pelayananId, status, createdAt])
   @@index([jemaatId, pelayananId, createdAt])
   @@map("pelayanan_join_request")
+}
+
+// ============================================================
+// Kritik & Saran dari jemaat (menu Profil di app) → dibalas admin di portal.
+// ============================================================
+
+enum FeedbackTipe {
+  KRITIK
+  SARAN
+
+  @@map("feedback_tipe")
+}
+
+enum FeedbackStatus {
+  BARU
+  DIPROSES
+  SELESAI
+
+  @@map("feedback_status")
+}
+
+model Feedback {
+  id             String         @id @default(uuid()) @db.Uuid
+  jemaatId       String         @map("jemaat_id") @db.Uuid
+  // Snapshot cabang pengirim saat mengirim (filter di portal).
+  cabangId       String?        @map("cabang_id") @db.Uuid
+  tipe           FeedbackTipe
+  // Topik bebas terkontrol: APLIKASI | IBADAH | PELAYANAN | EVENT | HOMECELL | LAINNYA
+  kategori       String         @db.VarChar(30)
+  isi            String         @db.Text
+  status         FeedbackStatus @default(BARU)
+  // Info perangkat (versi app / platform) — bantu tim saat menindaklanjuti.
+  appInfo        String?        @map("app_info") @db.VarChar(200)
+  lastActivityAt DateTime       @default(now()) @map("last_activity_at")
+  // Ada balasan admin yang belum dibaca pengirim.
+  unreadForUser  Boolean        @default(false) @map("unread_for_user")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  jemaat  Jemaat          @relation("FeedbackSender", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang  CabangGereja?   @relation(fields: [cabangId], references: [id], onDelete: SetNull)
+  replies FeedbackReply[]
+
+  @@index([status, lastActivityAt])
+  @@index([jemaatId, createdAt])
+  @@index([cabangId])
+  @@map("feedback")
+}
+
+model FeedbackReply {
+  id             String   @id @default(uuid()) @db.Uuid
+  feedbackId     String   @map("feedback_id") @db.Uuid
+  authorJemaatId String?  @map("author_jemaat_id") @db.Uuid
+  // true = balasan admin (portal), false = tanggapan lanjutan pengirim (app)
+  fromAdmin      Boolean  @map("from_admin")
+  isi            String   @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  author   Jemaat?  @relation("FeedbackReplyAuthor", fields: [authorJemaatId], references: [id], onDelete: SetNull)
+
+  @@index([feedbackId, createdAt])
+  @@map("feedback_reply")
 }

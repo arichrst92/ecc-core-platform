@@ -6,7 +6,7 @@
  *   POST /:id/self-checkin   → { jemaatIds: string[] } check-in saya dan/atau
  *                              keluarga (harus anggota keluarga saya)
  *
- * Jendela: hanya di hari ibadah terjadwal, 30 menit sebelum jamMulai s.d.
+ * Jendela: hanya di hari ibadah terjadwal, 15 menit sebelum jamMulai s.d.
  * jamSelesai (WIB). Ibadah anak tidak bisa self check-in (lewat meja CKids).
  */
 import { Router, type Request } from 'express';
@@ -127,6 +127,9 @@ meIbadahRouter.get('/:id/self-checkin', async (req, res) => {
     success: true,
     data: {
       ...window,
+      // Jam server (UTC ISO) — mobile menghitung selisih jam HP vs server supaya
+      // tombol muncul/hilang tepat waktu walau jam / zona waktu HP berbeda.
+      serverNow: new Date().toISOString(),
       reasonText: window.reason ? SELF_CHECKIN_REASON_TEXT[window.reason] : null,
       ibadah: { id: ibadah.id, nama: ibadah.nama, jamMulai: ibadah.jamMulai, jamSelesai: ibadah.jamSelesai, lokasi: ibadah.lokasi },
       members,

@@ -19,14 +19,17 @@ describe('hhmmToMin', () => {
 });
 
 describe('selfCheckinWindow', () => {
-  it('buka 30 menit sebelum mulai', () => {
-    const w = selfCheckinWindow(base, [], wib('2026-10-18T08:30:00'));
+  it('buka 15 menit sebelum mulai', () => {
+    const w = selfCheckinWindow(base, [], wib('2026-10-18T08:45:00'));
     expect(w.available).toBe(true);
     expect(w.tanggal).toBe('2026-10-18');
-    expect(w.opensAt).toBe('2026-10-18T01:30:00.000Z');
+    expect(w.opensAt).toBe('2026-10-18T01:45:00.000Z');
     expect(w.closesAt).toBe('2026-10-18T04:00:00.000Z');
   });
-  it('terlalu awal', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T08:29:00')).reason).toBe('TOO_EARLY'));
+  it('terlalu awal (08:44)', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T08:44:59')).reason).toBe('TOO_EARLY'));
+  it('jam server UTC tidak menggeser: 01:44Z = 08:44 WIB masih tutup', () =>
+    expect(selfCheckinWindow(base, [], new Date('2026-10-18T01:44:00Z')).available).toBe(false));
+  it('tepat jam selesai masih bisa', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T11:00:00')).available).toBe(true));
   it('saat ibadah', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T10:15:00')).available).toBe(true));
   it('sudah selesai', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T11:01:00')).reason).toBe('ENDED'));
   it('bukan hari ibadah', () => expect(selfCheckinWindow(base, [], wib('2026-10-19T09:30:00')).reason).toBe('NOT_TODAY'));

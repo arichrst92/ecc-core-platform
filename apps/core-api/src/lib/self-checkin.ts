@@ -3,12 +3,12 @@
  *
  * Aturan: self check-in hanya terbuka pada HARI ibadah dijadwalkan (sesuai
  * tipeJadwal/hari/tanggalMulai, tidak dibatalkan) dan pada JAM ibadah:
- * mulai OPEN_BEFORE_MIN menit sebelum jamMulai sampai jamSelesai (WIB).
+ * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai jamSelesai (WIB).
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { todayWib } from './last-attendance.js';
 
-export const OPEN_BEFORE_MIN = 30;
+export const OPEN_BEFORE_MIN = 15;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 export type SelfCheckinReason =

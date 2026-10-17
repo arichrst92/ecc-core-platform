@@ -267,6 +267,7 @@ model Jemaat {
   pointTxCreated               PointTransaction[]            @relation("PointTxCreatedBy")
   hadiahRedeems                HadiahRedeem[]                @relation("JemaatRedeems")
   hadiahRedeemsProcessed       HadiahRedeem[]                @relation("RedeemProcessedBy")
+  hadiahRedeemsCancelled       HadiahRedeem[]                @relation("RedeemCancelledBy")
   // Branch change request (mobile)
   branchChangeRequests         BranchChangeRequest[]         @relation("BranchChangeRequester")
   branchChangeReviews          BranchChangeRequest[]         @relation("BranchChangeReviewer")
@@ -2688,11 +2689,18 @@ model HadiahRedeem {
   processedById String   @map("processed_by_id") @db.Uuid
   processedAt   DateTime @default(now()) @map("processed_at")
   note          String?  @db.Text
+  // Pembatalan (mis. salah pilih / ganti hadiah): point & stok dikembalikan.
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancelledById      String?   @map("cancelled_by_id") @db.Uuid
+  cancelReason       String?   @map("cancel_reason") @db.Text
+  // Kalau dibatalkan untuk diganti hadiah lain → id penukaran pengganti.
+  replacedByRedeemId String?   @map("replaced_by_redeem_id") @db.Uuid
 
   jemaat      Jemaat        @relation("JemaatRedeems", fields: [jemaatId], references: [id], onDelete: Cascade)
   cabang      CabangGereja  @relation("CabangRedeems", fields: [cabangId], references: [id], onDelete: Cascade)
   hadiah      HadiahKatalog @relation("HadiahRedeems", fields: [hadiahId], references: [id], onDelete: Restrict)
   processedBy Jemaat        @relation("RedeemProcessedBy", fields: [processedById], references: [id])
+  cancelledBy Jemaat?       @relation("RedeemCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   @@index([jemaatId, processedAt(sort: Desc)])
   @@index([cabangId, processedAt(sort: Desc)])
@@ -2711,6 +2719,7 @@ enum PointTxType {
 enum PointSource {
   KEHADIRAN_KIDS // dari check-in ibadah anak
   REDEEM // spend saat redeem hadiah
+  REDEEM_CANCEL // point dikembalikan karena penukaran hadiah dibatalkan
   MANUAL_ADJUST // koreksi admin
   STOCK_ADD // (not user-facing, tapi tracked)
 

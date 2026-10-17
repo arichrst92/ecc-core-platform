@@ -5,14 +5,17 @@
  *
  * Endpoints:
  *   GET  /admin/gift-stall/lookup-jemaat?kode=X&cabangId=Y  → jemaat + balance
+ *   GET  /admin/gift-stall/balance?jemaatId=&cabangId=        → balance point anak
  *   POST /admin/gift-stall/redeem                            → deduct point + stock
  *   POST /admin/gift-stall/hadiah/:id/add-stock              → increment stock
  *   POST /admin/gift-stall/adjust-point                       → manual koreksi
- *   GET  /admin/gift-stall/redeems?cabangId=&date=            → history
+ *   GET  /admin/gift-stall/redeems?cabangId=&date=&status=&q= → history
+ *   POST /admin/gift-stall/redeems/:id/cancel                 → batal (+ ganti hadiah)
  *   GET  /admin/gift-stall/report/today?cabangId=             → summary hari ini
  */
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
+import { z } from 'zod';
 import {
   addStockSchema,
   redeemHadiahSchema,
@@ -72,6 +75,21 @@ giftStallRouter.get('/lookup-jemaat', async (req, res) => {
       lastUpdate: balance?.updatedAt ?? null,
     },
   });
+});
+
+// ============================================================
+// GET /admin/gift-stall/balance?jemaatId=&cabangId=  → { balance }
+// (dipakai modal batal / ganti hadiah)
+// ============================================================
+giftStallRouter.get('/balance', async (req, res) => {
+  const { jemaatId, cabangId } = z
+    .object({ jemaatId: z.string().uuid(), cabangId: z.string().uuid() })
+    .parse(req.query);
+  const b = await prisma.jemaatPointBalance.findUnique({
+    where: { jemaatId_cabangId: { jemaatId, cabangId } },
+    select: { balance: true },
+  });
+  res.json({ success: true, data: { balance: b?.balance ?? 0 } });
 });
 
 // ============================================================
@@ -319,8 +337,20 @@ giftStallRouter.get('/redeems', async (req, res) => {
   const dateStr = typeof req.query.date === 'string' ? req.query.date : undefined;
   const hadiahId = typeof req.query.hadiahId === 'string' ? req.query.hadiahId : undefined;
   const adminId = typeof req.query.adminId === 'string' ? req.query.adminId : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : 'all';
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
   const where: any = {};
+  // status: all | active (belum dibatalkan) | cancelled
+  if (status === 'active') where.cancelledAt = null;
+  if (status === 'cancelled') where.cancelledAt = { not: null };
+  if (q) {
+    where.OR = [
+      { jemaat: { namaLengkap: { contains: q, mode: 'insensitive' } } },
+      { jemaat: { kode: { startsWith: q.toUpperCase() } } },
+      { hadiahNama: { contains: q, mode: 'insensitive' } },
+    ];
+  }
   if (cabangId) where.cabangId = cabangId;
   if (hadiahId) where.hadiahId = hadiahId;
   if (adminId) where.processedById = adminId;
@@ -338,6 +368,7 @@ giftStallRouter.get('/redeems', async (req, res) => {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
       hadiah: { select: { id: true, nama: true } },
       processedBy: { select: { id: true, namaLengkap: true } },
+      cancelledBy: { select: { id: true, namaLengkap: true } },
       cabang: { select: { id: true, nama: true } },
     },
   });
@@ -359,7 +390,7 @@ giftStallRouter.get('/report/today', async (req, res) => {
 
   const [redeems, agg] = await Promise.all([
     prisma.hadiahRedeem.findMany({
-      where: { cabangId, processedAt: { gte: today, lt: tomorrow } },
+      where: { cabangId, processedAt: { gte: today, lt: tomorrow }, cancelledAt: null },
       orderBy: { processedAt: 'desc' },
       include: {
         jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
@@ -368,7 +399,7 @@ giftStallRouter.get('/report/today', async (req, res) => {
       },
     }),
     prisma.hadiahRedeem.aggregate({
-      where: { cabangId, processedAt: { gte: today, lt: tomorrow } },
+      where: { cabangId, processedAt: { gte: today, lt: tomorrow }, cancelledAt: null },
       _count: { id: true },
       _sum: { pointDeducted: true },
     }),
@@ -397,5 +428,162 @@ giftStallRouter.get('/report/today', async (req, res) => {
       topHadiah,
       redeems,
     },
+  });
+});
+
+// ============================================================
+// POST /admin/gift-stall/redeems/:id/cancel
+// Body: { reason?, replaceHadiahId? }
+//   Batalkan penukaran: point dikembalikan ke anak & stok hadiah +1.
+//   Dengan replaceHadiahId → sekaligus ditukar ke hadiah lain (satu
+//   transaksi; gagal semua kalau stok / point tidak cukup).
+// ============================================================
+const cancelSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+  replaceHadiahId: z.string().uuid().optional(),
+});
+
+giftStallRouter.post('/redeems/:id/cancel', async (req, res) => {
+  const { reason, replaceHadiahId } = cancelSchema.parse(req.body ?? {});
+  const adminId = req.user?.jemaatId;
+  if (!adminId) throw BadRequest('Admin tidak punya jemaatId');
+
+  const old = await prisma.hadiahRedeem.findUnique({
+    where: { id: req.params.id },
+    include: { jemaat: { select: { id: true, namaLengkap: true } } },
+  });
+  if (!old) throw NotFound('Penukaran tidak ditemukan');
+  if (old.cancelledAt) throw BadRequest('Penukaran ini sudah dibatalkan.');
+
+  const newHadiah = replaceHadiahId
+    ? await prisma.hadiahKatalog.findUnique({ where: { id: replaceHadiahId } })
+    : null;
+  if (replaceHadiahId) {
+    if (!newHadiah) throw NotFound('Hadiah pengganti tidak ditemukan');
+    if (newHadiah.id === old.hadiahId) throw BadRequest('Hadiah pengganti sama dengan hadiah sebelumnya.');
+    if (newHadiah.cabangId !== old.cabangId) throw BadRequest('Hadiah pengganti harus dari cabang yang sama.');
+    if (!newHadiah.isActive) throw BadRequest('Hadiah pengganti tidak aktif');
+    if (newHadiah.stock <= 0) throw BadRequest(`Stok "${newHadiah.nama}" habis`);
+  }
+
+  const balance = await prisma.jemaatPointBalance.findUnique({
+    where: { jemaatId_cabangId: { jemaatId: old.jemaatId, cabangId: old.cabangId } },
+  });
+  const afterRefund = (balance?.balance ?? 0) + old.pointDeducted;
+  if (newHadiah && afterRefund < newHadiah.pointCost) {
+    throw BadRequest(
+      `Point tidak cukup untuk "${newHadiah.nama}". Setelah dikembalikan: ${afterRefund}, butuh ${newHadiah.pointCost}.`,
+    );
+  }
+
+  const label = reason ? `: ${reason}` : '';
+  const result = await prisma.$transaction(async (tx) => {
+    // Klaim atomik — cegah dobel batal dari dua perangkat.
+    const claim = await tx.hadiahRedeem.updateMany({
+      where: { id: old.id, cancelledAt: null },
+      data: { cancelledAt: new Date(), cancelledById: adminId, cancelReason: reason ?? null },
+    });
+    if (claim.count === 0) throw BadRequest('Penukaran ini sudah dibatalkan.');
+
+    // Kembalikan stok & point.
+    await tx.hadiahKatalog.update({ where: { id: old.hadiahId }, data: { stock: { increment: 1 } } });
+    await tx.jemaatPointBalance.upsert({
+      where: { jemaatId_cabangId: { jemaatId: old.jemaatId, cabangId: old.cabangId } },
+      create: { jemaatId: old.jemaatId, cabangId: old.cabangId, balance: old.pointDeducted },
+      update: { balance: { increment: old.pointDeducted } },
+    });
+    await tx.pointTransaction.create({
+      data: {
+        jemaatId: old.jemaatId,
+        cabangId: old.cabangId,
+        type: 'EARN',
+        amount: old.pointDeducted,
+        source: 'REDEEM_CANCEL',
+        referenceId: old.id,
+        note: `Batal tukar ${old.hadiahNama}${label}`,
+        createdById: adminId,
+      },
+    });
+
+    let replacement = null as null | { id: string; hadiahNama: string; pointDeducted: number };
+    if (newHadiah) {
+      const stock = await tx.hadiahKatalog.update({
+        where: { id: newHadiah.id },
+        data: { stock: { decrement: 1 } },
+      });
+      if (stock.stock < 0) throw BadRequest(`Stok "${newHadiah.nama}" habis`);
+      const bal = await tx.jemaatPointBalance.update({
+        where: { jemaatId_cabangId: { jemaatId: old.jemaatId, cabangId: old.cabangId } },
+        data: { balance: { decrement: newHadiah.pointCost } },
+      });
+      if (bal.balance < 0) throw BadRequest('Point tidak cukup');
+      const r = await tx.hadiahRedeem.create({
+        data: {
+          jemaatId: old.jemaatId,
+          cabangId: old.cabangId,
+          hadiahId: newHadiah.id,
+          pointDeducted: newHadiah.pointCost,
+          hadiahNama: newHadiah.nama,
+          hadiahFotoUrl: newHadiah.fotoUrl,
+          processedById: adminId,
+          note: `Pengganti ${old.hadiahNama}`,
+        },
+      });
+      await tx.pointTransaction.create({
+        data: {
+          jemaatId: old.jemaatId,
+          cabangId: old.cabangId,
+          type: 'SPEND',
+          amount: -newHadiah.pointCost,
+          source: 'REDEEM',
+          referenceId: r.id,
+          note: `Redeem ${newHadiah.nama} (ganti ${old.hadiahNama})`,
+          createdById: adminId,
+        },
+      });
+      await tx.hadiahRedeem.update({ where: { id: old.id }, data: { replacedByRedeemId: r.id } });
+      replacement = { id: r.id, hadiahNama: r.hadiahNama, pointDeducted: r.pointDeducted };
+    }
+
+    const finalBal = await tx.jemaatPointBalance.findUnique({
+      where: { jemaatId_cabangId: { jemaatId: old.jemaatId, cabangId: old.cabangId } },
+      select: { balance: true },
+    });
+    return { replacement, newBalance: finalBal?.balance ?? 0 };
+  });
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'hadiah_redeem',
+    resourceId: old.id,
+    resourceLabel: result.replacement
+      ? `Ganti hadiah ${old.jemaat.namaLengkap}: ${old.hadiahNama} → ${result.replacement.hadiahNama}`
+      : `Batal tukar ${old.hadiahNama} untuk ${old.jemaat.namaLengkap} (+${old.pointDeducted} pts)`,
+    metadata: { reason, replaceHadiahId, replacementRedeemId: result.replacement?.id ?? null },
+  });
+
+  // Kabari orang tua / wali — transparansi.
+  void (async () => {
+    const guardians = await resolveGuardianJemaatIds(old.jemaatId);
+    if (!guardians.length) return;
+    await createNotificationBatch(guardians, {
+      type: result.replacement ? 'GIFT_REDEEMED' : 'POINT_ADJUSTED',
+      title: result.replacement
+        ? `${old.jemaat.namaLengkap} ganti hadiah: ${old.hadiahNama} → ${result.replacement.hadiahNama}`
+        : `Penukaran ${old.hadiahNama} dibatalkan`,
+      body: result.replacement
+        ? `+${old.pointDeducted} / -${result.replacement.pointDeducted} pts. Balance sekarang: ${result.newBalance} pts.`
+        : `${old.pointDeducted} pts dikembalikan ke ${old.jemaat.namaLengkap}. Balance sekarang: ${result.newBalance} pts.`,
+      actionUrl: '/ckids',
+      metadata: { anakId: old.jemaatId, redeemId: old.id, replacementRedeemId: result.replacement?.id ?? null },
+    });
+  })().catch(() => {});
+
+  res.json({
+    success: true,
+    data: { cancelledId: old.id, refunded: old.pointDeducted, ...result },
+    message: result.replacement
+      ? `Diganti ke ${result.replacement.hadiahNama}. Sisa point: ${result.newBalance}`
+      : `Dibatalkan. ${old.pointDeducted} point dikembalikan. Sisa point: ${result.newBalance}`,
   });
 });

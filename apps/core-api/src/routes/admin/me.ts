@@ -1425,7 +1425,8 @@ meRouter.get('/children-redeem-history', async (req, res) => {
   }
 
   const rows = await prisma.hadiahRedeem.findMany({
-    where: { jemaatId: targetJemaatId },
+    // Penukaran yang dibatalkan admin tidak ditampilkan (point sudah kembali).
+    where: { jemaatId: targetJemaatId, cancelledAt: null },
     orderBy: { processedAt: 'desc' },
     take: limit,
     include: {

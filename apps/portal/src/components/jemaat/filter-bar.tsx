@@ -23,6 +23,9 @@ export interface JemaatFilterState {
   homecellAreaId: string;
   homecellId: string;
   pelayananId: string;
+  /** '' = semua, '__kosong' = belum diisi */
+  statusPekerjaan: string;
+  statusPernikahan: string;
   sortBy: 'namaLengkap' | 'tanggalLahir' | 'tanggalBergabung' | 'cabang';
   sortOrder: 'asc' | 'desc';
 }
@@ -38,6 +41,8 @@ export const defaultJemaatFilter: JemaatFilterState = {
   homecellAreaId: '',
   homecellId: '',
   pelayananId: '',
+  statusPekerjaan: '',
+  statusPernikahan: '',
   sortBy: 'namaLengkap',
   sortOrder: 'asc',
 };
@@ -58,6 +63,8 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     homecellAreaId: s.homecellAreaId || undefined,
     homecellId: s.homecellId || undefined,
     pelayananId: s.pelayananId || undefined,
+    statusPekerjaan: s.statusPekerjaan || undefined,
+    statusPernikahan: s.statusPernikahan || undefined,
     sortBy: s.sortBy,
     sortOrder: s.sortOrder,
   };
@@ -74,7 +81,9 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     !!s.cabangId ||
     !!s.homecellAreaId ||
     !!s.homecellId ||
-    !!s.pelayananId
+    !!s.pelayananId ||
+    !!s.statusPekerjaan ||
+    !!s.statusPernikahan
   );
 }
 
@@ -155,6 +164,18 @@ export function JemaatFilterBar({ value, onChange }: Props) {
       const body = res.data as any;
       return Array.isArray(body) ? body : (body?.data ?? []);
     },
+    staleTime: 5 * 60_000,
+  });
+
+  // Nilai pekerjaan & pernikahan yang ada di data (termasuk nilai lama) + jumlahnya.
+  const profileOptQ = useQuery({
+    queryKey: ['jemaat', 'profile-options'],
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: { statusPekerjaan: { value: string; count: number }[]; statusPernikahan: { value: string; count: number }[] };
+        }>('/admin/jemaat/profile-options')
+      ).data.data,
     staleTime: 5 * 60_000,
   });
 
@@ -260,6 +281,42 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             {(pelayananQ.data ?? []).map((p: { id: string; nama: string }) => (
               <option key={p.id} value={p.id}>
                 {p.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Pekerjaan */}
+        <Field label="Pekerjaan">
+          <select
+            value={value.statusPekerjaan}
+            onChange={(e) => patch({ statusPekerjaan: e.target.value })}
+            className={selectCls}
+            disabled={profileOptQ.isLoading}
+          >
+            <option value="">{profileOptQ.isLoading ? 'Memuat...' : 'Semua'}</option>
+            <option value="__kosong">— Belum diisi —</option>
+            {(profileOptQ.data?.statusPekerjaan ?? []).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value} ({o.count.toLocaleString('id-ID')})
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Status pernikahan */}
+        <Field label="Status Pernikahan">
+          <select
+            value={value.statusPernikahan}
+            onChange={(e) => patch({ statusPernikahan: e.target.value })}
+            className={selectCls}
+            disabled={profileOptQ.isLoading}
+          >
+            <option value="">{profileOptQ.isLoading ? 'Memuat...' : 'Semua'}</option>
+            <option value="__kosong">— Belum diisi —</option>
+            {(profileOptQ.data?.statusPernikahan ?? []).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value} ({o.count.toLocaleString('id-ID')})
               </option>
             ))}
           </select>

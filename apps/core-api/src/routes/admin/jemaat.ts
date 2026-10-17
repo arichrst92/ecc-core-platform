@@ -109,6 +109,7 @@ jemaatRouter.get('/', async (req, res) => {
   if (pelayananId) {
     where.jemaatPelayanan = { some: { isActive: true, pelayananId } };
   }
+  applyProfileFilters(req, where);
 
   // Filter usia: tanggalLahir antara (now - umurMax) .. (now - umurMin)
   // Mis. umurMin=20 umurMax=30 → tanggalLahir between (today-30y) and (today-20y).
@@ -212,6 +213,17 @@ function applyJenisFilter(req: any, where: any) {
   else if (jenis !== 'semua') where.isTamu = false;
 }
 
+/** Nilai khusus filter: data belum diisi. */
+const KOSONG = '__kosong';
+
+/** Filter pekerjaan & status pernikahan (?statusPekerjaan= / ?statusPernikahan=, '__kosong' = belum diisi). */
+function applyProfileFilters(req: any, where: any) {
+  const pekerjaan = getQueryString(req, 'statusPekerjaan');
+  const nikah = getQueryString(req, 'statusPernikahan');
+  if (pekerjaan) where.statusPekerjaan = pekerjaan === KOSONG ? null : pekerjaan;
+  if (nikah) where.statusPernikahan = nikah === KOSONG ? null : nikah;
+}
+
 function buildJemaatWhereFromQuery(req: any): any {
   const cabangId = getQueryString(req, 'cabangId');
   const sinodeId = getQueryString(req, 'sinodeId');
@@ -246,6 +258,7 @@ function buildJemaatWhereFromQuery(req: any): any {
   else if (homecellAreaId)
     where.homecellMembership = { some: { isActive: true, homecell: { areaId: homecellAreaId } } };
   if (pelayananId) where.jemaatPelayanan = { some: { isActive: true, pelayananId } };
+  applyProfileFilters(req, where);
 
   const umurMin = umurMinStr ? Number.parseInt(umurMinStr, 10) : undefined;
   const umurMax = umurMaxStr ? Number.parseInt(umurMaxStr, 10) : undefined;
@@ -454,6 +467,11 @@ jemaatRouter.get('/export', async (req, res) => {
       noHp: r.noHp ?? '',
       email: r.email ?? '',
       alamat: r.alamat ?? '',
+      tanggalLahir: r.tanggalLahir ? new Date(r.tanggalLahir).toISOString().slice(0, 10) : '',
+      pekerjaan: r.statusPekerjaan ?? '',
+      namaKantor: r.namaKantor ?? '',
+      statusPernikahan: r.statusPernikahan ?? '',
+      tanggalPernikahan: r.tanggalPernikahan ? new Date(r.tanggalPernikahan).toISOString().slice(0, 10) : '',
       cabang: r.cabang?.nama ?? '',
       roles,
       homecellArea: areas,
@@ -477,6 +495,11 @@ jemaatRouter.get('/export', async (req, res) => {
     'No HP',
     'Email',
     'Alamat',
+    'Tanggal Lahir',
+    'Pekerjaan',
+    'Nama Kantor / Usaha',
+    'Status Pernikahan',
+    'Tanggal Pernikahan',
     'Cabang',
     'Role',
     'Homecell Area',
@@ -494,6 +517,11 @@ jemaatRouter.get('/export', async (req, res) => {
     'noHp',
     'email',
     'alamat',
+    'tanggalLahir',
+    'pekerjaan',
+    'namaKantor',
+    'statusPernikahan',
+    'tanggalPernikahan',
     'cabang',
     'roles',
     'homecellArea',
@@ -533,6 +561,8 @@ jemaatRouter.get('/export', async (req, res) => {
   <td>${escapeHtml(String(row.jenisKelamin))}</td>
   <td>${escapeHtml(String(row.usia))}</td>
   <td>${escapeHtml(row.noHp)}</td>
+  <td>${escapeHtml([row.pekerjaan, row.namaKantor].filter(Boolean).join(' · '))}</td>
+  <td>${escapeHtml(row.statusPernikahan)}</td>
   <td>${escapeHtml(row.cabang)}</td>
   <td>${escapeHtml(row.homecellArea)}</td>
   <td>${escapeHtml(row.homecell)}</td>
@@ -589,6 +619,7 @@ ${
 <thead>
 <tr>
   <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
+  <th>Pekerjaan</th><th>Pernikahan</th>
   <th>Cabang</th><th>Homecell Area</th><th>Homecell</th><th>Ministry</th><th>Status</th>
 </tr>
 </thead>
@@ -627,6 +658,27 @@ function escapeHtml(s: unknown): string {
  *
  * Filter opsional `cabangId` membatasi hasil hanya jemaat dari cabang tertentu.
  */
+// GET /admin/jemaat/profile-options — nilai pekerjaan & status pernikahan yang
+// ada di data (termasuk nilai lama Shiftsoft) + jumlahnya, untuk filter.
+jemaatRouter.get('/profile-options', async (_req, res) => {
+  const [pekerjaan, pernikahan] = await Promise.all([
+    prisma.jemaat.groupBy({ by: ['statusPekerjaan'], where: { isTamu: false }, _count: { _all: true } }),
+    prisma.jemaat.groupBy({ by: ['statusPernikahan'], where: { isTamu: false }, _count: { _all: true } }),
+  ]);
+  const shape = (rows: { value: string | null; count: number }[]) =>
+    rows
+      .filter((r) => r.value)
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ value: r.value as string, count: r.count }));
+  res.json({
+    success: true,
+    data: {
+      statusPekerjaan: shape(pekerjaan.map((r) => ({ value: r.statusPekerjaan, count: r._count._all }))),
+      statusPernikahan: shape(pernikahan.map((r) => ({ value: r.statusPernikahan, count: r._count._all }))),
+    },
+  });
+});
+
 jemaatRouter.get('/by-pelayanan', async (req, res) => {
   const pelayananNama = typeof req.query.pelayanan === 'string' ? req.query.pelayanan : undefined;
   const roleNama = typeof req.query.role === 'string' ? req.query.role : undefined;
@@ -1318,6 +1370,8 @@ ${
         <h3>Data Pribadi</h3>
         <div class="info-row"><div class="lbl">Tanggal Lahir</div><div class="val">${fmtDate(j.tanggalLahir)}${j.tanggalLahir ? ` (${calcUsia(j.tanggalLahir)})` : ''}</div></div>
         <div class="info-row"><div class="lbl">Jenis Kelamin</div><div class="val">${j.jenisKelamin === 'L' ? 'Laki-laki' : j.jenisKelamin === 'P' ? 'Perempuan' : '-'}</div></div>
+        <div class="info-row"><div class="lbl">Pekerjaan</div><div class="val">${escapeHtml([j.statusPekerjaan, j.namaKantor].filter(Boolean).join(' · ') || '-')}</div></div>
+        <div class="info-row"><div class="lbl">Pernikahan</div><div class="val">${escapeHtml(j.statusPernikahan ?? '-')}${j.tanggalPernikahan ? ` (${fmtDate(j.tanggalPernikahan)})` : ''}</div></div>
         <div class="info-row"><div class="lbl">Bergabung</div><div class="val">${fmtDate(j.tanggalBergabung)}</div></div>
         <div class="info-row"><div class="lbl">Last Login</div><div class="val ${j.user?.lastLoginAt ? '' : 'muted'}">${j.user?.lastLoginAt ? new Date(j.user.lastLoginAt).toLocaleString('id-ID') : 'Belum pernah'}</div></div>
       </section>

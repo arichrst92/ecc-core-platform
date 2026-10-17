@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Armchair, BarChart3, Loader2, UserPlus } from 'lucide-react';
+import { Armchair, BarChart3, Loader2, Star, Target, TrendingDown, TrendingUp, UserPlus, Church } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   ExportButtons,
@@ -64,7 +64,50 @@ function OccupancyBar({ pct, hadir, seat }: { pct: number | null; hadir?: number
   );
 }
 
+interface IbadahInsights {
+  prev: { from: string; to: string; totalHadir: number; uniqueJemaat: number; uniqueTamu: number; pertemuan: number; rataRata: number };
+  growth: { totalHadir: number | null; uniqueJemaat: number | null; uniqueTamu: number | null; rataRata: number | null };
+  jangkauan: { jemaatAktif: number; hadirUnik: number; pct: number; belumHadir: number };
+  frekuensi: { label: string; count: number }[];
+  tamu: { baru: number; berulang: number; total: number };
+  perIbadah: {
+    ibadah: IbadahLabel;
+    terjadwal: number;
+    pertemuan: number;
+    total: number;
+    jemaat: number;
+    tamu: number;
+    tamuBaru: number;
+    puncak: number;
+    rataRata: number;
+    seat: number | null;
+    okupansi: number | null;
+    growth: number | null;
+  }[];
+  tertinggi: { ibadah: string; jam: string; tanggal: string; total: number }[];
+  terendah: { ibadah: string; jam: string; tanggal: string; total: number }[];
+  pertemuanTanpaKehadiran: number;
+}
+
+/** Badge perubahan vs periode sebelumnya. */
+function Growth({ g }: { g: number | null }) {
+  if (g == null) return <span className="text-[11px] text-neutral-400">— vs periode lalu</span>;
+  const up = g >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+        up ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+      }`}
+    >
+      {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {fmtPct(Math.abs(g))} vs periode lalu
+    </span>
+  );
+}
+
 interface IbadahReport {
+  insights: IbadahInsights;
+  filters: { cabang: string | null; ibadah: string | null };
   period: { from: string; to: string; label: string };
   summary: {
     totalHadir: number;
@@ -193,6 +236,180 @@ export default function LaporanIbadahPage() {
         </div>
       ) : (
         <>
+          {/* ===== Ringkasan eksekutif: perubahan vs periode lalu ===== */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Total kehadiran', value: d.summary.totalHadir, prev: d.insights.prev.totalHadir, g: d.insights.growth.totalHadir },
+              { label: 'Jemaat hadir (unik)', value: d.summary.uniqueJemaat, prev: d.insights.prev.uniqueJemaat, g: d.insights.growth.uniqueJemaat },
+              { label: 'Rata-rata / pertemuan', value: d.summary.rataRata, prev: d.insights.prev.rataRata, g: d.insights.growth.rataRata },
+              { label: 'Tamu (unik)', value: d.summary.uniqueTamu, prev: d.insights.prev.uniqueTamu, g: d.insights.growth.uniqueTamu },
+            ].map((k) => (
+              <div key={k.label} className="bg-gradient-to-br from-brand-50 to-white border border-brand-100 rounded-xl p-4">
+                <div className="text-xs font-semibold text-brand-700 uppercase tracking-wide">{k.label}</div>
+                <div className="text-3xl font-bold text-neutral-900 mt-1 tabular-nums">{k.value.toLocaleString('id-ID')}</div>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <Growth g={k.g} />
+                  <span className="text-[11px] text-neutral-400">lalu {k.prev.toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-neutral-500 -mt-2">
+            Pembanding: periode sebelumnya dengan panjang sama ({fmtTgl(d.insights.prev.from)} – {fmtTgl(d.insights.prev.to)}).
+          </p>
+
+          <div className="grid lg:grid-cols-3 gap-4">
+            {/* Jangkauan */}
+            <div className="bg-white border border-neutral-200 rounded-xl p-4">
+              <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4 text-blue-600" /> Jangkauan jemaat
+              </h2>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-blue-700">{fmtPct(d.insights.jangkauan.pct)}</span>
+                <span className="text-xs text-neutral-500">jemaat aktif hadir minimal sekali</span>
+              </div>
+              <div className="h-2.5 bg-neutral-100 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, d.insights.jangkauan.pct)}%` }} />
+              </div>
+              <div className="flex justify-between text-xs mt-1.5 text-neutral-600">
+                <span>
+                  Hadir <b>{d.insights.jangkauan.hadirUnik.toLocaleString('id-ID')}</b>
+                </span>
+                <span>
+                  Belum hadir <b className="text-red-600">{d.insights.jangkauan.belumHadir.toLocaleString('id-ID')}</b>
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-2">
+                Dari {d.insights.jangkauan.jemaatAktif.toLocaleString('id-ID')} jemaat aktif {d.filters.cabang ? `cabang ${d.filters.cabang}` : 'semua cabang'}.
+              </p>
+            </div>
+
+            {/* Frekuensi */}
+            <div className="bg-white border border-neutral-200 rounded-xl p-4">
+              <h2 className="font-semibold text-neutral-900 mb-3">Frekuensi hadir jemaat</h2>
+              <div className="space-y-2">
+                {d.insights.frekuensi.map((f) => {
+                  const max = Math.max(1, ...d.insights.frekuensi.map((z) => z.count));
+                  return (
+                    <div key={f.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-neutral-600">{f.label}</span>
+                        <b>{f.count.toLocaleString('id-ID')} jemaat</b>
+                      </div>
+                      <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-brand-500 rounded-full" style={{ width: `${(f.count / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-2">
+                Tamu: {d.insights.tamu.baru} baru · {d.insights.tamu.berulang} berulang
+              </p>
+            </div>
+
+            {/* Sorotan */}
+            <div className="bg-white border border-neutral-200 rounded-xl p-4">
+              <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-3">
+                <Star className="w-4 h-4 text-amber-500" /> Sorotan pertemuan
+              </h2>
+              <div className="text-[11px] font-semibold text-neutral-500 uppercase mb-1">Tertinggi</div>
+              {d.insights.tertinggi.map((o) => (
+                <div key={`t-${o.ibadah}-${o.tanggal}`} className="flex justify-between text-xs py-0.5 gap-2">
+                  <span className="truncate">
+                    {o.ibadah} <span className="text-neutral-400">{o.jam} · {fmtTgl(o.tanggal)}</span>
+                  </span>
+                  <b className="text-green-700">{o.total}</b>
+                </div>
+              ))}
+              <div className="text-[11px] font-semibold text-neutral-500 uppercase mt-3 mb-1">Terendah</div>
+              {d.insights.terendah.map((o) => (
+                <div key={`r-${o.ibadah}-${o.tanggal}`} className="flex justify-between text-xs py-0.5 gap-2">
+                  <span className="truncate">
+                    {o.ibadah} <span className="text-neutral-400">{o.jam} · {fmtTgl(o.tanggal)}</span>
+                  </span>
+                  <b className="text-red-600">{o.total}</b>
+                </div>
+              ))}
+              {d.insights.tertinggi.length === 0 ? <p className="text-xs text-neutral-400">Belum ada kehadiran.</p> : null}
+              {d.insights.pertemuanTanpaKehadiran ? (
+                <p className="text-[11px] text-neutral-400 mt-2">{d.insights.pertemuanTanpaKehadiran} pertemuan terjadwal tanpa data kehadiran.</p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Ringkasan per ibadah */}
+          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-100">
+              <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+                <Church className="w-4 h-4 text-brand-600" /> Ringkasan per ibadah
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">Diurutkan dari total kehadiran terbanyak · vs lalu = total dibanding periode sebelumnya.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium">Ibadah</th>
+                    <th className="text-right px-4 py-2 font-medium">Pertemuan</th>
+                    <th className="text-right px-4 py-2 font-medium">Total</th>
+                    <th className="text-right px-4 py-2 font-medium">Rata²</th>
+                    <th className="text-right px-4 py-2 font-medium">Puncak</th>
+                    <th className="text-right px-4 py-2 font-medium">Tamu</th>
+                    <th className="text-right px-4 py-2 font-medium">Okupansi</th>
+                    <th className="text-right px-4 py-2 font-medium">vs lalu</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {d.insights.perIbadah.map((p) => (
+                    <tr key={p.ibadah.id}>
+                      <td className="px-4 py-2">
+                        <Link href={`/dashboard/ibadah/${p.ibadah.id}`} className="font-medium hover:text-brand-600 hover:underline">
+                          {p.ibadah.nama}
+                        </Link>{' '}
+                        <span className="text-xs text-neutral-400">
+                          {p.ibadah.jamMulai}
+                          {p.ibadah.isKidsIbadah ? ' · 🧒' : ''}
+                          {!d.filters.cabang && p.ibadah.cabang ? ` · ${p.ibadah.cabang}` : ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right text-neutral-600">
+                        {p.pertemuan}/{p.terjadwal}
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold">{p.total.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2 text-right">{p.rataRata.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2 text-right">{p.puncak}</td>
+                      <td className="px-4 py-2 text-right text-violet-700">{p.tamu}</td>
+                      <td
+                        className={`px-4 py-2 text-right font-semibold ${
+                          p.okupansi == null ? 'text-neutral-400' : p.okupansi > 100 ? 'text-red-600' : p.okupansi >= 80 ? 'text-amber-700' : 'text-teal-700'
+                        }`}
+                      >
+                        {p.okupansi == null ? '—' : fmtPct(p.okupansi)}
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {p.growth == null ? (
+                          <span className="text-neutral-400">—</span>
+                        ) : (
+                          <span className={p.growth >= 0 ? 'text-green-700' : 'text-red-600'}>
+                            {p.growth >= 0 ? '▲' : '▼'} {fmtPct(Math.abs(p.growth))}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {d.insights.perIbadah.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center text-neutral-400 py-8">
+                        Belum ada kehadiran di periode ini.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <StatCard label="Total kehadiran" value={d.summary.totalHadir} hint={`${d.summary.jemaatHadir} jemaat + ${d.summary.tamuHadir} tamu`} />
             <StatCard label="Jemaat hadir (unik)" value={d.summary.uniqueJemaat} />

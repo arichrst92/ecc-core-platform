@@ -16,6 +16,7 @@ import { resolveJemaatAccess } from '../../lib/menu-access.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { resolvePeriod, todayWib, ymd } from '../../lib/last-attendance.js';
 import { esc, fmtTgl, sendCsv, sendPrintHtml, summaryCards } from '../../lib/print-report.js';
+import { renderIbadahReportHtml } from '../../lib/ibadah-report-html.js';
 import {
   CHECKIN_METHODS,
   METHOD_LABEL,
@@ -155,10 +156,22 @@ async function ibadahReportData(req: Request) {
   // Okupansi memakai jumlah seat saat ini (pendataan saja, tidak membatasi check-in).
   const seatById = new Map(ibadahs.map((i) => [i.id, i.kapasitasSeat]));
   const occ = buildOccupancy(report.occurrences, seatById);
+  const insights = await ibadahInsights({
+    ids,
+    ibadahs,
+    period,
+    cabangId: cabangId && UUID_RE.test(cabangId) ? cabangId : ibadahId ? (ibadahs[0]?.cabang?.id ?? null) : null,
+    rows,
+    report,
+    seatById,
+    occ,
+    ibadahLabel,
+  });
 
   return {
     period: { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' },
     summary: { ...report.summary, okupansi: occ.overall },
+    insights,
     trend: report.trend,
     occurrences: report.occurrences.map((o) => ({
       ...o,
@@ -179,6 +192,122 @@ async function ibadahReportData(req: Request) {
   };
 }
 
+// ------------------------------------------------------------
+// Insight eksekutif laporan ibadah: perbandingan periode sebelumnya,
+// jangkauan jemaat, frekuensi hadir, ringkasan per ibadah, pertemuan
+// tertinggi/terendah.
+// ------------------------------------------------------------
+const growthPct = (cur: number, prev: number): number | null =>
+  prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null;
+
+async function ibadahInsights(a: {
+  ids: string[];
+  ibadahs: { id: string; isActive: boolean }[];
+  period: { from: Date; to: Date };
+  cabangId: string | null;
+  rows: { ibadahId: string; tanggalIbadah: Date; guestSource: string | null; jemaat: { id: string; isTamu: boolean } }[];
+  report: ReturnType<typeof buildIbadahReport>;
+  seatById: Map<string, number | null>;
+  occ: ReturnType<typeof buildOccupancy>;
+  ibadahLabel: (id: string) => { id: string; nama: string; jamMulai: string; cabang: string | null; isKidsIbadah: boolean };
+}) {
+  const { ids, period, report } = a;
+  const DAY = 86_400_000;
+  const len = Math.round((period.to.getTime() - period.from.getTime()) / DAY) + 1;
+  const prevTo = new Date(period.from.getTime() - DAY);
+  const prevFrom = new Date(period.from.getTime() - len * DAY);
+  const isGuest = (r: { guestSource: string | null; jemaat: { isTamu: boolean } }) => r.jemaat.isTamu || !!r.guestSource;
+
+  const [prevRows, jemaatAktif] = await Promise.all([
+    ids.length
+      ? prisma.reservasi.findMany({
+          where: { ibadahId: { in: ids }, status: 'JOIN', tanggalIbadah: { gte: prevFrom, lte: prevTo } },
+          select: { ibadahId: true, tanggalIbadah: true, guestSource: true, jemaat: { select: { id: true, isTamu: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.jemaat.count({ where: { isActive: true, isTamu: false, ...(a.cabangId ? { cabangId: a.cabangId } : {}) } }),
+  ]);
+
+  const summarize = (rs: typeof prevRows) => {
+    const occ = new Set(rs.map((r) => `${r.ibadahId}|${ymd(r.tanggalIbadah)}`));
+    const jem = new Set(rs.filter((r) => !isGuest(r)).map((r) => r.jemaat.id));
+    const tam = new Set(rs.filter(isGuest).map((r) => r.jemaat.id));
+    return {
+      totalHadir: rs.length,
+      uniqueJemaat: jem.size,
+      uniqueTamu: tam.size,
+      pertemuan: occ.size,
+      rataRata: occ.size ? Math.round((rs.length / occ.size) * 10) / 10 : 0,
+    };
+  };
+  const cur = summarize(a.rows);
+  const prev = summarize(prevRows);
+
+  // Frekuensi hadir jemaat (bukan tamu) di periode.
+  const freq = new Map<string, number>();
+  for (const r of a.rows) if (!isGuest(r)) freq.set(r.jemaat.id, (freq.get(r.jemaat.id) ?? 0) + 1);
+  const buckets = [
+    { label: '1 kali', min: 1, max: 1, count: 0 },
+    { label: '2–3 kali', min: 2, max: 3, count: 0 },
+    { label: '4–7 kali', min: 4, max: 7, count: 0 },
+    { label: '8 kali atau lebih', min: 8, max: Infinity, count: 0 },
+  ];
+  for (const c of freq.values()) buckets.find((b) => c >= b.min && c <= b.max)!.count++;
+
+  // Ringkasan per ibadah.
+  const per = new Map<string, { terjadwal: number; pertemuan: number; total: number; jemaat: number; tamu: number; tamuBaru: number; puncak: number }>();
+  for (const o of report.occurrences) {
+    const x = per.get(o.ibadahId) ?? { terjadwal: 0, pertemuan: 0, total: 0, jemaat: 0, tamu: 0, tamuBaru: 0, puncak: 0 };
+    x.terjadwal++;
+    if (o.total > 0) x.pertemuan++;
+    x.total += o.total;
+    x.jemaat += o.jemaat;
+    x.tamu += o.tamu;
+    x.tamuBaru += o.tamuBaru;
+    x.puncak = Math.max(x.puncak, o.total);
+    per.set(o.ibadahId, x);
+  }
+  const prevPer = new Map<string, number>();
+  for (const r of prevRows) prevPer.set(r.ibadahId, (prevPer.get(r.ibadahId) ?? 0) + 1);
+  const occById = new Map(a.occ.perIbadah.map((o) => [o.ibadahId, o]));
+  const perIbadah = [...per.entries()]
+    .map(([id, x]) => ({
+      ibadah: a.ibadahLabel(id),
+      ...x,
+      rataRata: x.pertemuan ? Math.round((x.total / x.pertemuan) * 10) / 10 : 0,
+      seat: a.seatById.get(id) ?? null,
+      okupansi: occById.get(id)?.rataOkupansi ?? null,
+      growth: growthPct(x.total, prevPer.get(id) ?? 0),
+    }))
+    .sort((p, q2) => q2.total - p.total);
+
+  const held = report.occurrences.filter((o) => o.total > 0);
+  const toOcc = (o: (typeof held)[number]) => ({ ibadah: a.ibadahLabel(o.ibadahId).nama, jam: a.ibadahLabel(o.ibadahId).jamMulai, tanggal: o.tanggal, total: o.total });
+  const tamuBaru = report.guests.filter((g) => g.isBaru).length;
+
+  return {
+    prev: { from: ymd(prevFrom), to: ymd(prevTo), ...prev },
+    growth: {
+      totalHadir: growthPct(cur.totalHadir, prev.totalHadir),
+      uniqueJemaat: growthPct(cur.uniqueJemaat, prev.uniqueJemaat),
+      uniqueTamu: growthPct(cur.uniqueTamu, prev.uniqueTamu),
+      rataRata: growthPct(cur.rataRata, prev.rataRata),
+    },
+    jangkauan: {
+      jemaatAktif,
+      hadirUnik: cur.uniqueJemaat,
+      pct: jemaatAktif ? Math.round((cur.uniqueJemaat * 1000) / jemaatAktif) / 10 : 0,
+      belumHadir: Math.max(0, jemaatAktif - cur.uniqueJemaat),
+    },
+    frekuensi: buckets.map((b) => ({ label: b.label, count: b.count })),
+    tamu: { baru: tamuBaru, berulang: report.guests.length - tamuBaru, total: report.guests.length },
+    perIbadah,
+    tertinggi: [...held].sort((p, q2) => q2.total - p.total).slice(0, 3).map(toOcc),
+    terendah: [...held].sort((p, q2) => p.total - q2.total).slice(0, 3).map(toOcc),
+    pertemuanTanpaKehadiran: report.occurrences.length - held.length,
+  };
+}
+
 const pctTxt = (p: number) => `${p.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`;
 /** Sel % okupansi untuk PDF; > 100% ditandai merah (overflow). */
 const pctCell = (p: number | null) =>
@@ -194,7 +323,61 @@ reportRouter.get('/ibadah/export', async (req, res) => {
   const d = await ibadahReportData(req);
   const format = (q(req, 'format') ?? 'pdf').toLowerCase();
   if (format === 'csv') {
+    const ins = d.insights;
+    const g = (v: number | null) => (v == null ? '' : v);
     const lines = [
+      ['LAPORAN IBADAH', d.filters.cabang ?? 'Semua cabang', d.filters.ibadah ?? 'Semua ibadah'],
+      ['Periode', `${d.period.from} s.d. ${d.period.to}`, `Pembanding: ${ins.prev.from} s.d. ${ins.prev.to}`],
+      [],
+      ['RINGKASAN', 'Periode ini', 'Periode lalu', 'Perubahan (%)'],
+      ['Total kehadiran', d.summary.totalHadir, ins.prev.totalHadir, g(ins.growth.totalHadir)],
+      ['Jemaat hadir (unik)', d.summary.uniqueJemaat, ins.prev.uniqueJemaat, g(ins.growth.uniqueJemaat)],
+      ['Tamu (unik)', d.summary.uniqueTamu, ins.prev.uniqueTamu, g(ins.growth.uniqueTamu)],
+      ['Rata-rata hadir / pertemuan', d.summary.rataRata, ins.prev.rataRata, g(ins.growth.rataRata)],
+      ['Pertemuan ada kehadiran / terjadwal', `${d.summary.pertemuanAdaKehadiran}/${d.summary.pertemuan}`, ins.prev.pertemuan, ''],
+      ['Tamu baru', ins.tamu.baru, '', ''],
+      ['Tamu berulang', ins.tamu.berulang, '', ''],
+      ['Okupansi rata-rata (%)', d.summary.okupansi.rataOkupansi ?? '', '', ''],
+      [],
+      ['JANGKAUAN JEMAAT', 'Jemaat'],
+      ['Jemaat aktif', ins.jangkauan.jemaatAktif],
+      ['Hadir minimal sekali', ins.jangkauan.hadirUnik],
+      ['Hadir (% jemaat aktif)', ins.jangkauan.pct],
+      ['Belum hadir', ins.jangkauan.belumHadir],
+      [],
+      ['FREKUENSI HADIR JEMAAT', 'Jemaat'],
+      ...ins.frekuensi.map((f) => [f.label, f.count]),
+      [],
+      ['CARA CHECK-IN', 'Jumlah'],
+      ...CHECKIN_METHODS.map((m) => [METHOD_LABEL[m], d.summary.methods[m]]),
+      [],
+      ['RINGKASAN PER IBADAH'],
+      ['Ibadah', 'Jam', 'Cabang', 'Pertemuan (ada kehadiran)', 'Terjadwal', 'Total hadir', 'Jemaat', 'Tamu', 'Tamu baru', 'Rata-rata', 'Puncak', 'Seat', 'Okupansi (%)', 'vs periode lalu (%)'],
+      ...ins.perIbadah.map((p) => [
+        p.ibadah.nama,
+        p.ibadah.jamMulai,
+        p.ibadah.cabang ?? '',
+        p.pertemuan,
+        p.terjadwal,
+        p.total,
+        p.jemaat,
+        p.tamu,
+        p.tamuBaru,
+        p.rataRata,
+        p.puncak,
+        p.seat ?? '',
+        p.okupansi ?? '',
+        g(p.growth),
+      ]),
+      [],
+      ['KEHADIRAN TERTINGGI', 'Tanggal', 'Hadir'],
+      ...ins.tertinggi.map((o) => [`${o.ibadah} ${o.jam}`, o.tanggal, o.total]),
+      ['KEHADIRAN TERENDAH', 'Tanggal', 'Hadir'],
+      ...ins.terendah.map((o) => [`${o.ibadah} ${o.jam}`, o.tanggal, o.total]),
+      [],
+      ['TREN MINGGUAN (mulai Senin)', 'Jemaat', 'Tamu', 'Total'],
+      ...d.trend.map((t) => [t.week, t.jemaat, t.tamu, t.jemaat + t.tamu]),
+      [],
       ['OKUPANSI PER IBADAH'],
       ['Ibadah', 'Jam', 'Cabang', 'Seat', 'Pertemuan', 'Rata-rata hadir', 'Rata-rata okupansi (%)', 'Puncak hadir', 'Puncak okupansi (%)', 'Pertemuan melebihi seat'],
       ...d.occupancy.map((x) => [
@@ -242,57 +425,9 @@ reportRouter.get('/ibadah/export', async (req, res) => {
     ];
     return sendCsv(res, `laporan-ibadah-${d.period.from}_${d.period.to}.csv`, lines);
   }
-  const s = d.summary;
-  const body = `
-${summaryCards([
-  ['Total hadir', s.totalHadir],
-  ['Jemaat (unik)', s.uniqueJemaat],
-  ['Tamu (unik)', s.uniqueTamu],
-  ['Tamu baru', s.tamuBaru],
-  ['Pertemuan', `${s.pertemuanAdaKehadiran}/${s.pertemuan}`],
-  ['Rata-rata / pertemuan', s.rataRata],
-  ['Okupansi rata-rata', s.okupansi.rataOkupansi != null ? `${pctTxt(s.okupansi.rataOkupansi)}` : '—'],
-])}
-${methodLine(s.methods)}
-<h2>Okupansi per ibadah</h2>
-${
-  d.occupancy.length
-    ? `<table><thead><tr><th>Ibadah</th><th>Cabang</th><th class="r">Seat</th><th class="r">Pertemuan</th><th class="r">Rata-rata hadir</th><th class="r">Okupansi</th><th class="r">Puncak</th><th class="r">Melebihi seat</th></tr></thead><tbody>
-${d.occupancy
-  .map(
-    (x) =>
-      `<tr><td>${esc(x.ibadah.nama)} <span class="muted">${esc(x.ibadah.jamMulai)}</span></td><td>${esc(x.ibadah.cabang ?? '')}</td><td class="r">${x.seat ?? '<span class="muted">—</span>'}</td><td class="r">${x.pertemuan}</td><td class="r">${x.rataHadir}</td><td class="r b">${pctCell(x.rataOkupansi)}</td><td class="r">${x.puncakHadir}${x.puncakOkupansi != null ? ` <span class="muted">(${pctTxt(x.puncakOkupansi)})</span>` : ''}</td><td class="r">${x.melebihi || ''}</td></tr>`,
-  )
-  .join('')}
-</tbody></table>
-<p class="muted">Okupansi = hadir ÷ jumlah seat. Hanya pendataan — check-in tidak dibatasi, jadi bisa lebih dari 100%. Ibadah tanpa jumlah seat ditandai “—”.</p>`
-    : '<p class="muted">Belum ada kehadiran di periode ini.</p>'
-}
-<h2>Tren mingguan</h2>
-${trendTable(d.trend)}
-<h2>Per pertemuan</h2>
-<table><thead><tr><th>Tanggal</th><th>Ibadah</th><th>Cabang</th><th class="r">Hadir</th><th class="r">Okupansi</th><th class="r">Jemaat</th><th class="r">Tamu</th><th class="r">Tamu baru</th><th>Cara check-in</th></tr></thead><tbody>
-${d.occurrences
-  .map(
-    (o) =>
-      `<tr><td>${fmtTgl(o.tanggal)}</td><td>${esc(o.ibadah.nama)} <span class="muted">${esc(o.ibadah.jamMulai)}</span></td><td>${esc(o.ibadah.cabang ?? '')}</td><td class="r b">${o.total}</td><td class="r">${pctCell(o.okupansi)}</td><td class="r">${o.jemaat}</td><td class="r">${o.tamu}</td><td class="r">${o.tamuBaru}</td><td class="muted">${methodInline(o.methods)}</td></tr>`,
-  )
-  .join('')}
-</tbody></table>
-<h2>Daftar tamu (${d.guests.length})</h2>
-${
-  d.guests.length
-    ? `<table><thead><tr><th>Nama</th><th>No HP</th><th>Status</th><th class="r">Kunjungan</th><th>Terakhir</th><th>Ibadah</th><th>Dibawa oleh</th></tr></thead><tbody>
-${d.guests
-  .map(
-    (g) =>
-      `<tr><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${g.isBaru ? '<span class="ok">Baru</span>' : 'Berulang'}</td><td class="r">${g.kunjungan}</td><td>${fmtTgl(g.kunjunganTerakhir)}</td><td>${esc(g.ibadah.join(', '))}</td><td>${esc(g.walkIn && !g.inviters.length ? 'Walk-in' : g.inviters.join(', '))}</td></tr>`,
-  )
-  .join('')}
-</tbody></table>`
-    : '<p class="muted">Tidak ada tamu di periode ini.</p>'
-}`;
-  sendPrintHtml(req, res, 'Laporan Ibadah', d.period, [d.filters.cabang, d.filters.ibadah], body);
+  const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderIbadahReportHtml(d, { isMobileUa }));
 });
 
 // ============================================================

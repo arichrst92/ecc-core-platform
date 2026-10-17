@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { Church, Landmark, QrCode, ChevronLeft, Info } from 'lucide-react';
@@ -74,6 +75,7 @@ export default async function PersembahanCabangPage(
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+      <AppReturnBar />
       {/* Header */}
       <section className="border-b border-orange-100 bg-white/60 backdrop-blur">
         <div className="max-w-3xl mx-auto px-6 py-8">
@@ -210,6 +212,7 @@ export default async function PersembahanCabangPage(
           </p>
         </div>
       </section>
+      <AppReturnFooter />
     </div>
   );
 }

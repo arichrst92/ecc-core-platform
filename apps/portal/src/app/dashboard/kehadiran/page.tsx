@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,6 +16,10 @@ import {
   ScanLine,
   Trash2,
   Search,
+  UserPlus,
+  User as UserIcon,
+  Users,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -33,15 +37,29 @@ interface ReservasiItem {
   joinedAt: string | null;
   cancelledAt: string | null;
   catatan: string | null;
-  jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
+  guestSource?: string | null;
+  jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null; isTamu?: boolean };
   ibadah: { id: string; nama: string };
 }
 
 interface Ibadah {
   id: string;
   nama: string;
+  isKidsIbadah?: boolean;
   cabang?: { nama: string };
 }
+
+interface KehadiranSummary {
+  total: number;
+  reservasi: number;
+  hadir: number;
+  hadirJemaat: number;
+  tamu: number;
+  batal: number;
+}
+
+/** Hari ini (WIB) YYYY-MM-DD. */
+const todayWib = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 
 const STATUS_COLOR: Record<ReservasiStatus, string> = {
   RESERVE: 'bg-amber-100 text-amber-800',
@@ -88,6 +106,18 @@ export default function KehadiranPage() {
         meta: { page: number; totalPages: number; total: number };
       }>('/admin/reservasi', { params });
       return res.data;
+    },
+    placeholderData: (p) => p,
+  });
+
+  const summaryQ = useQuery({
+    queryKey: ['reservasi', 'summary', { filterIbadahId, filterTanggal, debouncedSearch }],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (filterIbadahId) params.ibadahId = filterIbadahId;
+      if (filterTanggal) params.tanggal = filterTanggal;
+      if (debouncedSearch) params.search = debouncedSearch;
+      return (await apiClient.get<{ data: KehadiranSummary }>('/admin/reservasi/summary', { params })).data.data;
     },
     placeholderData: (p) => p,
   });
@@ -142,7 +172,7 @@ export default function KehadiranPage() {
             Kehadiran / Reservasi
           </h1>
           <p className="text-neutral-500 mt-1">
-            Reservasi jemaat per ibadah & tanggal. Status: <strong>Reserve</strong> → <strong>Join</strong> (scan barcode) atau <strong>Cancel</strong>.
+            Reservasi jemaat per ibadah & tanggal. Status: <strong>Reserve</strong> → <strong>Join</strong> (scan QR / cari nama, no HP, email) atau <strong>Cancel</strong>. Tamu bisa dicatat langsung.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -151,7 +181,7 @@ export default function KehadiranPage() {
             className="flex items-center gap-2 px-3 py-1.5 border border-brand-300 text-brand-700 hover:bg-brand-50 text-sm font-medium rounded-lg"
           >
             <ScanLine className="w-4 h-4" />
-            Check-in via Kode
+            Check-in
           </button>
           <button
             onClick={() => setCheckoutScanOpen(true)}
@@ -178,10 +208,28 @@ export default function KehadiranPage() {
         </div>
       </div>
 
+      {/* Ringkasan sesuai filter (ibadah, tanggal, pencarian) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <SummaryCard label="Total terdaftar" value={summaryQ.data?.total} hint="reservasi + hadir + batal" tone="neutral" icon={Users} />
+        <SummaryCard label="Reservasi" value={summaryQ.data?.reservasi} hint="sudah reservasi, belum hadir" tone="amber" icon={Clock} />
+        <SummaryCard
+          label="Hadir"
+          value={summaryQ.data?.hadir}
+          hint={summaryQ.data ? `${summaryQ.data.hadirJemaat} jemaat + ${summaryQ.data.tamu} tamu` : undefined}
+          tone="green"
+          icon={CheckCircle2}
+        />
+        <SummaryCard label="Batal" value={summaryQ.data?.batal} tone="red" icon={XCircle} />
+        <SummaryCard label="Tamu" value={summaryQ.data?.tamu} hint="tamu yang hadir" tone="violet" icon={UserPlus} />
+      </div>
+      {!filterIbadahId && !filterTanggal ? (
+        <p className="text-xs text-neutral-500 -mt-2 mb-4">Pilih ibadah & tanggal di filter untuk melihat jumlah per pertemuan.</p>
+      ) : null}
+
       {/* Filters */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-medium text-neutral-600 mb-1">Cari nama/kode</label>
+          <label className="block text-xs font-medium text-neutral-600 mb-1">Cari nama / no HP / email / kode</label>
           <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
             <Search className="w-3.5 h-3.5 text-neutral-400" />
             <input
@@ -303,6 +351,11 @@ export default function KehadiranPage() {
                       >
                         {r.jemaat.namaLengkap}
                       </Link>
+                      {r.jemaat.isTamu || r.guestSource ? (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">
+                          Tamu
+                        </span>
+                      ) : null}
                       {r.jemaat.noHp && (
                         <div className="text-xs text-neutral-500">{r.jemaat.noHp}</div>
                       )}
@@ -423,7 +476,10 @@ export default function KehadiranPage() {
         />
       )}
       {scanOpen && (
-        <ScanKodeModal
+        <CheckinIbadahModal
+          ibadahList={ibadahQ.data ?? []}
+          defaultIbadahId={filterIbadahId}
+          defaultTanggal={filterTanggal || todayWib()}
           onClose={() => setScanOpen(false)}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['reservasi'] });
@@ -582,60 +638,382 @@ function CreateReservasiModal({
 
 // ============== Scan Kode Modal (manual checkin) ==============
 
-function ScanKodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [kode, setKode] = useState('');
+function SummaryCard({
+  label,
+  value,
+  hint,
+  tone,
+  icon: Icon,
+}: {
+  label: string;
+  value: number | undefined;
+  hint?: string;
+  tone: 'neutral' | 'amber' | 'green' | 'red' | 'violet';
+  icon: typeof Clock;
+}) {
+  const cls = {
+    neutral: 'text-neutral-700 bg-neutral-100',
+    amber: 'text-amber-700 bg-amber-50',
+    green: 'text-green-700 bg-green-50',
+    red: 'text-red-700 bg-red-50',
+    violet: 'text-violet-700 bg-violet-50',
+  }[tone];
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl p-3 flex items-start gap-3">
+      <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cls}`}>
+        <Icon className="w-4 h-4" />
+      </span>
+      <div className="min-w-0">
+        <div className="text-xl font-bold text-neutral-900 tabular-nums">
+          {value == null ? '—' : value.toLocaleString('id-ID')}
+        </div>
+        <div className="text-xs font-medium text-neutral-600">{label}</div>
+        {hint ? <div className="text-[11px] text-neutral-400 truncate">{hint}</div> : null}
+      </div>
+    </div>
+  );
+}
 
-  const scanMut = useMutation({
-    mutationFn: async () =>
-      apiClient.post('/admin/reservasi/checkin', { kode: kode.trim().toUpperCase() }),
-    onSuccess: (res) => {
-      toast.success(res.data.message ?? 'Check-in berhasil');
-      setKode('');
-      onSuccess();
-    },
-    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+// ============== Check-in Modal ==============
+//
+// Satu input untuk semua cara:
+//   - Scan / ketik KODE (8 karakter): kode reservasi → check-in reservasi;
+//     kalau bukan, dianggap kode QR jemaat → check-in ke ibadah & tanggal terpilih.
+//   - Ketik NAMA / NO HP / EMAIL → pilih dari daftar (termasuk tamu lama).
+//   - Tamu baru → isi nama + no HP (POST /admin/reservasi/walk-in-guest).
+interface JemaatHit {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  noHp: string | null;
+  email: string | null;
+  isTamu?: boolean;
+  cabang?: { nama: string } | null;
+}
+interface CheckinLog {
+  ok: boolean;
+  nama: string;
+  msg: string;
+  tamu?: boolean;
+}
+
+function CheckinIbadahModal({
+  ibadahList,
+  defaultIbadahId,
+  defaultTanggal,
+  onClose,
+  onSuccess,
+}: {
+  ibadahList: Ibadah[];
+  defaultIbadahId: string;
+  defaultTanggal: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [ibadahId, setIbadahId] = useState(defaultIbadahId);
+  const [tanggal, setTanggal] = useState(defaultTanggal);
+  const [q, setQ] = useState('');
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [guestNama, setGuestNama] = useState('');
+  const [guestHp, setGuestHp] = useState('');
+  const [log, setLog] = useState<CheckinLog[]>([]);
+  const dq = useDebounce(q.trim(), 300);
+  const ibadah = ibadahList.find((i) => i.id === ibadahId);
+  const ready = !!ibadahId && /^\d{4}-\d{2}-\d{2}$/.test(tanggal);
+  // Kode reservasi / QR jemaat = 7–8 karakter alfanumerik (no HP lebih panjang).
+  const looksLikeKode = /^[A-Z0-9]{7,8}$/i.test(q.trim());
+
+  const focus = () => setTimeout(() => inputRef.current?.focus(), 50);
+  const push = (l: CheckinLog) => setLog((h) => [l, ...h].slice(0, 30));
+  const errMsg = (e: any, fb: string) => e?.response?.data?.error?.message ?? fb;
+
+  const hitsQ = useQuery({
+    queryKey: ['kehadiran', 'jemaat-search', dq],
+    enabled: dq.length >= 2,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: JemaatHit[] }>('/admin/jemaat', {
+          params: { search: dq, jenis: 'semua', isActive: 'true', limit: 8 },
+        })
+      ).data.data,
+    staleTime: 15_000,
   });
+
+  const done = (nama: string, msg: string, tamu?: boolean) => {
+    toast.success(`${nama}: ${msg}`);
+    push({ ok: true, nama, msg, tamu });
+    setQ('');
+    onSuccess();
+    focus();
+  };
+  const fail = (nama: string, msg: string) => {
+    toast.error(msg);
+    push({ ok: false, nama, msg });
+    focus();
+  };
+
+  // Check-in jemaat (dari hasil cari atau kode QR jemaat) ke ibadah & tanggal terpilih.
+  const walkIn = useMutation({
+    mutationFn: async (v: { jemaatId?: string; kode?: string; via: 'scan' | 'search'; label: string }) =>
+      (
+        await apiClient.post('/admin/reservasi/walk-in', {
+          ibadahId,
+          tanggalIbadah: tanggal,
+          action: 'checkin',
+          via: v.via,
+          ...(v.jemaatId ? { jemaatId: v.jemaatId } : { kode: v.kode }),
+        })
+      ).data as { message?: string; data?: { jemaat?: { namaLengkap?: string } } },
+    onSuccess: (r, v) => done(r.data?.jemaat?.namaLengkap ?? v.label, r.message ?? 'Check-in berhasil'),
+    onError: (e, v) => fail(v.label, errMsg(e, 'Gagal check-in')),
+  });
+
+  // Kode: coba sebagai kode reservasi dulu, lalu sebagai kode QR jemaat.
+  const byKode = useMutation({
+    mutationFn: async (kode: string) => {
+      try {
+        const r = await apiClient.post('/admin/reservasi/checkin', { kode });
+        return { kind: 'reservasi' as const, r: r.data as { message?: string; data?: { jemaat?: { namaLengkap?: string } } } };
+      } catch (e: any) {
+        if (e?.response?.status !== 404) throw e;
+        return { kind: 'jemaat' as const, r: null };
+      }
+    },
+    onSuccess: (res, kode) => {
+      if (res.kind === 'reservasi') {
+        done(res.r?.data?.jemaat?.namaLengkap ?? kode, res.r?.message ?? 'Check-in berhasil');
+        return;
+      }
+      if (!ready) {
+        fail(kode, 'Bukan kode reservasi. Pilih ibadah & tanggal dulu untuk check-in dengan kode QR jemaat.');
+        return;
+      }
+      walkIn.mutate({ kode, via: 'scan', label: kode });
+    },
+    onError: (e, kode) => fail(kode, errMsg(e, 'Gagal check-in')),
+  });
+
+  const guest = useMutation({
+    mutationFn: async () =>
+      (
+        await apiClient.post('/admin/reservasi/walk-in-guest', {
+          ibadahId,
+          tanggalIbadah: tanggal,
+          nama: guestNama.trim(),
+          noHp: guestHp.trim(),
+        })
+      ).data as { message?: string; meta?: { alreadyCheckedIn?: boolean }; data?: { isMember?: boolean; jemaat?: { namaLengkap?: string } } },
+    onSuccess: (r) => {
+      done(
+        r.data?.jemaat?.namaLengkap ?? guestNama.trim(),
+        r.meta?.alreadyCheckedIn ? 'Sudah tercatat hadir sebelumnya' : (r.message ?? 'Tamu tercatat hadir'),
+        !r.data?.isMember,
+      );
+      setGuestNama('');
+      setGuestHp('');
+      setGuestOpen(false);
+    },
+    onError: (e) => fail(guestNama.trim() || 'Tamu', errMsg(e, 'Gagal mencatat tamu')),
+  });
+
+  const busy = walkIn.isPending || byKode.isPending || guest.isPending;
+  const submitEnter = () => {
+    const v = q.trim().toUpperCase();
+    if (!v || busy) return;
+    if (looksLikeKode) byKode.mutate(v);
+    else if ((hitsQ.data ?? []).length === 1 && ready) {
+      const j = hitsQ.data![0]!;
+      walkIn.mutate({ jemaatId: j.id, via: 'search', label: j.namaLengkap });
+    }
+  };
+  const inputCls = 'w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white';
 
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
-            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
-              <ScanLine className="w-4 h-4" />
-              Check-in via Kode
-            </h2>
-            <p className="text-xs text-neutral-500 mt-0.5">
-              Input/scan kode reservasi (8 karakter), tekan Enter.
-            </p>
-          </div>
-          <div className="p-6">
-            <input
-              type="text"
-              value={kode}
-              onChange={(e) => setKode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && kode.trim() && scanMut.mutate()}
-              autoFocus
-              placeholder="R7K2X9P"
-              className="w-full px-3 py-3 text-center font-mono tracking-widest text-lg border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
-              maxLength={20}
-            />
-          </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
-            >
-              Tutup
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[92vh] flex flex-col">
+          <div className="px-6 py-4 border-b border-neutral-100 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+                <ScanLine className="w-4 h-4 text-green-600" />
+                Check-in Kehadiran Ibadah
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Scan QR / ketik kode, atau cari nama, no HP, email. Tamu baru bisa langsung dicatat.
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-neutral-100 rounded">
+              <X className="w-4 h-4 text-neutral-500" />
             </button>
-            <button
-              onClick={() => scanMut.mutate()}
-              disabled={!kode.trim() || scanMut.isPending}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
-            >
-              {scanMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Check-in
+          </div>
+
+          <div className="p-6 space-y-3 border-b border-neutral-100">
+            <div className="grid grid-cols-[1fr_150px] gap-2">
+              <label className="block">
+                <span className="text-xs font-medium text-neutral-600">Ibadah</span>
+                <select value={ibadahId} onChange={(e) => setIbadahId(e.target.value)} className={`mt-1 ${inputCls}`}>
+                  <option value="">Pilih ibadah</option>
+                  {ibadahList.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.nama}
+                      {i.cabang?.nama ? ` — ${i.cabang.nama}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-neutral-600">Tanggal</span>
+                <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className={`mt-1 ${inputCls}`} />
+              </label>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 border-2 border-neutral-300 rounded-lg px-3 focus-within:border-green-500">
+                <Search className="w-4 h-4 text-neutral-400" />
+                <input
+                  ref={inputRef}
+                  autoFocus
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submitEnter()}
+                  placeholder="Scan QR / kode / nama / no HP / email"
+                  disabled={busy}
+                  className="flex-1 py-3 outline-none text-base"
+                />
+                {busy ? <Loader2 className="w-4 h-4 animate-spin text-neutral-400" /> : null}
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Scanner QR otomatis menekan Enter. Kode reservasi & kode QR jemaat sama-sama diterima.
+              </p>
+            </div>
+
+            {!ready && dq.length >= 2 ? (
+              <p className="text-xs text-amber-700">Pilih ibadah & tanggal dulu untuk check-in dari hasil pencarian.</p>
+            ) : null}
+
+            {dq.length >= 2 ? (
+              <div className="border border-neutral-200 rounded-lg max-h-60 overflow-y-auto divide-y divide-neutral-100">
+                {hitsQ.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-neutral-500 px-3 py-3">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Mencari…
+                  </div>
+                ) : (hitsQ.data ?? []).length === 0 ? (
+                  <div className="px-3 py-3 text-xs text-neutral-500 flex items-center justify-between gap-2">
+                    <span>Tidak ditemukan.</span>
+                    <button
+                      onClick={() => {
+                        setGuestOpen(true);
+                        if (/^[+\d\s().-]+$/.test(dq)) setGuestHp(dq);
+                        else setGuestNama(dq);
+                      }}
+                      className="text-violet-700 font-semibold hover:underline"
+                    >
+                      + Catat sebagai tamu baru
+                    </button>
+                  </div>
+                ) : (
+                  hitsQ.data!.map((j) => (
+                    <button
+                      key={j.id}
+                      disabled={!ready || busy}
+                      onClick={() => walkIn.mutate({ jemaatId: j.id, via: 'search', label: j.namaLengkap })}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-green-50 disabled:opacity-50 disabled:hover:bg-white"
+                    >
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${j.isTamu ? 'bg-violet-100 text-violet-700' : 'bg-green-100 text-green-700'}`}>
+                        <UserIcon className="w-4 h-4" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-neutral-900 truncate">
+                          {j.namaLengkap}
+                          {j.isTamu ? (
+                            <span className="ml-1.5 text-[10px] font-semibold uppercase bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Tamu</span>
+                          ) : null}
+                        </span>
+                        <span className="block text-[11px] text-neutral-500 truncate">
+                          {[j.kode, j.noHp, j.email, j.cabang?.nama].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                      <span className="text-xs font-semibold text-green-700">Check-in</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            {/* Tamu baru */}
+            {guestOpen ? (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+                <div className="text-xs font-semibold text-violet-800 flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5" /> Tamu baru (walk-in)
+                </div>
+                {ibadah?.isKidsIbadah ? (
+                  <p className="text-xs text-amber-700">Ibadah anak tidak menerima tamu walk-in — gunakan meja CKids.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={guestNama} onChange={(e) => setGuestNama(e.target.value)} placeholder="Nama lengkap" className={inputCls} />
+                      <input value={guestHp} onChange={(e) => setGuestHp(e.target.value)} placeholder="No HP (08… / +65…)" inputMode="tel" className={inputCls} />
+                    </div>
+                    <p className="text-[11px] text-neutral-500">
+                      Kalau no HP ternyata milik jemaat terdaftar, jemaat itu yang dicatat hadir. Tamu lama dengan no HP sama dipakai ulang.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setGuestOpen(false)} className="px-3 py-1.5 text-xs text-neutral-600 hover:bg-white rounded-lg">
+                        Batal
+                      </button>
+                      <button
+                        onClick={() => guest.mutate()}
+                        disabled={!ready || busy || guestNama.trim().length < 2 || guestHp.trim().length < 8}
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        {guest.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Catat hadir
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setGuestOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 hover:underline"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Catat tamu baru
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-2 text-[11px] uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-white border-b border-neutral-100">
+              Riwayat sesi ini ({log.length})
+            </div>
+            {log.length === 0 ? (
+              <p className="text-xs text-neutral-400 italic text-center py-5">Belum ada check-in.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {log.map((h, i) => (
+                  <li key={i} className={`flex items-center gap-3 px-6 py-2 text-sm ${h.ok ? 'bg-green-50/40' : 'bg-red-50/40'}`}>
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${h.ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {h.ok ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium text-neutral-900">{h.nama}</span>
+                      {h.tamu ? (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Tamu</span>
+                      ) : null}
+                      <span className={`block text-xs ${h.ok ? 'text-neutral-500' : 'text-red-600'}`}>{h.msg}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 px-6 py-3 border-t border-neutral-100 bg-neutral-50">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg">
+              Selesai
             </button>
           </div>
         </div>

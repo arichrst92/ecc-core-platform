@@ -73,6 +73,9 @@ export const walkInReservasiSchema = z
     ibadahId: uuidSchema,
     tanggalIbadah: z.string().date().openapi({ example: '2026-08-04' }),
     action: z.enum(['checkin', 'checkout', 'pickup']),
+    // Cara petugas menemukan jemaat: 'scan' (QR, default) | 'search' (cari nama/HP/email)
+    // → dicatat sebagai checkinMethod SCAN / MANUAL untuk laporan.
+    via: z.enum(['scan', 'search']).optional(),
   })
   .refine((v) => !!v.jemaatId !== !!v.kode, {
     message: 'Kirim salah satu: jemaatId ATAU kode (bukan keduanya, bukan kosong)',

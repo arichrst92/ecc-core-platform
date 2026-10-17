@@ -16,6 +16,7 @@ import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 import { z } from 'zod';
+import { phoneSearchTerms } from '../../lib/phone-search.js';
 import {
   createNotificationBatch,
   resolveGuardianJemaatIds,
@@ -26,27 +27,38 @@ const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 // ===== List dengan filter =====
 
+/** Filter list & ringkasan: ibadahId, jemaatId, tanggal, search (kode/nama/no HP/email). */
+function reservasiWhere(req: { query: Record<string, unknown> }, search?: string): Prisma.ReservasiWhereInput {
+  const ibadahId = typeof req.query.ibadahId === 'string' && UUID_PARAM.test(req.query.ibadahId) ? req.query.ibadahId : undefined;
+  const jemaatId = typeof req.query.jemaatId === 'string' && UUID_PARAM.test(req.query.jemaatId) ? req.query.jemaatId : undefined;
+  const tanggal =
+    typeof req.query.tanggal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.tanggal) ? req.query.tanggal : undefined;
+  const where: Prisma.ReservasiWhereInput = {};
+  if (ibadahId) where.ibadahId = ibadahId;
+  if (jemaatId) where.jemaatId = jemaatId;
+  if (tanggal) where.tanggalIbadah = new Date(`${tanggal}T00:00:00.000Z`);
+  const q = search?.trim();
+  if (q) {
+    where.OR = [
+      { kode: { contains: q.toUpperCase() } },
+      { jemaat: { namaLengkap: { contains: q, mode: 'insensitive' } } },
+      { jemaat: { email: { contains: q, mode: 'insensitive' } } },
+      { jemaat: { kode: { startsWith: q.toUpperCase() } } },
+      { jemaat: { noHp: { contains: q } } },
+      ...phoneSearchTerms(q).map((t) => ({ jemaat: { noHp: { contains: t } } })),
+    ];
+  }
+  return where;
+}
+
 reservasiRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const ibadahId = typeof req.query.ibadahId === 'string' ? req.query.ibadahId : undefined;
-  const jemaatId = typeof req.query.jemaatId === 'string' ? req.query.jemaatId : undefined;
   const status =
     typeof req.query.status === 'string' && ['RESERVE', 'JOIN', 'CANCEL'].includes(req.query.status)
       ? (req.query.status as 'RESERVE' | 'JOIN' | 'CANCEL')
       : undefined;
-  const tanggal = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
-
-  const where: Prisma.ReservasiWhereInput = {};
-  if (ibadahId) where.ibadahId = ibadahId;
-  if (jemaatId) where.jemaatId = jemaatId;
+  const where = reservasiWhere(req, q.search);
   if (status) where.status = status;
-  if (tanggal) where.tanggalIbadah = new Date(tanggal);
-  if (q.search) {
-    where.OR = [
-      { kode: { contains: q.search.toUpperCase() } },
-      { jemaat: { namaLengkap: { contains: q.search, mode: 'insensitive' } } },
-    ];
-  }
 
   const [data, total] = await Promise.all([
     prisma.reservasi.findMany({
@@ -55,7 +67,7 @@ reservasiRouter.get('/', async (req, res) => {
       take: q.limit,
       orderBy: [{ tanggalIbadah: 'desc' }, { reservedAt: 'desc' }],
       include: {
-        jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
+        jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isTamu: true } },
         ibadah: { select: { id: true, nama: true } },
       },
     }),
@@ -66,6 +78,37 @@ reservasiRouter.get('/', async (req, res) => {
     success: true,
     data,
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
+  });
+});
+
+// ===== Ringkasan (halaman Kehadiran) =====
+// GET /admin/reservasi/summary?ibadahId=&tanggal=&search=
+// Jumlah per status + tamu yang hadir, dengan filter yang sama seperti list
+// (tanpa filter status).
+reservasiRouter.get('/summary', async (req, res) => {
+  const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+  const where = reservasiWhere(req, search);
+  const tamuWhere: Prisma.ReservasiWhereInput = {
+    AND: [where, { status: 'JOIN' }, { OR: [{ jemaat: { isTamu: true } }, { guestSource: { not: null } }] }],
+  };
+  const [byStatus, tamuHadir] = await Promise.all([
+    prisma.reservasi.groupBy({ by: ['status'], where, _count: { _all: true } }),
+    prisma.reservasi.count({ where: tamuWhere }),
+  ]);
+  const n = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
+  const reserve = n('RESERVE');
+  const join = n('JOIN');
+  const cancel = n('CANCEL');
+  res.json({
+    success: true,
+    data: {
+      total: reserve + join + cancel,
+      reservasi: reserve, // sudah reservasi, belum check-in
+      hadir: join,
+      hadirJemaat: join - tamuHadir,
+      tamu: tamuHadir, // tamu yang hadir
+      batal: cancel,
+    },
   });
 });
 
@@ -714,7 +757,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
           joinedAt: now,
           cancelledAt: null,
           checkedInBy: adminId,
-          checkinMethod: 'SCAN',
+          checkinMethod: parsed.via === 'search' ? 'MANUAL' : 'SCAN',
           pickupCode,
         },
       });
@@ -757,7 +800,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         kode,
         joinedAt: now,
         checkedInBy: adminId,
-        checkinMethod: 'SCAN',
+        checkinMethod: parsed.via === 'search' ? 'MANUAL' : 'SCAN',
         pickupCode,
       },
     });

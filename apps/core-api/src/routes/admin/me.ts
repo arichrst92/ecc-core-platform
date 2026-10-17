@@ -53,6 +53,7 @@ import { mePrivacyRouter } from './me-privacy.js';
 import { meSpiritualJourneyRouter } from './me-spiritual-journey.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
+import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
 import { tzOr } from '../../lib/tz.js';
 import { canCancelReservasi } from '../../lib/reservasi-window.js';
 import { familyOf } from '../../lib/family.js';
@@ -1594,7 +1595,82 @@ meRouter.get('/ministry-schedule', async (req, res) => {
       fotoUrl: c.jemaat.fotoUrl,
       posisi: c.pelayananRole.nama,
     })),
+    source: 'ROSTER' as const,
   }));
+
+  // Petugas tetap ibadah (Ibadah → Pelayanan → Petugas, "pelayan default"),
+  // diturunkan ke tiap tanggal occurrence. Roster (PelayananSchedule) untuk
+  // pelayanan + ibadah + tanggal yang sama didahulukan (tidak dobel).
+  const links = await prisma.ibadahPelayanan.findMany({
+    where: { petugas: { some: { jemaatId } } },
+    select: {
+      pelayanan: { select: { id: true, nama: true } },
+      ibadah: {
+        select: {
+          id: true,
+          nama: true,
+          jamMulai: true,
+          jamSelesai: true,
+          lokasi: true,
+          isActive: true,
+          tipeJadwal: true,
+          tanggalMulai: true,
+          hari: true,
+        },
+      },
+      petugas: {
+        select: {
+          id: true,
+          jemaatId: true,
+          tanggalIbadah: true,
+          catatan: true,
+          pelayananRole: { select: { nama: true, level: true } },
+          jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+        },
+      },
+    },
+  });
+  let teamDuties: ReturnType<typeof resolveIbadahDuties> = [];
+  if (links.length) {
+    const fromDay = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+    const toDay = new Date(Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()));
+    const ibadahIds = links.map((l) => l.ibadah.id);
+    const [cancelledRows, rosters] = await Promise.all([
+      prisma.ibadahOccurrenceStatus.findMany({
+        where: { ibadahId: { in: ibadahIds }, status: 'CANCELLED', tanggalIbadah: { gte: fromDay, lte: toDay } },
+        select: { ibadahId: true, tanggalIbadah: true },
+      }),
+      prisma.pelayananSchedule.findMany({
+        where: { ibadahId: { in: ibadahIds }, tanggal: { gte: fromDay, lte: toDay } },
+        select: { ibadahId: true, pelayananId: true, tanggal: true },
+      }),
+    ]);
+    const cancelled = new Set(cancelledRows.map((c) => `${c.ibadahId}:${c.tanggalIbadah.toISOString().slice(0, 10)}`));
+    const rosterKey = new Set(rosters.map((r) => `${r.ibadahId}:${r.pelayananId}:${r.tanggal.toISOString().slice(0, 10)}`));
+    teamDuties = resolveIbadahDuties(
+      links.map((l) => ({
+        ibadah: l.ibadah,
+        pelayanan: l.pelayanan,
+        rows: l.petugas.map((p) => ({
+          id: p.id,
+          jemaatId: p.jemaatId,
+          tanggalIbadah: p.tanggalIbadah,
+          catatan: p.catatan,
+          role: p.pelayananRole,
+          jemaat: p.jemaat,
+        })),
+      })),
+      jemaatId,
+      fromDay,
+      toDay,
+      cancelled,
+    ).filter((d) => !rosterKey.has(`${d.ibadahId}:${d.ministryId}:${d.tanggal}`));
+  }
+  const allAssignments = [...assignments, ...teamDuties].sort((a, b) =>
+    String(a.tanggal instanceof Date ? a.tanggal.toISOString() : a.tanggal).localeCompare(
+      String(b.tanggal instanceof Date ? b.tanggal.toISOString() : b.tanggal),
+    ),
+  );
 
   // Petugas event (EventPelayananPetugas) yang event-nya beririsan dengan
   // jendela waktu — ditampilkan di "Jadwal Pelayanan Saya".
@@ -1649,5 +1725,5 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     catatan: r.catatan,
   }));
 
-  res.json({ success: true, data: { assignments, events } });
+  res.json({ success: true, data: { assignments: allAssignments, events } });
 });

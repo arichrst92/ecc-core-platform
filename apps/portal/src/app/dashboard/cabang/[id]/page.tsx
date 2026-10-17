@@ -25,6 +25,10 @@ import {
   PieChart,
   Link2Off,
   Briefcase,
+  Armchair,
+  Footprints as WalkIcon,
+  Baby,
+  Gift,
 } from 'lucide-react';
 import { ExportButtons } from '@/components/report/report-ui';
 import { apiClient } from '@/lib/api-client';
@@ -117,6 +121,48 @@ interface Executive {
     tamuHadirUnik: number;
     pertemuan: number;
     rataRataPerPertemuan: number;
+  };
+  okupansi: {
+    rataOkupansi: number | null;
+    melebihi: number;
+    pertemuanDenganSeat: number;
+    ibadahTanpaSeat: number;
+    perIbadah: {
+      ibadahId: string;
+      nama: string;
+      jamMulai: string;
+      seat: number | null;
+      pertemuan: number;
+      rataHadir: number;
+      rataOkupansi: number | null;
+      puncakHadir: number;
+      puncakOkupansi: number | null;
+      melebihi: number;
+    }[];
+  };
+  visit: {
+    total: number;
+    pelakuUnik: number;
+    dikunjungiUnik: number;
+    rataPerPelaku: number;
+    topPelaku: { nama: string; count: number }[];
+    perMinggu: { week: string; count: number }[];
+  };
+  ckids: {
+    anakTerdaftar: number;
+    ibadahAnak: number;
+    kehadiran: number;
+    anakHadirUnik: number;
+    anakHadirPct: number;
+    pertemuan: number;
+    rataRataPerPertemuan: number;
+    poinDiberikan: number;
+    poinDitukar: number;
+    penukaranHadiah: number;
+    hadiahAktif: number;
+    stokHadiah: number;
+    hadiahStokHabis: number;
+    topHadiah: { nama: string; count: number }[];
   };
 }
 
@@ -739,6 +785,126 @@ function ExecutiveSummary({ x, kpi, cabangId }: { x: Executive; kpi: CabangStats
           </div>
         </div>
       </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Okupansi ibadah */}
+        <Card icon={Armchair} title="Okupansi Ibadah" subtitle="Rata-rata hadir ÷ jumlah seat (pendataan).">
+          <div className="flex items-baseline gap-2 mb-3">
+            <span
+              className={`text-3xl font-bold tabular-nums ${
+                (x.okupansi.rataOkupansi ?? 0) > 100 ? 'text-red-600' : 'text-teal-700'
+              }`}
+            >
+              {x.okupansi.rataOkupansi == null ? '—' : `${x.okupansi.rataOkupansi.toLocaleString('id-ID')}%`}
+            </span>
+            <span className="text-xs text-neutral-500">
+              rata-rata
+              {x.okupansi.melebihi ? (
+                <span className="text-red-600 font-semibold"> · {x.okupansi.melebihi}× melebihi seat</span>
+              ) : null}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {x.okupansi.perIbadah.slice(0, 6).map((r) => (
+              <PctBar
+                key={r.ibadahId}
+                label={`${r.nama} ${r.jamMulai}`}
+                count={r.rataHadir}
+                pct={r.rataOkupansi ?? 0}
+                pctLabel={r.rataOkupansi == null ? 'seat belum diisi' : `${r.rataOkupansi.toLocaleString('id-ID')}%`}
+                color={
+                  r.rataOkupansi == null
+                    ? 'bg-neutral-200'
+                    : r.rataOkupansi > 100
+                      ? 'bg-red-500'
+                      : r.rataOkupansi >= 80
+                        ? 'bg-amber-500'
+                        : 'bg-teal-500'
+                }
+              />
+            ))}
+            {x.okupansi.perIbadah.length === 0 ? (
+              <p className="text-sm text-neutral-400 italic text-center py-4">Belum ada kehadiran ibadah.</p>
+            ) : null}
+          </div>
+          {x.okupansi.ibadahTanpaSeat ? (
+            <p className="text-[11px] text-neutral-400 mt-3">{x.okupansi.ibadahTanpaSeat} ibadah belum mengisi jumlah seat (menu Ibadah).</p>
+          ) : null}
+        </Card>
+
+        {/* Visit */}
+        <Card icon={WalkIcon} title="Aktivitas Visit" subtitle="Kunjungan oleh / kepada jemaat cabang ini.">
+          <div className="grid grid-cols-3 gap-2 text-center mb-4">
+            <MiniStat label="Total visit" value={n(x.visit.total)} />
+            <MiniStat label="Pelaku" value={n(x.visit.pelakuUnik)} />
+            <MiniStat label="Dikunjungi" value={n(x.visit.dikunjungiUnik)} />
+          </div>
+          {x.visit.perMinggu.length ? (
+            <div className="flex items-end gap-1 h-20 mb-3">
+              {x.visit.perMinggu.map((w) => {
+                const max = Math.max(1, ...x.visit.perMinggu.map((z) => z.count));
+                return (
+                  <div key={w.week} className="flex-1 flex flex-col items-center justify-end h-full" title={`Minggu ${formatDateID(w.week)}: ${w.count}`}>
+                    <span className="text-[9px] text-neutral-600">{w.count}</span>
+                    <div className="w-full bg-rose-400 rounded-t" style={{ height: `${(w.count / max) * 100}%` }} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="space-y-1.5">
+            {x.visit.topPelaku.map((p) => (
+              <div key={p.nama} className="flex justify-between text-xs">
+                <span className="text-neutral-700 truncate">{p.nama}</span>
+                <span className="font-semibold text-rose-600">{p.count}×</span>
+              </div>
+            ))}
+            {x.visit.total === 0 ? <p className="text-sm text-neutral-400 italic text-center py-2">Belum ada visit di periode ini.</p> : null}
+          </div>
+          <Link href="/dashboard/visit" className="text-xs text-brand-600 hover:underline mt-3 inline-block">
+            Buka menu Visit →
+          </Link>
+        </Card>
+
+        {/* CKids */}
+        <Card icon={Baby} title="CKids" subtitle="Anak ≤13 tahun, ibadah anak, poin & hadiah.">
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <MiniStat label="Anak terdaftar" value={n(x.ckids.anakTerdaftar)} />
+            <MiniStat label={`Anak hadir · ${x.ckids.anakHadirPct}%`} value={n(x.ckids.anakHadirUnik)} />
+            <MiniStat label="Rata² / pertemuan" value={n(x.ckids.rataRataPerPertemuan)} />
+            <MiniStat label="Penukaran hadiah" value={n(x.ckids.penukaranHadiah)} />
+          </div>
+          <div className="space-y-2.5">
+            <PctBar label="Poin diberikan" count={x.ckids.poinDiberikan} pct={100} pctLabel="" color="bg-green-500" />
+            <PctBar
+              label="Poin ditukar"
+              count={x.ckids.poinDitukar}
+              pct={x.ckids.poinDiberikan ? (x.ckids.poinDitukar / x.ckids.poinDiberikan) * 100 : 0}
+              pctLabel=""
+              color="bg-amber-500"
+            />
+          </div>
+          <div className="mt-3 pt-3 border-t border-neutral-100">
+            <div className="text-[11px] font-semibold text-neutral-500 uppercase mb-1.5 flex items-center gap-1">
+              <Gift className="w-3 h-3" /> Hadiah favorit
+            </div>
+            {x.ckids.topHadiah.length ? (
+              x.ckids.topHadiah.map((h) => (
+                <div key={h.nama} className="flex justify-between text-xs py-0.5">
+                  <span className="text-neutral-700 truncate">{h.nama}</span>
+                  <span className="font-semibold text-violet-600">{h.count}×</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-neutral-400 italic">Belum ada penukaran.</p>
+            )}
+            <p className="text-[11px] text-neutral-400 mt-2">
+              {n(x.ckids.hadiahAktif)} hadiah aktif · stok {n(x.ckids.stokHadiah)}
+              {x.ckids.hadiahStokHabis ? <span className="text-red-600 font-semibold"> · {x.ckids.hadiahStokHabis} habis</span> : null}
+            </p>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -750,6 +916,7 @@ function PctBar({
   color,
   icon: Icon,
   href,
+  pctLabel,
 }: {
   label: string;
   count: number;
@@ -757,6 +924,8 @@ function PctBar({
   color: string;
   icon?: typeof Users;
   href?: string;
+  /** Teks pengganti "· N%" ('' = sembunyikan). */
+  pctLabel?: string;
 }) {
   const content = (
     <>
@@ -767,7 +936,7 @@ function PctBar({
         </span>
         <span className="tabular-nums whitespace-nowrap">
           <strong className="text-neutral-900">{count.toLocaleString('id-ID')}</strong>
-          <span className="text-neutral-400"> · {pct}%</span>
+          {pctLabel === '' ? null : <span className="text-neutral-400"> · {pctLabel ?? `${pct}%`}</span>}
         </span>
       </div>
       <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">

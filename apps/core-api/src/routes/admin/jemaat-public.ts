@@ -25,6 +25,7 @@ import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { canDoCheckin, notDiscoverableByPhone, privacyGate, type PrivacyField } from '../../lib/privacy.js';
+import { journeyProgress } from '../../lib/spiritual-journey.js';
 
 export const jemaatPublicRouter = Router();
 
@@ -140,7 +141,18 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
         where: { isActive: true },
         take: 1,
         select: {
-          homecell: { select: { id: true, nama: true } },
+          tanggalBergabung: true,
+          homecell: {
+            select: {
+              id: true,
+              nama: true,
+              hari: true,
+              jam: true,
+              area: { select: { id: true, nama: true } },
+              picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+              _count: { select: { members: { where: { isActive: true } } } },
+            },
+          },
         },
       },
       // Family via JemaatRelasi (masuk semua tipe granular — Suami/Istri/Ayah/Ibu/dll).
@@ -155,6 +167,17 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
     },
   });
   if (!target) throw NotFound('Jemaat tidak ditemukan.');
+
+  // Spiritual Journey (tahap aktif berurutan, dari role aktif jemaat).
+  const steps = await prisma.spiritualJourneyStep.findMany({
+    where: { isActive: true },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, judul: true, ikon: true, roleId: true, subRoleId: true, subRoleStatusId: true },
+  });
+  const journey = journeyProgress(
+    steps,
+    target.jemaatRoles.map((jr) => ({ roleId: jr.roleId, subRoleId: jr.subRoleId, subRoleStatusId: jr.subRoleStatusId })),
+  );
 
   // Privasi: tiap data tampil sesuai pengaturan privasi target
   // (lib/privacy.ts). Diri sendiri & PIC homecell/area selalu lihat semua.
@@ -197,7 +220,25 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
       posisi: jp.pelayananRole.nama,
       posisiLevel: jp.pelayananRole.level,
     })),
-    homecell: target.homecellMembership[0]?.homecell ?? null,
+    homecell: (() => {
+      const m = target.homecellMembership[0];
+      if (!m) return null;
+      const { _count, ...hc } = m.homecell;
+      return { ...hc, memberCount: _count.members, tanggalBergabung: m.tanggalBergabung };
+    })(),
+    spiritualJourney: {
+      total: steps.length,
+      achievedCount: journey.achievedCount,
+      nextIndex: journey.nextIndex,
+      steps: journey.steps.map((st, i) => ({
+        id: st.id,
+        urutan: i + 1,
+        judul: st.judul,
+        ikon: st.ikon,
+        achieved: st.achieved,
+        isNext: st.isNext,
+      })),
+    },
     // Always public helpers
     noHpMasked: can('noHp') ? maskNoHp(target.noHp) : null,
     ulangTahunBulanTgl: can('ulangTahun') || can('tanggalLahir') ? birthMonthDay(target.tanggalLahir) : null,

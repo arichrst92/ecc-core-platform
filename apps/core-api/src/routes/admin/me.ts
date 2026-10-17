@@ -35,8 +35,12 @@ import {
   updateFamilyRelationSchema,
   createBranchChangeRequestSchema,
   deleteMyAccountSchema,
+  changePhoneRequestSchema,
+  changePhoneVerifySchema,
   type FamilyRole,
 } from '@ecc/shared-types';
+import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
+import { otpRequestLimiter, authVerifyLimiter } from '../../middleware/rate-limit.js';
 import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
@@ -237,6 +241,12 @@ meRouter.patch('/', async (req, res) => {
     jenisKelamin: input.jenisKelamin ?? undefined,
     alamat: input.alamat ?? undefined,
     cabang: cabangIdToUpdate ? { connect: { id: cabangIdToUpdate } } : undefined,
+    // Pekerjaan & pernikahan: null / '' = kosongkan, undefined = tidak diubah.
+    statusPekerjaan: input.statusPekerjaan === undefined ? undefined : input.statusPekerjaan || null,
+    namaKantor: input.namaKantor === undefined ? undefined : input.namaKantor || null,
+    statusPernikahan: input.statusPernikahan === undefined ? undefined : input.statusPernikahan || null,
+    tanggalPernikahan:
+      input.tanggalPernikahan === undefined ? undefined : input.tanggalPernikahan ? new Date(input.tanggalPernikahan) : null,
   };
   const updated = await prisma.jemaat.update({ where: { id: jemaatId }, data });
 
@@ -268,6 +278,88 @@ meRouter.patch('/', async (req, res) => {
     metadata: { kind: 'self-edit-mobile' },
   });
   res.json({ success: true, data: updated });
+});
+
+// ============================================================
+// Ganti no HP sendiri — OTP dikirim ke nomor BARU (WhatsApp).
+//   POST /admin/me/phone/request-otp { noHp }
+//   POST /admin/me/phone/verify      { noHp, kode }
+// Memakai OtpVerification purpose ONBOARDING_ADD_NOHP (verifikasi nomor
+// baru untuk jemaat yang sudah login) — tanpa migrasi enum.
+// ============================================================
+const PHONE_OTP_PURPOSE = 'ONBOARDING_ADD_NOHP' as const;
+
+async function assertPhoneFree(jemaatId: string, noHp: string) {
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { noHp: true } });
+  if (me?.noHp === noHp) throw BadRequest('Nomor ini sudah menjadi nomor Anda.');
+  const other = await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true } });
+  if (other && other.id !== jemaatId) {
+    throw Conflict('Nomor HP sudah dipakai jemaat lain. Hubungi admin gereja kalau ini nomor Anda.');
+  }
+}
+
+meRouter.post('/phone/request-otp', otpRequestLimiter, async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const { noHp } = changePhoneRequestSchema.parse(req.body ?? {});
+  await assertPhoneFree(jemaatId, noHp);
+
+  const recent = await prisma.otpVerification.findFirst({
+    where: { noHp, purpose: PHONE_OTP_PURPOSE, usedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' },
+  });
+  const cooldown = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS ?? 60);
+  if (recent && Date.now() - recent.createdAt.getTime() < cooldown * 1000) {
+    throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum meminta kode baru.`);
+  }
+  const otp = generateOtp();
+  await prisma.otpVerification.create({
+    data: {
+      noHp,
+      kodeHash: await hashOtp(otp),
+      purpose: PHONE_OTP_PURPOSE,
+      expiresAt: getOtpExpiry(),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    },
+  });
+  await sendOtpViaWhatsApp(noHp, otp);
+  res.json({ success: true, message: 'Kode verifikasi dikirim via WhatsApp ke nomor baru.', data: { noHp } });
+});
+
+meRouter.post('/phone/verify', authVerifyLimiter, async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const { noHp, kode } = changePhoneVerifySchema.parse(req.body ?? {});
+  const record = await prisma.otpVerification.findFirst({
+    where: { noHp, purpose: PHONE_OTP_PURPOSE, usedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!record) throw Unauthorized('Kode tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.');
+  const maxAttempts = Number(process.env.OTP_MAX_ATTEMPTS ?? 3);
+  if (record.attempts >= maxAttempts) throw Unauthorized('Terlalu banyak percobaan. Minta kode baru.');
+  if (!(await verifyOtpHash(kode, record.kodeHash))) {
+    await prisma.otpVerification.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
+    throw Unauthorized('Kode salah.');
+  }
+  await prisma.otpVerification.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+
+  await assertPhoneFree(jemaatId, noHp);
+  const before = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { noHp: true, namaLengkap: true } });
+  let updated;
+  try {
+    updated = await prisma.jemaat.update({ where: { id: jemaatId }, data: { noHp }, select: { id: true, noHp: true } });
+  } catch {
+    throw Conflict('Nomor HP sudah dipakai jemaat lain.');
+  }
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat',
+    resourceId: jemaatId,
+    resourceLabel: `Ganti no HP sendiri: ${before?.namaLengkap ?? ''}`,
+    before: { noHp: before?.noHp ?? null },
+    after: { noHp },
+    metadata: { kind: 'self-change-phone' },
+  });
+  res.json({ success: true, message: 'Nomor HP berhasil diganti. Gunakan nomor baru untuk login berikutnya.', data: updated });
 });
 
 meRouter.post('/foto', flexImageUpload(), async (req, res) => {

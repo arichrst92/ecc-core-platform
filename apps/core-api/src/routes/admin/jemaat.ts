@@ -1458,6 +1458,7 @@ jemaatRouter.post('/', async (req, res) => {
     email: input.email || null,
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
+    tanggalPernikahan: input.tanggalPernikahan ? new Date(input.tanggalPernikahan) : null,
   };
   const created = await prisma.jemaat.create({ data });
   audit(req, { action: 'CREATE', resource: 'jemaat', resourceId: created.id, resourceLabel: created.namaLengkap, after: created });
@@ -1470,6 +1471,8 @@ jemaatRouter.patch('/:id', async (req, res) => {
     ...input,
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
+    tanggalPernikahan:
+      input.tanggalPernikahan === undefined ? undefined : input.tanggalPernikahan ? new Date(input.tanggalPernikahan) : null,
   };
   const before = await prisma.jemaat.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');

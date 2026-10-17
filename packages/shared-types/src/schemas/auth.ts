@@ -214,9 +214,21 @@ export const selfEditJemaatSchema = z
     jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
     alamat: z.string().trim().max(500).nullable().optional(),
     cabangId: uuidSchema.optional(),
+    // Pekerjaan & pernikahan (2026-10-18) — null = kosongkan.
+    statusPekerjaan: z.string().trim().max(100).nullable().optional(),
+    namaKantor: z.string().trim().max(255).nullable().optional(),
+    statusPernikahan: z.string().trim().max(50).nullable().optional(),
+    tanggalPernikahan: z.string().date().nullable().optional(),
   })
   .openapi('SelfEditJemaatInput');
 export type SelfEditJemaatInput = z.infer<typeof selfEditJemaatSchema>;
+
+// ===== Ganti no HP sendiri (OTP ke nomor BARU) =====
+export const changePhoneRequestSchema = z.object({ noHp: noHpSchema });
+export const changePhoneVerifySchema = z.object({
+  noHp: noHpSchema,
+  kode: z.string().trim().regex(/^\d{4,8}$/, 'Kode OTP tidak valid'),
+});
 
 // ===== Edit dependent (PATCH /admin/me/family/:jemaatId/profile) =====
 // Patch 2026-05-22 per request mobile profile-edit-completeness.md +

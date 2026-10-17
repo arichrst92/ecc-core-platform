@@ -3,6 +3,10 @@ import { noHpSchema, uuidSchema, emptyToUndefined } from './common.js';
 
 export const jenisKelaminSchema = z.enum(['L', 'P']);
 
+/** Teks opsional yang bisa dikosongkan: '' / null → null, undefined → tidak diubah. */
+const nullableText = (max: number) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), z.string().trim().max(max).nullable()).optional();
+
 // Mandatory: cabangId (FK constraint DB), namaLengkap, noHp.
 // Sisanya opsional dan terima empty string dari form.
 export const createJemaatSchema = z.object({
@@ -16,6 +20,10 @@ export const createJemaatSchema = z.object({
   alamat: emptyToUndefined(z.string().trim()),
   tanggalBergabung: emptyToUndefined(z.string().date()),
   fotoUrl: emptyToUndefined(z.string().url()),
+  statusPekerjaan: nullableText(100),
+  namaKantor: nullableText(255),
+  statusPernikahan: nullableText(50),
+  tanggalPernikahan: z.preprocess((v) => (v === '' ? null : v), z.string().date().nullable()).optional(),
 });
 export type CreateJemaatInput = z.infer<typeof createJemaatSchema>;
 
@@ -31,5 +39,10 @@ export const updateJemaatSchema = z.object({
   tanggalBergabung: emptyToUndefined(z.string().date()),
   fotoUrl: emptyToUndefined(z.string().url()),
   isActive: z.boolean().optional(),
+  // Pekerjaan & pernikahan — '' / null = kosongkan, undefined = tidak diubah.
+  statusPekerjaan: nullableText(100),
+  namaKantor: nullableText(255),
+  statusPernikahan: nullableText(50),
+  tanggalPernikahan: z.preprocess((v) => (v === '' ? null : v), z.string().date().nullable()).optional(),
 });
 export type UpdateJemaatInput = z.infer<typeof updateJemaatSchema>;

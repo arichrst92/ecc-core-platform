@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Briefcase,
   ArrowLeft,
   User as UserIcon,
   HandHeart,
@@ -66,6 +67,10 @@ interface Jemaat {
   jenisKelamin: 'L' | 'P' | null;
   alamat: string | null;
   tanggalBergabung: string | null;
+  statusPekerjaan?: string | null;
+  namaKantor?: string | null;
+  statusPernikahan?: string | null;
+  tanggalPernikahan?: string | null;
   fotoUrl: string | null;
   isActive: boolean;
   cabang?: { id: string; nama: string };
@@ -351,6 +356,19 @@ export default function JemaatDetailPage() {
                 {new Date(j.tanggalBergabung).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
               </Info>
             )}
+            {j.statusPekerjaan || j.namaKantor ? (
+              <Info icon={Briefcase} label="Pekerjaan">
+                {[j.statusPekerjaan, j.namaKantor].filter(Boolean).join(' · ')}
+              </Info>
+            ) : null}
+            {j.statusPernikahan ? (
+              <Info icon={Heart} label="Pernikahan">
+                {j.statusPernikahan}
+                {j.tanggalPernikahan
+                  ? ` · ${new Date(j.tanggalPernikahan).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                  : ''}
+              </Info>
+            ) : null}
             {j.alamat && (
               <Info icon={MapPin} label="Alamat" full>
                 {j.alamat}

@@ -86,6 +86,21 @@ function formatRelativeTime(iso: string | null | undefined): string {
  * Callback ditanam ke kolom "Relasi" sehingga klik tombol di row bisa
  * trigger state di parent page.
  */
+/** Pilihan pekerjaan & pernikahan — sama dengan app (Edit Profil). */
+export const PEKERJAAN_OPTIONS = [
+  'Pelajar / Mahasiswa',
+  'Karyawan Swasta',
+  'PNS / ASN',
+  'TNI / Polri',
+  'Wiraswasta / Pengusaha',
+  'Profesional',
+  'Ibu Rumah Tangga',
+  'Pensiunan',
+  'Belum Bekerja',
+  'Lainnya',
+].map((v) => ({ value: v, label: v }));
+export const PERNIKAHAN_OPTIONS = ['Single', 'Menikah', 'Janda', 'Duda', 'Cerai'].map((v) => ({ value: v, label: v }));
+
 export function buildJemaatResource(
   onShowRelasi: (jemaat: { id: string; namaLengkap: string }) => void,
 ): ResourceConfig<Jemaat> {
@@ -287,6 +302,25 @@ export function buildJemaatResource(
       { name: 'tanggalLahir', label: 'Tanggal Lahir', type: 'date' },
       { name: 'tanggalBergabung', label: 'Tanggal Bergabung', type: 'date' },
       { name: 'alamat', label: 'Alamat', type: 'textarea' },
+      {
+        name: 'statusPekerjaan',
+        label: 'Pekerjaan',
+        type: 'select',
+        options: PEKERJAAN_OPTIONS,
+      },
+      { name: 'namaKantor', label: 'Nama Kantor / Usaha', type: 'text' },
+      {
+        name: 'statusPernikahan',
+        label: 'Status Pernikahan',
+        type: 'select',
+        options: PERNIKAHAN_OPTIONS,
+      },
+      {
+        name: 'tanggalPernikahan',
+        label: 'Tanggal Pernikahan',
+        type: 'date',
+        showIf: (v) => !!v.statusPernikahan && v.statusPernikahan !== 'Single',
+      },
       { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
     ],
     createSchema: createJemaatSchema,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventGrantsStep, journeyProgress, meetsStep } from './spiritual-journey.js';
+import { eventGrantsStep, jemaatWhereForStage, journeyProgress, journeyStage, journeyStageLabel, meetsStep } from './spiritual-journey.js';
 
 const step = (roleId: string, subRoleId: string | null = null, subRoleStatusId: string | null = null) => ({
   roleId,
@@ -36,5 +36,32 @@ describe('eventGrantsStep', () => {
     expect(eventGrantsStep({ grantRoleId: 'J', grantSubRoleId: 'TETAP', grantSubRoleStatusId: 'EXPAND' }, step('J', 'TETAP', 'EXPAND'))).toBe(true);
     expect(eventGrantsStep({ grantRoleId: 'J', grantSubRoleId: 'TETAP', grantSubRoleStatusId: null }, step('J', 'TETAP', 'EXPAND'))).toBe(false);
     expect(eventGrantsStep({ grantRoleId: null, grantSubRoleId: null, grantSubRoleStatusId: null }, step('J'))).toBe(false);
+  });
+});
+
+describe('journeyStage', () => {
+  const steps = [
+    { roleId: 'R1', subRoleId: null, subRoleStatusId: null, judul: 'Satu' },
+    { roleId: 'R2', subRoleId: null, subRoleStatusId: null, judul: 'Dua' },
+    { roleId: 'R3', subRoleId: null, subRoleStatusId: null, judul: 'Tiga' },
+  ];
+  const held = (...ids: string[]) => ids.map((roleId) => ({ roleId, subRoleId: 'x', subRoleStatusId: null }));
+  it('belum mulai', () => {
+    const s = journeyStage(steps, []);
+    expect(s.stage).toBe(0);
+    expect(journeyStageLabel(s)).toBe('Belum mulai (0/3)');
+  });
+  it('berurutan: berhenti di tahap pertama yang belum', () => {
+    const s = journeyStage(steps, held('R1', 'R3'));
+    expect(s.stage).toBe(1);
+    expect(s.next).toBe('Dua');
+    expect(journeyStageLabel(s)).toBe('Tahap 1/3 · Satu');
+  });
+  it('semua tercapai', () => {
+    expect(journeyStage(steps, held('R1', 'R2', 'R3')).stage).toBe(3);
+  });
+  it('where stage: tahap 1 tercapai, tahap 2 belum', () => {
+    const w = jemaatWhereForStage(steps, 1) as { AND: unknown[] };
+    expect(w.AND.length).toBe(2);
   });
 });

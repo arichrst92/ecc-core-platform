@@ -71,3 +71,46 @@ export function eventGrantsStep(
   if (step.subRoleStatusId && ev.grantSubRoleStatusId !== step.subRoleStatusId) return false;
   return true;
 }
+
+// ============================================================
+// Tahap saat ini (untuk daftar / export / filter jemaat di portal)
+// ============================================================
+
+export interface JourneyStage {
+  /** Jumlah tahap berurutan yang sudah tercapai dari awal (0 = belum mulai). */
+  stage: number;
+  total: number;
+  /** Judul tahap terakhir yang tercapai (null kalau belum mulai). */
+  judul: string | null;
+  /** Judul tahap berikutnya (null kalau semua tercapai). */
+  next: string | null;
+}
+
+/** `steps` harus sudah urut. Tahap = tahap terakhir yang dicapai berurutan dari tahap 1. */
+export function journeyStage<S extends StepRequirement & { judul: string }>(steps: S[], roles: HeldRole[]): JourneyStage {
+  const p = journeyProgress(steps, roles);
+  const stage = p.nextIndex ?? steps.length;
+  return {
+    stage,
+    total: steps.length,
+    judul: stage > 0 ? steps[stage - 1]!.judul : null,
+    next: stage < steps.length ? steps[stage]!.judul : null,
+  };
+}
+
+/** Label ringkas: "Tahap 2/5 · Baptis Air" / "Belum mulai (0/5)". */
+export function journeyStageLabel(s: JourneyStage): string {
+  if (s.total === 0) return '';
+  return s.stage === 0 ? `Belum mulai (0/${s.total})` : `Tahap ${s.stage}/${s.total} · ${s.judul}`;
+}
+
+/**
+ * Filter Prisma: jemaat yang tahap saat ininya = `stage`
+ * (tahap 1..stage tercapai, tahap stage+1 belum). stage 0 = belum mulai.
+ */
+export function jemaatWhereForStage(steps: StepRequirement[], stage: number): Prisma.JemaatWhereInput {
+  const and: Prisma.JemaatWhereInput[] = steps.slice(0, stage).map((s) => jemaatWhereForStep(s));
+  const next = steps[stage];
+  if (next) and.push({ NOT: jemaatWhereForStep(next) });
+  return { AND: and };
+}

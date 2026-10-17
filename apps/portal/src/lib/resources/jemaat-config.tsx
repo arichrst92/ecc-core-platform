@@ -57,6 +57,7 @@ interface Jemaat extends Record<string, unknown> {
     pelayananRole: { nama: string };
   }>;
   user?: { lastLoginAt: string | null } | null;
+  spiritualJourney?: { stage: number; total: number; judul: string | null; next: string | null; label: string } | null;
 }
 
 /** Format waktu login jadi relatif: "2 menit lalu", "3 jam lalu", "5 hari lalu". */
@@ -211,6 +212,31 @@ export function buildJemaatResource(
               {list.length > 2 && (
                 <span className="text-[10px] text-neutral-400">+{list.length - 2}</span>
               )}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'spiritualJourney',
+        label: 'Spiritual Journey',
+        width: '170px',
+        render: (_v, row) => {
+          const sj = row.spiritualJourney;
+          if (!sj || sj.total === 0) return <span className="text-neutral-400">-</span>;
+          const pct = Math.round((sj.stage / sj.total) * 100);
+          return (
+            <div title={sj.next ? `Berikutnya: ${sj.next}` : 'Semua tahap tercapai'}>
+              <div className="text-[11px] font-medium text-neutral-800 truncate">
+                {sj.stage === 0 ? 'Belum mulai' : sj.judul}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="h-1.5 w-16 bg-neutral-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-[10px] text-neutral-500">
+                  {sj.stage}/{sj.total}
+                </span>
+              </div>
             </div>
           );
         },

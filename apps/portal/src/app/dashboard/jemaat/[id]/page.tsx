@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Footprints,
   Briefcase,
   ArrowLeft,
   User as UserIcon,
@@ -69,6 +70,14 @@ interface Jemaat {
   tanggalBergabung: string | null;
   statusPekerjaan?: string | null;
   namaKantor?: string | null;
+  spiritualJourney?: {
+    stage: number;
+    total: number;
+    label: string;
+    next: string | null;
+    achievedCount: number;
+    steps: { id: string; urutan: number; judul: string; ikon: string | null; achieved: boolean; isNext: boolean }[];
+  } | null;
   statusPernikahan?: string | null;
   tanggalPernikahan?: string | null;
   fotoUrl: string | null;
@@ -390,6 +399,53 @@ export default function JemaatDetailPage() {
 
       {/* Kartu QR jemaat — kode untuk scan check-in event */}
       {j.kode && <JemaatQrCard kode={j.kode} nama={j.namaLengkap} />}
+
+      {/* Spiritual Journey — tahap saat ini (dari role aktif) */}
+      {j.spiritualJourney && j.spiritualJourney.total > 0 ? (
+        <section className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mt-6">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+              <Footprints className="w-4 h-4 text-emerald-600" /> Spiritual Journey
+            </h2>
+            <Link href="/dashboard/spiritual-journey" className="text-xs text-brand-600 hover:underline">
+              Kelola tahap
+            </Link>
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full"
+                style={{ width: `${Math.round((j.spiritualJourney.stage / j.spiritualJourney.total) * 100)}%` }}
+              />
+            </div>
+            <span className="text-sm font-semibold text-neutral-800 whitespace-nowrap">{j.spiritualJourney.label}</span>
+          </div>
+          <ol className="flex flex-wrap gap-2">
+            {j.spiritualJourney.steps.map((st) => (
+              <li
+                key={st.id}
+                className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1 ${
+                  st.achieved
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : st.isNext
+                      ? 'bg-amber-50 border-amber-300 text-amber-800 font-semibold'
+                      : 'bg-neutral-50 border-neutral-200 text-neutral-400'
+                }`}
+              >
+                {st.achieved ? '✓' : st.isNext ? '→' : `${st.urutan}.`} {st.ikon ? `${st.ikon} ` : ''}
+                {st.judul}
+              </li>
+            ))}
+          </ol>
+          {j.spiritualJourney.next ? (
+            <p className="text-xs text-neutral-500 mt-3">
+              Tahap berikutnya: <strong>{j.spiritualJourney.next}</strong>. Tahap dihitung berurutan dari role aktif jemaat.
+            </p>
+          ) : (
+            <p className="text-xs text-emerald-700 mt-3">Semua tahap sudah tercapai.</p>
+          )}
+        </section>
+      ) : null}
 
       {/* Pelayanan section */}
       <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden mt-6">

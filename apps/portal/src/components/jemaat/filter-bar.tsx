@@ -26,6 +26,8 @@ export interface JemaatFilterState {
   /** '' = semua, '__kosong' = belum diisi */
   statusPekerjaan: string;
   statusPernikahan: string;
+  /** '' = semua, '0' = belum mulai, 'N' = tahap saat ini N */
+  journeyStage: string;
   sortBy: 'namaLengkap' | 'tanggalLahir' | 'tanggalBergabung' | 'cabang';
   sortOrder: 'asc' | 'desc';
 }
@@ -43,6 +45,7 @@ export const defaultJemaatFilter: JemaatFilterState = {
   pelayananId: '',
   statusPekerjaan: '',
   statusPernikahan: '',
+  journeyStage: '',
   sortBy: 'namaLengkap',
   sortOrder: 'asc',
 };
@@ -65,6 +68,7 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     pelayananId: s.pelayananId || undefined,
     statusPekerjaan: s.statusPekerjaan || undefined,
     statusPernikahan: s.statusPernikahan || undefined,
+    journeyStage: s.journeyStage || undefined,
     sortBy: s.sortBy,
     sortOrder: s.sortOrder,
   };
@@ -83,7 +87,8 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     !!s.homecellId ||
     !!s.pelayananId ||
     !!s.statusPekerjaan ||
-    !!s.statusPernikahan
+    !!s.statusPernikahan ||
+    !!s.journeyStage
   );
 }
 
@@ -173,7 +178,11 @@ export function JemaatFilterBar({ value, onChange }: Props) {
     queryFn: async () =>
       (
         await apiClient.get<{
-          data: { statusPekerjaan: { value: string; count: number }[]; statusPernikahan: { value: string; count: number }[] };
+          data: {
+            journeyStages: { stage: number; label: string; count: number }[];
+            statusPekerjaan: { value: string; count: number }[];
+            statusPernikahan: { value: string; count: number }[];
+          };
         }>('/admin/jemaat/profile-options')
       ).data.data,
     staleTime: 5 * 60_000,
@@ -281,6 +290,23 @@ export function JemaatFilterBar({ value, onChange }: Props) {
             {(pelayananQ.data ?? []).map((p: { id: string; nama: string }) => (
               <option key={p.id} value={p.id}>
                 {p.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Spiritual Journey — tahap saat ini */}
+        <Field label="Spiritual Journey">
+          <select
+            value={value.journeyStage}
+            onChange={(e) => patch({ journeyStage: e.target.value })}
+            className={selectCls}
+            disabled={profileOptQ.isLoading}
+          >
+            <option value="">{profileOptQ.isLoading ? 'Memuat...' : 'Semua tahap'}</option>
+            {(profileOptQ.data?.journeyStages ?? []).map((o) => (
+              <option key={o.stage} value={String(o.stage)}>
+                {o.label} ({o.count.toLocaleString('id-ID')})
               </option>
             ))}
           </select>

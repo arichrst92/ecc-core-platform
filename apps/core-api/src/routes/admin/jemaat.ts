@@ -17,6 +17,7 @@ import {
 } from '../../lib/import-csv.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { logger } from '../../lib/logger.js';
+import { jemaatWhereForStage, journeyProgress, journeyStage, journeyStageLabel } from '../../lib/spiritual-journey.js';
 
 // Helper: generate kode jemaat unik (mirip pattern reservasi).
 async function generateUniqueKodeJemaat(): Promise<string> {
@@ -110,6 +111,8 @@ jemaatRouter.get('/', async (req, res) => {
     where.jemaatPelayanan = { some: { isActive: true, pelayananId } };
   }
   applyProfileFilters(req, where);
+  const journeySteps = await loadJourneySteps();
+  applyJourneyFilter(req, where, journeySteps);
 
   // Filter usia: tanggalLahir antara (now - umurMax) .. (now - umurMin)
   // Mis. umurMin=20 umurMax=30 → tanggalLahir between (today-30y) and (today-20y).
@@ -159,6 +162,9 @@ jemaatRouter.get('/', async (req, res) => {
         jemaatRoles: {
           where: { isActive: true },
           select: {
+            roleId: true,
+            subRoleId: true,
+            subRoleStatusId: true,
             role: { select: { nama: true } },
             subRole: { select: { nama: true } },
             subRoleStatus: { select: { nama: true } },
@@ -195,7 +201,10 @@ jemaatRouter.get('/', async (req, res) => {
   ]);
   res.json({
     success: true,
-    data,
+    data: data.map((d) => ({
+      ...d,
+      spiritualJourney: journeySteps.length ? stageOf(journeySteps, d.jemaatRoles) : null,
+    })),
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
   });
 });
@@ -211,6 +220,31 @@ function applyJenisFilter(req: any, where: any) {
   const jenis = getQueryString(req, 'jenis');
   if (jenis === 'tamu') where.isTamu = true;
   else if (jenis !== 'semua') where.isTamu = false;
+}
+
+/** Tahap Spiritual Journey aktif, berurutan. */
+function loadJourneySteps() {
+  return prisma.spiritualJourneyStep.findMany({
+    where: { isActive: true },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, judul: true, ikon: true, roleId: true, subRoleId: true, subRoleStatusId: true },
+  });
+}
+type JourneySteps = Awaited<ReturnType<typeof loadJourneySteps>>;
+
+/** Filter ?journeyStage=N (tahap saat ini; 0 = belum mulai). */
+function applyJourneyFilter(req: any, where: any, steps: JourneySteps) {
+  const raw = getQueryString(req, 'journeyStage');
+  if (raw === undefined || raw === null || raw === '') return;
+  const stage = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(stage) || stage < 0 || stage > steps.length || steps.length === 0) return;
+  where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), jemaatWhereForStage(steps, stage)];
+}
+
+/** Ringkasan tahap per jemaat dari role aktifnya. */
+function stageOf(steps: JourneySteps, roles: { roleId: string; subRoleId: string; subRoleStatusId: string | null }[]) {
+  const st = journeyStage(steps, roles);
+  return { ...st, label: journeyStageLabel(st) };
 }
 
 /** Nilai khusus filter: data belum diisi. */
@@ -311,6 +345,9 @@ async function fetchJemaatForExport(where: any) {
       jemaatRoles: {
         where: { isActive: true },
         select: {
+          roleId: true,
+          subRoleId: true,
+          subRoleStatusId: true,
           role: { select: { nama: true } },
           subRole: { select: { nama: true } },
           subRoleStatus: { select: { nama: true } },
@@ -436,6 +473,8 @@ jemaatRouter.get('/duplicates', async (_req, res) => {
 jemaatRouter.get('/export', async (req, res) => {
   const format = (getQueryString(req, 'format') ?? 'csv').toLowerCase();
   const where = buildJemaatWhereFromQuery(req);
+  const journeySteps = await loadJourneySteps();
+  applyJourneyFilter(req, where, journeySteps);
   const rows = await fetchJemaatForExport(where);
 
   const dataRows = rows.map((r: any) => {
@@ -477,6 +516,7 @@ jemaatRouter.get('/export', async (req, res) => {
       homecellArea: areas,
       homecell: homecells,
       ministry: ministries,
+      spiritualJourney: journeySteps.length ? stageOf(journeySteps, r.jemaatRoles ?? []).label : '',
       status: r.isActive ? 'Aktif' : 'Nonaktif',
       tanggalBergabung: r.tanggalBergabung
         ? new Date(r.tanggalBergabung).toISOString().slice(0, 10)
@@ -505,6 +545,7 @@ jemaatRouter.get('/export', async (req, res) => {
     'Homecell Area',
     'Homecell',
     'Ministry',
+    'Spiritual Journey',
     'Status',
     'Tanggal Bergabung',
     'Last Login',
@@ -527,6 +568,7 @@ jemaatRouter.get('/export', async (req, res) => {
     'homecellArea',
     'homecell',
     'ministry',
+    'spiritualJourney',
     'status',
     'tanggalBergabung',
     'lastLogin',
@@ -567,6 +609,7 @@ jemaatRouter.get('/export', async (req, res) => {
   <td>${escapeHtml(row.homecellArea)}</td>
   <td>${escapeHtml(row.homecell)}</td>
   <td>${escapeHtml(row.ministry)}</td>
+  <td>${escapeHtml(row.spiritualJourney)}</td>
   <td>${escapeHtml(row.status)}</td>
 </tr>`,
       )
@@ -620,7 +663,7 @@ ${
 <tr>
   <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
   <th>Pekerjaan</th><th>Pernikahan</th>
-  <th>Cabang</th><th>Homecell Area</th><th>Homecell</th><th>Ministry</th><th>Status</th>
+  <th>Cabang</th><th>Homecell Area</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
 </tr>
 </thead>
 <tbody>${tableBody}</tbody>
@@ -670,9 +713,20 @@ jemaatRouter.get('/profile-options', async (_req, res) => {
       .filter((r) => r.value)
       .sort((a, b) => b.count - a.count)
       .map((r) => ({ value: r.value as string, count: r.count }));
+  const steps = await loadJourneySteps();
+  const journeyStages = steps.length
+    ? await Promise.all(
+        Array.from({ length: steps.length + 1 }, async (_x, stage) => ({
+          stage,
+          label: stage === 0 ? 'Belum mulai' : `Tahap ${stage} · ${steps[stage - 1]!.judul}`,
+          count: await prisma.jemaat.count({ where: { isTamu: false, isActive: true, ...jemaatWhereForStage(steps, stage) } }),
+        })),
+      )
+    : [];
   res.json({
     success: true,
     data: {
+      journeyStages,
       statusPekerjaan: shape(pekerjaan.map((r) => ({ value: r.statusPekerjaan, count: r._count._all }))),
       statusPernikahan: shape(pernikahan.map((r) => ({ value: r.statusPernikahan, count: r._count._all }))),
     },
@@ -746,7 +800,22 @@ jemaatRouter.get('/:id', async (req, res) => {
     },
   });
   if (!item) throw NotFound('Jemaat tidak ditemukan');
-  res.json({ success: true, data: item });
+  const steps = await loadJourneySteps();
+  const active = item.jemaatRoles.filter((r) => r.isActive);
+  const p = journeyProgress(steps, active);
+  res.json({
+    success: true,
+    data: {
+      ...item,
+      spiritualJourney: steps.length
+        ? {
+            ...stageOf(steps, active),
+            achievedCount: p.achievedCount,
+            steps: p.steps.map((st, i) => ({ id: st.id, urutan: i + 1, judul: st.judul, ikon: st.ikon, achieved: st.achieved, isNext: st.isNext })),
+          }
+        : null,
+    },
+  });
 });
 
 // ============================================================
@@ -1164,6 +1233,20 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   const fmtDate = (d: Date | null | undefined) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
+  // Spiritual Journey (tahap aktif berurutan, dari role aktif jemaat).
+  const jSteps = await loadJourneySteps();
+  const journeyDetail = jSteps.length
+    ? {
+        label: stageOf(jSteps, j.jemaatRoles).label,
+        steps: journeyProgress(jSteps, j.jemaatRoles).steps.map((st, i) => ({
+          urutan: i + 1,
+          judul: st.judul,
+          achieved: st.achieved,
+          isNext: st.isNext,
+        })),
+      }
+    : null;
+
   const calcUsia = (d: Date | null | undefined): string => {
     if (!d) return '';
     const dt = new Date(d);
@@ -1393,6 +1476,23 @@ ${
           <div class="bd" style="background:#fce7f3;color:#9d174d;"><b>${actVi3m}</b>Visit</div>
         </div>
       </section>
+
+      ${
+        journeyDetail
+          ? `<section>
+        <h3>Spiritual Journey</h3>
+        <div class="info-row"><div class="lbl">Tahap saat ini</div><div class="val strong">${escapeHtml(journeyDetail.label)}</div></div>
+        ${journeyDetail.steps
+          .map(
+            (st) =>
+              `<div style="font-size:10.5px;margin:2px 0;color:${st.achieved ? '#047857' : st.isNext ? '#b45309' : '#94a3b8'}">${
+                st.achieved ? '✔' : st.isNext ? '➜' : '○'
+              } ${st.urutan}. ${escapeHtml(st.judul)}</div>`,
+          )
+          .join('')}
+      </section>`
+          : ''
+      }
 
       <section>
         <h3>Role & Pelayanan</h3>

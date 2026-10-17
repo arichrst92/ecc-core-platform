@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEventReport, buildIbadahReport, weekStart } from './attendance-report.js';
+import { buildEventReport, buildIbadahReport, buildOccupancy, occupancyPct, weekStart } from './attendance-report.js';
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const j = (id: string, isTamu = false) => ({ id, namaLengkap: id.toUpperCase(), noHp: null, isTamu });
@@ -85,5 +85,33 @@ describe('buildEventReport', () => {
     expect(r.summary.hadir).toBe(2);
     expect(r.summary.tamuUnik).toBe(1);
     expect(r.guests[0]!.walkIn).toBe(true);
+  });
+});
+
+describe('okupansi seat', () => {
+  it('occupancyPct: null tanpa seat, bisa > 100', () => {
+    expect(occupancyPct(50, null)).toBeNull();
+    expect(occupancyPct(50, 0)).toBeNull();
+    expect(occupancyPct(75, 100)).toBe(75);
+    expect(occupancyPct(130, 100)).toBe(130);
+    expect(occupancyPct(1, 3)).toBe(33.3);
+  });
+
+  it('buildOccupancy: rata-rata, puncak, overflow; pertemuan kosong diabaikan', () => {
+    const seat = new Map<string, number | null>([['A', 100], ['B', null]]);
+    const r = buildOccupancy(
+      [
+        { ibadahId: 'A', total: 80 },
+        { ibadahId: 'A', total: 120 },
+        { ibadahId: 'A', total: 0 },
+        { ibadahId: 'B', total: 40 },
+      ],
+      seat,
+    );
+    const a = r.perIbadah.find((x) => x.ibadahId === 'A')!;
+    expect(a).toEqual({ ibadahId: 'A', seat: 100, pertemuan: 2, rataHadir: 100, rataOkupansi: 100, puncakHadir: 120, puncakOkupansi: 120, melebihi: 1 });
+    const b = r.perIbadah.find((x) => x.ibadahId === 'B')!;
+    expect(b.rataOkupansi).toBeNull();
+    expect(r.overall).toEqual({ rataOkupansi: 100, melebihi: 1, pertemuanDenganSeat: 2 });
   });
 });

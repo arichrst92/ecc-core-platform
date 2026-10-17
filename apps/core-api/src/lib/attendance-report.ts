@@ -285,3 +285,78 @@ export function buildEventReport(eventIds: string[], rows: EventParticipationRow
     guests,
   };
 }
+
+// ============================================================
+// Okupansi seat (ibadah) — hanya pendataan, tidak membatasi check-in
+// ============================================================
+
+/** % okupansi (1 desimal). null kalau seat tidak diisi. Bisa > 100 (overflow). */
+export function occupancyPct(hadir: number, seat: number | null | undefined): number | null {
+  if (!seat || seat <= 0) return null;
+  return Math.round((hadir / seat) * 1000) / 10;
+}
+
+export interface IbadahOccupancy {
+  ibadahId: string;
+  seat: number | null;
+  pertemuan: number; // pertemuan yang ada kehadirannya
+  rataHadir: number;
+  rataOkupansi: number | null; // %
+  puncakHadir: number;
+  puncakOkupansi: number | null; // %
+  melebihi: number; // jumlah pertemuan dengan hadir > seat
+}
+
+/**
+ * Ringkasan okupansi per ibadah + keseluruhan. Pertemuan tanpa kehadiran
+ * (belum ada data) tidak dihitung supaya rata-rata tidak turun palsu.
+ */
+export function buildOccupancy(
+  occurrences: { ibadahId: string; total: number }[],
+  seatById: Map<string, number | null>,
+): { perIbadah: IbadahOccupancy[]; overall: { rataOkupansi: number | null; melebihi: number; pertemuanDenganSeat: number } } {
+  const agg = new Map<string, { n: number; sum: number; max: number; over: number }>();
+  for (const o of occurrences) {
+    if (o.total <= 0) continue;
+    const a = agg.get(o.ibadahId) ?? { n: 0, sum: 0, max: 0, over: 0 };
+    a.n++;
+    a.sum += o.total;
+    a.max = Math.max(a.max, o.total);
+    const seat = seatById.get(o.ibadahId);
+    if (seat && o.total > seat) a.over++;
+    agg.set(o.ibadahId, a);
+  }
+  let seatSum = 0;
+  let hadirSum = 0;
+  let over = 0;
+  let withSeat = 0;
+  const perIbadah = [...agg.entries()].map(([ibadahId, a]) => {
+    const seat = seatById.get(ibadahId) ?? null;
+    const rataHadir = Math.round((a.sum / a.n) * 10) / 10;
+    if (seat) {
+      seatSum += seat * a.n;
+      hadirSum += a.sum;
+      over += a.over;
+      withSeat += a.n;
+    }
+    return {
+      ibadahId,
+      seat,
+      pertemuan: a.n,
+      rataHadir,
+      rataOkupansi: occupancyPct(a.sum / a.n, seat),
+      puncakHadir: a.max,
+      puncakOkupansi: occupancyPct(a.max, seat),
+      melebihi: a.over,
+    };
+  });
+  perIbadah.sort((x, y) => (y.rataOkupansi ?? -1) - (x.rataOkupansi ?? -1));
+  return {
+    perIbadah,
+    overall: {
+      rataOkupansi: seatSum ? Math.round((hadirSum / seatSum) * 1000) / 10 : null,
+      melebihi: over,
+      pertemuanDenganSeat: withSeat,
+    },
+  };
+}

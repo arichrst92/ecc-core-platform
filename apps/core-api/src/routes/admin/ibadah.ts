@@ -14,6 +14,7 @@ import { NotFound, BadRequest, Forbidden, Conflict } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
+import { occupancyPct } from '../../lib/attendance-report.js';
 
 export const ibadahRouter = Router();
 
@@ -292,7 +293,21 @@ ibadahRouter.get('/:id', async (req, res) => {
   // Strip ibadahPelayanan dari output (avoid duplicate data — petugas
   // sudah di-flatten + kita tidak mau expose internal junction structure).
   const { ibadahPelayanan: _strip, ...rest } = item;
-  res.json({ success: true, data: { ...rest, petugas } });
+
+  // Okupansi seat pertemuan ?tanggal= (pendataan saja — check-in tidak dibatasi).
+  let okupansi: { tanggal: string; seat: number | null; hadir: number; persen: number | null } | null = null;
+  if (tanggalDate) {
+    const hadir = await prisma.reservasi.count({
+      where: { ibadahId: item.id, tanggalIbadah: tanggalDate, status: 'JOIN' },
+    });
+    okupansi = {
+      tanggal: tanggalDate.toISOString().slice(0, 10),
+      seat: item.kapasitasSeat,
+      hadir,
+      persen: occupancyPct(hadir, item.kapasitasSeat),
+    };
+  }
+  res.json({ success: true, data: { ...rest, petugas, okupansi } });
 });
 
 ibadahRouter.post('/', async (req, res) => {

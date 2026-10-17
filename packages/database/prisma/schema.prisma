@@ -461,6 +461,8 @@ model Ibadah {
   mapsUrl          String?     @map("maps_url") @db.Text
   // Radius self check-in (meter). NULL = boleh self check-in di mana saja.
   selfCheckinRadiusM Int?      @map("self_checkin_radius_m")
+  // Jumlah seat — HANYA untuk pendataan % okupansi (tidak membatasi check-in).
+  kapasitasSeat    Int?        @map("kapasitas_seat")
   isOnline         Boolean     @default(false) @map("is_online")
   // URL Zoom/YouTube Live/Meet untuk akses streaming. DB column tetap
   // `link_stream` (existing), Prisma field rename ke `linkOnline` 2026-05-24

@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Loader2, UserPlus } from 'lucide-react';
+import { Armchair, BarChart3, Loader2, UserPlus } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   ExportButtons,
@@ -25,6 +25,45 @@ import {
   type PeriodState,
 } from '@/components/report/report-ui';
 
+interface IbadahLabel {
+  id: string;
+  nama: string;
+  jamMulai: string;
+  cabang: string | null;
+  isKidsIbadah: boolean;
+  kapasitasSeat: number | null;
+}
+
+const fmtPct = (p: number) => `${p.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`;
+
+/**
+ * Bar okupansi. Lebar dibatasi 100%; kalau melebihi seat (overflow) bar merah
+ * penuh + label "+N di atas seat". Hanya pendataan — check-in tidak dibatasi.
+ */
+function OccupancyBar({ pct, hadir, seat }: { pct: number | null; hadir?: number; seat: number | null }) {
+  if (pct == null || !seat) return <span className="text-xs text-neutral-400">— (seat belum diisi)</span>;
+  const over = pct > 100;
+  const color = over ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
+  return (
+    <div className="min-w-[140px]">
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className={`font-semibold ${over ? 'text-red-600' : 'text-neutral-800'}`}>{fmtPct(pct)}</span>
+        {hadir != null ? (
+          <span className="text-neutral-500">
+            {hadir.toLocaleString('id-ID')} / {seat.toLocaleString('id-ID')}
+          </span>
+        ) : null}
+      </div>
+      <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      {over && hadir != null ? (
+        <div className="text-[10px] text-red-600 mt-0.5">+{(hadir - seat).toLocaleString('id-ID')} di atas seat</div>
+      ) : null}
+    </div>
+  );
+}
+
 interface IbadahReport {
   period: { from: string; to: string; label: string };
   summary: {
@@ -38,6 +77,7 @@ interface IbadahReport {
     pertemuanAdaKehadiran: number;
     rataRata: number;
     methods: MethodCount;
+    okupansi: { rataOkupansi: number | null; melebihi: number; pertemuanDenganSeat: number };
   };
   trend: { week: string; jemaat: number; tamu: number }[];
   occurrences: {
@@ -48,7 +88,20 @@ interface IbadahReport {
     tamu: number;
     tamuBaru: number;
     methods: MethodCount;
-    ibadah: { id: string; nama: string; jamMulai: string; cabang: string | null; isKidsIbadah: boolean };
+    seat: number | null;
+    okupansi: number | null;
+    ibadah: IbadahLabel;
+  }[];
+  occupancy: {
+    ibadahId: string;
+    seat: number | null;
+    pertemuan: number;
+    rataHadir: number;
+    rataOkupansi: number | null;
+    puncakHadir: number;
+    puncakOkupansi: number | null;
+    melebihi: number;
+    ibadah: IbadahLabel;
   }[];
   guests: {
     id: string;
@@ -140,13 +193,89 @@ export default function LaporanIbadahPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <StatCard label="Total kehadiran" value={d.summary.totalHadir} hint={`${d.summary.jemaatHadir} jemaat + ${d.summary.tamuHadir} tamu`} />
             <StatCard label="Jemaat hadir (unik)" value={d.summary.uniqueJemaat} />
             <StatCard label="Tamu (unik)" value={d.summary.uniqueTamu} accent="tamu" />
             <StatCard label="Tamu baru" value={d.summary.tamuBaru} hint="Pertama kali datang di periode ini" accent="tamu" />
             <StatCard label="Pertemuan" value={`${d.summary.pertemuanAdaKehadiran}/${d.summary.pertemuan}`} hint="ada kehadiran / terjadwal" />
             <StatCard label="Rata-rata hadir" value={d.summary.rataRata} hint="per pertemuan" />
+            <StatCard
+              label="Okupansi rata-rata"
+              value={d.summary.okupansi.rataOkupansi != null ? fmtPct(d.summary.okupansi.rataOkupansi) : '—'}
+              hint={
+                d.summary.okupansi.pertemuanDenganSeat
+                  ? d.summary.okupansi.melebihi
+                    ? `${d.summary.okupansi.melebihi} pertemuan melebihi seat`
+                    : 'hadir ÷ jumlah seat'
+                  : 'Isi jumlah seat di menu Ibadah'
+              }
+            />
+          </div>
+
+          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-100">
+              <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+                <Armchair className="w-4 h-4 text-emerald-600" /> Okupansi per ibadah
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Rata-rata hadir ÷ jumlah seat, dari pertemuan yang ada kehadirannya. Hanya pendataan — check-in tidak dibatasi, jadi bisa
+                lebih dari 100%.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium">Ibadah</th>
+                    <th className="text-left px-4 py-2 font-medium">Cabang</th>
+                    <th className="text-right px-4 py-2 font-medium">Seat</th>
+                    <th className="text-right px-4 py-2 font-medium">Pertemuan</th>
+                    <th className="text-right px-4 py-2 font-medium">Rata-rata hadir</th>
+                    <th className="text-left px-4 py-2 font-medium w-56">Okupansi rata-rata</th>
+                    <th className="text-right px-4 py-2 font-medium">Puncak</th>
+                    <th className="text-right px-4 py-2 font-medium">Melebihi seat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {d.occupancy.map((x) => (
+                    <tr key={x.ibadahId}>
+                      <td className="px-4 py-2">
+                        <Link href={`/dashboard/ibadah/${x.ibadahId}`} className="hover:text-brand-600 hover:underline">
+                          {x.ibadah.nama}
+                        </Link>{' '}
+                        <span className="text-xs text-neutral-400">{x.ibadah.jamMulai}</span>
+                      </td>
+                      <td className="px-4 py-2 text-neutral-600">{x.ibadah.cabang ?? '—'}</td>
+                      <td className="px-4 py-2 text-right">{x.seat?.toLocaleString('id-ID') ?? '—'}</td>
+                      <td className="px-4 py-2 text-right">{x.pertemuan}</td>
+                      <td className="px-4 py-2 text-right">{x.rataHadir.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2">
+                        <OccupancyBar pct={x.rataOkupansi} seat={x.seat} />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {x.puncakHadir}
+                        {x.puncakOkupansi != null ? (
+                          <span className={`text-xs ml-1 ${x.puncakOkupansi > 100 ? 'text-red-600 font-semibold' : 'text-neutral-400'}`}>
+                            ({fmtPct(x.puncakOkupansi)})
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className={`px-4 py-2 text-right ${x.melebihi ? 'text-red-600 font-semibold' : 'text-neutral-400'}`}>
+                        {x.melebihi ? `${x.melebihi}×` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {d.occupancy.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center text-neutral-400 py-8">
+                        Belum ada kehadiran di periode ini.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-4">
@@ -208,6 +337,7 @@ export default function LaporanIbadahPage() {
                     <th className="text-left px-4 py-2 font-medium">Ibadah</th>
                     <th className="text-left px-4 py-2 font-medium">Cabang</th>
                     <th className="text-right px-4 py-2 font-medium">Hadir</th>
+                    <th className="text-left px-4 py-2 font-medium">Okupansi</th>
                     <th className="text-right px-4 py-2 font-medium">Jemaat</th>
                     <th className="text-right px-4 py-2 font-medium">Tamu</th>
                     <th className="text-right px-4 py-2 font-medium">Tamu baru</th>
@@ -226,6 +356,9 @@ export default function LaporanIbadahPage() {
                       </td>
                       <td className="px-4 py-2 text-neutral-600">{o.ibadah.cabang ?? '—'}</td>
                       <td className="px-4 py-2 text-right font-semibold">{o.total}</td>
+                      <td className="px-4 py-2">
+                        {o.total > 0 ? <OccupancyBar pct={o.okupansi} hadir={o.total} seat={o.seat} /> : <span className="text-xs">—</span>}
+                      </td>
                       <td className="px-4 py-2 text-right">{o.jemaat}</td>
                       <td className="px-4 py-2 text-right text-violet-700">{o.tamu}</td>
                       <td className="px-4 py-2 text-right text-violet-700">{o.tamuBaru || ''}</td>
@@ -236,7 +369,7 @@ export default function LaporanIbadahPage() {
                   ))}
                   {occ.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center text-neutral-400 py-8">
+                      <td colSpan={9} className="text-center text-neutral-400 py-8">
                         Tidak ada pertemuan di periode ini.
                       </td>
                     </tr>

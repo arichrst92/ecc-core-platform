@@ -89,6 +89,12 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       width: '90px',
       render: (v) => (v ? chipText('Online', 'blue') : chipText('Offline', 'neutral')),
     },
+    {
+      key: 'kapasitasSeat',
+      label: 'Seat',
+      width: '80px',
+      render: (v) => (typeof v === 'number' ? v.toLocaleString('id-ID') : '—'),
+    },
     { key: 'tanggalMulai', label: 'Mulai', width: '110px', render: (v) => dateLocal(v) },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],
@@ -155,6 +161,14 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       ],
       helperText:
         'Dengan radius: jemaat harus berada di dekat titik lokasi (GPS HP dicek). Di luar radius diarahkan ke usher untuk scan QR. Radius butuh titik lokasi ibadah atau cabang.',
+    },
+    {
+      name: 'kapasitasSeat',
+      label: 'Jumlah Seat',
+      type: 'number',
+      placeholder: '300',
+      helperText:
+        'Hanya untuk pendataan % okupansi di laporan & aplikasi. Tidak membatasi check-in — jemaat tetap bisa masuk walau sudah penuh.',
     },
     { name: 'isOnline', label: 'Online?', type: 'switch', defaultValue: false },
     {

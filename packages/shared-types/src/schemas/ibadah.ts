@@ -9,6 +9,17 @@ const selfCheckinRadiusSchema = z
   )
   .optional();
 
+/**
+ * Jumlah seat — hanya untuk pendataan % okupansi, TIDAK membatasi check-in.
+ * '' / null / NaN = tidak diisi; undefined = tidak diubah.
+ */
+const kapasitasSeatSchema = z
+  .preprocess(
+    (v) => (v === '' || (typeof v === 'number' && Number.isNaN(v)) ? null : v),
+    z.union([z.null(), z.coerce.number().int().min(1, 'Seat minimal 1').max(1_000_000)]),
+  )
+  .optional();
+
 export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY', 'ONCE']);
 export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']);
 
@@ -44,6 +55,7 @@ export const createIbadahSchema = z
     mapsUrl: emptyToUndefined(z.string().trim().max(2000)),
     // Radius self check-in (meter). null/'' = boleh di mana saja.
     selfCheckinRadiusM: selfCheckinRadiusSchema,
+    kapasitasSeat: kapasitasSeatSchema,
     isOnline: z.boolean().default(false),
     linkOnline: emptyToUndefined(z.string().url()),
     // Modul 26 — toggle wajib checkout (biasanya untuk ibadah anak)
@@ -77,6 +89,7 @@ export const updateIbadahSchema = z.object({
   mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
   // Radius self check-in (meter). null/'' = boleh di mana saja.
   selfCheckinRadiusM: selfCheckinRadiusSchema,
+  kapasitasSeat: kapasitasSeatSchema,
   isOnline: z.boolean().optional(),
   linkOnline: emptyToUndefined(z.string().url()),
   requiresCheckout: z.boolean().optional(),

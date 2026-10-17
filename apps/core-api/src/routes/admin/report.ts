@@ -21,6 +21,8 @@ import {
   METHOD_LABEL,
   buildEventReport,
   buildIbadahReport,
+  buildOccupancy,
+  occupancyPct,
   type MethodCount,
 } from '../../lib/attendance-report.js';
 
@@ -87,6 +89,7 @@ async function ibadahReportData(req: Request) {
       hari: true,
       isActive: true,
       isKidsIbadah: true,
+      kapasitasSeat: true,
       cabang: { select: { id: true, nama: true } },
       kategoriIbadah: { select: { nama: true } },
     },
@@ -145,14 +148,25 @@ async function ibadahReportData(req: Request) {
   const ibadahById = new Map(ibadahs.map((i) => [i.id, i]));
   const ibadahLabel = (id: string) => {
     const i = ibadahById.get(id);
-    return i ? { id, nama: i.nama, jamMulai: i.jamMulai, cabang: i.cabang?.nama ?? null, isKidsIbadah: i.isKidsIbadah } : { id, nama: '—', jamMulai: '', cabang: null, isKidsIbadah: false };
+    return i
+      ? { id, nama: i.nama, jamMulai: i.jamMulai, cabang: i.cabang?.nama ?? null, isKidsIbadah: i.isKidsIbadah, kapasitasSeat: i.kapasitasSeat }
+      : { id, nama: '—', jamMulai: '', cabang: null, isKidsIbadah: false, kapasitasSeat: null };
   };
+  // Okupansi memakai jumlah seat saat ini (pendataan saja, tidak membatasi check-in).
+  const seatById = new Map(ibadahs.map((i) => [i.id, i.kapasitasSeat]));
+  const occ = buildOccupancy(report.occurrences, seatById);
 
   return {
     period: { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' },
-    summary: report.summary,
+    summary: { ...report.summary, okupansi: occ.overall },
     trend: report.trend,
-    occurrences: report.occurrences.map((o) => ({ ...o, ibadah: ibadahLabel(o.ibadahId) })),
+    occurrences: report.occurrences.map((o) => ({
+      ...o,
+      ibadah: ibadahLabel(o.ibadahId),
+      seat: seatById.get(o.ibadahId) ?? null,
+      okupansi: o.total > 0 ? occupancyPct(o.total, seatById.get(o.ibadahId)) : null,
+    })),
+    occupancy: occ.perIbadah.map((x) => ({ ...x, ibadah: ibadahLabel(x.ibadahId) })),
     guests: report.guests.map((g) => ({
       ...g,
       ibadah: g.ibadahIds.map((id) => ibadahLabel(id).nama),
@@ -165,6 +179,11 @@ async function ibadahReportData(req: Request) {
   };
 }
 
+const pctTxt = (p: number) => `${p.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`;
+/** Sel % okupansi untuk PDF; > 100% ditandai merah (overflow). */
+const pctCell = (p: number | null) =>
+  p == null ? '<span class="muted">—</span>' : p > 100 ? `<span style="color:#dc2626;font-weight:700">${pctTxt(p)}</span>` : pctTxt(p);
+
 reportRouter.get('/ibadah', async (req, res) => {
   await assertAccess(req, 'laporan-ibadah');
   res.json({ success: true, data: await ibadahReportData(req) });
@@ -176,13 +195,31 @@ reportRouter.get('/ibadah/export', async (req, res) => {
   const format = (q(req, 'format') ?? 'pdf').toLowerCase();
   if (format === 'csv') {
     const lines = [
-      ['Tanggal', 'Ibadah', 'Jam', 'Cabang', 'Total hadir', 'Jemaat', 'Tamu', 'Tamu baru', ...CHECKIN_METHODS.map((m) => METHOD_LABEL[m])],
+      ['OKUPANSI PER IBADAH'],
+      ['Ibadah', 'Jam', 'Cabang', 'Seat', 'Pertemuan', 'Rata-rata hadir', 'Rata-rata okupansi (%)', 'Puncak hadir', 'Puncak okupansi (%)', 'Pertemuan melebihi seat'],
+      ...d.occupancy.map((x) => [
+        x.ibadah.nama,
+        x.ibadah.jamMulai,
+        x.ibadah.cabang ?? '',
+        x.seat ?? '',
+        x.pertemuan,
+        x.rataHadir,
+        x.rataOkupansi ?? '',
+        x.puncakHadir,
+        x.puncakOkupansi ?? '',
+        x.melebihi,
+      ]),
+      [],
+      ['PER PERTEMUAN'],
+      ['Tanggal', 'Ibadah', 'Jam', 'Cabang', 'Total hadir', 'Seat', 'Okupansi (%)', 'Jemaat', 'Tamu', 'Tamu baru', ...CHECKIN_METHODS.map((m) => METHOD_LABEL[m])],
       ...d.occurrences.map((o) => [
         o.tanggal,
         o.ibadah.nama,
         o.ibadah.jamMulai,
         o.ibadah.cabang ?? '',
         o.total,
+        o.seat ?? '',
+        o.okupansi ?? '',
         o.jemaat,
         o.tamu,
         o.tamuBaru,
@@ -214,16 +251,31 @@ ${summaryCards([
   ['Tamu baru', s.tamuBaru],
   ['Pertemuan', `${s.pertemuanAdaKehadiran}/${s.pertemuan}`],
   ['Rata-rata / pertemuan', s.rataRata],
+  ['Okupansi rata-rata', s.okupansi.rataOkupansi != null ? `${pctTxt(s.okupansi.rataOkupansi)}` : '—'],
 ])}
 ${methodLine(s.methods)}
+<h2>Okupansi per ibadah</h2>
+${
+  d.occupancy.length
+    ? `<table><thead><tr><th>Ibadah</th><th>Cabang</th><th class="r">Seat</th><th class="r">Pertemuan</th><th class="r">Rata-rata hadir</th><th class="r">Okupansi</th><th class="r">Puncak</th><th class="r">Melebihi seat</th></tr></thead><tbody>
+${d.occupancy
+  .map(
+    (x) =>
+      `<tr><td>${esc(x.ibadah.nama)} <span class="muted">${esc(x.ibadah.jamMulai)}</span></td><td>${esc(x.ibadah.cabang ?? '')}</td><td class="r">${x.seat ?? '<span class="muted">—</span>'}</td><td class="r">${x.pertemuan}</td><td class="r">${x.rataHadir}</td><td class="r b">${pctCell(x.rataOkupansi)}</td><td class="r">${x.puncakHadir}${x.puncakOkupansi != null ? ` <span class="muted">(${pctTxt(x.puncakOkupansi)})</span>` : ''}</td><td class="r">${x.melebihi || ''}</td></tr>`,
+  )
+  .join('')}
+</tbody></table>
+<p class="muted">Okupansi = hadir ÷ jumlah seat. Hanya pendataan — check-in tidak dibatasi, jadi bisa lebih dari 100%. Ibadah tanpa jumlah seat ditandai “—”.</p>`
+    : '<p class="muted">Belum ada kehadiran di periode ini.</p>'
+}
 <h2>Tren mingguan</h2>
 ${trendTable(d.trend)}
 <h2>Per pertemuan</h2>
-<table><thead><tr><th>Tanggal</th><th>Ibadah</th><th>Cabang</th><th class="r">Hadir</th><th class="r">Jemaat</th><th class="r">Tamu</th><th class="r">Tamu baru</th><th>Cara check-in</th></tr></thead><tbody>
+<table><thead><tr><th>Tanggal</th><th>Ibadah</th><th>Cabang</th><th class="r">Hadir</th><th class="r">Okupansi</th><th class="r">Jemaat</th><th class="r">Tamu</th><th class="r">Tamu baru</th><th>Cara check-in</th></tr></thead><tbody>
 ${d.occurrences
   .map(
     (o) =>
-      `<tr><td>${fmtTgl(o.tanggal)}</td><td>${esc(o.ibadah.nama)} <span class="muted">${esc(o.ibadah.jamMulai)}</span></td><td>${esc(o.ibadah.cabang ?? '')}</td><td class="r b">${o.total}</td><td class="r">${o.jemaat}</td><td class="r">${o.tamu}</td><td class="r">${o.tamuBaru}</td><td class="muted">${methodInline(o.methods)}</td></tr>`,
+      `<tr><td>${fmtTgl(o.tanggal)}</td><td>${esc(o.ibadah.nama)} <span class="muted">${esc(o.ibadah.jamMulai)}</span></td><td>${esc(o.ibadah.cabang ?? '')}</td><td class="r b">${o.total}</td><td class="r">${pctCell(o.okupansi)}</td><td class="r">${o.jemaat}</td><td class="r">${o.tamu}</td><td class="r">${o.tamuBaru}</td><td class="muted">${methodInline(o.methods)}</td></tr>`,
   )
   .join('')}
 </tbody></table>

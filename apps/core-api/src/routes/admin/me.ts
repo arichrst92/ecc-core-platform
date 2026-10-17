@@ -1596,5 +1596,58 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     })),
   }));
 
-  res.json({ success: true, data: { assignments } });
+  // Petugas event (EventPelayananPetugas) yang event-nya beririsan dengan
+  // jendela waktu — ditampilkan di "Jadwal Pelayanan Saya".
+  const eventRows = await prisma.eventPelayananPetugas.findMany({
+    where: {
+      jemaatId,
+      eventPelayanan: {
+        event: {
+          isActive: true,
+          tanggalMulai: { lte: to },
+          OR: [{ tanggalSelesai: { gte: from } }, { tanggalSelesai: null, tanggalMulai: { gte: from } }],
+        },
+      },
+    },
+    include: {
+      pelayananRole: { select: { nama: true, level: true } },
+      eventPelayanan: {
+        include: {
+          pelayanan: { select: { id: true, nama: true } },
+          event: {
+            select: {
+              id: true,
+              judul: true,
+              tanggalMulai: true,
+              tanggalSelesai: true,
+              jamMulai: true,
+              jamSelesai: true,
+              lokasi: true,
+              cabang: { select: { id: true, nama: true, timezone: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { eventPelayanan: { event: { tanggalMulai: 'asc' } } },
+  });
+  const events = eventRows.map((r) => ({
+    id: r.id,
+    eventId: r.eventPelayanan.event.id,
+    judul: r.eventPelayanan.event.judul,
+    tanggalMulai: r.eventPelayanan.event.tanggalMulai,
+    tanggalSelesai: r.eventPelayanan.event.tanggalSelesai,
+    jamMulai: r.eventPelayanan.event.jamMulai,
+    jamSelesai: r.eventPelayanan.event.jamSelesai,
+    lokasi: r.eventPelayanan.event.lokasi,
+    cabang: r.eventPelayanan.event.cabang,
+    ministryId: r.eventPelayanan.pelayanan.id,
+    ministryNama: r.eventPelayanan.pelayanan.nama,
+    posisi: r.pelayananRole.nama,
+    posisiLevel: r.pelayananRole.level,
+    canScanAttendance: r.canScanAttendance,
+    catatan: r.catatan,
+  }));
+
+  res.json({ success: true, data: { assignments, events } });
 });

@@ -188,7 +188,7 @@ export const groupResource: ResourceConfig<Group> = {
       type: 'switch',
       defaultValue: true,
       helperText:
-        'Public: siapa saja bisa lihat + join langsung. Private: hidden dari listing, join hanya via kode invitation (QR scan). Toggle ke private otomatis generate joinCode.',
+        'Public: siapa saja bisa lihat + join langsung. Private: hidden dari listing, join hanya via kode invitation (QR scan). Semua group punya QR (lihat halaman detail group); dijadikan private → kode QR diganti baru.',
     },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],

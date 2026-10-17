@@ -273,7 +273,7 @@ groupRouter.post('/join-by-code', async (req, res) => {
 
   const group = await prisma.group.findUnique({
     where: { joinCode: code.toUpperCase() },
-    select: { id: true, nama: true, isActive: true, picJemaatId: true },
+    select: { id: true, nama: true, isActive: true, picJemaatId: true, isPublic: true },
   });
   if (!group || !group.isActive) throw NotFound('Kode invitation tidak valid');
 
@@ -284,6 +284,8 @@ groupRouter.post('/join-by-code', async (req, res) => {
     data: {
       groupId: group.id,
       groupNama: group.nama,
+      // Public → app bisa langsung membuka halaman group walau masih menunggu persetujuan.
+      isPublic: group.isPublic,
       status: r.status, // MEMBER | PENDING
       requestId: 'requestId' in r ? r.requestId : null,
       alreadyMember: 'alreadyMember' in r ? r.alreadyMember : false,
@@ -329,6 +331,17 @@ groupRouter.get('/:id', async (req, res) => {
   // Hide joinCode kalau bukan PIC/admin
   const isPicOrAdmin =
     requester.isFulltimer || group.picJemaatId === requester.jemaatId;
+  // Semua group (public & private) punya kode/QR supaya bisa dibuka lewat
+  // scan QR di app. Group lama yang belum punya kode → dibuat saat dibuka PIC/admin.
+  if (isPicOrAdmin && !group.joinCode) {
+    group.joinCode = (
+      await prisma.group.update({
+        where: { id: group.id },
+        data: { joinCode: await generateUniqueJoinCode() },
+        select: { joinCode: true },
+      })
+    ).joinCode;
+  }
   const { _count, ...rest } = group;
   const [myJoinRequest, pendingJoinCount] = await Promise.all([
     prisma.groupJoinRequest.findFirst({
@@ -375,8 +388,8 @@ groupRouter.post('/', async (req, res) => {
   const requester = await getRequester(req);
   const input = createGroupSchema.parse(req.body);
 
-  // Kalau isPublic=false, auto-generate joinCode
-  const joinCode = input.isPublic === false ? await generateUniqueJoinCode() : null;
+  // Semua group punya joinCode (QR group) — public maupun private.
+  const joinCode = await generateUniqueJoinCode();
 
   // PIC default = requester kalau tidak specified
   const picJemaatId = input.picJemaatId ?? requester.jemaatId;
@@ -415,8 +428,7 @@ groupRouter.post('/', async (req, res) => {
 // ============================================================
 // PATCH /:id — update group (PIC/admin)
 // ============================================================
-// Kalau toggle isPublic: true→false → auto-generate joinCode.
-// Kalau false→true → clear joinCode.
+// Toggle isPublic: dijadikan private → joinCode di-rotate; public tetap punya kode (QR group).
 groupRouter.patch('/:id', async (req, res) => {
   const requester = await getRequester(req);
   await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
@@ -446,12 +458,10 @@ groupRouter.patch('/:id', async (req, res) => {
   // Visibility toggle logic
   if (input.isPublic !== undefined && input.isPublic !== before.isPublic) {
     updateData.isPublic = input.isPublic;
-    if (input.isPublic === false) {
-      // Baru dijadikan private → generate joinCode
+    // Kode/QR tetap berlaku untuk public & private. Dijadikan private →
+    // kode di-rotate supaya undangan lama (saat masih public) tidak berlaku.
+    if (input.isPublic === false || !before.joinCode) {
       updateData.joinCode = await generateUniqueJoinCode();
-    } else {
-      // Baru dijadikan public → clear joinCode
-      updateData.joinCode = null;
     }
   }
 
@@ -541,7 +551,7 @@ groupRouter.delete('/:id', async (req, res) => {
 });
 
 // ============================================================
-// POST /:id/regenerate-code — rotate joinCode (private group only)
+// POST /:id/regenerate-code — rotate joinCode / QR group
 // ============================================================
 groupRouter.post('/:id/regenerate-code', async (req, res) => {
   const requester = await getRequester(req);
@@ -552,7 +562,6 @@ groupRouter.post('/:id/regenerate-code', async (req, res) => {
     select: { id: true, isPublic: true },
   });
   if (!group) throw NotFound('Group tidak ditemukan');
-  if (group.isPublic) throw BadRequest('Group public tidak punya joinCode');
 
   const newCode = await generateUniqueJoinCode();
   const updated = await prisma.group.update({

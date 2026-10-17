@@ -22,6 +22,9 @@ import {
   ChevronRight,
   Info,
   UsersRound,
+  QrCode,
+  Download,
+  Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -286,45 +289,16 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {/* Join code (private only) */}
-        {!g.isPublic && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-            <h2 className="font-semibold text-amber-900 mb-2 flex items-center gap-1.5">
-              <Lock className="w-4 h-4" /> Kode Invitation
-            </h2>
-            <p className="text-xs text-amber-800 mb-3">
-              Share kode ini via QR scan atau manual input untuk invite member.
-            </p>
-            {g.joinCode ? (
-              <>
-                <div className="flex items-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 mb-3">
-                  <code className="font-mono text-lg font-bold text-amber-900 tracking-wider flex-1">
-                    {g.joinCode}
-                  </code>
-                  <button
-                    onClick={() => copyCode(g.joinCode!)}
-                    className="p-1.5 rounded hover:bg-amber-100 text-amber-800"
-                    title="Copy"
-                  >
-                    {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button
-                  onClick={() => regenerateMut.mutate()}
-                  disabled={regenerateMut.isPending}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-amber-300 text-amber-800 rounded hover:bg-amber-100"
-                >
-                  <RefreshCw className={`w-3 h-3 ${regenerateMut.isPending ? 'animate-spin' : ''}`} />
-                  Rotate kode
-                </button>
-              </>
-            ) : (
-              <span className="text-xs text-amber-700 italic">
-                Kode belum tersedia (Anda bukan PIC / admin).
-              </span>
-            )}
-          </div>
-        )}
+        {/* QR Group — public & private. Discan dari app (Group → ikon QR). */}
+        <GroupQrCard
+          nama={g.nama}
+          isPublic={g.isPublic}
+          joinCode={g.joinCode}
+          copied={copiedCode}
+          onCopy={() => g.joinCode && copyCode(g.joinCode)}
+          onRotate={() => regenerateMut.mutate()}
+          rotating={regenerateMut.isPending}
+        />
       </div>
 
       {/* Permintaan bergabung — PIC/admin terima atau tolak */}
@@ -571,6 +545,121 @@ function AddMemberModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * QR Group: isi QR = kode group 8 karakter (format yang dibaca scanner
+ * "Jelajahi Group → QR" di app). Public → langsung bergabung; private →
+ * bergabung / menunggu persetujuan PIC sesuai pengaturan group.
+ */
+function GroupQrCard({
+  nama,
+  isPublic,
+  joinCode,
+  copied,
+  onCopy,
+  onRotate,
+  rotating,
+}: {
+  nama: string;
+  isPublic: boolean;
+  joinCode: string | null;
+  copied: boolean;
+  onCopy: () => void;
+  onRotate: () => void;
+  rotating: boolean;
+}) {
+  const qrSrc = (size: number) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(joinCode ?? '')}`;
+
+  async function download() {
+    if (!joinCode) return;
+    try {
+      const blob = await (await fetch(qrSrc(800))).blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QR-Group-${nama.replace(/[^A-Za-z0-9]+/g, '-')}-${joinCode}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      window.open(qrSrc(800), '_blank');
+    }
+  }
+
+  function print() {
+    if (!joinCode) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    w.document.write(`<!doctype html><html><head><title>QR Group ${esc(nama)}</title>
+<style>body{font-family:system-ui,sans-serif;text-align:center;padding:48px}h1{font-size:28px;margin:0 0 6px}
+p{color:#555;margin:4px 0}.code{font:700 28px monospace;letter-spacing:6px;margin-top:16px}img{width:360px;height:360px;margin-top:24px}</style>
+</head><body><h1>${esc(nama)}</h1><p>Scan QR ini di aplikasi ECC: menu Group → Jelajahi Group → ikon QR</p>
+<img src="${qrSrc(720)}" onload="setTimeout(()=>window.print(),300)" /><div class="code">${esc(joinCode)}</div></body></html>`);
+    w.document.close();
+  }
+
+  return (
+    <div className={`rounded-xl p-5 border ${isPublic ? 'bg-white border-neutral-200' : 'bg-amber-50 border-amber-200'}`}>
+      <h2 className={`font-semibold mb-1 flex items-center gap-1.5 ${isPublic ? 'text-neutral-900' : 'text-amber-900'}`}>
+        <QrCode className="w-4 h-4" /> QR Group
+        {isPublic ? (
+          <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 inline-flex items-center gap-0.5">
+            <Globe className="w-3 h-3" /> Public
+          </span>
+        ) : (
+          <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 inline-flex items-center gap-0.5">
+            <Lock className="w-3 h-3" /> Private
+          </span>
+        )}
+      </h2>
+      <p className={`text-xs mb-3 ${isPublic ? 'text-neutral-500' : 'text-amber-800'}`}>
+        Jemaat scan di app (Group → Jelajahi Group → ikon QR) atau ketik kodenya untuk membuka & bergabung.
+      </p>
+      {joinCode ? (
+        <>
+          <div className="flex justify-center mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrSrc(320)} alt={`QR ${nama}`} width={180} height={180} className="rounded-lg border border-neutral-200 bg-white p-1" />
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-neutral-300 rounded-lg px-3 py-2 mb-3">
+            <code className="font-mono text-lg font-bold text-neutral-900 tracking-wider flex-1 text-center">{joinCode}</code>
+            <button onClick={onCopy} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-600" title="Copy kode">
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={download}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-50"
+            >
+              <Download className="w-3 h-3" /> Unduh
+            </button>
+            <button
+              onClick={print}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-50"
+            >
+              <Printer className="w-3 h-3" /> Cetak
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm('Buat kode/QR baru? QR lama tidak bisa dipakai lagi.')) onRotate();
+              }}
+              disabled={rotating}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${rotating ? 'animate-spin' : ''}`} /> Ganti
+            </button>
+          </div>
+        </>
+      ) : (
+        <span className="text-xs text-neutral-500 italic">QR hanya terlihat oleh PIC / admin group.</span>
+      )}
     </div>
   );
 }

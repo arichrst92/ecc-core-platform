@@ -5,19 +5,22 @@
  * Status + cara mendapatkannya. Jemaat melihat progresnya di app mobile.
  * API: /admin/spiritual-journey
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
+  Camera,
+  Check,
   Footprints,
   Loader2,
   Pencil,
   Plus,
   Search,
   Trash2,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -59,6 +62,7 @@ export default function SpiritualJourneyPage() {
   const [editing, setEditing] = useState<Step | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Step | null>(null);
   const [viewing, setViewing] = useState<Step | null>(null);
+  const [adding, setAdding] = useState<Step | null>(null);
 
   const q = useQuery({
     queryKey: KEY,
@@ -161,7 +165,13 @@ export default function SpiritualJourneyPage() {
                     <p className="text-neutral-700 whitespace-pre-wrap">{s.caraMendapatkan}</p>
                   </div>
                 )}
-                <div className="flex flex-wrap gap-3 mt-3 text-xs">
+                <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
+                  <button
+                    onClick={() => setAdding(s)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Menambahkan Jemaat di Fase Ini
+                  </button>
                   <button onClick={() => setViewing(s)} className="inline-flex items-center gap-1 text-brand-600 hover:underline">
                     <Users className="w-3.5 h-3.5" /> {s.achievedCount.toLocaleString('id-ID')} jemaat sudah mencapai
                   </button>
@@ -199,6 +209,7 @@ export default function SpiritualJourneyPage() {
 
       {editing && <StepForm step={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       {viewing && <AchieversModal step={viewing} onClose={() => setViewing(null)} />}
+      {adding && <AddJemaatModal step={adding} onClose={() => setAdding(null)} />}
       <ConfirmDelete
         open={!!deleting}
         loading={del.isPending}
@@ -500,6 +511,296 @@ function AchieversModal({ step, onClose }: { step: Step; onClose: () => void }) 
                 </button>
               </div>
             </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+interface Candidate {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  noHp: string | null;
+  email: string | null;
+  fotoUrl: string | null;
+  cabang: Ref;
+  achieved: boolean;
+}
+
+/**
+ * Tambah jemaat ke tahap: cari via kode / scan QR (scanner hardware atau
+ * kamera), nama, no HP, atau email → jemaat diberi Role/Sub role/Status
+ * sesuai syarat tahap.
+ */
+function AddJemaatModal({ step, onClose }: { step: Step; onClose: () => void }) {
+  const qc = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState('');
+  const [subRoleId, setSubRoleId] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [added, setAdded] = useState<{ nama: string; ok: boolean; msg: string }[]>([]);
+  const s = useDebounce(search.trim(), 300);
+  const needSubRole = !step.subRoleId;
+
+  const rolesQ = useQuery({
+    queryKey: ['role', 'options'],
+    enabled: needSubRole,
+    queryFn: async () => ((await apiClient.get('/admin/role')).data as { data: RoleOpt[] }).data,
+    staleTime: 5 * 60_000,
+  });
+  const subRoles = rolesQ.data?.find((r) => r.id === step.roleId)?.subRoles ?? [];
+
+  const q = useQuery({
+    queryKey: ['spiritual-journey', step.id, 'candidates', s],
+    enabled: s.length >= 2,
+    queryFn: async () =>
+      (await apiClient.get<{ data: Candidate[] }>(`/admin/spiritual-journey/${step.id}/candidates`, { params: { search: s } })).data
+        .data,
+  });
+
+  const add = useMutation({
+    mutationFn: async (body: { jemaatId?: string; kode?: string; label: string }) =>
+      (
+        await apiClient.post<{ data: { jemaat: { namaLengkap: string } } }>(`/admin/spiritual-journey/${step.id}/jemaat`, {
+          jemaatId: body.jemaatId,
+          kode: body.kode,
+          subRoleId: needSubRole ? subRoleId || null : undefined,
+        })
+      ).data.data,
+    onSuccess: (d) => {
+      const nama = d.jemaat.namaLengkap;
+      toast.success(`${nama} ditambahkan ke "${step.judul}"`);
+      setAdded((h) => [{ nama, ok: true, msg: 'Ditambahkan' }, ...h].slice(0, 20));
+      setSearch('');
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ['spiritual-journey', step.id] });
+      setTimeout(() => inputRef.current?.focus(), 50);
+    },
+    onError: (e, vars) => {
+      const msg = errMsg(e, 'Gagal menambahkan');
+      toast.error(msg);
+      setAdded((h) => [{ nama: vars.label, ok: false, msg }, ...h].slice(0, 20));
+    },
+  });
+
+  const blocked = needSubRole && !subRoleId;
+  const submitKode = (raw: string) => {
+    const kode = raw.trim().toUpperCase();
+    if (!kode || blocked) return;
+    add.mutate({ kode, label: kode });
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto max-h-[90vh] flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+            <div>
+              <h2 className="font-semibold flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-brand-500" /> Menambahkan Jemaat di Fase Ini
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {step.judul} — jemaat diberi {step.role.nama}
+                {step.subRole ? ` › ${step.subRole.nama}` : ''}
+                {step.subRoleStatus ? ` › ${step.subRoleStatus.nama}` : ''}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded-lg">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-3 border-b border-neutral-100">
+            {needSubRole && (
+              <Lbl label={`Sub role yang diberikan * (tahap ini menerima semua sub role ${step.role.nama})`}>
+                <select value={subRoleId} onChange={(e) => setSubRoleId(e.target.value)} className={inputCls}>
+                  <option value="">Pilih sub role</option>
+                  {subRoles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nama}
+                    </option>
+                  ))}
+                </select>
+              </Lbl>
+            )}
+            <div>
+              <span className="block text-xs font-medium text-neutral-600 mb-1">
+                Scan QR, atau ketik kode / nama / no HP / email
+              </span>
+              <div className="flex gap-2">
+                <div className="flex-1 flex items-center gap-2 border-2 border-neutral-300 rounded-lg px-3 focus-within:border-brand-500">
+                  <Search className="w-4 h-4 text-neutral-400" />
+                  <input
+                    ref={inputRef}
+                    autoFocus
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Scanner hardware mengirim Enter setelah kode.
+                      if (e.key === 'Enter' && /^[A-Z0-9]{8}$/i.test(search.trim())) submitKode(search);
+                    }}
+                    placeholder="Kode QR / nama / no HP / email"
+                    className="flex-1 py-2.5 outline-none text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScanning(true)}
+                  title="Scan QR dengan kamera"
+                  className="px-3 rounded-lg border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+              </div>
+              {blocked && <p className="text-[11px] text-amber-700 mt-1">Pilih sub role dulu.</p>}
+            </div>
+
+            {s.length >= 2 && (
+              <div className="border border-neutral-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-neutral-100">
+                {q.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-neutral-500 px-3 py-3">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Mencari…
+                  </div>
+                ) : (q.data ?? []).length === 0 ? (
+                  <p className="text-xs text-neutral-500 px-3 py-3">Tidak ada jemaat yang cocok.</p>
+                ) : (
+                  q.data!.map((j) => (
+                    <div key={j.id} className="flex items-center gap-3 px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-neutral-900 truncate">{j.namaLengkap}</div>
+                        <div className="text-[11px] text-neutral-500 truncate">
+                          {[j.kode, j.noHp, j.email, j.cabang.nama].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      {j.achieved ? (
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded inline-flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Sudah di fase ini
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => add.mutate({ jemaatId: j.id, label: j.namaLengkap })}
+                          disabled={add.isPending || blocked}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-50"
+                        >
+                          Tambahkan
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-5 py-2 text-[11px] uppercase tracking-wider text-neutral-500 font-semibold">
+              Riwayat sesi ini ({added.length})
+            </div>
+            {added.length === 0 ? (
+              <p className="text-xs text-neutral-400 italic text-center pb-5">Belum ada jemaat ditambahkan.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {added.map((h, i) => (
+                  <li key={i} className={`px-5 py-2 text-sm ${h.ok ? 'bg-green-50/40' : 'bg-red-50/40'}`}>
+                    <span className="font-medium text-neutral-900">{h.nama}</span>
+                    <span className={`ml-2 text-xs ${h.ok ? 'text-green-700' : 'text-red-600'}`}>{h.msg}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex justify-end px-5 py-3 border-t border-neutral-100 bg-neutral-50">
+            <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-neutral-300 text-neutral-700 hover:bg-white">
+              Selesai
+            </button>
+          </div>
+        </div>
+      </div>
+      {scanning && (
+        <CameraScanner
+          onClose={() => setScanning(false)}
+          onResult={(kode) => {
+            setScanning(false);
+            setSearch(kode);
+            submitKode(kode);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/** Scan QR via kamera (BarcodeDetector bawaan browser — Chrome/Edge/Android). */
+function CameraScanner({ onResult, onClose }: { onResult: (kode: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let raf = 0;
+    let stopped = false;
+    const BD = (window as any).BarcodeDetector;
+    if (!BD) {
+      setError('Browser ini belum mendukung scan QR via kamera. Gunakan Chrome/Edge, scanner USB, atau ketik kodenya.');
+      return;
+    }
+    const detector = new BD({ formats: ['qr_code'] });
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (stopped || !videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        const tick = async () => {
+          if (stopped || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            const raw: string | undefined = codes?.[0]?.rawValue;
+            if (raw) {
+              // QR berisi kode jemaat; kalau berupa URL, ambil segmen terakhir.
+              const kode = raw.trim().split(/[/?#=]/).filter(Boolean).pop() ?? raw.trim();
+              onResult(kode.toUpperCase());
+              return;
+            }
+          } catch {
+            /* frame belum siap */
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      } catch {
+        setError('Tidak bisa membuka kamera. Pastikan izin kamera diberikan.');
+      }
+    })();
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 z-[60]" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden pointer-events-auto">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+            <span className="text-sm font-semibold flex items-center gap-2">
+              <Camera className="w-4 h-4" /> Scan QR jemaat
+            </span>
+            <button onClick={onClose} className="p-1 hover:bg-neutral-100 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {error ? (
+            <p className="p-5 text-sm text-red-600">{error}</p>
+          ) : (
+            <video ref={videoRef} muted playsInline className="w-full aspect-square object-cover bg-black" />
           )}
         </div>
       </div>

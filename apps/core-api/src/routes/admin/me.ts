@@ -49,6 +49,7 @@ import { meEventCheckinRouter } from './me-event-checkin.js';
 import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
+import { mePrivacyRouter } from './me-privacy.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -59,6 +60,7 @@ export const meRouter = Router();
 meRouter.use('/visits', meVisitRouter);
 // Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
 meRouter.use('/homecell', meHomecellRouter);
+meRouter.use('/privacy', mePrivacyRouter);
 // Self check-in ibadah (saya + keluarga) → me-ibadah.ts
 meRouter.use('/ibadah', meIbadahRouter);
 // Self check-in event (saya + keluarga terdaftar) → me-event-checkin.ts

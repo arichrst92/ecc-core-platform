@@ -209,6 +209,7 @@ model Jemaat {
   relasiAsal                   JemaatRelasi[]                @relation("RelasiAsal")
   relasiTujuan                 JemaatRelasi[]                @relation("RelasiTujuan")
   user                         User?
+  privacy                      JemaatPrivacy?
   jemaatPelayanan              JemaatPelayanan[]
   ibadahPelayananPetugas       IbadahPelayananPetugas[]
   reservasi                    Reservasi[]
@@ -3167,4 +3168,19 @@ model JemaatTamu {
   @@unique([inviterId, tamuId])
   @@index([tamuId])
   @@map("jemaat_tamu")
+}
+
+// Pengaturan privasi data pribadi jemaat (app mobile). `settings` = JSON
+// { [field]: Audience[] } — field: noHp, email, tanggalLahir, ulangTahun,
+// alamat, pekerjaan, pernikahan, keluarga; audience: KELUARGA, HOMECELL,
+// AREA, GROUP, PELAYANAN, CABANG, SEMUA. Tidak ada baris = pakai default.
+model JemaatPrivacy {
+  jemaatId            String   @id @map("jemaat_id") @db.Uuid
+  settings            Json     @default("{}")
+  discoverableByPhone Boolean  @default(true) @map("discoverable_by_phone")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@map("jemaat_privacy")
 }

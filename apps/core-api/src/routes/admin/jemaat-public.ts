@@ -13,10 +13,9 @@
  *   - RESTRICTED fields (close relation only): noHp full, tanggalLahir full,
  *     alamat, family
  *
- * **Close relation** = salah satu:
- *   a. Same cabang dengan requester
- *   b. Ada FamilyRelation antara requester ↔ target (verified)
- *   c. Co-member di Homecell yang sama (active membership)
+ * **Update 2026-10-17:** data pribadi (No HP, email, tanggal lahir, ulang
+ *   tahun, alamat, pekerjaan, pernikahan, keluarga) mengikuti pengaturan
+ *   privasi target (/admin/me/privacy, lib/privacy.ts).
  *
  * Endpoint TIDAK overlap dengan /admin/jemaat/:id (admin CRUD untuk fulltimer).
  * Mobile call /admin/jemaat-public/:id.
@@ -25,6 +24,7 @@ import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
+import { notDiscoverableByPhone, privacyGate, type PrivacyField } from '../../lib/privacy.js';
 
 export const jemaatPublicRouter = Router();
 
@@ -87,14 +87,20 @@ jemaatPublicRouter.get('/search', async (req, res) => {
     take: 60,
   });
   const lower = q.toLowerCase();
+  // Jemaat yang menolak ditemukan lewat no HP: hanya muncul kalau cocok
+  // dengan nama / kode, dan no HP-nya tidak ditampilkan (meski disamarkan).
+  const hidden = await notDiscoverableByPhone(rows.map((r) => r.id));
+  const matchesNameOrKode = (r: (typeof rows)[number]) =>
+    (r.kode ?? '').startsWith(upper) || r.namaLengkap.toLowerCase().includes(lower);
+  const visible = rows.filter((r) => !hidden.has(r.id) || matchesNameOrKode(r));
   const score = (r: (typeof rows)[number]) =>
     (r.kode === upper ? 0 : 10) +
     (cabangId && r.cabangId === cabangId ? 0 : 3) +
     (r.namaLengkap.toLowerCase().startsWith(lower) ? 0 : 1);
-  const data = rows
+  const data = visible
     .sort((a, b) => score(a) - score(b) || a.namaLengkap.localeCompare(b.namaLengkap))
     .slice(0, limit)
-    .map(({ noHp, cabangId: _c, ...r }) => ({ ...r, noHpMasked: maskNoHp(noHp) }));
+    .map(({ noHp, cabangId: _c, ...r }) => ({ ...r, noHpMasked: hidden.has(r.id) ? null : maskNoHp(noHp) }));
   res.json({ success: true, data });
 });
 
@@ -145,54 +151,23 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
   });
   if (!target) throw NotFound('Jemaat tidak ditemukan.');
 
-  // Resolve requester cabangId + homecellIds untuk close-relation check.
-  const requester = await prisma.jemaat.findUnique({
-    where: { id: requesterId },
-    select: {
-      cabangId: true,
-      homecellMembership: {
-        where: { isActive: true },
-        select: { homecellId: true },
-      },
-    },
-  });
-  if (!requester) throw Unauthorized();
-
-  // Compute isCloseRelation
-  let reason: 'same-cabang' | 'family' | 'homecell-co-member' | 'public-only' =
-    'public-only';
-
-  if (requesterId === targetId) {
-    // Self-view: tampilkan full (tapi seharusnya mobile call /admin/me)
-    reason = 'family';
-  } else if (requester.cabangId === target.cabangId) {
-    reason = 'same-cabang';
-  } else {
-    // Cek family link via JemaatRelasi
-    const family = await prisma.jemaatRelasi.findFirst({
-      where: { jemaatId: requesterId, jemaatTerkaitId: targetId },
-      select: { id: true },
-    });
-    if (family) {
-      reason = 'family';
-    } else {
-      // Cek homecell co-member
-      const requesterHomecellIds = requester.homecellMembership.map((m) => m.homecellId);
-      if (requesterHomecellIds.length > 0) {
-        const coMember = await prisma.homecellMember.findFirst({
-          where: {
-            jemaatId: targetId,
-            homecellId: { in: requesterHomecellIds },
-            isActive: true,
-          },
-          select: { id: true },
-        });
-        if (coMember) reason = 'homecell-co-member';
-      }
-    }
-  }
-
-  const isCloseRelation = reason !== 'public-only';
+  // Privasi: tiap data tampil sesuai pengaturan privasi target
+  // (lib/privacy.ts). Diri sendiri & PIC homecell/area selalu lihat semua.
+  const gate = await privacyGate(requesterId, [targetId]);
+  const can = (f: PrivacyField) => gate.can(targetId, f);
+  const rel = [...gate.relations(targetId)];
+  const reason = rel.includes('SELF')
+    ? 'self'
+    : rel.includes('PASTORAL')
+      ? 'pastoral'
+      : rel.includes('KELUARGA')
+        ? 'family'
+        : rel.includes('HOMECELL')
+          ? 'homecell-co-member'
+          : rel.includes('CABANG')
+            ? 'same-cabang'
+            : 'public-only';
+  const isCloseRelation = can('noHp') || can('alamat') || can('tanggalLahir');
 
   // Shape response
   const data = {
@@ -217,13 +192,20 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
     })),
     homecell: target.homecellMembership[0]?.homecell ?? null,
     // Always public helpers
-    noHpMasked: maskNoHp(target.noHp),
-    ulangTahunBulanTgl: birthMonthDay(target.tanggalLahir),
-    // Restricted — null kalau bukan close relation
-    noHp: isCloseRelation ? target.noHp : null,
-    tanggalLahir: isCloseRelation ? target.tanggalLahir : null,
-    alamat: isCloseRelation ? target.alamat : null,
-    family: isCloseRelation
+    noHpMasked: can('noHp') ? maskNoHp(target.noHp) : null,
+    ulangTahunBulanTgl: can('ulangTahun') || can('tanggalLahir') ? birthMonthDay(target.tanggalLahir) : null,
+    // Sesuai pengaturan privasi — null kalau tidak diizinkan.
+    noHp: can('noHp') ? target.noHp : null,
+    email: can('email') ? target.email : null,
+    tanggalLahir: can('tanggalLahir') ? target.tanggalLahir : null,
+    alamat: can('alamat') ? target.alamat : null,
+    pekerjaan: can('pekerjaan')
+      ? { statusPekerjaan: target.statusPekerjaan, namaKantor: target.namaKantor }
+      : null,
+    pernikahan: can('pernikahan')
+      ? { statusPernikahan: target.statusPernikahan, tanggalPernikahan: target.tanggalPernikahan }
+      : null,
+    family: can('keluarga')
       ? target.relasiAsal.map((r) => ({
           tipeRelasi: r.tipeRelasi,
           jemaat: r.jemaatTerkait,
@@ -232,6 +214,7 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
     visibility: {
       isCloseRelation,
       reason,
+      relations: rel,
     },
   };
 

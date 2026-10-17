@@ -28,6 +28,8 @@
  * auto-passes semua auth check (mirror pattern Homecell).
  */
 import { Router } from 'express';
+import { OPEN_GATE, privacyGate } from '../../lib/privacy.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createGroupSchema,
@@ -337,10 +339,25 @@ groupRouter.get('/:id', async (req, res) => {
       ? prisma.groupJoinRequest.count({ where: { groupId: group.id, status: 'PENDING' } })
       : Promise.resolve(0),
   ]);
+  // Privasi no HP anggota (pengaturan privasi masing-masing). Admin di
+  // portal tetap melihat semua.
+  const gate =
+    requester.isFulltimer && !isMobileClient(req)
+      ? OPEN_GATE
+      : await privacyGate(requester.jemaatId, [
+          ...(rest.picJemaat ? [rest.picJemaat.id] : []),
+          ...rest.members.map((m) => m.jemaat.id),
+        ]);
+  const hp = <T extends { id: string; noHp: string | null }>(j: T): T => ({
+    ...j,
+    noHp: gate.can(j.id, 'noHp') ? j.noHp : null,
+  });
   res.json({
     success: true,
     data: {
       ...rest,
+      picJemaat: rest.picJemaat ? hp(rest.picJemaat) : null,
+      members: rest.members.map((m) => ({ ...m, jemaat: hp(m.jemaat) })),
       memberCount: _count.members,
       joinCode: isPicOrAdmin ? group.joinCode : null,
       // Status join user: permintaan menunggu persetujuan PIC (kalau ada).

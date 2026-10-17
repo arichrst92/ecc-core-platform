@@ -23,6 +23,7 @@ import {
   type LastMeeting,
 } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
+import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
@@ -411,7 +412,14 @@ meHomecellRouter.get('/:id', async (req, res) => {
       : Promise.resolve([]),
     // Kontak pemimpin hanya untuk anggota.
     hc.picJemaat && isInside
-      ? prisma.jemaat.findUnique({ where: { id: hc.picJemaat.id }, select: { noHp: true } })
+      ? prisma.jemaat
+          .findUnique({ where: { id: hc.picJemaat.id }, select: { id: true, noHp: true } })
+          .then(async (p) => {
+            // Ikuti pengaturan privasi PIC (default: anggota homecell boleh lihat).
+            if (!p) return null;
+            const gate = await privacyGate(jemaatId, [p.id]);
+            return gate.can(p.id, 'noHp') ? p : { ...p, noHp: null };
+          })
       : Promise.resolve(null),
     prisma.homecellJoinRequest.findFirst({
       where: { jemaatId, homecellId: hc.id, status: 'PENDING' },

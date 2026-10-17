@@ -10,6 +10,7 @@
  *   - POST /admin/maintenance/dispatch-ibadah-reminder
  *   - POST /admin/maintenance/dispatch-event-reminder
  *   - GET  /admin/maintenance/notification-logs    (recent 200, filter type/status)
+ *   - /admin/maintenance/db/*                      backup & restore database (db-backup.ts)
  */
 import { Router } from 'express';
 import { z } from 'zod';
@@ -21,8 +22,11 @@ import {
   dispatchEventReminders,
 } from '../../lib/scheduled-jobs.js';
 import { audit } from '../../lib/audit.js';
+import { dbBackupRouter } from './db-backup.js';
 
 export const maintenanceRouter = Router();
+// Backup & restore database (fulltimer + master password untuk restore).
+maintenanceRouter.use('/db', dbBackupRouter);
 
 // ============================================================
 //  Refresh token

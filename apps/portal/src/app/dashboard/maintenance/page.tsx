@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { DbBackupSection } from '@/components/maintenance/db-backup-section';
 
 type NotifType = 'IBADAH_REMINDER' | 'EVENT_REMINDER';
 type NotifStatus = 'PENDING' | 'SENT' | 'FAILED';
@@ -164,8 +165,8 @@ export default function MaintenancePage() {
             Maintenance
           </h1>
           <p className="text-neutral-500 mt-1">
-            Diagnostic + manual trigger untuk background jobs (cleanup token, audit
-            log retention, WA reminder dispatch).
+            Backup & restore database, serta diagnostic + manual trigger untuk background jobs
+            (cleanup token, audit log retention, WA reminder dispatch).
           </p>
         </div>
         <button
@@ -176,6 +177,9 @@ export default function MaintenancePage() {
           Refresh
         </button>
       </div>
+
+      {/* Backup & Restore Database */}
+      <DbBackupSection />
 
       {/* Cards: stats + actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

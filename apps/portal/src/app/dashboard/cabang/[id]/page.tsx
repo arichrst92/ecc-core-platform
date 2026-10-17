@@ -18,7 +18,15 @@ import {
   ExternalLink,
   CalendarDays,
   UserCheck,
+  Footprints,
+  HeartHandshake,
+  Smartphone,
+  UserPlus,
+  PieChart,
+  Link2Off,
+  Briefcase,
 } from 'lucide-react';
+import { ExportButtons } from '@/components/report/report-ui';
 import { apiClient } from '@/lib/api-client';
 import { BarChart, DonutChart, LineChart } from '@/components/charts/simple-charts';
 import { RekeningSection } from '@/components/cabang/rekening-section';
@@ -76,6 +84,40 @@ interface CabangStats {
     isActive: boolean;
   }>;
   reservasiStatusBreakdown: { JOIN: number; RESERVE: number; CANCEL: number };
+  executive: Executive;
+}
+
+interface Executive {
+  jemaat: {
+    aktif: number;
+    tamu: number;
+    baru: number;
+    tamuBaru: number;
+    pria: number;
+    wanita: number;
+    tanpaGender: number;
+    tanpaTanggalLahir: number;
+  };
+  ageGroups: { label: string; count: number }[];
+  journey: { total: number; stages: { stage: number; label: string; count: number; pct: number }[] };
+  keterlibatan: {
+    pelayanan: number;
+    pelayananPct: number;
+    homecell: number;
+    homecellPct: number;
+    keduanya: number;
+    keduanyaPct: number;
+    belumTerhubung: number;
+    belumTerhubungPct: number;
+  };
+  app: { pernahLogin: number; pernahLoginPct: number; aktif30Hari: number; aktif30HariPct: number };
+  ibadah: {
+    jemaatHadirUnik: number;
+    jemaatHadirPct: number;
+    tamuHadirUnik: number;
+    pertemuan: number;
+    rataRataPerPertemuan: number;
+  };
 }
 
 // ============== Page ==============
@@ -195,9 +237,6 @@ export default function CabangDetailPage() {
         </div>
       </div>
 
-      {/* Rekening Bank section */}
-      <RekeningSection cabangId={stats.cabang.id} />
-
       {/* Filter periode */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 flex items-end gap-3 flex-wrap">
         <div>
@@ -232,10 +271,20 @@ export default function CabangDetailPage() {
             </button>
           ))}
         </div>
-        <div className="ml-auto text-xs text-neutral-500">
-          {formatDateID(stats.periode.from)} – {formatDateID(stats.periode.to)} ({stats.periode.days} hari)
+        <div className="ml-auto flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-neutral-500">
+            {formatDateID(stats.periode.from)} – {formatDateID(stats.periode.to)} ({stats.periode.days} hari)
+          </span>
+          <ExportButtons
+            endpoint={`/admin/cabang/${stats.cabang.id}/stats/export`}
+            params={{ from, to }}
+            filename={`laporan-cabang-${stats.cabang.kode}-${from}_${to}`}
+          />
         </div>
       </div>
+
+      {/* ================= Ringkasan eksekutif ================= */}
+      <ExecutiveSummary x={stats.executive} kpi={stats.kpi} cabangId={stats.cabang.id} />
 
       {/* KPI cards — row 1: jemaat + 3 jenis kehadiran */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -494,6 +543,9 @@ export default function CabangDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* Rekening Bank section */}
+      <RekeningSection cabangId={stats.cabang.id} />
     </div>
   );
 }
@@ -576,5 +628,167 @@ function ReservasiDonut({
       centerLabel={total.toLocaleString('id-ID')}
       centerSublabel="Total"
     />
+  );
+}
+
+// ============== Ringkasan eksekutif ==============
+
+function ExecutiveSummary({ x, kpi, cabangId }: { x: Executive; kpi: CabangStats['kpi']; cabangId: string }) {
+  const n = (v: number) => v.toLocaleString('id-ID');
+  const ageMax = Math.max(1, ...x.ageGroups.map((g) => g.count));
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-neutral-900">Ringkasan Eksekutif</h2>
+        <p className="text-xs text-neutral-500">
+          Persentase dihitung dari jemaat aktif (anggota) cabang saat ini. Kehadiran & jemaat baru mengikuti periode di atas.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <KpiCard icon={Users} label="Jemaat Aktif" value={x.jemaat.aktif} sublabel={`+${n(x.jemaat.baru)} baru di periode`} color="bg-brand-500" />
+        <KpiCard
+          icon={UserCheck}
+          label="Hadir Ibadah"
+          value={x.ibadah.jemaatHadirUnik}
+          sublabel={`${x.ibadah.jemaatHadirPct}% jemaat aktif (unik)`}
+          color="bg-blue-500"
+        />
+        <KpiCard icon={UserPlus} label="Tamu Hadir" value={x.ibadah.tamuHadirUnik} sublabel={`${n(x.jemaat.tamuBaru)} tamu baru tercatat`} color="bg-violet-500" />
+        <KpiCard icon={HeartHandshake} label="Terlibat Pelayanan" value={x.keterlibatan.pelayanan} sublabel={`${x.keterlibatan.pelayananPct}% jemaat aktif`} color="bg-pink-500" />
+        <KpiCard icon={HomeIcon} label="Terlibat Homecell" value={x.keterlibatan.homecell} sublabel={`${x.keterlibatan.homecellPct}% jemaat aktif`} color="bg-purple-500" />
+        <KpiCard icon={Smartphone} label="Aktif di App" value={x.app.aktif30Hari} sublabel={`${x.app.aktif30HariPct}% · 30 hari terakhir`} color="bg-emerald-500" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card icon={Footprints} title="Spiritual Journey" subtitle="Jumlah jemaat aktif per tahap saat ini (berurutan dari tahap 1).">
+          {x.journey.total === 0 ? (
+            <p className="text-sm text-neutral-400 italic text-center py-6">
+              Belum ada tahap. Atur di menu{' '}
+              <Link href="/dashboard/spiritual-journey" className="text-brand-600 hover:underline">
+                Spiritual Journey
+              </Link>
+              .
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {x.journey.stages.map((st) => (
+                <PctBar
+                  key={st.stage}
+                  label={st.label}
+                  count={st.count}
+                  pct={st.pct}
+                  color={st.stage === 0 ? 'bg-neutral-300' : 'bg-emerald-500'}
+                  href={`/dashboard/jemaat?cabangId=${cabangId}&journeyStage=${st.stage}`}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card icon={PieChart} title="Keterlibatan Jemaat" subtitle="Seberapa banyak jemaat aktif yang terhubung ke pelayanan & homecell.">
+          <div className="space-y-2.5">
+            <PctBar label="Terlibat pelayanan" count={x.keterlibatan.pelayanan} pct={x.keterlibatan.pelayananPct} color="bg-pink-500" icon={HeartHandshake} />
+            <PctBar label="Terlibat homecell" count={x.keterlibatan.homecell} pct={x.keterlibatan.homecellPct} color="bg-purple-500" icon={HomeIcon} />
+            <PctBar label="Pelayanan & homecell" count={x.keterlibatan.keduanya} pct={x.keterlibatan.keduanyaPct} color="bg-brand-500" icon={Users} />
+            <PctBar label="Belum terhubung" count={x.keterlibatan.belumTerhubung} pct={x.keterlibatan.belumTerhubungPct} color="bg-neutral-400" icon={Link2Off} />
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-neutral-100 text-center">
+            <MiniStat label="Rata-rata hadir / ibadah" value={n(x.ibadah.rataRataPerPertemuan)} />
+            <MiniStat label="Pertemuan ibadah" value={n(x.ibadah.pertemuan)} />
+            <MiniStat label="Pernah login app" value={`${x.app.pernahLoginPct}%`} />
+          </div>
+        </Card>
+      </div>
+
+      <Card icon={Briefcase} title="Demografi Jemaat Aktif" subtitle="Jenis kelamin & kelompok usia.">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <div className="flex h-3 rounded-full overflow-hidden bg-neutral-100">
+              {x.jemaat.aktif > 0 ? (
+                <>
+                  <div className="bg-sky-500" style={{ width: `${(x.jemaat.pria / x.jemaat.aktif) * 100}%` }} />
+                  <div className="bg-pink-400" style={{ width: `${(x.jemaat.wanita / x.jemaat.aktif) * 100}%` }} />
+                </>
+              ) : null}
+            </div>
+            <div className="flex justify-between text-xs mt-2">
+              <span className="text-sky-700 font-semibold">Laki-laki {n(x.jemaat.pria)}</span>
+              <span className="text-pink-700 font-semibold">Perempuan {n(x.jemaat.wanita)}</span>
+            </div>
+            {x.jemaat.tanpaGender > 0 ? (
+              <p className="text-[11px] text-neutral-400 mt-1">{n(x.jemaat.tanpaGender)} belum mengisi jenis kelamin</p>
+            ) : null}
+            <p className="text-[11px] text-neutral-500 mt-3">
+              Tamu tercatat: <strong>{n(x.jemaat.tamu)}</strong> · Ibadah aktif: <strong>{n(kpi.ibadahAktif)}</strong>
+            </p>
+          </div>
+          <div className="md:col-span-2 space-y-1.5">
+            {x.ageGroups.map((g) => (
+              <div key={g.label} className="flex items-center gap-3 text-xs">
+                <span className="w-28 text-neutral-600 shrink-0">{g.label}</span>
+                <div className="flex-1 h-2.5 bg-neutral-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(g.count / ageMax) * 100}%` }} />
+                </div>
+                <span className="w-12 text-right tabular-nums font-semibold text-neutral-800">{n(g.count)}</span>
+              </div>
+            ))}
+            {x.jemaat.tanpaTanggalLahir > 0 ? (
+              <p className="text-[11px] text-neutral-400">{n(x.jemaat.tanpaTanggalLahir)} belum mengisi tanggal lahir</p>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function PctBar({
+  label,
+  count,
+  pct,
+  color,
+  icon: Icon,
+  href,
+}: {
+  label: string;
+  count: number;
+  pct: number;
+  color: string;
+  icon?: typeof Users;
+  href?: string;
+}) {
+  const content = (
+    <>
+      <div className="flex items-center justify-between text-xs mb-1 gap-2">
+        <span className="text-neutral-700 flex items-center gap-1.5 min-w-0">
+          {Icon ? <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" /> : null}
+          <span className="truncate">{label}</span>
+        </span>
+        <span className="tabular-nums whitespace-nowrap">
+          <strong className="text-neutral-900">{count.toLocaleString('id-ID')}</strong>
+          <span className="text-neutral-400"> · {pct}%</span>
+        </span>
+      </div>
+      <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="block hover:opacity-80" title="Lihat daftar jemaat">
+      {content}
+    </Link>
+  ) : (
+    <div>{content}</div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-lg font-bold text-neutral-900 tabular-nums">{value}</div>
+      <div className="text-[10px] text-neutral-500">{label}</div>
+    </div>
   );
 }

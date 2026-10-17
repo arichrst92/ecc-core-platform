@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import {
   createCabangSchema,
@@ -11,6 +11,8 @@ import { NotFound, BadRequest } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { saveCabangRekeningQris, deleteCabangRekeningQris } from '../../lib/storage.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
+import { jemaatWhereForStage } from '../../lib/spiritual-journey.js';
+import { esc, fmtTgl, sendCsv, sendPrintHtml, summaryCards } from '../../lib/print-report.js';
 
 export const cabangRouter = Router();
 
@@ -167,7 +169,7 @@ function parseDate(s: string | undefined, fallback: Date): Date {
   return d;
 }
 
-cabangRouter.get('/:id/stats', async (req, res) => {
+async function computeCabangStats(req: Request) {
   const cabang = await prisma.cabangGereja.findUnique({
     where: { id: req.params.id },
     include: { sinode: { select: { id: true, nama: true, kode: true } } },
@@ -426,9 +428,9 @@ cabangRouter.get('/:id/stats', async (req, res) => {
     statusMap[r.status] = r._count._all;
   }
 
-  res.json({
-    success: true,
-    data: {
+  const executive = await computeExecutive(cabang.id, from, to);
+
+  return {
       cabang: {
         id: cabang.id,
         nama: cabang.nama,
@@ -458,8 +460,301 @@ cabangRouter.get('/:id/stats', async (req, res) => {
       timeSeries,
       homecells: homecellSummary,
       reservasiStatusBreakdown: statusMap,
-    },
+      executive,
+  };
+}
+
+
+// ============================================================
+//  Ringkasan eksekutif cabang — snapshot (sekarang) + periode.
+// ============================================================
+const AGE_GROUPS = [
+  { label: 'Anak (0–12)', min: 0, max: 12 },
+  { label: 'Remaja (13–17)', min: 13, max: 17 },
+  { label: 'Pemuda (18–35)', min: 18, max: 35 },
+  { label: 'Dewasa (36–59)', min: 36, max: 59 },
+  { label: 'Lansia (60+)', min: 60, max: 200 },
+];
+
+function ageOf(d: Date, today = new Date()): number {
+  let a = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) a -= 1;
+  return a;
+}
+
+async function computeExecutive(cabangId: string, from: Date, to: Date) {
+  const base = { cabangId, isActive: true, isTamu: false };
+  const DAY = 86_400_000;
+  const since30 = new Date(Date.now() - 30 * DAY);
+  const steps = await prisma.spiritualJourneyStep.findMany({
+    where: { isActive: true },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+    select: { judul: true, roleId: true, subRoleId: true, subRoleStatusId: true },
   });
+
+  const [
+    aktif,
+    tamuTotal,
+    jemaatBaru,
+    tamuBaru,
+    pria,
+    wanita,
+    pelayanan,
+    homecell,
+    keduanya,
+    pernahLogin,
+    aktifApp30,
+    lahir,
+    stageCounts,
+    hadirUnik,
+    tamuHadirUnik,
+    pertemuan,
+    totalHadir,
+  ] = await Promise.all([
+    prisma.jemaat.count({ where: base }),
+    prisma.jemaat.count({ where: { cabangId, isActive: true, isTamu: true } }),
+    prisma.jemaat.count({ where: { ...base, createdAt: { gte: from, lte: to } } }),
+    prisma.jemaat.count({ where: { cabangId, isTamu: true, createdAt: { gte: from, lte: to } } }),
+    prisma.jemaat.count({ where: { ...base, jenisKelamin: 'L' } }),
+    prisma.jemaat.count({ where: { ...base, jenisKelamin: 'P' } }),
+    prisma.jemaat.count({ where: { ...base, jemaatPelayanan: { some: { isActive: true } } } }),
+    prisma.jemaat.count({ where: { ...base, homecellMembership: { some: { isActive: true } } } }),
+    prisma.jemaat.count({
+      where: {
+        ...base,
+        jemaatPelayanan: { some: { isActive: true } },
+        homecellMembership: { some: { isActive: true } },
+      },
+    }),
+    prisma.jemaat.count({ where: { ...base, user: { lastLoginAt: { not: null } } } }),
+    prisma.jemaat.count({ where: { ...base, user: { lastLoginAt: { gte: since30 } } } }),
+    prisma.jemaat.findMany({ where: { ...base, tanggalLahir: { not: null } }, select: { tanggalLahir: true } }),
+    Promise.all(
+      steps.length
+        ? Array.from({ length: steps.length + 1 }, (_x, stage) =>
+            prisma.jemaat.count({ where: { ...base, ...jemaatWhereForStage(steps, stage) } }),
+          )
+        : [],
+    ),
+    prisma.reservasi.groupBy({
+      by: ['jemaatId'],
+      where: { ibadah: { cabangId }, status: 'JOIN', tanggalIbadah: { gte: from, lte: to }, jemaat: { isTamu: false } },
+    }),
+    prisma.reservasi.groupBy({
+      by: ['jemaatId'],
+      where: {
+        ibadah: { cabangId },
+        status: 'JOIN',
+        tanggalIbadah: { gte: from, lte: to },
+        OR: [{ jemaat: { isTamu: true } }, { guestSource: { not: null } }],
+      },
+    }),
+    prisma.reservasi.groupBy({
+      by: ['ibadahId', 'tanggalIbadah'],
+      where: { ibadah: { cabangId }, status: 'JOIN', tanggalIbadah: { gte: from, lte: to } },
+    }),
+    prisma.reservasi.count({
+      where: { ibadah: { cabangId }, status: 'JOIN', tanggalIbadah: { gte: from, lte: to } },
+    }),
+  ]);
+
+  const today = new Date();
+  const ageGroups = AGE_GROUPS.map((g) => ({ label: g.label, count: 0 }));
+  for (const r of lahir) {
+    const a = ageOf(r.tanggalLahir!, today);
+    const idx = AGE_GROUPS.findIndex((g) => a >= g.min && a <= g.max);
+    if (idx >= 0) ageGroups[idx]!.count++;
+  }
+  const pct = (n: number) => (aktif ? Math.round((n * 1000) / aktif) / 10 : 0);
+  const terhubung = pelayanan + homecell - keduanya;
+
+  return {
+    jemaat: {
+      aktif,
+      tamu: tamuTotal,
+      baru: jemaatBaru,
+      tamuBaru,
+      pria,
+      wanita,
+      tanpaGender: aktif - pria - wanita,
+      tanpaTanggalLahir: aktif - lahir.length,
+    },
+    ageGroups,
+    journey: {
+      total: steps.length,
+      stages: stageCounts.map((count, stage) => ({
+        stage,
+        label: stage === 0 ? 'Belum mulai' : `Tahap ${stage} · ${steps[stage - 1]!.judul}`,
+        count,
+        pct: pct(count),
+      })),
+    },
+    keterlibatan: {
+      pelayanan,
+      pelayananPct: pct(pelayanan),
+      homecell,
+      homecellPct: pct(homecell),
+      keduanya,
+      keduanyaPct: pct(keduanya),
+      belumTerhubung: aktif - terhubung,
+      belumTerhubungPct: pct(aktif - terhubung),
+    },
+    app: { pernahLogin, pernahLoginPct: pct(pernahLogin), aktif30Hari: aktifApp30, aktif30HariPct: pct(aktifApp30) },
+    ibadah: {
+      jemaatHadirUnik: hadirUnik.length,
+      jemaatHadirPct: pct(hadirUnik.length),
+      tamuHadirUnik: tamuHadirUnik.length,
+      pertemuan: pertemuan.length,
+      rataRataPerPertemuan: pertemuan.length ? Math.round((totalHadir / pertemuan.length) * 10) / 10 : 0,
+    },
+  };
+}
+
+cabangRouter.get('/:id/stats', async (req, res) => {
+  res.json({ success: true, data: await computeCabangStats(req) });
+});
+
+/**
+ * GET /admin/cabang/:id/stats/export?format=pdf|csv&from&to
+ * Laporan cabang untuk rapat eksekutif (PDF print view / Excel CSV).
+ */
+cabangRouter.get('/:id/stats/export', async (req, res) => {
+  const d = await computeCabangStats(req);
+  const x = d.executive;
+  const format = String(req.query.format ?? 'pdf').toLowerCase();
+  const period = { from: d.periode.from, to: d.periode.to, label: `${d.periode.days} hari` };
+  const n = (v: number) => v.toLocaleString('id-ID');
+  const fname = `laporan-cabang-${d.cabang.kode}-${d.periode.from}_${d.periode.to}`;
+
+  if (format === 'csv' || format === 'excel') {
+    const lines: unknown[][] = [
+      ['LAPORAN CABANG', `${d.cabang.nama} (${d.cabang.kode})`],
+      ['Periode', `${d.periode.from} s.d. ${d.periode.to}`],
+      [],
+      ['RINGKASAN', 'Nilai', 'Catatan'],
+      ['Jemaat aktif', x.jemaat.aktif, ''],
+      ['Jemaat baru (periode)', x.jemaat.baru, 'terdaftar di periode'],
+      ['Tamu (data tamu)', x.jemaat.tamu, ''],
+      ['Tamu baru (periode)', x.jemaat.tamuBaru, ''],
+      ['Jemaat hadir ibadah (unik)', x.ibadah.jemaatHadirUnik, `${x.ibadah.jemaatHadirPct}% dari jemaat aktif`],
+      ['Tamu hadir ibadah (unik)', x.ibadah.tamuHadirUnik, ''],
+      ['Total kehadiran ibadah', d.kpi.totalIbadahCheckin, `${x.ibadah.pertemuan} pertemuan, rata-rata ${x.ibadah.rataRataPerPertemuan}`],
+      ['Kehadiran event', d.kpi.totalEventCheckin, `${d.kpi.eventDiPeriode} event`],
+      ['Kehadiran homecell', d.kpi.totalHomecellKehadiran, `${d.kpi.totalHomecellPertemuan} pertemuan`],
+      ['Ibadah aktif', d.kpi.ibadahAktif, ''],
+      ['Homecell aktif', d.kpi.homecellAktif, `${d.kpi.homecellArea} area`],
+      ['Pengguna app (pernah login)', x.app.pernahLogin, `${x.app.pernahLoginPct}%`],
+      ['Aktif di app 30 hari terakhir', x.app.aktif30Hari, `${x.app.aktif30HariPct}%`],
+      [],
+      ['KETERLIBATAN', 'Jemaat', '% jemaat aktif'],
+      ['Terlibat pelayanan', x.keterlibatan.pelayanan, x.keterlibatan.pelayananPct],
+      ['Terlibat homecell', x.keterlibatan.homecell, x.keterlibatan.homecellPct],
+      ['Pelayanan & homecell', x.keterlibatan.keduanya, x.keterlibatan.keduanyaPct],
+      ['Belum terhubung', x.keterlibatan.belumTerhubung, x.keterlibatan.belumTerhubungPct],
+      [],
+      ['SPIRITUAL JOURNEY (tahap saat ini)', 'Jemaat', '% jemaat aktif'],
+      ...x.journey.stages.map((st) => [st.label, st.count, st.pct]),
+      [],
+      ['DEMOGRAFI', 'Jemaat'],
+      ['Laki-laki', x.jemaat.pria],
+      ['Perempuan', x.jemaat.wanita],
+      ['Jenis kelamin belum diisi', x.jemaat.tanpaGender],
+      ...x.ageGroups.map((g) => [g.label, g.count]),
+      ['Tanggal lahir belum diisi', x.jemaat.tanpaTanggalLahir],
+      [],
+      ['IBADAH TERPOPULER', 'Kategori', 'Kehadiran'],
+      ...d.topIbadah.map((i) => [i.ibadahNama, i.kategori ?? '', i.kehadiran]),
+      [],
+      ['EVENT', 'Tanggal', 'Daftar', 'Bayar', 'Hadir', 'Total'],
+      ...d.topEvent.map((e) => [e.judul, new Date(e.tanggalMulai).toISOString().slice(0, 10), e.daftar, e.bayar, e.hadir, e.totalPartisipasi]),
+      [],
+      ['HOMECELL', 'Area', 'Anggota', 'Anggota baru', 'Pertemuan', 'Kehadiran', 'Rata-rata hadir (%)'],
+      ...d.homecells.map((h) => [h.nama, h.area, h.memberAktif, h.memberBaru, h.scheduleCount, h.totalAttendance, h.avgAttendancePercent ?? '']),
+    ];
+    return sendCsv(res, `${fname}.csv`, lines);
+  }
+
+  const bar = (p: number, color: string) =>
+    `<div style="height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden;width:160px"><div style="height:100%;width:${Math.min(100, p)}%;background:${color}"></div></div>`;
+  const pctRow = (label: string, count: number, p: number, color: string) =>
+    `<tr><td>${esc(label)}</td><td class="r b">${n(count)}</td><td class="r">${p}%</td><td>${bar(p, color)}</td></tr>`;
+  const body = `
+<p class="meta">${esc(d.cabang.nama)} (${esc(d.cabang.kode)}) · Sinode ${esc(d.cabang.sinode.nama)}${d.cabang.alamat ? ` · ${esc(d.cabang.alamat)}` : ''}</p>
+${summaryCards([
+  ['Jemaat aktif', n(x.jemaat.aktif)],
+  ['Jemaat baru (periode)', n(x.jemaat.baru)],
+  ['Hadir ibadah (unik)', `${n(x.ibadah.jemaatHadirUnik)} · ${x.ibadah.jemaatHadirPct}%`],
+  ['Tamu hadir (unik)', n(x.ibadah.tamuHadirUnik)],
+  ['Terlibat pelayanan', `${x.keterlibatan.pelayananPct}%`],
+  ['Terlibat homecell', `${x.keterlibatan.homecellPct}%`],
+])}
+${summaryCards([
+  ['Kehadiran ibadah', n(d.kpi.totalIbadahCheckin)],
+  ['Rata-rata / pertemuan', n(x.ibadah.rataRataPerPertemuan)],
+  ['Kehadiran event', n(d.kpi.totalEventCheckin)],
+  ['Kehadiran homecell', n(d.kpi.totalHomecellKehadiran)],
+  ['Homecell aktif', `${n(d.kpi.homecellAktif)} di ${n(d.kpi.homecellArea)} area`],
+  ['Aktif di app (30 hr)', `${x.app.aktif30HariPct}%`],
+])}
+<div style="display:flex;gap:16px">
+  <div style="flex:1">
+    <h2>Spiritual Journey — tahap saat ini</h2>
+    ${
+      x.journey.total
+        ? `<table><thead><tr><th>Tahap</th><th class="r">Jemaat</th><th class="r">%</th><th></th></tr></thead><tbody>
+      ${x.journey.stages.map((st) => pctRow(st.label, st.count, st.pct, '#10b981')).join('')}</tbody></table>`
+        : '<p class="muted">Belum ada tahap Spiritual Journey.</p>'
+    }
+  </div>
+  <div style="flex:1">
+    <h2>Keterlibatan jemaat aktif</h2>
+    <table><thead><tr><th></th><th class="r">Jemaat</th><th class="r">%</th><th></th></tr></thead><tbody>
+      ${pctRow('Terlibat pelayanan', x.keterlibatan.pelayanan, x.keterlibatan.pelayananPct, '#ec4899')}
+      ${pctRow('Terlibat homecell', x.keterlibatan.homecell, x.keterlibatan.homecellPct, '#8b5cf6')}
+      ${pctRow('Pelayanan & homecell', x.keterlibatan.keduanya, x.keterlibatan.keduanyaPct, '#f97316')}
+      ${pctRow('Belum terhubung', x.keterlibatan.belumTerhubung, x.keterlibatan.belumTerhubungPct, '#94a3b8')}
+    </tbody></table>
+    <h2>Demografi</h2>
+    <table><tbody>
+      <tr><td>Laki-laki / Perempuan</td><td class="r b">${n(x.jemaat.pria)} / ${n(x.jemaat.wanita)}</td><td class="muted">${x.jemaat.tanpaGender ? `${n(x.jemaat.tanpaGender)} belum diisi` : ''}</td></tr>
+      ${x.ageGroups.map((g) => `<tr><td>${esc(g.label)}</td><td class="r b">${n(g.count)}</td><td></td></tr>`).join('')}
+      ${x.jemaat.tanpaTanggalLahir ? `<tr><td class="muted">Tanggal lahir belum diisi</td><td class="r">${n(x.jemaat.tanpaTanggalLahir)}</td><td></td></tr>` : ''}
+    </tbody></table>
+  </div>
+</div>
+<h2>Ibadah terpopuler</h2>
+${
+  d.topIbadah.length
+    ? `<table><thead><tr><th>Ibadah</th><th>Kategori</th><th class="r">Kehadiran</th></tr></thead><tbody>
+  ${d.topIbadah.map((i) => `<tr><td>${esc(i.ibadahNama)}</td><td>${esc(i.kategori ?? '')}</td><td class="r b">${n(i.kehadiran)}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">Belum ada kehadiran ibadah.</p>'
+}
+<h2>Event di periode</h2>
+${
+  d.topEvent.length
+    ? `<table><thead><tr><th>Event</th><th>Tanggal</th><th class="r">Daftar</th><th class="r">Bayar</th><th class="r">Hadir</th><th class="r">Total</th></tr></thead><tbody>
+  ${d.topEvent
+    .map(
+      (e) =>
+        `<tr><td>${esc(e.judul)}</td><td>${fmtTgl(new Date(e.tanggalMulai).toISOString().slice(0, 10))}</td><td class="r">${e.daftar}</td><td class="r">${e.bayar}</td><td class="r b">${e.hadir}</td><td class="r">${e.totalPartisipasi}</td></tr>`,
+    )
+    .join('')}</tbody></table>`
+    : '<p class="muted">Tidak ada event di periode ini.</p>'
+}
+<h2>Homecell</h2>
+${
+  d.homecells.length
+    ? `<table><thead><tr><th>Homecell</th><th>Area</th><th class="r">Anggota</th><th class="r">Baru</th><th class="r">Pertemuan</th><th class="r">Hadir</th><th class="r">Rata² hadir</th></tr></thead><tbody>
+  ${d.homecells
+    .map(
+      (h) =>
+        `<tr${h.isActive ? '' : ' class="muted"'}><td>${esc(h.nama)}</td><td>${esc(h.area)}</td><td class="r">${h.memberAktif}</td><td class="r">${h.memberBaru || ''}</td><td class="r">${h.scheduleCount}</td><td class="r">${h.totalAttendance}</td><td class="r b">${h.avgAttendancePercent == null ? '—' : `${h.avgAttendancePercent}%`}</td></tr>`,
+    )
+    .join('')}</tbody></table>`
+    : '<p class="muted">Belum ada homecell.</p>'
+}`;
+  sendPrintHtml(req, res, `Laporan Cabang ${d.cabang.nama}`, period, [], body, 'Persentase dihitung dari jumlah jemaat aktif (anggota) cabang saat ini.');
 });
 
 // ============================================================

@@ -23,7 +23,11 @@ function JemaatPageInner() {
   const sinodeId = sp.get('sinodeId') ?? undefined;
 
   const [relasiTarget, setRelasiTarget] = useState<{ id: string; namaLengkap: string } | null>(null);
-  const [filter, setFilter] = useState<JemaatFilterState>(defaultJemaatFilter);
+  // Deep link dari detail cabang: ?journeyStage=N
+  const [filter, setFilter] = useState<JemaatFilterState>(() => ({
+    ...defaultJemaatFilter,
+    journeyStage: sp.get('journeyStage') ?? '',
+  }));
   const config = useMemo(() => buildJemaatResource(setRelasiTarget), []);
 
   const cabangQ = useQuery({

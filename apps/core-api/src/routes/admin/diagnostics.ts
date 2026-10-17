@@ -8,7 +8,11 @@
  *   - GET    /admin/diagnostics/error-events            — aggregate by fingerprint
  *   - GET    /admin/diagnostics/error-events/:fingerprint — detail (events + breadcrumbs)
  *
- * Auth: requireAuth via parent adminRouter. RBAC gate: menu_key 'diagnostics'.
+ * Auth: requireAuth via parent adminRouter + requireMenu('diagnostics')
+ * (fulltimer / Role Access). PATCH app-config butuh canWrite.
+ *
+ * Filter waktu error-events memakai received_at (jam server), bukan
+ * timestamp dari HP yang bisa salah jam.
  */
 import { Router } from 'express';
 import { Prisma, prisma } from '@ecc/database';
@@ -19,8 +23,12 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { requireMenu } from '../../middleware/require-menu.js';
 
 export const diagnosticsAdminRouter = Router();
+// Hanya fulltimer / role dengan akses menu "diagnostics" (data berisi no HP,
+// stack trace, dan kill switch / threshold face login).
+diagnosticsAdminRouter.use(requireMenu('diagnostics'));
 
 // ============================================================
 //  GET /admin/diagnostics/app-config
@@ -34,7 +42,7 @@ diagnosticsAdminRouter.get('/app-config', async (_req, res) => {
 // ============================================================
 //  PATCH /admin/diagnostics/app-config
 // ============================================================
-diagnosticsAdminRouter.patch('/app-config', async (req, res) => {
+diagnosticsAdminRouter.patch('/app-config', requireMenu('diagnostics', 'write'), async (req, res) => {
   const input = appConfigUpdateSchema.parse(req.body);
   if (Object.keys(input).length === 0) {
     throw BadRequest('Minimal satu field harus diisi untuk update.');
@@ -72,15 +80,14 @@ diagnosticsAdminRouter.get('/face-telemetry', async (req, res) => {
   const where: Prisma.FaceTelemetryEventWhereInput = {
     timestamp: { gte: from, lte: to },
   };
-  if (q.platform !== 'all') {
-    // platform stored di JSONB device.platform — Prisma path syntax.
-    where.device = { path: ['platform'], equals: q.platform };
-  }
+  // platform & appVersion di JSONB device — digabung dengan AND (sebelumnya
+  // filter release menimpa filter platform).
+  const deviceFilters: Prisma.FaceTelemetryEventWhereInput[] = [];
+  if (q.platform !== 'all') deviceFilters.push({ device: { path: ['platform'], equals: q.platform } });
+  if (q.release) deviceFilters.push({ device: { path: ['appVersion'], equals: q.release } });
+  if (deviceFilters.length) where.AND = deviceFilters;
   if (q.flow !== 'all') {
     where.flow = q.flow;
-  }
-  if (q.release) {
-    where.device = { ...(where.device as object), path: ['appVersion'], equals: q.release };
   }
   if (q.noHp) {
     where.noHp = q.noHp;
@@ -207,13 +214,7 @@ diagnosticsAdminRouter.get('/error-events', async (req, res) => {
   const from = q.from ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const to = q.to ?? new Date();
 
-  const where: Prisma.DiagnosticsErrorEventWhereInput = {
-    timestamp: { gte: from, lte: to },
-  };
-  if (q.platform !== 'all') where.platform = q.platform;
-  if (q.release) where.release = q.release;
-  if (q.search) where.message = { contains: q.search, mode: 'insensitive' };
-  if (q.noHp) where.userNoHp = q.noHp;
+  const type = req.query.type === 'error' || req.query.type === 'message' ? req.query.type : null;
 
   // Aggregate by fingerprint. Pakai raw SQL karena Prisma groupBy
   // tidak support nested aggregate dengan window function.
@@ -226,6 +227,7 @@ diagnosticsAdminRouter.get('/error-events', async (req, res) => {
       user_count: bigint;
       sample_message: string;
       sample_error_name: string | null;
+      sample_type: string;
       platforms: string[];
       releases: string[];
     }>
@@ -233,19 +235,21 @@ diagnosticsAdminRouter.get('/error-events', async (req, res) => {
     SELECT
       fingerprint,
       COUNT(*)::bigint AS total,
-      MIN(timestamp) AS first_seen,
-      MAX(timestamp) AS last_seen,
+      MIN(received_at) AS first_seen,
+      MAX(received_at) AS last_seen,
       COUNT(DISTINCT user_no_hp)::bigint AS user_count,
-      (array_agg(message ORDER BY timestamp DESC))[1] AS sample_message,
-      (array_agg(error_name ORDER BY timestamp DESC))[1] AS sample_error_name,
+      (array_agg(message ORDER BY received_at DESC))[1] AS sample_message,
+      (array_agg(error_name ORDER BY received_at DESC))[1] AS sample_error_name,
+      (array_agg(type ORDER BY received_at DESC))[1] AS sample_type,
       array_agg(DISTINCT platform) AS platforms,
       array_agg(DISTINCT release) AS releases
     FROM diagnostics_error_event
-    WHERE timestamp BETWEEN ${from} AND ${to}
+    WHERE received_at BETWEEN ${from} AND ${to}
       ${q.platform !== 'all' ? Prisma.sql`AND platform = ${q.platform}` : Prisma.empty}
       ${q.release ? Prisma.sql`AND release = ${q.release}` : Prisma.empty}
-      ${q.search ? Prisma.sql`AND message ILIKE ${'%' + q.search + '%'}` : Prisma.empty}
+      ${q.search ? Prisma.sql`AND (message ILIKE ${'%' + q.search + '%'} OR error_name ILIKE ${'%' + q.search + '%'})` : Prisma.empty}
       ${q.noHp ? Prisma.sql`AND user_no_hp = ${q.noHp}` : Prisma.empty}
+      ${type ? Prisma.sql`AND type = ${type}` : Prisma.empty}
     GROUP BY fingerprint
     ORDER BY total DESC
     LIMIT ${q.limit}
@@ -255,17 +259,18 @@ diagnosticsAdminRouter.get('/error-events', async (req, res) => {
   const totalGroups = await prisma.$queryRaw<Array<{ count: bigint }>>`
     SELECT COUNT(DISTINCT fingerprint)::bigint AS count
     FROM diagnostics_error_event
-    WHERE timestamp BETWEEN ${from} AND ${to}
+    WHERE received_at BETWEEN ${from} AND ${to}
       ${q.platform !== 'all' ? Prisma.sql`AND platform = ${q.platform}` : Prisma.empty}
       ${q.release ? Prisma.sql`AND release = ${q.release}` : Prisma.empty}
-      ${q.search ? Prisma.sql`AND message ILIKE ${'%' + q.search + '%'}` : Prisma.empty}
+      ${q.search ? Prisma.sql`AND (message ILIKE ${'%' + q.search + '%'} OR error_name ILIKE ${'%' + q.search + '%'})` : Prisma.empty}
       ${q.noHp ? Prisma.sql`AND user_no_hp = ${q.noHp}` : Prisma.empty}
+      ${type ? Prisma.sql`AND type = ${type}` : Prisma.empty}
   `;
 
   res.json({
     success: true,
     data: {
-      filter: { from, to, platform: q.platform, release: q.release ?? null, search: q.search ?? null },
+      filter: { from, to, platform: q.platform, release: q.release ?? null, search: q.search ?? null, type },
       pagination: {
         page: q.page,
         limit: q.limit,
@@ -279,6 +284,7 @@ diagnosticsAdminRouter.get('/error-events', async (req, res) => {
         userCount: Number(g.user_count),
         sampleMessage: g.sample_message,
         sampleErrorName: g.sample_error_name,
+        type: g.sample_type,
         platforms: g.platforms,
         releases: g.releases,
       })),
@@ -296,22 +302,25 @@ diagnosticsAdminRouter.get('/error-events/:fingerprint', async (req, res) => {
     throw BadRequest('Fingerprint tidak valid (harus md5 hex 32 chars).');
   }
 
-  const recent = await prisma.diagnosticsErrorEvent.findMany({
-    where: { fingerprint },
-    orderBy: { timestamp: 'desc' },
-    take: 50,
-  });
+  const [recent, totalAll] = await Promise.all([
+    prisma.diagnosticsErrorEvent.findMany({
+      where: { fingerprint },
+      orderBy: { receivedAt: 'desc' },
+      take: 50,
+    }),
+    prisma.diagnosticsErrorEvent.count({ where: { fingerprint } }),
+  ]);
 
   if (recent.length === 0) throw NotFound('Fingerprint tidak ditemukan.');
 
   // Trend chart — count per hari, last 7 days.
   const trend = await prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
     SELECT
-      DATE_TRUNC('day', timestamp) AS day,
+      DATE_TRUNC('day', received_at AT TIME ZONE 'Asia/Jakarta') AS day,
       COUNT(*)::bigint AS count
     FROM diagnostics_error_event
     WHERE fingerprint = ${fingerprint}
-      AND timestamp > NOW() - INTERVAL '7 days'
+      AND received_at > NOW() - INTERVAL '30 days'
     GROUP BY day
     ORDER BY day ASC
   `;
@@ -327,7 +336,8 @@ diagnosticsAdminRouter.get('/error-events/:fingerprint', async (req, res) => {
     success: true,
     data: {
       fingerprint,
-      total: recent.length, // up to 50, untuk count yang akurat pakai separate query
+      total: totalAll,
+      shown: recent.length,
       recent: recent.map((e) => ({
         id: e.id,
         timestamp: e.timestamp,

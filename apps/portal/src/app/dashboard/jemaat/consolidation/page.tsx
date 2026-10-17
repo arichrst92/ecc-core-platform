@@ -9,7 +9,7 @@
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
@@ -73,7 +73,7 @@ interface Preview {
 }
 interface ApplyResult {
   summary: Record<string, number>;
-  results: { rowNo: number; jemaatId: string; ok: boolean; changes: string[]; error?: string }[];
+  results: { rowNo: number; jemaatId: string | null; ok: boolean; created?: boolean; changes: string[]; error?: string }[];
 }
 
 // ---------- Diff di client (kandidat bisa diganti admin) ----------
@@ -99,9 +99,19 @@ const validSheetValue = (f: Field, v: string | null) =>
   !!v && (f !== 'email' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) && (f !== 'noHp' || v.length >= 8);
 
 interface RowChoice {
-  jemaatId: string | null; // null = skip baris
+  jemaatId: string | null; // null = skip baris (kecuali create)
   fields: Field[]; // field yang diambil dari sheet
+  /** Tambahkan sebagai jemaat baru (baris tidak ada di production). */
+  create: boolean;
 }
+
+/** Data jemaat baru dari baris sheet — hanya nilai yang valid. */
+function createPayload(r: Row) {
+  const out: Record<string, string> = { namaLengkap: r.nama.trim() };
+  for (const f of FIELDS) if (validSheetValue(f, r[f])) out[f] = r[f]!;
+  return out;
+}
+const canCreate = (r: Row) => r.match.status !== 'MATCHED' && r.nama.trim().length >= 2;
 const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 const STATUS_STYLE: Record<MatchStatus, string> = {
@@ -137,6 +147,7 @@ export default function JemaatConsolidationPage() {
     for (const r of p.rows) {
       const target = r.match.status === 'MATCHED' ? r.match.candidates[0] : undefined;
       ch[r.rowNo] = {
+        create: false,
         jemaatId: target?.id ?? null,
         // Default: isi field yang kosong di production; yang beda tetap production.
         fields: target ? FIELDS.filter((f) => diff(f, r[f], target[f]) === 'fill' && validSheetValue(f, r[f])) : [],
@@ -178,9 +189,12 @@ export default function JemaatConsolidationPage() {
     mutationFn: async () => {
       if (!data?.cabang) throw new Error('Cabang tidak diketahui');
       const rows = data.rows
-        .filter((r) => choices[r.rowNo]?.jemaatId)
+        .filter((r) => choices[r.rowNo]?.jemaatId || choices[r.rowNo]?.create)
         .map((r) => {
           const c = choices[r.rowNo]!;
+          if (!c.jemaatId && c.create) {
+            return { rowNo: r.rowNo, create: createPayload(r), area: r.area, homecell: r.homecell, ministry: r.ministry };
+          }
           const updates: Record<string, string> = {};
           for (const f of c.fields) if (r[f]) updates[f] = r[f]!;
           return { rowNo: r.rowNo, jemaatId: c.jemaatId!, updates, area: r.area, homecell: r.homecell, ministry: r.ministry };
@@ -215,7 +229,7 @@ export default function JemaatConsolidationPage() {
 
   // ---------- Ringkasan ----------
   const stats = useMemo(() => {
-    const s = { total: 0, MATCHED: 0, CONFLICT: 0, NAME_ONLY: 0, NOT_FOUND: 0, included: 0, fieldChanges: 0 };
+    const s = { total: 0, MATCHED: 0, CONFLICT: 0, NAME_ONLY: 0, NOT_FOUND: 0, included: 0, fieldChanges: 0, created: 0 };
     if (!data) return s;
     for (const r of data.rows) {
       s.total++;
@@ -224,6 +238,9 @@ export default function JemaatConsolidationPage() {
       if (c?.jemaatId) {
         s.included++;
         s.fieldChanges += c.fields.length;
+      } else if (c?.create) {
+        s.included++;
+        s.created++;
       }
     }
     return s;
@@ -249,7 +266,7 @@ export default function JemaatConsolidationPage() {
           (target && FIELDS.some((f) => diff(f, r[f], target[f]) === 'differ'))
         );
       }
-      if (filter === 'changes') return (choices[r.rowNo]?.fields.length ?? 0) > 0;
+      if (filter === 'changes') return (choices[r.rowNo]?.fields.length ?? 0) > 0 || !!choices[r.rowNo]?.create;
       return true;
     });
   }, [data, filter, q, choices, candById]);
@@ -261,9 +278,28 @@ export default function JemaatConsolidationPage() {
     const t = id ? candById.get(id) : undefined;
     setRow(r.rowNo, {
       jemaatId: id,
+      create: false,
       fields: t ? FIELDS.filter((f) => diff(f, r[f], t[f]) === 'fill' && validSheetValue(f, r[f])) : [],
     });
   }
+  function setCreate(r: Row, on: boolean) {
+    setRow(r.rowNo, on ? { create: true, jemaatId: null, fields: [] } : { create: false });
+  }
+  /** Centang / batalkan "jemaat baru" untuk semua baris yang tidak ditemukan. */
+  const notFoundRows = useMemo(() => data?.rows.filter((r) => r.match.status === 'NOT_FOUND' && canCreate(r)) ?? [], [data]);
+  const allNotFoundChecked = notFoundRows.length > 0 && notFoundRows.every((r) => choices[r.rowNo]?.create);
+  function setCreateAll(on: boolean) {
+    setChoices((p) => {
+      const next = { ...p };
+      for (const r of notFoundRows) {
+        const cur = next[r.rowNo]!;
+        if (cur.jemaatId) continue;
+        next[r.rowNo] = { ...cur, create: on, fields: [] };
+      }
+      return next;
+    });
+  }
+
   function toggleField(rowNo: number, f: Field, useSheet: boolean) {
     const c = choices[rowNo]!;
     setRow(rowNo, { fields: useSheet ? [...new Set([...c.fields, f])] : c.fields.filter((x) => x !== f) });
@@ -330,11 +366,12 @@ export default function JemaatConsolidationPage() {
       {data && !data.missingColumns.length && !result && (
         <>
           {/* Ringkasan */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-4">
             <Stat label="Baris sheet" value={stats.total} />
             <Stat label="Cocok" value={stats.MATCHED} tone="green" />
             <Stat label="Konflik" value={stats.CONFLICT} tone="red" />
             <Stat label="Nama saja / tidak ada" value={stats.NAME_ONLY + stats.NOT_FOUND} tone="amber" />
+            <Stat label="Jemaat baru" value={stats.created} tone="brand" />
             <Stat label="Akan di-apply" value={stats.included} tone="brand" />
           </div>
 
@@ -380,6 +417,12 @@ export default function JemaatConsolidationPage() {
                     {l}
                   </button>
                 ))}
+                {notFoundRows.length > 0 && (
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full border border-blue-300 bg-blue-50 text-blue-800 cursor-pointer">
+                    <input type="checkbox" checked={allNotFoundChecked} onChange={(e) => setCreateAll(e.target.checked)} />
+                    Tambahkan semua yang tidak ditemukan sebagai jemaat baru ({notFoundRows.length})
+                  </label>
+                )}
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -390,7 +433,8 @@ export default function JemaatConsolidationPage() {
               <p className="text-xs text-neutral-500 mb-3">
                 Default: field yang <span className="text-blue-700 font-medium">kosong di production</span> diisi dari sheet;
                 field yang <span className="text-amber-700 font-medium">berbeda</span> tetap production — centang untuk
-                menimpa. Baris yang tidak cocok otomatis di-skip sampai kandidat dipilih.
+                menimpa. Baris yang tidak cocok otomatis di-skip sampai kandidat dipilih — atau centang{' '}
+                <span className="text-blue-700 font-medium">Tambahkan sebagai jemaat baru</span>.
               </p>
               <div className="space-y-3">
                 {visibleRows.length === 0 && <div className="text-sm text-neutral-500 p-6 text-center">Tidak ada baris.</div>}
@@ -402,6 +446,7 @@ export default function JemaatConsolidationPage() {
                     target={choices[r.rowNo]?.jemaatId ? candById.get(choices[r.rowNo]!.jemaatId!) : undefined}
                     duplicate={!!choices[r.rowNo]?.jemaatId && dupTargets.has(choices[r.rowNo]!.jemaatId!)}
                     onPick={(id) => pickCandidate(r, id)}
+                    onCreate={(on) => setCreate(r, on)}
                     onToggle={(f, v) => toggleField(r.rowNo, f, v)}
                   />
                 ))}
@@ -494,6 +539,11 @@ export default function JemaatConsolidationPage() {
               <h2 className="font-semibold text-neutral-900">Yang akan dilakukan</h2>
               <ul className="list-disc pl-5 space-y-1 text-neutral-700">
                 <li>{stats.included} jemaat diproses ({stats.total - stats.included} baris di-skip).</li>
+                {stats.created > 0 && (
+                  <li>
+                    <b>{stats.created} jemaat baru</b> ditambahkan ke cabang {data.cabang?.nama} (kode jemaat dibuat otomatis).
+                  </li>
+                )}
                 <li>{stats.fieldChanges} field data pribadi diperbarui dari sheet.</li>
                 <li>Role jemaat dipastikan Jemaat → Jemaat Tetap (role lain tidak diubah).</li>
                 <li>
@@ -514,7 +564,14 @@ export default function JemaatConsolidationPage() {
               )}
               <button
                 onClick={() => {
-                  if (confirm(`Terapkan konsolidasi untuk ${stats.included} jemaat ke production?`)) applyMut.mutate();
+                  if (
+                  confirm(
+                    `Terapkan konsolidasi untuk ${stats.included} jemaat ke production?${
+                      stats.created ? `\n${stats.created} di antaranya jemaat baru.` : ''
+                    }`,
+                  )
+                )
+                  applyMut.mutate();
                 }}
                 disabled={applyMut.isPending || stats.included === 0}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg"
@@ -559,7 +616,11 @@ export default function JemaatConsolidationPage() {
           )}
           <p className="text-sm text-neutral-600">
             {result.results.filter((x) => x.ok).length} baris berhasil,{' '}
-            {result.results.filter((x) => x.ok && x.changes.length).length} ada perubahan.
+            {result.results.filter((x) => x.ok && x.changes.length).length} ada perubahan
+            {result.results.some((x) => x.ok && x.created)
+              ? `, ${result.results.filter((x) => x.ok && x.created).length} jemaat baru dibuat`
+              : ''}
+            .
           </p>
         </div>
       )}
@@ -592,6 +653,7 @@ function RowCard({
   target,
   duplicate,
   onPick,
+  onCreate,
   onToggle,
 }: {
   row: Row;
@@ -599,11 +661,17 @@ function RowCard({
   target: Candidate | undefined;
   duplicate: boolean;
   onPick: (id: string | null) => void;
+  onCreate: (on: boolean) => void;
   onToggle: (f: Field, useSheet: boolean) => void;
 }) {
-  const skipped = !choice.jemaatId;
+  const creating = !choice.jemaatId && choice.create;
+  const skipped = !choice.jemaatId && !creating;
   return (
-    <div className={`bg-white border rounded-xl p-3 ${skipped ? 'border-neutral-200 opacity-75' : 'border-neutral-300'}`}>
+    <div
+      className={`bg-white border rounded-xl p-3 ${
+        creating ? 'border-blue-300 bg-blue-50/30' : skipped ? 'border-neutral-200 opacity-75' : 'border-neutral-300'
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className="text-xs text-neutral-400">#{row.rowNo}</span>
         <span className="font-semibold text-neutral-900">{row.nama}</span>
@@ -612,6 +680,11 @@ function RowCard({
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">cabang: {target.cabang}</span>
         )}
         {duplicate && <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">dipakai baris lain</span>}
+        {creating && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 inline-flex items-center gap-1">
+            <UserPlus className="w-3 h-3" /> jemaat baru
+          </span>
+        )}
         <span className="text-xs text-neutral-500 ml-auto">
           {[row.area, row.homecell, row.ministry].filter(Boolean).join(' · ')}
         </span>
@@ -622,15 +695,68 @@ function RowCard({
         onChange={(e) => onPick(e.target.value || null)}
         className="w-full sm:w-auto max-w-full border border-neutral-300 rounded-lg px-2 py-1 text-sm mb-2"
       >
-        <option value="">— Skip baris ini —</option>
+        <option value="">{creating ? '— Bukan jemaat yang ada —' : '— Skip baris ini —'}</option>
         {row.match.candidates.map((c) => (
           <option key={c.id} value={c.id}>
             {candLabel(c)}
           </option>
         ))}
       </select>
-      {row.match.status === 'NOT_FOUND' && (
-        <p className="text-xs text-neutral-500">Tidak ditemukan di production — tambahkan lewat menu Jemaat bila perlu.</p>
+      {!choice.jemaatId && canCreate(row) && (
+        <label className="flex items-center gap-2 text-sm text-neutral-800 cursor-pointer mb-1">
+          <input type="checkbox" checked={choice.create} onChange={(e) => onCreate(e.target.checked)} />
+          <span>
+            <b>Tambahkan sebagai jemaat baru</b>
+            <span className="text-xs text-neutral-500">
+              {row.match.status === 'NOT_FOUND'
+                ? ' — tidak ditemukan di production'
+                : ' — pastikan bukan salah satu kandidat di atas'}
+            </span>
+          </span>
+        </label>
+      )}
+      {creating && (
+        <div className="overflow-x-auto mt-1">
+          <table className="w-full text-xs">
+            <thead className="text-neutral-500">
+              <tr>
+                <th className="text-left font-medium py-1 pr-2 w-28">Field</th>
+                <th className="text-left font-medium py-1">Akan disimpan</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-neutral-100">
+                <td className="py-1 pr-2 text-neutral-600">Nama</td>
+                <td className="py-1 text-blue-700">{row.nama}</td>
+              </tr>
+              {FIELDS.map((f) =>
+                row[f] ? (
+                  <tr key={f} className="border-t border-neutral-100 align-top">
+                    <td className="py-1 pr-2 text-neutral-600">{FIELD_LABEL[f]}</td>
+                    <td className="py-1 break-words">
+                      {validSheetValue(f, row[f]) ? (
+                        <span className="text-blue-700">{row[f]}</span>
+                      ) : (
+                        <span className="text-red-600">{row[f]} — tidak valid, dikosongkan</span>
+                      )}
+                    </td>
+                  </tr>
+                ) : null,
+              )}
+              {[row.area, row.homecell, row.ministry].some(Boolean) && (
+                <tr className="border-t border-neutral-100">
+                  <td className="py-1 pr-2 text-neutral-600">Homecell / Ministry</td>
+                  <td className="py-1 text-neutral-700">{[row.area, row.homecell, row.ministry].filter(Boolean).join(' · ')}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {!row.noHp && !row.email && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              Tanpa No HP / email — jemaat ini belum bisa login app sampai datanya dilengkapi.
+            </p>
+          )}
+        </div>
       )}
 
       {target && (

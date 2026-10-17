@@ -5,7 +5,9 @@
  *        → baris sheet + hasil pencocokan ke DB + diff per field + rencana
  *          area/homecell/leader/ministry. TIDAK menulis apa pun.
  *   POST /admin/jemaat-consolidation/apply     JSON keputusan dari GUI
- *        → tulis hanya yang dipilih admin.
+ *        → tulis hanya yang dipilih admin. Baris yang tidak ada di production
+ *          bisa dicentang "tambahkan sebagai jemaat baru" (`create`) → jemaat
+ *          dibuat di cabang sheet, lalu diproses sama (role, homecell, ministry).
  *
  * Fulltimer only. Role sheet diabaikan — semua jemaat dipastikan punya
  * role Jemaat → Jemaat Tetap.
@@ -18,6 +20,7 @@ import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { readXlsx } from '../../lib/xlsx-lite.js';
+import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import {
   DIFF_FIELDS,
   buildIndex,
@@ -230,18 +233,33 @@ const fieldUpdates = z
   })
   .strict();
 
+const createJemaat = z
+  .object({
+    namaLengkap: z.string().trim().min(2).max(255),
+    noHp: z.string().trim().min(8).max(20).optional(),
+    email: z.string().trim().email().max(255).optional(),
+    alamat: z.string().trim().max(2000).optional(),
+    statusPernikahan: z.string().trim().max(50).optional(),
+    tanggalBergabungGereja: z.string().date().optional(),
+  })
+  .strict();
+
 const applySchema = z.object({
   cabangId: z.string().uuid(),
   rows: z
     .array(
-      z.object({
-        rowNo: z.number().int(),
-        jemaatId: z.string().uuid(),
-        updates: fieldUpdates,
-        area: z.string().trim().max(100).nullable(),
-        homecell: z.string().trim().max(150).nullable(),
-        ministry: z.string().trim().max(100).nullable(),
-      }),
+      z
+        .object({
+          rowNo: z.number().int(),
+          // Salah satu: jemaatId (update jemaat yang ada) ATAU create (jemaat baru).
+          jemaatId: z.string().uuid().optional(),
+          create: createJemaat.optional(),
+          updates: fieldUpdates.default({}),
+          area: z.string().trim().max(100).nullable(),
+          homecell: z.string().trim().max(150).nullable(),
+          ministry: z.string().trim().max(100).nullable(),
+        })
+        .refine((r) => !!r.jemaatId !== !!r.create, 'Tiap baris wajib jemaatId atau create (salah satu).'),
     )
     .max(5000),
   areas: z.array(z.object({ nama: z.string().trim().min(1).max(100), picJemaatId: z.string().uuid().nullable() })),
@@ -262,7 +280,7 @@ const applySchema = z.object({
   ),
 });
 
-type RowResult = { rowNo: number; jemaatId: string; ok: boolean; changes: string[]; error?: string };
+type RowResult = { rowNo: number; jemaatId: string | null; ok: boolean; created?: boolean; changes: string[]; error?: string };
 
 jemaatConsolidationRouter.post('/apply', async (req, res) => {
   if (!req.user) throw Unauthorized();
@@ -280,6 +298,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
   if (!jemaatRole || !tetapId) throw BadRequest('Role "Jemaat → Jemaat Tetap" belum ada di database.');
 
   const summary = {
+    jemaatCreated: 0,
     areasCreated: 0,
     homecellsCreated: 0,
     picSet: 0,
@@ -392,28 +411,53 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
   const results: RowResult[] = [];
   for (const r of input.rows) {
     const changes: string[] = [];
+    let jemaatId: string | null = r.jemaatId ?? null;
     try {
+      if (r.create) {
+        // Jemaat baru dari baris sheet (dicentang admin).
+        const c = r.create;
+        const created = await prisma.jemaat.create({
+          data: {
+            cabangId: cabang.id,
+            kode: await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } }))),
+            namaLengkap: c.namaLengkap,
+            noHp: c.noHp ?? null,
+            email: c.email ? c.email.toLowerCase() : null,
+            alamat: c.alamat ?? null,
+            statusPernikahan: c.statusPernikahan ?? null,
+            tanggalBergabungGereja: c.tanggalBergabungGereja ? new Date(c.tanggalBergabungGereja) : null,
+          },
+          select: { id: true },
+        });
+        jemaatId = created.id;
+        changes.push('dibuat');
+        summary.jemaatCreated += 1;
+      }
+      if (!jemaatId) throw new Error('Jemaat tidak ditentukan.');
+
       const data: Record<string, unknown> = {};
       const u = r.updates;
-      if (u.noHp) data.noHp = u.noHp;
-      if (u.email) data.email = u.email.toLowerCase();
-      if (u.alamat) data.alamat = u.alamat;
-      if (u.statusPernikahan) data.statusPernikahan = u.statusPernikahan;
-      if (u.tanggalBergabungGereja) data.tanggalBergabungGereja = new Date(u.tanggalBergabungGereja);
+      if (!r.create) {
+        if (u.noHp) data.noHp = u.noHp;
+        if (u.email) data.email = u.email.toLowerCase();
+        if (u.alamat) data.alamat = u.alamat;
+        if (u.statusPernikahan) data.statusPernikahan = u.statusPernikahan;
+        if (u.tanggalBergabungGereja) data.tanggalBergabungGereja = new Date(u.tanggalBergabungGereja);
+      }
       if (Object.keys(data).length) {
-        await prisma.jemaat.update({ where: { id: r.jemaatId }, data });
+        await prisma.jemaat.update({ where: { id: jemaatId }, data });
         changes.push(...Object.keys(data));
         summary.fieldsUpdated += 1;
       }
 
       // Role → Jemaat Tetap
       const roles = await prisma.jemaatRole.findMany({
-        where: { jemaatId: r.jemaatId, roleId: jemaatRole.id, isActive: true },
+        where: { jemaatId: jemaatId, roleId: jemaatRole.id, isActive: true },
         select: { id: true, subRoleId: true },
       });
       if (roles.length === 0) {
         await prisma.jemaatRole.create({
-          data: { jemaatId: r.jemaatId, roleId: jemaatRole.id, subRoleId: tetapId },
+          data: { jemaatId: jemaatId, roleId: jemaatRole.id, subRoleId: tetapId },
         });
         changes.push('role');
         summary.rolesSet += 1;
@@ -428,11 +472,11 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
         const hcId = homecellIdByKey.get(`${r.area.toUpperCase()}|${r.homecell.toUpperCase()}`);
         if (hcId) {
           const existing = await prisma.homecellMember.findUnique({
-            where: { homecellId_jemaatId: { homecellId: hcId, jemaatId: r.jemaatId } },
+            where: { homecellId_jemaatId: { homecellId: hcId, jemaatId: jemaatId } },
             select: { id: true, isActive: true },
           });
           if (!existing) {
-            await prisma.homecellMember.create({ data: { homecellId: hcId, jemaatId: r.jemaatId } });
+            await prisma.homecellMember.create({ data: { homecellId: hcId, jemaatId: jemaatId } });
             changes.push('homecell');
             summary.homecellMembers += 1;
           } else if (!existing.isActive) {
@@ -450,35 +494,37 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
       const mt = r.ministry ? ministryTarget.get(r.ministry.toUpperCase()) : undefined;
       if (mt) {
         const exists = await prisma.jemaatPelayanan.findFirst({
-          where: { jemaatId: r.jemaatId, pelayananId: mt.pelayananId, isActive: true },
+          where: { jemaatId: jemaatId, pelayananId: mt.pelayananId, isActive: true },
           select: { id: true },
         });
         if (!exists) {
           await prisma.jemaatPelayanan.create({
-            data: { jemaatId: r.jemaatId, pelayananId: mt.pelayananId, pelayananRoleId: mt.roleId, isActive: true },
+            data: { jemaatId: jemaatId, pelayananId: mt.pelayananId, pelayananRoleId: mt.roleId, isActive: true },
           });
           changes.push('ministry');
           summary.ministryMembers += 1;
         }
       }
 
-      results.push({ rowNo: r.rowNo, jemaatId: r.jemaatId, ok: true, changes });
+      results.push({ rowNo: r.rowNo, jemaatId, ok: true, created: !!r.create, changes });
     } catch (e) {
       const code = (e as { code?: string }).code;
       const msg =
         code === 'P2002'
-          ? 'Email / No HP sudah dipakai jemaat lain.'
+          ? r.create
+            ? 'Tidak bisa dibuat: Email / No HP sudah dipakai jemaat lain.'
+            : 'Email / No HP sudah dipakai jemaat lain.'
           : code === 'P2025'
             ? 'Jemaat tidak ditemukan.'
             : (e as Error).message;
-      results.push({ rowNo: r.rowNo, jemaatId: r.jemaatId, ok: false, changes, error: msg });
+      results.push({ rowNo: r.rowNo, jemaatId, ok: false, created: false, changes, error: msg });
     }
   }
 
   audit(req, {
     action: 'UPDATE',
     resource: 'jemaat_consolidation',
-    resourceLabel: `Konsolidasi ${cabang.nama}: ${input.rows.length} baris`,
+    resourceLabel: `Konsolidasi ${cabang.nama}: ${input.rows.length} baris (${summary.jemaatCreated} jemaat baru)`,
     metadata: { ...summary, failed: results.filter((x) => !x.ok).length },
   });
 

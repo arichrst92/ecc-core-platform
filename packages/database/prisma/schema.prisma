@@ -186,6 +186,10 @@ model Jemaat {
   tamuStatusUpdatedById String?   @map("tamu_status_updated_by_id") @db.Uuid
   // Catatan internal tim follow-up (tidak tampil ke jemaat pengundang).
   tamuCatatan           String?   @map("tamu_catatan") @db.Text
+  // Jemaat / staf yang ditugaskan mem-follow-up tamu ini (diatur admin portal,
+  // namanya terlihat oleh jemaat pengundang di app).
+  tamuFollowupById      String?   @map("tamu_followup_by_id") @db.Uuid
+  tamuFollowupAt        DateTime? @map("tamu_followup_at")
 
   // ---- Onboarding state ----
   // NULL = jemaat belum complete onboarding wizard. Mobile app WAJIB
@@ -245,6 +249,8 @@ model Jemaat {
   feedbackReplies              FeedbackReply[]               @relation("FeedbackReplyAuthor")
   tamuSaya                     JemaatTamu[]                  @relation("TamuInviter")
   diundangSebagaiTamu          JemaatTamu[]                  @relation("TamuGuest")
+  tamuFollowupBy               Jemaat?                       @relation("TamuFollowup", fields: [tamuFollowupById], references: [id], onDelete: SetNull)
+  tamuDifollowup               Jemaat[]                      @relation("TamuFollowup")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
@@ -311,6 +317,7 @@ model Jemaat {
   @@index([namaLengkap])
   @@index([kode])
   @@index([primaryGuardianId])
+  @@index([tamuFollowupById])
   @@map("jemaat")
 }
 

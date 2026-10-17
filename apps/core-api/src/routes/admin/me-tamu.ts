@@ -23,7 +23,17 @@ function me(req: Request) {
   return req.user;
 }
 
-const tamuSelect = { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, tamuStatus: true } as const;
+const tamuSelect = {
+  id: true,
+  namaLengkap: true,
+  noHp: true,
+  kode: true,
+  isTamu: true,
+  tamuStatus: true,
+  tamuFollowupAt: true,
+  // Nama petugas follow-up (bukan no HP — privasi petugas).
+  tamuFollowupBy: { select: { id: true, namaLengkap: true } },
+} as const;
 
 /**
  * Daftar tamu saya + status tindak lanjut (diatur admin ECC, dinaikkan
@@ -43,7 +53,7 @@ meTamuRouter.get('/', async (req, res) => {
     data: rows.map((r) => {
       const a = att.get(r.tamu.id);
       const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: !!a?.kehadiran });
-      const { tamuStatus: _s, ...tamu } = r.tamu;
+      const { tamuStatus: _s, tamuFollowupBy, tamuFollowupAt, ...tamu } = r.tamu;
       return {
         ...tamu,
         addedAt: r.createdAt,
@@ -52,6 +62,8 @@ meTamuRouter.get('/', async (req, res) => {
         kehadiran: a?.kehadiran ?? 0,
         terakhirHadir: a?.terakhirHadir ?? null,
         terakhirAcara: a?.terakhirAcara ?? null,
+        followupBy: tamuFollowupBy,
+        followupSejak: tamuFollowupAt,
       };
     }),
   });

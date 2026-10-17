@@ -9,11 +9,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Contact, Loader2, MessageCircle, Search, StickyNote, X } from 'lucide-react';
+import { Contact, Loader2, MessageCircle, Search, StickyNote, UserCheck, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
-import { selectCls, useCabangOptions } from '@/components/report/report-ui';
+import { ExportButtons, selectCls, useCabangOptions } from '@/components/report/report-ui';
 
 type Status = 'DIUNDANG' | 'TERLIBAT' | 'FOLLOWUP' | 'TERDAFTAR';
 
@@ -34,6 +34,8 @@ interface Tamu {
   statusTersimpan: string | null;
   statusDiubah: string | null;
   catatan: string | null;
+  followupBy: { id: string; namaLengkap: string; noHp: string | null } | null;
+  followupSejak: string | null;
 }
 
 interface ListResp {
@@ -45,6 +47,7 @@ interface ListResp {
     totalAll: number;
     counts: Record<Status, number>;
     statusOptions: { value: Status; label: string }[];
+    followupPeople: { id: string; namaLengkap: string }[];
   };
 }
 
@@ -73,22 +76,38 @@ export default function TamuPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [noteFor, setNoteFor] = useState<Tamu | null>(null);
+  const [assignFor, setAssignFor] = useState<Tamu | null>(null);
+  const [followupBy, setFollowupBy] = useState('');
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
 
+  // Filter yang sama untuk daftar & export
+  const filterParams: Record<string, string | undefined> = {
+    status: status || undefined,
+    cabangId: cabangId || undefined,
+    search: s || undefined,
+    followupBy: followupBy || undefined,
+  };
+
   const q = useQuery({
-    queryKey: ['tamu', status, cabangId, s, page],
+    queryKey: ['tamu', status, cabangId, s, followupBy, page],
     queryFn: async () =>
       (
         await apiClient.get<ListResp>('/admin/tamu', {
-          params: { status: status || undefined, cabangId: cabangId || undefined, search: s || undefined, page },
+          params: { ...filterParams, page },
         })
       ).data,
     placeholderData: (p) => p,
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, body }: { id: string; body: { status?: Status; catatan?: string | null } }) =>
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id: string;
+      body: { status?: Status; catatan?: string | null; followupById?: string | null };
+    }) =>
       apiClient.patch(`/admin/tamu/${id}`, body),
     onSuccess: () => {
       toast.success('Tersimpan');
@@ -102,6 +121,7 @@ export default function TamuPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <Contact className="w-6 h-6 text-brand-500" /> Tamu
@@ -111,6 +131,8 @@ export default function TamuPage() {
           jemaat yang mengundang melihat statusnya di aplikasi. Status otomatis naik ke <i>Sudah terlibat</i> saat tamu
           hadir, dan ke <i>Sudah terdaftar</i> saat tamu mendaftar Els App.
         </p>
+      </div>
+      <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${new Date().toISOString().slice(0, 10)}`} />
       </div>
 
       {/* Ringkasan per status (klik untuk filter) */}
@@ -168,6 +190,22 @@ export default function TamuPage() {
             </option>
           ))}
         </select>
+        <select
+          value={followupBy}
+          onChange={(e) => {
+            setFollowupBy(e.target.value);
+            setPage(1);
+          }}
+          className={`${selectCls} w-56`}
+        >
+          <option value="">Semua petugas follow-up</option>
+          <option value="none">Belum ada petugas follow-up</option>
+          {(meta?.followupPeople ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.namaLengkap}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
@@ -185,6 +223,7 @@ export default function TamuPage() {
                 <th className="text-left px-4 py-2 font-medium">Diundang oleh</th>
                 <th className="text-left px-4 py-2 font-medium">Kehadiran</th>
                 <th className="text-left px-4 py-2 font-medium w-64">Status</th>
+                <th className="text-left px-4 py-2 font-medium w-48">Difollow-up oleh</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -256,6 +295,21 @@ export default function TamuPage() {
                     ) : null}
                     {t.catatan ? <div className="text-[11px] text-neutral-600 mt-1 line-clamp-2">“{t.catatan}”</div> : null}
                   </td>
+                  <td className="px-4 py-3 text-xs">
+                    {t.followupBy ? (
+                      <>
+                        <Link href={`/dashboard/jemaat/${t.followupBy.id}`} className="font-medium text-neutral-800 hover:underline">
+                          {t.followupBy.namaLengkap}
+                        </Link>
+                        {t.followupSejak ? <div className="text-[10px] text-neutral-400">sejak {tgl(t.followupSejak)}</div> : null}
+                      </>
+                    ) : (
+                      <span className="text-neutral-400">Belum ada</span>
+                    )}
+                    <button onClick={() => setAssignFor(t)} className="block mt-1 text-brand-600 hover:underline">
+                      {t.followupBy ? 'Ganti' : 'Tugaskan'}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => setNoteFor(t)}
@@ -290,6 +344,17 @@ export default function TamuPage() {
           </div>
         )}
       </div>
+
+      {assignFor && (
+        <AssignModal
+          tamu={assignFor}
+          saving={update.isPending}
+          onClose={() => setAssignFor(null)}
+          onSave={(followupById) =>
+            update.mutate({ id: assignFor.id, body: { followupById } }, { onSuccess: () => setAssignFor(null) })
+          }
+        />
+      )}
 
       {noteFor && (
         <NoteModal
@@ -348,6 +413,108 @@ function NoteModal({
               Simpan
             </button>
           </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+interface JemaatOpt {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  noHp: string | null;
+  cabang?: { nama: string } | null;
+}
+
+function AssignModal({
+  tamu,
+  saving,
+  onClose,
+  onSave,
+}: {
+  tamu: Tamu;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (followupById: string | null) => void;
+}) {
+  const [q, setQ] = useState('');
+  const dq = useDebounce(q.trim(), 300);
+  const res = useQuery({
+    queryKey: ['jemaat-pick-followup', dq],
+    enabled: dq.length >= 2,
+    queryFn: async () =>
+      (await apiClient.get<{ data: JemaatOpt[] }>('/admin/jemaat', { params: { search: dq, limit: 8, isActive: 'true' } })).data.data,
+    staleTime: 30_000,
+  });
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="font-semibold flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-brand-500" /> Petugas follow-up
+              </h2>
+              <p className="text-xs text-neutral-500">
+                {tamu.namaLengkap} · nama petugas terlihat oleh jemaat yang mengundang di aplikasi
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-neutral-100 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {tamu.followupBy ? (
+            <div className="flex items-center justify-between bg-neutral-50 rounded-lg px-3 py-2 mb-3 text-sm">
+              <span>
+                Saat ini: <b>{tamu.followupBy.namaLengkap}</b>
+              </span>
+              <button onClick={() => onSave(null)} disabled={saving} className="text-xs text-red-600 hover:underline">
+                Lepas
+              </button>
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
+            <Search className="w-3.5 h-3.5 text-neutral-400" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cari nama / no HP / kode jemaat"
+              className="flex-1 py-2 outline-none text-sm"
+            />
+          </div>
+          <div className="mt-2 max-h-72 overflow-y-auto divide-y divide-neutral-100">
+            {dq.length < 2 ? (
+              <p className="text-xs text-neutral-400 px-1 py-3">Ketik minimal 2 huruf.</p>
+            ) : res.isLoading ? (
+              <div className="py-6 flex justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+              </div>
+            ) : (res.data ?? []).filter((j) => j.id !== tamu.id).length === 0 ? (
+              <p className="text-xs text-neutral-400 px-1 py-3">Tidak ditemukan.</p>
+            ) : (
+              (res.data ?? [])
+                .filter((j) => j.id !== tamu.id)
+                .map((j) => (
+                  <button
+                    key={j.id}
+                    onClick={() => onSave(j.id)}
+                    disabled={saving}
+                    className="w-full text-left px-2 py-2.5 hover:bg-brand-50 rounded flex items-center justify-between gap-2"
+                  >
+                    <span className="text-sm font-medium text-neutral-900">{j.namaLengkap}</span>
+                    <span className="text-[11px] text-neutral-500">
+                      {[j.kode, j.cabang?.nama].filter(Boolean).join(' · ')}
+                    </span>
+                  </button>
+                ))
+            )}
+          </div>
+          <p className="text-[11px] text-neutral-500 mt-3">
+            Menugaskan petugas otomatis mengubah status menjadi <i>Sedang di-follow-up ECC</i> (kecuali tamu sudah terdaftar).
+          </p>
         </div>
       </div>
     </>

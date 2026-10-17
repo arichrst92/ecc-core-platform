@@ -562,7 +562,9 @@ homecellScheduleRouter.delete(
 );
 
 // ============================================================
-// DELETE schedule — hanya kalau attendanceCount = 0 (safety)
+// DELETE schedule — default hanya kalau attendanceCount = 0 (safety).
+// ?force=true (dari portal, setelah konfirmasi) → kehadiran & file materi
+// pertemuan ikut terhapus.
 // ============================================================
 homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
   const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
@@ -578,7 +580,8 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
   });
   if (!before) throw NotFound('Schedule tidak ditemukan.');
 
-  if (before._count.attendances > 0) {
+  const force = req.query.force === 'true';
+  if (before._count.attendances > 0 && !force) {
     throw new ApiError(
       400,
       'HAS_ATTENDANCE',
@@ -599,11 +602,14 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
     action: 'DELETE',
     resource: 'homecell_schedule',
     resourceId: scheduleId,
-    resourceLabel: `${before.tanggal.toISOString().slice(0, 10)} — ${before.lokasi}`,
+    resourceLabel: `${before.tanggal.toISOString().slice(0, 10)} — ${before.lokasi}${
+      before._count.attendances ? ` (+${before._count.attendances} kehadiran)` : ''
+    }`,
     before,
+    metadata: { attendanceDeleted: before._count.attendances, filesDeleted: files.length, force },
   });
 
-  res.json({ success: true, data: { deleted: true } });
+  res.json({ success: true, data: { deleted: true, attendanceDeleted: before._count.attendances, filesDeleted: files.length } });
 });
 
 // ============================================================

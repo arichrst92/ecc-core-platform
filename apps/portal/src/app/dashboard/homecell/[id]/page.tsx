@@ -22,6 +22,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
 import { HomecellBoardSection } from '@/components/group/group-content';
 
 interface Homecell {
@@ -466,6 +467,7 @@ function AddMemberModal({
 }
 
 function SchedulesSection({ homecellId }: { homecellId: string }) {
+  const [deleting, setDeleting] = useState<ScheduleListItem | null>(null);
   const q = useQuery({
     queryKey: ['homecell', 'schedules', homecellId],
     queryFn: async () => {
@@ -490,10 +492,10 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
         </div>
         <span
           className="text-xs text-neutral-500 flex items-center gap-1"
-          title="Jadwal pertemuan dibuat oleh PIC homecell via aplikasi mobile. Portal read-only."
+          title="Jadwal pertemuan dibuat oleh PIC homecell via aplikasi mobile. Portal bisa melihat & menghapus."
         >
           <Info className="w-3.5 h-3.5" />
-          Read-only. Dibuat dari aplikasi mobile.
+          Dibuat dari aplikasi mobile. Portal bisa menghapus.
         </span>
       </div>
 
@@ -519,7 +521,7 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
               <th className="px-5 py-2 text-center font-medium" style={{ width: '110px' }}>
                 Kehadiran
               </th>
-              <th className="px-5 py-2 text-right font-medium" style={{ width: '50px' }}></th>
+              <th className="px-5 py-2 text-right font-medium" style={{ width: '90px' }}></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
@@ -551,7 +553,14 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
                     {s.attendanceCount}
                   </span>
                 </td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-5 py-3 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => setDeleting(s)}
+                    className="inline-flex items-center p-1.5 rounded text-neutral-400 hover:text-red-600 hover:bg-red-50 mr-1"
+                    title="Hapus jadwal"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   <Link
                     href={`/dashboard/homecell/${homecellId}/schedule/${s.id}`}
                     className="inline-flex items-center text-neutral-400 hover:text-brand-600"
@@ -565,6 +574,7 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
           </tbody>
         </table>
       )}
+      <DeleteScheduleDialog homecellId={homecellId} schedule={deleting} onClose={() => setDeleting(null)} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -14,8 +15,10 @@ import {
   Info,
   Clock,
   Smartphone,
+  Trash2,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
 import { ScheduleFilesSection, type ScheduleFile } from '@/components/homecell/schedule-files';
 
 interface ScheduleDetail {
@@ -56,6 +59,7 @@ export default function HomecellScheduleDetailPage() {
   const router = useRouter();
   const homecellId = params.id;
   const scheduleId = params.scheduleId;
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const q = useQuery({
     queryKey: ['homecell', 'schedule', 'detail', homecellId, scheduleId],
@@ -110,16 +114,32 @@ export default function HomecellScheduleDetailPage() {
             </Link>
           </div>
         </div>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-lg"
+        >
+          <Trash2 className="w-4 h-4" /> Hapus jadwal
+        </button>
       </div>
+      <DeleteScheduleDialog
+        homecellId={homecellId}
+        schedule={
+          deleteOpen
+            ? { id: s.id, tanggal: s.tanggal, lokasi: s.lokasi, attendanceCount: s.attendanceCount, fileCount: s.files?.length ?? 0 }
+            : null
+        }
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => router.replace(`/dashboard/homecell/${homecellId}`)}
+      />
 
       {/* Info banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 text-sm text-blue-800">
         <Info className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
         <div>
-          <p className="font-medium mb-1">Jadwal pertemuan — read-only</p>
+          <p className="font-medium mb-1">Jadwal pertemuan</p>
           <p className="text-xs text-blue-700">
             Jadwal pertemuan dan absensi dibuat oleh PIC homecell via aplikasi mobile (scan
-            QR jemaat). Portal menampilkan report saja — tidak ada CRUD.
+            QR jemaat). Portal menampilkan report dan bisa menghapus jadwal (kehadiran ikut terhapus).
           </p>
         </div>
       </div>

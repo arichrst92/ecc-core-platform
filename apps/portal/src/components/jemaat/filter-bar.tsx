@@ -395,7 +395,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
 
         {/* Usia range */}
         <Field label="Usia">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <input
               type="number"
               min={0}
@@ -440,7 +440,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           <button
             type="button"
             onClick={() => patch({ sortOrder: value.sortOrder === 'asc' ? 'desc' : 'asc' })}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 border border-neutral-300 rounded text-sm hover:bg-neutral-50"
+            className={`w-full flex items-center justify-center gap-1.5 hover:bg-neutral-50 ${controlCls}`}
             title={value.sortOrder === 'asc' ? 'Naik (A→Z, kecil→besar)' : 'Turun (Z→A, besar→kecil)'}
           >
             {value.sortOrder === 'asc' ? (
@@ -458,15 +458,16 @@ export function JemaatFilterBar({ value, onChange }: Props) {
   );
 }
 
-const selectCls =
-  'w-full px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
-const inputCls =
-  'px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
+// Semua kontrol filter: tinggi, sudut, border & fokus sama (h-9).
+const controlCls =
+  'h-9 px-3 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500';
+const selectCls = `w-full ${controlCls}`;
+const inputCls = controlCls;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">{label}</span>
+      <span className="block text-[11px] text-neutral-500 font-medium mb-1">{label}</span>
       {children}
     </label>
   );

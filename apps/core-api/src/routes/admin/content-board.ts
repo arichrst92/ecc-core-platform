@@ -29,6 +29,8 @@ export interface BoardAccess {
   ownerNama: string;
   jemaatId: string;
   canManage: boolean;
+  /** Anggota aktif / PIC — hanya mereka yang boleh vote. */
+  isParticipant: boolean;
   /** jemaatId penerima notifikasi (anggota aktif + PIC). */
   recipients: () => Promise<string[]>;
 }
@@ -173,7 +175,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
       take: 100,
       select: announcementSelect,
     });
-    res.json({ success: true, data: rows, meta: { canManage: a.canManage } });
+    res.json({ success: true, data: rows, meta: { canManage: a.canManage, canVote: a.isParticipant } });
   });
 
   r.post('/announcements', async (req, res) => {
@@ -246,7 +248,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
     res.json({
       success: true,
       data: rows.map((p) => serializePoll(p, a.jemaatId, a.canManage)),
-      meta: { canManage: a.canManage },
+      meta: { canManage: a.canManage, canVote: a.isParticipant },
     });
   });
 
@@ -324,6 +326,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
   /** Pilih / ubah / tarik suara. Body `{ optionIds: string[] }` (kosong = tarik). */
   r.post('/polls/:pollId/vote', async (req, res) => {
     const a = await access(req);
+    if (!a.isParticipant) throw Forbidden('Voting hanya untuk anggota dan PIC.');
     const { optionIds } = z.object({ optionIds: z.array(z.string().uuid()).max(20) }).parse(req.body ?? {});
     const poll = await scope.poll().findFirst({
       where: { id: req.params.pollId, ...own(a) },

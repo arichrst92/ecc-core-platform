@@ -19,6 +19,7 @@ import { deleteGroupFile, deleteGroupHero, saveGroupFile, saveGroupHero } from '
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { buildBoardRouter } from './content-board.js';
 import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 
 export const groupContentRouter = Router({ mergeParams: true });
 
@@ -38,15 +39,19 @@ async function loadAccess(req: Request) {
   });
   if (!group || !group.isActive) throw NotFound('Group tidak ditemukan');
 
-  const canManage = isFulltimer || group.picJemaatId === jemaatId;
-  if (!canManage) {
-    const m = await prisma.groupMember.findUnique({
-      where: { groupId_jemaatId: { groupId, jemaatId } },
-      select: { isActive: true },
-    });
-    if (!m?.isActive) throw Forbidden('Konten ini hanya untuk anggota group.');
-  }
-  return { group, jemaatId, canManage };
+  const isPic = group.picJemaatId === jemaatId;
+  const m = isPic
+    ? null
+    : await prisma.groupMember.findUnique({
+        where: { groupId_jemaatId: { groupId, jemaatId } },
+        select: { isActive: true },
+      });
+  const isParticipant = isPic || !!m?.isActive;
+  // Admin fulltimer hanya lewat portal; di app mobile konten hanya untuk anggota & PIC.
+  const adminBypass = isFulltimer && !isMobileClient(req);
+  const canManage = isPic || adminBypass;
+  if (!isParticipant && !adminBypass) throw Forbidden('Konten ini hanya untuk anggota group.');
+  return { group, jemaatId, canManage, isParticipant };
 }
 
 async function loadManage(req: Request) {
@@ -208,6 +213,7 @@ groupContentRouter.use(
         ownerNama: a.group.nama,
         jemaatId: a.jemaatId,
         canManage: a.canManage,
+        isParticipant: a.isParticipant,
         recipients: async () => {
           const ms = await prisma.groupMember.findMany({
             where: { groupId: a.group.id, isActive: true },

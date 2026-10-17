@@ -4,12 +4,13 @@
  *   → /admin/homecell/:homecellId/announcements, /admin/homecell/:homecellId/polls
  *
  * Akses:
- *   - Kelola: PIC homecell, PIC area, atau fulltimer
- *   - Lihat & vote: anggota aktif homecell
+ *   - Kelola: PIC homecell, PIC area, atau fulltimer (fulltimer hanya via portal)
+ *   - Lihat & vote: anggota aktif homecell + PIC (fulltimer non-anggota tidak bisa vote)
  */
 import { prisma } from '@ecc/database';
 import { Forbidden, NotFound } from '../../lib/errors.js';
 import { buildBoardRouter } from './content-board.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 
 export const homecellBoardRouter = buildBoardRouter({
   resource: 'homecell',
@@ -21,19 +22,24 @@ export const homecellBoardRouter = buildBoardRouter({
       select: { id: true, nama: true, isActive: true, picJemaatId: true, area: { select: { picJemaatId: true } } },
     });
     if (!hc || !hc.isActive) throw NotFound('Homecell tidak ditemukan.');
-    const canManage = isFulltimer || hc.picJemaatId === jemaatId || hc.area?.picJemaatId === jemaatId;
-    if (!canManage) {
-      const m = await prisma.homecellMember.findUnique({
-        where: { homecellId_jemaatId: { homecellId: hc.id, jemaatId } },
-        select: { isActive: true },
-      });
-      if (!m?.isActive) throw Forbidden('Konten ini hanya untuk anggota homecell.');
-    }
+    const isPic = hc.picJemaatId === jemaatId || hc.area?.picJemaatId === jemaatId;
+    const m = isPic
+      ? null
+      : await prisma.homecellMember.findUnique({
+          where: { homecellId_jemaatId: { homecellId: hc.id, jemaatId } },
+          select: { isActive: true },
+        });
+    const isParticipant = isPic || !!m?.isActive;
+    // Admin fulltimer hanya lewat portal; di app mobile konten hanya untuk anggota & PIC.
+    const adminBypass = isFulltimer && !isMobileClient(req);
+    const canManage = isPic || adminBypass;
+    if (!isParticipant && !adminBypass) throw Forbidden('Konten ini hanya untuk anggota homecell.');
     return {
       ownerId: hc.id,
       ownerNama: hc.nama,
       jemaatId,
       canManage,
+      isParticipant,
       recipients: async () => {
         const ms = await prisma.homecellMember.findMany({
           where: { homecellId: hc.id, isActive: true },

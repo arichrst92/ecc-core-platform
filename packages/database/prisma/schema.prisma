@@ -334,6 +334,7 @@ model Role {
   menuAccesses RoleMenuAccess[]
   eventRequirements EventRoleRequirement[]
   eventGrants       Event[]                @relation("EventGrantRole")
+  journeySteps      SpiritualJourneyStep[] @relation("JourneyRole")
 
   @@map("role")
 }
@@ -355,6 +356,7 @@ model SubRole {
   menuAccesses SubRoleMenuAccess[]
   eventRequirements EventRoleRequirement[]
   eventGrants       Event[]                @relation("EventGrantSubRole")
+  journeySteps      SpiritualJourneyStep[] @relation("JourneySubRole")
 
   @@unique([roleId, nama])
   @@index([roleId])
@@ -374,6 +376,7 @@ model SubRoleStatus {
   jemaatRoles JemaatRole[]
   eventRequirements EventRoleRequirement[]
   eventGrants       Event[]                @relation("EventGrantSubRoleStatus")
+  journeySteps      SpiritualJourneyStep[] @relation("JourneySubRoleStatus")
 
   @@unique([subRoleId, nama])
   @@index([subRoleId])
@@ -3195,4 +3198,29 @@ model JemaatPrivacy {
   jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
 
   @@map("jemaat_privacy")
+}
+
+// Spiritual Journey — tahap berurutan (global). Tahap tercapai kalau jemaat
+// punya JemaatRole aktif yang cocok dengan syarat (role [+ sub role [+ status]]).
+model SpiritualJourneyStep {
+  id              String   @id @default(uuid()) @db.Uuid
+  judul           String   @db.VarChar(150)
+  deskripsi       String?  @db.Text
+  // Cara mendapatkan (teks langkah-langkah).
+  caraMendapatkan String?  @map("cara_mendapatkan") @db.Text
+  ikon            String?  @db.VarChar(16) // emoji opsional
+  urutan          Int      @default(0)
+  roleId          String   @map("role_id") @db.Uuid
+  subRoleId       String?  @map("sub_role_id") @db.Uuid
+  subRoleStatusId String?  @map("sub_role_status_id") @db.Uuid
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  role          Role           @relation("JourneyRole", fields: [roleId], references: [id], onDelete: Restrict)
+  subRole       SubRole?       @relation("JourneySubRole", fields: [subRoleId], references: [id], onDelete: SetNull)
+  subRoleStatus SubRoleStatus? @relation("JourneySubRoleStatus", fields: [subRoleStatusId], references: [id], onDelete: SetNull)
+
+  @@index([urutan])
+  @@map("spiritual_journey_step")
 }

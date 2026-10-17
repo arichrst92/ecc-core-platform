@@ -55,6 +55,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },
   { key: 'laporan-event', label: 'Laporan Event', href: '/dashboard/laporan-event', group: 'Movement' },
   { key: 'visit', label: 'Visit', href: '/dashboard/visit', group: 'Movement' },
+  { key: 'spiritual-journey', label: 'Spiritual Journey', href: '/dashboard/spiritual-journey', group: 'Movement' },
   { key: 'local-business', label: 'Local Market', href: '/dashboard/local-business', group: 'Movement' },
 
   // Broadcast

@@ -51,6 +51,7 @@ meTamuRouter.get('/', async (req, res) => {
         statusLabel: TAMU_STATUS_LABEL[status],
         kehadiran: a?.kehadiran ?? 0,
         terakhirHadir: a?.terakhirHadir ?? null,
+        terakhirAcara: a?.terakhirAcara ?? null,
       };
     }),
   });

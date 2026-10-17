@@ -41,33 +41,59 @@ export function effectiveTamuStatus(p: {
 export interface TamuAttendance {
   kehadiran: number;
   terakhirHadir: Date | null;
+  /** Ibadah / event terakhir yang dihadiri. */
+  terakhirAcara: { jenis: 'IBADAH' | 'EVENT'; id: string; nama: string; tanggal: Date } | null;
 }
 
-/** Jumlah & tanggal kehadiran terakhir (ibadah JOIN + event HADIR) per jemaat. */
+/** Jumlah, tanggal & acara kehadiran terakhir (ibadah JOIN + event HADIR) per jemaat. */
 export async function tamuAttendance(ids: string[]): Promise<Map<string, TamuAttendance>> {
   const out = new Map<string, TamuAttendance>();
   if (!ids.length) return out;
-  const [ib, ev] = await Promise.all([
+  const [ibCount, evCount, ibLast, evLast] = await Promise.all([
     prisma.reservasi.groupBy({
       by: ['jemaatId'],
       where: { jemaatId: { in: ids }, status: 'JOIN' },
       _count: { _all: true },
-      _max: { tanggalIbadah: true },
     }),
     prisma.eventParticipation.groupBy({
       by: ['jemaatId'],
       where: { jemaatId: { in: ids }, status: 'HADIR' },
       _count: { _all: true },
-      _max: { attendedAt: true },
+    }),
+    prisma.reservasi.findMany({
+      where: { jemaatId: { in: ids }, status: 'JOIN' },
+      orderBy: [{ tanggalIbadah: 'desc' }, { joinedAt: 'desc' }],
+      distinct: ['jemaatId'],
+      select: { jemaatId: true, tanggalIbadah: true, ibadah: { select: { id: true, nama: true } } },
+    }),
+    prisma.eventParticipation.findMany({
+      where: { jemaatId: { in: ids }, status: 'HADIR' },
+      orderBy: [{ attendedAt: 'desc' }],
+      distinct: ['jemaatId'],
+      select: { jemaatId: true, attendedAt: true, event: { select: { id: true, judul: true, tanggalMulai: true } } },
     }),
   ]);
-  const bump = (id: string, n: number, d: Date | null) => {
-    const cur = out.get(id) ?? { kehadiran: 0, terakhirHadir: null };
-    cur.kehadiran += n;
-    if (d && (!cur.terakhirHadir || d > cur.terakhirHadir)) cur.terakhirHadir = d;
-    out.set(id, cur);
+  const get = (id: string) => {
+    let cur = out.get(id);
+    if (!cur) {
+      cur = { kehadiran: 0, terakhirHadir: null, terakhirAcara: null };
+      out.set(id, cur);
+    }
+    return cur;
   };
-  for (const r of ib) bump(r.jemaatId, r._count._all, r._max.tanggalIbadah);
-  for (const r of ev) bump(r.jemaatId, r._count._all, r._max.attendedAt);
+  const consider = (id: string, acara: NonNullable<TamuAttendance['terakhirAcara']>) => {
+    const cur = get(id);
+    if (!cur.terakhirAcara || acara.tanggal > cur.terakhirAcara.tanggal) {
+      cur.terakhirAcara = acara;
+      cur.terakhirHadir = acara.tanggal;
+    }
+  };
+  for (const r of ibCount) get(r.jemaatId).kehadiran += r._count._all;
+  for (const r of evCount) get(r.jemaatId).kehadiran += r._count._all;
+  for (const r of ibLast) consider(r.jemaatId, { jenis: 'IBADAH', id: r.ibadah.id, nama: r.ibadah.nama, tanggal: r.tanggalIbadah });
+  for (const r of evLast) {
+    const tanggal = r.attendedAt ?? r.event.tanggalMulai;
+    consider(r.jemaatId, { jenis: 'EVENT', id: r.event.id, nama: r.event.judul, tanggal });
+  }
   return out;
 }

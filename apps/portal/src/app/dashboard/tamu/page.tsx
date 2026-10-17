@@ -28,6 +28,7 @@ interface Tamu {
   pengundang: { id: string; namaLengkap: string; noHp: string | null; sejak: string }[];
   kehadiran: number;
   terakhirHadir: string | null;
+  terakhirAcara: { jenis: 'IBADAH' | 'EVENT'; id: string; nama: string; tanggal: string } | null;
   status: Status;
   statusLabel: string;
   statusTersimpan: string | null;
@@ -227,6 +228,11 @@ export default function TamuPage() {
                       <>
                         <div className="font-semibold text-neutral-800">{t.kehadiran}× hadir</div>
                         <div>terakhir {tgl(t.terakhirHadir)}</div>
+                        {t.terakhirAcara ? (
+                          <div className="text-neutral-500">
+                            {t.terakhirAcara.jenis === 'EVENT' ? 'Event' : 'Ibadah'}: {t.terakhirAcara.nama}
+                          </div>
+                        ) : null}
                       </>
                     ) : (
                       <span className="text-neutral-400">Belum hadir</span>

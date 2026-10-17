@@ -91,6 +91,7 @@ async function loadTamu(req: Request) {
       pengundang: r.diundangSebagaiTamu.map((x) => ({ ...x.inviter, sejak: x.createdAt })),
       kehadiran: a?.kehadiran ?? 0,
       terakhirHadir: a?.terakhirHadir ?? null,
+        terakhirAcara: a?.terakhirAcara ?? null,
       status,
       statusLabel: TAMU_STATUS_LABEL[status],
       statusTersimpan: r.tamuStatus,

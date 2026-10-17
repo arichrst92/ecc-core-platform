@@ -231,7 +231,7 @@ reservasiRouter.post('/checkin', async (req, res) => {
     },
   });
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
-  if (item.status === 'CANCEL') throw BadRequest('Reservasi sudah dibatalkan');
+  // Reservasi yang dibatalkan jemaat tetap bisa check-in kalau ternyata datang.
   if (item.status === 'JOIN') {
     return res.json({
       success: true,
@@ -269,6 +269,7 @@ reservasiRouter.post('/checkin', async (req, res) => {
     data: {
       status: 'JOIN',
       joinedAt: new Date(),
+      cancelledAt: null,
       checkedInBy: req.user?.sub,
       checkinMethod: 'SCAN',
       pickupCode,
@@ -692,9 +693,8 @@ reservasiRouter.post('/walk-in', async (req, res) => {
   // ═══════════ CHECK-IN ═══════════
   if (action === 'checkin') {
     if (existing) {
-      if (existing.status === 'CANCEL') {
-        throw BadRequest('Reservasi sudah dibatalkan — tidak bisa check-in');
-      }
+      // Reservasi dibatalkan jemaat (bisa dari app) tapi ternyata datang →
+      // tetap check-in (diproses sama seperti RESERVE di bawah).
       if (existing.status === 'JOIN') {
         return res.json({
           success: true,
@@ -702,7 +702,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
           message: `Sudah check-in sebelumnya (${existing.joinedAt?.toISOString()})`,
         });
       }
-      // Status = RESERVE → flip ke JOIN
+      // Status = RESERVE / CANCEL → flip ke JOIN
       let pickupCode: string | null = null;
       if (ibadah.isKidsIbadah) {
         pickupCode = await generateUniquePickupCode(ibadahId, tanggal);
@@ -712,6 +712,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         data: {
           status: 'JOIN',
           joinedAt: now,
+          cancelledAt: null,
           checkedInBy: adminId,
           checkinMethod: 'SCAN',
           pickupCode,

@@ -52,6 +52,8 @@ import { meHomecellRouter } from './me-homecell.js';
 import { mePrivacyRouter } from './me-privacy.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { activeWindow, relationFor } from '../../lib/my-reservasi.js';
+import { canCancelReservasi } from '../../lib/reservasi-window.js';
+import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -1261,8 +1263,49 @@ meRouter.get('/reservasi', async (req, res) => {
 
   res.json({
     success: true,
-    data: rows.map((r) => ({ ...r, relation: relationFor(r, jemaatId, people) })),
+    data: rows.map((r) => ({
+      ...r,
+      relation: relationFor(r, jemaatId, people),
+      // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah.
+      canCancel: canCancelReservasi(r, r.ibadah.jamMulai),
+    })),
   });
+});
+
+/**
+ * POST /admin/me/reservasi/:id/cancel — batalkan reservasi (status RESERVE)
+ * milik saya / keluarga / tamu saya, sampai jam mulai ibadah.
+ */
+meRouter.post('/reservasi/:id/cancel', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) throw NotFound('Reservasi tidak ditemukan');
+  const r = await prisma.reservasi.findUnique({
+    where: { id: req.params.id },
+    include: { ibadah: { select: { nama: true, jamMulai: true } }, jemaat: { select: { namaLengkap: true } } },
+  });
+  if (!r) throw NotFound('Reservasi tidak ditemukan');
+  const fam = await familyOf(jemaatId);
+  if (r.jemaatId !== jemaatId && !fam.has(r.jemaatId) && r.invitedByJemaatId !== jemaatId) {
+    throw NotFound('Reservasi tidak ditemukan');
+  }
+  if (r.status !== 'RESERVE') throw BadRequest('Hanya reservasi berstatus Terdaftar yang bisa dibatalkan.');
+  if (!canCancelReservasi(r, r.ibadah.jamMulai)) {
+    throw BadRequest('Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai.');
+  }
+  const updated = await prisma.reservasi.update({
+    where: { id: r.id },
+    data: { status: 'CANCEL', cancelledAt: new Date() },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'reservasi',
+    resourceId: r.id,
+    resourceLabel: `Batal reservasi mandiri: ${r.jemaat.namaLengkap} → ${r.ibadah.nama}`,
+    metadata: { kind: 'self-reserve-cancel' },
+    before: r,
+    after: updated,
+  });
+  res.json({ success: true, data: updated, message: 'Reservasi dibatalkan.' });
 });
 
 // ============================================================

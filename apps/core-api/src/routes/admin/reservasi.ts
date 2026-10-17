@@ -871,7 +871,7 @@ async function notifyKidsCheckin(
     type: 'CKIDS_CHECKIN',
     title: `${anakNama} sudah check-in`,
     body: `Ibadah: ${ibadahNama}. Kode jemput: ${pickupCode}. Tunjukkan kode ini ke admin saat menjemput.`,
-    actionUrl: `/ckids/reservasi/${reservasiId}`,
+    actionUrl: '/my-reservasi',
     metadata: { anakId, reservasiId, pickupCode, ibadahNama },
   });
 }
@@ -893,7 +893,7 @@ async function notifyKidsPickup(
     type: 'CKIDS_PICKUP',
     title: `${anakNama} sudah dijemput`,
     body: `Ibadah: ${ibadahNama}. Dijemput jam ${jam}. Kalau bukan Anda yang menjemput, segera hubungi admin ibadah.`,
-    actionUrl: `/ckids/reservasi/${reservasiId}`,
+    actionUrl: '/my-reservasi',
     metadata: { anakId, reservasiId, ibadahNama, pickedUpAt: new Date().toISOString() },
   });
 }
@@ -914,7 +914,7 @@ async function notifyPointEarned(
     type: 'POINT_EARNED',
     title: `${anakNama} +${amount} point`,
     body: `Dari kehadiran ${ibadahNama}. Balance sekarang: ${newBalance} pts.`,
-    actionUrl: `/ckids/anak/${anakId}`,
+    actionUrl: '/ckids',
     metadata: { anakId, amount, newBalance, source: 'KEHADIRAN_KIDS' },
   });
 }

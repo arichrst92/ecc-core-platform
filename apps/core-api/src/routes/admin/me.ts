@@ -51,6 +51,7 @@ import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { mePrivacyRouter } from './me-privacy.js';
 import { privacyGate } from '../../lib/privacy.js';
+import { activeWindow, relationFor } from '../../lib/my-reservasi.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -1180,19 +1181,22 @@ meRouter.delete('/', async (req, res) => {
 // ============================================================
 
 /**
- * GET /admin/me/reservasi — active reservasi user (self) + anak.
+ * GET /admin/me/reservasi — Reservasi Saya (mobile).
  *
- * Untuk parent lihat pickup code sendiri di app tanpa tanya admin.
- * Include:
- *   - Reservasi jemaatId=self (aktivitas diri sendiri)
- *   - Reservasi anak yg di-check-in oleh self (Reservasi.checkedInBy=self)
+ * Cakupan (lib/my-reservasi.ts): saya, anak saya (termasuk anak pasangan),
+ * tanggungan saya, tamu yang saya bawa, dan keluarga yang saya self
+ * check-in-kan. Reservasi yang di-scan usher TIDAK ikut ke usher.
  *
- * Query params (semua opsional):
- *   - ibadahId, tanggal (YYYY-MM-DD), status (RESERVE|JOIN)
- *   - activeOnly (default true) — filter 24 jam terakhir
+ * Query params (opsional):
+ *   - ibadahId, tanggal (YYYY-MM-DD), status (RESERVE|JOIN|CANCEL)
+ *   - activeOnly (default true): ibadah hari ini & mendatang (WIB) atau
+ *     check-in < 24 jam. `false` = riwayat (100 terbaru).
+ *
+ * Tiap baris diberi `relation`: SELF | ANAK | TANGGUNGAN | TAMU | KELUARGA.
  */
 meRouter.get('/reservasi', async (req, res) => {
   const jemaatId = assertJemaatId(req);
+  const userId = req.user!.sub;
   const ibadahId = typeof req.query.ibadahId === 'string' ? req.query.ibadahId : undefined;
   const tanggalStr = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
   const status =
@@ -1202,27 +1206,39 @@ meRouter.get('/reservasi', async (req, res) => {
       : undefined;
   const activeOnly = req.query.activeOnly !== 'false';
 
-  const where: Prisma.ReservasiWhereInput = {
-    OR: [
-      { jemaatId },
-      { checkedInBy: jemaatId }, // anak yg di-check-in oleh user ini
-    ],
-  };
-  if (ibadahId) where.ibadahId = ibadahId;
-  if (tanggalStr) where.tanggalIbadah = new Date(tanggalStr);
-  if (status) where.status = status;
+  // Orang yang reservasinya saya pegang (anak, tanggungan, tamu).
+  const [childIds, dependents, tamu] = await Promise.all([
+    getMyChildrenIds(jemaatId),
+    prisma.jemaat.findMany({ where: { primaryGuardianId: jemaatId }, select: { id: true } }),
+    prisma.jemaatTamu.findMany({ where: { inviterId: jemaatId }, select: { tamuId: true } }),
+  ]);
+  const people = new Map<string, 'ANAK' | 'TANGGUNGAN' | 'TAMU'>();
+  for (const t of tamu) people.set(t.tamuId, 'TAMU');
+  for (const d of dependents) people.set(d.id, 'TANGGUNGAN');
+  for (const c of childIds) people.set(c, 'ANAK');
+  people.delete(jemaatId);
+
+  const and: Prisma.ReservasiWhereInput[] = [
+    {
+      OR: [
+        { jemaatId: { in: [jemaatId, ...people.keys()] } },
+        // Keluarga yang saya self check-in-kan (bukan hasil scan usher).
+        { checkedInBy: userId, checkinMethod: 'SELF' },
+        { invitedByJemaatId: jemaatId },
+      ],
+    },
+  ];
+  if (ibadahId) and.push({ ibadahId });
+  if (tanggalStr && /^\d{4}-\d{2}-\d{2}$/.test(tanggalStr)) and.push({ tanggalIbadah: new Date(`${tanggalStr}T00:00:00.000Z`) });
+  if (status) and.push({ status });
   if (activeOnly && !tanggalStr) {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    where.OR = [
-      { jemaatId, joinedAt: { gte: cutoff } },
-      { checkedInBy: jemaatId, joinedAt: { gte: cutoff } },
-      { jemaatId, reservedAt: { gte: cutoff }, status: 'RESERVE' },
-    ];
+    const w = activeWindow();
+    and.push({ OR: [{ tanggalIbadah: { gte: w.fromTanggal } }, { joinedAt: { gte: w.joinedSince } }] });
   }
 
   const rows = await prisma.reservasi.findMany({
-    where,
-    orderBy: { joinedAt: 'desc' },
+    where: { AND: and },
+    orderBy: [{ tanggalIbadah: 'desc' }, { joinedAt: { sort: 'desc', nulls: 'last' } }],
     take: 100,
     include: {
       jemaat: {
@@ -1234,14 +1250,19 @@ meRouter.get('/reservasi', async (req, res) => {
           nama: true,
           jamMulai: true,
           jamSelesai: true,
+          lokasi: true,
           isKidsIbadah: true,
           requiresCheckout: true,
+          cabang: { select: { id: true, nama: true } },
         },
       },
     },
   });
 
-  res.json({ success: true, data: rows });
+  res.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, relation: relationFor(r, jemaatId, people) })),
+  });
 });
 
 // ============================================================

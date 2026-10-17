@@ -283,7 +283,7 @@ async function notifyGiftRedeemed(
     type: 'GIFT_REDEEMED',
     title: `${anakNama} tukar ${hadiahNama}`,
     body: `-${pointCost} pts. Balance sekarang: ${newBalance} pts.`,
-    actionUrl: `/ckids/anak/${anakId}/history`,
+    actionUrl: '/ckids',
     metadata: { anakId, redeemId, hadiahNama, pointCost, newBalance },
   });
 }
@@ -305,7 +305,7 @@ async function notifyPointAdjusted(
     type: 'POINT_ADJUSTED',
     title: `${anakNama} ${sign}${amount} point (koreksi admin)`,
     body: `${note ? `${note}. ` : ''}Balance sekarang: ${newBalance} pts.`,
-    actionUrl: `/ckids/anak/${anakId}`,
+    actionUrl: '/ckids',
     metadata: { anakId, amount, newBalance, note, source: 'MANUAL_ADJUST' },
   });
 }

@@ -24,7 +24,7 @@ import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
-import { notDiscoverableByPhone, privacyGate, type PrivacyField } from '../../lib/privacy.js';
+import { canDoCheckin, notDiscoverableByPhone, privacyGate, type PrivacyField } from '../../lib/privacy.js';
 
 export const jemaatPublicRouter = Router();
 
@@ -89,7 +89,10 @@ jemaatPublicRouter.get('/search', async (req, res) => {
   const lower = q.toLowerCase();
   // Jemaat yang menolak ditemukan lewat no HP: hanya muncul kalau cocok
   // dengan nama / kode, dan no HP-nya tidak ditampilkan (meski disamarkan).
-  const hidden = await notDiscoverableByPhone(rows.map((r) => r.id));
+  // Kecuali untuk check-in/absensi oleh petugas (usher/scanner, PIC
+  // homecell/area, fulltimer): `purpose=checkin` → tetap bisa dicari via no HP.
+  const forCheckin = req.query.purpose === 'checkin' && (await canDoCheckin(req.user.jemaatId, req.user.isFulltimer === true));
+  const hidden = forCheckin ? new Set<string>() : await notDiscoverableByPhone(rows.map((r) => r.id));
   const matchesNameOrKode = (r: (typeof rows)[number]) =>
     (r.kode ?? '').startsWith(upper) || r.namaLengkap.toLowerCase().includes(lower);
   const visible = rows.filter((r) => !hidden.has(r.id) || matchesNameOrKode(r));
@@ -97,10 +100,12 @@ jemaatPublicRouter.get('/search', async (req, res) => {
     (r.kode === upper ? 0 : 10) +
     (cabangId && r.cabangId === cabangId ? 0 : 3) +
     (r.namaLengkap.toLowerCase().startsWith(lower) ? 0 : 1);
+  // No HP selalu disamarkan; disembunyikan untuk yang menolak dicari via no HP.
+  const maskedHidden = forCheckin ? await notDiscoverableByPhone(rows.map((r) => r.id)) : hidden;
   const data = visible
     .sort((a, b) => score(a) - score(b) || a.namaLengkap.localeCompare(b.namaLengkap))
     .slice(0, limit)
-    .map(({ noHp, cabangId: _c, ...r }) => ({ ...r, noHpMasked: hidden.has(r.id) ? null : maskNoHp(noHp) }));
+    .map(({ noHp, cabangId: _c, ...r }) => ({ ...r, noHpMasked: maskedHidden.has(r.id) ? null : maskNoHp(noHp) }));
   res.json({ success: true, data });
 });
 

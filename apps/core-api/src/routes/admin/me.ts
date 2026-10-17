@@ -50,6 +50,7 @@ import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { mePrivacyRouter } from './me-privacy.js';
+import { privacyGate } from '../../lib/privacy.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 
@@ -690,7 +691,19 @@ meRouter.get('/family', async (req, res) => {
     },
   }));
 
-  res.json({ success: true, data: [...directData, ...spouseData] });
+  // Privasi: no HP & tanggal lahir anggota keluarga dewasa mengikuti
+  // pengaturan mereka (anak & tanggungan selalu terlihat oleh orang tua/wali).
+  const all = [...directData, ...spouseData];
+  const gate = await privacyGate(jemaatId, all.map((r) => r.jemaat.id));
+  const data = all.map((r) => ({
+    ...r,
+    jemaat: {
+      ...r.jemaat,
+      noHp: gate.can(r.jemaat.id, 'noHp') ? r.jemaat.noHp : null,
+      tanggalLahir: gate.can(r.jemaat.id, 'tanggalLahir') ? r.jemaat.tanggalLahir : null,
+    },
+  }));
+  res.json({ success: true, data });
 });
 
 meRouter.post('/family/link-by-kode', async (req, res) => {

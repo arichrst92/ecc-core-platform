@@ -7,6 +7,7 @@
  * Selalu boleh lihat semua data (tidak bisa dimatikan):
  *   - diri sendiri
  *   - PIC homecell / PIC area dari homecell jemaat itu (kebutuhan pastoral)
+ *   - orang tua atas anaknya, wali atas tanggungannya, pengundang atas tamunya
  * Admin portal memakai endpoint admin sendiri, tidak terkena aturan ini.
  */
 import { prisma } from '@ecc/database';
@@ -127,8 +128,14 @@ export async function privacyGate(viewerId: string, targetIdsIn: Iterable<string
 
   for (const p of privacyRows) settings.set(p.jemaatId, normalizePrivacy(p.settings));
 
-  // Keluarga (dua arah).
-  for (const id of targetIds) if (family.has(id)) add(id, 'KELUARGA');
+  // Keluarga (dua arah). Orang tua → anak, wali → tanggungan, dan
+  // pengundang → tamu-nya selalu boleh lihat semua (tanggung jawab wali).
+  for (const id of targetIds) {
+    const label = family.get(id);
+    if (!label) continue;
+    add(id, 'KELUARGA');
+    if (label.startsWith('Anak') || label === 'Tanggungan' || label === 'Tamu') add(id, 'PASTORAL');
+  }
   for (const r of reverseFamily) add(r.jemaatId, 'KELUARGA');
 
   // Homecell & area.
@@ -212,4 +219,20 @@ export async function notDiscoverableByPhone(ids: string[]): Promise<Set<string>
     select: { jemaatId: true },
   });
   return new Set(rows.map((r) => r.jemaatId));
+}
+
+/**
+ * Petugas absensi: fulltimer, petugas scan ibadah/event (canScanAttendance),
+ * atau PIC homecell / PIC area. Untuk mereka pencarian jemaat keperluan
+ * check-in tetap bisa lewat no HP (pengaturan "bisa dicari" diabaikan).
+ */
+export async function canDoCheckin(jemaatId: string, isFulltimer: boolean): Promise<boolean> {
+  if (isFulltimer) return true;
+  const [ib, ev, hc, area] = await Promise.all([
+    prisma.ibadahPelayananPetugas.findFirst({ where: { jemaatId, canScanAttendance: true }, select: { id: true } }),
+    prisma.eventPelayananPetugas.findFirst({ where: { jemaatId, canScanAttendance: true }, select: { id: true } }),
+    prisma.homecell.findFirst({ where: { picJemaatId: jemaatId, isActive: true }, select: { id: true } }),
+    prisma.homecellArea.findFirst({ where: { picJemaatId: jemaatId, isActive: true }, select: { id: true } }),
+  ]);
+  return !!(ib || ev || hc || area);
 }

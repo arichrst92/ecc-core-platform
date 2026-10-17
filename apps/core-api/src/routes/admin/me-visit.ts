@@ -22,6 +22,7 @@ import {
   myVisitsQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { privacyGate } from '../../lib/privacy.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 
@@ -62,6 +63,15 @@ function shapeForCaller(visit: any, myJemaatId: string) {
     myNote: myNote ?? null,
     noteLawan: noteLawan ?? null,
   };
+}
+
+/** shapeForCaller + no HP lawan mengikuti pengaturan privasi lawan. */
+async function shapeGated(visits: any[], myJemaatId: string) {
+  const shaped = visits.map((v) => shapeForCaller(v, myJemaatId));
+  const gate = await privacyGate(myJemaatId, shaped.map((v) => v.lawan?.id).filter(Boolean));
+  return shaped.map((v) =>
+    v.lawan && !gate.can(v.lawan.id, 'noHp') ? { ...v, lawan: { ...v.lawan, noHp: null } } : v,
+  );
 }
 
 // ============================================================
@@ -115,7 +125,7 @@ meVisitRouter.get('/', async (req, res) => {
     prisma.visit.count({ where }),
   ]);
 
-  const data = rows.map((r) => shapeForCaller(r, jemaatId));
+  const data = await shapeGated(rows, jemaatId);
   res.json({
     success: true,
     data,
@@ -178,7 +188,7 @@ meVisitRouter.post('/', async (req, res) => {
     },
   });
 
-  res.status(201).json({ success: true, data: shapeForCaller(created, jemaatId) });
+  res.status(201).json({ success: true, data: (await shapeGated([created], jemaatId))[0] });
 });
 
 // ============================================================
@@ -205,7 +215,7 @@ async function findMyVisitOrThrow(visitId: string, jemaatId: string) {
 meVisitRouter.get('/:id', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const visit = await findMyVisitOrThrow(req.params.id, jemaatId);
-  res.json({ success: true, data: shapeForCaller(visit, jemaatId) });
+  res.json({ success: true, data: (await shapeGated([visit], jemaatId))[0] });
 });
 
 // ============================================================
@@ -241,7 +251,7 @@ meVisitRouter.patch('/:id', async (req, res) => {
     before,
     after: updated,
   });
-  res.json({ success: true, data: shapeForCaller(updated, jemaatId) });
+  res.json({ success: true, data: (await shapeGated([updated], jemaatId))[0] });
 });
 
 // ============================================================
@@ -272,7 +282,7 @@ meVisitRouter.patch('/:id/note', async (req, res) => {
     after: updated,
     metadata: { kind: 'visit-note', side: isInitiator ? 'initiator' : 'target' },
   });
-  res.json({ success: true, data: shapeForCaller(updated, jemaatId) });
+  res.json({ success: true, data: (await shapeGated([updated], jemaatId))[0] });
 });
 
 // ============================================================

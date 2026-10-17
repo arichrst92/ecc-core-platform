@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { OPEN_GATE, privacyGate } from '../../lib/privacy.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createHomecellSchema,
@@ -423,11 +425,27 @@ homecellRouter.get('/:id', async (req, res) => {
       }
     : null;
 
+  // Privasi no HP (pengaturan masing-masing). PIC homecell / area selalu
+  // lihat semua; admin portal (bukan app mobile) juga.
+  const gate =
+    req.user?.isFulltimer && !isMobileClient(req)
+      ? OPEN_GATE
+      : req.user?.jemaatId
+        ? await privacyGate(req.user.jemaatId, [
+            ...(rest.picJemaat ? [rest.picJemaat.id] : []),
+            ...members.map((m) => m.jemaat.id),
+          ])
+        : null;
+  const hp = <T extends { id: string; noHp: string | null }>(j: T): T => ({
+    ...j,
+    noHp: gate?.can(j.id, 'noHp') ? j.noHp : null,
+  });
   res.json({
     success: true,
     data: {
       ...rest,
-      members: members.map((m) => withLastAttendance(m.jemaatId, m, lastMap)),
+      picJemaat: rest.picJemaat ? hp(rest.picJemaat) : null,
+      members: members.map((m) => withLastAttendance(m.jemaatId, { ...m, jemaat: hp(m.jemaat) }, lastMap)),
       scheduleCount: _count.schedules,
       lastSchedule,
     },

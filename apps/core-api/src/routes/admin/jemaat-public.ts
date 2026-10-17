@@ -177,7 +177,9 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
   // Shape response
   const data = {
     id: target.id,
-    kode: target.kode,
+    // Kode = isi QR identitas (dipakai check-in) → hanya diri sendiri,
+    // keluarga, dan PIC homecell/area.
+    kode: rel.includes('SELF') || rel.includes('PASTORAL') || rel.includes('KELUARGA') ? target.kode : null,
     namaLengkap: target.namaLengkap,
     fotoUrl: target.fotoUrl,
     jenisKelamin: target.jenisKelamin,

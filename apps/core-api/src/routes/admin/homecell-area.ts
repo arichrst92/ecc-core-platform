@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { OPEN_GATE, privacyGate } from '../../lib/privacy.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createHomecellAreaSchema,
@@ -81,6 +83,11 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
     },
   });
 
+  // Privasi no HP PIC — hanya untuk app mobile; portal tidak berubah.
+  const gate =
+    !isMobileClient(req)
+      ? OPEN_GATE
+      : await privacyGate(req.user!.jemaatId, data.flatMap((hc) => (hc.picJemaat ? [hc.picJemaat.id] : [])));
   const result = data.map((hc) => ({
     id: hc.id,
     nama: hc.nama,
@@ -88,7 +95,9 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
     hari: hc.hari,
     jam: hc.jam,
     isActive: hc.isActive,
-    picJemaat: hc.picJemaat,
+    picJemaat: hc.picJemaat
+      ? { ...hc.picJemaat, noHp: gate.can(hc.picJemaat.id, 'noHp') ? hc.picJemaat.noHp : null }
+      : null,
     memberCount: hc._count.members,
     scheduleCount: hc._count.schedules,
   }));
@@ -113,6 +122,11 @@ homecellAreaRouter.get('/:id', async (req, res) => {
     },
   });
   if (!item) throw NotFound('Homecell Area tidak ditemukan');
+  // Privasi no HP PIC area — hanya untuk app mobile; portal tidak berubah.
+  if (item.picJemaat && isMobileClient(req)) {
+    const gate = await privacyGate(req.user!.jemaatId, [item.picJemaat.id]);
+    if (!gate.can(item.picJemaat.id, 'noHp')) item.picJemaat.noHp = null;
+  }
   res.json({ success: true, data: item });
 });
 

@@ -75,13 +75,16 @@ async function ibadahReportData(req: Request) {
   const period = reportPeriod(req);
   const cabangId = q(req, 'cabangId');
   const ibadahId = q(req, 'ibadahId');
+  const kategoriId = q(req, 'kategoriIbadahId');
   const where: Prisma.IbadahWhereInput = {};
   if (cabangId && UUID_RE.test(cabangId)) where.cabangId = cabangId;
   if (ibadahId && UUID_RE.test(ibadahId)) where.id = ibadahId;
+  if (kategoriId && UUID_RE.test(kategoriId)) where.kategoriIbadahId = kategoriId;
 
   const ibadahs = await prisma.ibadah.findMany({
     where,
     select: {
+      requiresCheckout: true,
       id: true,
       nama: true,
       jamMulai: true,
@@ -121,12 +124,15 @@ async function ibadahReportData(req: Request) {
     ? await prisma.reservasi.findMany({
         where: { ibadahId: { in: ids }, status: 'JOIN', tanggalIbadah: { gte: period.from, lte: period.to } },
         select: {
+          id: true,
           ibadahId: true,
           tanggalIbadah: true,
           checkinMethod: true,
           guestSource: true,
           invitedByJemaatId: true,
-          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true } },
+          checkedOutAt: true,
+          pickedUpAt: true,
+          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, jenisKelamin: true, tanggalLahir: true } },
         },
       })
     : [];
@@ -156,11 +162,18 @@ async function ibadahReportData(req: Request) {
   // Okupansi memakai jumlah seat saat ini (pendataan saja, tidak membatasi check-in).
   const seatById = new Map(ibadahs.map((i) => [i.id, i.kapasitasSeat]));
   const occ = buildOccupancy(report.occurrences, seatById);
+  const scopeCabangId = cabangId && UUID_RE.test(cabangId) ? cabangId : ibadahId ? (ibadahs[0]?.cabang?.id ?? null) : null;
+  const kidsIds = new Set(ibadahs.filter((i) => i.isKidsIbadah).map((i) => i.id));
+  const kidsOnly = ibadahs.length > 0 && kidsIds.size === ibadahs.length;
+  const kids = kidsIds.size
+    ? await kidsReport({ ibadahs: ibadahs.filter((i) => kidsIds.has(i.id)), rows: rows.filter((r) => kidsIds.has(r.ibadahId)), report, cabangId: scopeCabangId })
+    : null;
   const insights = await ibadahInsights({
     ids,
     ibadahs,
     period,
-    cabangId: cabangId && UUID_RE.test(cabangId) ? cabangId : ibadahId ? (ibadahs[0]?.cabang?.id ?? null) : null,
+    cabangId: scopeCabangId,
+    kidsOnly,
     rows,
     report,
     seatById,
@@ -172,6 +185,7 @@ async function ibadahReportData(req: Request) {
     period: { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' },
     summary: { ...report.summary, okupansi: occ.overall },
     insights,
+    kids,
     trend: report.trend,
     occurrences: report.occurrences.map((o) => ({
       ...o,
@@ -188,6 +202,8 @@ async function ibadahReportData(req: Request) {
     filters: {
       cabang: cabangId ? (ibadahs[0]?.cabang?.nama ?? null) : null,
       ibadah: ibadahId ? (ibadahs[0]?.nama ?? null) : null,
+      kategori: kategoriId ? (ibadahs[0]?.kategoriIbadah?.nama ?? null) : null,
+      kidsOnly,
     },
   };
 }
@@ -197,6 +213,109 @@ async function ibadahReportData(req: Request) {
 // jangkauan jemaat, frekuensi hadir, ringkasan per ibadah, pertemuan
 // tertinggi/terendah.
 // ------------------------------------------------------------
+/** Lahir pada/setelah tanggal ini = usia ≤13 tahun (batas CKids). */
+function kidsBirthLimit(today = new Date()): Date {
+  return new Date(Date.UTC(today.getUTCFullYear() - 14, today.getUTCMonth(), today.getUTCDate() + 1));
+}
+
+const KIDS_AGE = [
+  { label: 'Balita (0–3)', min: 0, max: 3 },
+  { label: 'Prasekolah (4–6)', min: 4, max: 6 },
+  { label: 'SD kecil (7–9)', min: 7, max: 9 },
+  { label: 'SD besar (10–13)', min: 10, max: 13 },
+  { label: 'Di atas 13', min: 14, max: 200 },
+];
+
+/** Data khusus ibadah anak (CKids) dalam cakupan laporan. */
+async function kidsReport(a: {
+  ibadahs: { id: string; nama: string; jamMulai: string; requiresCheckout: boolean }[];
+  rows: {
+    id: string;
+    ibadahId: string;
+    tanggalIbadah: Date;
+    guestSource: string | null;
+    checkedOutAt: Date | null;
+    pickedUpAt: Date | null;
+    jemaat: { id: string; isTamu: boolean; jenisKelamin: 'L' | 'P' | null; tanggalLahir: Date | null };
+  }[];
+  report: ReturnType<typeof buildIbadahReport>;
+  cabangId: string | null;
+}) {
+  const today = new Date();
+  const ageOf = (d: Date) => {
+    let x = today.getFullYear() - d.getFullYear();
+    const m = today.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) x -= 1;
+    return x;
+  };
+  const anak = new Map<string, (typeof a.rows)[number]['jemaat']>();
+  for (const r of a.rows) anak.set(r.jemaat.id, r.jemaat);
+  const usia = KIDS_AGE.map((g) => ({ label: g.label, count: 0 }));
+  let tanpaUsia = 0;
+  let L = 0;
+  let P = 0;
+  for (const j of anak.values()) {
+    if (j.jenisKelamin === 'L') L++;
+    else if (j.jenisKelamin === 'P') P++;
+    if (!j.tanggalLahir) tanpaUsia++;
+    else {
+      const age = ageOf(j.tanggalLahir);
+      const idx = KIDS_AGE.findIndex((g) => age >= g.min && age <= g.max);
+      if (idx >= 0) usia[idx]!.count++;
+    }
+  }
+  const checkoutIbadah = new Set(a.ibadahs.filter((i) => i.requiresCheckout).map((i) => i.id));
+  const wajib = a.rows.filter((r) => checkoutIbadah.has(r.ibadahId));
+  const occ = new Set(a.rows.map((r) => `${r.ibadahId}|${ymd(r.tanggalIbadah)}`));
+  const [anakTerdaftar, poin] = await Promise.all([
+    prisma.jemaat.count({
+      where: { isActive: true, isTamu: false, tanggalLahir: { gte: kidsBirthLimit() }, ...(a.cabangId ? { cabangId: a.cabangId } : {}) },
+    }),
+    a.rows.length
+      ? prisma.pointTransaction.aggregate({
+          where: { source: 'KEHADIRAN_KIDS', referenceId: { in: a.rows.map((r) => r.id) } },
+          _sum: { amount: true },
+        })
+      : Promise.resolve({ _sum: { amount: 0 } }),
+  ]);
+  const perIbadah = a.ibadahs
+    .map((i) => {
+      const rs = a.rows.filter((r) => r.ibadahId === i.id);
+      const o = new Set(rs.map((r) => ymd(r.tanggalIbadah)));
+      return {
+        nama: i.nama,
+        jamMulai: i.jamMulai,
+        kehadiran: rs.length,
+        anakUnik: new Set(rs.map((r) => r.jemaat.id)).size,
+        pertemuan: o.size,
+        rataRata: o.size ? Math.round((rs.length / o.size) * 10) / 10 : 0,
+        wajibCheckout: i.requiresCheckout,
+      };
+    })
+    .sort((x, y) => y.kehadiran - x.kehadiran);
+  return {
+    ibadah: a.ibadahs.map((i) => i.nama),
+    kehadiran: a.rows.length,
+    anakHadirUnik: anak.size,
+    anakTerdaftar,
+    jangkauanPct: anakTerdaftar ? Math.round((anak.size * 1000) / anakTerdaftar) / 10 : 0,
+    pertemuan: occ.size,
+    rataRataPerPertemuan: occ.size ? Math.round((a.rows.length / occ.size) * 10) / 10 : 0,
+    tamuAnak: new Set(a.rows.filter((r) => r.jemaat.isTamu || r.guestSource).map((r) => r.jemaat.id)).size,
+    gender: { L, P, tanpa: anak.size - L - P },
+    usia,
+    tanpaUsia,
+    checkout: {
+      wajib: wajib.length,
+      sudahCheckout: wajib.filter((r) => r.checkedOutAt).length,
+      dijemput: wajib.filter((r) => r.pickedUpAt).length,
+      belum: wajib.filter((r) => !r.checkedOutAt && !r.pickedUpAt).length,
+    },
+    poinDiberikan: poin._sum.amount ?? 0,
+    perIbadah,
+  };
+}
+
 const growthPct = (cur: number, prev: number): number | null =>
   prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null;
 
@@ -205,6 +324,8 @@ async function ibadahInsights(a: {
   ibadahs: { id: string; isActive: boolean }[];
   period: { from: Date; to: Date };
   cabangId: string | null;
+  /** Semua ibadah dalam cakupan = ibadah anak → jangkauan dihitung dari anak ≤13 th. */
+  kidsOnly: boolean;
   rows: { ibadahId: string; tanggalIbadah: Date; guestSource: string | null; jemaat: { id: string; isTamu: boolean } }[];
   report: ReturnType<typeof buildIbadahReport>;
   seatById: Map<string, number | null>;
@@ -225,7 +346,14 @@ async function ibadahInsights(a: {
           select: { ibadahId: true, tanggalIbadah: true, guestSource: true, jemaat: { select: { id: true, isTamu: true } } },
         })
       : Promise.resolve([]),
-    prisma.jemaat.count({ where: { isActive: true, isTamu: false, ...(a.cabangId ? { cabangId: a.cabangId } : {}) } }),
+    prisma.jemaat.count({
+      where: {
+        isActive: true,
+        isTamu: false,
+        ...(a.cabangId ? { cabangId: a.cabangId } : {}),
+        ...(a.kidsOnly ? { tanggalLahir: { gte: kidsBirthLimit() } } : {}),
+      },
+    }),
   ]);
 
   const summarize = (rs: typeof prevRows) => {
@@ -326,7 +454,7 @@ reportRouter.get('/ibadah/export', async (req, res) => {
     const ins = d.insights;
     const g = (v: number | null) => (v == null ? '' : v);
     const lines = [
-      ['LAPORAN IBADAH', d.filters.cabang ?? 'Semua cabang', d.filters.ibadah ?? 'Semua ibadah'],
+      ['LAPORAN IBADAH', d.filters.cabang ?? 'Semua cabang', d.filters.kategori ? `Kategori ${d.filters.kategori}` : 'Semua kategori', d.filters.ibadah ?? 'Semua ibadah'],
       ['Periode', `${d.period.from} s.d. ${d.period.to}`, `Pembanding: ${ins.prev.from} s.d. ${ins.prev.to}`],
       [],
       ['RINGKASAN', 'Periode ini', 'Periode lalu', 'Perubahan (%)'],
@@ -375,6 +503,27 @@ reportRouter.get('/ibadah/export', async (req, res) => {
       ['KEHADIRAN TERENDAH', 'Tanggal', 'Hadir'],
       ...ins.terendah.map((o) => [`${o.ibadah} ${o.jam}`, o.tanggal, o.total]),
       [],
+      ...(d.kids
+        ? [
+            ['IBADAH ANAK (CKIDS)', 'Nilai', 'Catatan'],
+            ['Ibadah anak', d.kids.ibadah.join('; '), ''],
+            ['Kehadiran anak', d.kids.kehadiran, `${d.kids.pertemuan} pertemuan`],
+            ['Anak hadir (unik)', d.kids.anakHadirUnik, `${d.kids.jangkauanPct}% dari ${d.kids.anakTerdaftar} anak terdaftar (≤13 th)`],
+            ['Rata-rata hadir / pertemuan', d.kids.rataRataPerPertemuan, ''],
+            ['Tamu anak (unik)', d.kids.tamuAnak, ''],
+            ['Laki-laki / Perempuan', `${d.kids.gender.L} / ${d.kids.gender.P}`, d.kids.gender.tanpa ? `${d.kids.gender.tanpa} belum diisi` : ''],
+            ...d.kids.usia.map((u) => [`Usia ${u.label}`, u.count, '']),
+            ['Tanggal lahir belum diisi', d.kids.tanpaUsia, ''],
+            ['Kehadiran wajib checkout', d.kids.checkout.wajib, ''],
+            ['Sudah checkout', d.kids.checkout.sudahCheckout, ''],
+            ['Sudah dijemput (kode jemput)', d.kids.checkout.dijemput, ''],
+            ['Belum checkout / dijemput', d.kids.checkout.belum, ''],
+            ['Poin kehadiran diberikan', d.kids.poinDiberikan, ''],
+            ['Per ibadah anak', 'Kehadiran', 'Anak unik', 'Pertemuan', 'Rata-rata'],
+            ...d.kids.perIbadah.map((p) => [`${p.nama} ${p.jamMulai}`, p.kehadiran, p.anakUnik, p.pertemuan, p.rataRata]),
+            [],
+          ]
+        : []),
       ['TREN MINGGUAN (mulai Senin)', 'Jemaat', 'Tamu', 'Total'],
       ...d.trend.map((t) => [t.week, t.jemaat, t.tamu, t.jemaat + t.tamu]),
       [],

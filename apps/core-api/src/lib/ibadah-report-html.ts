@@ -32,12 +32,58 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
   const ins = d.insights;
   const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
-  const scope = [d.filters.cabang ? `Cabang ${d.filters.cabang}` : 'Semua cabang', d.filters.ibadah ? `Ibadah ${d.filters.ibadah}` : 'Semua ibadah'].join(' · ');
+  const scope = [
+    d.filters.cabang ? `Cabang ${d.filters.cabang}` : 'Semua cabang',
+    d.filters.kategori ? `Kategori ${d.filters.kategori}` : null,
+    d.filters.ibadah ? `Ibadah ${d.filters.ibadah}` : 'Semua ibadah',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const k = d.kids;
+  const kidsSection = k
+    ? section(
+        'Ibadah Anak (CKids)',
+        '🧒',
+        '#a855f7',
+        `<div class="mini4">
+      <div><b>${n(k.anakHadirUnik)}</b><span>Anak hadir · ${pctTxt(k.jangkauanPct)}</span></div>
+      <div><b>${n(k.anakTerdaftar)}</b><span>Anak terdaftar (≤13)</span></div>
+      <div><b>${n(k.rataRataPerPertemuan)}</b><span>Rata² / pertemuan</span></div>
+      <div><b>${n(k.poinDiberikan)}</b><span>Poin diberikan</span></div>
+    </div>
+    <div class="two"><div>
+      <div class="sub-t">Kelompok usia</div>
+      ${k.usia.map((u: { label: string; count: number }) => barRow(u.label, n(u.count), (u.count / Math.max(1, ...k.usia.map((z: { count: number }) => z.count))) * 100, '#a855f7')).join('')}
+      ${k.tanpaUsia ? `<p class="muted small">${n(k.tanpaUsia)} anak belum ada tanggal lahir.</p>` : ''}
+      <div class="gender" style="margin-top:8px"><div class="gbar"><div style="width:${k.anakHadirUnik ? (k.gender.L / k.anakHadirUnik) * 100 : 0}%;background:#0ea5e9"></div><div style="width:${
+          k.anakHadirUnik ? (k.gender.P / k.anakHadirUnik) * 100 : 0
+        }%;background:#f472b6"></div></div><div class="gl"><span style="color:#0369a1">♂ ${n(k.gender.L)}</span><span style="color:#be185d">♀ ${n(k.gender.P)}</span></div></div>
+    </div><div>
+      <div class="sub-t">Keamanan (checkout & jemput)</div>
+      ${
+        k.checkout.wajib
+          ? `${barRow('Sudah checkout', n(k.checkout.sudahCheckout), (k.checkout.sudahCheckout / k.checkout.wajib) * 100, '#22c55e')}
+      ${barRow('Dijemput dengan kode', n(k.checkout.dijemput), (k.checkout.dijemput / k.checkout.wajib) * 100, '#10b981')}
+      ${barRow('Belum checkout / dijemput', n(k.checkout.belum), (k.checkout.belum / k.checkout.wajib) * 100, k.checkout.belum ? '#ef4444' : '#cbd5e1')}
+      <p class="muted small">Dari ${n(k.checkout.wajib)} kehadiran di ibadah wajib checkout.</p>`
+          : '<p class="muted">Tidak ada ibadah anak yang wajib checkout.</p>'
+      }
+      <div class="sub-t" style="margin-top:8px">Per ibadah anak</div>
+      ${k.perIbadah
+        .map((p: { nama: string; jamMulai: string; kehadiran: number; anakUnik: number; rataRata: number }) =>
+          barRow(`${p.nama} ${p.jamMulai}`, `${n(p.kehadiran)}`, (p.kehadiran / Math.max(1, k.perIbadah[0]?.kehadiran ?? 1)) * 100, '#c084fc', ` <span class="muted">· ${n(p.anakUnik)} anak · rata² ${n(p.rataRata)}</span>`),
+        )
+        .join('')}
+      ${k.tamuAnak ? `<p class="muted small">${n(k.tamuAnak)} anak tamu.</p>` : ''}
+    </div></div>`,
+        `${k.ibadah.length} ibadah anak · ${n(k.kehadiran)} kehadiran · ${n(k.pertemuan)} pertemuan`,
+      )
+    : '';
 
   const kpis = `
   <div class="kpis">
     ${kpi('🙌', 'Total kehadiran', n(s.totalHadir), `${n(s.jemaatHadir)} jemaat + ${n(s.tamuHadir)} tamu`, '#f97316').replace('</div></div>', `</div>${growthBadge(ins.growth.totalHadir)}</div>`)}
-    ${kpi('✅', 'Jemaat hadir (unik)', n(s.uniqueJemaat), `${pctTxt(ins.jangkauan.pct)} dari ${n(ins.jangkauan.jemaatAktif)} jemaat aktif`, '#3b82f6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueJemaat)}</div>`)}
+    ${kpi('✅', d.filters.kidsOnly ? 'Anak hadir (unik)' : 'Jemaat hadir (unik)', n(s.uniqueJemaat), `${pctTxt(ins.jangkauan.pct)} dari ${n(ins.jangkauan.jemaatAktif)} ${d.filters.kidsOnly ? 'anak terdaftar' : 'jemaat aktif'}`, '#3b82f6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueJemaat)}</div>`)}
     ${kpi('📊', 'Rata-rata / pertemuan', n(s.rataRata), `${n(s.pertemuanAdaKehadiran)} dari ${n(s.pertemuan)} pertemuan ada kehadiran`, '#0ea5e9').replace('</div></div>', `</div>${growthBadge(ins.growth.rataRata)}</div>`)}
     ${kpi('🙋', 'Tamu (unik)', n(s.uniqueTamu), `${n(ins.tamu.baru)} baru · ${n(ins.tamu.berulang)} berulang`, '#8b5cf6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueTamu)}</div>`)}
     ${kpi('🪑', 'Okupansi rata-rata', pctTxt(s.okupansi.rataOkupansi), s.okupansi.melebihi ? `${s.okupansi.melebihi}× melebihi seat` : 'hadir ÷ jumlah seat', '#14b8a6')}
@@ -130,7 +176,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 <div class="page">
   <div class="hero">
     <div class="eyebrow">Laporan Ibadah · Ringkasan Eksekutif</div>
-    <h1>Kehadiran Ibadah</h1>
+    <h1>${d.filters.kidsOnly ? 'Kehadiran Ibadah Anak' : 'Kehadiran Ibadah'}</h1>
     <div class="meta">${esc(scope)}</div>
     <div class="period">📅 ${d.period.label ? `${esc(d.period.label)} · ` : ''}${fmtTgl(d.period.from)} – ${fmtTgl(d.period.to)}</div>
   </div>
@@ -142,10 +188,11 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   ${section('Tren Mingguan', '📈', '#f97316', trend, 'Total kehadiran (jemaat + tamu) per minggu')}
 
   <div class="grid2">
-    ${section('Jangkauan Jemaat', '🎯', '#3b82f6', jangkauan, d.filters.cabang ? `Jemaat aktif cabang ${d.filters.cabang}` : 'Jemaat aktif semua cabang')}
+    ${section(d.filters.kidsOnly ? 'Jangkauan Anak' : 'Jangkauan Jemaat', '🎯', '#3b82f6', jangkauan, `${d.filters.kidsOnly ? 'Anak ≤13 th' : 'Jemaat aktif'} ${d.filters.cabang ? `cabang ${d.filters.cabang}` : 'semua cabang'}`)}
     ${section('Cara Check-in', '📲', '#10b981', methods, 'Distribusi metode check-in')}
   </div>
 
+  ${kidsSection}
   ${section('Ringkasan per Ibadah', '⛪', '#f97316', perIbadahTable, 'Pertemuan ada kehadiran / terjadwal · okupansi = rata-rata hadir ÷ seat · vs lalu = total dibanding periode sebelumnya')}
   ${section('Sorotan Pertemuan', '⭐', '#f59e0b', highlights)}
   ${section(`Tamu (${n(d.guests.length)})`, '🙋', '#8b5cf6', guests, 'Untuk tindak lanjut tim penyambutan')}

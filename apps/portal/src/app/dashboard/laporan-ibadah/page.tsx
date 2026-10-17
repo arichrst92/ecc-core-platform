@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Armchair, BarChart3, Loader2, Star, Target, TrendingDown, TrendingUp, UserPlus, Church } from 'lucide-react';
+import { Armchair, Baby, BarChart3, Loader2, Star, Target, TrendingDown, TrendingUp, UserPlus, Church } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   ExportButtons,
@@ -64,6 +64,111 @@ function OccupancyBar({ pct, hadir, seat }: { pct: number | null; hadir?: number
   );
 }
 
+interface KidsData {
+  ibadah: string[];
+  kehadiran: number;
+  anakHadirUnik: number;
+  anakTerdaftar: number;
+  jangkauanPct: number;
+  pertemuan: number;
+  rataRataPerPertemuan: number;
+  tamuAnak: number;
+  gender: { L: number; P: number; tanpa: number };
+  usia: { label: string; count: number }[];
+  tanpaUsia: number;
+  checkout: { wajib: number; sudahCheckout: number; dijemput: number; belum: number };
+  poinDiberikan: number;
+  perIbadah: { nama: string; jamMulai: string; kehadiran: number; anakUnik: number; pertemuan: number; rataRata: number; wajibCheckout: boolean }[];
+}
+
+/** Bagian khusus ibadah anak (CKids). */
+function KidsSection({ k }: { k: KidsData }) {
+  const usiaMax = Math.max(1, ...k.usia.map((u) => u.count));
+  const pct = (a: number, b: number) => (b ? Math.round((a * 1000) / b) / 10 : 0);
+  return (
+    <div className="bg-white border border-violet-200 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 bg-violet-50 border-b border-violet-100">
+        <h2 className="font-semibold text-violet-900 flex items-center gap-2">
+          <Baby className="w-4 h-4" /> Ibadah Anak (CKids)
+        </h2>
+        <p className="text-xs text-violet-700/80 mt-0.5">
+          {k.ibadah.join(', ')} · {k.kehadiran.toLocaleString('id-ID')} kehadiran · {k.pertemuan} pertemuan
+        </p>
+      </div>
+      <div className="p-5 grid lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 gap-2 content-start">
+          {[
+            { v: k.anakHadirUnik, l: `Anak hadir · ${fmtPct(k.jangkauanPct)}` },
+            { v: k.anakTerdaftar, l: 'Anak terdaftar (≤13 th)' },
+            { v: k.rataRataPerPertemuan, l: 'Rata-rata / pertemuan' },
+            { v: k.poinDiberikan, l: 'Poin kehadiran diberikan' },
+            { v: k.tamuAnak, l: 'Anak tamu' },
+            { v: k.gender.L, l: `Laki-laki · ${k.gender.P} perempuan` },
+          ].map((x) => (
+            <div key={x.l} className="bg-violet-50/60 rounded-lg p-2.5">
+              <div className="text-lg font-bold text-violet-900 tabular-nums">{x.v.toLocaleString('id-ID')}</div>
+              <div className="text-[10px] text-violet-700/80">{x.l}</div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-neutral-500 uppercase mb-2">Kelompok usia</div>
+          <div className="space-y-1.5">
+            {k.usia.map((u) => (
+              <div key={u.label} className="flex items-center gap-2 text-xs">
+                <span className="w-28 text-neutral-600 shrink-0">{u.label}</span>
+                <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-violet-500 rounded-full" style={{ width: `${(u.count / usiaMax) * 100}%` }} />
+                </div>
+                <b className="w-8 text-right">{u.count}</b>
+              </div>
+            ))}
+          </div>
+          {k.tanpaUsia ? <p className="text-[11px] text-neutral-400 mt-2">{k.tanpaUsia} anak belum ada tanggal lahir.</p> : null}
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-neutral-500 uppercase mb-2">Keamanan (checkout & jemput)</div>
+          {k.checkout.wajib ? (
+            <div className="space-y-2 text-xs">
+              {[
+                { l: 'Sudah checkout', v: k.checkout.sudahCheckout, c: 'bg-green-500' },
+                { l: 'Dijemput dengan kode', v: k.checkout.dijemput, c: 'bg-emerald-500' },
+                { l: 'Belum checkout / dijemput', v: k.checkout.belum, c: k.checkout.belum ? 'bg-red-500' : 'bg-neutral-300' },
+              ].map((x) => (
+                <div key={x.l}>
+                  <div className="flex justify-between mb-0.5">
+                    <span className="text-neutral-600">{x.l}</span>
+                    <b>
+                      {x.v} <span className="text-neutral-400 font-normal">· {fmtPct(pct(x.v, k.checkout.wajib))}</span>
+                    </b>
+                  </div>
+                  <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${x.c}`} style={{ width: `${pct(x.v, k.checkout.wajib)}%` }} />
+                  </div>
+                </div>
+              ))}
+              <p className="text-[11px] text-neutral-400">Dari {k.checkout.wajib} kehadiran di ibadah wajib checkout.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-400">Tidak ada ibadah anak yang wajib checkout.</p>
+          )}
+          <div className="text-xs font-semibold text-neutral-500 uppercase mt-4 mb-1.5">Per ibadah anak</div>
+          {k.perIbadah.map((p) => (
+            <div key={p.nama + p.jamMulai} className="flex justify-between text-xs py-0.5 gap-2">
+              <span className="truncate">
+                {p.nama} <span className="text-neutral-400">{p.jamMulai}</span>
+              </span>
+              <span className="whitespace-nowrap">
+                <b>{p.kehadiran}</b> <span className="text-neutral-400">· {p.anakUnik} anak · rata² {p.rataRata}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface IbadahInsights {
   prev: { from: string; to: string; totalHadir: number; uniqueJemaat: number; uniqueTamu: number; pertemuan: number; rataRata: number };
   growth: { totalHadir: number | null; uniqueJemaat: number | null; uniqueTamu: number | null; rataRata: number | null };
@@ -107,7 +212,8 @@ function Growth({ g }: { g: number | null }) {
 
 interface IbadahReport {
   insights: IbadahInsights;
-  filters: { cabang: string | null; ibadah: string | null };
+  kids: KidsData | null;
+  filters: { cabang: string | null; ibadah: string | null; kategori: string | null; kidsOnly: boolean };
   period: { from: string; to: string; label: string };
   summary: {
     totalHadir: number;
@@ -163,18 +269,36 @@ interface IbadahReport {
 export default function LaporanIbadahPage() {
   const [cabangId, setCabangId] = useState('');
   const [ibadahId, setIbadahId] = useState('');
+  const [kategoriId, setKategoriId] = useState('');
+  const kategoriQ = useQuery({
+    queryKey: ['kategori-ibadah', 'options'],
+    queryFn: async () =>
+      ((await apiClient.get('/admin/ibadah/kategori', { params: { limit: 200 } })).data as { data: { id: string; nama: string }[] }).data,
+    staleTime: 5 * 60_000,
+  });
   const [period, setPeriod] = useState<PeriodState>({ periode: 'last_30d', from: '', to: '' });
   const [hideEmpty, setHideEmpty] = useState(false);
   const cabangQ = useCabangOptions();
   const ibadahQ = useQuery({
     queryKey: ['ibadah', 'options', cabangId],
     queryFn: async () =>
-      ((await apiClient.get('/admin/ibadah', { params: { limit: 500 } })).data as { data: { id: string; nama: string; cabang?: { id: string } }[] }).data,
+      (
+        (await apiClient.get('/admin/ibadah', { params: { limit: 500 } })).data as {
+          data: { id: string; nama: string; isKidsIbadah?: boolean; kategoriIbadahId?: string; cabang?: { id: string } }[];
+        }
+      ).data,
     staleTime: 5 * 60_000,
   });
-  const ibadahOptions = (ibadahQ.data ?? []).filter((i) => !cabangId || i.cabang?.id === cabangId);
+  const ibadahOptions = (ibadahQ.data ?? []).filter(
+    (i) => (!cabangId || i.cabang?.id === cabangId) && (!kategoriId || i.kategoriIbadahId === kategoriId),
+  );
 
-  const params = { cabangId: cabangId || undefined, ibadahId: ibadahId || undefined, ...periodParams(period) };
+  const params = {
+    cabangId: cabangId || undefined,
+    kategoriIbadahId: kategoriId || undefined,
+    ibadahId: ibadahId || undefined,
+    ...periodParams(period),
+  };
   const q = useQuery({
     queryKey: ['report', 'ibadah', params],
     queryFn: async () => (await apiClient.get<{ data: IbadahReport }>('/admin/report/ibadah', { params })).data.data,
@@ -217,12 +341,30 @@ export default function LaporanIbadahPage() {
             ))}
           </select>
         </Field>
+        <Field label="Kategori">
+          <select
+            value={kategoriId}
+            onChange={(e) => {
+              setKategoriId(e.target.value);
+              setIbadahId('');
+            }}
+            className={selectCls}
+          >
+            <option value="">Semua kategori</option>
+            {(kategoriQ.data ?? []).map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.nama}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Ibadah">
           <select value={ibadahId} onChange={(e) => setIbadahId(e.target.value)} className={selectCls}>
             <option value="">Semua ibadah</option>
             {ibadahOptions.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.nama}
+                {i.isKidsIbadah ? ' 🧒' : ''}
               </option>
             ))}
           </select>
@@ -262,11 +404,11 @@ export default function LaporanIbadahPage() {
             {/* Jangkauan */}
             <div className="bg-white border border-neutral-200 rounded-xl p-4">
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-2">
-                <Target className="w-4 h-4 text-blue-600" /> Jangkauan jemaat
+                <Target className="w-4 h-4 text-blue-600" /> {d.filters.kidsOnly ? 'Jangkauan anak' : 'Jangkauan jemaat'}
               </h2>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold text-blue-700">{fmtPct(d.insights.jangkauan.pct)}</span>
-                <span className="text-xs text-neutral-500">jemaat aktif hadir minimal sekali</span>
+                <span className="text-xs text-neutral-500">{d.filters.kidsOnly ? 'anak (≤13 th)' : 'jemaat aktif'} hadir minimal sekali</span>
               </div>
               <div className="h-2.5 bg-neutral-100 rounded-full overflow-hidden mt-2">
                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, d.insights.jangkauan.pct)}%` }} />
@@ -280,7 +422,7 @@ export default function LaporanIbadahPage() {
                 </span>
               </div>
               <p className="text-[11px] text-neutral-400 mt-2">
-                Dari {d.insights.jangkauan.jemaatAktif.toLocaleString('id-ID')} jemaat aktif {d.filters.cabang ? `cabang ${d.filters.cabang}` : 'semua cabang'}.
+                Dari {d.insights.jangkauan.jemaatAktif.toLocaleString('id-ID')} {d.filters.kidsOnly ? 'anak terdaftar' : 'jemaat aktif'} {d.filters.cabang ? `cabang ${d.filters.cabang}` : 'semua cabang'}.
               </p>
             </div>
 
@@ -409,6 +551,8 @@ export default function LaporanIbadahPage() {
               </table>
             </div>
           </div>
+
+          {d.kids ? <KidsSection k={d.kids} /> : null}
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <StatCard label="Total kehadiran" value={d.summary.totalHadir} hint={`${d.summary.jemaatHadir} jemaat + ${d.summary.tamuHadir} tamu`} />

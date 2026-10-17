@@ -34,6 +34,7 @@ import { groupRouter } from './group.js';
 import { feedbackRouter } from './feedback.js';
 import { reportRouter } from './report.js';
 import { spiritualJourneyRouter } from './spiritual-journey.js';
+import { tamuRouter } from './tamu.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
@@ -72,6 +73,7 @@ adminRouter.use('/feedback', feedbackRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).
 adminRouter.use('/report', reportRouter);
 adminRouter.use('/spiritual-journey', spiritualJourneyRouter);
+adminRouter.use('/tamu', tamuRouter);
 adminRouter.use('/role', roleRouter);
 adminRouter.use('/ibadah', ibadahRouter);
 adminRouter.use('/keluarga', keluargaRouter);

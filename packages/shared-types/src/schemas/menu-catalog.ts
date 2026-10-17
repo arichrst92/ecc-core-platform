@@ -45,6 +45,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'role-jemaat', label: 'Role Jemaat', href: '/dashboard/role', group: 'People' },
   { key: 'tipe-relasi', label: 'Relasi Jemaat', href: '/dashboard/tipe-relasi', group: 'People' },
   { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People' },
+  { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People' },
 
   // Community
   { key: 'homecell-area', label: 'Homecell Area', href: '/dashboard/homecell-area', group: 'Community' },

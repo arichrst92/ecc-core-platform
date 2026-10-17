@@ -179,6 +179,13 @@ model Jemaat {
   // anggota & tanpa akun. Disembunyikan dari daftar jemaat default. Saat ia
   // mendaftar Els App dengan no HP yang sama, record ini di-upgrade (false).
   isTamu Boolean @default(false) @map("is_tamu")
+  // Status tindak lanjut tamu (diatur admin portal): DIUNDANG | TERLIBAT |
+  // FOLLOWUP | TERDAFTAR. Status efektif juga dihitung otomatis (lib/tamu-status.ts).
+  tamuStatus            String?   @map("tamu_status") @db.VarChar(20)
+  tamuStatusUpdatedAt   DateTime? @map("tamu_status_updated_at")
+  tamuStatusUpdatedById String?   @map("tamu_status_updated_by_id") @db.Uuid
+  // Catatan internal tim follow-up (tidak tampil ke jemaat pengundang).
+  tamuCatatan           String?   @map("tamu_catatan") @db.Text
 
   // ---- Onboarding state ----
   // NULL = jemaat belum complete onboarding wizard. Mobile app WAJIB

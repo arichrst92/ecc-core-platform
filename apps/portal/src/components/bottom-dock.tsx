@@ -197,7 +197,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: FileText, menuKey: 'wa-config' },
       // Operations Tickets — DISEMBUNYIKAN sampai apps/operations dibangun (2026-10-11).
       // { href: '/operations', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
-      { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
+      { href: '/planning', label: 'Ticketing Tools', icon: Ticket, menuKey: 'planning-backlog', external: true },
     ],
   },
 ];

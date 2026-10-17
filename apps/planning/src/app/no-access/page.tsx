@@ -17,10 +17,10 @@ export default function NoAccessPage() {
           {user ? (
             <>
               Hi <strong>{user.namaLengkap}</strong>, akun kamu belum terdaftar sebagai anggota
-              <strong> IT Minister Team</strong>. Planning Backlog hanya untuk tim dev internal.
+              <strong> IT Minister Team</strong>. Ticketing Tools hanya untuk tim dev internal.
             </>
           ) : (
-            'Akun kamu belum terdaftar sebagai anggota IT Minister Team. Planning Backlog hanya untuk tim dev internal.'
+            'Akun kamu belum terdaftar sebagai anggota IT Minister Team. Ticketing Tools hanya untuk tim dev internal.'
           )}
         </p>
         <div className="text-xs text-neutral-500">

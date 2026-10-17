@@ -79,7 +79,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // ops-tickets tetap di catalog (RBAC row tidak hilang) tapi menu disembunyikan
   // dari sidebar + bottom-dock sampai apps/operations dibangun (2026-10-11).
   { key: 'ops-tickets', label: 'Operations Tickets (segera)', href: '/operations', group: 'Developer Tools' },
-  { key: 'planning-backlog', label: 'Planning Backlog', href: '/planning', group: 'Developer Tools' },
+  { key: 'planning-backlog', label: 'Ticketing Tools', href: '/planning', group: 'Developer Tools' },
 
   // CKids (Modul 28) — gift stall di subdomain ckids.eccchurch.global,
   // hadiah master data di portal.

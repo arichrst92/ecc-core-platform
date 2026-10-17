@@ -106,7 +106,7 @@ const SECTIONS: Section[] = [
           'Movement — Event, Visit, Local Market',
           'Broadcast — News, Renungan',
           'App Settings — Legal Docs, App Versions',
-          'Developer Tools — Role Access, API Keys, Audit Log, Maintenance, Server Health, Credential, Diagnostics, Shiftsoft Sync, WhatsApp Notif Config, Technical Documentation, Team IT Minister, Planning Backlog',
+          'Developer Tools — Role Access, API Keys, Audit Log, Maintenance, Server Health, Credential, Diagnostics, Shiftsoft Sync, WhatsApp Notif Config, Technical Documentation, Team IT Minister, Ticketing Tools',
           'Profil & Keamanan (bawah) — edit data sendiri',
         ],
       },
@@ -618,8 +618,8 @@ const SECTIONS: Section[] = [
       { kind: 'menu-card', href: '/dashboard/server-health', label: 'Server Health', description: 'Real-time CPU/memory/DB/storage stats + troubleshooting guide untuk tim ops.' },
       { kind: 'menu-card', href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', description: 'Aktifkan/matikan notifikasi WhatsApp per jenis (reminder, event, homecell, keluarga, ministry, dll), edit template pesan, dan kirim test ke nomor sendiri.' },
       { kind: 'menu-card', href: '/dashboard/tech-docs', label: 'Technical Documentation', description: 'Dokumentasi teknis untuk tim dev/ops: arsitektur, database, deploy, nginx, PM2, testing.' },
-      { kind: 'menu-card', href: '/dashboard/it-minister-team', label: 'Team IT Minister', description: 'Struktur tim IT Minister (divisi + peran). Anggota aktif otomatis dapat akses Planning Backlog.' },
-      { kind: 'menu-card', href: '/planning', label: 'Planning Backlog', description: 'Aplikasi planning tim IT (Epic → Story → Task, Sprint, Kanban, komentar). Terbuka di tab baru tanpa login ulang; hanya untuk anggota IT Minister Team.' },
+      { kind: 'menu-card', href: '/dashboard/it-minister-team', label: 'Team IT Minister', description: 'Struktur tim IT Minister (divisi + peran). Anggota aktif otomatis dapat akses Ticketing Tools.' },
+      { kind: 'menu-card', href: '/planning', label: 'Ticketing Tools', description: 'Aplikasi planning tim IT (Epic → Story → Task, Sprint, Kanban, komentar). Terbuka di tab baru tanpa login ulang; hanya untuk anggota IT Minister Team.' },
       {
         kind: 'steps',
         title: 'Beri akses portal ke role baru',
@@ -646,10 +646,10 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'steps',
-        title: 'Pakai Planning Backlog',
+        title: 'Pakai Ticketing Tools',
         items: [
           'Pastikan Anda terdaftar aktif di Team IT Minister (kalau tidak, halaman menampilkan "Akses Ditolak").',
-          'Klik Developer Tools → Planning Backlog → terbuka di tab baru (portal.eccchurch.global/planning).',
+          'Klik Developer Tools → Ticketing Tools → terbuka di tab baru (portal.eccchurch.global/planning).',
           'Sprints: buat sprint, lalu Activate (hanya 1 sprint aktif sekaligus) dan Complete saat selesai.',
           'Backlog: buat Epic → tambah Story → tambah Task. Isi owner/assignee dari anggota IT Minister Team, priority P0–P3, sprint, estimasi jam.',
           'Kanban: pilih level Epic/Story/Task, geser kartu antar kolom status (atau pakai dropdown di kartu). Klik kartu untuk detail + komentar.',

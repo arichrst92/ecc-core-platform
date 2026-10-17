@@ -32,7 +32,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-neutral-900">Planning Backlog</h1>
+        <h1 className="text-2xl font-bold text-neutral-900">Ticketing Tools</h1>
         <p className="text-sm text-neutral-500">Ringkasan sprint aktif & item kamu.</p>
       </header>
 

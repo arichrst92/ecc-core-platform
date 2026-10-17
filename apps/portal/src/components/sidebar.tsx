@@ -166,10 +166,10 @@ const groups: NavGroup[] = [
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
-      // Planning Backlog — di-mount sebagai path /planning di portal.eccchurch.global
+      // Ticketing Tools (dulu Planning Backlog) — di-mount sebagai path /planning di portal.eccchurch.global
       // via nginx reverse proxy ke apps/planning (port 3300). Same-origin → localStorage
       // auto-shared, tidak perlu SSO handoff.
-      { href: '/planning', label: 'Planning Backlog', icon: FileText, menuKey: 'planning-backlog', external: true },
+      { href: '/planning', label: 'Ticketing Tools', icon: Ticket, menuKey: 'planning-backlog', external: true },
       // Operations Tickets — DISEMBUNYIKAN sampai apps/operations dibangun (2026-10-11).
       // { href: '/operations', label: 'Operations Tickets', icon: Ticket, menuKey: 'ops-tickets', external: true },
     ],

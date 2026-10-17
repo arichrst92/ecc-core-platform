@@ -65,7 +65,7 @@ const SECTIONS: Section[] = [
           ['Backend API', 'Node.js 20 + Express 4 + TypeScript', '4100', 'api.eccchurch.global'],
           ['Portal (admin)', 'Next.js 14 App Router + Tailwind', '3100', 'portal.eccchurch.global'],
           ['CKids Web', 'Next.js 14 (subdomain)', '3300', 'ckids.eccchurch.global'],
-          ['Planning Backlog', 'Next.js 14 (basePath /planning)', '3400', 'portal.eccchurch.global/planning'],
+          ['Ticketing Tools', 'Next.js 14 (basePath /planning)', '3400', 'portal.eccchurch.global/planning'],
           ['Landing Site', 'Next.js 14 (public)', '3200', 'eccchurch.global'],
           ['Database', 'PostgreSQL 16 + Prisma 5.22', '5432', 'localhost (VPS internal)'],
           ['Reverse Proxy', 'Nginx 1.24 + Certbot SSL', '443', 'all subdomains'],
@@ -92,7 +92,7 @@ const SECTIONS: Section[] = [
 ├── apps/
 │   ├── core-api/       Express backend, main API server
 │   ├── portal/         Admin portal (Fulltimer)
-│   ├── planning/       Planning Backlog IT Minister Team (path /planning)
+│   ├── planning/       Ticketing Tools IT Minister Team (path /planning)
 │   ├── ckids/          Kids gift stall admin (subdomain)
 │   └── landing/        Public landing site
 ├── packages/
@@ -151,7 +151,7 @@ pnpm dev`,
           'WaNotificationConfig: on/off + template per tipe notif WhatsApp, dikelola di Developer Tools → WhatsApp Notif Config.',
           'PelayananJoinRequest: permintaan bergabung ke ministry (PENDING/APPROVED/REJECTED/CANCELLED). Terpisah dari JemaatPelayanan supaya membership selalu aktif. Unique partial index: 1 PENDING per (jemaat, ministry).',
           'WebActionToken: token sekali pakai (10 menit) → session web (30 menit) untuk daftar + upload bukti event NOMINAL_BEBAS di web. Disimpan sebagai SHA-256 hash.',
-          'ITMinisterTeam + BacklogSprint/Epic/Story/Task/Comment: IT Minister Team (RBAC planning) + Planning Backlog app.',
+          'ITMinisterTeam + BacklogSprint/Epic/Story/Task/Comment: IT Minister Team (RBAC planning) + Ticketing Tools app.',
           'Integration (Modul 29 rollback): third-party API keys runtime editable.',
         ],
       },
@@ -305,7 +305,7 @@ const canWrite = hasMenuAccess(user.menuAccess, 'jemaat', 'write');`,
         kind: 'table',
         headers: ['Gate khusus', 'Aturan', 'Lokasi'],
         rows: [
-          ['Planning Backlog', 'Anggota aktif ITMinisterTeam (cache 60s) — bukan anggota → 403, app tampil /planning/no-access', 'lib/rbac-planning.ts'],
+          ['Ticketing Tools', 'Anggota aktif ITMinisterTeam (cache 60s) — bukan anggota → 403, app tampil /planning/no-access', 'lib/rbac-planning.ts'],
           ['Ministry join approval', 'Membership aktif role level ≥ 5 di ministry tsb, atau Fulltimer', 'lib/ministry-access.ts'],
           ['Daftar event batch', 'Non-Fulltimer hanya boleh jemaatIds diri sendiri + keluarga', 'routes/admin/event.ts'],
           ['Web action session', 'Header X-Web-Session, scope 1 jemaat + 1 event, hanya 5 endpoint /web-action/*', 'routes/web-action.ts'],
@@ -588,7 +588,7 @@ pm2 status`,
       {
         kind: 'code',
         lang: 'nginx',
-        content: `# Planning Backlog TIDAK pakai subdomain — path /planning di server block portal.
+        content: `# Ticketing Tools TIDAK pakai subdomain — path /planning di server block portal.
 # Taruh SEBELUM location /. Next.js planning pakai basePath '/planning', jadi proxy tanpa strip prefix.
 location /planning {
   proxy_pass http://127.0.0.1:3400;

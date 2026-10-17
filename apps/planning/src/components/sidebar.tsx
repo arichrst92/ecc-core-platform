@@ -34,7 +34,7 @@ export function Sidebar() {
           P
         </div>
         <div>
-          <div className="font-bold text-neutral-900">Planning Backlog</div>
+          <div className="font-bold text-neutral-900">Ticketing Tools</div>
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">IT Minister Team</div>
         </div>
       </div>

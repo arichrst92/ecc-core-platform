@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'ECC Planning Backlog',
+  title: 'ECC Ticketing Tools',
   description: 'Internal dev-team planning tool untuk IT Minister Team ECC',
   icons: { icon: '/logo-ecc.webp' },
 };

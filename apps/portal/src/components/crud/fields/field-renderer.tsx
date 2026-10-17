@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Upload, Trash2, Loader2, ImageOff } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -44,7 +44,9 @@ export function FieldRenderer({ field }: Props) {
             {...register(field.name)}
             className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
           >
-            <option value="">— pilih —</option>
+            {/* Kalau opsi kosong ('') sudah ada di daftar, jangan dobel. */}
+            {field.options?.some((o) => o.value === '') ? null : <option value="">— pilih —</option>}
+            <MissingOption field={field} />
             {field.options?.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -106,12 +108,38 @@ export function FieldRenderer({ field }: Props) {
   );
 }
 
+/**
+ * Nilai existing yang tidak ada di opsi select (mis. radius 150 m) tetap
+ * ditampilkan, supaya saat edit tidak berubah diam-diam ke opsi lain.
+ */
+function MissingOption({ field }: { field: FieldConfig }) {
+  const { watch } = useFormContext();
+  const v = watch(field.name) as unknown;
+  if (v == null || v === '' || field.options?.some((o) => o.value === String(v))) return null;
+  return <option value={String(v)}>{String(v)} (data saat ini)</option>;
+}
+
 function RelationSelect({ field }: { field: FieldConfig }) {
-  const { register } = useFormContext();
+  const { register, setValue, getValues, watch } = useFormContext();
   const { data, isLoading } = useRelationOptions(field.relation!.endpoint);
+  const current = watch(field.name) as string | null | undefined;
 
   const valueKey = field.relation?.valueKey ?? 'id';
   const labelKey = field.relation?.labelKey ?? 'nama';
+
+  // Opsi dimuat async: saat form di-reset nilainya belum ada di <select>,
+  // jadi browser menampilkan "— pilih —". Setelah opsi tiba, pasang ulang
+  // nilai existing supaya dropdown menampilkan data yang sedang diedit.
+  useEffect(() => {
+    if (!data) return;
+    const v = getValues(field.name);
+    if (v != null && v !== '') setValue(field.name, String(v), { shouldDirty: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const has = (v: unknown) => (data ?? []).some((item) => String(item[valueKey]) === String(v));
+  // Nilai existing di luar daftar (mis. > 100 data / data nonaktif) tetap ditampilkan.
+  const missing = !isLoading && current != null && current !== '' && !has(current);
 
   return (
     <select
@@ -120,6 +148,7 @@ function RelationSelect({ field }: { field: FieldConfig }) {
       className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white disabled:opacity-50"
     >
       <option value="">{isLoading ? 'Memuat...' : '— pilih —'}</option>
+      {missing ? <option value={String(current)}>(data saat ini)</option> : null}
       {data?.map((item) => (
         <option key={String(item[valueKey])} value={String(item[valueKey])}>
           {field.relation?.formatLabel ? field.relation.formatLabel(item) : String(item[labelKey])}

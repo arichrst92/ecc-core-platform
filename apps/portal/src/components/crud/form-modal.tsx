@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect } from 'react';
+import { Fragment, useEffect, useMemo } from 'react';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Loader2 } from 'lucide-react';
@@ -21,6 +21,46 @@ interface Props<T> {
   isEdit?: boolean;
 }
 
+/**
+ * Samakan bentuk data existing dengan input form supaya saat EDIT semua field
+ * langsung terisi (admin tidak perlu input ulang):
+ *  - date     : ISO "2026-10-17T00:00:00.000Z" → "2026-10-17"
+ *  - time     : "08:00:00" → "08:00"
+ *  - select   : number/boolean → string (value <option> selalu string); null → ''
+ *  - relation : kalau hanya ada objek nested (mis. `cabang: { id }`) → ambil id-nya
+ */
+export function normalizeFormValues(fields: FieldConfig[], values: Record<string, unknown> | undefined) {
+  if (!values) return values;
+  const out: Record<string, unknown> = { ...values };
+  for (const f of fields) {
+    const v = out[f.name];
+    switch (f.type) {
+      case 'date':
+        if (v instanceof Date) out[f.name] = v.toISOString().slice(0, 10);
+        else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) out[f.name] = v.slice(0, 10);
+        break;
+      case 'time':
+        if (typeof v === 'string' && /^\d{2}:\d{2}/.test(v)) out[f.name] = v.slice(0, 5);
+        break;
+      case 'select':
+        if (v != null) out[f.name] = String(v);
+        break;
+      case 'relation': {
+        if (v == null || v === '') {
+          // Fallback: field "cabangId" ← row.cabang.id
+          const base = f.name.endsWith('Id') ? f.name.slice(0, -2) : null;
+          const nested = base ? (values[base] as { id?: unknown } | null | undefined) : null;
+          if (nested && nested.id != null) out[f.name] = String(nested.id);
+        } else out[f.name] = String(v);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
 export function FormModal<T extends Record<string, unknown>>({
   open,
   onClose,
@@ -32,15 +72,23 @@ export function FormModal<T extends Record<string, unknown>>({
   loading,
   isEdit,
 }: Props<T>) {
+  const initial = useMemo(
+    () => normalizeFormValues(fields, defaultValues as Record<string, unknown> | undefined),
+    [fields, defaultValues],
+  );
   const methods = useForm({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues as any,
+    defaultValues: initial as any,
   });
 
+  // Reset hanya saat modal dibuka / data yang diedit berubah isinya — bukan
+  // setiap parent re-render (objek defaultValues baru) supaya ketikan admin
+  // tidak terhapus.
+  const initialKey = JSON.stringify(initial ?? null);
   useEffect(() => {
-    if (open) methods.reset(defaultValues as any);
+    if (open) methods.reset(initial as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultValues]);
+  }, [open, initialKey]);
 
   if (!open) return null;
 

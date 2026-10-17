@@ -112,7 +112,7 @@ publicRouter.post('/reservasi/checkin', async (req, res) => {
 
   const updated = await prisma.reservasi.update({
     where: { id: item.id },
-    data: { status: 'JOIN', joinedAt: new Date() },
+    data: { status: 'JOIN', joinedAt: new Date(), checkinMethod: 'SCAN' },
   });
   audit(req, {
     action: 'UPDATE',

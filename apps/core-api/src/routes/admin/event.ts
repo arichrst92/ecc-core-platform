@@ -1914,6 +1914,7 @@ eventRouter.patch('/:id/peserta/:participationId', async (req, res) => {
       data.approvedAt = new Date();
     } else if (input.status === 'HADIR') {
       data.attendedAt = new Date();
+      data.checkinMethod = 'MANUAL'; // ditandai hadir oleh admin portal
       // Kalau berbayar tapi belum BAYAR, beri warning lewat error
       if (
         before.status !== 'BAYAR' &&
@@ -2120,6 +2121,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     data: {
       status: 'HADIR',
       attendedAt: now,
+      checkinMethod: 'SCAN',
     },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
@@ -2217,7 +2219,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
   const participation = existing
     ? await prisma.eventParticipation.update({
         where: { id: existing.id },
-        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, ...(paid ? { paidAt: now } : {}), ...guestData },
+        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, checkinMethod: 'WALK_IN', ...(paid ? { paidAt: now } : {}), ...guestData },
       })
     : await prisma.eventParticipation.create({
         data: {
@@ -2225,6 +2227,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
           jemaatId: tamu.id,
           status: 'HADIR',
           attendedAt: now,
+          checkinMethod: 'WALK_IN',
           nominalBayar: paid ? nominal : null,
           ...(paid ? { paidAt: now } : {}),
           ...guestData,

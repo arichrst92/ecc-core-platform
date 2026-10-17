@@ -839,6 +839,9 @@ model Reservasi {
   // Tamu: jemaat yang membawa (DIUNDANG) atau WALK_IN oleh petugas.
   invitedByJemaatId  String?         @map("invited_by_jemaat_id") @db.Uuid
   guestSource        String?         @map("guest_source") @db.VarChar(20)
+  // Cara check-in: SCAN (usher scan QR / input kode) | SELF (self check-in app)
+  // | WALK_IN (tamu dicatat petugas) | MANUAL (diubah admin portal). NULL = data lama.
+  checkinMethod      String?         @map("checkin_method") @db.VarChar(20)
   // Checkout tracking — cuma di-populate kalau ibadah.requiresCheckout=true
   // dan admin scan QR jemaat saat keluar. Modul 26 (2026-08-01).
   checkedOutAt       DateTime?       @map("checked_out_at")
@@ -1373,6 +1376,8 @@ model EventParticipation {
   // Tamu: siapa yang mendaftarkan (DIUNDANG) atau WALK_IN oleh petugas.
   invitedByJemaatId String? @map("invited_by_jemaat_id") @db.Uuid
   guestSource       String? @map("guest_source") @db.VarChar(20)
+  // Cara check-in (lihat Reservasi.checkinMethod). NULL = data lama.
+  checkinMethod     String? @map("checkin_method") @db.VarChar(20)
 
   // Lifecycle timestamps
   registeredAt DateTime  @default(now()) @map("registered_at")

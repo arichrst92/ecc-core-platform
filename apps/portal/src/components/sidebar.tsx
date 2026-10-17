@@ -42,6 +42,7 @@ import {
   MessageCircle,
   UserPlus,
   MessageSquareText,
+  BarChart3,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -89,6 +90,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan' },
       { href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', icon: UserPlus, menuKey: 'ministry-join-requests' },
       { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
+      { href: '/dashboard/laporan-ibadah', label: 'Laporan Ibadah', icon: BarChart3, menuKey: 'laporan-ibadah' },
     ],
   },
   {
@@ -112,6 +114,7 @@ const groups: NavGroup[] = [
     label: 'Movement',
     items: [
       { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event' },
+      { href: '/dashboard/laporan-event', label: 'Laporan Event', icon: BarChart3, menuKey: 'laporan-event' },
       { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
       { href: '/dashboard/local-business', label: 'Local Market', icon: Store, menuKey: 'local-business' },
     ],

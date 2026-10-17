@@ -38,6 +38,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'pelayanan', label: 'Pelayanan', href: '/dashboard/pelayanan', group: 'Service' },
   { key: 'ministry-join-requests', label: 'Permintaan Volunteer', href: '/dashboard/pelayanan/join-requests', group: 'Service' },
   { key: 'kehadiran', label: 'Kehadiran', href: '/dashboard/kehadiran', group: 'Service' },
+  { key: 'laporan-ibadah', label: 'Laporan Ibadah', href: '/dashboard/laporan-ibadah', group: 'Service' },
 
   // People
   { key: 'jemaat', label: 'Jemaat', href: '/dashboard/jemaat', group: 'People' },
@@ -52,6 +53,7 @@ export const MENU_CATALOG: MenuItem[] = [
 
   // Movement
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },
+  { key: 'laporan-event', label: 'Laporan Event', href: '/dashboard/laporan-event', group: 'Movement' },
   { key: 'visit', label: 'Visit', href: '/dashboard/visit', group: 'Movement' },
   { key: 'local-business', label: 'Local Market', href: '/dashboard/local-business', group: 'Movement' },
 

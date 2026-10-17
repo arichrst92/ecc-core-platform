@@ -619,6 +619,7 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
         joinedAt: now,
         cancelledAt: existing.status === 'CANCEL' ? null : existing.cancelledAt,
         checkedInBy: req.user.sub,
+        checkinMethod: 'SCAN',
       },
       include: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } } },
     });
@@ -636,6 +637,7 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
         status: 'JOIN',
         joinedAt: now,
         checkedInBy: req.user.sub,
+        checkinMethod: 'SCAN',
       },
       include: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } } },
     });

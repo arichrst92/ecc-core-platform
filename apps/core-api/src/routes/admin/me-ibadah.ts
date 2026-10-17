@@ -177,12 +177,12 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
       // Reservasi pernah dibatalkan — hadir sekarang tetap dicatat.
       await prisma.reservasi.update({
         where: { id: existing.id },
-        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: u.sub },
+        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: u.sub, checkinMethod: 'SELF' },
       });
     } else if (existing) {
       await prisma.reservasi.update({
         where: { id: existing.id },
-        data: { status: 'JOIN', joinedAt: now, checkedInBy: u.sub },
+        data: { status: 'JOIN', joinedAt: now, checkedInBy: u.sub, checkinMethod: 'SELF' },
       });
     } else {
       const kode = await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } })));
@@ -195,6 +195,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
           kode,
           joinedAt: now,
           checkedInBy: u.sub,
+          checkinMethod: 'SELF',
           ...(p.isTamu ? { invitedByJemaatId: u.jemaatId, guestSource: 'DIUNDANG' } : {}),
         },
       });

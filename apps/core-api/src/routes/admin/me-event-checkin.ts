@@ -173,7 +173,7 @@ meEventCheckinRouter.post('/:eventId', async (req, res) => {
     // Klaim atomik: hanya ubah kalau belum HADIR/BATAL (hindari dobel dgn scan petugas).
     const upd = await prisma.eventParticipation.updateMany({
       where: { id: r.participationId, status: { notIn: ['HADIR', 'BATAL'] } },
-      data: { status: 'HADIR', attendedAt: now },
+      data: { status: 'HADIR', attendedAt: now, checkinMethod: 'SELF' },
     });
     if (upd.count === 0) {
       results.push({ jemaatId: id, namaLengkap: nama, result: 'ALREADY' });

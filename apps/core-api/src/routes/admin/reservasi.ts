@@ -195,7 +195,10 @@ reservasiRouter.patch('/:id/status', async (req, res) => {
 
   const now = new Date();
   const data: Prisma.ReservasiUpdateInput = { status: input.status, catatan: input.catatan };
-  if (input.status === 'JOIN' && !before.joinedAt) data.joinedAt = now;
+  if (input.status === 'JOIN' && !before.joinedAt) {
+    data.joinedAt = now;
+    data.checkinMethod = 'MANUAL'; // ditandai hadir oleh admin portal
+  }
   if (input.status === 'CANCEL' && !before.cancelledAt) data.cancelledAt = now;
   if (input.status === 'RESERVE') {
     // reset timestamps kalau dibalikin
@@ -267,6 +270,7 @@ reservasiRouter.post('/checkin', async (req, res) => {
       status: 'JOIN',
       joinedAt: new Date(),
       checkedInBy: req.user?.sub,
+      checkinMethod: 'SCAN',
       pickupCode,
     },
   });
@@ -709,6 +713,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
           status: 'JOIN',
           joinedAt: now,
           checkedInBy: adminId,
+          checkinMethod: 'SCAN',
           pickupCode,
         },
       });
@@ -751,6 +756,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         kode,
         joinedAt: now,
         checkedInBy: adminId,
+        checkinMethod: 'SCAN',
         pickupCode,
       },
     });
@@ -984,7 +990,7 @@ reservasiRouter.post('/walk-in-guest', async (req, res) => {
   const reservasi = existing
     ? await prisma.reservasi.update({
         where: { id: existing.id },
-        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: req.user?.sub ?? null, ...guestData },
+        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: req.user?.sub ?? null, checkinMethod: 'WALK_IN', ...guestData },
       })
     : await prisma.reservasi.create({
         data: {
@@ -995,6 +1001,7 @@ reservasiRouter.post('/walk-in-guest', async (req, res) => {
           kode: await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } }))),
           joinedAt: now,
           checkedInBy: req.user?.sub ?? null,
+          checkinMethod: 'WALK_IN',
           ...guestData,
         },
       });

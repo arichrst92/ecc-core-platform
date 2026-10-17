@@ -42,12 +42,22 @@ export function Field({ label, children }: { label: string; children: React.Reac
 }
 
 export interface PeriodState {
-  periode: Exclude<PeriodePreset, ''>;
+  /** '' = semua waktu (hanya kalau PeriodFields allowAll). */
+  periode: PeriodePreset;
   from: string;
   to: string;
 }
 
-export function PeriodFields({ value, onChange }: { value: PeriodState; onChange: (v: PeriodState) => void }) {
+export function PeriodFields({
+  value,
+  onChange,
+  allowAll,
+}: {
+  value: PeriodState;
+  onChange: (v: PeriodState) => void;
+  /** Tampilkan opsi "Semua waktu". */
+  allowAll?: boolean;
+}) {
   return (
     <>
       <Field label="Periode">
@@ -56,7 +66,7 @@ export function PeriodFields({ value, onChange }: { value: PeriodState; onChange
           onChange={(e) => onChange({ ...value, periode: e.target.value as PeriodState['periode'] })}
           className={selectCls}
         >
-          {PERIODE_OPTIONS.filter((o) => o.value).map((o) => (
+          {PERIODE_OPTIONS.filter((o) => allowAll || o.value).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -182,7 +192,7 @@ export function ExportButtons({ endpoint, params, filename }: { endpoint: string
 
 export function periodParams(p: PeriodState) {
   return {
-    periode: p.periode === 'custom' && !p.from && !p.to ? 'last_30d' : p.periode,
+    periode: p.periode === 'custom' && !p.from && !p.to ? 'last_30d' : p.periode || undefined,
     from: p.periode === 'custom' ? p.from || undefined : undefined,
     to: p.periode === 'custom' ? p.to || undefined : undefined,
   };

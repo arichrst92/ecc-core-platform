@@ -13,6 +13,7 @@ interface Cabang extends Record<string, unknown> {
   kontak: string | null;
   latitude: number | null;
   longitude: number | null;
+  timezone: string;
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
   jemaatCount?: number;
@@ -20,6 +21,31 @@ interface Cabang extends Record<string, unknown> {
   homecellAreaCount?: number;
   homecellCount?: number;
 }
+
+/** Zona waktu IANA yang umum dipakai cabang ECC. */
+const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Jakarta', label: 'WIB — Asia/Jakarta (UTC+7)' },
+  { value: 'Asia/Makassar', label: 'WITA — Asia/Makassar (UTC+8)' },
+  { value: 'Asia/Jayapura', label: 'WIT — Asia/Jayapura (UTC+9)' },
+  { value: 'Asia/Singapore', label: 'Singapore (UTC+8)' },
+  { value: 'Asia/Kuala_Lumpur', label: 'Kuala Lumpur (UTC+8)' },
+  { value: 'Asia/Hong_Kong', label: 'Hong Kong (UTC+8)' },
+  { value: 'Asia/Taipei', label: 'Taipei (UTC+8)' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (UTC+9)' },
+  { value: 'Asia/Seoul', label: 'Seoul (UTC+9)' },
+  { value: 'Australia/Perth', label: 'Perth (UTC+8)' },
+  { value: 'Australia/Brisbane', label: 'Brisbane (UTC+10)' },
+  { value: 'Australia/Sydney', label: 'Sydney / Melbourne (UTC+10/+11)' },
+  { value: 'Pacific/Auckland', label: 'Auckland (UTC+12/+13)' },
+  { value: 'Asia/Dubai', label: 'Dubai (UTC+4)' },
+  { value: 'Europe/London', label: 'London (UTC+0/+1)' },
+  { value: 'Europe/Amsterdam', label: 'Amsterdam / Berlin (UTC+1/+2)' },
+  { value: 'America/New_York', label: 'New York (UTC−5/−4)' },
+  { value: 'America/Chicago', label: 'Chicago (UTC−6/−5)' },
+  { value: 'America/Denver', label: 'Denver (UTC−7/−6)' },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (UTC−8/−7)' },
+  { value: 'America/Toronto', label: 'Toronto (UTC−5/−4)' },
+];
 
 export const cabangResource: ResourceConfig<Cabang> = {
   name: 'cabang',
@@ -79,6 +105,7 @@ export const cabangResource: ResourceConfig<Cabang> = {
       ),
     },
     { key: 'kontak', label: 'Kontak', width: '140px' },
+    { key: 'timezone', label: 'Zona Waktu', width: '150px' },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],
   fields: [
@@ -113,6 +140,16 @@ export const cabangResource: ResourceConfig<Cabang> = {
       type: 'decimal',
       placeholder: '106,8456 atau 106.8456',
       helperText: 'Opsional. Koordinat WGS84. Range -180..180. Boleh pakai koma atau titik.',
+    },
+    {
+      name: 'timezone',
+      label: 'Zona Waktu',
+      type: 'select',
+      required: true,
+      defaultValue: 'Asia/Jakarta',
+      options: TIMEZONE_OPTIONS,
+      helperText:
+        'Jam jadwal ibadah & event cabang ini mengikuti zona waktu ini. Jemaat di zona lain melihat jam yang sudah dikonversi ke zona waktu HP mereka.',
     },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],

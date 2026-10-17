@@ -9,13 +9,29 @@
  *   - TAMU       : tamu yang saya undang / bawa
  *   - KELUARGA   : anggota keluarga yang saya self check-in-kan
  */
-import { todayWib } from './last-attendance.js';
+import { DEFAULT_TZ, addDays, todayInTz } from './tz.js';
 
 export type MyReservasiRelation = 'SELF' | 'ANAK' | 'TANGGUNGAN' | 'TAMU' | 'KELUARGA';
 
-/** Batas "aktif": ibadah hari ini & mendatang (WIB) atau check-in < 24 jam. */
+/**
+ * Batas "aktif": ibadah hari ini & mendatang (zona cabang) atau check-in
+ * < 24 jam. `fromTanggal` untuk query DB dibuat longgar (kemarin UTC) karena
+ * zona tiap cabang berbeda; saring akhir per baris pakai `isActiveRow`.
+ */
 export function activeWindow(now: Date = new Date()) {
-  return { fromTanggal: todayWib(now), joinedSince: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
+  return {
+    fromTanggal: addDays(todayInTz('UTC', now), -1),
+    joinedSince: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  };
+}
+
+export function isActiveRow(
+  r: { tanggalIbadah: Date; joinedAt: Date | null },
+  tz: string = DEFAULT_TZ,
+  now: Date = new Date(),
+): boolean {
+  const w = activeWindow(now);
+  return r.tanggalIbadah.getTime() >= todayInTz(tz, now).getTime() || (!!r.joinedAt && r.joinedAt >= w.joinedSince);
 }
 
 export function relationFor(

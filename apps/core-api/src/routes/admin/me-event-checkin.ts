@@ -7,7 +7,7 @@
  *                      petugas: attendedAt, role otomatis, notifikasi)
  *
  * Syarat: event.allowSelfCheckin && event.butuhKehadiran, 15 menit sebelum
- * mulai s.d. selesai (WIB). Event berbayar: peserta harus sudah BAYAR.
+ * mulai s.d. selesai (jam dinding zona waktu cabang event). Event berbayar: peserta harus sudah BAYAR.
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
@@ -26,6 +26,7 @@ import {
   venueInfo,
   venuePoint,
 } from '../../lib/self-checkin.js';
+import { tzOr } from '../../lib/tz.js';
 
 export const meEventCheckinRouter = Router();
 
@@ -55,11 +56,12 @@ async function loadEvent(eventId: string) {
       latitude: true,
       longitude: true,
       selfCheckinRadiusM: true,
-      cabang: { select: { latitude: true, longitude: true } },
+      cabang: { select: { latitude: true, longitude: true, timezone: true } },
     },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
-  return { event, window: eventSelfCheckinWindow(event) };
+  const tz = tzOr(event.cabang?.timezone);
+  return { event, tz, window: eventSelfCheckinWindow(event, new Date(), tz) };
 }
 
 /** Saya + keluarga yang terdaftar (bukan BATAL) di event ini. */
@@ -100,7 +102,7 @@ async function registeredMembers(jemaatId: string, event: { id: string; tipeBaya
 
 meEventCheckinRouter.get('/:eventId', async (req, res) => {
   const u = me(req);
-  const { event, window } = await loadEvent(req.params.eventId);
+  const { event, window, tz } = await loadEvent(req.params.eventId);
   const rows = window.reason === 'DISABLED' ? [] : await registeredMembers(u.jemaatId, event);
   res.json({
     success: true,
@@ -117,6 +119,8 @@ meEventCheckinRouter.get('/:eventId', async (req, res) => {
         jamMulai: event.jamMulai,
         jamSelesai: event.jamSelesai,
       },
+      // Zona waktu cabang event (event global → default).
+      timezone: tz,
       members: rows.map((r) => r.member),
       // radiusM null = self check-in boleh di mana saja.
       venue: venueInfo(event.selfCheckinRadiusM, venuePoint(event, event.cabang)),

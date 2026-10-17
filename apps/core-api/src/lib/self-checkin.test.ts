@@ -130,3 +130,38 @@ describe('radius dapat diatur', () => {
   it('venueInfo: di mana saja', () => expect(venueInfo(null, gereja)).toEqual({ requiresLocation: false, radiusM: null }));
   it('venueInfo: radius + titik', () => expect(venueInfo(250, gereja)).toEqual({ requiresLocation: true, radiusM: 250 }));
 });
+
+describe('self check-in di zona cabang lain', () => {
+  const sydney = {
+    tipeJadwal: 'WEEKLY' as const,
+    tanggalMulai: new Date('2026-01-04T00:00:00Z'),
+    hari: 'MINGGU' as const,
+    jamMulai: '09:00',
+    jamSelesai: '11:00',
+    isActive: true,
+    isKidsIbadah: false,
+  };
+  it('Minggu 08:45 AEDT (Sabtu 21:45Z) sudah buka', () => {
+    const w = selfCheckinWindow(sydney, [], new Date('2026-12-05T21:45:00Z'), 'Australia/Sydney');
+    expect(w.tanggal).toBe('2026-12-06');
+    expect(w.available).toBe(true);
+    expect(w.opensAt).toBe('2026-12-05T21:45:00.000Z');
+  });
+  it('dengan zona WIB, waktu yang sama bukan hari ibadah', () => {
+    expect(selfCheckinWindow(sydney, [], new Date('2026-12-05T21:45:00Z')).available).toBe(false);
+  });
+  it('event New York 18:00 EDT', () => {
+    const ev = {
+      allowSelfCheckin: true,
+      butuhKehadiran: true,
+      isActive: true,
+      tanggalMulai: new Date('2026-10-20T00:00:00Z'),
+      tanggalSelesai: null,
+      jamMulai: '18:00',
+      jamSelesai: '21:00',
+    };
+    const w = eventSelfCheckinWindow(ev, new Date('2026-10-20T21:50:00Z'), 'America/New_York');
+    expect(w.opensAt).toBe('2026-10-20T21:45:00.000Z');
+    expect(w.available).toBe(true);
+  });
+});

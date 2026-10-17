@@ -3,13 +3,13 @@
  *
  * Aturan: self check-in hanya terbuka pada HARI ibadah dijadwalkan (sesuai
  * tipeJadwal/hari/tanggalMulai, tidak dibatalkan) dan pada JAM ibadah:
- * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai jamSelesai (WIB).
+ * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai jamSelesai, jam
+ * dinding di zona waktu cabang (default Asia/Jakarta).
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
-import { todayWib } from './last-attendance.js';
+import { DEFAULT_TZ, calendarDateOf, todayInTz, wallToInstant } from './tz.js';
 
 export const OPEN_BEFORE_MIN = 15;
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 export type SelfCheckinReason =
   | 'INACTIVE'
@@ -22,7 +22,7 @@ export type SelfCheckinReason =
 export interface SelfCheckinWindow {
   available: boolean;
   reason: SelfCheckinReason | null;
-  /** Tanggal occurrence hari ini (YYYY-MM-DD, WIB). */
+  /** Tanggal occurrence hari ini (YYYY-MM-DD, zona cabang). */
   tanggal: string;
   /** ISO — kapan self check-in dibuka / ditutup hari ini (kalau hari ibadah). */
   opensAt: string | null;
@@ -49,8 +49,10 @@ export function selfCheckinWindow(
   },
   cancelledDates: string[],
   now: Date = new Date(),
+  /** Zona waktu cabang (IANA). Jam ibadah = jam dinding di zona ini. */
+  tz: string = DEFAULT_TZ,
 ): SelfCheckinWindow {
-  const today = todayWib(now);
+  const today = todayInTz(tz, now);
   const tanggal = today.toISOString().slice(0, 10);
   const base = { tanggal, opensAt: null, closesAt: null };
   if (!ibadah.isActive) return { ...base, available: false, reason: 'INACTIVE' };
@@ -63,8 +65,8 @@ export function selfCheckinWindow(
   const start = hhmmToMin(ibadah.jamMulai) ?? 0;
   let end = hhmmToMin(ibadah.jamSelesai) ?? 24 * 60 - 1;
   if (end <= start) end = 24 * 60 - 1; // jam selesai lewat tengah malam → sampai akhir hari
-  // Waktu dinding WIB → instant UTC
-  const atMin = (min: number) => new Date(today.getTime() + min * 60_000 - WIB_OFFSET_MS);
+  // Jam dinding di zona cabang → instant UTC
+  const atMin = (min: number) => wallToInstant(today, min, tz);
   const opens = atMin(Math.max(0, start - OPEN_BEFORE_MIN));
   const closes = atMin(end);
   const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
@@ -89,14 +91,10 @@ export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
 export type EventSelfCheckinReason = 'DISABLED' | 'NO_ATTENDANCE' | 'INACTIVE' | 'TOO_EARLY' | 'ENDED';
 
 /** Tanggal kalender WIB (sebagai UTC midnight) dari sebuah instant. */
-function wibDate(d: Date): Date {
-  const w = new Date(d.getTime() + WIB_OFFSET_MS);
-  return new Date(Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate()));
-}
 
 /**
  * Jendela self check-in event: 15 menit sebelum (tanggalMulai + jamMulai)
- * s.d. (tanggalSelesai|tanggalMulai + jamSelesai), jam dinding WIB.
+ * s.d. (tanggalSelesai|tanggalMulai + jamSelesai), jam dinding zona cabang.
  * Tanpa jamMulai → 00:00; tanpa jamSelesai → 23:59 hari terakhir.
  */
 export function eventSelfCheckinWindow(
@@ -110,15 +108,17 @@ export function eventSelfCheckinWindow(
     jamSelesai: string | null;
   },
   now: Date = new Date(),
+  /** Zona waktu cabang event (IANA); event global → default. */
+  tz: string = DEFAULT_TZ,
 ): { available: boolean; reason: EventSelfCheckinReason | null; tanggal: string; opensAt: string | null; closesAt: string | null } {
-  const tanggal = todayWib(now).toISOString().slice(0, 10);
-  const startDay = wibDate(ev.tanggalMulai);
-  const endDay = wibDate(ev.tanggalSelesai ?? ev.tanggalMulai);
+  const tanggal = todayInTz(tz, now).toISOString().slice(0, 10);
+  const startDay = calendarDateOf(ev.tanggalMulai, tz);
+  const endDay = calendarDateOf(ev.tanggalSelesai ?? ev.tanggalMulai, tz);
   const start = hhmmToMin(ev.jamMulai) ?? 0;
   let end = hhmmToMin(ev.jamSelesai) ?? 24 * 60 - 1;
   if (!ev.tanggalSelesai && end <= start) end = 24 * 60 - 1;
-  const opens = new Date(startDay.getTime() + Math.max(0, start - OPEN_BEFORE_MIN) * 60_000 - WIB_OFFSET_MS);
-  const closes = new Date(endDay.getTime() + end * 60_000 - WIB_OFFSET_MS);
+  const opens = wallToInstant(startDay, Math.max(0, start - OPEN_BEFORE_MIN), tz);
+  const closes = wallToInstant(endDay, end, tz);
   const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
   if (!ev.allowSelfCheckin) return { ...win, available: false, reason: 'DISABLED' };
   if (!ev.butuhKehadiran) return { ...win, available: false, reason: 'NO_ATTENDANCE' };

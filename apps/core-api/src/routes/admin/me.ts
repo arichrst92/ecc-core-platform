@@ -51,7 +51,8 @@ import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { mePrivacyRouter } from './me-privacy.js';
 import { privacyGate } from '../../lib/privacy.js';
-import { activeWindow, relationFor } from '../../lib/my-reservasi.js';
+import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
+import { tzOr } from '../../lib/tz.js';
 import { canCancelReservasi } from '../../lib/reservasi-window.js';
 import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
@@ -1191,7 +1192,7 @@ meRouter.delete('/', async (req, res) => {
  *
  * Query params (opsional):
  *   - ibadahId, tanggal (YYYY-MM-DD), status (RESERVE|JOIN|CANCEL)
- *   - activeOnly (default true): ibadah hari ini & mendatang (WIB) atau
+ *   - activeOnly (default true): ibadah hari ini & mendatang (zona cabang) atau
  *     check-in < 24 jam. `false` = riwayat (100 terbaru).
  *
  * Tiap baris diberi `relation`: SELF | ANAK | TANGGUNGAN | TAMU | KELUARGA.
@@ -1255,20 +1256,27 @@ meRouter.get('/reservasi', async (req, res) => {
           lokasi: true,
           isKidsIbadah: true,
           requiresCheckout: true,
-          cabang: { select: { id: true, nama: true } },
+          cabang: { select: { id: true, nama: true, timezone: true } },
         },
       },
     },
   });
 
+  // Saring "aktif" per zona waktu cabang masing-masing ibadah.
+  const now = new Date();
+  const visible = activeOnly && !tanggalStr ? rows.filter((r) => isActiveRow(r, tzOr(r.ibadah.cabang.timezone), now)) : rows;
   res.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r,
-      relation: relationFor(r, jemaatId, people),
-      // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah.
-      canCancel: canCancelReservasi(r, r.ibadah.jamMulai),
-    })),
+    data: visible.map((r) => {
+      const tz = tzOr(r.ibadah.cabang.timezone);
+      return {
+        ...r,
+        ibadah: { ...r.ibadah, timezone: tz },
+        relation: relationFor(r, jemaatId, people),
+        // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah (zona cabang).
+        canCancel: canCancelReservasi(r, r.ibadah.jamMulai, now, tz),
+      };
+    }),
   });
 });
 
@@ -1281,7 +1289,10 @@ meRouter.post('/reservasi/:id/cancel', async (req, res) => {
   if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) throw NotFound('Reservasi tidak ditemukan');
   const r = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
-    include: { ibadah: { select: { nama: true, jamMulai: true } }, jemaat: { select: { namaLengkap: true } } },
+    include: {
+      ibadah: { select: { nama: true, jamMulai: true, cabang: { select: { timezone: true } } } },
+      jemaat: { select: { namaLengkap: true } },
+    },
   });
   if (!r) throw NotFound('Reservasi tidak ditemukan');
   const fam = await familyOf(jemaatId);
@@ -1289,7 +1300,7 @@ meRouter.post('/reservasi/:id/cancel', async (req, res) => {
     throw NotFound('Reservasi tidak ditemukan');
   }
   if (r.status !== 'RESERVE') throw BadRequest('Hanya reservasi berstatus Terdaftar yang bisa dibatalkan.');
-  if (!canCancelReservasi(r, r.ibadah.jamMulai)) {
+  if (!canCancelReservasi(r, r.ibadah.jamMulai, new Date(), tzOr(r.ibadah.cabang.timezone))) {
     throw BadRequest('Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai.');
   }
   const updated = await prisma.reservasi.update({

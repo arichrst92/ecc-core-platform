@@ -7,7 +7,7 @@
  *                              keluarga (harus anggota keluarga saya)
  *
  * Jendela: hanya di hari ibadah terjadwal, 15 menit sebelum jamMulai s.d.
- * jamSelesai (WIB). Ibadah anak tidak bisa self check-in (lewat meja CKids).
+ * jamSelesai (jam dinding zona waktu cabang). Ibadah anak tidak bisa self check-in (lewat meja CKids).
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
@@ -24,6 +24,7 @@ import {
   venuePoint,
 } from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
+import { tzOr } from '../../lib/tz.js';
 import {
   canCancelReservasi,
   eligibleForKids,
@@ -58,7 +59,7 @@ async function loadIbadahWindow(ibadahId: string) {
       latitude: true,
       longitude: true,
       selfCheckinRadiusM: true,
-      cabang: { select: { latitude: true, longitude: true } },
+      cabang: { select: { latitude: true, longitude: true, timezone: true } },
     },
   });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
@@ -69,6 +70,8 @@ async function loadIbadahWindow(ibadahId: string) {
   const window = selfCheckinWindow(
     ibadah,
     cancelled.map((c) => c.tanggalIbadah.toISOString().slice(0, 10)),
+    new Date(),
+    tzOr(ibadah.cabang.timezone),
   );
   return { ibadah, window };
 }
@@ -118,6 +121,8 @@ meIbadahRouter.get('/:id/self-checkin', async (req, res) => {
       serverNow: new Date().toISOString(),
       reasonText: window.reason ? SELF_CHECKIN_REASON_TEXT[window.reason] : null,
       ibadah: { id: ibadah.id, nama: ibadah.nama, jamMulai: ibadah.jamMulai, jamSelesai: ibadah.jamSelesai, lokasi: ibadah.lokasi },
+      // Zona waktu cabang: jamMulai/jamSelesai adalah jam dinding di zona ini.
+      timezone: tzOr(ibadah.cabang.timezone),
       // Cek radius: app wajib kirim lokasi kalau requiresLocation=true.
       // radiusM null = self check-in boleh di mana saja.
       venue: venueInfo(ibadah.selfCheckinRadiusM, venuePoint(ibadah, ibadah.cabang)),
@@ -232,7 +237,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
 // RESERVASI MANDIRI (saya + keluarga + tamu saya)
 // ============================================================
 //   GET  /:id/reservasi?tanggal=YYYY-MM-DD → pertemuan yang bisa direservasi
-//        (hari ini s.d. 30 hari, WIB) + daftar saya & keluarga beserta status
+//        (hari ini s.d. 30 hari, zona waktu cabang) + daftar saya & keluarga beserta status
 //   POST /:id/reservasi         { tanggal, jemaatIds } → reservasi (RESERVE)
 //   POST /:id/reservasi/cancel  { tanggal, jemaatIds } → batal (CANCEL)
 // Ditutup saat jam mulai ibadah. Ibadah anak: hanya anak ≤ 13 tahun.
@@ -252,9 +257,11 @@ async function loadReservable(ibadahId: string) {
       jamMulai: true,
       jamSelesai: true,
       lokasi: true,
+      cabang: { select: { timezone: true } },
     },
   });
   if (!ibadah || !ibadah.isActive) throw NotFound('Ibadah tidak ditemukan');
+  const tz = tzOr(ibadah.cabang.timezone);
   const cancelled = await prisma.ibadahOccurrenceStatus.findMany({
     where: { ibadahId, status: 'CANCELLED' },
     select: { tanggalIbadah: true },
@@ -262,12 +269,19 @@ async function loadReservable(ibadahId: string) {
   const occurrences = reservableOccurrences(
     ibadah,
     cancelled.map((c) => c.tanggalIbadah.toISOString().slice(0, 10)),
+    new Date(),
+    tz,
   );
-  return { ibadah, occurrences };
+  return { ibadah, occurrences, tz };
 }
 
 /** Saya + keluarga (+ tamu saya) yang boleh direservasikan untuk ibadah ini. */
-async function reservableMembers(jemaatId: string, ibadah: { id: string; isKidsIbadah: boolean }, tanggal: Date | null) {
+async function reservableMembers(
+  jemaatId: string,
+  ibadah: { id: string; isKidsIbadah: boolean },
+  tanggal: Date | null,
+  tz: string,
+) {
   const fam = await familyOf(jemaatId);
   const ids = [jemaatId, ...fam.keys()];
   const [people, reservasi] = await Promise.all([
@@ -297,7 +311,7 @@ async function reservableMembers(jemaatId: string, ibadah: { id: string; isKidsI
         status: (r?.status ?? 'NONE') as 'NONE' | 'RESERVE' | 'JOIN' | 'CANCEL',
         reservasiId: r?.id ?? null,
         // Ibadah anak: hanya anak ≤ 13 tahun / tanggungan tanpa tanggal lahir.
-        eligible: !ibadah.isKidsIbadah || eligibleForKids({ tanggalLahir: p.tanggalLahir, isDependent }),
+        eligible: !ibadah.isKidsIbadah || eligibleForKids({ tanggalLahir: p.tanggalLahir, isDependent }, new Date(), tz),
       };
     })
     .sort((a, b) => (a.isSelf ? -1 : b.isSelf ? 1 : a.namaLengkap.localeCompare(b.namaLengkap)));
@@ -314,13 +328,14 @@ function pickOccurrence(occ: ReservableOccurrence[], tanggal: string | undefined
 
 meIbadahRouter.get('/:id/reservasi', async (req, res) => {
   const u = me(req);
-  const { ibadah, occurrences } = await loadReservable(req.params.id);
+  const { ibadah, occurrences, tz } = await loadReservable(req.params.id);
   const tanggalQ = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
   const selected = pickOccurrence(occurrences, tanggalQ);
   const members = await reservableMembers(
     u.jemaatId,
     ibadah,
     selected ? new Date(`${selected.tanggal}T00:00:00.000Z`) : null,
+    tz,
   );
   res.json({
     success: true,
@@ -333,6 +348,7 @@ meIbadahRouter.get('/:id/reservasi', async (req, res) => {
         lokasi: ibadah.lokasi,
         isKidsIbadah: ibadah.isKidsIbadah,
       },
+      timezone: tz,
       occurrences,
       selected,
       members,
@@ -349,13 +365,13 @@ const reserveSchema = z.object({
 meIbadahRouter.post('/:id/reservasi', async (req, res) => {
   const u = me(req);
   const { tanggal, jemaatIds } = reserveSchema.parse(req.body ?? {});
-  const { ibadah, occurrences } = await loadReservable(req.params.id);
+  const { ibadah, occurrences, tz } = await loadReservable(req.params.id);
   const occ = pickOccurrence(occurrences, tanggal)!;
   if (occ.cancelled) throw new ApiError(400, 'RESERVASI_CANCELLED', 'Ibadah di tanggal ini dibatalkan.');
   if (!occ.open) throw new ApiError(400, 'RESERVASI_CLOSED', 'Reservasi sudah ditutup karena ibadah sudah dimulai.');
 
   const tgl = new Date(`${tanggal}T00:00:00.000Z`);
-  const members = await reservableMembers(u.jemaatId, ibadah, tgl);
+  const members = await reservableMembers(u.jemaatId, ibadah, tgl, tz);
   const byId = new Map(members.map((m) => [m.id, m]));
   const unique = [...new Set(jemaatIds)];
   if (unique.some((id) => !byId.has(id))) throw BadRequest('Hanya bisa reservasi untuk Anda, keluarga, dan tamu Anda.');
@@ -415,13 +431,13 @@ meIbadahRouter.post('/:id/reservasi', async (req, res) => {
 meIbadahRouter.post('/:id/reservasi/cancel', async (req, res) => {
   const u = me(req);
   const { tanggal, jemaatIds } = reserveSchema.parse(req.body ?? {});
-  const { ibadah } = await loadReservable(req.params.id);
+  const { ibadah, tz } = await loadReservable(req.params.id);
   const tgl = new Date(`${tanggal}T00:00:00.000Z`);
-  const members = await reservableMembers(u.jemaatId, ibadah, tgl);
+  const members = await reservableMembers(u.jemaatId, ibadah, tgl, tz);
   const allowed = new Set(members.map((m) => m.id));
   const unique = [...new Set(jemaatIds)];
   if (unique.some((id) => !allowed.has(id))) throw BadRequest('Hanya bisa membatalkan reservasi Anda, keluarga, dan tamu Anda.');
-  if (!canCancelReservasi({ status: 'RESERVE', tanggalIbadah: tgl }, ibadah.jamMulai)) {
+  if (!canCancelReservasi({ status: 'RESERVE', tanggalIbadah: tgl }, ibadah.jamMulai, new Date(), tz)) {
     throw new ApiError(400, 'RESERVASI_CLOSED', 'Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai.');
   }
   const upd = await prisma.reservasi.updateMany({

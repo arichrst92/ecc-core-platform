@@ -44,3 +44,14 @@ describe('ibadah anak', () => {
     expect(eligibleForKids({ tanggalLahir: null, isDependent: false }, now)).toBe(false);
   });
 });
+
+describe('zona waktu cabang lain', () => {
+  it('Sydney: ibadah 09:00 AEDT = 22:00Z hari sebelumnya', () => {
+    expect(occurrenceStart('2026-12-06', '09:00', 'Australia/Sydney').toISOString()).toBe('2026-12-05T22:00:00.000Z');
+  });
+  it('Los Angeles: batal masih boleh sebelum 10:00 PDT', () => {
+    const r = { status: 'RESERVE', tanggalIbadah: new Date('2026-07-05T00:00:00Z') };
+    expect(canCancelReservasi(r, '10:00', new Date('2026-07-05T16:59:00Z'), 'America/Los_Angeles')).toBe(true);
+    expect(canCancelReservasi(r, '10:00', new Date('2026-07-05T17:00:00Z'), 'America/Los_Angeles')).toBe(false);
+  });
+});

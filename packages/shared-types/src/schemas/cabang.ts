@@ -30,6 +30,20 @@ function preprocessDecimal(value: unknown): unknown {
 const latitudeSchema = z
   .preprocess(preprocessDecimal, z.number().min(-90).max(90).optional())
   .optional();
+/** Zona waktu IANA (mis. "Asia/Jakarta"). Divalidasi lewat Intl. */
+export const timezoneSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((tz) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Zona waktu tidak valid (contoh: Asia/Jakarta)');
+
 const longitudeSchema = z
   .preprocess(preprocessDecimal, z.number().min(-180).max(180).optional())
   .optional();
@@ -43,6 +57,7 @@ export const createCabangSchema = z
     kontak: emptyToUndefined(z.string().trim().max(100)),
     latitude: latitudeSchema,
     longitude: longitudeSchema,
+    timezone: timezoneSchema.optional().openapi({ example: 'Asia/Jakarta' }),
   })
   .openapi('CreateCabangInput');
 export type CreateCabangInput = z.infer<typeof createCabangSchema>;
@@ -56,6 +71,7 @@ export const updateCabangSchema = z
     kontak: emptyToUndefined(z.string().trim().max(100)),
     latitude: latitudeSchema,
     longitude: longitudeSchema,
+    timezone: timezoneSchema.optional(),
     isActive: z.boolean().optional(),
   })
   .openapi('UpdateCabangInput');

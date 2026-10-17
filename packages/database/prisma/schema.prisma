@@ -55,6 +55,9 @@ model CabangGereja {
   // konvensi WGS84 (latitude -90..90, longitude -180..180).
   latitude  Float?
   longitude Float?
+  // Zona waktu IANA cabang (mis. "Asia/Jakarta", "Australia/Sydney"). Jam
+  // jadwal ibadah/event cabang = jam dinding di zona ini.
+  timezone  String   @default("Asia/Jakarta") @db.VarChar(64)
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

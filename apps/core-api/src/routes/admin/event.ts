@@ -1653,6 +1653,25 @@ eventRouter.post('/:id/donations', async (req, res) => {
 });
 
 // Detail donation
+const VIRT_PREFIX = 'virt-';
+const UUID_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Validasi :donationId — baris sintetis (virt-…) hanya bisa di-approve; aksi lain
+// (detail/ubah/upload bukti/batal) dilakukan dari daftar Peserta.
+eventRouter.param('donationId', (req, _res, next, id: string) => {
+  if (id.startsWith(VIRT_PREFIX)) {
+    const pid = id.slice(VIRT_PREFIX.length);
+    if (!UUID_ID_RE.test(pid)) return next(BadRequest('ID pembayaran tidak valid.'));
+    const isApprove = req.method === 'POST' && /\/approve$/.test(req.path);
+    if (!isApprove) {
+      return next(BadRequest('Pembayaran ini tercatat di data peserta — ubah atau batalkan dari daftar Peserta event.'));
+    }
+    return next();
+  }
+  if (!UUID_ID_RE.test(id)) return next(NotFound('Donation tidak ditemukan'));
+  next();
+});
+
 eventRouter.get('/:id/donations/:donationId', async (req, res) => {
   const event = await resolveEventByIdOrSlug(req.params.id);
   const donation = await prisma.eventDonation.findUnique({
@@ -1786,6 +1805,14 @@ eventRouter.post(
 
 // Approve shortcut — set status BAYAR
 eventRouter.post('/:id/donations/:donationId/approve', async (req, res) => {
+  // Baris sintetis (virt-<participationId>) = pembayaran dari data partisipasi
+  // lama tanpa row donation → approve partisipasinya langsung.
+  if (req.params.donationId.startsWith(VIRT_PREFIX)) {
+    const ev = await resolveEventByIdOrSlug(req.params.id);
+    const updated = await approveParticipation(req, ev.id, req.params.donationId.slice(VIRT_PREFIX.length));
+    res.json({ success: true, data: updated });
+    return;
+  }
   const event = await resolveEventByIdOrSlug(req.params.id);
   const before = await prisma.eventDonation.findUnique({
     where: { id: req.params.donationId },
@@ -2266,12 +2293,20 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
 
 // Approve = set status BAYAR + approvedBy + approvedAt + paidAt.
 // Shortcut konvenien (versus PATCH manual).
-eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
+/**
+ * Approve pembayaran partisipasi (status → BAYAR) + notif in-app & WA.
+ * Dipakai endpoint peserta/:pid/approve dan donations/virt-<pid>/approve
+ * (baris "payment history" sintetis dari partisipasi lama).
+ */
+async function approveParticipation(req: import('express').Request, eventId: string, participationId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(participationId)) {
+    throw NotFound('Partisipasi tidak ditemukan');
+  }
   const before = await prisma.eventParticipation.findUnique({
-    where: { id: req.params.participationId },
+    where: { id: participationId },
     include: { jemaat: { select: { namaLengkap: true } }, event: { select: { judul: true } } },
   });
-  if (!before || before.eventId !== req.params.id) {
+  if (!before || before.eventId !== eventId) {
     throw NotFound('Partisipasi tidak ditemukan');
   }
   // approver relasi ke Jemaat — pakai jemaatId. Verify jemaat exists supaya
@@ -2315,6 +2350,11 @@ eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
       event_judul: before.event.judul,
     });
   })();
+  return updated;
+}
+
+eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
+  const updated = await approveParticipation(req, req.params.id, req.params.participationId);
   res.json({ success: true, data: updated });
 });
 

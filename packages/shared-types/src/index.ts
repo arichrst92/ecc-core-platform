@@ -44,3 +44,4 @@ export * from './schemas/homecell-schedule.js';
 export * from './schemas/group.js';
 export * from './schemas/ckids.js';
 export * from './schemas/planning.js';
+export * from './schemas/prayer.js';

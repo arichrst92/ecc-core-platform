@@ -32,6 +32,8 @@ import { diagnosticsAdminRouter } from './diagnostics.js';
 import { websiteContentRouter } from './website-content.js';
 import { groupRouter } from './group.js';
 import { feedbackRouter } from './feedback.js';
+import { prayerRequestRouter } from './prayer-request.js';
+import { jemaatResolusiRouter } from './jemaat-resolusi.js';
 import { reportRouter } from './report.js';
 import { spiritualJourneyRouter } from './spiritual-journey.js';
 import { tamuRouter } from './tamu.js';
@@ -67,9 +69,13 @@ adminRouter.use('/jemaat-public', jemaatPublicRouter);
 adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
 // Sertifikat jemaat (gambar/PDF) — sebelum jemaatRouter.
 adminRouter.use('/jemaat/:jemaatId/sertifikat', jemaatSertifikatRouter);
+// Resolusi tahunan jemaat (read-only) — sebelum jemaatRouter.
+adminRouter.use('/jemaat/:jemaatId/resolusi', jemaatResolusiRouter);
 adminRouter.use('/jemaat', jemaatRouter);
 // Kritik & Saran jemaat (inbox admin portal).
 adminRouter.use('/feedback', feedbackRouter);
+// Prayer Request (Doa) — inbox, assign petugas, konfigurasi role petugas.
+adminRouter.use('/prayer-request', prayerRequestRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).
 adminRouter.use('/report', reportRouter);
 adminRouter.use('/spiritual-journey', spiritualJourneyRouter);

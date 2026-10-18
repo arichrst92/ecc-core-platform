@@ -79,7 +79,9 @@ model CabangGereja {
   // IT Minister — Data Minister per cabang assignment
   itMinisterTeam    ITMinisterTeam[]
 
-  feedbacks Feedback[]
+  feedbacks      Feedback[]
+  prayerRequests PrayerRequest[]
+
   @@unique([sinodeId, kode])
   @@index([sinodeId])
   @@map("cabang_gereja")
@@ -311,6 +313,13 @@ model Jemaat {
   // Ministry join request (pemohon + leader yg review).
   pelayananJoinRequests        PelayananJoinRequest[]        @relation("PelayananJoinRequester")
   pelayananJoinReviews         PelayananJoinRequest[]        @relation("PelayananJoinReviewer")
+  // Prayer Request (Doa) & Resolusi Tahunan (2026-10-18)
+  prayerRequests               PrayerRequest[]               @relation("PrayerRequester")
+  prayerUntuk                  PrayerRequest[]               @relation("PrayerUntuk")
+  prayerDitugaskan             PrayerRequest[]               @relation("PrayerPetugas")
+  prayerAssignedBy             PrayerRequest[]               @relation("PrayerAssigner")
+  prayerDidoakanBy             PrayerRequest[]               @relation("PrayerDidoakanBy")
+  resolusi                     Resolusi[]                    @relation("ResolusiOwner")
 
   @@index([cabangId])
   @@index([noHp])
@@ -349,6 +358,7 @@ model Role {
   eventRequirements EventRoleRequirement[]
   eventGrants       Event[]                @relation("EventGrantRole")
   journeySteps      SpiritualJourneyStep[] @relation("JourneyRole")
+  prayerPetugasRoles PrayerPetugasRole[]
 
   @@map("role")
 }
@@ -371,6 +381,7 @@ model SubRole {
   eventRequirements EventRoleRequirement[]
   eventGrants       Event[]                @relation("EventGrantSubRole")
   journeySteps      SpiritualJourneyStep[] @relation("JourneySubRole")
+  prayerPetugasRoles PrayerPetugasRole[]
 
   @@unique([roleId, nama])
   @@index([roleId])
@@ -1954,6 +1965,8 @@ enum InAppNotifType {
   HOMECELL_ANNOUNCEMENT
   HOMECELL_POLL_CREATED
   FEEDBACK_REPLIED
+  PRAYER_ASSIGNED
+  PRAYER_PRAYED
 
   @@map("in_app_notif_type")
 }
@@ -3239,4 +3252,108 @@ model SpiritualJourneyStep {
 
   @@index([urutan])
   @@map("spiritual_journey_step")
+}
+
+// ============================================================
+// PRAYER REQUEST ("Doa") — 2026-10-18
+// ============================================================
+// Jemaat kirim pokok doa → admin assign ke petugas (role diatur di
+// PrayerPetugasRole) → petugas tandai SUDAH_DIDOAKAN (+ catatan yang
+// ditampilkan ke jemaat) → jemaat bisa tandai terjawab (terjawabAt).
+// "Terjawab" disimpan terpisah dari status supaya bisa dibatalkan tanpa
+// kehilangan progres petugas. Hapus oleh jemaat = soft delete (deletedAt).
+enum PrayerStatus {
+  BARU
+  DITUGASKAN
+  SUDAH_DIDOAKAN
+
+  @@map("prayer_status")
+}
+
+enum PrayerTarget {
+  DIRI_SENDIRI
+  KELUARGA
+  ORANG_LAIN
+
+  @@map("prayer_target")
+}
+
+model PrayerRequest {
+  id             String       @id @default(uuid()) @db.Uuid
+  jemaatId       String       @map("jemaat_id") @db.Uuid
+  // Snapshot cabang pengirim saat mengirim (filter portal).
+  cabangId       String?      @map("cabang_id") @db.Uuid
+  // HEALTH | FAMILY | WORK | FINANCE | STUDY | RELATIONSHIP | RESTORATION | THANKSGIVING | OTHER
+  kategori       String       @db.VarChar(30)
+  untuk          PrayerTarget @default(DIRI_SENDIRI)
+  // Nama yang didoakan (keluarga/orang lain). Untuk KELUARGA bisa juga link ke jemaat.
+  untukNama      String?      @map("untuk_nama") @db.VarChar(150)
+  untukJemaatId  String?      @map("untuk_jemaat_id") @db.Uuid
+  isi            String       @db.Text
+  // Anonim: nama pengirim disembunyikan dari petugas (admin tetap lihat).
+  isAnonim       Boolean      @default(false) @map("is_anonim")
+  status         PrayerStatus @default(BARU)
+  petugasId      String?      @map("petugas_id") @db.Uuid
+  assignedById   String?      @map("assigned_by_id") @db.Uuid
+  assignedAt     DateTime?    @map("assigned_at")
+  didoakanAt     DateTime?    @map("didoakan_at")
+  didoakanById   String?      @map("didoakan_by_id") @db.Uuid
+  // Catatan petugas — ditampilkan ke jemaat.
+  catatanPetugas String?      @map("catatan_petugas") @db.Text
+  terjawabAt     DateTime?    @map("terjawab_at")
+  kesaksian      String?      @db.Text
+  deletedAt      DateTime?    @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  jemaat      Jemaat        @relation("PrayerRequester", fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang      CabangGereja? @relation(fields: [cabangId], references: [id], onDelete: SetNull)
+  untukJemaat Jemaat?       @relation("PrayerUntuk", fields: [untukJemaatId], references: [id], onDelete: SetNull)
+  petugas     Jemaat?       @relation("PrayerPetugas", fields: [petugasId], references: [id], onDelete: SetNull)
+  assignedBy  Jemaat?       @relation("PrayerAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  didoakanBy  Jemaat?       @relation("PrayerDidoakanBy", fields: [didoakanById], references: [id], onDelete: SetNull)
+
+  @@index([jemaatId, createdAt])
+  @@index([petugasId, status])
+  @@index([status, createdAt])
+  @@index([cabangId])
+  @@map("prayer_request")
+}
+
+// Role/SubRole yang boleh di-assign sebagai petugas doa (Konfigurasi portal).
+// subRoleId NULL = semua sub-role dari role tsb.
+model PrayerPetugasRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  subRoleId String?  @map("sub_role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  role    Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  subRole SubRole? @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, subRoleId])
+  @@map("prayer_petugas_role")
+}
+
+// ============================================================
+// RESOLUSI TAHUNAN — 2026-10-18
+// ============================================================
+model Resolusi {
+  id        String    @id @default(uuid()) @db.Uuid
+  jemaatId  String    @map("jemaat_id") @db.Uuid
+  tahun     Int
+  judul     String    @db.VarChar(200)
+  catatan   String?   @db.Text
+  // SPIRITUAL | FAMILY | HEALTH | CAREER | FINANCE | MINISTRY | PERSONAL_GROWTH | OTHER
+  kategori  String    @db.VarChar(30)
+  isDone    Boolean   @default(false) @map("is_done")
+  doneAt    DateTime? @map("done_at")
+  urutan    Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation("ResolusiOwner", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([jemaatId, tahun, urutan])
+  @@map("resolusi")
 }

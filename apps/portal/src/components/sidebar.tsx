@@ -102,6 +102,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield, menuKey: 'role-jemaat' },
       { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
       { href: '/dashboard/feedback', label: 'Kritik & Saran', icon: MessageSquareText, menuKey: 'feedback' },
+      { href: '/dashboard/prayer-request', label: 'Prayer Request', icon: HandHeart, menuKey: 'prayer-request' },
       { href: '/dashboard/tamu', label: 'Tamu', icon: Contact, menuKey: 'tamu' },
     ],
   },

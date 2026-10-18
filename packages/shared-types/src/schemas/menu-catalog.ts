@@ -46,6 +46,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'tipe-relasi', label: 'Relasi Jemaat', href: '/dashboard/tipe-relasi', group: 'People' },
   { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People' },
   { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People' },
+  { key: 'prayer-request', label: 'Prayer Request', href: '/dashboard/prayer-request', group: 'People' },
 
   // Community
   { key: 'homecell-area', label: 'Homecell Area', href: '/dashboard/homecell-area', group: 'Community' },

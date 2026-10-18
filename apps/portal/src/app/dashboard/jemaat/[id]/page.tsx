@@ -41,6 +41,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
+import { ResolusiSection } from '@/components/jemaat/resolusi-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
 import { todayYmd, parseYmd, isDateOnly } from '@/lib/dates';
@@ -587,6 +588,9 @@ export default function JemaatDetailPage() {
 
       {/* Sertifikat (bisa lebih dari satu) */}
       <SertifikatSection jemaatId={jemaatId} />
+
+      {/* Resolusi tahunan (read-only, diisi jemaat dari app) */}
+      <ResolusiSection jemaatId={jemaatId} />
 
       {/* History sections: Homecell + Event + Ibadah + Group + Business */}
       <JemaatHistorySections jemaatId={jemaatId} />

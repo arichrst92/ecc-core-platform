@@ -63,6 +63,8 @@ import { canCancelReservasi } from '../../lib/reservasi-window.js';
 import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
+import { mePrayerRouter } from './me-prayer.js';
+import { meResolusiRouter } from './me-resolusi.js';
 
 export const meRouter = Router();
 
@@ -79,6 +81,10 @@ meRouter.use('/ibadah', meIbadahRouter);
 meRouter.use('/event-checkin', meEventCheckinRouter);
 // Kritik & Saran saya → me-feedback.ts
 meRouter.use('/feedback', meFeedbackRouter);
+// Doa (prayer request) saya + tugas petugas doa → me-prayer.ts
+meRouter.use('/prayer', mePrayerRouter);
+// Resolusi tahunan saya → me-resolusi.ts
+meRouter.use('/resolusi', meResolusiRouter);
 // Tamu saya (non-anggota yang saya ajak) → me-tamu.ts
 meRouter.use('/tamu', meTamuRouter);
 // Local Business — CRUD owner + browse public.

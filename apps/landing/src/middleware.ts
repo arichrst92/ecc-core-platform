@@ -100,6 +100,8 @@ export async function middleware(req: NextRequest) {
     // Kalau app NOT installed, user tetap bisa lihat detail event (bukan coming-soon).
     /^\/event\/[^/]+$/.test(pathname) ||
     pathname === '/privacy' ||
+    pathname === '/support' ||
+    pathname === '/contact' ||
     pathname === '/terms' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||

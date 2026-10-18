@@ -18,12 +18,15 @@ import { flexImageUpload } from '../../lib/image-upload.js';
 import { saveHadiahPhoto, deleteHadiahPhoto } from '../../lib/storage.js';
 
 export const hadiahRouter = Router();
-hadiahRouter.use(requireFulltimer);
 
 // ============================================================
 // GET /admin/hadiah — list dengan filter cabang + isActive
 // ============================================================
+// Terbuka untuk semua user login: app CKids (orang tua) menampilkan katalog
+// hadiah cabang anak. Non-fulltimer hanya melihat hadiah AKTIF dari cabang
+// yang diminta (read-only). Endpoint lain (CRUD) tetap khusus Fulltimer.
 hadiahRouter.get('/', async (req, res) => {
+  const isAdmin = req.user?.isFulltimer === true;
   const q = paginationQuerySchema.parse(req.query);
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
   const isActive =
@@ -35,6 +38,14 @@ hadiahRouter.get('/', async (req, res) => {
   const where: Prisma.HadiahKatalogWhereInput = {};
   if (cabangId) where.cabangId = cabangId;
   if (isActive !== undefined) where.isActive = isActive;
+  if (!isAdmin) {
+    // Jemaat/orang tua: wajib per cabang, hanya hadiah aktif.
+    if (!cabangId) {
+      res.json({ success: true, data: [], meta: { page: 1, limit: 0, total: 0, totalPages: 0 } });
+      return;
+    }
+    where.isActive = true;
+  }
   if (search) where.nama = { contains: search, mode: 'insensitive' };
 
   const page = q.page ?? 1;
@@ -57,6 +68,9 @@ hadiahRouter.get('/', async (req, res) => {
     meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 });
+
+// Semua endpoint di bawah ini khusus Fulltimer (master data portal).
+hadiahRouter.use(requireFulltimer);
 
 // ============================================================
 // GET /admin/hadiah/:id — detail

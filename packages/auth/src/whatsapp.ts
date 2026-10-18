@@ -25,8 +25,11 @@ const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
  * reminder event, broadcast future). Single source of truth supaya kalau
  * branding berubah, edit di sini saja.
  */
+// Domain ditulis "ide\u2024asia" (U+2024 ONE DOT LEADER, tampak seperti titik)
+// tanpa "https://" supaya WhatsApp tidak mendeteksinya sebagai link: tidak
+// clickable dan tidak memunculkan preview/OG image IDEA di setiap pesan.
 export const WA_SIGNATURE =
-  '\n\n_Powered by IDEA (https://ide.asia)_\n_an Enterprise IT Service and Outsourcing Company_';
+  '\n\n_Powered by IDEA (ide\u2024asia)_\n_an Enterprise IT Service and Outsourcing Company_';
 
 /** Wrap body dengan signature footer. Idempotent: kalau signature sudah ada, tidak duplicate. */
 export function appendSignature(body: string): string {

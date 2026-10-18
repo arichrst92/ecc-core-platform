@@ -1294,31 +1294,70 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
   const tamuSet = new Set(
     (await prisma.jemaatTamu.findMany({ where: { inviterId: selfId }, select: { tamuId: true } })).map((t) => t.tamuId),
   );
-  // Donasi tambahan (event sukarela, berkali-kali dari web) per partisipasi.
-  const donasi = rows.length
-    ? await prisma.eventDonation.groupBy({
-        by: ['participationId', 'status'],
-        where: { participationId: { in: rows.map((r) => r.id) }, tambahan: true, status: { not: 'BATAL' } },
-        _count: { _all: true },
-        _sum: { nominalBayar: true },
+  // Riwayat pemberian per partisipasi (event berbayar). Donasi "utama"
+  // (tambahan=false, mis. walk-in / flow lama) menggantikan pembayaran di
+  // partisipasi; donasi tambahan (sukarela, berkali-kali dari web) ditambahkan.
+  const donRows = rows.length
+    ? await prisma.eventDonation.findMany({
+        where: { participationId: { in: rows.map((r) => r.id) } },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          participationId: true,
+          nominalBayar: true,
+          status: true,
+          tambahan: true,
+          buktiTransferUrl: true,
+          createdAt: true,
+          paidAt: true,
+        },
       })
     : [];
-  const donasiBy = new Map<string, { count: number; total: number; totalConfirmed: number; pending: number }>();
-  for (const d of donasi) {
-    const cur = donasiBy.get(d.participationId) ?? { count: 0, total: 0, totalConfirmed: 0, pending: 0 };
-    const sum = Number(d._sum.nominalBayar ?? 0);
-    cur.count += d._count._all;
-    cur.total += sum;
-    if (d.status === 'BAYAR') cur.totalConfirmed += sum;
-    else cur.pending += d._count._all;
-    donasiBy.set(d.participationId, cur);
+  const donByPart = new Map<string, typeof donRows>();
+  for (const d of donRows) {
+    const list = donByPart.get(d.participationId) ?? [];
+    list.push(d);
+    donByPart.set(d.participationId, list);
   }
+  const summarize = (r: (typeof rows)[number]) => {
+    const list = donByPart.get(r.id) ?? [];
+    const active = list.filter((d) => d.status !== 'BATAL');
+    const hasPrimary = list.some((d) => !d.tambahan);
+    const tambahan = active.filter((d) => d.tambahan);
+    const sum = (xs: typeof list) => xs.reduce((a, d) => a + Number(d.nominalBayar), 0);
+    // Pembayaran pertama dari partisipasi (kalau belum diwakili donasi utama).
+    const pertama =
+      !hasPrimary && Number(r.nominalBayar ?? 0) > 0
+        ? [
+            {
+              id: `p-${r.id}`,
+              nominalBayar: String(r.nominalBayar),
+              status: r.status === 'BAYAR' || r.status === 'HADIR' ? 'BAYAR' : r.status === 'MENUNGGU_VERIFIKASI' ? 'MENUNGGU_VERIFIKASI' : 'DAFTAR',
+              tambahan: false,
+              buktiTransferUrl: r.buktiTransferUrl,
+              createdAt: r.registeredAt,
+              paidAt: r.paidAt,
+            },
+          ]
+        : [];
+    const riwayat = [...pertama, ...list.map((d) => ({ ...d, nominalBayar: String(d.nominalBayar) }))];
+    return {
+      donasiTambahan: {
+        count: tambahan.length,
+        total: sum(tambahan),
+        totalConfirmed: sum(tambahan.filter((d) => d.status === 'BAYAR')),
+        pending: tambahan.filter((d) => d.status === 'MENUNGGU_VERIFIKASI').length,
+      },
+      // Total yang diberikan = semua pemberian non-batal.
+      totalDiberikan: riwayat.filter((d) => d.status !== 'BATAL').reduce((a, d) => a + Number(d.nominalBayar), 0),
+      jumlahPemberian: riwayat.filter((d) => d.status !== 'BATAL').length,
+      riwayatPemberian: riwayat,
+    };
+  };
 
   const participations = rows.map((r) => ({
     ...r,
-    donasiTambahan: donasiBy.get(r.id) ?? { count: 0, total: 0, totalConfirmed: 0, pending: 0 },
-    // Total yang diberikan (pembayaran pertama + donasi tambahan non-batal).
-    totalDiberikan: Number(r.nominalBayar ?? 0) + (donasiBy.get(r.id)?.total ?? 0),
+    ...summarize(r),
     isSelf: r.jemaatId === selfId,
     isTamu: tamuSet.has(r.jemaatId),
     relationLabel:

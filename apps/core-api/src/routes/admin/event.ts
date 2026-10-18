@@ -1294,8 +1294,31 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
   const tamuSet = new Set(
     (await prisma.jemaatTamu.findMany({ where: { inviterId: selfId }, select: { tamuId: true } })).map((t) => t.tamuId),
   );
+  // Donasi tambahan (event sukarela, berkali-kali dari web) per partisipasi.
+  const donasi = rows.length
+    ? await prisma.eventDonation.groupBy({
+        by: ['participationId', 'status'],
+        where: { participationId: { in: rows.map((r) => r.id) }, tambahan: true, status: { not: 'BATAL' } },
+        _count: { _all: true },
+        _sum: { nominalBayar: true },
+      })
+    : [];
+  const donasiBy = new Map<string, { count: number; total: number; totalConfirmed: number; pending: number }>();
+  for (const d of donasi) {
+    const cur = donasiBy.get(d.participationId) ?? { count: 0, total: 0, totalConfirmed: 0, pending: 0 };
+    const sum = Number(d._sum.nominalBayar ?? 0);
+    cur.count += d._count._all;
+    cur.total += sum;
+    if (d.status === 'BAYAR') cur.totalConfirmed += sum;
+    else cur.pending += d._count._all;
+    donasiBy.set(d.participationId, cur);
+  }
+
   const participations = rows.map((r) => ({
     ...r,
+    donasiTambahan: donasiBy.get(r.id) ?? { count: 0, total: 0, totalConfirmed: 0, pending: 0 },
+    // Total yang diberikan (pembayaran pertama + donasi tambahan non-batal).
+    totalDiberikan: Number(r.nominalBayar ?? 0) + (donasiBy.get(r.id)?.total ?? 0),
     isSelf: r.jemaatId === selfId,
     isTamu: tamuSet.has(r.jemaatId),
     relationLabel:

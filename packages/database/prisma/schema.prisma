@@ -1504,6 +1504,9 @@ model EventDonation {
   status           EventDonationStatus @default(MENUNGGU_VERIFIKASI)
   catatan          String?             @db.Text
   paidAt           DateTime?           @map("paid_at")
+  // Donasi tambahan (event NOMINAL_BEBAS — jemaat boleh berdonasi berkali-kali
+  // dari halaman web). false = pembayaran utama partisipasi (legacy/walk-in).
+  tambahan         Boolean             @default(false)
   // Approval audit
   approvedBy       String?             @map("approved_by") @db.Uuid
   approvedAt       DateTime?           @map("approved_at")

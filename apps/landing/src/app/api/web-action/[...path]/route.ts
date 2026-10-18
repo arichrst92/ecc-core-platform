@@ -19,6 +19,8 @@ const ALLOWED: Array<{ method: string; re: RegExp }> = [
   { method: 'GET', re: new RegExp(`^event/${UUID}/peserta/mine-and-family$`, 'i') },
   { method: 'POST', re: new RegExp(`^event/${UUID}/peserta/batch$`, 'i') },
   { method: 'POST', re: new RegExp(`^event/${UUID}/peserta/${UUID}/bukti$`, 'i') },
+  { method: 'GET', re: new RegExp(`^event/${UUID}/donations$`, 'i') },
+  { method: 'POST', re: new RegExp(`^event/${UUID}/donations$`, 'i') },
 ];
 
 async function proxy(req: NextRequest, { params }: { params: { path: string[] } }) {

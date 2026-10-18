@@ -5,9 +5,9 @@
  * Aktif hanya kalau app membuka halaman dengan ?wt= dan exchange sukses.
  * Semua call lewat proxy /api/web-action/* (session di cookie httpOnly).
  */
-import { useState } from 'react';
-import { CheckCircle2, Loader2, Upload, UserCheck, AlertTriangle } from 'lucide-react';
-import type { WaFamilyItem, WaParticipation, WaSessionInfo } from '@/lib/web-action-server';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, HandHeart, Loader2, Upload, UserCheck, AlertTriangle } from 'lucide-react';
+import type { WaDonation, WaFamilyItem, WaParticipation, WaSessionInfo } from '@/lib/web-action-server';
 
 const MIN_BEBAS = 1000;
 
@@ -15,6 +15,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   DAFTAR: { label: 'Menunggu bukti transfer', cls: 'bg-amber-100 text-amber-800' },
   MENUNGGU_VERIFIKASI: { label: 'Menunggu verifikasi', cls: 'bg-blue-100 text-blue-800' },
   BAYAR: { label: 'Lunas', cls: 'bg-emerald-100 text-emerald-800' },
+  BATAL: { label: 'Dibatalkan', cls: 'bg-neutral-100 text-neutral-600' },
   HADIR: { label: 'Hadir', cls: 'bg-emerald-100 text-emerald-800' },
 };
 
@@ -49,6 +50,12 @@ export function WebActionPanel({
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [expired, setExpired] = useState(false);
+  // Donasi tambahan (sukarela — boleh berkali-kali setelah terdaftar).
+  const [donations, setDonations] = useState<WaDonation[]>([]);
+  const [donasiNominal, setDonasiNominal] = useState('');
+  const [donasiFor, setDonasiFor] = useState('');
+  const [donasiFile, setDonasiFile] = useState<File | null>(null);
+  const [donasiBusy, setDonasiBusy] = useState(false);
 
   const candidates = [
     { id: session.jemaat.id, namaLengkap: session.jemaat.namaLengkap, label: 'Diri sendiri' },
@@ -67,6 +74,44 @@ export function WebActionPanel({
   async function refresh() {
     const r = await call(`event/${eventId}/peserta/mine-and-family`);
     if (r.ok) setParticipations(r.json.data.participations);
+  }
+
+  async function refreshDonations() {
+    const r = await call(`event/${eventId}/donations`);
+    if (r.ok) setDonations(r.json.data ?? []);
+  }
+
+  useEffect(() => {
+    if (isBebas) void refreshDonations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBebas, eventId]);
+
+  async function donate() {
+    setMessage(null);
+    const amount = Number(donasiNominal);
+    if (!Number.isFinite(amount) || amount < MIN_BEBAS) {
+      setMessage({ type: 'err', text: `Nominal donasi minimal Rp ${rupiah(MIN_BEBAS)}.` });
+      return;
+    }
+    if (!donasiFile) {
+      setMessage({ type: 'err', text: 'Pilih foto bukti transfer donasi.' });
+      return;
+    }
+    setDonasiBusy(true);
+    const fd = new FormData();
+    fd.append('nominal', String(Math.round(amount)));
+    if (donasiFor) fd.append('participationId', donasiFor);
+    fd.append('bukti', donasiFile);
+    const r = await call(`event/${eventId}/donations`, { method: 'POST', body: fd });
+    setDonasiBusy(false);
+    if (!r.ok) {
+      setMessage({ type: 'err', text: r.json?.error?.message ?? 'Donasi gagal dikirim.' });
+      return;
+    }
+    setDonasiNominal('');
+    setDonasiFile(null);
+    await refreshDonations();
+    setMessage({ type: 'ok', text: 'Terima kasih! Donasi Anda terkirim dan menunggu verifikasi admin.' });
   }
 
   function toggle(id: string) {
@@ -267,6 +312,98 @@ export function WebActionPanel({
             <p className="text-[11px] text-neutral-500 mt-2">
               Pembatalan pendaftaran dilakukan dari Els App.
             </p>
+          </section>
+        )}
+
+        {/* 3. Donasi lagi — event sukarela, boleh berkali-kali */}
+        {isBebas && participations.length > 0 && (
+          <section className="border-t border-neutral-100 pt-5">
+            <h3 className="text-sm font-semibold text-neutral-900 mb-1 flex items-center gap-1.5">
+              <HandHeart className="w-4 h-4 text-orange-500" /> 3. Donasi lagi
+            </h3>
+            <p className="text-xs text-neutral-500 mb-3">
+              Ingin memberi lagi untuk event ini? Transfer ke rekening di atas, lalu kirim bukti di sini. Bisa berkali-kali.
+            </p>
+            {participations.length > 1 && (
+              <label className="block mb-3">
+                <span className="text-xs font-medium text-neutral-600">Atas nama</span>
+                <select
+                  value={donasiFor}
+                  onChange={(e) => setDonasiFor(e.target.value)}
+                  className="mt-1 w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white outline-none"
+                >
+                  <option value="">{session.jemaat.namaLengkap} (saya)</option>
+                  {participations
+                    .filter((p) => !p.isSelf)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.jemaat.namaLengkap} ({p.relationLabel})
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            <label className="block">
+              <span className="text-xs font-medium text-neutral-600">Nominal donasi (min Rp {rupiah(MIN_BEBAS)})</span>
+              <div className="mt-1 flex items-center border border-neutral-300 rounded-lg overflow-hidden">
+                <span className="px-3 text-sm text-neutral-500 bg-neutral-50 py-2">Rp</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_BEBAS}
+                  step={1000}
+                  value={donasiNominal}
+                  placeholder="100000"
+                  onChange={(e) => setDonasiNominal(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm outline-none"
+                />
+              </div>
+            </label>
+            <label className="mt-3 flex items-center gap-2 text-sm border border-dashed border-neutral-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-orange-300">
+              <Upload className="w-4 h-4 text-orange-500 shrink-0" />
+              <span className={`truncate ${donasiFile ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                {donasiFile ? donasiFile.name : 'Pilih foto bukti transfer'}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  setDonasiFile(e.target.files?.[0] ?? null);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={donasiBusy || !donasiNominal || !donasiFile}
+              onClick={donate}
+              className="mt-3 w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            >
+              {donasiBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+              Kirim donasi
+            </button>
+
+            {donations.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold text-neutral-700">Riwayat donasi tambahan</p>
+                {donations.map((d) => {
+                  const st = STATUS_LABEL[d.status] ?? { label: d.status, cls: 'bg-neutral-100 text-neutral-700' };
+                  return (
+                    <div key={d.id} className="flex items-center justify-between gap-2 border border-neutral-200 rounded-xl px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-neutral-900">Rp {rupiah(Number(d.nominalBayar))}</p>
+                        <p className="text-[11px] text-neutral-500 truncate">
+                          {d.jemaat.namaLengkap} ·{' '}
+                          {new Date(d.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>{st.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
       </div>

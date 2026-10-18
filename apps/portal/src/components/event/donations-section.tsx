@@ -43,6 +43,8 @@ interface DonationRow {
   buktiTransferUrl: string | null;
   status: 'MENUNGGU_VERIFIKASI' | 'BAYAR' | 'BATAL';
   catatan: string | null;
+  /** Donasi tambahan (event sukarela — berkali-kali dari web). */
+  tambahan?: boolean;
   paidAt: string | null;
   approvedAt: string | null;
   createdAt: string;
@@ -328,8 +330,13 @@ function DonationRowItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
-            <div className="font-medium text-neutral-900 text-sm">
+            <div className="font-medium text-neutral-900 text-sm flex items-center gap-1.5">
               {donation.participation.jemaat.namaLengkap}
+              {donation.tambahan ? (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                  Donasi tambahan
+                </span>
+              ) : null}
             </div>
             <div className="text-xs text-neutral-500">
               {donation.participation.jemaat.noHp ?? '(no HP -)'}

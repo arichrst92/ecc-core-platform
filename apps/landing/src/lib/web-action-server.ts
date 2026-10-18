@@ -28,6 +28,18 @@ export interface WaParticipation {
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
 }
 
+/** Donasi tambahan (event NOMINAL_BEBAS). */
+export interface WaDonation {
+  id: string;
+  participationId: string;
+  nominalBayar: string | number;
+  buktiTransferUrl: string | null;
+  status: 'MENUNGGU_VERIFIKASI' | 'BAYAR' | 'BATAL';
+  catatan: string | null;
+  createdAt: string;
+  jemaat: { id: string; namaLengkap: string };
+}
+
 export async function waGet<T>(path: string, session: string): Promise<T | null> {
   try {
     const r = await fetch(`${API_BASE}/web-action/${path}`, {

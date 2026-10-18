@@ -1469,7 +1469,14 @@ eventRouter.get('/:id/donations', async (req, res) => {
   //    punya EventDonation row (dibedakan by participationId).
   //    Ini fix untuk kasus admin approve via /peserta/:pid/approve → cuma
   //    update participation, tidak create donation row → payment history kosong.
-  const existingPartIds = new Set(donationRows.map((d) => d.participationId));
+  // Hanya donasi "utama" (bukan tambahan) yang menggantikan pembayaran
+  // partisipasi — donasi tambahan (NOMINAL_BEBAS, berkali-kali) dicatat di
+  // samping pembayaran pertama, bukan menggantikannya.
+  const primaryDonations = await prisma.eventDonation.findMany({
+    where: { participation: { eventId: event.id }, tambahan: false },
+    select: { participationId: true },
+  });
+  const existingPartIds = new Set(primaryDonations.map((d) => d.participationId));
   const legacyParts = await prisma.eventParticipation.findMany({
     where: {
       eventId: event.id,

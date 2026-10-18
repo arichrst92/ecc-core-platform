@@ -9,6 +9,8 @@
  *   GET  /web-action/event/:eventId/peserta/mine-and-family
  *   POST /web-action/event/:eventId/peserta/batch     → batch register (guard keluarga di handler)
  *   POST /web-action/event/:eventId/peserta/:participationId/bukti
+ *   GET  /web-action/event/:eventId/donations          → riwayat donasi tambahan (saya + keluarga)
+ *   POST /web-action/event/:eventId/donations          → donasi tambahan (NOMINAL_BEBAS, berkali-kali)
  *
  * Keamanan: session web BUKAN JWT penuh. Hanya endpoint di file ini yang
  * menerima header X-Web-Session, dan setiap endpoint event dicek eventId-nya
@@ -22,6 +24,9 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { webActionLimiter, webActionMintLimiter } from '../middleware/rate-limit.js';
 import { ApiError, BadRequest, NotFound, Unauthorized } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
+import { getFamilyJemaatIds } from '../lib/family-relation.js';
+import { flexImageUpload } from '../lib/image-upload.js';
+import { saveEventDonationBukti } from '../lib/storage.js';
 import {
   SESSION_TTL_MS,
   TOKEN_TTL_MS,
@@ -241,3 +246,100 @@ webActionRouter.post(
     (req) => `/${req.params.eventId}/peserta/${req.params.participationId}/bukti`,
   ),
 );
+
+// ============================================================
+//  Donasi tambahan — event NOMINAL_BEBAS (berkali-kali)
+// ============================================================
+// Pembayaran pertama tetap di partisipasi (daftar + upload bukti). Setelah
+// terdaftar, jemaat boleh berdonasi lagi kapan saja: setiap donasi = baris
+// EventDonation (tambahan=true) dengan bukti sendiri, diverifikasi admin di
+// tab Donasi event.
+const MIN_DONASI = 1000;
+
+async function familyParticipations(eventId: string, selfId: string) {
+  const ids = await getFamilyJemaatIds(selfId);
+  return prisma.eventParticipation.findMany({
+    where: { eventId, jemaatId: { in: [...ids] }, status: { not: 'BATAL' } },
+    select: { id: true, jemaatId: true, jemaat: { select: { namaLengkap: true } } },
+  });
+}
+
+webActionRouter.get('/event/:eventId/donations', requireWebSession, async (req, res) => {
+  const w = req.webAction!;
+  const parts = await familyParticipations(w.eventId, w.jemaatId);
+  const rows = await prisma.eventDonation.findMany({
+    where: { participationId: { in: parts.map((p) => p.id) }, tambahan: true },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      participationId: true,
+      nominalBayar: true,
+      buktiTransferUrl: true,
+      status: true,
+      catatan: true,
+      createdAt: true,
+      participation: { select: { jemaat: { select: { id: true, namaLengkap: true } } } },
+    },
+  });
+  res.json({
+    success: true,
+    data: rows.map(({ participation, ...r }) => ({ ...r, jemaat: participation.jemaat })),
+  });
+});
+
+const donasiSchema = z.object({
+  nominal: z.coerce.number().int().min(MIN_DONASI, `Nominal minimal Rp ${MIN_DONASI.toLocaleString('id-ID')}.`).max(1_000_000_000),
+  participationId: z.string().uuid().optional(),
+  catatan: z.string().trim().max(500).optional(),
+});
+
+webActionRouter.post('/event/:eventId/donations', requireWebSession, flexImageUpload(), async (req, res) => {
+  const w = req.webAction!;
+  const event = await prisma.event.findUnique({
+    where: { id: w.eventId },
+    select: { id: true, judul: true, tipeBayar: true },
+  });
+  if (!event) throw NotFound('Event tidak ditemukan');
+  if (event.tipeBayar !== 'NOMINAL_BEBAS') {
+    throw BadRequest('Donasi tambahan hanya untuk event dengan persembahan sukarela.');
+  }
+  if (!req.file) throw BadRequest('Upload bukti transfer donasi.');
+  const input = donasiSchema.parse(req.body ?? {});
+
+  const parts = await familyParticipations(event.id, w.jemaatId);
+  if (parts.length === 0) throw BadRequest('Daftar event ini terlebih dahulu sebelum berdonasi.');
+  const part = input.participationId
+    ? parts.find((p) => p.id === input.participationId)
+    : (parts.find((p) => p.jemaatId === w.jemaatId) ?? parts[0]);
+  if (!part) throw BadRequest('Peserta tidak ditemukan.');
+
+  const created = await prisma.eventDonation.create({
+    data: {
+      participationId: part.id,
+      nominalBayar: input.nominal,
+      catatan: input.catatan || `Donasi tambahan dari ${w.namaLengkap} (web)`,
+      status: 'MENUNGGU_VERIFIKASI',
+      tambahan: true,
+    },
+    select: { id: true },
+  });
+  const buktiTransferUrl = await saveEventDonationBukti(created.id, req.file.buffer);
+  const donation = await prisma.eventDonation.update({
+    where: { id: created.id },
+    data: { buktiTransferUrl },
+  });
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'event_donation',
+    resourceId: donation.id,
+    resourceLabel: `Donasi tambahan ${part.jemaat.namaLengkap} @ ${event.judul}: ${input.nominal}`,
+    metadata: { kind: 'event-donation-tambahan-web', eventId: event.id },
+  });
+
+  res.status(201).json({
+    success: true,
+    data: donation,
+    message: 'Terima kasih! Donasi Anda menunggu verifikasi admin.',
+  });
+});

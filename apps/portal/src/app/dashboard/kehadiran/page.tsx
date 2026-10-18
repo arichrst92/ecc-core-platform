@@ -25,6 +25,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { useDebounce } from '@/lib/use-debounce';
+import { todayYmd, parseYmd } from '@/lib/dates';
 
 type ReservasiStatus = 'RESERVE' | 'JOIN' | 'CANCEL';
 
@@ -369,7 +370,7 @@ export default function KehadiranPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 text-neutral-700 text-xs tabular-nums">
-                      {new Date(r.tanggalIbadah).toLocaleDateString('id-ID', {
+                      {parseYmd(r.tanggalIbadah).toLocaleDateString('id-ID', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
@@ -512,7 +513,7 @@ function CreateReservasiModal({
   onSuccess: () => void;
 }) {
   const [ibadahId, setIbadahId] = useState('');
-  const [tanggalIbadah, setTanggalIbadah] = useState(new Date().toISOString().slice(0, 10));
+  const [tanggalIbadah, setTanggalIbadah] = useState(todayYmd());
   const [search, setSearch] = useState('');
   const [jemaatId, setJemaatId] = useState('');
 
@@ -1209,7 +1210,7 @@ function QrPreviewModal({ item, onClose }: { item: ReservasiItem; onClose: () =>
             <div className="text-sm text-neutral-700 mb-1">{item.jemaat.namaLengkap}</div>
             <div className="text-xs text-neutral-500 mb-4">
               {item.ibadah.nama} —{' '}
-              {new Date(item.tanggalIbadah).toLocaleDateString('id-ID', {
+              {parseYmd(item.tanggalIbadah).toLocaleDateString('id-ID', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',

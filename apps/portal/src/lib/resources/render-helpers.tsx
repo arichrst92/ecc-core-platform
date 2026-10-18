@@ -3,6 +3,7 @@
  * Karena render function return JSX, file ini harus .tsx.
  */
 import type { ReactNode } from 'react';
+import { parseYmd, isDateOnly } from '@/lib/dates';
 
 export function statusBadge(value: unknown): ReactNode {
   return (
@@ -42,7 +43,8 @@ export function nestedField(path: string) {
 export function dateLocal(value: unknown) {
   if (!value) return '-';
   try {
-    return new Date(value as string).toLocaleDateString('id-ID', {
+    // Tanggal saja (@db.Date) dibaca sebagai tanggal kalender, bukan jam UTC.
+    return (isDateOnly(value) ? parseYmd(value) : new Date(value as string)).toLocaleDateString('id-ID', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -59,7 +61,7 @@ export function timeRange(start: string, end: string) {
 /** Hitung usia dalam tahun dari tanggal lahir (ISO date). */
 export function calcAge(tanggalLahir: string | null | undefined): number | null {
   if (!tanggalLahir) return null;
-  const dob = new Date(tanggalLahir);
+  const dob = parseYmd(tanggalLahir);
   if (isNaN(dob.getTime())) return null;
   const now = new Date();
   let age = now.getFullYear() - dob.getFullYear();

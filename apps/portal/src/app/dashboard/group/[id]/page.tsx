@@ -32,6 +32,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { GroupJoinRequestsSection } from '@/components/group/group-join-requests';
 import { GroupContentSection } from '@/components/group/group-content';
 import { GroupHero } from '@/components/group/group-hero';
+import { parseYmd } from '@/lib/dates';
 
 interface GroupMember {
   id: string;
@@ -385,7 +386,7 @@ export default function GroupDetailPage() {
                   </td>
                   <td className="px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
                   <td className="px-5 py-3 text-neutral-600">
-                    {new Date(m.tanggalBergabung).toLocaleDateString('id-ID')}
+                    {parseYmd(m.tanggalBergabung).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <button

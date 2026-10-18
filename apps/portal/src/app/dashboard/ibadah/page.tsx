@@ -24,6 +24,7 @@ import { FormModal } from '@/components/crud/form-modal';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { ibadahResource } from '@/lib/resources/ibadah-config';
 import { CalendarView } from '@/components/ibadah/calendar-view';
+import { parseYmd } from '@/lib/dates';
 
 // Index signature wajib karena FormModal generic constraint `T extends
 // Record<string, unknown>` (lihat components/crud/form-modal.tsx).
@@ -348,7 +349,7 @@ function CabangSection({
                   <td className="px-4 py-2.5 text-neutral-700">
                     {TIPE_LABEL[i.tipeJadwal] ?? i.tipeJadwal}
                     {i.tipeJadwal === 'ONCE'
-                      ? ` · ${new Date(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                      ? ` · ${parseYmd(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
                       : i.hari
                         ? ` · ${HARI_LABEL[i.hari] ?? i.hari}`
                         : ''}

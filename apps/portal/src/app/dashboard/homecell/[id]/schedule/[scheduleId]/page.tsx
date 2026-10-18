@@ -20,6 +20,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
 import { ScheduleFilesSection, type ScheduleFile } from '@/components/homecell/schedule-files';
+import { parseYmd } from '@/lib/dates';
 
 interface ScheduleDetail {
   files?: ScheduleFile[];
@@ -101,7 +102,7 @@ export default function HomecellScheduleDetailPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Calendar className="w-6 h-6 text-brand-500" />
-            {new Date(s.tanggal).toLocaleDateString('id-ID', {
+            {parseYmd(s.tanggal).toLocaleDateString('id-ID', {
               weekday: 'long',
               day: 'numeric',
               month: 'long',

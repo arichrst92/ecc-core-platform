@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { CheckinModal } from '@/components/checkin-modal';
+import { parseYmd } from '@/lib/dates';
 
 interface Ibadah {
   id: string;
@@ -269,7 +270,7 @@ export default function IbadahDetailPage() {
             {i.jamMulai} – {i.jamSelesai}
           </Info>
           <Info icon={Calendar} label="Mulai">
-            {new Date(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {parseYmd(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Info>
           {i.lokasi && (
             <Info icon={MapPin} label="Lokasi" full>
@@ -415,7 +416,7 @@ export default function IbadahDetailPage() {
       {scannerOpen && (
         <CheckinModal
           title="Check-in Kehadiran Ibadah"
-          subtitle={`${i.nama} · ${new Date(scannerTanggal).toLocaleDateString('id-ID', {
+          subtitle={`${i.nama} · ${parseYmd(scannerTanggal).toLocaleDateString('id-ID', {
             weekday: 'long',
             day: 'numeric',
             month: 'long',

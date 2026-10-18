@@ -43,6 +43,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
+import { todayYmd, parseYmd, isDateOnly } from '@/lib/dates';
 
 interface JemaatRoleAssignment {
   id: string;
@@ -176,7 +177,7 @@ export default function JemaatDetailPage() {
     mutationFn: async (id: string) =>
       apiClient.patch(`/admin/pelayanan/assign/${id}`, {
         isActive: false,
-        tanggalSelesai: new Date().toISOString().slice(0, 10),
+        tanggalSelesai: todayYmd(),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['jemaat-pelayanan', jemaatId] });
@@ -204,7 +205,7 @@ export default function JemaatDetailPage() {
     mutationFn: async (id: string) =>
       apiClient.patch(`/admin/role/assign/${id}`, {
         isActive: false,
-        tanggalSelesai: new Date().toISOString().slice(0, 10),
+        tanggalSelesai: todayYmd(),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['jemaat', 'detail', jemaatId] });
@@ -357,12 +358,12 @@ export default function JemaatDetailPage() {
             )}
             {j.tanggalLahir && (
               <Info icon={Calendar} label="Tgl Lahir">
-                {new Date(j.tanggalLahir).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {parseYmd(j.tanggalLahir).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
               </Info>
             )}
             {j.tanggalBergabung && (
               <Info icon={Calendar} label="Bergabung">
-                {new Date(j.tanggalBergabung).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {parseYmd(j.tanggalBergabung).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
               </Info>
             )}
             {j.statusPekerjaan || j.namaKantor ? (
@@ -374,7 +375,7 @@ export default function JemaatDetailPage() {
               <Info icon={Heart} label="Pernikahan">
                 {j.statusPernikahan}
                 {j.tanggalPernikahan
-                  ? ` · ${new Date(j.tanggalPernikahan).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                  ? ` · ${parseYmd(j.tanggalPernikahan).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
                   : ''}
               </Info>
             ) : null}
@@ -712,9 +713,9 @@ function AssignmentRow({
           </span>
         </div>
         <div className="text-xs text-neutral-500 mt-0.5">
-          {new Date(a.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {parseYmd(a.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
           {a.tanggalSelesai && (
-            <> – {new Date(a.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</>
+            <> – {parseYmd(a.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</>
           )}
           {a.catatan && <span className="italic"> · {a.catatan}</span>}
         </div>
@@ -1281,7 +1282,7 @@ function JemaatRoleRow({
           )}
         </div>
         <div className="text-xs text-neutral-500 mt-0.5">
-          {new Date(r.tanggalMulai).toLocaleDateString('id-ID', {
+          {parseYmd(r.tanggalMulai).toLocaleDateString('id-ID', {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
@@ -1290,7 +1291,7 @@ function JemaatRoleRow({
             <>
               {' '}
               –{' '}
-              {new Date(r.tanggalSelesai).toLocaleDateString('id-ID', {
+              {parseYmd(r.tanggalSelesai).toLocaleDateString('id-ID', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',
@@ -1336,7 +1337,7 @@ function AddJemaatRoleModal({
   const [roleId, setRoleId] = useState('');
   const [subRoleId, setSubRoleId] = useState('');
   const [subRoleStatusId, setSubRoleStatusId] = useState('');
-  const [tanggalMulai, setTanggalMulai] = useState(new Date().toISOString().slice(0, 10));
+  const [tanggalMulai, setTanggalMulai] = useState(todayYmd());
   const [catatan, setCatatan] = useState('');
 
   const rolesQ = useQuery({
@@ -1604,7 +1605,8 @@ function formatRelativeTime(iso: string | null | undefined): string {
 
 function formatDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return '-';
-  const d = new Date(iso);
+  // Tanggal saja (@db.Date) → tanggal kalender; timestamp → jam lokal.
+  const d = !withTime && isDateOnly(iso) ? parseYmd(iso) : new Date(iso);
   if (isNaN(d.getTime())) return '-';
   const opts: Intl.DateTimeFormatOptions = {
     day: '2-digit',

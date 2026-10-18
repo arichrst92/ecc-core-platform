@@ -34,6 +34,7 @@ import { ExportButtons } from '@/components/report/report-ui';
 import { apiClient } from '@/lib/api-client';
 import { BarChart, DonutChart, LineChart } from '@/components/charts/simple-charts';
 import { RekeningSection } from '@/components/cabang/rekening-section';
+import { todayYmd, daysAgoYmd, parseYmd } from '@/lib/dates';
 
 // ============== Types ==============
 
@@ -177,15 +178,13 @@ const PERIODE_PRESETS = [
 ];
 
 function isoToday() {
-  return new Date().toISOString().slice(0, 10);
+  return todayYmd();
 }
 function isoDaysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return daysAgoYmd(n);
 }
 function formatDateID(iso: string) {
-  return new Date(iso).toLocaleDateString('id-ID', {
+  return parseYmd(iso).toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

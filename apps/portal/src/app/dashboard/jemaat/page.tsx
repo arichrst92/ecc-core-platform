@@ -15,6 +15,7 @@ import {
   type JemaatFilterState,
 } from '@/components/jemaat/filter-bar';
 import { apiClient } from '@/lib/api-client';
+import { todayYmd } from '@/lib/dates';
 
 function JemaatPageInner() {
   const sp = useSearchParams();
@@ -119,7 +120,7 @@ function JemaatPageInner() {
       } else {
         const a = document.createElement('a');
         a.href = url;
-        a.download = `jemaat-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `jemaat-${todayYmd()}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

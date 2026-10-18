@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
 import { ExportButtons, selectCls, useCabangOptions } from '@/components/report/report-ui';
+import { todayYmd } from '@/lib/dates';
 
 type Status = 'DIUNDANG' | 'TERLIBAT' | 'FOLLOWUP' | 'TERDAFTAR';
 
@@ -132,7 +133,7 @@ export default function TamuPage() {
           hadir, dan ke <i>Sudah terdaftar</i> saat tamu mendaftar Els App.
         </p>
       </div>
-      <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${new Date().toISOString().slice(0, 10)}`} />
+      <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${todayYmd()}`} />
       </div>
 
       {/* Ringkasan per status (klik untuk filter) */}

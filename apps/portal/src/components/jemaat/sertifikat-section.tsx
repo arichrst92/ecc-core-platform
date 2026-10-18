@@ -11,6 +11,7 @@ import { Award, FileText, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucid
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { todayYmd } from '@/lib/dates';
 
 interface Sertifikat {
   id: string;
@@ -171,7 +172,7 @@ function SertifikatFormModal({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [nama, setNama] = useState(item?.nama ?? '');
-  const [tanggal, setTanggal] = useState(item?.tanggal.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  const [tanggal, setTanggal] = useState(item?.tanggal.slice(0, 10) ?? todayYmd());
   const [file, setFile] = useState<File | null>(null);
 
   const saveMut = useMutation({

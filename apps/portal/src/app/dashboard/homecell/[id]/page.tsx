@@ -24,6 +24,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
 import { HomecellBoardSection } from '@/components/group/group-content';
+import { todayYmd, parseYmd } from '@/lib/dates';
 
 interface Homecell {
   id: string;
@@ -245,11 +246,11 @@ export default function HomecellDetailPage() {
                   </td>
                   <td className="px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
                   <td className="px-5 py-3 text-neutral-600">
-                    {new Date(m.tanggalBergabung).toLocaleDateString('id-ID')}
+                    {parseYmd(m.tanggalBergabung).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-5 py-3 text-neutral-600">
                     {m.tanggalKeluar
-                      ? new Date(m.tanggalKeluar).toLocaleDateString('id-ID')
+                      ? parseYmd(m.tanggalKeluar).toLocaleDateString('id-ID')
                       : '-'}
                   </td>
                   <td className="px-5 py-3">
@@ -337,7 +338,7 @@ function AddMemberModal({
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tanggalBergabung, setTanggalBergabung] = useState<string>(
-    new Date().toISOString().slice(0, 10),
+    todayYmd(),
   );
   const [catatan, setCatatan] = useState('');
 
@@ -533,7 +534,7 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
                     className="text-brand-600 hover:underline font-medium inline-flex items-center gap-1.5"
                   >
                     <Calendar className="w-3.5 h-3.5" />
-                    {new Date(s.tanggal).toLocaleDateString('id-ID', {
+                    {parseYmd(s.tanggal).toLocaleDateString('id-ID', {
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',

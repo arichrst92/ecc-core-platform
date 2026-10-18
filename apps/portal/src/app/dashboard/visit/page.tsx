@@ -29,6 +29,7 @@ import {
   useCabangOptions,
   type PeriodState,
 } from '@/components/report/report-ui';
+import { todayYmd } from '@/lib/dates';
 
 interface JemaatLite {
   id: string;
@@ -239,7 +240,7 @@ export default function VisitPage() {
             {per ? `${per.label ? `${per.label} · ` : ''}${fmtTgl(per.from)} – ${fmtTgl(per.to)}` : 'Semua waktu'}
           </p>
         </div>
-        <ExportButtons endpoint="/admin/visit/export" params={params} filename={`visit-${new Date().toISOString().slice(0, 10)}`} />
+        <ExportButtons endpoint="/admin/visit/export" params={params} filename={`visit-${todayYmd()}`} />
       </div>
 
       {/* Filters */}

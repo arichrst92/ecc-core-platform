@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { parseYmd } from '@/lib/dates';
 
 export interface DeletableSchedule {
   id: string;
@@ -45,7 +46,7 @@ export function DeleteScheduleDialog({
   });
 
   if (!schedule) return null;
-  const tgl = new Date(schedule.tanggal).toLocaleDateString('id-ID', {
+  const tgl = parseYmd(schedule.tanggal).toLocaleDateString('id-ID', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',

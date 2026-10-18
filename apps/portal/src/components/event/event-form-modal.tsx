@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Loader2, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { todayYmd } from '@/lib/dates';
 
 export type EventFormValues = {
   judul: string;
@@ -83,7 +84,7 @@ interface CabangGereja {
 const EMPTY: EventFormValues = {
   judul: '',
   deskripsi: '',
-  tanggalMulai: new Date().toISOString().slice(0, 10),
+  tanggalMulai: todayYmd(),
   tipeBayar: 'GRATIS',
   tags: [],
   butuhKehadiran: false,

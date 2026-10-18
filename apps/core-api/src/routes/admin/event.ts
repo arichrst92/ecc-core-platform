@@ -1700,6 +1700,20 @@ eventRouter.post('/:id/donations', async (req, res) => {
   // Resolve / create participation
   const participation = await ensureParticipation(event.id, req.user.jemaatId);
 
+  // Nominal tetap = bayar sekali saja. Donasi berkali-kali hanya untuk
+  // event sukarela (NOMINAL_BEBAS).
+  if (event.tipeBayar === 'NOMINAL_TETAP') {
+    const sudahBayar =
+      ['MENUNGGU_VERIFIKASI', 'BAYAR', 'HADIR'].includes(participation.status) ||
+      !!participation.buktiTransferUrl ||
+      (await prisma.eventDonation.count({
+        where: { participationId: participation.id, status: { not: 'BATAL' } },
+      })) > 0;
+    if (sudahBayar) {
+      throw BadRequest('Event ini nominal tetap — pembayaran hanya sekali dan sudah tercatat.');
+    }
+  }
+
   const created = await prisma.eventDonation.create({
     data: {
       participationId: participation.id,

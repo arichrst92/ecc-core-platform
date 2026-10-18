@@ -6,7 +6,7 @@ const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.
 /**
  * Web Action Token exchange (per backend-request-event-bebas-web-action-token.md).
  *
- * App membuka /event/{id}/pembayaran?wt={token}. Di sini (server-side):
+ * App membuka /bayar/event/{id}?wt={token} (versi lama: /event/{id}/pembayaran). Di sini (server-side):
  *   1. Tukar token → session web ke BE (/web-action/exchange)
  *   2. Simpan session di cookie httpOnly
  *   3. Redirect 302 ke URL yang sama TANPA ?wt (token tidak tersisa di history)
@@ -16,7 +16,7 @@ const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.
 async function handleWebActionToken(req: NextRequest): Promise<NextResponse | null> {
   const { pathname, searchParams } = req.nextUrl;
   const wt = searchParams.get('wt');
-  if (!wt || !/^\/event\/[^/]+\/pembayaran\/?$/.test(pathname)) return null;
+  if (!wt || !/^\/(event\/[^/]+\/pembayaran|bayar\/event\/[^/]+)\/?$/.test(pathname)) return null;
 
   const clean = req.nextUrl.clone();
   clean.searchParams.delete('wt');
@@ -92,6 +92,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/persembahan' ||
     pathname.startsWith('/persembahan/') ||
     pathname === '/event/pembayaran' ||
+    pathname.startsWith('/bayar/') ||
     pathname.startsWith('/event/pembayaran/') ||
     /^\/event\/[^/]+\/(register|payment|pembayaran)/.test(pathname) ||
     // Universal Link target: /event/{slug_or_uuid} harus live supaya "Kembali ke App"

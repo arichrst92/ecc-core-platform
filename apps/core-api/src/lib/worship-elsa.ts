@@ -197,3 +197,36 @@ export function startWorshipElsaWorker() {
   }, TICK_MS);
   timer.unref();
 }
+
+/** Cari binary di PATH (atau path absolut). */
+async function binExists(bin: string): Promise<boolean> {
+  const candidates = bin.includes('/') ? [bin] : (process.env.PATH ?? '').split(':').filter(Boolean).map((d) => path.join(d, bin));
+  for (const c of candidates) {
+    try {
+      await fs.access(c, fs.constants.X_OK);
+      return true;
+    } catch {
+      /* lanjut */
+    }
+  }
+  return false;
+}
+
+/** Kesiapan Elsa (untuk Server Health). */
+export async function elsaReadiness() {
+  const [ffmpeg, whisper, small, medium] = await Promise.all([
+    binExists(FFMPEG_BIN),
+    binExists(WHISPER_BIN),
+    fs.access(path.join(MODEL_DIR, MODEL.CEPAT)).then(() => true, () => false),
+    fs.access(path.join(MODEL_DIR, MODEL.TELITI)).then(() => true, () => false),
+  ]);
+  return {
+    enabled: process.env.WORSHIP_ELSA_DISABLED !== '1',
+    ffmpeg,
+    whisper,
+    modelCepat: small,
+    modelTeliti: medium,
+    runningJobId: running?.jobId ?? null,
+    nightWindow: isNightWindow(),
+  };
+}

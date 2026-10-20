@@ -23,6 +23,8 @@ import fs from 'node:fs/promises';
 import { prisma } from '@ecc/database';
 import { UPLOADS_DIR } from '../../lib/storage.js';
 import { logger } from '../../lib/logger.js';
+import { WORSHIP_DIR } from '../../lib/worship-media.js';
+import { elsaReadiness } from '../../lib/worship-elsa.js';
 
 export const serverHealthRouter = Router();
 
@@ -135,6 +137,20 @@ serverHealthRouter.get('/', async (_req, res) => {
     notifByType[g.type]![g.status] = g._count._all;
   }
 
+  // ===== ECC Worship (audio privat + Elsa) =====
+  const since7 = new Date(Date.now() - 7 * 86400_000);
+  const [worshipSizeBytes, elsa, elsaGrouped, worshipSongs, worshipPlays7] = await Promise.all([
+    dirSize(WORSHIP_DIR),
+    elsaReadiness().catch(() => null),
+    prisma.worshipSyncJob
+      .groupBy({ by: ['status'], where: { OR: [{ status: { in: ['QUEUED', 'RUNNING'] } }, { createdAt: { gte: since7 } }] }, _count: { _all: true } })
+      .catch(() => []),
+    prisma.worshipSong.count({ where: { audioFile: { not: null } } }).catch(() => -1),
+    prisma.worshipPlay.count({ where: { createdAt: { gte: since7 } } }).catch(() => -1),
+  ]);
+  const elsaJobs: Record<string, number> = {};
+  for (const g of elsaGrouped) elsaJobs[g.status] = g._count._all;
+
   const tookMs = Date.now() - startMs;
   res.json({
     success: true,
@@ -174,6 +190,14 @@ serverHealthRouter.get('/', async (_req, res) => {
         uploadsDir: UPLOADS_DIR,
         uploadsSizeBytes: uploadsBytes,
         uploadsError,
+      },
+      worship: {
+        dir: WORSHIP_DIR,
+        sizeBytes: worshipSizeBytes,
+        songsWithAudio: worshipSongs,
+        plays7d: worshipPlays7,
+        elsa,
+        elsaJobs,
       },
       database: {
         connectionCount: dbConnections,

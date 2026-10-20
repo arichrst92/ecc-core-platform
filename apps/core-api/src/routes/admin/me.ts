@@ -1253,6 +1253,9 @@ meRouter.delete('/', async (req, res) => {
       const e = await tx.diagnosticsErrorEvent.deleteMany({ where: { userNoHp: jemaat.noHp } });
       errorEventsDeleted = e.count;
     }
+    // ECC Worship: riwayat putar/unduh dianonimkan (angka statistik tetap).
+    await tx.worshipPlay.updateMany({ where: { jemaatId: jemaat.id }, data: { jemaatId: null } });
+    await tx.worshipDownload.updateMany({ where: { jemaatId: jemaat.id }, data: { jemaatId: null } });
     return { updated, revokedCount, telemetryDeleted, errorEventsDeleted };
   });
 

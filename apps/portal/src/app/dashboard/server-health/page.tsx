@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Bell,
   Settings,
+  Music,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -59,6 +60,22 @@ interface ServerHealth {
     uploadsDir: string;
     uploadsSizeBytes: number;
     uploadsError: string | null;
+  };
+  worship?: {
+    dir: string;
+    sizeBytes: number;
+    songsWithAudio: number;
+    plays7d: number;
+    elsa: {
+      enabled: boolean;
+      ffmpeg: boolean;
+      whisper: boolean;
+      modelCepat: boolean;
+      modelTeliti: boolean;
+      runningJobId: string | null;
+      nightWindow: boolean;
+    } | null;
+    elsaJobs: Record<string, number>;
   };
   database: {
     connectionCount: number | null;
@@ -274,6 +291,39 @@ export default function ServerHealthPage() {
             </Card>
 
             {/* Entities */}
+            {d.worship ? (
+              <Card title="ECC Worship & Elsa" icon={Music}>
+                <Row label="Audio dir" value={d.worship.dir} small />
+                <Row label="Size" value={fmtBytes(d.worship.sizeBytes)} />
+                <Row label="Lagu ber-audio" value={String(d.worship.songsWithAudio)} />
+                <Row label="Putar (7 hari)" value={String(d.worship.plays7d)} />
+                {d.worship.elsa ? (
+                  <>
+                    <Row
+                      label="Elsa siap"
+                      value={
+                        !d.worship.elsa.enabled
+                          ? 'Dimatikan'
+                          : [d.worship.elsa.ffmpeg ? null : 'ffmpeg', d.worship.elsa.whisper ? null : 'whisper-cli', d.worship.elsa.modelCepat ? null : 'model small', d.worship.elsa.modelTeliti ? null : 'model medium']
+                              .filter(Boolean)
+                              .join(', ') || 'Ya'
+                      }
+                      accent={
+                        d.worship.elsa.enabled && d.worship.elsa.ffmpeg && d.worship.elsa.whisper && d.worship.elsa.modelCepat ? 'text-green-700' : 'text-amber-700'
+                      }
+                    />
+                    <Row label="Sedang diproses" value={d.worship.elsa.runningJobId ? 'Ya' : 'Tidak'} />
+                    <Row label="Jendela malam (2 thread)" value={d.worship.elsa.nightWindow ? 'Aktif' : 'Tidak'} />
+                  </>
+                ) : null}
+                <Row
+                  label="Job Elsa (antri/jalan/gagal 7h)"
+                  value={`${d.worship.elsaJobs.QUEUED ?? 0} / ${d.worship.elsaJobs.RUNNING ?? 0} / ${d.worship.elsaJobs.FAILED ?? 0}`}
+                  accent={(d.worship.elsaJobs.FAILED ?? 0) > 0 ? 'text-amber-700' : undefined}
+                />
+              </Card>
+            ) : null}
+
             <Card title="Entity counts" icon={Activity}>
               <Row label="Jemaat aktif" value={fmtNumber(d.entities.jemaatAktif)} />
               <Row label="Ibadah aktif" value={fmtNumber(d.entities.ibadahAktif)} />

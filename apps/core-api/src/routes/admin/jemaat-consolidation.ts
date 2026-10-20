@@ -11,6 +11,9 @@
  *
  * Fulltimer only. Role sheet diabaikan — semua jemaat dipastikan punya
  * role Jemaat → Jemaat Tetap.
+ *
+ * Kolom "Spiritual Journey" (mis. "Expand"): jemaat diberi role yang
+ * disyaratkan tahap tersebut DAN semua tahap sebelumnya (yang belum dipenuhi).
  */
 import { Router } from 'express';
 import multer from 'multer';
@@ -27,8 +30,10 @@ import {
   diffField,
   majority,
   matchRow,
+  journeyStepsToGrant,
   normalizeName,
   parseSheetRows,
+  suggestJourneyStep,
   suggestPelayanan,
   type JemaatLite,
 } from '../../lib/jemaat-consolidation.js';
@@ -67,6 +72,30 @@ async function loadAllJemaat(): Promise<JemaatLite[]> {
     cabangId: r.cabangId,
     cabangNama: r.cabang.nama,
   }));
+}
+
+/** Tahap Spiritual Journey aktif, urut. */
+async function loadJourneySteps() {
+  return prisma.spiritualJourneyStep.findMany({
+    where: { isActive: true },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+    select: {
+      id: true,
+      judul: true,
+      urutan: true,
+      roleId: true,
+      subRoleId: true,
+      subRoleStatusId: true,
+      role: {
+        select: {
+          nama: true,
+          subRoles: { where: { isActive: true }, orderBy: { nama: 'asc' }, select: { id: true, nama: true } },
+        },
+      },
+      subRole: { select: { nama: true } },
+      subRoleStatus: { select: { nama: true } },
+    },
+  });
 }
 
 // ============================================================
@@ -203,6 +232,15 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
     memberCount: rows.filter((r) => r.ministry === nama).length,
   }));
 
+  // ---- Spiritual Journey ----
+  const steps = await loadJourneySteps();
+  const journeyNames = [...new Set(rows.map((r) => r.spiritualJourney).filter((x): x is string => !!x))].sort();
+  const journeys = journeyNames.map((nama) => ({
+    sheetNama: nama,
+    suggestedStepId: suggestJourneyStep(nama, steps),
+    memberCount: rows.filter((r) => r.spiritualJourney === nama).length,
+  }));
+
   res.json({
     success: true,
     data: {
@@ -215,6 +253,18 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
       homecells,
       ministries,
       pelayananOptions: pelayanan,
+      journeys,
+      journeySteps: steps.map((st) => ({
+        id: st.id,
+        judul: st.judul,
+        urutan: st.urutan,
+        roleNama: st.role.nama,
+        subRoleId: st.subRoleId,
+        subRoleNama: st.subRole?.nama ?? null,
+        subRoleStatusNama: st.subRoleStatus?.nama ?? null,
+        // Tahap tanpa sub role → admin memilih sub role yang diberikan.
+        subRoleOptions: st.subRoleId ? [] : st.role.subRoles,
+      })),
     },
   });
 });
@@ -258,6 +308,7 @@ const applySchema = z.object({
           area: z.string().trim().max(100).nullable(),
           homecell: z.string().trim().max(150).nullable(),
           ministry: z.string().trim().max(100).nullable(),
+          spiritualJourney: z.string().trim().max(150).nullable().optional(),
         })
         .refine((r) => !!r.jemaatId !== !!r.create, 'Tiap baris wajib jemaatId atau create (salah satu).'),
     )
@@ -278,6 +329,10 @@ const applySchema = z.object({
       z.null(),
     ]),
   ),
+  // Nilai kolom Spiritual Journey di sheet → id tahap (null = lewati).
+  journeyMap: z.record(z.string(), z.string().uuid().nullable()).default({}),
+  // Tahap tanpa sub role → sub role yang diberikan (stepId → subRoleId).
+  journeySubRole: z.record(z.string().uuid(), z.string().uuid()).default({}),
 });
 
 type RowResult = { rowNo: number; jemaatId: string | null; ok: boolean; created?: boolean; changes: string[]; error?: string };
@@ -308,7 +363,31 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
     homecellMembers: 0,
     ministryMembers: 0,
     penggembalaanAdded: 0,
+    journeyRolesAdded: 0,
   };
+
+  // ---- Spiritual Journey: tahap + sub role yang diberikan ----
+  const journeySteps = await loadJourneySteps();
+  const stepIndex = new Map(journeySteps.map((st, i) => [st.id, i]));
+  const grantSubRole = new Map<string, string>();
+  for (const st of journeySteps) {
+    if (st.subRoleId) {
+      grantSubRole.set(st.id, st.subRoleId);
+      continue;
+    }
+    const chosen = input.journeySubRole[st.id];
+    const valid = chosen && st.role.subRoles.some((x) => x.id === chosen) ? chosen : st.role.subRoles[0]?.id;
+    if (valid) grantSubRole.set(st.id, valid);
+  }
+  const journeyTarget = new Map<string, number>();
+  for (const [sheetNama, stepId] of Object.entries(input.journeyMap)) {
+    if (!stepId) continue;
+    const idx = stepIndex.get(stepId);
+    if (idx === undefined) throw BadRequest(`Tahap Spiritual Journey untuk "${sheetNama}" tidak ditemukan / tidak aktif.`);
+    journeyTarget.set(sheetNama.trim().toLowerCase(), idx);
+  }
+  // Sub role yang dipakai tahap journey — jangan diubah oleh normalisasi Jemaat Tetap.
+  const journeySubRoleIds = new Set(grantSubRole.values());
 
   // ---- Ministry: map / buat pelayanan ----
   const ministryTarget = new Map<string, { pelayananId: string; roleId: string }>();
@@ -462,9 +541,45 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
         changes.push('role');
         summary.rolesSet += 1;
       } else if (!roles.some((x) => x.subRoleId === tetapId)) {
-        await prisma.jemaatRole.update({ where: { id: roles[0]!.id }, data: { subRoleId: tetapId } });
+        // Role Jemaat yang menjadi syarat tahap Spiritual Journey tidak diubah.
+        const convertible = roles.find((x) => !journeySubRoleIds.has(x.subRoleId));
+        if (convertible) {
+          await prisma.jemaatRole.update({ where: { id: convertible.id }, data: { subRoleId: tetapId } });
+        } else {
+          await prisma.jemaatRole.create({ data: { jemaatId: jemaatId, roleId: jemaatRole.id, subRoleId: tetapId } });
+        }
         changes.push('role');
         summary.rolesSet += 1;
+      }
+
+      // Spiritual Journey: role tahap target + semua tahap sebelumnya.
+      const targetIdx = r.spiritualJourney ? journeyTarget.get(r.spiritualJourney.trim().toLowerCase()) : undefined;
+      if (targetIdx !== undefined) {
+        const held = await prisma.jemaatRole.findMany({
+          where: { jemaatId, isActive: true },
+          select: { roleId: true, subRoleId: true, subRoleStatusId: true },
+        });
+        const target = journeySteps[targetIdx]!;
+        let added = 0;
+        for (const st of journeyStepsToGrant(journeySteps, targetIdx, held)) {
+          const subRoleId = grantSubRole.get(st.id);
+          if (!subRoleId) throw new Error(`Role "${st.role.nama}" untuk tahap "${st.judul}" belum punya sub role.`);
+          await prisma.jemaatRole.create({
+            data: {
+              jemaatId,
+              roleId: st.roleId,
+              subRoleId,
+              subRoleStatusId: st.subRoleStatusId ?? null,
+              catatan: `Konsolidasi: Spiritual Journey "${target.judul}" (tahap ${st.judul})`,
+            },
+          });
+          held.push({ roleId: st.roleId, subRoleId, subRoleStatusId: st.subRoleStatusId ?? null });
+          added += 1;
+        }
+        if (added) {
+          changes.push(`spiritual-journey:${target.judul}`);
+          summary.journeyRolesAdded += added;
+        }
       }
 
       // Homecell

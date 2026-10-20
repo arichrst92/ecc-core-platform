@@ -8,6 +8,8 @@ import {
   normalizePhone,
   parseSheetRows,
   suggestPelayanan,
+  suggestJourneyStep,
+  journeyStepsToGrant,
   type JemaatLite,
   type SheetRow,
 } from './jemaat-consolidation.js';
@@ -154,5 +156,41 @@ describe('struktur', () => {
     expect(suggestPelayanan('WORSHIP', p)).toBe('w');
     expect(suggestPelayanan('CKIDS MINSITER', p)).toBe('c');
     expect(suggestPelayanan('CMP', p)).toBe(null);
+  });
+});
+
+describe('spiritual journey', () => {
+  const steps = [
+    { id: 's1', judul: 'Connect', roleId: 'r1', subRoleId: null, subRoleStatusId: null },
+    { id: 's2', judul: 'Grow', roleId: 'r2', subRoleId: 'sr2', subRoleStatusId: null },
+    { id: 's3', judul: 'Expand', roleId: 'r3', subRoleId: null, subRoleStatusId: 'st3' },
+    { id: 's4', judul: 'Lead & Multiply', roleId: 'r4', subRoleId: null, subRoleStatusId: null },
+  ];
+
+  it('mencocokkan nilai sheet ke tahap', () => {
+    expect(suggestJourneyStep('Expand', steps)).toBe('s3');
+    expect(suggestJourneyStep('  EXPAND ', steps)).toBe('s3');
+    expect(suggestJourneyStep('3', steps)).toBe('s3');
+    expect(suggestJourneyStep('Tahap 2', steps)).toBe('s2');
+    expect(suggestJourneyStep('lead and multiply', steps)).toBe(null);
+    expect(suggestJourneyStep('Lead', steps)).toBe('s4');
+    expect(suggestJourneyStep('Lainnya', steps)).toBe(null);
+  });
+
+  it('memberi tahap target + semua tahap sebelumnya yang belum dipenuhi', () => {
+    const held = [{ roleId: 'r2', subRoleId: 'sr2', subRoleStatusId: null }];
+    expect(journeyStepsToGrant(steps, 2, held).map((s) => s.id)).toEqual(['s1', 's3']);
+    expect(journeyStepsToGrant(steps, 0, []).map((s) => s.id)).toEqual(['s1']);
+    expect(journeyStepsToGrant(steps, -1, []).map((s) => s.id)).toEqual([]);
+    // Status wajib: role sama tanpa status belum memenuhi tahap 3.
+    expect(journeyStepsToGrant(steps, 2, [...held, { roleId: 'r1', subRoleId: 'x', subRoleStatusId: null }, { roleId: 'r3', subRoleId: 'y', subRoleStatusId: null }]).map((s) => s.id)).toEqual(['s3']);
+  });
+
+  it('membaca kolom Spiritual Journey', () => {
+    const { rows } = parseSheetRows([
+      ['Nama Lengkap', 'No HP', 'Spiritual Journey'],
+      ['Budi', '0812345678', 'Expand'],
+    ]);
+    expect(rows[0]!.spiritualJourney).toBe('Expand');
   });
 });

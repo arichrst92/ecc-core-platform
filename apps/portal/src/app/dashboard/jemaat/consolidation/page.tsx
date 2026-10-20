@@ -3,7 +3,7 @@
 /**
  * Konsolidasi data jemaat dari spreadsheet (rekap manual Shiftsoft).
  * Alur: upload .xlsx → preview (pencocokan ke DB + diff) → human check per
- * baris / field / homecell / ministry → Apply → laporan hasil.
+ * baris / field / homecell / ministry / Spiritual Journey → Apply → laporan hasil.
  * Backend: /admin/jemaat-consolidation/{preview,apply} (Fulltimer only).
  */
 import { useMemo, useRef, useState } from 'react';
@@ -48,6 +48,7 @@ interface Row {
   area: string | null;
   homecell: string | null;
   ministry: string | null;
+  spiritualJourney?: string | null;
   statusPernikahan: string | null;
   tanggalBergabungGereja: string | null;
   match: { status: MatchStatus; jemaatId: string | null; candidates: Candidate[] };
@@ -70,7 +71,21 @@ interface Preview {
   homecells: (LeaderPlan & { areaNama: string | null })[];
   ministries: { sheetNama: string; suggestedPelayananId: string | null; memberCount: number }[];
   pelayananOptions: { id: string; nama: string }[];
+  journeys?: { sheetNama: string; suggestedStepId: string | null; memberCount: number }[];
+  journeySteps?: JourneyStep[];
 }
+interface JourneyStep {
+  id: string;
+  judul: string;
+  urutan: number;
+  roleNama: string;
+  subRoleId: string | null;
+  subRoleNama: string | null;
+  subRoleStatusNama: string | null;
+  subRoleOptions: { id: string; nama: string }[];
+}
+const stepRoleLabel = (st: JourneyStep, subNama?: string | null) =>
+  [st.roleNama, st.subRoleNama ?? subNama ?? null, st.subRoleStatusNama].filter(Boolean).join(' → ');
 interface ApplyResult {
   summary: Record<string, number>;
   results: { rowNo: number; jemaatId: string | null; ok: boolean; created?: boolean; changes: string[]; error?: string }[];
@@ -125,13 +140,15 @@ export default function JemaatConsolidationPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [data, setData] = useState<Preview | null>(null);
-  const [tab, setTab] = useState<'data' | 'homecell' | 'ministry' | 'apply'>('data');
+  const [tab, setTab] = useState<'data' | 'homecell' | 'ministry' | 'journey' | 'apply'>('data');
   const [filter, setFilter] = useState<'all' | 'review' | 'changes'>('review');
   const [q, setQ] = useState('');
   const [choices, setChoices] = useState<Record<number, RowChoice>>({});
   const [areaPic, setAreaPic] = useState<Record<string, string | null>>({});
   const [hcPic, setHcPic] = useState<Record<string, string | null>>({});
   const [ministry, setMinistry] = useState<Record<string, string>>({}); // 'skip' | 'create:<nama>' | pelayananId
+  const [journey, setJourney] = useState<Record<string, string>>({}); // sheet value → stepId | 'skip'
+  const [journeySub, setJourneySub] = useState<Record<string, string>>({}); // stepId → subRoleId
   const [result, setResult] = useState<ApplyResult | null>(null);
 
   const candById = useMemo(() => {
@@ -160,6 +177,12 @@ export default function JemaatConsolidationPage() {
     setMinistry(
       Object.fromEntries(
         p.ministries.map((m) => [m.sheetNama, m.suggestedPelayananId ?? `create:${titleCase(m.sheetNama)}`]),
+      ),
+    );
+    setJourney(Object.fromEntries((p.journeys ?? []).map((j) => [j.sheetNama, j.suggestedStepId ?? 'skip'])));
+    setJourneySub(
+      Object.fromEntries(
+        (p.journeySteps ?? []).filter((st) => !st.subRoleId && st.subRoleOptions[0]).map((st) => [st.id, st.subRoleOptions[0]!.id]),
       ),
     );
   }
@@ -193,11 +216,11 @@ export default function JemaatConsolidationPage() {
         .map((r) => {
           const c = choices[r.rowNo]!;
           if (!c.jemaatId && c.create) {
-            return { rowNo: r.rowNo, create: createPayload(r), area: r.area, homecell: r.homecell, ministry: r.ministry };
+            return { rowNo: r.rowNo, create: createPayload(r), area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null };
           }
           const updates: Record<string, string> = {};
           for (const f of c.fields) if (r[f]) updates[f] = r[f]!;
-          return { rowNo: r.rowNo, jemaatId: c.jemaatId!, updates, area: r.area, homecell: r.homecell, ministry: r.ministry };
+          return { rowNo: r.rowNo, jemaatId: c.jemaatId!, updates, area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null };
         });
       const ministryMap: Record<string, { pelayananId: string } | { createNama: string } | null> = {};
       for (const [k, v] of Object.entries(ministry)) {
@@ -213,6 +236,8 @@ export default function JemaatConsolidationPage() {
             .filter((h) => h.areaNama)
             .map((h) => ({ nama: h.nama, areaNama: h.areaNama!, picJemaatId: hcPic[hcKey(h.areaNama, h.nama)] ?? null })),
           ministryMap,
+          journeyMap: Object.fromEntries(Object.entries(journey).map(([k, v]) => [k, v === 'skip' ? null : v])),
+          journeySubRole: journeySub,
         },
         { timeout: 300_000 },
       );
@@ -382,6 +407,7 @@ export default function JemaatConsolidationPage() {
                 ['data', 'Data Pribadi'],
                 ['homecell', `Homecell (${data.areas.length} area, ${data.homecells.length})`],
                 ['ministry', `Ministry (${data.ministries.length})`],
+                ['journey', `Spiritual Journey (${data.journeys?.length ?? 0})`],
                 ['apply', 'Ringkasan & Apply'],
               ] as const
             ).map(([k, label]) => (
@@ -534,6 +560,16 @@ export default function JemaatConsolidationPage() {
             </div>
           )}
 
+          {tab === 'journey' && (
+            <JourneyTab
+              data={data}
+              journey={journey}
+              setJourney={setJourney}
+              journeySub={journeySub}
+              setJourneySub={setJourneySub}
+            />
+          )}
+
           {tab === 'apply' && (
             <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3 text-sm">
               <h2 className="font-semibold text-neutral-900">Yang akan dilakukan</h2>
@@ -554,6 +590,13 @@ export default function JemaatConsolidationPage() {
                   Ministry: {Object.values(ministry).filter((v) => v.startsWith('create:')).length} pelayanan baru,{' '}
                   {Object.values(ministry).filter((v) => v === 'skip').length} dilewati.
                 </li>
+                {(data.journeys?.length ?? 0) > 0 && (
+                  <li>
+                    Spiritual Journey: {Object.values(journey).filter((v) => v !== 'skip').length} nilai dipetakan ke tahap,{' '}
+                    {Object.values(journey).filter((v) => v === 'skip').length} dilewati. Jemaat diberi role tahap tersebut dan
+                    semua tahap sebelumnya (yang belum dimiliki).
+                  </li>
+                )}
               </ul>
               {dupTargets.size > 0 && (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 text-amber-800">
@@ -686,7 +729,7 @@ function RowCard({
           </span>
         )}
         <span className="text-xs text-neutral-500 ml-auto">
-          {[row.area, row.homecell, row.ministry].filter(Boolean).join(' · ')}
+          {[row.area, row.homecell, row.ministry, row.spiritualJourney ? `SJ: ${row.spiritualJourney}` : null].filter(Boolean).join(' · ')}
         </span>
       </div>
 
@@ -871,6 +914,134 @@ function LeaderTable({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ====================================================================
+//  Tab Spiritual Journey — petakan nilai sheet → tahap
+// ====================================================================
+
+function JourneyTab({
+  data,
+  journey,
+  setJourney,
+  journeySub,
+  setJourneySub,
+}: {
+  data: Preview;
+  journey: Record<string, string>;
+  setJourney: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  journeySub: Record<string, string>;
+  setJourneySub: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  const steps = data.journeySteps ?? [];
+  const journeys = data.journeys ?? [];
+  if (journeys.length === 0) {
+    return (
+      <div className="bg-white border border-neutral-200 rounded-xl p-6 text-sm text-neutral-500">
+        Sheet tidak punya kolom <b>Spiritual Journey</b> (atau semua kosong). Tambahkan kolom bernama &quot;Spiritual Journey&quot;
+        berisi nama tahap, mis. &quot;Expand&quot;.
+      </div>
+    );
+  }
+  const idxOf = (id: string) => steps.findIndex((st) => st.id === id);
+  const maxIdx = Math.max(-1, ...Object.values(journey).filter((v) => v !== 'skip').map(idxOf));
+  const needSub = steps.slice(0, maxIdx + 1).filter((st) => !st.subRoleId);
+  const subNama = (st: JourneyStep) => st.subRoleOptions.find((o) => o.id === journeySub[st.id])?.nama ?? null;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-neutral-600 text-xs uppercase">
+            <tr>
+              <th className="px-3 py-2 text-left">Nilai di sheet</th>
+              <th className="px-3 py-2 text-left">Jemaat</th>
+              <th className="px-3 py-2 text-left">Tahap tujuan</th>
+              <th className="px-3 py-2 text-left">Role yang diberikan</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {journeys.map((j) => {
+              const v = journey[j.sheetNama] ?? 'skip';
+              const idx = v === 'skip' ? -1 : idxOf(v);
+              return (
+                <tr key={j.sheetNama} className="align-top">
+                  <td className="px-3 py-2 font-medium">{j.sheetNama}</td>
+                  <td className="px-3 py-2">{j.memberCount}</td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={v}
+                      onChange={(e) => setJourney((p) => ({ ...p, [j.sheetNama]: e.target.value }))}
+                      className="border border-neutral-300 rounded-lg px-2 py-1 text-sm"
+                    >
+                      <option value="skip">— Lewati —</option>
+                      {steps.map((st, i) => (
+                        <option key={st.id} value={st.id}>
+                          {i + 1}. {st.judul}
+                        </option>
+                      ))}
+                    </select>
+                    {!j.suggestedStepId && v === 'skip' && (
+                      <div className="text-[11px] text-amber-700 mt-1">Tidak cocok otomatis — pilih tahapnya.</div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-neutral-600">
+                    {idx < 0 ? (
+                      <span className="text-neutral-400">—</span>
+                    ) : (
+                      <ol className="space-y-0.5">
+                        {steps.slice(0, idx + 1).map((st, i) => (
+                          <li key={st.id}>
+                            <span className="text-neutral-400">{i + 1}.</span> {st.judul}:{' '}
+                            <span className="text-neutral-800">{stepRoleLabel(st, subNama(st))}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="text-xs text-neutral-500 p-3 border-t border-neutral-100">
+          Jemaat diberi role yang disyaratkan tahap tujuan <b>dan semua tahap sebelumnya</b>. Role yang sudah dimiliki tidak
+          ditambahkan lagi, role lain tidak diubah.
+        </p>
+      </div>
+
+      {needSub.length > 0 && (
+        <div className="bg-white border border-neutral-200 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-1">Sub role untuk tahap tanpa sub role</h3>
+          <p className="text-xs text-neutral-500 mb-3">Tahap berikut hanya mensyaratkan role — pilih sub role yang diberikan.</p>
+          <div className="space-y-2">
+            {needSub.map((st) => (
+              <div key={st.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="w-48 text-neutral-700">
+                  {st.judul} <span className="text-neutral-400">({st.roleNama})</span>
+                </span>
+                {st.subRoleOptions.length === 0 ? (
+                  <span className="text-xs text-red-600">Role ini belum punya sub role — tambahkan di Role Jemaat.</span>
+                ) : (
+                  <select
+                    value={journeySub[st.id] ?? ''}
+                    onChange={(e) => setJourneySub((p) => ({ ...p, [st.id]: e.target.value }))}
+                    className="border border-neutral-300 rounded-lg px-2 py-1 text-sm"
+                  >
+                    {st.subRoleOptions.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.nama}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

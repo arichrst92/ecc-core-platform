@@ -4,6 +4,7 @@
  * Dipakai routes/admin/jemaat-consolidation.ts. Lihat test di sebelahnya.
  */
 import { excelSerialToDate, type CellValue } from './xlsx-lite.js';
+import { meetsStep, type HeldRole, type StepRequirement } from './spiritual-journey.js';
 
 // ------------------------------------------------------------
 //  Normalisasi
@@ -73,6 +74,8 @@ export interface SheetRow {
   statusPernikahan: string | null;
   tanggalBergabungGereja: string | null; // YYYY-MM-DD
   username: string | null;
+  /** Tahap Spiritual Journey (teks bebas dari sheet, mis. "Expand"). */
+  spiritualJourney: string | null;
 }
 
 const HEADER_ALIASES: Record<keyof Omit<SheetRow, 'rowNo'>, string[]> = {
@@ -90,6 +93,15 @@ const HEADER_ALIASES: Record<keyof Omit<SheetRow, 'rowNo'>, string[]> = {
   statusPernikahan: ['status'],
   tanggalBergabungGereja: ['tanggal bergabung', 'berjemaat di ecc sejak'],
   username: ['username els 1', 'username'],
+  spiritualJourney: [
+    'spiritual journey',
+    'tahap spiritual journey',
+    'fase spiritual journey',
+    'spiritual growth',
+    'journey',
+    'fase',
+    'tahap',
+  ],
 };
 
 export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missingColumns: string[] } {
@@ -126,6 +138,7 @@ export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missing
       statusPernikahan: status && MARITAL.has(status.toLowerCase()) ? status : null,
       tanggalBergabungGereja: dateOnly(at('tanggalBergabungGereja')),
       username: text(at('username')),
+      spiritualJourney: text(at('spiritualJourney')),
     });
   });
   return { rows: out, missingColumns: missing };
@@ -275,4 +288,39 @@ export function suggestPelayanan(
 ): string | null {
   const target = MINISTRY_SYNONYMS[sheetNama.toUpperCase()] ?? sheetNama.toLowerCase();
   return pelayanan.find((p) => p.nama.toLowerCase() === target)?.id ?? null;
+}
+
+// ------------------------------------------------------------
+//  Spiritual Journey
+// ------------------------------------------------------------
+
+const journeyKey = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Cocokkan nilai sheet ke tahap Spiritual Journey (steps urut):
+ * judul persis (abaikan huruf besar & tanda baca) → nomor tahap ("3",
+ * "Tahap 3") → judul mengandung / dikandung nilai sheet. Null kalau tidak ada.
+ */
+export function suggestJourneyStep(sheetVal: string, steps: { id: string; judul: string }[]): string | null {
+  const k = journeyKey(sheetVal);
+  if (!k) return null;
+  const exact = steps.find((s) => journeyKey(s.judul) === k);
+  if (exact) return exact.id;
+  const num = k.match(/^(?:tahap |fase |step )?(\d{1,2})$/);
+  if (num) return steps[Number(num[1]) - 1]?.id ?? null;
+  const partial = steps.filter((s) => {
+    const j = journeyKey(s.judul);
+    return j.includes(k) || k.includes(j);
+  });
+  return partial.length === 1 ? partial[0]!.id : null;
+}
+
+/**
+ * Tahap yang perlu diberikan role-nya agar jemaat mencapai `targetIndex`
+ * (tahap target + semua tahap sebelumnya). Tahap yang syaratnya sudah
+ * dipenuhi role yang dimiliki dilewati. `steps` harus sudah urut.
+ */
+export function journeyStepsToGrant<S extends StepRequirement>(steps: S[], targetIndex: number, held: HeldRole[]): S[] {
+  if (targetIndex < 0) return [];
+  return steps.slice(0, targetIndex + 1).filter((s) => !meetsStep(s, held));
 }

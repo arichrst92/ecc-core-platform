@@ -837,3 +837,27 @@ publicUnauthRouter.get('/website-content', publicBrowseLimiter, async (_req, res
 
   res.json({ success: true, data });
 });
+
+// ============================================================
+//  GET /public/worship/songs/:id — info share lagu ECC Worship
+//  (tanpa lirik & tanpa audio) untuk halaman eccchurch.global/worship/:id.
+// ============================================================
+publicUnauthRouter.get('/worship/songs/:id', publicBrowseLimiter, async (req, res) => {
+  const id = String(req.params.id ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw NotFound('Lagu tidak ditemukan');
+  const s = await prisma.worshipSong.findFirst({
+    where: { id, isPublished: true, audioFile: { not: null }, album: { isPublished: true } },
+    select: {
+      id: true,
+      judul: true,
+      ciptaan: true,
+      tahun: true,
+      durasi: true,
+      album: { select: { id: true, tipe: true, judul: true, coverUrl: true } },
+    },
+  });
+  if (!s) throw NotFound('Lagu tidak ditemukan');
+  const base = (process.env.PUBLIC_API_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const cover = s.album.coverUrl ? (/^https?:/i.test(s.album.coverUrl) ? s.album.coverUrl : `${base}${s.album.coverUrl}`) : null;
+  res.json({ success: true, data: { ...s, album: { ...s.album, coverUrl: cover } } });
+});

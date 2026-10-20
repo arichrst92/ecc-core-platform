@@ -99,6 +99,8 @@ export async function middleware(req: NextRequest) {
     // tombol di payment page bisa trigger iOS Universal Link / Android App Link.
     // Kalau app NOT installed, user tetap bisa lihat detail event (bukan coming-soon).
     /^\/event\/[^/]+$/.test(pathname) ||
+    // Share lagu ECC Worship (OG preview + tombol buka Els App).
+    /^\/worship\/[^/]+$/.test(pathname) ||
     pathname === '/privacy' ||
     pathname === '/support' ||
     pathname === '/contact' ||

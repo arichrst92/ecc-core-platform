@@ -6,6 +6,7 @@ import os from 'node:os';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
 import { startScheduledJobs } from './lib/scheduled-jobs.js';
+import { startWorshipElsaWorker } from './lib/worship-elsa.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
 // Default bind ke `0.0.0.0` (semua interfaces) supaya:
@@ -39,6 +40,8 @@ async function main() {
   // Kick off background maintenance (refresh-token cleanup, dst).
   // Aman dijalankan sebelum listen — pakai setTimeout internal untuk delay.
   startScheduledJobs();
+  // Worker "Sinkronkan dengan Elsa" (ECC Worship, whisper.cpp).
+  startWorshipElsaWorker();
   app.listen(PORT, HOST, () => {
     const bind = HOST === '0.0.0.0' ? 'all interfaces' : HOST;
     logger.info(`🚀 ECC Core API listening on ${HOST}:${PORT} (${bind})`);

@@ -63,6 +63,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // Broadcast
   { key: 'news', label: 'News', href: '/dashboard/news', group: 'Broadcast' },
   { key: 'renungan', label: 'Renungan', href: '/dashboard/renungan', group: 'Broadcast' },
+  { key: 'ecc-worship', label: 'ECC Worship', href: '/dashboard/worship', group: 'Broadcast' },
 
   // Developer Tools / Access Control
   { key: 'api-key', label: 'API Keys', href: '/dashboard/api-key', group: 'Developer Tools' },

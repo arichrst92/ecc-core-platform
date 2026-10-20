@@ -17,6 +17,7 @@ import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin/index.js';
 import { publicRouter } from './routes/public/index.js';
 import { publicUnauthRouter } from './routes/public-unauth.js';
+import { worshipMediaRouter } from './routes/worship-media.js';
 import { uploadRouter } from './routes/upload.js';
 import { diagnosticsRouter } from './routes/diagnostics.js';
 import { webActionMintRouter, webActionRouter } from './routes/web-action.js';
@@ -131,6 +132,8 @@ export function createApp(): Express {
   // Diakses sebelum login (splash, signup screen). Limit pakai globalLimiter
   // saja karena unauthenticated.
   app.use('/public', publicUnauthRouter);
+  // ECC Worship — streaming audio via URL bertanda tangan (tanpa JWT).
+  app.use('/worship-media', worshipMediaRouter);
 
   // Diagnostics — mobile fire-and-forget error reporting. No auth.
   // Lihat docs/backend-request-diagnostics-error-endpoint.md.

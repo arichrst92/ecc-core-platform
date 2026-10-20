@@ -320,6 +320,8 @@ model Jemaat {
   prayerAssignedBy             PrayerRequest[]               @relation("PrayerAssigner")
   prayerDidoakanBy             PrayerRequest[]               @relation("PrayerDidoakanBy")
   resolusi                     Resolusi[]                    @relation("ResolusiOwner")
+  // ECC Worship (2026-10-20)
+  worshipFavorites             WorshipFavorite[]             @relation("WorshipFavoriteJemaat")
 
   @@index([cabangId])
   @@index([noHp])
@@ -3359,4 +3361,165 @@ model Resolusi {
 
   @@index([jemaatId, tahun, urutan])
   @@map("resolusi")
+}
+
+// ============================================================
+// ECC WORSHIP — album & lagu original ECC (2026-10-20)
+// ============================================================
+// Album (tipe ALBUM) atau Single (tipe SINGLE = album berisi 1 lagu).
+// File audio disimpan PRIVAT (bukan /uploads) dan diputar lewat URL
+// bertanda tangan berumur pendek. Cover publik (dipakai OG share).
+enum WorshipAlbumTipe {
+  ALBUM
+  SINGLE
+
+  @@map("worship_album_tipe")
+}
+
+enum WorshipMode {
+  VOKAL
+  KARAOKE
+
+  @@map("worship_mode")
+}
+
+model WorshipAlbum {
+  id          String           @id @default(uuid()) @db.Uuid
+  tipe        WorshipAlbumTipe @default(ALBUM)
+  judul       String           @db.VarChar(200)
+  tahun       Int?
+  deskripsi   String?          @db.Text
+  coverUrl    String?          @map("cover_url") @db.Text
+  urutan      Int              @default(0)
+  isPublished Boolean          @default(false) @map("is_published")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  songs WorshipSong[]
+
+  @@index([tipe, isPublished, urutan])
+  @@map("worship_album")
+}
+
+model WorshipSong {
+  id             String   @id @default(uuid()) @db.Uuid
+  albumId        String   @map("album_id") @db.Uuid
+  judul          String   @db.VarChar(200)
+  ciptaan        String?  @db.VarChar(200)
+  tahun          Int?
+  lirik          String?  @db.Text
+  // [{ t: detik (float), line: string }] — null = belum disinkron.
+  lirikSinkron   Json?    @map("lirik_sinkron")
+  urutan         Int      @default(0)
+  isPublished    Boolean  @default(true) @map("is_published")
+  // Audio vokal (wajib sebelum publikasi) & karaoke (opsional). Path relatif di WORSHIP_DIR.
+  audioFile      String?  @map("audio_file") @db.VarChar(255)
+  audioMime      String?  @map("audio_mime") @db.VarChar(50)
+  audioSize      Int?     @map("audio_size")
+  durasi         Float?
+  karaokeFile    String?  @map("karaoke_file") @db.VarChar(255)
+  karaokeMime    String?  @map("karaoke_mime") @db.VarChar(50)
+  karaokeSize    Int?     @map("karaoke_size")
+  karaokeDurasi  Float?   @map("karaoke_durasi")
+  playsVokal     Int      @default(0) @map("plays_vokal")
+  playsKaraoke   Int      @default(0) @map("plays_karaoke")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  album     WorshipAlbum      @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  favorites WorshipFavorite[]
+  plays     WorshipPlay[]
+  downloads WorshipDownload[]
+  syncJobs  WorshipSyncJob[]
+
+  @@index([albumId, urutan])
+  @@map("worship_song")
+}
+
+model WorshipFavorite {
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  songId    String   @map("song_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  jemaat Jemaat      @relation("WorshipFavoriteJemaat", fields: [jemaatId], references: [id], onDelete: Cascade)
+  song   WorshipSong @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@id([jemaatId, songId])
+  @@index([songId])
+  @@map("worship_favorite")
+}
+
+// Log putar (≥ 30 detik) — untuk statistik 30 hari & "Paling sering diputar".
+model WorshipPlay {
+  id        String      @id @default(uuid()) @db.Uuid
+  songId    String      @map("song_id") @db.Uuid
+  jemaatId  String?     @map("jemaat_id") @db.Uuid
+  mode      WorshipMode
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  song WorshipSong @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId, createdAt])
+  @@index([createdAt])
+  @@map("worship_play")
+}
+
+model WorshipDownload {
+  id        String      @id @default(uuid()) @db.Uuid
+  songId    String      @map("song_id") @db.Uuid
+  jemaatId  String?     @map("jemaat_id") @db.Uuid
+  mode      WorshipMode
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  song WorshipSong @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId, createdAt])
+  @@map("worship_download")
+}
+
+enum WorshipSyncStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELLED
+
+  @@map("worship_sync_status")
+}
+
+enum WorshipSyncQuality {
+  CEPAT
+  TELITI
+
+  @@map("worship_sync_quality")
+}
+
+// Job "Sinkronkan dengan Elsa" (mesin: whisper.cpp self-hosted).
+model WorshipSyncJob {
+  id            String             @id @default(uuid()) @db.Uuid
+  songId        String             @map("song_id") @db.Uuid
+  status        WorshipSyncStatus  @default(QUEUED)
+  quality       WorshipSyncQuality @default(CEPAT)
+  // PREPARE | TRANSCRIBE | ALIGN
+  stage         String?            @db.VarChar(20)
+  progress      Int                @default(0)
+  processedSec  Float?             @map("processed_sec")
+  etaSec        Int?               @map("eta_sec")
+  threads       Int?
+  // Potongan teks terbaca (pratinjau saat proses).
+  preview       String?            @db.Text
+  // [{ t, line, confidence }] — hasil, diterapkan admin secara manual.
+  result        Json?
+  error         String?            @db.Text
+  requestedById String?            @map("requested_by_id") @db.Uuid
+  startedAt     DateTime?          @map("started_at")
+  finishedAt    DateTime?          @map("finished_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  song WorshipSong @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([songId, createdAt])
+  @@map("worship_sync_job")
 }

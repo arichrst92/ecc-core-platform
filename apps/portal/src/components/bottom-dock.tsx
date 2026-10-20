@@ -42,6 +42,7 @@ import {
   HandHeart,
   Ticket,
   Newspaper,
+  Music,
   BookOpen,
   Home as HomeIcon,
   UsersRound,
@@ -155,6 +156,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/news', label: 'News', icon: Newspaper, menuKey: 'news' },
       { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
+      { href: '/dashboard/worship', label: 'ECC Worship', icon: Music, menuKey: 'ecc-worship' },
     ],
   },
   {

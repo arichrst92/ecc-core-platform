@@ -7,7 +7,9 @@ export const WORSHIP_MODE = ['VOKAL', 'KARAOKE'] as const;
 export type WorshipMode = (typeof WORSHIP_MODE)[number];
 
 /** Batas ukuran file audio (MP3/M4A). */
-export const WORSHIP_AUDIO_MAX_BYTES = 10 * 1024 * 1024;
+export const WORSHIP_AUDIO_MAX_BYTES = 30 * 1024 * 1024;
+/** Batas dalam MB (untuk pesan). */
+export const WORSHIP_AUDIO_MAX_MB = 30;
 /** Selisih durasi vokal vs karaoke yang masih dianggap aman (detik). */
 export const WORSHIP_DURATION_TOLERANCE_SEC = 3;
 /** Lagu dihitung "diputar" setelah N detik. */

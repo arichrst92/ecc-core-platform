@@ -347,7 +347,7 @@ function AudioSlot({
   const [pct, setPct] = useState<number | null>(null);
   const upload = async (f: File) => {
     if (f.size > WORSHIP_AUDIO_MAX_BYTES) {
-      toast.error('File audio maksimal 10 MB.');
+      toast.error(`File audio maksimal ${WORSHIP_AUDIO_MAX_BYTES / 1024 / 1024} MB.`);
       return;
     }
     const fd = new FormData();

@@ -9,7 +9,7 @@ Status: diimplementasi 20 Okt 2026 (migration 20261020100000_ecc_worship). Setup
 - **Penempatan:** tile **ECC Worship** di Quick Access Home. Tile **hanya tampil bila sudah ada minimal 1 lagu terpublikasi** (album/single published); app mengecek lewat ringkasan ringan (`hasSongs`) yang ikut di-refresh, jadi tile muncul otomatis begitu lagu pertama dipublikasikan — tanpa update app.
 - **Kategori:** Album dan **Single**.
 - **Data lagu:** judul, file audio, lirik (statis), ciptaan, tahun, + **file karaoke opsional** (musik tanpa vokal, upload terpisah).
-- **File audio:** MP3/M4A, **maks 10 MB** per file (standar unggah MP3 192 kbps). Durasi dibaca otomatis. Tanpa transcoding.
+- **File audio:** MP3/M4A, **maks 30 MB** per file (standar unggah MP3 192 kbps). Durasi dibaca otomatis. Tanpa transcoding.
 - **Cover:** crop **1:1** di portal (geser, zoom, putar, pratinjau di app), disimpan **1000×1000 WebP**. Berlaku untuk album & single.
 - **Fitur:** lirik statis + **lirik tersinkron** (opsional per lagu), Disukai (favorit), share, statistik, download offline, mode karaoke.
 - **Hitungan putar:** dihitung setelah diputar **≥ 30 detik**. Statistik vokal & karaoke ditampilkan terpisah, total digabung.
@@ -48,7 +48,7 @@ Status: diimplementasi 20 Okt 2026 (migration 20261020100000_ecc_worship). Setup
 
 ## Teknis
 - Audio **tidak** di `/uploads` publik. App meminta **URL putar bertanda tangan** (berumur ±6 jam) setelah login; file dikirim **Nginx (X-Accel-Redirect)** dengan dukungan Range (seek).
-- Batas upload Nginx untuk endpoint audio dinaikkan (≥ 12 MB).
+- Batas upload Nginx untuk endpoint audio dinaikkan (32 MB, khusus `/admin/worship/songs/*/audio/*`).
 - Modul audio native: verifikasi `expo-audio` vs `react-native-track-player` (lock screen, antrian, New Architecture RN 0.81).
 - iOS: `UIBackgroundModes: audio`; App Review notes: lagu original milik ECC.
 - Backup: folder audio & cover perlu dicadangkan terpisah dari backup database.

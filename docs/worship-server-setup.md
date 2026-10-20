@@ -28,7 +28,19 @@ location /_worship_files/ {
     add_header Access-Control-Allow-Origin "*";
 }
 ```
-`client_max_body_size 20M` yang sudah ada cukup untuk audio ≤ 10 MB.
+Upload audio maks **30 MB** — batas global `client_max_body_size 20M` tidak cukup. Tambahkan location khusus
+(salin `proxy_pass` + header dari `location /` core-api yang sudah ada):
+```nginx
+location ~ ^/admin/worship/songs/[^/]+/audio/ {
+    client_max_body_size 32M;
+    proxy_read_timeout 300s;
+    proxy_pass http://127.0.0.1:4100;   # samakan dengan upstream core-api
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```

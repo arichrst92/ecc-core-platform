@@ -18,7 +18,7 @@ import { promisify } from 'node:util';
 import multer from 'multer';
 import sharp from 'sharp';
 import type { RequestHandler } from 'express';
-import { WORSHIP_AUDIO_MAX_BYTES, type WorshipMode } from '@ecc/shared-types';
+import { WORSHIP_AUDIO_MAX_BYTES, WORSHIP_AUDIO_MAX_MB, type WorshipMode } from '@ecc/shared-types';
 import { BadRequest } from './errors.js';
 import { PUBLIC_UPLOADS_PREFIX, UPLOADS_DIR, ensureDir } from './storage.js';
 
@@ -45,7 +45,7 @@ function audioExt(mime: string, name: string): string | null {
   return ext === 'mp3' || ext === 'm4a' ? ext : null;
 }
 
-/** Multer untuk upload audio (field bebas, 1 file, ≤ 10 MB, MP3/M4A). */
+/** Multer untuk upload audio (field bebas, 1 file, ≤ 30 MB, MP3/M4A). */
 export function audioUpload(): RequestHandler {
   const m = multer({
     storage: multer.memoryStorage(),
@@ -63,7 +63,7 @@ export function audioUpload(): RequestHandler {
         return next();
       }
       const e = err as { code?: string; message?: string };
-      if (e.code === 'LIMIT_FILE_SIZE') return next(BadRequest('File audio maksimal 10 MB.'));
+      if (e.code === 'LIMIT_FILE_SIZE') return next(BadRequest(`File audio maksimal ${WORSHIP_AUDIO_MAX_MB} MB.`));
       return next(BadRequest(e.message ?? 'Upload audio gagal.'));
     });
 }

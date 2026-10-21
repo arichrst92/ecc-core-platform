@@ -967,7 +967,7 @@ async function notifyPointEarned(
  * Helper: generate 6-digit pickup code unique dalam (ibadah, tanggal) occurrence.
  * Retry sampai 5x kalau collision.
  */
-async function generateUniquePickupCode(
+export async function generateUniquePickupCode(
   ibadahId: string,
   tanggalIbadah: Date,
 ): Promise<string> {

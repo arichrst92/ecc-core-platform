@@ -9,7 +9,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Contact, Loader2, MessageCircle, Search, StickyNote, UserCheck, X } from 'lucide-react';
+import { Contact, Loader2, MessageCircle, Plus, Search, StickyNote, UserCheck, X } from 'lucide-react';
+import { AddGuestModal } from '@/components/tamu/add-guest-modal';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
@@ -24,6 +25,8 @@ interface Tamu {
   noHp: string | null;
   kode: string | null;
   isTamu: boolean;
+  isAnak?: boolean;
+  tanggalLahir?: string | null;
   cabang: { id: string; nama: string } | null;
   pertamaDicatat: string;
   pengundang: { id: string; namaLengkap: string; noHp: string | null; sejak: string }[];
@@ -79,6 +82,7 @@ export default function TamuPage() {
   const [noteFor, setNoteFor] = useState<Tamu | null>(null);
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
   const [followupBy, setFollowupBy] = useState('');
+  const [adding, setAdding] = useState(false);
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
 
@@ -133,8 +137,19 @@ export default function TamuPage() {
           hadir, dan ke <i>Sudah terdaftar</i> saat tamu mendaftar Els App.
         </p>
       </div>
-      <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${todayYmd()}`} />
+      <div className="flex items-center gap-2">
+        <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${todayYmd()}`} />
+        <button
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-semibold hover:bg-brand-600"
+        >
+          <Plus className="w-4 h-4" /> Tambah Tamu
+        </button>
       </div>
+      </div>
+      {adding ? (
+        <AddGuestModal onClose={() => setAdding(false)} onSuccess={() => qc.invalidateQueries({ queryKey: ['tamu'] })} />
+      ) : null}
 
       {/* Ringkasan per status (klik untuk filter) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -235,6 +250,11 @@ export default function TamuPage() {
                     <Link href={`/dashboard/jemaat/${t.id}`} className="font-medium text-neutral-900 hover:text-brand-600 hover:underline">
                       {t.namaLengkap}
                     </Link>
+                    {t.isAnak ? (
+                      <span className="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-pink-100 text-pink-700 align-middle">
+                        Anak
+                      </span>
+                    ) : null}
                     <div className="text-xs text-neutral-500 flex items-center gap-1.5">
                       {t.noHp ? (
                         <a href={waLink(t.noHp)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-green-700">

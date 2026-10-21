@@ -14,7 +14,8 @@
 import { Router, type Request } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
-import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { syncEventRoleForStatus } from '../../lib/event-role.js';
 import { esc, sendCsv, sendPrintHtml, summaryCards } from '../../lib/print-report.js';
 import { audit } from '../../lib/audit.js';
 import { resolveJemaatAccess } from '../../lib/menu-access.js';
@@ -149,11 +150,14 @@ tamuRouter.get('/', async (req, res) => {
 });
 
 // ============================================================
-// Tambah tamu dari portal + reservasi / check-in ibadah
+// Tambah tamu dari portal → ibadah (reservasi / hadir) atau event (daftar / hadir)
 // ============================================================
-//   GET  /ibadah-options → ibadah aktif (untuk dipilih)
-//   POST /               → { jenis: DEWASA|ANAK, nama, noHp?, tanggalLahir?,
-//                            ibadahId, tanggalIbadah, aksi: RESERVE|CHECKIN }
+//   GET  /ibadah-options → ibadah aktif
+//   GET  /event-options  → event aktif yang belum lewat
+//   POST /               → { tujuan: IBADAH|EVENT, jenis: DEWASA|ANAK, nama,
+//                            noHp?, tanggalLahir?, ... }
+//     IBADAH: { ibadahId, tanggalIbadah, aksi: RESERVE|CHECKIN }
+//     EVENT : { eventId, aksi: DAFTAR|CHECKIN, pembayaran?, nominal?, force? }
 // DEWASA wajib no HP (kunci tamu berulang; no HP jemaat → jemaat itu yang
 // dicatat). ANAK tanpa no HP; tamu anak yang sama dikenali dari nama +
 // tanggal lahir + cabang. Ibadah anak (CKids) hanya menerima tamu ANAK.
@@ -167,84 +171,113 @@ tamuRouter.get('/ibadah-options', async (req, res) => {
   res.json({ success: true, data: rows });
 });
 
+tamuRouter.get('/event-options', async (req, res) => {
+  await assertAccess(req, 'write');
+  const since = new Date(Date.now() - 2 * 24 * 3600_000);
+  const rows = await prisma.event.findMany({
+    where: {
+      isActive: true,
+      OR: [{ tanggalSelesai: { gte: since } }, { tanggalSelesai: null, tanggalMulai: { gte: since } }],
+    },
+    orderBy: { tanggalMulai: 'asc' },
+    take: 300,
+    select: {
+      id: true,
+      judul: true,
+      tanggalMulai: true,
+      tanggalSelesai: true,
+      jamMulai: true,
+      tipeBayar: true,
+      nominal: true,
+      butuhKehadiran: true,
+      quotaPeserta: true,
+      isPublished: true,
+      cabang: { select: { id: true, nama: true } },
+      _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } },
+    },
+  });
+  res.json({
+    success: true,
+    data: rows.map(({ _count, nominal, ...e }) => ({ ...e, nominal: nominal != null ? Number(nominal) : null, peserta: _count.partisipasi })),
+  });
+});
+
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD');
 const createSchema = z
   .object({
+    tujuan: z.enum(['IBADAH', 'EVENT']).default('IBADAH'),
     jenis: z.enum(['DEWASA', 'ANAK']),
     nama: z.string().trim().min(2, 'Nama tamu minimal 2 karakter').max(255),
     noHp: z.string().trim().optional().nullable(),
     tanggalLahir: ymd.optional().nullable(),
-    ibadahId: z.string().uuid('Pilih ibadah'),
-    tanggalIbadah: ymd,
-    aksi: z.enum(['RESERVE', 'CHECKIN']).default('RESERVE'),
+    // IBADAH
+    ibadahId: z.string().uuid().optional(),
+    tanggalIbadah: ymd.optional(),
+    // EVENT
+    eventId: z.string().uuid().optional(),
+    pembayaran: z.enum(['BELUM', 'TUNAI', 'TRANSFER', 'QRIS', 'GRATIS']).optional(),
+    nominal: z.coerce.number().nonnegative().optional(),
+    force: z.boolean().optional(),
+    aksi: z.enum(['RESERVE', 'DAFTAR', 'CHECKIN']).default('RESERVE'),
   })
   .superRefine((v, ctx) => {
-    if (v.jenis === 'DEWASA') {
-      const r = noHpSchema.safeParse(v.noHp ?? '');
-      if (!r.success) ctx.addIssue({ code: 'custom', path: ['noHp'], message: 'No HP tamu dewasa wajib diisi dengan benar' });
+    if (v.jenis === 'DEWASA' && !noHpSchema.safeParse(v.noHp ?? '').success) {
+      ctx.addIssue({ code: 'custom', path: ['noHp'], message: 'No HP tamu dewasa wajib diisi dengan benar' });
+    }
+    if (v.tujuan === 'IBADAH' && (!v.ibadahId || !v.tanggalIbadah)) {
+      ctx.addIssue({ code: 'custom', path: ['ibadahId'], message: 'Pilih ibadah dan tanggalnya' });
+    }
+    if (v.tujuan === 'EVENT' && !v.eventId) {
+      ctx.addIssue({ code: 'custom', path: ['eventId'], message: 'Pilih event' });
     }
   });
+type CreateInput = z.infer<typeof createSchema>;
+
+/** Cari / buat record tamu (dewasa via no HP, anak via nama + tgl lahir + cabang). */
+async function resolveGuest(input: CreateInput, cabangId: string) {
+  if (input.jenis === 'DEWASA') {
+    const r = await resolveTamu({ nama: input.nama, noHp: noHpSchema.parse(input.noHp) }, cabangId);
+    return { tamu: r.tamu, created: r.created, member: r.member };
+  }
+  const lahir = input.tanggalLahir ? new Date(`${input.tanggalLahir}T00:00:00.000Z`) : null;
+  const found = await prisma.jemaat.findFirst({
+    where: { isTamu: true, noHp: null, cabangId, namaLengkap: { equals: input.nama, mode: 'insensitive' }, tanggalLahir: lahir },
+    select: { id: true, namaLengkap: true, kode: true, isActive: true },
+  });
+  if (found) {
+    if (!found.isActive) await prisma.jemaat.update({ where: { id: found.id }, data: { isActive: true } });
+    return { tamu: found, created: false, member: false };
+  }
+  const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
+  const tamu = await prisma.jemaat.create({
+    data: { cabangId, namaLengkap: input.nama, noHp: null, tanggalLahir: lahir, kode, isTamu: true, isActive: true, tanggalBergabung: new Date() },
+    select: { id: true, namaLengkap: true, kode: true },
+  });
+  return { tamu, created: true, member: false };
+}
 
 tamuRouter.post('/', async (req, res) => {
   await assertAccess(req, 'write');
   const input = createSchema.parse(req.body ?? {});
+  if (input.tujuan === 'EVENT') return addGuestToEvent(req, res, input);
+
   const ibadah = await prisma.ibadah.findUnique({
-    where: { id: input.ibadahId },
+    where: { id: input.ibadahId! },
     select: { id: true, nama: true, isActive: true, isKidsIbadah: true, cabangId: true },
   });
   if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
   if (ibadah.isKidsIbadah && input.jenis !== 'ANAK') throw BadRequest('Ibadah anak (CKids) hanya untuk tamu anak.');
 
-  // 1. Tamu
-  let tamu: { id: string; namaLengkap: string; kode: string | null };
-  let created = false;
-  let member = false;
-  if (input.jenis === 'DEWASA') {
-    const r = await resolveTamu({ nama: input.nama, noHp: noHpSchema.parse(input.noHp) }, ibadah.cabangId);
-    tamu = r.tamu;
-    created = r.created;
-    member = r.member;
-  } else {
-    const lahir = input.tanggalLahir ? new Date(`${input.tanggalLahir}T00:00:00.000Z`) : null;
-    const found = await prisma.jemaat.findFirst({
-      where: {
-        isTamu: true,
-        noHp: null,
-        cabangId: ibadah.cabangId,
-        namaLengkap: { equals: input.nama, mode: 'insensitive' },
-        tanggalLahir: lahir,
-      },
-      select: { id: true, namaLengkap: true, kode: true, isActive: true },
-    });
-    if (found) {
-      if (!found.isActive) await prisma.jemaat.update({ where: { id: found.id }, data: { isActive: true } });
-      tamu = found;
-    } else {
-      const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
-      tamu = await prisma.jemaat.create({
-        data: {
-          cabangId: ibadah.cabangId,
-          namaLengkap: input.nama,
-          noHp: null,
-          tanggalLahir: lahir,
-          kode,
-          isTamu: true,
-          isActive: true,
-          tanggalBergabung: new Date(),
-        },
-        select: { id: true, namaLengkap: true, kode: true },
-      });
-      created = true;
-    }
-  }
+  const { tamu, created, member } = await resolveGuest(input, ibadah.cabangId);
 
-  // 2. Reservasi (RESERVE) atau langsung hadir (JOIN)
+  // Reservasi (RESERVE) atau langsung hadir (JOIN)
   const tanggal = new Date(`${input.tanggalIbadah}T00:00:00.000Z`);
   const now = new Date();
   const existing = await prisma.reservasi.findUnique({
     where: { jemaatId_ibadahId_tanggalIbadah: { jemaatId: tamu.id, ibadahId: ibadah.id, tanggalIbadah: tanggal } },
   });
   const guestData = member ? {} : { guestSource: 'WALK_IN' };
+  const newKode = () => generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } })));
   let reservasi;
   if (existing?.status === 'JOIN') {
     reservasi = existing;
@@ -253,27 +286,12 @@ tamuRouter.post('/', async (req, res) => {
     const data = { status: 'JOIN' as const, joinedAt: now, cancelledAt: null, checkedInBy: req.user?.sub ?? null, checkinMethod: 'MANUAL', pickupCode, ...guestData };
     reservasi = existing
       ? await prisma.reservasi.update({ where: { id: existing.id }, data })
-      : await prisma.reservasi.create({
-          data: {
-            ...data,
-            jemaatId: tamu.id,
-            ibadahId: ibadah.id,
-            tanggalIbadah: tanggal,
-            kode: await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } }))),
-          },
-        });
+      : await prisma.reservasi.create({ data: { ...data, jemaatId: tamu.id, ibadahId: ibadah.id, tanggalIbadah: tanggal, kode: await newKode() } });
   } else {
     reservasi = existing
       ? await prisma.reservasi.update({ where: { id: existing.id }, data: { status: 'RESERVE', cancelledAt: null, ...guestData } })
       : await prisma.reservasi.create({
-          data: {
-            jemaatId: tamu.id,
-            ibadahId: ibadah.id,
-            tanggalIbadah: tanggal,
-            status: 'RESERVE',
-            kode: await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } }))),
-            ...guestData,
-          },
+          data: { jemaatId: tamu.id, ibadahId: ibadah.id, tanggalIbadah: tanggal, status: 'RESERVE', kode: await newKode(), ...guestData },
         });
   }
 
@@ -282,24 +300,122 @@ tamuRouter.post('/', async (req, res) => {
     resource: 'reservasi',
     resourceId: reservasi.id,
     resourceLabel: `Tamu ${input.jenis === 'ANAK' ? 'anak' : 'dewasa'} ${tamu.namaLengkap} → ${ibadah.nama} (${input.aksi === 'CHECKIN' ? 'hadir' : 'reservasi'})`,
-    metadata: { kind: 'portal-tamu', jenis: input.jenis, tamuBaru: created, isMember: member },
+    metadata: { kind: 'portal-tamu', tujuan: 'IBADAH', jenis: input.jenis, tamuBaru: created, isMember: member },
   });
 
   const hadir = reservasi.status === 'JOIN';
   res.status(201).json({
     success: true,
     data: {
+      tujuan: 'IBADAH',
       tamu: { id: tamu.id, namaLengkap: tamu.namaLengkap, kode: tamu.kode },
-      reservasi: { id: reservasi.id, kode: reservasi.kode, status: reservasi.status, pickupCode: reservasi.pickupCode },
+      status: hadir ? 'HADIR' : 'RESERVASI',
+      pickupCode: reservasi.pickupCode,
       isMember: member,
       isReturning: !created && !member,
-      ibadahNama: ibadah.nama,
+      acaraNama: ibadah.nama,
     },
     message: member
       ? `${tamu.namaLengkap} ternyata sudah terdaftar sebagai jemaat — ${hadir ? 'tercatat hadir' : 'reservasi dibuat'}.`
       : `Tamu ${tamu.namaLengkap} ${hadir ? 'tercatat hadir' : 'direservasikan'} di ${ibadah.nama}.`,
   });
 });
+
+/**
+ * Tamu event: DAFTAR (terdaftar; event berbayar bisa langsung dicatat lunas
+ * bila pembayaran diterima petugas) atau CHECKIN (langsung hadir — event
+ * harus mencatat kehadiran). Kuota penuh → 409 QUOTA_FULL kecuali force.
+ */
+async function addGuestToEvent(req: Request, res: import('express').Response, input: CreateInput) {
+  const event = await prisma.event.findUnique({ where: { id: input.eventId! } });
+  if (!event || !event.isActive) throw BadRequest('Event tidak valid / tidak aktif');
+  const checkin = input.aksi === 'CHECKIN';
+  if (checkin && !event.butuhKehadiran) throw BadRequest('Event ini tidak mencatat kehadiran — pilih "Daftarkan".');
+  const paid = event.tipeBayar !== 'GRATIS';
+  const pembayaran = paid ? (input.pembayaran ?? 'BELUM') : 'GRATIS';
+  if (checkin && paid && pembayaran === 'BELUM') {
+    throw BadRequest('Event berbayar: pilih pembayaran yang diterima (Tunai/Transfer/QRIS) atau Gratis untuk mencatat hadir.');
+  }
+
+  const cabangId =
+    event.cabangId ??
+    (req.user?.jemaatId ? (await prisma.jemaat.findUnique({ where: { id: req.user.jemaatId }, select: { cabangId: true } }))?.cabangId : null);
+  if (!cabangId) throw BadRequest('Cabang tamu tidak bisa ditentukan untuk event tingkat sinode.');
+
+  const { tamu, created, member } = await resolveGuest(input, cabangId);
+
+  const existing = await prisma.eventParticipation.findUnique({
+    where: { eventId_jemaatId: { eventId: event.id, jemaatId: tamu.id } },
+  });
+  if (existing && existing.status === 'HADIR') {
+    throw new ApiError(409, 'ALREADY', `${tamu.namaLengkap} sudah tercatat hadir di event ini.`);
+  }
+  if (existing && existing.status !== 'BATAL' && !checkin) {
+    throw new ApiError(409, 'ALREADY', `${tamu.namaLengkap} sudah terdaftar di event ini.`);
+  }
+  if ((!existing || existing.status === 'BATAL') && event.quotaPeserta != null && !input.force) {
+    const count = await prisma.eventParticipation.count({ where: { eventId: event.id, status: { not: 'BATAL' } } });
+    if (count >= event.quotaPeserta) {
+      throw new ApiError(409, 'QUOTA_FULL', 'Kuota peserta penuh. Tetap masukkan tamu ini?');
+    }
+  }
+
+  const now = new Date();
+  const lunas = paid && pembayaran !== 'BELUM';
+  const nominal =
+    event.tipeBayar === 'NOMINAL_TETAP' ? Number(event.nominal ?? 0) : Math.max(Number(event.nominal ?? 0), input.nominal ?? 0);
+  const status = checkin ? 'HADIR' : lunas ? 'BAYAR' : 'DAFTAR';
+  const approverJemaatId = req.user?.jemaatId ?? null;
+  const data = {
+    status: status as 'HADIR' | 'BAYAR' | 'DAFTAR',
+    cancelledAt: null,
+    ...(checkin ? { attendedAt: now, checkinMethod: 'MANUAL' } : {}),
+    ...(lunas ? { paidAt: now } : {}),
+    ...(member ? {} : { guestSource: 'WALK_IN', invitedByJemaatId: null }),
+  };
+  const participation = existing
+    ? await prisma.eventParticipation.update({ where: { id: existing.id }, data })
+    : await prisma.eventParticipation.create({
+        data: { ...data, eventId: event.id, jemaatId: tamu.id, nominalBayar: paid ? nominal : null },
+      });
+  if (lunas && pembayaran !== 'GRATIS' && nominal > 0) {
+    await prisma.eventDonation.create({
+      data: {
+        participationId: participation.id,
+        nominalBayar: nominal,
+        status: 'BAYAR',
+        paidAt: now,
+        approvedBy: approverJemaatId,
+        approvedAt: now,
+        catatan: `Tamu dari portal — diterima petugas (${pembayaran})`,
+      },
+    });
+  }
+  await syncEventRoleForStatus(event, tamu.id, status);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'event_participation',
+    resourceId: participation.id,
+    resourceLabel: `Tamu ${input.jenis === 'ANAK' ? 'anak' : 'dewasa'} ${tamu.namaLengkap} @ ${event.judul} (${checkin ? 'hadir' : 'daftar'})`,
+    metadata: { kind: 'portal-tamu', tujuan: 'EVENT', jenis: input.jenis, pembayaran, force: !!input.force, tamuBaru: created, isMember: member },
+  });
+  const label = checkin ? 'tercatat hadir' : lunas ? 'terdaftar (lunas)' : paid ? 'terdaftar (belum bayar)' : 'terdaftar';
+  res.status(201).json({
+    success: true,
+    data: {
+      tujuan: 'EVENT',
+      tamu: { id: tamu.id, namaLengkap: tamu.namaLengkap, kode: tamu.kode },
+      status,
+      pickupCode: null,
+      isMember: member,
+      isReturning: !created && !member,
+      acaraNama: event.judul,
+    },
+    message: member
+      ? `${tamu.namaLengkap} ternyata sudah terdaftar sebagai jemaat — ${label}.`
+      : `Tamu ${tamu.namaLengkap} ${label} di ${event.judul}.`,
+  });
+}
 
 const patchSchema = z.object({
   status: z.enum(TAMU_STATUSES).optional(),

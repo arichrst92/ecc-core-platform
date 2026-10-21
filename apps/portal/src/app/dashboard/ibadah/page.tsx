@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ChevronRight,
   Church,
+  Armchair,
+  MapPin,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -40,7 +43,11 @@ interface IbadahItem extends Record<string, unknown> {
   lokasi: string | null;
   isOnline: boolean;
   isActive: boolean;
-  cabang?: { id: string; nama: string };
+  kapasitasSeat?: number | null;
+  selfCheckinRadiusM?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  cabang?: { id: string; nama: string; latitude?: number | null; longitude?: number | null };
   kategoriIbadah?: { id: string; nama: string };
   petugasCount?: number;
   pelayananCount?: number;
@@ -320,6 +327,8 @@ function CabangSection({
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '160px' }}>Kategori</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '170px' }}>Jadwal</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '110px' }}>Jam</th>
+                <th className="px-4 py-2 text-right font-medium" style={{ width: '80px' }}>Seat</th>
+                <th className="px-4 py-2 text-left font-medium" style={{ width: '150px' }}>Self Check-in</th>
                 <th className="px-4 py-2 text-center font-medium" style={{ width: '110px' }}>Pelayan</th>
                 <th className="px-4 py-2 text-center font-medium" style={{ width: '80px' }}>Status</th>
                 <th className="px-4 py-2 text-right font-medium" style={{ width: '90px' }}></th>
@@ -356,6 +365,19 @@ function CabangSection({
                   </td>
                   <td className="px-4 py-2.5 text-neutral-700 tabular-nums">
                     {i.jamMulai}–{i.jamSelesai}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">
+                    {typeof i.kapasitasSeat === 'number' && i.kapasitasSeat > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-neutral-700" title="Kapasitas seat (untuk % okupansi)">
+                        <Armchair className="w-3.5 h-3.5 text-neutral-400" />
+                        {i.kapasitasSeat.toLocaleString('id-ID')}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <SelfCheckinCell item={i} />
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <Link
@@ -409,5 +431,49 @@ function CabangSection({
         </div>
       )}
     </div>
+  );
+}
+
+function formatRadius(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toLocaleString('id-ID')} km` : `${m} m`;
+}
+
+/**
+ * Info self check-in jemaat:
+ * - tanpa radius → "Di mana saja"
+ * - radius + titik (ibadah, atau fallback cabang) → "Radius 100 m"
+ * - radius tanpa titik sama sekali → peringatan (cek radius tidak bisa jalan)
+ */
+function SelfCheckinCell({ item }: { item: IbadahItem }) {
+  const r = item.selfCheckinRadiusM;
+  if (!r) {
+    return (
+      <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-600" title="Jemaat bisa self check-in tanpa cek lokasi">
+        Di mana saja
+      </span>
+    );
+  }
+  const hasOwn = item.latitude != null && item.longitude != null;
+  const hasCabang = item.cabang?.latitude != null && item.cabang?.longitude != null;
+  if (!hasOwn && !hasCabang) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700"
+        title="Radius diset tapi ibadah & cabang belum punya titik lokasi — isi link Google Maps di form ibadah"
+      >
+        <AlertTriangle className="w-3 h-3" />
+        {formatRadius(r)} · titik belum ada
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-green-50 text-green-700"
+      title={hasOwn ? 'Radius dari titik lokasi ibadah' : 'Radius dari titik lokasi cabang'}
+    >
+      <MapPin className="w-3 h-3" />
+      Radius {formatRadius(r)}
+      <span className="text-green-600/70">· {hasOwn ? 'ibadah' : 'cabang'}</span>
+    </span>
   );
 }

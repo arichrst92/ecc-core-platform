@@ -179,7 +179,8 @@ ibadahRouter.get('/', async (req, res) => {
       take: q.limit,
       orderBy: [{ kategoriIbadah: { nama: 'asc' } }, { [q.sortBy ?? 'nama']: q.sortOrder }],
       include: {
-        cabang: { select: { id: true, nama: true } },
+        // lat/lng cabang: fallback titik self check-in (ditampilkan di list portal).
+        cabang: { select: { id: true, nama: true, latitude: true, longitude: true } },
         kategoriIbadah: { select: { id: true, nama: true } },
         // Nested count untuk hitung total petugas: sum dari semua ibadahPelayanan link
         ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },

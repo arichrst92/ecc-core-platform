@@ -42,6 +42,15 @@ async function assertAccess(req: Request, level: 'read' | 'write') {
   if (!(level === 'read' ? m?.canRead : m?.canWrite)) throw Forbidden('Anda tidak punya akses ke menu Tamu.');
 }
 
+/** Tambah tamu: menu Tamu (tulis) atau petugas CKids (menu gift-stall). */
+async function assertAddGuestAccess(req: Request) {
+  if (!req.user) throw Unauthorized();
+  if (req.user.isFulltimer) return;
+  const acc = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess;
+  if (acc['tamu']?.canWrite || acc['gift-stall']?.canRead) return;
+  throw Forbidden('Anda tidak punya akses untuk menambah tamu.');
+}
+
 async function loadTamu(req: Request) {
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
   const cabangId = typeof req.query.cabangId === 'string' && UUID_RE.test(req.query.cabangId) ? req.query.cabangId : undefined;
@@ -205,7 +214,9 @@ tamuRouter.get('/event-options', async (req, res) => {
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD');
 const createSchema = z
   .object({
-    tujuan: z.enum(['IBADAH', 'EVENT']).default('IBADAH'),
+    // DATA = hanya buat/cari record tamu (dipakai scanner CKids, lalu check-in biasa).
+    tujuan: z.enum(['IBADAH', 'EVENT', 'DATA']).default('IBADAH'),
+    cabangId: z.string().uuid().optional(),
     jenis: z.enum(['DEWASA', 'ANAK']),
     nama: z.string().trim().min(2, 'Nama tamu minimal 2 karakter').max(255),
     noHp: z.string().trim().optional().nullable(),
@@ -226,6 +237,9 @@ const createSchema = z
     }
     if (v.tujuan === 'IBADAH' && (!v.ibadahId || !v.tanggalIbadah)) {
       ctx.addIssue({ code: 'custom', path: ['ibadahId'], message: 'Pilih ibadah dan tanggalnya' });
+    }
+    if (v.tujuan === 'DATA' && !v.cabangId) {
+      ctx.addIssue({ code: 'custom', path: ['cabangId'], message: 'Cabang wajib' });
     }
     if (v.tujuan === 'EVENT' && !v.eventId) {
       ctx.addIssue({ code: 'custom', path: ['eventId'], message: 'Pilih event' });
@@ -257,9 +271,32 @@ async function resolveGuest(input: CreateInput, cabangId: string) {
 }
 
 tamuRouter.post('/', async (req, res) => {
-  await assertAccess(req, 'write');
+  await assertAddGuestAccess(req);
   const input = createSchema.parse(req.body ?? {});
   if (input.tujuan === 'EVENT') return addGuestToEvent(req, res, input);
+  if (input.tujuan === 'DATA') {
+    const { tamu, created, member } = await resolveGuest(input, input.cabangId!);
+    const j = await prisma.jemaat.findUnique({
+      where: { id: tamu.id },
+      select: { id: true, namaLengkap: true, noHp: true, kode: true, fotoUrl: true, tanggalLahir: true },
+    });
+    audit(req, {
+      action: 'CREATE',
+      resource: 'jemaat_tamu',
+      resourceId: tamu.id,
+      resourceLabel: `Tamu ${input.jenis === 'ANAK' ? 'anak' : 'dewasa'} ${tamu.namaLengkap}${created ? ' (baru)' : ''} — scanner`,
+      metadata: { kind: 'tamu-data', jenis: input.jenis, tamuBaru: created, isMember: member },
+    });
+    return res.status(created ? 201 : 200).json({
+      success: true,
+      data: { jemaat: j, isMember: member, isReturning: !created && !member },
+      message: member
+        ? `${tamu.namaLengkap} ternyata sudah terdaftar sebagai jemaat.`
+        : created
+          ? `Tamu ${tamu.namaLengkap} ditambahkan.`
+          : `Tamu ${tamu.namaLengkap} sudah pernah tercatat — data lama dipakai.`,
+    });
+  }
 
   const ibadah = await prisma.ibadah.findUnique({
     where: { id: input.ibadahId! },

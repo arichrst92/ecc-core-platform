@@ -16,6 +16,7 @@ import {
   SkipForward,
   ChevronRight,
   Calendar,
+  UserPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -43,6 +44,7 @@ interface JemaatItem {
   kode: string | null;
   fotoUrl: string | null;
   tanggalLahir: string | null;
+  isTamu?: boolean;
 }
 
 function calcUmur(tanggalLahir: string | null): number | null {
@@ -288,6 +290,7 @@ function JemaatSearchStep({
   const [searchQ, setSearchQ] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [addGuestOpen, setAddGuestOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQ.trim()), 300);
@@ -299,7 +302,7 @@ function JemaatSearchStep({
     enabled: debouncedSearch.length >= 2,
     queryFn: async () => {
       const res = await apiClient.get<{ data: JemaatItem[] }>('/admin/jemaat', {
-        params: { cabangId, search: debouncedSearch, limit: 20 },
+        params: { cabangId, search: debouncedSearch, limit: 20, jenis: 'semua' },
       });
       return res.data.data;
     },
@@ -308,7 +311,7 @@ function JemaatSearchStep({
   const lookupByKodeMut = useMutation({
     mutationFn: async (kode: string) => {
       const res = await apiClient.get<{ data: JemaatItem[] }>('/admin/jemaat', {
-        params: { cabangId, search: kode, limit: 5 },
+        params: { cabangId, search: kode, limit: 5, jenis: 'semua' },
       });
       const match = res.data.data.find(
         (j) => j.kode?.toUpperCase() === kode.toUpperCase(),
@@ -358,6 +361,13 @@ function JemaatSearchStep({
               <ScanLine className="w-4 h-4" />
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setAddGuestOpen(true)}
+            className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-kids-400 text-kids-600 text-sm font-semibold rounded-lg hover:bg-kids-50"
+          >
+            <UserPlus className="w-4 h-4" /> Tambah Tamu (belum terdaftar)
+          </button>
         </div>
 
         {debouncedSearch.length >= 2 && (
@@ -393,6 +403,11 @@ function JemaatSearchStep({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-neutral-900 truncate">
                         {j.namaLengkap}
+                        {j.isTamu ? (
+                          <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 align-middle">
+                            Tamu
+                          </span>
+                        ) : null}
                       </div>
                       <div className="text-xs text-neutral-500">
                         {j.kode ?? '(no kode)'} · {j.noHp ?? '-'}
@@ -419,6 +434,18 @@ function JemaatSearchStep({
         </div>
       )}
 
+      {addGuestOpen && (
+        <AddGuestModal
+          cabangId={cabangId}
+          defaultNama={searchQ.trim()}
+          onClose={() => setAddGuestOpen(false)}
+          onCreated={(j) => {
+            setAddGuestOpen(false);
+            onPicked(j);
+          }}
+        />
+      )}
+
       {scannerOpen && (
         <QrScannerModal
           title="Scan QR Profile Jemaat"
@@ -431,6 +458,116 @@ function JemaatSearchStep({
         />
       )}
     </>
+  );
+}
+
+// ============================================================
+//  Tambah Tamu — orang yang belum terdaftar. Anak tanpa no HP.
+//  Setelah disimpan, langsung lanjut ke pilih ibadah + check-in.
+// ============================================================
+function AddGuestModal({
+  cabangId,
+  defaultNama,
+  onClose,
+  onCreated,
+}: {
+  cabangId: string;
+  defaultNama: string;
+  onClose: () => void;
+  onCreated: (j: JemaatItem) => void;
+}) {
+  const [jenis, setJenis] = useState<'ANAK' | 'DEWASA'>('ANAK');
+  const [nama, setNama] = useState(/\d/.test(defaultNama) ? '' : defaultNama);
+  const [noHp, setNoHp] = useState('');
+  const [tanggalLahir, setTanggalLahir] = useState('');
+
+  const mut = useMutation({
+    mutationFn: async () =>
+      (
+        await apiClient.post<{ data: { jemaat: JemaatItem; isMember: boolean }; message: string }>('/admin/tamu', {
+          tujuan: 'DATA',
+          cabangId,
+          jenis,
+          nama: nama.trim(),
+          noHp: jenis === 'DEWASA' ? noHp.trim() : null,
+          tanggalLahir: jenis === 'ANAK' && tanggalLahir ? tanggalLahir : null,
+        })
+      ).data,
+    onSuccess: (r) => {
+      toast.success(r.message);
+      onCreated({ ...r.data.jemaat, isTamu: !r.data.isMember });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menambah tamu'),
+  });
+
+  const can = nama.trim().length >= 2 && (jenis === 'ANAK' || noHp.trim().length >= 8);
+  const inputCls = 'mt-1 w-full px-3 py-2.5 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-kids-400';
+  const seg = (on: boolean) =>
+    `flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold border ${
+      on ? 'bg-kids-500 text-white border-kids-500' : 'bg-white text-neutral-700 border-neutral-300'
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+          <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-kids-600" /> Tambah Tamu
+          </h2>
+          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
+            <X className="w-4 h-4 text-neutral-500" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex gap-2">
+            <button type="button" className={seg(jenis === 'ANAK')} onClick={() => setJenis('ANAK')}>
+              <Baby className="w-4 h-4" /> Anak
+            </button>
+            <button type="button" className={seg(jenis === 'DEWASA')} onClick={() => setJenis('DEWASA')}>
+              <User className="w-4 h-4" /> Dewasa
+            </button>
+          </div>
+          <label className="block">
+            <span className="text-sm font-medium text-neutral-700">Nama</span>
+            <input value={nama} onChange={(e) => setNama(e.target.value)} className={inputCls} placeholder="Nama lengkap" autoFocus />
+          </label>
+          {jenis === 'DEWASA' ? (
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">No HP</span>
+              <input value={noHp} onChange={(e) => setNoHp(e.target.value)} className={inputCls} placeholder="08xx" inputMode="tel" />
+              <span className="text-[11px] text-neutral-500">Kalau no HP milik jemaat terdaftar, jemaat itu yang dipakai.</span>
+            </label>
+          ) : (
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">
+                Tanggal lahir <span className="font-normal text-neutral-400">(opsional)</span>
+              </span>
+              <input
+                type="date"
+                value={tanggalLahir}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setTanggalLahir(e.target.value)}
+                className={inputCls}
+              />
+              <span className="text-[11px] text-neutral-500">Tanpa no HP. Membantu mengenali anak yang sama di minggu berikutnya.</span>
+            </label>
+          )}
+        </div>
+        <div className="flex gap-2 px-4 py-3 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm text-neutral-700 border border-neutral-300 rounded-lg bg-white">
+            Batal
+          </button>
+          <button
+            onClick={() => mut.mutate()}
+            disabled={!can || mut.isPending}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-kids-500 hover:bg-kids-600 rounded-lg disabled:opacity-50"
+          >
+            {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Simpan & lanjut check-in
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

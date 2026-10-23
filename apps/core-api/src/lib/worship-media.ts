@@ -17,6 +17,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import multer from 'multer';
 import sharp from 'sharp';
+import { assertRasterImage } from './image-sniff.js';
 import type { RequestHandler } from 'express';
 import { WORSHIP_AUDIO_MAX_BYTES, WORSHIP_AUDIO_MAX_MB, type WorshipMode } from '@ecc/shared-types';
 import { BadRequest } from './errors.js';
@@ -131,7 +132,7 @@ export async function saveWorshipCover(albumId: string, buffer: Buffer): Promise
   await ensureDir(dir);
   const filename = `${albumId}.webp`;
   // Portal sudah crop 1:1; server memastikan persegi 1000×1000.
-  await sharp(buffer).rotate().resize(1000, 1000, { fit: 'cover' }).webp({ quality: 85 }).toFile(path.join(dir, filename));
+  await sharp(assertRasterImage(buffer)).rotate().resize(1000, 1000, { fit: 'cover' }).webp({ quality: 85 }).toFile(path.join(dir, filename));
   return `${PUBLIC_UPLOADS_PREFIX}/content/worship/cover/${filename}?v=${Date.now()}`;
 }
 

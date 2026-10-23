@@ -50,6 +50,8 @@ const ANDROID_OCTET_STREAM = 'application/octet-stream';
 
 function isImageMime(mime: string): boolean {
   const lower = mime.toLowerCase();
+  // SVG (vektor/XML) ditolak — diproses librsvg yang rentan (CVE-2026-96889).
+  if (lower.includes('svg') || lower.includes('xml')) return false;
   if (ACCEPTED_MIME.has(lower)) return true;
   // Android kadang kirim octet-stream + filename ber-ext .jpg/.heic
   if (lower === ANDROID_OCTET_STREAM) return true;
@@ -76,10 +78,9 @@ export function flexImageUpload(opts: FlexImageUploadOptions = {}): RequestHandl
     limits: { fileSize: maxBytes, files: 1 },
     fileFilter: (_req, file, cb) => {
       if (!isImageMime(file.mimetype)) {
-        const accepted = [...ACCEPTED_MIME].join(', ');
         return cb(
           new Error(
-            `Tipe file tidak didukung (${file.mimetype}). Diterima: ${accepted}`,
+            `Tipe file tidak didukung (${file.mimetype}). Gunakan foto JPG, PNG, WebP, GIF, atau HEIC.`,
           ),
         );
       }

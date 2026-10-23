@@ -4,7 +4,12 @@ const nextConfig = {
   // Landing site cuma serve static content + 1-2 link ke portal/api.
   // Tidak butuh transpilePackages atau webpack custom.
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
+    // Hanya domain ECC (CVE-2026-96889 / CVE-2026-94483: jangan izinkan host sembarang).
+    remotePatterns: [
+      { protocol: 'https', hostname: 'eccchurch.global' },
+      { protocol: 'https', hostname: '*.eccchurch.global' },
+      ...(process.env.NODE_ENV === 'production' ? [] : [{ protocol: 'http', hostname: 'localhost' }]),
+    ],
   },
   async rewrites() {
     return [

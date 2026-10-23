@@ -19,6 +19,7 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import sharp from 'sharp';
+import { assertRasterImage } from './image-sniff.js';
 
 export const UPLOADS_DIR = path.resolve(process.env.UPLOADS_DIR ?? './uploads');
 export const PUBLIC_UPLOADS_PREFIX = '/uploads';
@@ -50,7 +51,7 @@ export async function saveProfilePhoto(
   const filename = `${ownerId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_PROFILE, height: MAX_DIM_PROFILE, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -87,7 +88,7 @@ export async function saveContentHero(
   const filename = `${kontenId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -119,7 +120,7 @@ export async function saveHadiahPhoto(hadiahId: string, buffer: Buffer): Promise
   const filename = `${hadiahId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -152,7 +153,7 @@ export async function saveEventQris(eventId: string, buffer: Buffer): Promise<st
   const filename = `${eventId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -180,7 +181,7 @@ export async function saveEventBuktiTransfer(
   const filename = `${participationId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_BUKTI, height: MAX_DIM_BUKTI, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -224,7 +225,7 @@ export async function saveEventDonationBukti(
   const filename = `${donationId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_BUKTI, height: MAX_DIM_BUKTI, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -264,7 +265,7 @@ export async function saveCabangRekeningQris(
   const filename = `${rekeningId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -301,7 +302,7 @@ export async function saveBusinessHero(businessId: string, buffer: Buffer): Prom
   const filename = `${businessId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -330,7 +331,7 @@ export async function saveBusinessLogo(businessId: string, buffer: Buffer): Prom
   const filename = `${businessId}.webp`;
   const absPath = path.join(dir, filename);
 
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({
       width: MAX_DIM_LOGO,
@@ -405,7 +406,7 @@ export async function saveSertifikatFile(
     return { url: `${PUBLIC_UPLOADS_PREFIX}/sertifikat/${jemaatId}/${filename}?v=${v}`, mime: 'application/pdf' };
   }
   const filename = `${sertifikatId}.webp`;
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_BUKTI, height: MAX_DIM_BUKTI, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -480,7 +481,7 @@ export async function saveGroupHero(groupId: string, buffer: Buffer): Promise<st
   const dir = path.join(UPLOADS_DIR, 'group-hero');
   await ensureDir(dir);
   const filename = `${groupId}.webp`;
-  await sharp(buffer)
+  await sharp(assertRasterImage(buffer))
     .rotate()
     .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: QUALITY })

@@ -206,3 +206,29 @@ export function venueInfo(
 ): { requiresLocation: boolean; radiusM: number | null } {
   return { requiresLocation: radiusM != null && !!point, radiusM: radiusM != null && point ? radiusM : null };
 }
+
+// ============================================================
+// Tiket (Reservasi Saya) — jendela check-in per tiket
+// ============================================================
+
+/**
+ * Jendela self check-in untuk SATU reservasi ibadah (tanggal tertentu), dipakai
+ * tiket di "Reservasi Saya": 15 menit sebelum jamMulai s.d. jamSelesai, jam
+ * dinding zona cabang. Ibadah anak → check-in di meja CKids (mode DESK).
+ * Validasi final tetap di POST /me/ibadah/:id/self-checkin.
+ */
+export function ibadahTicketCheckin(
+  ib: { jamMulai: string; jamSelesai: string; isKidsIbadah: boolean },
+  tanggalIbadah: Date,
+  tz: string,
+): { mode: 'SELF' | 'DESK'; opensAt: string; closesAt: string } {
+  const start = hhmmToMin(ib.jamMulai) ?? 0;
+  let end = hhmmToMin(ib.jamSelesai) ?? 24 * 60 - 1;
+  if (end <= start) end = 24 * 60 - 1;
+  const day = calendarDateOf(tanggalIbadah, tz);
+  return {
+    mode: ib.isKidsIbadah ? 'DESK' : 'SELF',
+    opensAt: wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz).toISOString(),
+    closesAt: wallToInstant(day, end, tz).toISOString(),
+  };
+}

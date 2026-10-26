@@ -50,6 +50,7 @@ import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relati
 import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
 import { meEventCheckinRouter } from './me-event-checkin.js';
+import { meEventTiketRouter } from './me-event-tiket.js';
 import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
@@ -60,6 +61,7 @@ import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.j
 import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
 import { tzOr } from '../../lib/tz.js';
 import { canCancelReservasi } from '../../lib/reservasi-window.js';
+import { ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -80,6 +82,8 @@ meRouter.use('/spiritual-journey', meSpiritualJourneyRouter);
 meRouter.use('/ibadah', meIbadahRouter);
 // Self check-in event (saya + keluarga terdaftar) → me-event-checkin.ts
 meRouter.use('/event-checkin', meEventCheckinRouter);
+// Tiket event saya (lintas event) — Reservasi Saya tab Event.
+meRouter.use('/event-tiket', meEventTiketRouter);
 // Kritik & Saran saya → me-feedback.ts
 meRouter.use('/feedback', meFeedbackRouter);
 // Doa (prayer request) saya + tugas petugas doa → me-prayer.ts
@@ -1363,7 +1367,11 @@ meRouter.get('/reservasi', async (req, res) => {
           lokasi: true,
           isKidsIbadah: true,
           requiresCheckout: true,
-          cabang: { select: { id: true, nama: true, timezone: true } },
+          latitude: true,
+          longitude: true,
+          selfCheckinRadiusM: true,
+          cabang: { select: { id: true, nama: true, timezone: true, latitude: true, longitude: true } },
+          kategoriIbadah: { select: { nama: true } },
         },
       },
     },
@@ -1376,10 +1384,18 @@ meRouter.get('/reservasi', async (req, res) => {
     success: true,
     data: visible.map((r) => {
       const tz = tzOr(r.ibadah.cabang.timezone);
+      const { latitude, longitude, selfCheckinRadiusM, ...ibadahRest } = r.ibadah;
+      const { latitude: _cl, longitude: _cg, ...cabangRest } = r.ibadah.cabang;
       return {
         ...r,
-        ibadah: { ...r.ibadah, timezone: tz },
+        // point: titik venue (ibadah, atau cabang) — untuk tombol Petunjuk arah di tiket.
+        ibadah: { ...ibadahRest, cabang: cabangRest, timezone: tz, point: venuePoint({ latitude, longitude }, r.ibadah.cabang) },
         relation: relationFor(r, jemaatId, people),
+        // Tiket: jendela self check-in tanggal ini + kebutuhan lokasi (radius).
+        selfCheckin: {
+          ...ibadahTicketCheckin(r.ibadah, r.tanggalIbadah, tz),
+          venue: venueInfo(selfCheckinRadiusM, venuePoint({ latitude, longitude }, r.ibadah.cabang)),
+        },
         // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah (zona cabang).
         canCancel: canCancelReservasi(r, r.ibadah.jamMulai, now, tz),
       };

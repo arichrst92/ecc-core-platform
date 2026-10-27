@@ -23,6 +23,7 @@ import {
   type LastMeeting,
 } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
+import { homecellSegmenSchema } from '@ecc/shared-types';
 import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -575,6 +576,25 @@ meHomecellRouter.delete('/:id/join-request', async (req, res) => {
 // ------------------------------------------------------------------ leader: lokasi
 
 const lokasiSchema = z.object({ mapsUrl: z.string().trim().max(2000).nullable() });
+
+// Pemimpin homecell mengatur kategori (Single/Couple) + rentang usia anggota.
+meHomecellRouter.patch('/:id/segmen', async (req, res) => {
+  await assertLeaderOf(req, req.params.id);
+  const input = homecellSegmenSchema.parse(req.body ?? {});
+  const updated = await prisma.homecell.update({
+    where: { id: req.params.id },
+    data: { kategori: input.kategori ?? null, usiaMin: input.usiaMin ?? null, usiaMax: input.usiaMax ?? null },
+    select: { id: true, nama: true, kategori: true, usiaMin: true, usiaMax: true },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell',
+    resourceId: updated.id,
+    resourceLabel: `Kategori & usia homecell ${updated.nama}`,
+    after: updated,
+  });
+  res.json({ success: true, data: updated });
+});
 
 meHomecellRouter.patch('/:id/lokasi', async (req, res) => {
   await assertLeaderOf(req, req.params.id);

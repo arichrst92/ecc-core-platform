@@ -415,6 +415,8 @@ homecellRouter.get('/:id', async (req, res) => {
               fotoUrl: true,
               noHp: true,
               jenisKelamin: true,
+              // Hanya dipakai untuk menghitung usia (tanggal lahir tidak dikirim).
+              tanggalLahir: true,
             },
           },
         },
@@ -464,12 +466,29 @@ homecellRouter.get('/:id', async (req, res) => {
     ...j,
     noHp: gate?.can(j.id, 'noHp') ? j.noHp : null,
   });
+  // Usia anggota (tahun) untuk PIC — mengikuti privasi tanggal lahir; tanggal
+  // lahirnya sendiri tidak dikirim.
+  const now = new Date();
+  const usiaOf = (id: string, lahir: Date | null): number | null => {
+    if (!lahir || !gate?.can(id, 'tanggalLahir')) return null;
+    let u = now.getUTCFullYear() - lahir.getUTCFullYear();
+    const m = now.getUTCMonth() - lahir.getUTCMonth();
+    if (m < 0 || (m === 0 && now.getUTCDate() < lahir.getUTCDate())) u--;
+    return u >= 0 && u < 130 ? u : null;
+  };
   res.json({
     success: true,
     data: {
       ...rest,
       picJemaat: rest.picJemaat ? hp(rest.picJemaat) : null,
-      members: members.map((m) => withLastAttendance(m.jemaatId, { ...m, jemaat: hp(m.jemaat) }, lastMap)),
+      members: members.map((m) => {
+        const { tanggalLahir, ...jemaat } = m.jemaat;
+        return withLastAttendance(
+          m.jemaatId,
+          { ...m, jemaat: { ...hp(jemaat), usia: usiaOf(m.jemaat.id, tanggalLahir) } },
+          lastMap,
+        );
+      }),
       scheduleCount: _count.schedules,
       lastSchedule,
     },

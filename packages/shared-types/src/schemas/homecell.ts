@@ -114,6 +114,12 @@ export const updateHomecellSchema = z
   .openapi('UpdateHomecellInput');
 export type UpdateHomecellInput = z.infer<typeof updateHomecellSchema>;
 
+/** Pemimpin homecell (mobile) — set kategori + rentang usia. null = kosongkan. */
+export const homecellSegmenSchema = z
+  .object({ kategori: kategoriField, usiaMin: usiaField, usiaMax: usiaField })
+  .refine(usiaRangeOk, usiaRangeMsg);
+export type HomecellSegmenInput = z.infer<typeof homecellSegmenSchema>;
+
 // ====================== HOMECELL MEMBER ======================
 
 export const addHomecellMemberSchema = z

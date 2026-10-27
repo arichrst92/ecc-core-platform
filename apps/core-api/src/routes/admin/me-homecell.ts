@@ -23,7 +23,7 @@ import {
   type LastMeeting,
 } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
-import { homecellSegmenSchema } from '@ecc/shared-types';
+import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
 import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -576,6 +576,72 @@ meHomecellRouter.delete('/:id/join-request', async (req, res) => {
 // ------------------------------------------------------------------ leader: lokasi
 
 const lokasiSchema = z.object({ mapsUrl: z.string().trim().max(2000).nullable() });
+
+/** Pemimpin homecell ATAU PIC area homecell tsb (atau fulltimer). */
+async function assertLeaderOrAreaPic(req: Request, homecellId: string) {
+  const u = me(req);
+  if (u.isFulltimer) return;
+  const hc = await prisma.homecell.findUnique({
+    where: { id: homecellId },
+    select: { picJemaatId: true, area: { select: { picJemaatId: true } } },
+  });
+  if (!hc) throw NotFound('Homecell tidak ditemukan');
+  if (hc.picJemaatId !== u.jemaatId && hc.area.picJemaatId !== u.jemaatId) {
+    throw Forbidden('Hanya pemimpin homecell / PIC area yang dapat mengubah homecell ini.');
+  }
+}
+
+// Ubah info homecell dari app: nama, deskripsi, alamat, link Google Maps,
+// kategori, rentang usia. Field yang tidak dikirim tidak diubah.
+meHomecellRouter.patch('/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const input = meUpdateHomecellSchema.parse(req.body ?? {});
+  const before = await prisma.homecell.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Homecell tidak ditemukan');
+  const nextMin = input.usiaMin === undefined ? before.usiaMin : input.usiaMin;
+  const nextMax = input.usiaMax === undefined ? before.usiaMax : input.usiaMax;
+  if (nextMin != null && nextMax != null && nextMin > nextMax) {
+    throw BadRequest('Usia minimal tidak boleh lebih besar dari usia maksimal.');
+  }
+  const data: Prisma.HomecellUpdateInput = {};
+  if (input.nama !== undefined) data.nama = input.nama;
+  if (input.deskripsi !== undefined) data.deskripsi = input.deskripsi;
+  if (input.alamat !== undefined) data.alamat = input.alamat;
+  if (input.kategori !== undefined) data.kategori = input.kategori;
+  if (input.usiaMin !== undefined) data.usiaMin = input.usiaMin;
+  if (input.usiaMax !== undefined) data.usiaMax = input.usiaMax;
+  if (input.mapsUrl !== undefined && input.mapsUrl !== before.mapsUrl) {
+    if (!input.mapsUrl) {
+      Object.assign(data, { mapsUrl: null, latitude: null, longitude: null });
+    } else {
+      const loc = await resolveMapsLocation(input.mapsUrl);
+      if (!loc) {
+        throw BadRequest(
+          'Koordinat tidak ditemukan di link tersebut. Buka Google Maps, tekan lama titik lokasi, lalu salin koordinat (mis. -6.2088, 106.8456) atau tautan "Bagikan".',
+        );
+      }
+      Object.assign(data, { mapsUrl: input.mapsUrl, latitude: loc.lat, longitude: loc.lng });
+    }
+  }
+  const updated = await prisma.homecell.update({
+    where: { id: req.params.id },
+    data,
+    select: {
+      id: true, nama: true, deskripsi: true, alamat: true, mapsUrl: true, latitude: true, longitude: true,
+      kategori: true, usiaMin: true, usiaMax: true,
+    },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell',
+    resourceId: updated.id,
+    resourceLabel: `Info homecell ${updated.nama} (app)`,
+    before,
+    after: updated,
+  });
+  res.json({ success: true, data: updated });
+});
 
 // Pemimpin homecell mengatur kategori (Single/Couple) + rentang usia anggota.
 meHomecellRouter.patch('/:id/segmen', async (req, res) => {

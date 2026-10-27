@@ -37,6 +37,7 @@ import {
   deleteMyAccountSchema,
   changePhoneRequestSchema,
   changePhoneVerifySchema,
+  meUpdateHomecellAreaSchema,
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
@@ -655,6 +656,39 @@ meRouter.get('/homecell-managed', async (req, res) => {
     orderBy: { nama: 'asc' },
   });
   res.json({ success: true, data: data.map((r) => ({ ...r, memberCount: r._count.members })) });
+});
+
+// PIC area mengubah nama & deskripsi area dari app.
+meRouter.patch('/homecell-area/:id', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = meUpdateHomecellAreaSchema.parse(req.body ?? {});
+  const before = await prisma.homecellArea.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Homecell Area tidak ditemukan');
+  if (!req.user?.isFulltimer && before.picJemaatId !== jemaatId) {
+    throw Forbidden('Hanya PIC area ini yang dapat mengubahnya.');
+  }
+  try {
+    const updated = await prisma.homecellArea.update({
+      where: { id: before.id },
+      data: {
+        ...(input.nama !== undefined ? { nama: input.nama } : {}),
+        ...(input.deskripsi !== undefined ? { deskripsi: input.deskripsi } : {}),
+      },
+      select: { id: true, nama: true, deskripsi: true },
+    });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'homecell_area',
+      resourceId: updated.id,
+      resourceLabel: `Area ${updated.nama} (app)`,
+      before,
+      after: updated,
+    });
+    res.json({ success: true, data: updated });
+  } catch (e) {
+    if ((e as { code?: string }).code === 'P2002') throw Conflict('Nama area sudah dipakai di cabang ini.');
+    throw e;
+  }
 });
 
 meRouter.get('/homecell-area-managed', async (req, res) => {

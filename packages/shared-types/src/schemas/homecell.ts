@@ -114,6 +114,32 @@ export const updateHomecellSchema = z
   .openapi('UpdateHomecellInput');
 export type UpdateHomecellInput = z.infer<typeof updateHomecellSchema>;
 
+/**
+ * Pemimpin homecell / PIC area (mobile) — ubah info homecell.
+ * Field tidak dikirim = tidak diubah; null / '' = kosongkan (kecuali nama).
+ */
+const optText = (max: number) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), z.string().trim().max(max).nullable()).optional();
+export const meUpdateHomecellSchema = z
+  .object({
+    nama: z.string().trim().min(2, 'Nama minimal 2 karakter').max(150).optional(),
+    deskripsi: optText(1000),
+    alamat: optText(1000),
+    mapsUrl: optText(2000),
+    kategori: kategoriField,
+    usiaMin: usiaField,
+    usiaMax: usiaField,
+  })
+  .refine(usiaRangeOk, usiaRangeMsg);
+export type MeUpdateHomecellInput = z.infer<typeof meUpdateHomecellSchema>;
+
+/** PIC area (mobile) — ubah nama & deskripsi area. */
+export const meUpdateHomecellAreaSchema = z.object({
+  nama: z.string().trim().min(2, 'Nama minimal 2 karakter').max(100).optional(),
+  deskripsi: optText(1000),
+});
+export type MeUpdateHomecellAreaInput = z.infer<typeof meUpdateHomecellAreaSchema>;
+
 /** Pemimpin homecell (mobile) — set kategori + rentang usia. null = kosongkan. */
 export const homecellSegmenSchema = z
   .object({ kategori: kategoriField, usiaMin: usiaField, usiaMax: usiaField })

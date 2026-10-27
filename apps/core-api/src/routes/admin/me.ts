@@ -67,6 +67,7 @@ import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 import { mePrayerRouter } from './me-prayer.js';
 import { meResolusiRouter } from './me-resolusi.js';
+import { meBible365Router } from './me-bible365.js';
 import { meWorshipRouter } from './me-worship.js';
 
 export const meRouter = Router();
@@ -90,6 +91,8 @@ meRouter.use('/feedback', meFeedbackRouter);
 meRouter.use('/prayer', mePrayerRouter);
 // Resolusi tahunan saya → me-resolusi.ts
 meRouter.use('/resolusi', meResolusiRouter);
+// Bible 365 (program baca Alkitab 365 hari) → me-bible365.ts
+meRouter.use('/bible365', meBible365Router);
 // ECC Worship (album & lagu) → me-worship.ts
 meRouter.use('/worship', meWorshipRouter);
 // Tamu saya (non-anggota yang saya ajak) → me-tamu.ts

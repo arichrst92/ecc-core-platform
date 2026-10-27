@@ -127,6 +127,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
       { href: '/dashboard/feedback', label: 'Kritik & Saran', icon: MessageSquareText, menuKey: 'feedback' },
       { href: '/dashboard/prayer-request', label: 'Prayer Request', icon: HandHeart, menuKey: 'prayer-request' },
+      { href: '/dashboard/bible365', label: 'Bible 365', icon: BookOpen, menuKey: 'bible365' },
       { href: '/dashboard/tamu', label: 'Tamu', icon: Contact, menuKey: 'tamu' },
     ],
   },

@@ -320,6 +320,7 @@ model Jemaat {
   prayerAssignedBy             PrayerRequest[]               @relation("PrayerAssigner")
   prayerDidoakanBy             PrayerRequest[]               @relation("PrayerDidoakanBy")
   resolusi                     Resolusi[]                    @relation("ResolusiOwner")
+  bible365Plans                Bible365Plan[]                @relation("Bible365Owner")
   // ECC Worship (2026-10-20)
   worshipFavorites             WorshipFavorite[]             @relation("WorshipFavoriteJemaat")
 
@@ -3525,4 +3526,70 @@ model WorshipSyncJob {
   @@index([status, createdAt])
   @@index([songId, createdAt])
   @@map("worship_sync_job")
+}
+
+// ============================================================
+// BIBLE 365 — program baca Alkitab 365 hari (berurutan Kejadian–Wahyu)
+// ============================================================
+// Satu jemaat punya paling banyak satu plan AKTIF; putaran berikutnya dibuat
+// setelah SELESAI / DIHENTIKAN. Jadwal harian dihitung deterministik dari
+// urutan 1.189 pasal (lib/bible365.ts) — tidak disimpan.
+enum Bible365Status {
+  AKTIF
+  SELESAI
+  DIHENTIKAN
+}
+
+model Bible365Plan {
+  id           String         @id @default(uuid()) @db.Uuid
+  jemaatId     String         @map("jemaat_id") @db.Uuid
+  putaran      Int            @default(1)
+  // Hari 1 = tanggal mulai (kalender Asia/Jakarta).
+  startDate    DateTime       @map("start_date") @db.Date
+  status       Bible365Status @default(AKTIF)
+  completedAt  DateTime?      @map("completed_at")
+  stoppedAt    DateTime?      @map("stopped_at")
+  // "HH:MM" — pengingat lokal di HP (disimpan untuk sinkron antar perangkat).
+  reminderTime String?        @map("reminder_time") @db.VarChar(5)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  jemaat   Jemaat            @relation("Bible365Owner", fields: [jemaatId], references: [id], onDelete: Cascade)
+  readings Bible365Reading[]
+  notes    Bible365Note[]
+
+  @@index([jemaatId, status])
+  @@index([status])
+  @@map("bible365_plan")
+}
+
+model Bible365Reading {
+  id      String   @id @default(uuid()) @db.Uuid
+  planId  String   @map("plan_id") @db.Uuid
+  day     Int
+  bookId  Int      @map("book_id")
+  bab     Int
+  readAt  DateTime @default(now()) @map("read_at")
+
+  plan Bible365Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, bookId, bab])
+  @@index([planId, day])
+  @@map("bible365_reading")
+}
+
+// Catatan renungan harian — PRIBADI (tidak tampil di portal).
+model Bible365Note {
+  id        String   @id @default(uuid()) @db.Uuid
+  planId    String   @map("plan_id") @db.Uuid
+  day       Int
+  isi       String   @db.Text
+  ayat      String?  @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plan Bible365Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, day])
+  @@map("bible365_note")
 }

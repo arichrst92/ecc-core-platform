@@ -47,6 +47,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People' },
   { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People' },
   { key: 'prayer-request', label: 'Prayer Request', href: '/dashboard/prayer-request', group: 'People' },
+  { key: 'bible365', label: 'Bible 365', href: '/dashboard/bible365', group: 'People' },
 
   // Community
   { key: 'homecell-area', label: 'Homecell Area', href: '/dashboard/homecell-area', group: 'Community' },

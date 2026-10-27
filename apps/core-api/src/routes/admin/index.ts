@@ -33,6 +33,7 @@ import { websiteContentRouter } from './website-content.js';
 import { groupRouter } from './group.js';
 import { feedbackRouter } from './feedback.js';
 import { prayerRequestRouter } from './prayer-request.js';
+import { bible365AdminRouter } from './bible365.js';
 import { jemaatResolusiRouter } from './jemaat-resolusi.js';
 import { worshipAdminRouter } from './worship.js';
 import { reportRouter } from './report.js';
@@ -77,6 +78,7 @@ adminRouter.use('/jemaat', jemaatRouter);
 adminRouter.use('/feedback', feedbackRouter);
 // Prayer Request (Doa) — inbox, assign petugas, konfigurasi role petugas.
 adminRouter.use('/prayer-request', prayerRequestRouter);
+adminRouter.use('/bible365', bible365AdminRouter);
 // ECC Worship — album, lagu, sinkron lirik (Elsa), statistik.
 adminRouter.use('/worship', worshipAdminRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).

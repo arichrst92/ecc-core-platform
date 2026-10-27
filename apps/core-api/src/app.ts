@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { reportPublicRouter } from './routes/report-public.js';
+import { publicHomecellRouter } from './routes/public-homecell.js';
 import compression from 'compression';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
@@ -134,6 +135,8 @@ export function createApp(): Express {
   // saja karena unauthenticated.
   // Laporan homecell/area untuk app mobile (link bertanda tangan, tanpa JWT).
   app.use('/public/report', reportPublicRouter);
+  // Mode tamu: cari homecell & minta bergabung (tanpa akun).
+  app.use('/public/homecell', publicHomecellRouter);
   app.use('/public', publicUnauthRouter);
   // ECC Worship — streaming audio via URL bertanda tangan (tanpa JWT).
   app.use('/worship-media', worshipMediaRouter);

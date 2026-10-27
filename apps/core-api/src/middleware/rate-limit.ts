@@ -145,6 +145,12 @@ export const publicBrowseLimiter = makeLimiter('public-browse', {
   limit: 60,
 });
 
+/** Mode tamu: minta bergabung homecell (tanpa akun) — anti-spam per IP. */
+export const guestJoinLimiter = makeLimiter('guest-join', {
+  windowMs: 60 * 60 * 1000,
+  limit: 6,
+});
+
 /**
  * Diagnostics error reporting — mobile push runtime error.
  * Lebih ketat dari telemetry karena 1 error report = 1 event (vs telemetry

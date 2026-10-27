@@ -255,6 +255,8 @@ model Jemaat {
   tamuHomecellDicatat          HomecellTamu[]                @relation("HomecellTamuAddedBy")
   tamuHomecellHadir            HomecellTamuAttendance[]      @relation("HomecellTamuHadir")
   tamuHomecellHadirDicatat     HomecellTamuAttendance[]      @relation("HomecellTamuHadirMarker")
+  homecellGuestReviewed        HomecellGuestRequest[]        @relation("HomecellGuestReviewer")
+  homecellGuestAsTamu          HomecellGuestRequest[]        @relation("HomecellGuestTamu")
   tamuFollowupBy               Jemaat?                       @relation("TamuFollowup", fields: [tamuFollowupById], references: [id], onDelete: SetNull)
   tamuDifollowup               Jemaat[]                      @relation("TamuFollowup")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
@@ -1059,6 +1061,7 @@ model Homecell {
   members       HomecellMember[]
   schedules     HomecellSchedule[]
   joinRequests  HomecellJoinRequest[]
+  guestRequests HomecellGuestRequest[]
   announcements HomecellAnnouncement[]
   tamu          HomecellTamu[]
   polls         HomecellPoll[]
@@ -3646,4 +3649,35 @@ model HomecellTamuAttendance {
   @@unique([scheduleId, tamuId])
   @@index([tamuId])
   @@map("homecell_tamu_attendance")
+}
+
+/// Permintaan bergabung dari pengguna MODE TAMU (tanpa akun) — dari layar
+/// "Cari homecell" di app. PIC approve → dicatat sebagai tamu homecell
+/// (Jemaat isTamu + HomecellTamu). Status dicek app lewat token rahasia
+/// (disimpan di perangkat; server hanya menyimpan hash-nya).
+model HomecellGuestRequest {
+  id           String             @id @default(uuid()) @db.Uuid
+  homecellId   String             @map("homecell_id") @db.Uuid
+  nama         String             @db.VarChar(255)
+  noHp         String             @map("no_hp") @db.VarChar(20)
+  jenisKelamin JenisKelamin?      @map("jenis_kelamin")
+  usia         Int?
+  pesan        String?            @db.VarChar(500)
+  status       HomecellJoinStatus @default(PENDING)
+  tokenHash    String             @map("token_hash") @db.VarChar(64)
+  tamuId       String?            @map("tamu_id") @db.Uuid
+  reviewedById String?            @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?          @map("reviewed_at")
+  rejectReason String?            @map("reject_reason") @db.VarChar(300)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  homecell   Homecell @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  tamu       Jemaat?  @relation("HomecellGuestTamu", fields: [tamuId], references: [id], onDelete: SetNull)
+  reviewedBy Jemaat?  @relation("HomecellGuestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([tokenHash])
+  @@index([homecellId, status, createdAt])
+  @@index([noHp, status])
+  @@map("homecell_guest_request")
 }

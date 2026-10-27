@@ -8,6 +8,9 @@
  *   GET    /join-requests            [leader] permintaan bergabung PENDING di homecell yang saya pimpin
  *   POST   /join-requests/:reqId/approve   [leader] terima → otomatis jadi anggota
  *   POST   /join-requests/:reqId/reject    [leader] tolak { reason? }
+ *   GET    /guest-requests                  [leader] permintaan dari MODE TAMU (tanpa akun) PENDING
+ *   POST   /guest-requests/:reqId/approve   [leader] terima → dicatat sebagai tamu homecell
+ *   POST   /guest-requests/:reqId/reject    [leader] tolak { reason? }
  *   GET    /:id                      detail read-only (+ anggota kalau saya anggota / leader)
  *   POST   /:id/join-request         minta bergabung { pesan? }
  *   DELETE /:id/join-request         batalkan permintaan saya
@@ -148,7 +151,7 @@ meHomecellRouter.get('/', async (req, res) => {
     prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabang: { select: { id: true, nama: true } } } }),
     prisma.homecell.findMany({
       where: { picJemaatId: jemaatId, isActive: true },
-      select: { ...listSelect, _count: { select: { members: { where: { isActive: true } }, joinRequests: { where: { status: 'PENDING' } } } } },
+      select: { ...listSelect, _count: { select: { members: { where: { isActive: true } }, joinRequests: { where: { status: 'PENDING' } }, guestRequests: { where: { status: 'PENDING' } } } } },
       orderBy: { nama: 'asc' },
     }),
     prisma.homecellMember.findMany({
@@ -188,6 +191,8 @@ meHomecellRouter.get('/', async (req, res) => {
       managed: managed.map((h) => ({
         ...toListItem(h as unknown as ListRow, null, status, lastMap),
         pendingJoinCount: h._count.joinRequests,
+        // Permintaan dari mode tamu (app ≥ 2.4.3 menjumlahkan ke banner).
+        pendingGuestCount: h._count.guestRequests,
         nextSchedule: next(h.id),
       })),
       memberships: memberships.map((m) => ({
@@ -387,6 +392,112 @@ meHomecellRouter.post('/join-requests/:reqId/reject', async (req, res) => {
     alasan: reason ? `\nAlasan: ${reason}` : '',
   });
   res.json({ success: true, data: { requestId: request.id, status: 'REJECTED' } });
+});
+
+// ------------------------------------------------------------------ leader: permintaan dari mode tamu
+// Pengguna tanpa akun (mode tamu) minta bergabung lewat /public/homecell.
+// Terima → dicatat sebagai tamu homecell (Jemaat isTamu + HomecellTamu),
+// pemimpin jadi pengundang (masuk menu Tamu portal). Detail lokasi & kontak
+// pemimpin baru terlihat oleh tamu setelah diterima.
+
+meHomecellRouter.get('/guest-requests', async (req, res) => {
+  const u = me(req);
+  const rows = await prisma.homecellGuestRequest.findMany({
+    where: { status: 'PENDING', homecell: { isActive: true, picJemaatId: u.jemaatId } },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      nama: true,
+      noHp: true,
+      jenisKelamin: true,
+      usia: true,
+      pesan: true,
+      homecell: { select: { id: true, nama: true } },
+    },
+  });
+  res.json({ success: true, data: rows });
+});
+
+async function loadGuestRequest(reqId: string) {
+  if (!UUID_RE.test(reqId)) throw NotFound('Permintaan tidak ditemukan.');
+  const r = await prisma.homecellGuestRequest.findUnique({
+    where: { id: reqId },
+    include: { homecell: { select: { id: true, nama: true, area: { select: { cabangId: true } } } } },
+  });
+  if (!r) throw NotFound('Permintaan tidak ditemukan.');
+  return r;
+}
+
+meHomecellRouter.post('/guest-requests/:reqId/approve', async (req, res) => {
+  const u = me(req);
+  const r = await loadGuestRequest(req.params.reqId);
+  await assertLeaderOf(req, r.homecellId);
+  if (r.status !== 'PENDING') throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+
+  const { tamu, member } = await resolveTamu({ nama: r.nama, noHp: r.noHp }, r.homecell.area.cabangId);
+  if (member) {
+    // Sejak meminta, nomor ini sudah daftar Els App → minta ia ajukan dari akunnya.
+    await prisma.homecellGuestRequest.updateMany({
+      where: { id: r.id, status: 'PENDING' },
+      data: { status: 'CANCELLED', reviewedById: u.jemaatId, reviewedAt: new Date() },
+    });
+    throw new ApiError(
+      409,
+      'PHONE_IS_MEMBER',
+      `${r.nama} sudah terdaftar di Els App. Minta ia mengajukan bergabung dari akunnya — permintaan tamu ini ditutup.`,
+    );
+  }
+  const catatan = [r.pesan, r.usia != null ? `Usia ±${r.usia} th` : null, 'Dari mode tamu Els App'].filter(Boolean).join(' · ');
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.homecellGuestRequest.updateMany({
+      where: { id: r.id, status: 'PENDING' },
+      data: { status: 'APPROVED', tamuId: tamu.id, reviewedById: u.jemaatId, reviewedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+    await tx.homecellTamu.upsert({
+      where: { homecellId_tamuId: { homecellId: r.homecellId, tamuId: tamu.id } },
+      create: { homecellId: r.homecellId, tamuId: tamu.id, addedById: u.jemaatId, catatan },
+      update: {},
+    });
+    await tx.jemaatTamu.upsert({
+      where: { inviterId_tamuId: { inviterId: u.jemaatId, tamuId: tamu.id } },
+      create: { inviterId: u.jemaatId, tamuId: tamu.id },
+      update: {},
+    });
+    if (r.jenisKelamin) {
+      await tx.jemaat.updateMany({ where: { id: tamu.id, jenisKelamin: null }, data: { jenisKelamin: r.jenisKelamin } });
+    }
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_guest_request',
+    resourceId: r.id,
+    resourceLabel: `Terima tamu ${r.nama} di homecell ${r.homecell.nama}`,
+    metadata: { tamuId: tamu.id },
+  });
+  void sendWaIfEnabled('HOMECELL_GUEST_APPROVED', r.noHp, { nama: r.nama, homecell_nama: r.homecell.nama });
+  res.json({ success: true, data: { requestId: r.id, status: 'APPROVED', tamuId: tamu.id } });
+});
+
+meHomecellRouter.post('/guest-requests/:reqId/reject', async (req, res) => {
+  const u = me(req);
+  const { reason } = rejectSchema.parse(req.body ?? {});
+  const r = await loadGuestRequest(req.params.reqId);
+  await assertLeaderOf(req, r.homecellId);
+  const claimed = await prisma.homecellGuestRequest.updateMany({
+    where: { id: r.id, status: 'PENDING' },
+    data: { status: 'REJECTED', rejectReason: reason ?? null, reviewedById: u.jemaatId, reviewedAt: new Date() },
+  });
+  if (claimed.count === 0) throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_guest_request',
+    resourceId: r.id,
+    resourceLabel: `Tolak tamu ${r.nama} di homecell ${r.homecell.nama}`,
+    metadata: { reason: reason ?? null },
+  });
+  res.json({ success: true, data: { requestId: r.id, status: 'REJECTED' } });
 });
 
 // ------------------------------------------------------------------ detail (read-only)

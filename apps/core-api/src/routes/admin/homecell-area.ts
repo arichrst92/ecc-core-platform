@@ -80,6 +80,8 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
           schedules: true,
         },
       },
+      // Untuk rata-rata % kehadiran (sama dengan kolom "Rata² Hadir" portal).
+      schedules: { select: { _count: { select: { attendances: true } } } },
     },
   });
 
@@ -100,6 +102,16 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
       : null,
     memberCount: hc._count.members,
     scheduleCount: hc._count.schedules,
+    kategori: hc.kategori,
+    usiaMin: hc.usiaMin,
+    usiaMax: hc.usiaMax,
+    // Rata² hadir = total hadir / (anggota aktif × jumlah pertemuan); null bila belum ada data.
+    avgAttendancePercent:
+      hc._count.members > 0 && hc._count.schedules > 0
+        ? Math.round(
+            (hc.schedules.reduce((n, sc) => n + sc._count.attendances, 0) / (hc._count.members * hc._count.schedules)) * 100,
+          )
+        : null,
   }));
 
   res.json({ success: true, data: result });

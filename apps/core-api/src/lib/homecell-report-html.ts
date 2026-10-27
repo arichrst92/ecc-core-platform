@@ -23,6 +23,7 @@ export interface HcMemberRow {
 }
 
 export interface HcReportRow {
+  id: string;
   nama: string;
   isActive: boolean;
   area: string;

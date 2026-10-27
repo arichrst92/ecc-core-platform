@@ -23,6 +23,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
+import { HomecellReportPanel } from '@/components/homecell/homecell-report-panel';
 import { HomecellBoardSection } from '@/components/group/group-content';
 import { todayYmd, parseYmd } from '@/lib/dates';
 import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
@@ -184,6 +185,9 @@ export default function HomecellDetailPage() {
           </span>
         )}
       </div>
+
+      {/* Laporan: periode, KPI, demografi, kehadiran anggota + Export PDF */}
+      <HomecellReportPanel homecellId={homecellId} />
 
       {/* Info card — hanya PIC. Jadwal & alamat tidak ditampilkan karena
           pertemuan homecell dibahas per minggu via kesepakatan grup. */}

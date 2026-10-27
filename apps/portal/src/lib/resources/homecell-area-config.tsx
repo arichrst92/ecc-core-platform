@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarCheck, Home, Users } from 'lucide-react';
+import { CalendarCheck, Eye, Home, Users } from 'lucide-react';
 import { homecellAttendanceTier } from '@ecc/shared-types';
 import { ATTENDANCE_TIER_CLASS } from './homecell-config';
 import { createHomecellAreaSchema, updateHomecellAreaSchema } from '@ecc/shared-types';
@@ -22,6 +22,45 @@ interface HomecellArea extends Record<string, unknown> {
   meetingCount?: number;
   attendancePercent?: number | null;
   homecellNoMeeting?: number;
+  demografi?: {
+    pria: number;
+    wanita: number;
+    genderUnknown: number;
+    groups: number[];
+    ageUnknown: number;
+    total: number;
+  } | null;
+}
+
+/** Label kelompok usia — sejajar DEMO_AGE_GROUPS di core-api. */
+export const AGE_GROUP_LABELS = ['≤ 17', '18–24', '25–29', '30–34', '35–44', '45–59', '60+'];
+const AGE_COLORS = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706', '#b45309', '#78350f'];
+
+/** Ringkas: L/P + bar bertumpuk kelompok usia. */
+export function DemografiMini({ d }: { d: HomecellArea['demografi'] }) {
+  if (!d || !d.total) return <span className="text-neutral-400 text-xs">—</span>;
+  const known = d.total - d.ageUnknown;
+  const top = d.groups.reduce((bi, v, i, arr) => (v > (arr[bi] ?? 0) ? i : bi), 0);
+  return (
+    <div className="flex flex-col gap-1 min-w-[130px]">
+      <div className="text-xs">
+        <span className="text-sky-700 font-semibold">{d.pria} L</span>
+        <span className="text-neutral-300 mx-1">·</span>
+        <span className="text-pink-700 font-semibold">{d.wanita} P</span>
+        {d.genderUnknown ? <span className="text-neutral-400 text-[11px]"> · {d.genderUnknown} ?</span> : null}
+      </div>
+      {known > 0 ? (
+        <>
+          <div className="flex h-1.5 rounded-full overflow-hidden bg-neutral-100" title={AGE_GROUP_LABELS.map((l, i) => `${l} th: ${d.groups[i] ?? 0}`).join('\n')}>
+            {d.groups.map((v, i) => (v ? <div key={i} style={{ width: `${(v / known) * 100}%`, background: AGE_COLORS[i] }} /> : null))}
+          </div>
+          <div className="text-[11px] text-neutral-500">Terbanyak {AGE_GROUP_LABELS[top]} th</div>
+        </>
+      ) : (
+        <div className="text-[11px] text-neutral-400">Usia belum terisi</div>
+      )}
+    </div>
+  );
 }
 
 /** Keterangan warna kehadiran (dipakai di halaman Homecell Area). */
@@ -44,7 +83,19 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
   displayField: 'nama',
   defaultSort: { field: 'nama', order: 'asc' },
   columns: [
-    { key: 'nama', label: 'Nama Area' },
+    {
+      key: 'nama',
+      label: 'Nama Area',
+      render: (_v, row) => (
+        <Link
+          href={`/dashboard/homecell-area/${row.id}`}
+          className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          {row.nama}
+        </Link>
+      ),
+    },
     { key: 'cabang', label: 'Cabang', render: nestedField('cabang.nama'), width: '160px' },
     {
       key: 'picJemaat',
@@ -84,6 +135,12 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       width: '100px',
       render: (_v, row) =>
         row.avgAge != null ? <span className="text-neutral-700">{row.avgAge} th</span> : <span className="text-neutral-400 text-xs">—</span>,
+    },
+    {
+      key: 'demografi',
+      label: 'Demografi',
+      width: '170px',
+      render: (_v, row) => <DemografiMini d={row.demografi} />,
     },
     {
       key: 'attendancePercent',

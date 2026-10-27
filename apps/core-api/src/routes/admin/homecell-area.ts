@@ -11,7 +11,7 @@ import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { resolvePeriod, ymd } from '../../lib/last-attendance.js';
-import { computeAreaStats } from '../../lib/homecell-area-stats.js';
+import { DEMO_AGE_GROUPS, computeAreaStats } from '../../lib/homecell-area-stats.js';
 import { renderHomecellAreaReportHtml } from '../../lib/homecell-area-report-html.js';
 import { fmtTgl } from '../../lib/print-report.js';
 
@@ -58,6 +58,7 @@ homecellAreaRouter.get('/', async (req, res) => {
       meetingCount: s?.meetingCount ?? 0,
       attendancePercent: s?.attendancePercent ?? null,
       homecellNoMeeting: s?.homecellNoMeeting ?? 0,
+      demografi: s?.demografi ?? null,
     };
   });
 
@@ -84,10 +85,11 @@ homecellAreaRouter.get('/export', async (req, res) => {
   if (!['pdf', 'html', 'print'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf.');
   const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
   const cabangId = str('cabangId');
+  const areaId = str('areaId');
   const search = str('search');
   const period = resolvePeriod(str('periode'), str('from'), str('to'));
 
-  const where: Prisma.HomecellAreaWhereInput = { isActive: true };
+  const where: Prisma.HomecellAreaWhereInput = areaId ? { id: areaId } : { isActive: true };
   if (cabangId) where.cabangId = cabangId;
   if (search) where.nama = { contains: search, mode: 'insensitive' };
   const areas = await prisma.homecellArea.findMany({
@@ -108,7 +110,8 @@ homecellAreaRouter.get('/export', async (req, res) => {
   const periodLabel = period
     ? `${PERIOD_LABEL[str('periode') ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
     : 'Semua waktu (sampai hari ini)';
-  const filterLabel = cabang ? `Homecell Area — ${cabang.nama}` : 'Homecell Area — Semua Cabang';
+  const filterLabel =
+    areaId && areas[0] ? `Homecell Area — ${areas[0].nama}` : cabang ? `Homecell Area — ${cabang.nama}` : 'Homecell Area — Semua Cabang';
   const ua = (req.get('user-agent') ?? '').toLowerCase();
   const html = renderHomecellAreaReportHtml(
     areas.map((a) => ({
@@ -123,6 +126,35 @@ homecellAreaRouter.get('/export', async (req, res) => {
   );
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
+});
+
+// ===== Statistik satu area (halaman detail portal, isi sama dengan PDF) =====
+// GET /admin/homecell-area/:id/stats?periode=&from=&to=
+homecellAreaRouter.get('/:id/stats', async (req, res) => {
+  const area = await prisma.homecellArea.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      nama: true,
+      deskripsi: true,
+      isActive: true,
+      cabang: { select: { id: true, nama: true } },
+      picJemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+    },
+  });
+  if (!area) throw NotFound('Homecell Area tidak ditemukan');
+  const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
+  const period = resolvePeriod(str('periode'), str('from'), str('to'));
+  const stats = await computeAreaStats([area.id], period);
+  res.json({
+    success: true,
+    data: {
+      area,
+      period: period ? { from: ymd(period.from), to: ymd(period.to) } : null,
+      stat: stats.get(area.id),
+      ageGroups: DEMO_AGE_GROUPS.map((g) => g.label),
+    },
+  });
 });
 
 // ============================================================

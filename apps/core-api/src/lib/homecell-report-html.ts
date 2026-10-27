@@ -4,11 +4,12 @@
  * kategori, "perlu perhatian", lalu kartu tiap homecell + tabel anggota
  * (usia, kehadiran di periode, terakhir hadir).
  */
-import { esc, fmtTgl } from './print-report.js';
+import { esc } from './print-report.js';
+import { L, fmtTglL as fmtTgl, generatedAt, setReportLang, usiaLabelL, yrs, type ReportLang } from './report-i18n.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
 import { EXTRA_CSS, ICON_PATHS, TIER, demografiCard, demografiLine, ic, pctBadge, tierOf } from './homecell-area-report-html.js';
 import { addDemografi, mergeDemografi, newDemografi, type Demografi } from './homecell-area-stats.js';
-import { HOMECELL_KATEGORI_LABEL, homecellUsiaLabel, type HomecellAttendanceTier } from '@ecc/shared-types';
+import { HOMECELL_KATEGORI_LABEL, type HomecellAttendanceTier } from '@ecc/shared-types';
 
 export interface HcMemberRow {
   nama: string;
@@ -52,8 +53,8 @@ const CSS = `
 `;
 
 const relHari = (d: number | null) => {
-  if (d == null) return '<span class="muted">belum pernah</span>';
-  const t = d === 0 ? 'hari ini' : d === 1 ? 'kemarin' : `${d} hari lalu`;
+  if (d == null) return `<span class="muted">${L('belum pernah', 'never')}</span>`;
+  const t = d === 0 ? L('hari ini', 'today') : d === 1 ? L('kemarin', 'yesterday') : L(`${d} hari lalu`, `${d} days ago`);
   const cls = d <= 7 ? 'ok' : d <= 30 ? 'warn' : 'bad';
   return `<span class="rel ${cls}">${t}</span>`;
 };
@@ -61,15 +62,16 @@ const relHari = (d: number | null) => {
 const segChips = (k: 'SINGLE' | 'COUPLE' | null, min: number | null, max: number | null) =>
   [
     k ? `<span class="seg ${k.toLowerCase()}">${HOMECELL_KATEGORI_LABEL[k]}</span>` : '',
-    homecellUsiaLabel(min, max) ? `<span class="seg">${esc(homecellUsiaLabel(min, max))}</span>` : '',
+    usiaLabelL(min, max) ? `<span class="seg">${esc(usiaLabelL(min, max))}</span>` : '',
   ].join('');
 
 export function renderHomecellReportHtml(
   rows: HcReportRow[],
-  opts: { isMobileUa: boolean; title: string; filterParts: string[]; periodLabel: string },
+  opts: { isMobileUa: boolean; title: string; filterParts: string[]; periodLabel: string; lang?: ReportLang },
 ): string {
+  setReportLang(opts.lang);
   const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
-  const generated = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
+  const generated = generatedAt();
 
   const tot = rows.reduce(
     (a, r) => {
@@ -107,13 +109,13 @@ export function renderHomecellReportHtml(
       const p = r.attendancePercent;
       const t = tierOf(p);
       return p == null || r.attendanceTotal === 0
-        ? barRow(r.nama, '—', 0, '#e2e8f0', ' <span class="muted">· belum ada pertemuan</span>')
-        : barRow(r.nama, `${p}%`, p, t ? TIER[t].bar : '#94a3b8', ` <span class="muted">· ${esc(r.area)} · ${n(r.meetingCount)} pertemuan</span>`);
+        ? barRow(r.nama, '—', 0, '#e2e8f0', ` <span class="muted">· ${L('belum ada pertemuan', 'no meetings yet')}</span>`)
+        : barRow(r.nama, `${p}%`, p, t ? TIER[t].bar : '#94a3b8', ` <span class="muted">· ${esc(r.area)} · ${n(r.meetingCount)} ${L('pertemuan', 'meetings')}</span>`);
     })
     .join('');
-  const perfMore = rows.length > 25 ? `<p class="muted small">+${rows.length - 25} homecell lain di detail di bawah.</p>` : '';
+  const perfMore = rows.length > 25 ? `<p class="muted small">${L(`+${rows.length - 25} homecell lain di detail di bawah.`, `+${rows.length - 25} more homecells in the details below.`)}</p>` : '';
 
-  const legend = `<div class="legend-tier">Indikator kehadiran: ${(Object.keys(TIER) as HomecellAttendanceTier[])
+  const legend = `<div class="legend-tier">${L('Indikator kehadiran', 'Attendance indicator')}: ${(Object.keys(TIER) as HomecellAttendanceTier[])
     .map((k) => `<span class="pill" style="background:${TIER[k].bg};color:${TIER[k].fg}">${TIER[k].label}</span>`)
     .join(' ')}</div>`;
 
@@ -121,7 +123,7 @@ export function renderHomecellReportHtml(
     [
       { label: 'Single', value: tot.kat.SINGLE, color: '#0ea5e9' },
       { label: 'Couple', value: tot.kat.COUPLE, color: '#ec4899' },
-      { label: 'Umum', value: tot.kat.UMUM, color: '#94a3b8' },
+      { label: L('Umum', 'General'), value: tot.kat.UMUM, color: '#94a3b8' },
     ],
     n(rows.length),
     'homecell',
@@ -136,11 +138,11 @@ export function renderHomecellReportHtml(
         .map(
           (r) =>
             `<div class="warn-row"><span><b>${esc(r.nama)}</b> <span class="muted">· ${esc(r.area)}</span></span><span>${
-              r.attendanceTotal === 0 ? '<span class="pill" style="background:#f1f5f9;color:#475569">Belum ada pertemuan</span>' : pctBadge(r.attendancePercent)
+              r.attendanceTotal === 0 ? `<span class="pill" style="background:#f1f5f9;color:#475569">${L('Belum ada pertemuan', 'No meetings yet')}</span>` : pctBadge(r.attendancePercent)
             }</span></div>`,
         )
         .join('')
-    : '<p class="muted">Semua homecell di atas 25% kehadiran.</p>';
+    : `<p class="muted">${L('Semua homecell di atas 25% kehadiran.', 'All homecells are above 25% attendance.')}</p>`;
 
   const cards = rows
     .map((r) => {
@@ -148,35 +150,35 @@ export function renderHomecellReportHtml(
       const st = (icon: keyof typeof ICON_PATHS, color: string, v: string, l: string) =>
         `<div class="st"><span class="i" style="background:${color}">${ic(icon, 11)}</span><div><b>${v}</b><span>${esc(l)}</span></div></div>`;
       const memberTable = r.members.length
-        ? `<table><thead><tr><th>#</th><th>Nama</th><th>Kode</th><th>L/P</th><th class="r">Usia</th><th>Bergabung</th><th class="r">Hadir di periode</th><th>Terakhir hadir</th></tr></thead><tbody>${r.members
+        ? `<table><thead><tr><th>#</th><th>${L('Nama', 'Name')}</th><th>${L('Kode', 'Code')}</th><th>${L('L/P', 'M/F')}</th><th class="r">${L('Usia', 'Age')}</th><th>${L('Bergabung', 'Joined')}</th><th class="r">${L('Hadir di periode', 'Attended in period')}</th><th>${L('Terakhir hadir', 'Last attended')}</th></tr></thead><tbody>${r.members
             .map((m, i) => {
               const rate = r.meetingCount > 0 ? Math.round((m.hadir / r.meetingCount) * 100) : null;
               const mt = tierOf(rate);
               const outRange =
                 m.usia != null && ((r.usiaMin != null && m.usia < r.usiaMin) || (r.usiaMax != null && m.usia > r.usiaMax));
-              return `<tr><td class="n">${i + 1}</td><td><b>${esc(m.nama)}</b></td><td>${esc(m.kode ?? '')}</td><td>${m.jenisKelamin ?? '<span class="muted">—</span>'}</td><td class="r"${
-                outRange ? ' style="color:#b45309;font-weight:700" title="Di luar rentang usia homecell"' : ''
-              }>${m.usia != null ? `${m.usia} th` : '<span class="muted">—</span>'}</td><td>${fmtTgl(m.bergabung)}</td><td class="r">${
+              return `<tr><td class="n">${i + 1}</td><td><b>${esc(m.nama)}</b></td><td>${esc(m.kode ?? '')}</td><td>${m.jenisKelamin ? (m.jenisKelamin === 'L' ? L('L', 'M') : L('P', 'F')) : '<span class="muted">—</span>'}</td><td class="r"${
+                outRange ? ` style="color:#b45309;font-weight:700" title="${L('Di luar rentang usia homecell', 'Outside the homecell age range')}"` : ''
+              }>${m.usia != null ? `${m.usia} ${yrs()}` : '<span class="muted">—</span>'}</td><td>${fmtTgl(m.bergabung)}</td><td class="r">${
                 r.meetingCount > 0
                   ? `${m.hadir}/${r.meetingCount} <span class="mini" style="background:${mt ? TIER[mt].bg : '#f1f5f9'};color:${mt ? TIER[mt].fg : '#475569'}">${rate}%</span>`
                   : '<span class="muted">—</span>'
               }</td><td>${m.lastAt ? `${fmtTgl(m.lastAt)} · ${relHari(m.lastDaysAgo)}` : relHari(null)}</td></tr>`;
             })
             .join('')}</tbody></table>`
-        : '<p class="muted">Belum ada anggota aktif.</p>';
+        : `<p class="muted">${L('Belum ada anggota aktif.', 'No active members yet.')}</p>`;
       return `<div class="area">
   <div class="area-h hc">
     <span class="area-ic hc">${ic('home', 15)}</span>
-    <div><div class="area-t">${esc(r.nama)}${r.isActive ? '' : '<span class="hc-tag">nonaktif</span>'}${segChips(r.kategori, r.usiaMin, r.usiaMax)}</div>
+    <div><div class="area-t">${esc(r.nama)}${r.isActive ? '' : `<span class="hc-tag">${L('nonaktif', 'inactive')}</span>`}${segChips(r.kategori, r.usiaMin, r.usiaMax)}</div>
       <div class="area-s">${esc(r.area)} · ${esc(r.cabang)} · PIC: ${esc(r.pic ?? '—')}</div></div>
-    <div class="area-p"><div class="v" style="color:${t ? TIER[t].fg : '#94a3b8'}">${r.attendancePercent != null && r.attendanceTotal > 0 ? `${r.attendancePercent}%` : '—'}</div><div class="l">Kehadiran</div></div>
+    <div class="area-p"><div class="v" style="color:${t ? TIER[t].fg : '#94a3b8'}">${r.attendancePercent != null && r.attendanceTotal > 0 ? `${r.attendancePercent}%` : '—'}</div><div class="l">${L('Kehadiran', 'Attendance')}</div></div>
   </div>
   <div class="area-b">
     <div class="stats4">
-      ${st('users', '#f97316', n(r.members.length), 'Anggota aktif')}
-      ${st('cake', '#f59e0b', r.avgAge != null ? `${r.avgAge} th` : '—', 'Usia rata-rata')}
-      ${st('calendarCheck', '#3b82f6', n(r.meetingCount), 'Pertemuan di periode')}
-      ${st('userCheck', '#10b981', r.lastMeetingAt ? fmtTgl(r.lastMeetingAt) : '—', 'Pertemuan terakhir')}
+      ${st('users', '#f97316', n(r.members.length), L('Anggota aktif', 'Active members'))}
+      ${st('cake', '#f59e0b', r.avgAge != null ? `${r.avgAge} ${yrs()}` : '—', L('Usia rata-rata', 'Average age'))}
+      ${st('calendarCheck', '#3b82f6', n(r.meetingCount), L('Pertemuan di periode', 'Meetings in period'))}
+      ${st('userCheck', '#10b981', r.lastMeetingAt ? fmtTgl(r.lastMeetingAt) : '—', L('Pertemuan terakhir', 'Last meeting'))}
     </div>
     ${demografiLine(demoOf.get(r)!)}
     ${memberTable}
@@ -186,45 +188,45 @@ export function renderHomecellReportHtml(
     .join('');
 
   return `<!doctype html>
-<html lang="id"><head><meta charset="utf-8"><title>Laporan Homecell — ${esc(opts.periodLabel)}</title>
+<html lang="${opts.lang === 'en' ? 'en' : 'id'}"><head><meta charset="utf-8"><title>${L('Laporan Homecell', 'Homecell Report')} — ${esc(opts.periodLabel)}</title>
 <style>
 ${REPORT_CSS}${EXTRA_CSS}${CSS}</style></head><body>
-${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : '<div class="noprint"><strong>Print Preview — Laporan Homecell</strong> · Tekan <kbd>Ctrl/Cmd + P</kbd> lalu pilih “Save as PDF” (aktifkan “Background graphics”).<button onclick="window.print()">Print / Save as PDF</button></div>'}
+${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : `<div class="noprint"><strong>Print Preview — ${L('Laporan Homecell', 'Homecell Report')}</strong> · ${L('Tekan <kbd>Ctrl/Cmd + P</kbd> lalu pilih “Save as PDF” (aktifkan “Background graphics”).', 'Press <kbd>Ctrl/Cmd + P</kbd> and choose “Save as PDF” (enable “Background graphics”).')}<button onclick="window.print()">Print / Save as PDF</button></div>`}
 <div class="page">
   <div class="hero">
-    <div class="eyebrow">Laporan Penggembalaan · Homecell</div>
+    <div class="eyebrow">${L('Laporan Penggembalaan', 'Pastoral Report')} · Homecell</div>
     <h1>${esc(opts.title)}</h1>
-    <div class="meta">${n(rows.length)} homecell · ${n(tot.mem)} anggota aktif · dibuat ${esc(generated)}</div>
+    <div class="meta">${n(rows.length)} homecell · ${n(tot.mem)} ${L('anggota aktif', 'active members')} · ${L('dibuat', 'generated')} ${esc(generated)}</div>
     ${opts.filterParts.length ? `<div class="meta" style="margin-top:2px">${opts.filterParts.map(esc).join(' · ')}</div>` : ''}
     <div class="period">${ic('calendarCheck', 10, '#c2410c')} ${esc(opts.periodLabel)}</div>
   </div>
 
-  <h2 class="sec">Ringkasan</h2>
+  <h2 class="sec">${L('Ringkasan', 'Summary')}</h2>
   <div class="kpis six">
-    ${kpiBox('home', '#8b5cf6', 'Homecell', n(rows.length), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.UMUM)} umum`)}
-    ${kpiBox('users', '#0ea5e9', 'Anggota aktif', n(tot.mem), rows.length ? `rata-rata ${Math.round(tot.mem / rows.length)} per homecell` : '')}
-    ${kpiBox('cake', '#f59e0b', 'Usia rata-rata', avgAge != null ? `${avgAge} th` : '—', `dari ${n(tot.ageKnown)} anggota dengan tanggal lahir`)}
-    ${kpiBox('calendarCheck', '#3b82f6', 'Pertemuan', n(tot.meet), 'jadwal pertemuan di periode')}
-    ${kpiBox('trendingUp', tAll ? TIER[tAll].bar : '#94a3b8', 'Kehadiran rata-rata', avgPct != null ? `<span style="color:${tAll ? TIER[tAll].fg : '#0f172a'}">${avgPct}%</span>` : '—', 'hadir ÷ (anggota × pertemuan)')}
-    ${kpiBox('alertTriangle', '#ef4444', 'Tanpa pertemuan', n(tot.noMeet), 'homecell tanpa kehadiran di periode')}
+    ${kpiBox('home', '#8b5cf6', 'Homecell', n(rows.length), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
+    ${kpiBox('users', '#0ea5e9', L('Anggota aktif', 'Active members'), n(tot.mem), rows.length ? L(`rata-rata ${Math.round(tot.mem / rows.length)} per homecell`, `avg ${Math.round(tot.mem / rows.length)} per homecell`) : '')}
+    ${kpiBox('cake', '#f59e0b', L('Usia rata-rata', 'Average age'), avgAge != null ? `${avgAge} ${yrs()}` : '—', L(`dari ${n(tot.ageKnown)} anggota dengan tanggal lahir`, `from ${n(tot.ageKnown)} members with a birth date`))}
+    ${kpiBox('calendarCheck', '#3b82f6', L('Pertemuan', 'Meetings'), n(tot.meet), L('jadwal pertemuan di periode', 'meetings in the period'))}
+    ${kpiBox('trendingUp', tAll ? TIER[tAll].bar : '#94a3b8', L('Kehadiran rata-rata', 'Average attendance'), avgPct != null ? `<span style="color:${tAll ? TIER[tAll].fg : '#0f172a'}">${avgPct}%</span>` : '—', L('hadir ÷ (anggota × pertemuan)', 'present ÷ (members × meetings)'))}
+    ${kpiBox('alertTriangle', '#ef4444', L('Tanpa pertemuan', 'No meetings'), n(tot.noMeet), L('homecell tanpa kehadiran di periode', 'homecells without attendance in period'))}
   </div>
 
-  <div class="card"><div class="card-h"><span class="card-ic" style="background:#22c55e">${ic('trendingUp', 12)}</span><div><div class="card-t">Performa kehadiran homecell</div><div class="card-s">Diurutkan dari tertinggi</div></div></div>
-    ${perf || '<p class="muted">Tidak ada homecell.</p>'}${perfMore}
+  <div class="card"><div class="card-h"><span class="card-ic" style="background:#22c55e">${ic('trendingUp', 12)}</span><div><div class="card-t">${L('Performa kehadiran homecell', 'Homecell attendance')}</div><div class="card-s">${L('Diurutkan dari tertinggi', 'Highest first')}</div></div></div>
+    ${perf || `<p class="muted">${L('Tidak ada homecell.', 'No homecells.')}</p>`}${perfMore}
     ${legend}
   </div>
 
   <div class="grid2">
-    ${demografiCard(demoAll, 'Gender & kelompok usia anggota aktif')}
-    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">Komposisi kategori</div><div class="card-s">Single · Couple · Umum</div></div></div>${komposisi}</div>
+    ${demografiCard(demoAll, L('Gender & kelompok usia anggota aktif', 'Gender & age groups of active members'))}
+    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori', 'Categories')}</div><div class="card-s">Single · Couple · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
   </div>
-  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">Perlu perhatian</div><div class="card-s">Kehadiran ≤ 25% atau belum ada pertemuan</div></div></div>${attentionBody}</div>
+  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>
 
-  <h2 class="sec">Detail per homecell</h2>
-  ${cards || '<p class="muted">Tidak ada homecell yang sesuai filter.</p>'}
+  <h2 class="sec">${L('Detail per homecell', 'Homecell details')}</h2>
+  ${cards || `<p class="muted">${L('Tidak ada homecell yang sesuai filter.', 'No homecells match the filter.')}</p>`}
 
   <div class="foot">
-    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Terakhir hadir: hijau ≤ 7 hari, kuning ≤ 30 hari, merah &gt; 30 hari · Usia oranye = di luar rentang usia homecell</div>
+    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Terakhir hadir: hijau ≤ 7 hari, kuning ≤ 30 hari, merah &gt; 30 hari · Usia oranye = di luar rentang usia homecell', 'Last attended: green ≤ 7 days, yellow ≤ 30 days, red &gt; 30 days · Orange age = outside the homecell age range')}</div>
     <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
   </div>
 </div>

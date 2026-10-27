@@ -589,6 +589,7 @@ const reportLinkSchema = z.object({
   periode: z.enum(['last_7d', 'this_week', 'last_week', 'last_30d', 'this_month', 'last_month', 'custom']).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lang: z.enum(['id', 'en']).optional(),
 });
 meHomecellRouter.post('/report-link', async (req, res) => {
   const u = me(req);
@@ -600,7 +601,7 @@ meHomecellRouter.post('/report-link', async (req, res) => {
     if (!area) throw NotFound('Homecell Area tidak ditemukan');
     if (area.picJemaatId !== u.jemaatId) throw Forbidden('Hanya PIC area ini yang dapat membuka laporannya.');
   }
-  const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to });
+  const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to, l: input.lang });
   res.json({ success: true, data: { url: `${apiBase(req)}/public/report/${token}`, expiresInSec: REPORT_LINK_TTL_SEC } });
 });
 

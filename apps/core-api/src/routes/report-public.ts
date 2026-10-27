@@ -8,21 +8,23 @@ import { prisma } from '@ecc/database';
 import { Forbidden, NotFound } from '../lib/errors.js';
 import { verifyReportToken } from '../lib/report-link.js';
 import { resolvePeriod, ymd } from '../lib/last-attendance.js';
-import { fmtTgl } from '../lib/print-report.js';
+import { L, fmtTglL, periodName, setReportLang } from '../lib/report-i18n.js';
 import { computeAreaStats } from '../lib/homecell-area-stats.js';
 import { renderHomecellAreaReportHtml } from '../lib/homecell-area-report-html.js';
 import { renderHomecellReportHtml } from '../lib/homecell-report-html.js';
-import { buildHomecellReportRows, PERIOD_LABEL } from './admin/homecell.js';
+import { buildHomecellReportRows } from './admin/homecell.js';
 
 export const reportPublicRouter = Router();
 
 reportPublicRouter.get('/:token', async (req, res) => {
   const p = verifyReportToken(req.params.token);
-  if (!p) throw Forbidden('Link laporan sudah kedaluwarsa. Buka ulang dari Els App.');
+  if (!p) throw Forbidden('Link laporan sudah kedaluwarsa / Report link expired. Buka ulang dari Els App.');
+  const lang = p.l === 'en' ? 'en' : 'id';
+  setReportLang(lang);
   const period = resolvePeriod(p.p, p.f, p.t);
   const periodLabel = period
-    ? `${PERIOD_LABEL[p.p ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
-    : 'Semua waktu (sampai hari ini)';
+    ? `${periodName(p.p)} · ${fmtTglL(ymd(period.from))} – ${fmtTglL(ymd(period.to))}`
+    : L('Semua waktu (sampai hari ini)', 'All time (up to today)');
   const ua = (req.get('user-agent') ?? '').toLowerCase();
   const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(ua);
 
@@ -30,7 +32,7 @@ reportPublicRouter.get('/:token', async (req, res) => {
   if (p.k === 'homecell') {
     const rows = await buildHomecellReportRows({ id: p.id }, period);
     if (!rows[0]) throw NotFound('Homecell tidak ditemukan');
-    html = renderHomecellReportHtml(rows, { isMobileUa, title: `Homecell — ${rows[0].nama}`, filterParts: [], periodLabel });
+    html = renderHomecellReportHtml(rows, { isMobileUa, title: `Homecell — ${rows[0].nama}`, filterParts: [], periodLabel, lang });
   } else {
     const area = await prisma.homecellArea.findUnique({
       where: { id: p.id },
@@ -40,7 +42,7 @@ reportPublicRouter.get('/:token', async (req, res) => {
     const stats = await computeAreaStats([area.id], period);
     html = renderHomecellAreaReportHtml(
       [{ id: area.id, nama: area.nama, deskripsi: area.deskripsi, cabang: area.cabang.nama, pic: area.picJemaat?.namaLengkap ?? null, stat: stats.get(area.id)! }],
-      { isMobileUa, filterLabel: `Homecell Area — ${area.nama}`, periodLabel },
+      { isMobileUa, filterLabel: `Homecell Area — ${area.nama}`, periodLabel, lang },
     );
   }
   // Halaman cetak: izinkan style/script inline (tombol & auto-print) + gambar https (logo IDEA).

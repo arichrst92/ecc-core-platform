@@ -15,6 +15,7 @@ export interface ReportPayload {
   p?: string; // periode preset
   f?: string; // from YYYY-MM-DD
   t?: string; // to YYYY-MM-DD
+  l?: 'id' | 'en'; // bahasa laporan (ikut bahasa app)
   exp: number; // epoch detik
 }
 

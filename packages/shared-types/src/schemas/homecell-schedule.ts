@@ -56,10 +56,14 @@ export type ScanHomecellAttendanceInput = z.infer<typeof scanHomecellAttendanceS
  * Bulk attendance — PIC tandai banyak jemaat sekaligus via checklist
  * (bukan QR scan 1-per-1). Max 50 kodes per request (homecell terbesar ~30).
  */
-export const bulkScanHomecellAttendanceSchema = z.object({
-  kodes: z
-    .array(z.string().trim().min(1).max(64))
-    .min(1, 'Minimal 1 kode')
-    .max(50, 'Maksimal 50 kode per batch'),
-});
+// Bulk: kirim `jemaatIds` (app ≥ 2.5.0) dan/atau `kodes`. Kode boleh null/kosong
+// (anggota tanpa kode dari app lama) — baris itu dilaporkan error, sisanya tetap
+// dicatat (dulu satu kode null membuat seluruh request 400).
+export const bulkScanHomecellAttendanceSchema = z
+  .object({
+    kodes: z.array(z.string().trim().max(64).nullable()).max(50, 'Maksimal 50 kode per batch').optional(),
+    jemaatIds: z.array(z.string().uuid()).max(50, 'Maksimal 50 jemaat per batch').optional(),
+  })
+  .refine((v) => (v.kodes?.length ?? 0) + (v.jemaatIds?.length ?? 0) > 0, { message: 'Minimal 1 jemaat' })
+  .refine((v) => (v.kodes?.length ?? 0) + (v.jemaatIds?.length ?? 0) <= 50, { message: 'Maksimal 50 jemaat per batch' });
 export type BulkScanHomecellAttendanceInput = z.infer<typeof bulkScanHomecellAttendanceSchema>;

@@ -27,6 +27,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ApiError, BadRequest, NotFound } from '../../lib/errors.js';
+import { generateUniqueKode } from '../../lib/kode-reservasi.js';
+import { logger } from '../../lib/logger.js';
 import { flexMaterialUpload, materialExt, MATERIAL_TYPES } from '../../lib/material-upload.js';
 import { deleteHomecellMaterial, saveHomecellMaterial } from '../../lib/storage.js';
 import { audit } from '../../lib/audit.js';
@@ -195,6 +197,21 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       jemaat: { select: { id: true, namaLengkap: true, kode: true } },
     },
   });
+  // Anggota lama tanpa kode jemaat → buatkan kode sekarang. App (≤ 2.4.x)
+  // mengirim absen bulk berdasarkan kode; kode null membuat absen gagal.
+  // Kode ini juga dipakai kartu QR jemaat, jadi aman disimpan permanen.
+  for (const m of members) {
+    if (m.jemaat.kode) continue;
+    try {
+      const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
+      const upd = await prisma.jemaat.updateMany({ where: { id: m.jemaat.id, kode: null }, data: { kode } });
+      if (upd.count) m.jemaat.kode = kode;
+      else m.jemaat.kode = (await prisma.jemaat.findUnique({ where: { id: m.jemaat.id }, select: { kode: true } }))?.kode ?? null;
+      logger.info({ jemaatId: m.jemaat.id, kode: m.jemaat.kode }, 'homecell: kode jemaat dibuat otomatis');
+    } catch (e) {
+      logger.warn({ err: e, jemaatId: m.jemaat.id }, 'homecell: gagal membuat kode jemaat');
+    }
+  }
   const attendedIds = new Set(schedule.attendances.map((a) => a.jemaatId));
   const missingMembers = members
     .filter((m) => !attendedIds.has(m.jemaat.id))
@@ -352,7 +369,11 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
   const requester = await getRequester(req);
   await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
 
-  const { kodes } = bulkScanHomecellAttendanceSchema.parse(req.body);
+  const input = bulkScanHomecellAttendanceSchema.parse(req.body);
+  const items: Array<{ kode: string | null; jemaatId: string | null }> = [
+    ...(input.jemaatIds ?? []).map((jemaatId) => ({ kode: null, jemaatId })),
+    ...(input.kodes ?? []).map((k) => ({ kode: k && k.length ? k : null, jemaatId: null })),
+  ];
 
   // Verify schedule + load homecell nama for notif
   const schedule = await prisma.homecellSchedule.findFirst({
@@ -377,6 +398,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
   }
   interface BulkResultErr {
     kode: string;
+    jemaatId?: string | null;
     status: 'error';
     error: { code: string; message: string };
   }
@@ -384,10 +406,19 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
 
   // Process per kode. Tidak di-transactional supaya 1 kode fail tidak rollback
   // kode lain — partial success is intentional (per request doc).
-  for (const kode of kodes) {
+  for (const item of items) {
+    const kode = item.kode ?? item.jemaatId ?? '';
     try {
+      if (!item.kode && !item.jemaatId) {
+        results.push({
+          kode: '',
+          status: 'error',
+          error: { code: 'KODE_EMPTY', message: 'Jemaat belum punya kode — perbarui Els App lalu coba lagi.' },
+        });
+        continue;
+      }
       const jemaat = await prisma.jemaat.findUnique({
-        where: { kode },
+        where: item.jemaatId ? { id: item.jemaatId } : { kode: item.kode! },
         select: {
           id: true,
           namaLengkap: true,
@@ -401,7 +432,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
         results.push({
           kode,
           status: 'error',
-          error: { code: 'KODE_NOT_FOUND', message: `Kode "${kode}" tidak ditemukan.` },
+          error: { code: 'KODE_NOT_FOUND', message: item.jemaatId ? 'Jemaat tidak ditemukan.' : `Kode "${kode}" tidak ditemukan.` },
         });
         continue;
       }
@@ -510,8 +541,8 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
     action: 'CREATE',
     resource: 'homecell_attendance',
     resourceId: scheduleId,
-    resourceLabel: `Bulk ${newlyRecorded}/${kodes.length} di schedule ${scheduleId}`,
-    metadata: { kind: 'bulk-attendance', totalRequested: kodes.length, newlyRecorded },
+    resourceLabel: `Bulk ${newlyRecorded}/${items.length} di schedule ${scheduleId}`,
+    metadata: { kind: 'bulk-attendance', totalRequested: items.length, newlyRecorded },
   });
 
   const attendanceCount = await prisma.homecellAttendance.count({ where: { scheduleId } });

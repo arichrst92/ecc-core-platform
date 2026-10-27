@@ -33,8 +33,18 @@ describe('bulkScanHomecellAttendanceSchema', () => {
     expect(bulkScanHomecellAttendanceSchema.safeParse({ kodes: k(51) }).success).toBe(false);
   });
 
-  it('menolak kode string kosong', () => {
-    expect(bulkScanHomecellAttendanceSchema.safeParse({ kodes: ['  '] }).success).toBe(false);
+  it('menerima kode null/kosong (anggota tanpa kode) — dilaporkan per baris, bukan 400', () => {
+    expect(bulkScanHomecellAttendanceSchema.safeParse({ kodes: ['  ', null, 'JMT001'] }).success).toBe(true);
+  });
+
+  it('menerima jemaatIds dan membatasi total 50', () => {
+    const id = '0b6f3c1e-8a2d-4a5b-9c7e-1d2f3a4b5c6d';
+    expect(bulkScanHomecellAttendanceSchema.safeParse({ jemaatIds: [id] }).success).toBe(true);
+    expect(bulkScanHomecellAttendanceSchema.safeParse({ jemaatIds: ['bukan-uuid'] }).success).toBe(false);
+    expect(
+      bulkScanHomecellAttendanceSchema.safeParse({ jemaatIds: [id], kodes: Array.from({ length: 50 }, (_, i) => `K${i}`) }).success,
+    ).toBe(false);
+    expect(bulkScanHomecellAttendanceSchema.safeParse({}).success).toBe(false);
   });
 });
 

@@ -30,6 +30,8 @@ interface Tamu {
   cabang: { id: string; nama: string } | null;
   pertamaDicatat: string;
   pengundang: { id: string; namaLengkap: string; noHp: string | null; sejak: string }[];
+  /** Homecell tempat tamu dicatat (oleh pemimpin homecell di app). */
+  homecell?: { id: string; nama: string; sejak: string; catatan: string | null }[];
   kehadiran: number;
   terakhirHadir: string | null;
   terakhirAcara: { jenis: 'IBADAH' | 'EVENT'; id: string; nama: string; tanggal: string } | null;
@@ -82,6 +84,7 @@ export default function TamuPage() {
   const [noteFor, setNoteFor] = useState<Tamu | null>(null);
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
   const [followupBy, setFollowupBy] = useState('');
+  const [sumber, setSumber] = useState('');
   const [adding, setAdding] = useState(false);
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
@@ -92,10 +95,11 @@ export default function TamuPage() {
     cabangId: cabangId || undefined,
     search: s || undefined,
     followupBy: followupBy || undefined,
+    sumber: sumber || undefined,
   };
 
   const q = useQuery({
-    queryKey: ['tamu', status, cabangId, s, followupBy, page],
+    queryKey: ['tamu', status, cabangId, s, followupBy, sumber, page],
     queryFn: async () =>
       (
         await apiClient.get<ListResp>('/admin/tamu', {
@@ -187,7 +191,7 @@ export default function TamuPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Cari nama tamu / no HP / nama pengundang"
+            placeholder="Cari nama tamu / no HP / pengundang / homecell"
             className="flex-1 py-1.5 outline-none text-sm"
           />
         </div>
@@ -221,6 +225,17 @@ export default function TamuPage() {
               {p.namaLengkap}
             </option>
           ))}
+        </select>
+        <select
+          value={sumber}
+          onChange={(e) => {
+            setSumber(e.target.value);
+            setPage(1);
+          }}
+          className={`${selectCls} w-44`}
+        >
+          <option value="">Semua sumber</option>
+          <option value="homecell">Tamu homecell</option>
         </select>
       </div>
 
@@ -268,6 +283,20 @@ export default function TamuPage() {
                       {t.cabang?.nama ?? '—'} · dicatat {tgl(t.pertamaDicatat)}
                       {!t.isTamu ? ' · sudah punya akun' : ''}
                     </div>
+                    {t.homecell && t.homecell.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {t.homecell.map((h) => (
+                          <Link
+                            key={h.id}
+                            href={`/dashboard/homecell/${h.id}`}
+                            className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold hover:underline"
+                            title={h.catatan ?? undefined}
+                          >
+                            Homecell: {h.nama}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {t.pengundang.length === 0 ? (

@@ -56,8 +56,11 @@ async function loadTamu(req: Request) {
   const cabangId = typeof req.query.cabangId === 'string' && UUID_RE.test(req.query.cabangId) ? req.query.cabangId : undefined;
   // followupBy: <uuid> = ditangani orang ini | 'none' = belum ada petugas follow-up
   const fu = typeof req.query.followupBy === 'string' ? req.query.followupBy : '';
+  // sumber=homecell → hanya tamu yang dicatat dari homecell.
+  const sumber = typeof req.query.sumber === 'string' ? req.query.sumber : '';
   const where: Prisma.JemaatWhereInput = {
-    OR: [{ isTamu: true }, { diundangSebagaiTamu: { some: {} } }],
+    OR: [{ isTamu: true }, { diundangSebagaiTamu: { some: {} } }, { tamuHomecell: { some: {} } }],
+    ...(sumber === 'homecell' ? { tamuHomecell: { some: {} } } : {}),
     ...(cabangId ? { cabangId } : {}),
     ...(fu === 'none' ? { tamuFollowupById: null } : UUID_RE.test(fu) ? { tamuFollowupById: fu } : {}),
     ...(search
@@ -68,6 +71,7 @@ async function loadTamu(req: Request) {
                 { namaLengkap: { contains: search, mode: 'insensitive' } },
                 { noHp: { contains: search.replace(/\D/g, '') || search } },
                 { diundangSebagaiTamu: { some: { inviter: { namaLengkap: { contains: search, mode: 'insensitive' } } } } },
+                { tamuHomecell: { some: { homecell: { nama: { contains: search, mode: 'insensitive' } } } } },
               ],
             },
           ],
@@ -96,6 +100,10 @@ async function loadTamu(req: Request) {
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true, inviter: { select: { id: true, namaLengkap: true, noHp: true } } },
       },
+      tamuHomecell: {
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true, catatan: true, homecell: { select: { id: true, nama: true } } },
+      },
     },
   });
   const att = await tamuAttendance(rows.map((r) => r.id));
@@ -114,6 +122,7 @@ async function loadTamu(req: Request) {
       cabang: r.cabang,
       pertamaDicatat: r.diundangSebagaiTamu[0]?.createdAt ?? r.createdAt,
       pengundang: r.diundangSebagaiTamu.map((x) => ({ ...x.inviter, sejak: x.createdAt })),
+      homecell: r.tamuHomecell.map((x) => ({ ...x.homecell, sejak: x.createdAt, catatan: x.catatan })),
       kehadiran: a?.kehadiran ?? 0,
       terakhirHadir: a?.terakhirHadir ?? null,
       terakhirAcara: a?.terakhirAcara ?? null,

@@ -25,6 +25,8 @@ import {
 import { Router, type Request } from 'express';
 import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
 import { createReportToken, REPORT_LINK_TTL_SEC } from '../../lib/report-link.js';
+import { memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance } from '../../lib/tamu-status.js';
 import { apiBase } from '../../lib/worship.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
@@ -600,6 +602,95 @@ meHomecellRouter.post('/report-link', async (req, res) => {
   }
   const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to });
   res.json({ success: true, data: { url: `${apiBase(req)}/public/report/${token}`, expiresInSec: REPORT_LINK_TTL_SEC } });
+});
+
+// ------------------------------------------------------------------ tamu homecell
+// Pemimpin homecell / PIC area mencatat tamu yang berkunjung ke homecell.
+// Tamu masuk ke menu Tamu portal (Jemaat isTamu + JemaatTamu pengundang).
+//   GET    /:id/tamu
+//   POST   /:id/tamu            { nama, noHp, catatan? }
+//   DELETE /:id/tamu/:tamuId    (hapus dari daftar homecell; data tamu tetap)
+const homecellTamuSchema = tamuInputSchema.extend({ catatan: z.string().trim().max(500).optional() });
+
+meHomecellRouter.get('/:id/tamu', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const rows = await prisma.homecellTamu.findMany({
+    where: { homecellId: req.params.id },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      catatan: true,
+      createdAt: true,
+      addedBy: { select: { id: true, namaLengkap: true } },
+      tamu: { select: { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, tamuStatus: true } },
+    },
+  });
+  const att = await tamuAttendance(rows.map((r) => r.tamu.id));
+  res.json({
+    success: true,
+    data: rows.map((r) => {
+      const a = att.get(r.tamu.id);
+      const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: !!a?.kehadiran });
+      const { tamuStatus: _s, ...tamu } = r.tamu;
+      return {
+        ...tamu,
+        catatan: r.catatan,
+        addedAt: r.createdAt,
+        addedBy: r.addedBy,
+        status,
+        statusLabel: TAMU_STATUS_LABEL[status],
+        kehadiran: a?.kehadiran ?? 0,
+        terakhirHadir: a?.terakhirHadir ?? null,
+        terakhirAcara: a?.terakhirAcara ?? null,
+      };
+    }),
+  });
+});
+
+meHomecellRouter.post('/:id/tamu', async (req, res) => {
+  const u = me(req);
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const input = homecellTamuSchema.parse(req.body ?? {});
+  const hc = await prisma.homecell.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, nama: true, area: { select: { cabangId: true } } },
+  });
+  if (!hc) throw NotFound('Homecell tidak ditemukan');
+  const { tamu, created, member } = await resolveTamu({ nama: input.nama, noHp: input.noHp }, hc.area.cabangId);
+  if (member) throw memberPhoneError();
+  await prisma.$transaction([
+    prisma.homecellTamu.upsert({
+      where: { homecellId_tamuId: { homecellId: hc.id, tamuId: tamu.id } },
+      create: { homecellId: hc.id, tamuId: tamu.id, addedById: u.jemaatId, catatan: input.catatan || null },
+      update: input.catatan ? { catatan: input.catatan } : {},
+    }),
+    // Pemimpin tercatat sebagai pengundang → tampil di menu Tamu portal & "Tamu saya".
+    prisma.jemaatTamu.upsert({
+      where: { inviterId_tamuId: { inviterId: u.jemaatId, tamuId: tamu.id } },
+      create: { inviterId: u.jemaatId, tamuId: tamu.id },
+      update: {},
+    }),
+  ]);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'homecell_tamu',
+    resourceId: tamu.id,
+    resourceLabel: `Tamu ${tamu.namaLengkap} di homecell ${hc.nama}${created ? ' (baru)' : ' (berulang)'}`,
+  });
+  res.status(created ? 201 : 200).json({
+    success: true,
+    data: { id: tamu.id, namaLengkap: tamu.namaLengkap, noHp: tamu.noHp, kode: tamu.kode, isReturning: !created },
+  });
+});
+
+meHomecellRouter.delete('/:id/tamu/:tamuId', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const r = await prisma.homecellTamu.deleteMany({ where: { homecellId: req.params.id, tamuId: String(req.params.tamuId ?? '') } });
+  if (r.count === 0) throw NotFound('Tamu tidak ditemukan di homecell ini');
+  audit(req, { action: 'DELETE', resource: 'homecell_tamu', resourceId: String(req.params.tamuId), resourceLabel: 'Hapus tamu dari homecell' });
+  res.json({ success: true, data: { id: req.params.tamuId } });
 });
 
 /** Pemimpin homecell ATAU PIC area homecell tsb (atau fulltimer). */

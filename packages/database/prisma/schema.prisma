@@ -251,6 +251,8 @@ model Jemaat {
   feedbackReplies              FeedbackReply[]               @relation("FeedbackReplyAuthor")
   tamuSaya                     JemaatTamu[]                  @relation("TamuInviter")
   diundangSebagaiTamu          JemaatTamu[]                  @relation("TamuGuest")
+  tamuHomecell                 HomecellTamu[]                @relation("HomecellTamuGuest")
+  tamuHomecellDicatat          HomecellTamu[]                @relation("HomecellTamuAddedBy")
   tamuFollowupBy               Jemaat?                       @relation("TamuFollowup", fields: [tamuFollowupById], references: [id], onDelete: SetNull)
   tamuDifollowup               Jemaat[]                      @relation("TamuFollowup")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
@@ -1056,6 +1058,7 @@ model Homecell {
   schedules     HomecellSchedule[]
   joinRequests  HomecellJoinRequest[]
   announcements HomecellAnnouncement[]
+  tamu          HomecellTamu[]
   polls         HomecellPoll[]
 
   @@index([areaId])
@@ -3601,4 +3604,24 @@ model Bible365Note {
 
   @@unique([planId, day])
   @@map("bible365_note")
+}
+
+// Tamu homecell — non-anggota yang dibawa / berkunjung ke homecell, dicatat
+// pemimpin homecell dari app. Tamu = Jemaat isTamu=true (lib/tamu.ts) supaya
+// tampil di menu Tamu portal; relasi ini menandai homecell asalnya.
+model HomecellTamu {
+  id         String   @id @default(uuid()) @db.Uuid
+  homecellId String   @map("homecell_id") @db.Uuid
+  tamuId     String   @map("tamu_id") @db.Uuid
+  addedById  String?  @map("added_by_id") @db.Uuid
+  catatan    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  homecell Homecell @relation(fields: [homecellId], references: [id], onDelete: Cascade)
+  tamu     Jemaat   @relation("HomecellTamuGuest", fields: [tamuId], references: [id], onDelete: Cascade)
+  addedBy  Jemaat?  @relation("HomecellTamuAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([homecellId, tamuId])
+  @@index([tamuId])
+  @@map("homecell_tamu")
 }

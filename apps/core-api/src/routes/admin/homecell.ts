@@ -227,7 +227,7 @@ homecellRouter.get('/export', async (req, res) => {
         orderBy: { jemaat: { namaLengkap: 'asc' } },
         select: {
           tanggalBergabung: true,
-          jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true, tanggalLahir: true } },
+          jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true, tanggalLahir: true, jenisKelamin: true } },
         },
       },
     },
@@ -305,6 +305,7 @@ homecellRouter.get('/export', async (req, res) => {
           kode: m.jemaat.kode,
           noHp: m.jemaat.noHp,
           usia: ageOf(m.jemaat.tanggalLahir),
+          jenisKelamin: m.jemaat.jenisKelamin,
           bergabung: ymd(m.tanggalBergabung),
           hadir: hadirMap.get(`${h.id}:${m.jemaat.id}`) ?? 0,
           lastAt: la ? ymd(la.lastAttendedAt) : null,

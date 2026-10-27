@@ -6,7 +6,8 @@
  */
 import { esc, fmtTgl } from './print-report.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
-import { EXTRA_CSS, ICON_PATHS, TIER, ic, pctBadge, tierOf } from './homecell-area-report-html.js';
+import { EXTRA_CSS, ICON_PATHS, TIER, demografiCard, demografiLine, ic, pctBadge, tierOf } from './homecell-area-report-html.js';
+import { addDemografi, mergeDemografi, newDemografi, type Demografi } from './homecell-area-stats.js';
 import { HOMECELL_KATEGORI_LABEL, homecellUsiaLabel, type HomecellAttendanceTier } from '@ecc/shared-types';
 
 export interface HcMemberRow {
@@ -14,6 +15,7 @@ export interface HcMemberRow {
   kode: string | null;
   noHp: string | null;
   usia: number | null;
+  jenisKelamin: 'L' | 'P' | null;
   bergabung: string;
   hadir: number;
   lastAt: string | null;
@@ -81,6 +83,14 @@ export function renderHomecellReportHtml(
     },
     { mem: 0, meet: 0, hadir: 0, pot: 0, ageSum: 0, ageKnown: 0, noMeet: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
   );
+  // Demografi per homecell + gabungan.
+  const demoOf = new Map<HcReportRow, Demografi>();
+  for (const r of rows) {
+    const d = newDemografi();
+    for (const m of r.members) addDemografi(d, m.usia, m.jenisKelamin);
+    demoOf.set(r, d);
+  }
+  const demoAll = mergeDemografi([...demoOf.values()]);
   const avgAge = tot.ageKnown ? Math.round(tot.ageSum / tot.ageKnown) : null;
   const avgPct = tot.pot ? Math.min(100, Math.round((tot.hadir / tot.pot) * 100)) : null;
   const tAll = tierOf(avgPct);
@@ -137,13 +147,13 @@ export function renderHomecellReportHtml(
       const st = (icon: keyof typeof ICON_PATHS, color: string, v: string, l: string) =>
         `<div class="st"><span class="i" style="background:${color}">${ic(icon, 11)}</span><div><b>${v}</b><span>${esc(l)}</span></div></div>`;
       const memberTable = r.members.length
-        ? `<table><thead><tr><th>#</th><th>Nama</th><th>Kode</th><th class="r">Usia</th><th>Bergabung</th><th class="r">Hadir di periode</th><th>Terakhir hadir</th></tr></thead><tbody>${r.members
+        ? `<table><thead><tr><th>#</th><th>Nama</th><th>Kode</th><th>L/P</th><th class="r">Usia</th><th>Bergabung</th><th class="r">Hadir di periode</th><th>Terakhir hadir</th></tr></thead><tbody>${r.members
             .map((m, i) => {
               const rate = r.meetingCount > 0 ? Math.round((m.hadir / r.meetingCount) * 100) : null;
               const mt = tierOf(rate);
               const outRange =
                 m.usia != null && ((r.usiaMin != null && m.usia < r.usiaMin) || (r.usiaMax != null && m.usia > r.usiaMax));
-              return `<tr><td class="n">${i + 1}</td><td><b>${esc(m.nama)}</b></td><td>${esc(m.kode ?? '')}</td><td class="r"${
+              return `<tr><td class="n">${i + 1}</td><td><b>${esc(m.nama)}</b></td><td>${esc(m.kode ?? '')}</td><td>${m.jenisKelamin ?? '<span class="muted">—</span>'}</td><td class="r"${
                 outRange ? ' style="color:#b45309;font-weight:700" title="Di luar rentang usia homecell"' : ''
               }>${m.usia != null ? `${m.usia} th` : '<span class="muted">—</span>'}</td><td>${fmtTgl(m.bergabung)}</td><td class="r">${
                 r.meetingCount > 0
@@ -167,6 +177,7 @@ export function renderHomecellReportHtml(
       ${st('calendarCheck', '#3b82f6', n(r.meetingCount), 'Pertemuan di periode')}
       ${st('userCheck', '#10b981', r.lastMeetingAt ? fmtTgl(r.lastMeetingAt) : '—', 'Pertemuan terakhir')}
     </div>
+    ${demografiLine(demoOf.get(r)!)}
     ${memberTable}
   </div>
 </div>`;
@@ -203,9 +214,10 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   </div>
 
   <div class="grid2">
+    ${demografiCard(demoAll, 'Gender & kelompok usia anggota aktif')}
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">Komposisi kategori</div><div class="card-s">Single · Couple · Umum</div></div></div>${komposisi}</div>
-    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">Perlu perhatian</div><div class="card-s">Kehadiran ≤ 25% atau belum ada pertemuan</div></div></div>${attentionBody}</div>
   </div>
+  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">Perlu perhatian</div><div class="card-s">Kehadiran ≤ 25% atau belum ada pertemuan</div></div></div>${attentionBody}</div>
 
   <h2 class="sec">Detail per homecell</h2>
   ${cards || '<p class="muted">Tidak ada homecell yang sesuai filter.</p>'}

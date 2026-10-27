@@ -10,6 +10,63 @@
 import { prisma, type HomecellKategori } from '@ecc/database';
 import { homecellAttendanceTier } from '@ecc/shared-types';
 
+
+// ------------------------------------------------------------------ demografi
+
+/** Kelompok usia untuk demografi homecell (fokus anak muda / keluarga muda). */
+export const DEMO_AGE_GROUPS = [
+  { label: '≤ 17', min: 0, max: 17 },
+  { label: '18–24', min: 18, max: 24 },
+  { label: '25–29', min: 25, max: 29 },
+  { label: '30–34', min: 30, max: 34 },
+  { label: '35–44', min: 35, max: 44 },
+  { label: '45–59', min: 45, max: 59 },
+  { label: '60+', min: 60, max: 200 },
+] as const;
+
+export interface Demografi {
+  pria: number;
+  wanita: number;
+  genderUnknown: number;
+  groups: number[]; // sejajar DEMO_AGE_GROUPS
+  ageUnknown: number;
+  total: number;
+}
+
+export const newDemografi = (): Demografi => ({
+  pria: 0,
+  wanita: 0,
+  genderUnknown: 0,
+  groups: DEMO_AGE_GROUPS.map(() => 0),
+  ageUnknown: 0,
+  total: 0,
+});
+
+export function addDemografi(d: Demografi, usia: number | null, jk: 'L' | 'P' | null | undefined) {
+  d.total++;
+  if (jk === 'L') d.pria++;
+  else if (jk === 'P') d.wanita++;
+  else d.genderUnknown++;
+  if (usia == null) d.ageUnknown++;
+  else {
+    const i = DEMO_AGE_GROUPS.findIndex((g) => usia >= g.min && usia <= g.max);
+    if (i >= 0) d.groups[i]!++;
+  }
+}
+
+export function mergeDemografi(list: Demografi[]): Demografi {
+  const d = newDemografi();
+  for (const x of list) {
+    d.pria += x.pria;
+    d.wanita += x.wanita;
+    d.genderUnknown += x.genderUnknown;
+    d.ageUnknown += x.ageUnknown;
+    d.total += x.total;
+    x.groups.forEach((v, i) => (d.groups[i]! += v));
+  }
+  return d;
+}
+
 export type Period = { from: Date; to: Date } | null;
 
 export interface HomecellStat {
@@ -25,6 +82,7 @@ export interface HomecellStat {
   attendanceTotal: number;
   attendancePercent: number | null;
   lastMeetingAt: string | null;
+  demografi: Demografi;
 }
 
 export interface AreaStat {
@@ -39,6 +97,7 @@ export interface AreaStat {
   homecellNoMeeting: number;
   kategori: { SINGLE: number; COUPLE: number; UMUM: number };
   homecells: HomecellStat[];
+  demografi: Demografi;
 }
 
 const ageOf = (lahir: Date, now: Date) => {
@@ -65,7 +124,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       usiaMin: true,
       usiaMax: true,
       picJemaat: { select: { namaLengkap: true } },
-      members: { where: { isActive: true }, select: { jemaat: { select: { tanggalLahir: true } } } },
+      members: { where: { isActive: true }, select: { jemaat: { select: { tanggalLahir: true, jenisKelamin: true } } } },
       schedules: {
         where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
         select: { tanggal: true, _count: { select: { attendances: true } } },
@@ -86,6 +145,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       homecellNoMeeting: 0,
       kategori: { SINGLE: 0, COUPLE: 0, UMUM: 0 },
       homecells: [],
+      demografi: newDemografi(),
     });
   }
   const ageSum = new Map<string, number>();
@@ -94,6 +154,10 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
 
   for (const h of homecells) {
     const a = out.get(h.areaId)!;
+    const demo = newDemografi();
+    for (const m of h.members) {
+      addDemografi(demo, m.jemaat.tanggalLahir ? ageOf(m.jemaat.tanggalLahir, now) : null, m.jemaat.jenisKelamin);
+    }
     const ages = h.members.map((m) => (m.jemaat.tanggalLahir ? ageOf(m.jemaat.tanggalLahir, now) : null)).filter((x): x is number => x != null);
     const hadir = h.schedules.reduce((n, s) => n + s._count.attendances, 0);
     const potensi = h.members.length * h.schedules.length;
@@ -113,6 +177,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       attendanceTotal: hadir,
       attendancePercent: potensi > 0 ? Math.min(100, Math.round((hadir / potensi) * 100)) : null,
       lastMeetingAt: last ? last.toISOString().slice(0, 10) : null,
+      demografi: demo,
     });
     a.homecellCount++;
     a.memberCount += h.members.length;
@@ -127,6 +192,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
   }
 
   for (const a of out.values()) {
+    a.demografi = mergeDemografi(a.homecells.map((h) => h.demografi));
     a.avgAge = a.ageKnown ? Math.round((ageSum.get(a.areaId) ?? 0) / a.ageKnown) : null;
     const pot = potensiSum.get(a.areaId) ?? 0;
     a.attendancePercent = pot > 0 ? Math.min(100, Math.round(((hadirSum.get(a.areaId) ?? 0) / pot) * 100)) : null;

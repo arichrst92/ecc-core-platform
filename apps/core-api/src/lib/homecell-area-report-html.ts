@@ -5,7 +5,7 @@
  */
 import { esc, fmtTgl } from './print-report.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
-import type { AreaStat } from './homecell-area-stats.js';
+import { DEMO_AGE_GROUPS, mergeDemografi, type AreaStat, type Demografi } from './homecell-area-stats.js';
 import { HOMECELL_KATEGORI_LABEL, homecellUsiaLabel, type HomecellAttendanceTier } from '@ecc/shared-types';
 
 export const ICON_PATHS: Record<string, string> = {
@@ -39,6 +39,42 @@ export const pctBadge = (p: number | null) => {
   return t ? `<span class="pill" style="background:${TIER[t].bg};color:${TIER[t].fg}">${p}%</span>` : '<span class="muted">—</span>';
 };
 
+/** Kartu demografi: bar gender + bar kelompok usia. */
+export function demografiCard(d: Demografi, sub: string) {
+  const g = d.pria + d.wanita;
+  const pP = g ? Math.round((d.pria / g) * 100) : 0;
+  const maxG = Math.max(1, ...d.groups);
+  const ageKnown = d.total - d.ageUnknown;
+  const bars = DEMO_AGE_GROUPS.map((grp, i) => {
+    const c = d.groups[i] ?? 0;
+    const pct = ageKnown ? Math.round((c / ageKnown) * 100) : 0;
+    return barRow(`${grp.label} th`, `${n(c)}`, (c / maxG) * 100, '#f59e0b', ` <span class="muted">· ${pct}%</span>`);
+  }).join('');
+  const notes = [
+    d.genderUnknown ? `${n(d.genderUnknown)} tanpa data gender` : '',
+    d.ageUnknown ? `${n(d.ageUnknown)} tanpa tanggal lahir` : '',
+  ].filter(Boolean);
+  return `<div class="card"><div class="card-h"><span class="card-ic" style="background:#0ea5e9">${ic('users', 12)}</span><div><div class="card-t">Demografi anggota</div><div class="card-s">${esc(sub)}</div></div></div>
+    <div class="gender"><div class="gbar"><div style="width:${g ? pP : 0}%;background:#0ea5e9"></div><div style="width:${g ? 100 - pP : 0}%;background:#f472b6"></div></div>
+    <div class="gl"><span style="color:#0369a1">Laki-laki <b>${n(d.pria)}</b>${g ? ` · ${pP}%` : ''}</span><span style="color:#be185d">Perempuan <b>${n(d.wanita)}</b>${g ? ` · ${100 - pP}%` : ''}</span></div></div>
+    <div class="sub-t">Kelompok usia</div>
+    ${d.total ? bars : '<p class="muted">Belum ada anggota.</p>'}
+    ${notes.length ? `<p class="muted small">${esc(notes.join(' · '))}</p>` : ''}
+  </div>`;
+}
+
+/** Baris ringkas demografi untuk kartu area/homecell. */
+export function demografiLine(d: Demografi) {
+  if (!d.total) return '';
+  const top = DEMO_AGE_GROUPS.map((g, i) => ({ l: g.label, c: d.groups[i] ?? 0 }))
+    .filter((x) => x.c > 0)
+    .map((x) => `<span class="seg">${esc(x.l)} th · ${x.c}</span>`)
+    .join('');
+  return `<div class="demo-line"><span style="color:#0369a1"><b>${n(d.pria)}</b> L</span> · <span style="color:#be185d"><b>${n(d.wanita)}</b> P</span>${
+    d.genderUnknown ? ` · <span class="muted">${n(d.genderUnknown)} ?</span>` : ''
+  } <span class="demo-ages">${top}</span></div>`;
+}
+
 export interface AreaReportRow {
   id: string;
   nama: string;
@@ -68,6 +104,9 @@ export const EXTRA_CSS = `
   .warn-row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dashed #eef2f7; font-size: 9.5px; }
   .legend-tier { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 8.5px; color: #64748b; margin-top: 6px; }
   .desc { font-size: 9px; color: #475569; margin: 0 0 8px; }
+  .demo-line { font-size: 9px; color: #475569; margin: -2px 0 8px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .demo-ages .seg { margin-left: 3px; }
+  .grid2.three { grid-template-columns: 1fr 1fr 1fr; }
 `;
 
 export function renderHomecellAreaReportHtml(
@@ -182,6 +221,7 @@ export function renderHomecellAreaReportHtml(
       ${st('cake', '#f59e0b', s.avgAge != null ? `${s.avgAge} th` : '—', `Usia rata² (${n(s.ageKnown)} data)`)}
       ${st('calendarCheck', '#3b82f6', n(s.meetingCount), `Pertemuan · ${n(s.homecellNoMeeting)} tanpa pertemuan`)}
     </div>
+    ${demografiLine(s.demografi)}
     ${table}
   </div>
 </div>`;
@@ -217,9 +257,10 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   </div>
 
   <div class="grid2">
+    ${demografiCard(mergeDemografi(rows.map((r) => r.stat.demografi)), 'Gender & kelompok usia anggota aktif')}
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">Komposisi kategori homecell</div><div class="card-s">Single · Couple · Umum</div></div></div>${komposisi}</div>
-    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">Perlu perhatian</div><div class="card-s">Kehadiran ≤ 25% atau belum ada pertemuan</div></div></div>${attentionBody}</div>
   </div>
+  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">Perlu perhatian</div><div class="card-s">Kehadiran ≤ 25% atau belum ada pertemuan</div></div></div>${attentionBody}</div>
 
   <h2 class="sec">Detail per area</h2>
   ${areaCards || '<p class="muted">Tidak ada area yang sesuai filter.</p>'}

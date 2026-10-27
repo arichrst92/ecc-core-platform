@@ -8,7 +8,7 @@ import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
 import type { AreaStat } from './homecell-area-stats.js';
 import { HOMECELL_KATEGORI_LABEL, homecellUsiaLabel, type HomecellAttendanceTier } from '@ecc/shared-types';
 
-const ICON_PATHS: Record<string, string> = {
+export const ICON_PATHS: Record<string, string> = {
   "mapPinned": "<path d=\"M18 8c0 4.5-6 9-6 9s-6-4.5-6-9a6 6 0 0 1 12 0\"/><circle cx=\"12\" cy=\"8\" r=\"2\"/><path d=\"M8.835 14H5a1 1 0 0 0-.9.7l-2 6c-.1.1-.1.2-.1.3 0 .6.4 1 1 1h18c.6 0 1-.4 1-1 0-.1 0-.2-.1-.3l-2-6a1 1 0 0 0-.9-.7h-3.835\"/>",
   "home": "<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/>",
   "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>",
@@ -23,18 +23,18 @@ const ICON_PATHS: Record<string, string> = {
 };
 
 /** Ikon Lucide (SVG, garis putih) — ikut tercetak, tidak bergantung font emoji. */
-const ic = (name: keyof typeof ICON_PATHS, size = 13, color = '#fff') =>
+export const ic = (name: keyof typeof ICON_PATHS, size = 13, color = '#fff') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name]}</svg>`;
 
-const TIER: Record<HomecellAttendanceTier, { bg: string; fg: string; bar: string; label: string }> = {
+export const TIER: Record<HomecellAttendanceTier, { bg: string; fg: string; bar: string; label: string }> = {
   merah: { bg: '#fee2e2', fg: '#b91c1c', bar: '#ef4444', label: '0–25%' },
   oranye: { bg: '#ffedd5', fg: '#c2410c', bar: '#f97316', label: '26–50%' },
   kuning: { bg: '#fef9c3', fg: '#a16207', bar: '#eab308', label: '51–75%' },
   hijau: { bg: '#dcfce7', fg: '#15803d', bar: '#22c55e', label: '76–100%' },
 };
-const tierOf = (p: number | null): HomecellAttendanceTier | null =>
+export const tierOf = (p: number | null): HomecellAttendanceTier | null =>
   p == null ? null : p <= 25 ? 'merah' : p <= 50 ? 'oranye' : p <= 75 ? 'kuning' : 'hijau';
-const pctBadge = (p: number | null) => {
+export const pctBadge = (p: number | null) => {
   const t = tierOf(p);
   return t ? `<span class="pill" style="background:${TIER[t].bg};color:${TIER[t].fg}">${p}%</span>` : '<span class="muted">—</span>';
 };
@@ -48,7 +48,7 @@ export interface AreaReportRow {
   stat: AreaStat;
 }
 
-const EXTRA_CSS = `
+export const EXTRA_CSS = `
   .kpis.six { grid-template-columns: repeat(3, 1fr); }
   .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-weight: 800; font-size: 9px; }
   .seg { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 5px; font-size: 8px; font-weight: 700; background: #f1f5f9; color: #475569; }

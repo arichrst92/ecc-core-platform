@@ -25,6 +25,7 @@ import {
   withLastAttendance,
 } from '../../lib/homecell-last-attendance.js';
 import { resolvePeriod, ymd } from '../../lib/last-attendance.js';
+import { renderHomecellReportHtml, type HcReportRow } from '../../lib/homecell-report-html.js';
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
@@ -182,10 +183,6 @@ const PERIOD_LABEL: Record<string, string> = {
   custom: 'Rentang tanggal',
 };
 
-function esc(s: unknown): string {
-  if (s === null || s === undefined) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 const fmtTgl = (ymdStr: string | null) =>
   ymdStr
@@ -197,12 +194,6 @@ const fmtTgl = (ymdStr: string | null) =>
       })
     : '—';
 
-function relHari(days: number | null): string {
-  if (days == null) return '<span class="muted">belum pernah</span>';
-  const cls = days <= 7 ? 'ok' : days <= 30 ? 'warn' : 'bad';
-  const txt = days === 0 ? 'hari ini' : days === 1 ? 'kemarin' : `${days} hari lalu`;
-  return `<span class="${cls}">${txt}</span>`;
-}
 
 homecellRouter.get('/export', async (req, res) => {
   const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
@@ -210,6 +201,9 @@ homecellRouter.get('/export', async (req, res) => {
   const search = typeof req.query.search === 'string' && req.query.search.trim() ? req.query.search.trim() : undefined;
   const { where, period, heldSchedule } = homecellFilter(req, search);
 
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const upper = period && period.to < today ? period.to : today;
   const rows = await prisma.homecell.findMany({
     where,
     orderBy: [{ area: { cabang: { nama: 'asc' } } }, { area: { nama: 'asc' } }, { nama: 'asc' }],
@@ -222,24 +216,49 @@ homecellRouter.get('/export', async (req, res) => {
       usiaMin: true,
       usiaMax: true,
       area: { select: { nama: true, cabang: { select: { nama: true } } } },
-      picJemaat: { select: { namaLengkap: true, noHp: true } },
-      schedules: { select: { _count: { select: { attendances: true } } } },
+      picJemaat: { select: { namaLengkap: true } },
+      // Pertemuan di periode (tanggal ≤ hari ini) untuk hitung kehadiran.
+      schedules: {
+        where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
+        select: { id: true, _count: { select: { attendances: true } } },
+      },
       members: {
         where: { isActive: true },
         orderBy: { jemaat: { namaLengkap: 'asc' } },
         select: {
           tanggalBergabung: true,
-          jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true } },
+          jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true, tanggalLahir: true } },
         },
       },
     },
   });
   const ids = rows.map((r) => r.id);
-  const [lastMap, memberMap, periodCounts] = await Promise.all([
+  const scheduleHc = new Map<string, string>();
+  for (const r of rows) for (const sc of r.schedules) scheduleHc.set(sc.id, r.id);
+  const [lastMap, memberMap, hadirRows] = await Promise.all([
     getLastMeetingMap(ids),
     getMemberLastAttendanceMulti(ids),
-    period ? periodMeetingCounts(ids, heldSchedule) : Promise.resolve(null),
+    scheduleHc.size
+      ? prisma.homecellAttendance.groupBy({
+          by: ['scheduleId', 'jemaatId'],
+          where: { scheduleId: { in: [...scheduleHc.keys()] } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([] as { scheduleId: string; jemaatId: string; _count: { _all: number } }[]),
   ]);
+  // Kehadiran tiap anggota di periode: key homecellId:jemaatId → jumlah pertemuan dihadiri.
+  const hadirMap = new Map<string, number>();
+  for (const h of hadirRows) {
+    const key = `${scheduleHc.get(h.scheduleId)}:${h.jemaatId}`;
+    hadirMap.set(key, (hadirMap.get(key) ?? 0) + 1);
+  }
+  const ageOf = (lahir: Date | null) => {
+    if (!lahir) return null;
+    let u = now.getUTCFullYear() - lahir.getUTCFullYear();
+    const mm = now.getUTCMonth() - lahir.getUTCMonth();
+    if (mm < 0 || (mm === 0 && now.getUTCDate() < lahir.getUTCDate())) u--;
+    return u >= 0 && u < 130 ? u : null;
+  };
 
   // Ringkasan filter untuk header laporan.
   const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : undefined);
@@ -247,143 +266,61 @@ homecellRouter.get('/export', async (req, res) => {
     str('cabangId') ? prisma.cabangGereja.findUnique({ where: { id: str('cabangId')! }, select: { nama: true } }) : null,
     str('areaId') ? prisma.homecellArea.findUnique({ where: { id: str('areaId')! }, select: { nama: true } }) : null,
   ]);
+  const kat = str('kategori');
   const filterParts = [
-    cabang ? `Cabang: ${cabang.nama}` : null,
     area ? `Area: ${area.nama}` : null,
-    period
-      ? `Periode: ${PERIOD_LABEL[str('periode') ?? ''] ?? ''} (${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))})`
-      : null,
+    kat === 'SINGLE' ? 'Kategori: Single' : kat === 'COUPLE' ? 'Kategori: Couple' : kat === 'UMUM' ? 'Kategori: Umum' : null,
     str('pertemuan') === 'ada' ? 'Ada pertemuan' : str('pertemuan') === 'tidak' ? 'Tidak ada pertemuan' : null,
     str('status') === 'aktif' ? 'Status: aktif' : str('status') === 'nonaktif' ? 'Status: nonaktif' : null,
     search ? `Cari: "${search}"` : null,
-  ].filter(Boolean);
+  ].filter((x): x is string => !!x);
+  const periodLabel = period
+    ? `${PERIOD_LABEL[str('periode') ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
+    : 'Semua waktu (sampai hari ini)';
 
-  const totalMembers = rows.reduce((n, r) => n + r.members.length, 0);
-  const timestamp = new Date().toISOString().slice(0, 10);
-  const uaStr = (req.get('user-agent') ?? '').toLowerCase();
-  const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(uaStr);
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
-
-  const sections = rows
-    .map((h) => {
-      const lm = lastMeetingOf(h.id, lastMap);
-      // Rata-rata kehadiran (sama dengan kolom "Rata² Hadir" di portal).
-      const totalHadir = h.schedules.reduce((n, s) => n + s._count.attendances, 0);
-      const pct = h.members.length > 0 && h.schedules.length > 0
-        ? Math.round((totalHadir / (h.members.length * h.schedules.length)) * 100)
-        : null;
-      const segmen = [h.kategori ? HOMECELL_KATEGORI_LABEL[h.kategori] : null, homecellUsiaLabel(h.usiaMin, h.usiaMax)]
-        .filter(Boolean)
-        .join(' · ');
-      const memberRows = h.members
-        .map((m, i) => {
-          const la = memberMap.get(`${h.id}:${m.jemaat.id}`);
-          return `<tr>
-  <td class="num">${i + 1}</td>
-  <td>${esc(m.jemaat.namaLengkap)}</td>
-  <td>${esc(m.jemaat.kode ?? '')}</td>
-  <td>${esc(m.jemaat.noHp ?? '')}</td>
-  <td>${fmtTgl(ymd(m.tanggalBergabung))}</td>
-  <td>${la ? fmtTgl(ymd(la.lastAttendedAt)) : '—'}</td>
-  <td>${relHari(la ? la.lastAttendedDaysAgo : null)}</td>
-</tr>`;
-        })
-        .join('');
-      return `<section class="hc">
-  <div class="hc-head">
-    <div>
-      <h2>${esc(h.nama)}${h.isActive ? '' : ' <span class="tag">nonaktif</span>'}</h2>
-      <div class="sub">${esc(h.area?.nama ?? '')} · ${esc(h.area?.cabang?.nama ?? '')} · PIC: ${esc(h.picJemaat?.namaLengkap ?? '—')}${segmen ? ` · ${esc(segmen)}` : ''}</div>
-    </div>
-    <div class="last">
-      <div>Rata² hadir: ${pct == null ? '<span class="muted">—</span>' : `<span class="tier tier-${homecellAttendanceTier(pct)}">${pct}%</span>`}</div>
-      <div>Terakhir homecell: <strong>${fmtTgl(lm.lastMeetingAt)}</strong></div>
-      <div>${relHari(lm.lastMeetingDaysAgo)}</div>
-      ${periodCounts ? `<div class="muted">${periodCounts.get(h.id) ?? 0} pertemuan dalam periode</div>` : ''}
-    </div>
-  </div>
-  ${
-    h.members.length === 0
-      ? '<p class="muted">Belum ada anggota aktif.</p>'
-      : `<table>
-  <thead><tr><th class="num">#</th><th>Nama</th><th>Kode</th><th>No HP</th><th>Bergabung</th><th>Terakhir hadir</th><th></th></tr></thead>
-  <tbody>${memberRows}</tbody>
-</table>`
-  }
-</section>`;
-    })
-    .join('');
-
-  const html = `<!doctype html>
-<html lang="id"><head><meta charset="utf-8">
-<title>Laporan Homecell — ${timestamp}</title>
-<style>
-  @page { size: A4 portrait; margin: 12mm; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; color: #0f172a; margin: 0; }
-  h1 { font-size: 16px; margin: 0 0 4px; }
-  h2 { font-size: 12.5px; margin: 0; }
-  .meta { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-  .filters { font-size: 10.5px; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 4px 8px; margin: 6px 0 12px; }
-  .hc { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; page-break-inside: avoid; }
-  .hc-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-  .sub { color: #64748b; font-size: 10px; margin-top: 2px; }
-  .last { text-align: right; font-size: 10px; white-space: nowrap; }
-  .tag { font-size: 9px; background: #e2e8f0; color: #475569; border-radius: 4px; padding: 1px 4px; font-weight: 500; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #e2e8f0; padding: 3px 5px; text-align: left; vertical-align: top; }
-  thead { background: #f8fafc; font-weight: 600; }
-  td.num, th.num { width: 18px; text-align: right; color: #94a3b8; }
-  .ok { color: #15803d; font-weight: 600; }
-  .warn { color: #b45309; font-weight: 600; }
-  .bad { color: #dc2626; font-weight: 600; }
-  .muted { color: #94a3b8; }
-  .tier { display: inline-block; padding: 0 6px; border-radius: 8px; font-weight: 700; }
-  .tier-merah { background: #fee2e2; color: #b91c1c; }
-  .tier-oranye { background: #ffedd5; color: #c2410c; }
-  .tier-kuning { background: #fef9c3; color: #a16207; }
-  .tier-hijau { background: #dcfce7; color: #15803d; }
-  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
-  .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
-  @media print {
-    .noprint, .noprint * { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
-  }
-  .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; }
-  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
-</style>
-</head><body>
-${
-  isMobileUa
-    ? ''
-    : `<div class="noprint">
-  <strong>Print Preview — Laporan Homecell</strong>
-  &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
-  <button onclick="doPrint()">Print / Save as PDF</button>
-</div>`
-}
-<script>
-  function doPrint() {
-    document.querySelectorAll('.noprint').forEach(el => el.remove());
-    setTimeout(() => window.print(), 50);
-  }
-  window.addEventListener('beforeprint', () => {
-    document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none');
+  const reportRows: HcReportRow[] = rows.map((h) => {
+    const lm = lastMeetingOf(h.id, lastMap);
+    const hadirTotal = h.schedules.reduce((x, sc) => x + sc._count.attendances, 0);
+    const potensi = h.members.length * h.schedules.length;
+    const ages = h.members.map((m) => ageOf(m.jemaat.tanggalLahir)).filter((x): x is number => x != null);
+    return {
+      nama: h.nama,
+      isActive: h.isActive,
+      area: h.area?.nama ?? '',
+      cabang: h.area?.cabang?.nama ?? '',
+      pic: h.picJemaat?.namaLengkap ?? null,
+      kategori: h.kategori,
+      usiaMin: h.usiaMin,
+      usiaMax: h.usiaMax,
+      meetingCount: h.schedules.length,
+      attendanceTotal: hadirTotal,
+      attendancePercent: potensi > 0 ? Math.min(100, Math.round((hadirTotal / potensi) * 100)) : null,
+      avgAge: ages.length ? Math.round(ages.reduce((x, y) => x + y, 0) / ages.length) : null,
+      lastMeetingAt: lm.lastMeetingAt,
+      lastMeetingDaysAgo: lm.lastMeetingDaysAgo,
+      members: h.members.map((m) => {
+        const la = memberMap.get(`${h.id}:${m.jemaat.id}`);
+        return {
+          nama: m.jemaat.namaLengkap,
+          kode: m.jemaat.kode,
+          noHp: m.jemaat.noHp,
+          usia: ageOf(m.jemaat.tanggalLahir),
+          bergabung: ymd(m.tanggalBergabung),
+          hadir: hadirMap.get(`${h.id}:${m.jemaat.id}`) ?? 0,
+          lastAt: la ? ymd(la.lastAttendedAt) : null,
+          lastDaysAgo: la ? la.lastAttendedDaysAgo : null,
+        };
+      }),
+    };
   });
-  ${isMobileUa ? 'setTimeout(() => window.print(), 600);' : ''}
-</script>
-<div style="padding: 10mm;">
-<h1>Laporan Homecell ECC</h1>
-<div class="meta">${rows.length} homecell · ${totalMembers} anggota aktif · Export ${timestamp}</div>
-${filterParts.length ? `<div class="filters">${filterParts.map(esc).join(' · ')}</div>` : ''}
-${sections || '<p class="muted">Tidak ada homecell yang sesuai filter.</p>'}
-<div class="footer-row">
-  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Terakhir hadir: hijau ≤7 hari, kuning ≤30 hari, merah &gt;30 hari · Rata² hadir: <span class="tier tier-merah">0–25%</span> <span class="tier tier-oranye">26–50%</span> <span class="tier tier-kuning">51–75%</span> <span class="tier tier-hijau">76–100%</span></div>
-  <div class="powered">
-    <span>Powered by</span>
-    <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/>
-  </div>
-</div>
-</div>
-</body></html>`;
+
+  const uaStr = (req.get('user-agent') ?? '').toLowerCase();
+  const html = renderHomecellReportHtml(reportRows, {
+    isMobileUa: /mobi|android|iphone|ipad|ipod/.test(uaStr),
+    title: cabang ? `Homecell — ${cabang.nama}` : 'Homecell — Semua Cabang',
+    filterParts,
+    periodLabel,
+  });
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });

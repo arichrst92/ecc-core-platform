@@ -85,6 +85,8 @@ homecellScheduleRouter.post('/', async (req, res) => {
     data: {
       homecellId,
       tanggal: new Date(input.tanggal),
+      jamMulai: input.jamMulai ?? null,
+      jamSelesai: input.jamSelesai ?? null,
       lokasi: input.lokasi,
       catatan: input.catatan ?? null,
       createdBy: requester.jemaatId,
@@ -150,6 +152,8 @@ homecellScheduleRouter.get('/', async (req, res) => {
     data: rows.map((r) => ({
       id: r.id,
       tanggal: r.tanggal,
+      jamMulai: r.jamMulai,
+      jamSelesai: r.jamSelesai,
       lokasi: r.lokasi,
       catatan: r.catatan,
       createdBy: r.createdBy,
@@ -227,6 +231,8 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       id: schedule.id,
       homecellId: schedule.homecellId,
       tanggal: schedule.tanggal,
+      jamMulai: schedule.jamMulai,
+      jamSelesai: schedule.jamSelesai,
       lokasi: schedule.lokasi,
       catatan: schedule.catatan,
       creator: schedule.creator,

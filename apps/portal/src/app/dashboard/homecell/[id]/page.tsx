@@ -62,6 +62,8 @@ interface Homecell {
 interface ScheduleListItem {
   id: string;
   tanggal: string;
+  jamMulai?: string | null;
+  jamSelesai?: string | null;
   lokasi: string;
   catatan: string | null;
   creator: { id: string; namaLengkap: string } | null;
@@ -539,6 +541,12 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
                       month: 'short',
                       year: 'numeric',
                     })}
+                    {s.jamMulai ? (
+                      <span className="text-neutral-500 font-normal">
+                        · {s.jamMulai}
+                        {s.jamSelesai ? `–${s.jamSelesai}` : ''}
+                      </span>
+                    ) : null}
                   </Link>
                 </td>
                 <td className="px-5 py-3 text-neutral-700">

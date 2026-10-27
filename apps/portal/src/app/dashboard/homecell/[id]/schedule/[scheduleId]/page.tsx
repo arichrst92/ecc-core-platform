@@ -27,6 +27,8 @@ interface ScheduleDetail {
   id: string;
   homecellId: string;
   tanggal: string;
+  jamMulai?: string | null;
+  jamSelesai?: string | null;
   lokasi: string;
   catatan: string | null;
   creator: { id: string; namaLengkap: string } | null;
@@ -147,6 +149,18 @@ export default function HomecellScheduleDetailPage() {
 
       {/* Meta card */}
       <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3 text-sm">
+        {s.jamMulai ? (
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-brand-500 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-xs text-neutral-500 mb-0.5">Jam</div>
+              <div className="text-neutral-900">
+                {s.jamMulai}
+                {s.jamSelesai ? ` – ${s.jamSelesai}` : ''}
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="flex items-start gap-3">
           <MapPin className="w-5 h-5 text-brand-500 shrink-0 mt-0.5" />
           <div>

@@ -16,6 +16,9 @@ export const createHomecellScheduleSchema = z
       example: '2026-05-28',
       description: 'Tanggal pertemuan YYYY-MM-DD. Tidak boleh > 30 hari yang lalu.',
     }),
+    // "HH:MM" — opsional (app lama tidak mengirim). Jam selesai harus > jam mulai.
+    jamMulai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
+    jamSelesai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
     lokasi: z.string().trim().min(1, 'Lokasi wajib').max(500),
     catatan: z
       .string()
@@ -35,7 +38,11 @@ export const createHomecellScheduleSchema = z
       message: `Tanggal tidak boleh lebih dari ${BACKDATE_MAX_DAYS} hari yang lalu.`,
       path: ['tanggal'],
     },
-  );
+  )
+  .refine((d) => !d.jamMulai || !d.jamSelesai || d.jamSelesai > d.jamMulai, {
+    message: 'Jam selesai harus setelah jam mulai.',
+    path: ['jamSelesai'],
+  });
 export type CreateHomecellScheduleInput = z.infer<typeof createHomecellScheduleSchema>;
 
 export const listHomecellSchedulesQuerySchema = z.object({

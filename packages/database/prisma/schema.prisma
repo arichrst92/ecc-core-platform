@@ -2239,6 +2239,9 @@ model HomecellSchedule {
   homecellId String   @map("homecell_id") @db.Uuid
   // Tanggal pertemuan (date-only, no time). UTC midnight via @db.Date.
   tanggal    DateTime @db.Date
+  // Jam mulai/selesai "HH:MM" (jam dinding cabang). Opsional — jadwal lama null.
+  jamMulai   String?  @map("jam_mulai") @db.VarChar(5)
+  jamSelesai String?  @map("jam_selesai") @db.VarChar(5)
   // Free-text alamat/lokasi pertemuan (mis. "Rumah Pak Yohanes Jl. Mawar 5").
   lokasi     String   @db.VarChar(500)
   // Optional notes PIC (mis. "Bawa Alkitab dan camilan").

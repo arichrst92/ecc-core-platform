@@ -162,7 +162,7 @@ meHomecellRouter.get('/', async (req, res) => {
     ? await prisma.homecellSchedule.findMany({
         where: { homecellId: { in: hcIds }, tanggal: { gte: today } },
         orderBy: { tanggal: 'asc' },
-        select: { id: true, homecellId: true, tanggal: true, lokasi: true, catatan: true },
+        select: { id: true, homecellId: true, tanggal: true, jamMulai: true, jamSelesai: true, lokasi: true, catatan: true },
       })
     : [];
   const nextByHc = new Map<string, (typeof upcoming)[number]>();
@@ -170,7 +170,7 @@ meHomecellRouter.get('/', async (req, res) => {
   const lastMap = await getLastMeetingMap(hcIds);
   const next = (id: string) => {
     const sc = nextByHc.get(id);
-    return sc ? { id: sc.id, tanggal: sc.tanggal, lokasi: sc.lokasi, catatan: sc.catatan } : null;
+    return sc ? { id: sc.id, tanggal: sc.tanggal, jamMulai: sc.jamMulai, jamSelesai: sc.jamSelesai, lokasi: sc.lokasi, catatan: sc.catatan } : null;
   };
   res.json({
     success: true,
@@ -400,7 +400,7 @@ meHomecellRouter.get('/:id', async (req, res) => {
       where: { homecellId: hc.id, tanggal: { gte: today } },
       orderBy: { tanggal: 'asc' },
       take: 5,
-      select: { id: true, tanggal: true, lokasi: true, catatan: true },
+      select: { id: true, tanggal: true, jamMulai: true, jamSelesai: true, lokasi: true, catatan: true },
     }),
     // Daftar anggota hanya untuk anggota / leader (privasi).
     isInside
@@ -458,6 +458,8 @@ meHomecellRouter.get('/:id/materi', async (req, res) => {
   const select = {
     id: true,
     tanggal: true,
+    jamMulai: true,
+    jamSelesai: true,
     lokasi: true,
     catatan: true,
     files: { orderBy: { createdAt: 'asc' as const }, select: scheduleFileSelect },

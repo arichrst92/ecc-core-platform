@@ -10,6 +10,10 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { resolvePeriod, ymd } from '../../lib/last-attendance.js';
+import { computeAreaStats } from '../../lib/homecell-area-stats.js';
+import { renderHomecellAreaReportHtml } from '../../lib/homecell-area-report-html.js';
+import { fmtTgl } from '../../lib/print-report.js';
 
 export const homecellAreaRouter = Router();
 
@@ -39,16 +43,86 @@ homecellAreaRouter.get('/', async (req, res) => {
     prisma.homecellArea.count({ where }),
   ]);
 
-  const data = rows.map((r) => ({
-    ...r,
-    homecellCount: r._count.homecells,
-  }));
+  // Statistik per area (anggota, usia rata-rata, kehadiran) — periode opsional.
+  const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : undefined);
+  const period = resolvePeriod(str('periode'), str('from'), str('to'));
+  const stats = await computeAreaStats(rows.map((r) => r.id), period);
+  const data = rows.map((r) => {
+    const s = stats.get(r.id);
+    return {
+      ...r,
+      homecellCount: r._count.homecells,
+      homecellAktif: s?.homecellCount ?? 0,
+      memberCount: s?.memberCount ?? 0,
+      avgAge: s?.avgAge ?? null,
+      meetingCount: s?.meetingCount ?? 0,
+      attendancePercent: s?.attendancePercent ?? null,
+      homecellNoMeeting: s?.homecellNoMeeting ?? 0,
+    };
+  });
 
   res.json({
     success: true,
     data,
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
   });
+});
+
+// ===== Export laporan (PDF via print view) =====
+// GET /admin/homecell-area/export?format=pdf&cabangId=&periode=&from=&to=&search=
+const PERIOD_LABEL: Record<string, string> = {
+  last_7d: '7 hari terakhir',
+  this_week: 'Minggu ini',
+  last_week: 'Minggu lalu',
+  last_30d: '30 hari terakhir',
+  this_month: 'Bulan ini',
+  last_month: 'Bulan lalu',
+  custom: 'Rentang tanggal',
+};
+homecellAreaRouter.get('/export', async (req, res) => {
+  const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
+  if (!['pdf', 'html', 'print'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf.');
+  const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
+  const cabangId = str('cabangId');
+  const search = str('search');
+  const period = resolvePeriod(str('periode'), str('from'), str('to'));
+
+  const where: Prisma.HomecellAreaWhereInput = { isActive: true };
+  if (cabangId) where.cabangId = cabangId;
+  if (search) where.nama = { contains: search, mode: 'insensitive' };
+  const areas = await prisma.homecellArea.findMany({
+    where,
+    orderBy: [{ cabang: { nama: 'asc' } }, { nama: 'asc' }],
+    take: 300,
+    select: {
+      id: true,
+      nama: true,
+      deskripsi: true,
+      cabang: { select: { nama: true } },
+      picJemaat: { select: { namaLengkap: true } },
+    },
+  });
+  const stats = await computeAreaStats(areas.map((a) => a.id), period);
+  const cabang = cabangId ? await prisma.cabangGereja.findUnique({ where: { id: cabangId }, select: { nama: true } }) : null;
+
+  const periodLabel = period
+    ? `${PERIOD_LABEL[str('periode') ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
+    : 'Semua waktu (sampai hari ini)';
+  const filterLabel = cabang ? `Homecell Area — ${cabang.nama}` : 'Homecell Area — Semua Cabang';
+  const ua = (req.get('user-agent') ?? '').toLowerCase();
+  const html = renderHomecellAreaReportHtml(
+    areas.map((a) => ({
+      id: a.id,
+      nama: a.nama,
+      deskripsi: a.deskripsi,
+      cabang: a.cabang.nama,
+      pic: a.picJemaat?.namaLengkap ?? null,
+      stat: stats.get(a.id)!,
+    })),
+    { isMobileUa: /mobi|android|iphone|ipad|ipod/.test(ua), filterLabel: search ? `${filterLabel} · "${search}"` : filterLabel, periodLabel },
+  );
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 // ============================================================

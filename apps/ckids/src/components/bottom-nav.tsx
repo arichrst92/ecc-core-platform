@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Gift, ScanLine, Award, BarChart3, ClipboardList, History } from 'lucide-react';
+import { useCanManage } from '@/lib/access';
 
 /**
  * Floating bottom dock — pola sama dengan BottomDock portal.
@@ -16,7 +17,7 @@ const ITEMS = [
   { href: '/', label: 'Gift Stall', short: 'Gift', icon: Gift },
   { href: '/ibadah', label: 'Scanner', short: 'Scan', icon: ScanLine },
   { href: '/hadir', label: 'Daftar Hadir', short: 'Hadir', icon: ClipboardList },
-  { href: '/adjust-point', label: 'Adjust Point', short: 'Adjust', icon: Award },
+  { href: '/adjust-point', label: 'Adjust Point', short: 'Adjust', icon: Award, manage: true },
   { href: '/history', label: 'History', short: 'History', icon: History },
   { href: '/report', label: 'Report', short: 'Report', icon: BarChart3 },
 ];
@@ -29,6 +30,7 @@ function isActive(pathname: string | null, href: string) {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const canManage = useCanManage();
 
   return (
     <nav
@@ -38,7 +40,7 @@ export function BottomNav() {
       style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
     >
       <div className="dock-scroll flex items-end gap-0.5 sm:gap-1.5 px-1.5 sm:px-3 py-2 bg-white/95 backdrop-blur border border-neutral-200 rounded-2xl shadow-2xl overflow-x-auto">
-        {ITEMS.map((n) => {
+        {ITEMS.filter((n) => canManage || !('manage' in n && n.manage)).map((n) => {
           const active = isActive(pathname, n.href);
           const Icon = n.icon;
           return (

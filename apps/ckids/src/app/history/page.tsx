@@ -15,6 +15,7 @@ import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { resolveMediaUrl } from '@/lib/media';
 import { Header, AuthGuard } from '@/components/header';
+import { useCanManage } from '@/lib/access';
 
 interface Redeem {
   id: string;
@@ -61,6 +62,7 @@ function HistoryContent() {
   const [status, setStatus] = useState<Status>('all');
   const [q, setQ] = useState('');
   const [cancelling, setCancelling] = useState<Redeem | null>(null);
+  const canManage = useCanManage();
 
   const list = useQuery({
     queryKey: ['gift-stall', 'redeems', cabangId, date, status, q.trim()],
@@ -196,7 +198,7 @@ function HistoryContent() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {!cancelled ? (
+                      {!cancelled && canManage ? (
                         <button
                           onClick={() => setCancelling(r)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 whitespace-nowrap"

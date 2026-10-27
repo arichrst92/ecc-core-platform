@@ -11,6 +11,7 @@ import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
 import { PhotoUpload } from '@/components/photo-upload';
 import { resolveMediaUrl } from '@/lib/media';
+import { useCanManage } from '@/lib/access';
 
 interface Hadiah {
   id: string;
@@ -33,6 +34,7 @@ export default function GiftStallHome() {
 }
 
 function GiftStallContent() {
+  const canManage = useCanManage();
   const { cabangId, cabangNama } = useCabangStore();
   const [selectedHadiah, setSelectedHadiah] = useState<Hadiah | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -72,12 +74,12 @@ function GiftStallContent() {
               Klik hadiah untuk redeem / add stock / edit. Klik + untuk tambah hadiah baru.
             </p>
           </div>
-          <button
+          {canManage && <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-kids-500 text-white text-sm font-semibold rounded-lg hover:bg-kids-600 shrink-0"
           >
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Tambah Hadiah</span>
-          </button>
+          </button>}
         </div>
 
         {hadiahQ.isLoading ? (
@@ -151,6 +153,7 @@ function GiftStallContent() {
 //  Hadiah Modal — 2 tab: Redeem / Add Stock
 // ============================================================
 function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void }) {
+  const canManage = useCanManage();
   const [tab, setTab] = useState<'redeem' | 'stock' | 'edit'>('redeem');
 
   return (
@@ -189,6 +192,7 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
           >
             <ScanLine className="w-4 h-4 inline mr-1" /> Redeem
           </button>
+          {canManage && <>
           <button
             onClick={() => setTab('stock')}
             className={`flex-1 py-2.5 text-sm font-semibold ${
@@ -209,11 +213,12 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
           >
             <Pencil className="w-4 h-4 inline mr-1" /> Edit
           </button>
+          </>}
         </div>
 
         {tab === 'redeem' && <RedeemTab hadiah={hadiah} onClose={onClose} />}
-        {tab === 'stock' && <AddStockTab hadiah={hadiah} onClose={onClose} />}
-        {tab === 'edit' && <EditHadiahTab hadiah={hadiah} onClose={onClose} />}
+        {canManage && tab === 'stock' && <AddStockTab hadiah={hadiah} onClose={onClose} />}
+        {canManage && tab === 'edit' && <EditHadiahTab hadiah={hadiah} onClose={onClose} />}
       </div>
     </div>
   );

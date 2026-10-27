@@ -22,7 +22,7 @@ import {
   adjustPointSchema,
   lookupJemaatByKodeSchema,
 } from '@ecc/shared-types';
-import { requireFulltimer } from '../../middleware/require-auth.js';
+import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import {
@@ -31,7 +31,10 @@ import {
 } from '../../lib/notification.js';
 
 export const giftStallRouter = Router();
-giftStallRouter.use(requireFulltimer);
+// Akses: Fulltimer, atau menu "Gift Stall (CKids)" di Role Access.
+//   Lihat (read)  → operasional: lookup, saldo, redeem, riwayat, laporan.
+//   Ubah (write)  → tambah stok, adjust poin, batalkan redeem.
+giftStallRouter.use(requireMenu('gift-stall'));
 
 // ============================================================
 // GET /admin/gift-stall/lookup-jemaat
@@ -202,7 +205,7 @@ giftStallRouter.post('/redeem', async (req, res) => {
 // POST /admin/gift-stall/hadiah/:id/add-stock
 // Body: { quantity, note? }
 // ============================================================
-giftStallRouter.post('/hadiah/:id/add-stock', async (req, res) => {
+giftStallRouter.post('/hadiah/:id/add-stock', requireMenu('gift-stall', 'write'), async (req, res) => {
   const { quantity, note } = addStockSchema.parse(req.body);
   const adminId = req.user?.jemaatId;
   if (!adminId) throw BadRequest('Admin tidak punya jemaatId');
@@ -237,7 +240,7 @@ giftStallRouter.post('/hadiah/:id/add-stock', async (req, res) => {
 // ============================================================
 // POST /admin/gift-stall/adjust-point (manual koreksi admin)
 // ============================================================
-giftStallRouter.post('/adjust-point', async (req, res) => {
+giftStallRouter.post('/adjust-point', requireMenu('gift-stall', 'write'), async (req, res) => {
   const { jemaatId, cabangId, amount, note } = adjustPointSchema.parse(req.body);
   const adminId = req.user?.jemaatId;
   if (!adminId) throw BadRequest('Admin tidak punya jemaatId');
@@ -443,7 +446,7 @@ const cancelSchema = z.object({
   replaceHadiahId: z.string().uuid().optional(),
 });
 
-giftStallRouter.post('/redeems/:id/cancel', async (req, res) => {
+giftStallRouter.post('/redeems/:id/cancel', requireMenu('gift-stall', 'write'), async (req, res) => {
   const { reason, replaceHadiahId } = cancelSchema.parse(req.body ?? {});
   const adminId = req.user?.jemaatId;
   if (!adminId) throw BadRequest('Admin tidak punya jemaatId');

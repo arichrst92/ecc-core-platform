@@ -11,7 +11,7 @@ import {
   updateHadiahSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { requireFulltimer } from '../../middleware/require-auth.js';
+import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -69,8 +69,11 @@ hadiahRouter.get('/', async (req, res) => {
   });
 });
 
-// Semua endpoint di bawah ini khusus Fulltimer (master data portal).
-hadiahRouter.use(requireFulltimer);
+// Endpoint di bawah: Fulltimer, atau menu "Gift Stall (CKids)" —
+// lihat detail = read, tambah/ubah/hapus hadiah & foto = write.
+const hadiahRead = requireMenu('gift-stall');
+const hadiahWrite = requireMenu('gift-stall', 'write');
+hadiahRouter.use((req, res, next) => (req.method === 'GET' ? hadiahRead : hadiahWrite)(req, res, next));
 
 // ============================================================
 // GET /admin/hadiah/:id — detail

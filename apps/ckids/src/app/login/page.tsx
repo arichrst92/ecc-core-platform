@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { normalizePhoneNumber } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
+import { canUseCkids } from '@/lib/access';
 
 /**
  * Login OTP — reuse endpoint sama dengan portal + mobile.
@@ -67,8 +68,8 @@ export default function LoginPage() {
       return res.data.data;
     },
     onSuccess: (data) => {
-      if (!data.user.isFulltimer) {
-        toast.error('Akses CKids Gift Stall hanya untuk Fulltimer');
+      if (!canUseCkids(data.user)) {
+        toast.error('Akun Anda belum punya akses CKids. Minta admin memberi akses menu "Gift Stall (CKids)" di Role Access.');
         return;
       }
       setAuth({

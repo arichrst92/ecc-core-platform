@@ -197,6 +197,11 @@ export async function buildHomecellReportRows(
         where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
         select: { id: true, _count: { select: { attendances: true } } },
       },
+      // Tamu homecell (dicatat terpisah dari anggota).
+      tamu: {
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true, tamu: { select: { id: true, namaLengkap: true, noHp: true } } },
+      },
       members: {
         where: { isActive: true },
         orderBy: { jemaat: { namaLengkap: 'asc' } },
@@ -210,7 +215,7 @@ export async function buildHomecellReportRows(
   const ids = rows.map((r) => r.id);
   const scheduleHc = new Map<string, string>();
   for (const r of rows) for (const sc of r.schedules) scheduleHc.set(sc.id, r.id);
-  const [lastMap, memberMap, hadirRows] = await Promise.all([
+  const [lastMap, memberMap, hadirRows, tamuRows] = await Promise.all([
     getLastMeetingMap(ids),
     getMemberLastAttendanceMulti(ids),
     scheduleHc.size
@@ -220,7 +225,27 @@ export async function buildHomecellReportRows(
           _count: { _all: true },
         })
       : Promise.resolve([] as { scheduleId: string; jemaatId: string; _count: { _all: number } }[]),
+    // Kehadiran tamu — seluruh waktu (untuk "terakhir hadir") & di periode.
+    ids.length
+      ? prisma.homecellTamuAttendance.findMany({
+          where: { schedule: { homecellId: { in: ids } } },
+          select: { tamuId: true, scheduleId: true, schedule: { select: { homecellId: true, tanggal: true } } },
+        })
+      : Promise.resolve([] as { tamuId: string; scheduleId: string; schedule: { homecellId: string; tanggal: Date } }[]),
   ]);
+  // key homecellId:tamuId → { hadir di periode, terakhir hadir }
+  const tamuHadir = new Map<string, { hadir: number; last: Date | null }>();
+  const tamuVisitsHc = new Map<string, number>();
+  for (const t of tamuRows) {
+    const key = `${t.schedule.homecellId}:${t.tamuId}`;
+    const cur = tamuHadir.get(key) ?? { hadir: 0, last: null };
+    if (!cur.last || t.schedule.tanggal > cur.last) cur.last = t.schedule.tanggal;
+    if (scheduleHc.has(t.scheduleId)) {
+      cur.hadir++;
+      tamuVisitsHc.set(t.schedule.homecellId, (tamuVisitsHc.get(t.schedule.homecellId) ?? 0) + 1);
+    }
+    tamuHadir.set(key, cur);
+  }
   // Kehadiran tiap anggota di periode: key homecellId:jemaatId → jumlah pertemuan dihadiri.
   const hadirMap = new Map<string, number>();
   for (const h of hadirRows) {
@@ -268,6 +293,17 @@ export async function buildHomecellReportRows(
           hadir: hadirMap.get(`${h.id}:${m.jemaat.id}`) ?? 0,
           lastAt: la ? ymd(la.lastAttendedAt) : null,
           lastDaysAgo: la ? la.lastAttendedDaysAgo : null,
+        };
+      }),
+      tamuVisits: tamuVisitsHc.get(h.id) ?? 0,
+      tamus: h.tamu.map((t) => {
+        const th = tamuHadir.get(`${h.id}:${t.tamu.id}`);
+        return {
+          nama: t.tamu.namaLengkap,
+          noHp: t.tamu.noHp,
+          dicatat: ymd(t.createdAt),
+          hadir: th?.hadir ?? 0,
+          lastAt: th?.last ? ymd(th.last) : null,
         };
       }),
     };

@@ -16,6 +16,7 @@ import {
   Clock,
   Smartphone,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
@@ -54,6 +55,14 @@ interface ScheduleDetail {
     jemaatId: string;
     namaLengkap: string;
     kode: string;
+  }[];
+  /** Tamu hadir — dicatat terpisah, tidak masuk % kehadiran anggota. */
+  tamuCount?: number;
+  tamuAttendances?: {
+    id: string;
+    createdAt: string;
+    tamu: { id: string; namaLengkap: string; noHp: string | null };
+    markedBy: { id: string; namaLengkap: string } | null;
   }[];
 }
 
@@ -192,7 +201,7 @@ export default function HomecellScheduleDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard
           icon={UserCheck}
           label="Hadir"
@@ -207,6 +216,7 @@ export default function HomecellScheduleDetailPage() {
           tone="amber"
           sub={`${attendanceRate}% kehadiran`}
         />
+        <StatCard icon={UserPlus} label="Tamu Hadir" value={s.tamuCount ?? 0} tone="teal" sub="tidak masuk % kehadiran" />
       </div>
 
       {/* Attendance list */}
@@ -277,6 +287,37 @@ export default function HomecellScheduleDetailPage() {
           </table>
         )}
       </div>
+
+      {/* Tamu hadir — terpisah dari anggota */}
+      {(s.tamuAttendances ?? []).length > 0 && (
+        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-neutral-100">
+            <h2 className="font-bold text-neutral-900 flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-teal-600" />
+              Tamu Hadir ({s.tamuAttendances!.length})
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">Dicatat terpisah — tidak dihitung dalam % kehadiran anggota.</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
+              <tr>
+                <th className="px-5 py-2 text-left font-medium">Nama</th>
+                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>No HP</th>
+                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>Dicatat oleh</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {s.tamuAttendances!.map((t) => (
+                <tr key={t.id} className="hover:bg-neutral-50">
+                  <td className="px-5 py-2.5 font-medium text-neutral-800">{t.tamu.namaLengkap}</td>
+                  <td className="px-5 py-2.5 text-neutral-600">{t.tamu.noHp ?? '-'}</td>
+                  <td className="px-5 py-2.5 text-neutral-600">{t.markedBy?.namaLengkap ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Missing members */}
       {s.missingMembers.length > 0 && (
@@ -353,13 +394,14 @@ function StatCard({
   icon: typeof Users;
   label: string;
   value: number;
-  tone: 'green' | 'neutral' | 'amber';
+  tone: 'green' | 'neutral' | 'amber' | 'teal';
   sub?: string;
 }) {
   const tones = {
     green: 'bg-green-50 text-green-700 border-green-200',
     neutral: 'bg-neutral-50 text-neutral-700 border-neutral-200',
     amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    teal: 'bg-teal-50 text-teal-700 border-teal-200',
   };
   return (
     <div className={`border rounded-xl p-4 ${tones[tone]}`}>

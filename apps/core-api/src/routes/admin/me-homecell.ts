@@ -26,7 +26,7 @@ import { Router, type Request } from 'express';
 import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
 import { createReportToken, REPORT_LINK_TTL_SEC } from '../../lib/report-link.js';
 import { memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
-import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance } from '../../lib/tamu-status.js';
+import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
 import { apiBase } from '../../lib/worship.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
@@ -631,7 +631,7 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
     success: true,
     data: rows.map((r) => {
       const a = att.get(r.tamu.id);
-      const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: !!a?.kehadiran });
+      const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: tamuHasAttended(a) });
       const { tamuStatus: _s, ...tamu } = r.tamu;
       return {
         ...tamu,
@@ -641,6 +641,8 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
         status,
         statusLabel: TAMU_STATUS_LABEL[status],
         kehadiran: a?.kehadiran ?? 0,
+        kehadiranHomecell: a?.kehadiranHomecell ?? 0,
+        terakhirHomecell: a?.terakhirHomecell ?? null,
         terakhirHadir: a?.terakhirHadir ?? null,
         terakhirAcara: a?.terakhirAcara ?? null,
       };

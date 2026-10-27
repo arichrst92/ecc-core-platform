@@ -28,6 +28,7 @@ import {
   TAMU_STATUS_LABEL,
   effectiveTamuStatus,
   tamuAttendance,
+  tamuHasAttended,
   type TamuStatus,
 } from '../../lib/tamu-status.js';
 
@@ -109,7 +110,7 @@ async function loadTamu(req: Request) {
   const att = await tamuAttendance(rows.map((r) => r.id));
   return rows.map((r) => {
     const a = att.get(r.id);
-    const status = effectiveTamuStatus({ stored: r.tamuStatus, isTamu: r.isTamu, hasAttended: !!a?.kehadiran });
+    const status = effectiveTamuStatus({ stored: r.tamuStatus, isTamu: r.isTamu, hasAttended: tamuHasAttended(a) });
     return {
       id: r.id,
       namaLengkap: r.namaLengkap,
@@ -124,6 +125,8 @@ async function loadTamu(req: Request) {
       pengundang: r.diundangSebagaiTamu.map((x) => ({ ...x.inviter, sejak: x.createdAt })),
       homecell: r.tamuHomecell.map((x) => ({ ...x.homecell, sejak: x.createdAt, catatan: x.catatan })),
       kehadiran: a?.kehadiran ?? 0,
+      kehadiranHomecell: a?.kehadiranHomecell ?? 0,
+      terakhirHomecell: a?.terakhirHomecell ?? null,
       terakhirHadir: a?.terakhirHadir ?? null,
       terakhirAcara: a?.terakhirAcara ?? null,
       status,
@@ -540,7 +543,7 @@ tamuRouter.get('/export', async (req, res) => {
 
   if (req.query.format === 'csv') {
     sendCsv(res, `tamu-${stamp}.csv`, [
-      ['Nama', 'No HP', 'Cabang', 'Diundang oleh', 'Dicatat', 'Kehadiran', 'Terakhir hadir', 'Acara terakhir', 'Status', 'Difollow-up oleh', 'Catatan'],
+      ['Nama', 'No HP', 'Cabang', 'Diundang oleh', 'Dicatat', 'Kehadiran ibadah/event', 'Terakhir hadir', 'Acara terakhir', 'Kehadiran homecell', 'Homecell terakhir', 'Status', 'Difollow-up oleh', 'Catatan'],
       ...rows.map((t) => [
         t.namaLengkap,
         t.noHp ?? '',
@@ -550,6 +553,8 @@ tamuRouter.get('/export', async (req, res) => {
         t.kehadiran,
         t.terakhirHadir ? tgl(t.terakhirHadir) : '',
         t.terakhirAcara?.nama ?? '',
+        t.kehadiranHomecell,
+        t.terakhirHomecell ? `${t.terakhirHomecell.nama} (${tgl(t.terakhirHomecell.tanggal)})` : '',
         t.statusLabel,
         t.followupBy?.namaLengkap ?? '',
         t.catatan ?? '',
@@ -589,7 +594,11 @@ ${summaryCards([
       (t) => `<tr>
 <td><b>${esc(t.namaLengkap)}</b><br><span class="muted">${esc(t.noHp ?? 'Tanpa no HP')} · ${esc(t.cabang?.nama ?? '')}<br>dicatat ${esc(tgl(t.pertamaDicatat))}</span></td>
 <td>${t.pengundang.length ? t.pengundang.map((p) => esc(p.namaLengkap)).join('<br>') : '<span class="muted">Walk-in</span>'}</td>
-<td>${t.kehadiran ? `${t.kehadiran}× · ${esc(tgl(t.terakhirHadir))}${t.terakhirAcara ? `<br><span class="muted">${esc(t.terakhirAcara.nama)}</span>` : ''}` : '<span class="muted">Belum hadir</span>'}</td>
+<td>${t.kehadiran ? `${t.kehadiran}× · ${esc(tgl(t.terakhirHadir))}${t.terakhirAcara ? `<br><span class="muted">${esc(t.terakhirAcara.nama)}</span>` : ''}` : t.kehadiranHomecell ? '' : '<span class="muted">Belum hadir</span>'}${
+  t.kehadiranHomecell && t.terakhirHomecell
+    ? `${t.kehadiran ? '<br>' : ''}Homecell ${t.kehadiranHomecell}× · ${esc(tgl(t.terakhirHomecell.tanggal))}<br><span class="muted">${esc(t.terakhirHomecell.nama)}</span>`
+    : ''
+}</td>
 <td>${esc(t.statusLabel)}</td>
 <td>${t.followupBy ? `${esc(t.followupBy.namaLengkap)}${t.followupSejak ? `<br><span class="muted">sejak ${esc(tgl(t.followupSejak))}</span>` : ''}` : '<span class="muted">—</span>'}</td>
 <td>${esc(t.catatan ?? '')}</td>

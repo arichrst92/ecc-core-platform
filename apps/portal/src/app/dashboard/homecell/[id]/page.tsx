@@ -75,6 +75,8 @@ interface ScheduleListItem {
   creator: { id: string; namaLengkap: string } | null;
   createdAt: string;
   attendanceCount: number;
+  /** Tamu hadir — dicatat terpisah, tidak masuk %. */
+  tamuCount?: number;
 }
 
 export default function HomecellDetailPage() {
@@ -544,7 +546,7 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
               <th className="px-5 py-2 text-left font-medium" style={{ width: '170px' }}>
                 Dibuat oleh
               </th>
-              <th className="px-5 py-2 text-center font-medium" style={{ width: '110px' }}>
+              <th className="px-5 py-2 text-center font-medium" style={{ width: '150px' }}>
                 Kehadiran
               </th>
               <th className="px-5 py-2 text-right font-medium" style={{ width: '90px' }}></th>
@@ -595,6 +597,11 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
                       </span>
                     );
                   })()}
+                  {s.tamuCount ? (
+                    <span className="ml-1 inline-flex px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 text-[11px] font-semibold" title="Tamu hadir (tidak masuk %)">
+                      +{s.tamuCount} tamu
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-5 py-3 text-right whitespace-nowrap">
                   <button

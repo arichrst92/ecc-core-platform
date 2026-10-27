@@ -59,6 +59,8 @@ homecellAreaRouter.get('/', async (req, res) => {
       attendancePercent: s?.attendancePercent ?? null,
       homecellNoMeeting: s?.homecellNoMeeting ?? 0,
       demografi: s?.demografi ?? null,
+      tamuVisits: s?.tamuVisits ?? 0,
+      tamuUnique: s?.tamuUnique ?? 0,
     };
   });
 

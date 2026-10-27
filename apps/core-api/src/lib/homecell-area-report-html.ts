@@ -76,6 +76,16 @@ export function demografiLine(d: Demografi) {
   } <span class="demo-ages">${top}</span></div>`;
 }
 
+/** Kartu ringkasan tamu — kehadiran tamu dicatat terpisah dari anggota. */
+export function tamuCard(visits: number, unique: number, top: { nama: string; sub: string; visits: number }[]) {
+  const list = top.filter((x) => x.visits > 0).sort((a, b) => b.visits - a.visits).slice(0, 8);
+  const max = Math.max(1, ...list.map((x) => x.visits));
+  return `<div class="card"><div class="card-h"><span class="card-ic" style="background:#14b8a6">${ic('user', 12)}</span><div><div class="card-t">${L('Kehadiran tamu', 'Guest attendance')}</div><div class="card-s">${L('Dicatat terpisah dari anggota', 'Recorded separately from members')}</div></div></div>
+  <div class="tamu-big"><div><b>${n(visits)}</b><span>${L('kunjungan tamu', 'guest visits')}</span></div><div><b>${n(unique)}</b><span>${L('tamu berbeda', 'unique guests')}</span></div></div>
+  ${list.length ? list.map((x) => barRow(x.nama, `${x.visits}×`, Math.round((x.visits / max) * 100), '#14b8a6', x.sub ? ` <span class="muted">· ${esc(x.sub)}</span>` : '')).join('') : `<p class="muted">${L('Belum ada tamu hadir di periode ini.', 'No guests attended in this period.')}</p>`}
+  <div class="note">${L('Tamu tidak dihitung dalam % kehadiran anggota.', 'Guests are not counted in member attendance %.')}</div></div>`;
+}
+
 export interface AreaReportRow {
   id: string;
   nama: string;
@@ -98,6 +108,10 @@ export const EXTRA_CSS = `
   .area-p .v { font-size: 18px; font-weight: 800; } .area-p .l { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: .08em; }
   .area-b { padding: 10px 12px; }
   .stats4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .stats5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+  .tamu-big { display: flex; gap: 14px; margin: 2px 0 6px; } .tamu-big b { font-size: 18px; font-weight: 800; color: #0f766e; display: block; } .tamu-big span { font-size: 8.5px; color: #64748b; }
+  .note { font-size: 8.5px; color: #64748b; margin-top: 6px; }
+  .sub-h { font-size: 9.5px; font-weight: 800; color: #0f766e; margin: 10px 0 4px; display: flex; align-items: center; gap: 5px; }
   .st { display: flex; align-items: center; gap: 6px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 9px; padding: 6px 8px; }
   .st .i { width: 20px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
   .st b { display: block; font-size: 13px; } .st span { font-size: 8px; color: #64748b; }
@@ -133,9 +147,11 @@ export function renderHomecellAreaReportHtml(
       a.kat.SINGLE += r.stat.kategori.SINGLE;
       a.kat.COUPLE += r.stat.kategori.COUPLE;
       a.kat.UMUM += r.stat.kategori.UMUM;
+      a.tamuVisits += r.stat.tamuVisits;
+      a.tamuUnique += r.stat.tamuUnique;
       return a;
     },
-    { hc: 0, mem: 0, meet: 0, ageKnown: 0, ageSum: 0, hadir: 0, pot: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
+    { hc: 0, mem: 0, meet: 0, ageKnown: 0, ageSum: 0, hadir: 0, pot: 0, tamuVisits: 0, tamuUnique: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
   );
   const avgAge = tot.ageKnown ? Math.round(tot.ageSum / tot.ageKnown) : null;
   const avgPct = tot.pot ? Math.min(100, Math.round((tot.hadir / tot.pot) * 100)) : null;
@@ -195,7 +211,7 @@ export function renderHomecellAreaReportHtml(
       const st = (icon: keyof typeof ICON_PATHS, color: string, v: string, l: string) =>
         `<div class="st"><span class="i" style="background:${color}">${ic(icon, 11)}</span><div><b>${v}</b><span>${esc(l)}</span></div></div>`;
       const table = s.homecells.length
-        ? `<table><thead><tr><th>#</th><th>Homecell</th><th>PIC</th><th class="r">${L('Anggota', 'Members')}</th><th class="r">${L('Usia rata²', 'Avg age')}</th><th class="r">${L('Pertemuan', 'Meetings')}</th><th class="r">${L('Kehadiran', 'Attendance')}</th><th>${L('Terakhir', 'Last')}</th></tr></thead><tbody>${s.homecells
+        ? `<table><thead><tr><th>#</th><th>Homecell</th><th>PIC</th><th class="r">${L('Anggota', 'Members')}</th><th class="r">${L('Usia rata²', 'Avg age')}</th><th class="r">${L('Pertemuan', 'Meetings')}</th><th class="r">${L('Kehadiran', 'Attendance')}</th><th class="r">${L('Tamu', 'Guests')}</th><th>${L('Terakhir', 'Last')}</th></tr></thead><tbody>${s.homecells
             .map((h, i) => {
               const seg = [
                 h.kategori ? `<span class="seg ${h.kategori.toLowerCase()}">${HOMECELL_KATEGORI_LABEL[h.kategori]}</span>` : '',
@@ -205,7 +221,7 @@ export function renderHomecellAreaReportHtml(
                 h.memberCount,
               )}</td><td class="r">${h.avgAge != null ? `${h.avgAge} ${yrs()}` : '<span class="muted">—</span>'}</td><td class="r">${n(h.meetingCount)}</td><td class="r">${pctBadge(
                 h.attendancePercent,
-              )}</td><td>${h.lastMeetingAt ? fmtTgl(h.lastMeetingAt) : '<span class="muted">—</span>'}</td></tr>`;
+              )}</td><td class="r">${h.tamuVisits ? `${n(h.tamuVisits)}×` : '<span class="muted">—</span>'}</td><td>${h.lastMeetingAt ? fmtTgl(h.lastMeetingAt) : '<span class="muted">—</span>'}</td></tr>`;
             })
             .join('')}</tbody></table>`
         : `<p class="muted">${L('Belum ada homecell aktif di area ini.', 'No active homecells in this area.')}</p>`;
@@ -217,11 +233,12 @@ export function renderHomecellAreaReportHtml(
   </div>
   <div class="area-b">
     ${r.deskripsi ? `<p class="desc">${esc(r.deskripsi)}</p>` : ''}
-    <div class="stats4">
+    <div class="stats5">
       ${st('home', '#8b5cf6', n(s.homecellCount), L('Homecell aktif', 'Active homecells'))}
       ${st('users', '#f97316', n(s.memberCount), L('Anggota aktif', 'Active members'))}
       ${st('cake', '#f59e0b', s.avgAge != null ? `${s.avgAge} ${yrs()}` : '—', `${L('Usia rata²', 'Avg age')} (${n(s.ageKnown)} ${L('data', 'records')})`)}
       ${st('calendarCheck', '#3b82f6', n(s.meetingCount), `${L('Pertemuan', 'Meetings')} · ${n(s.homecellNoMeeting)} ${L('tanpa pertemuan', 'without meetings')}`)}
+      ${st('user', '#14b8a6', n(s.tamuVisits), `${L('Kunjungan tamu', 'Guest visits')} · ${n(s.tamuUnique)} ${L('tamu', 'guests')}`)}
     </div>
     ${demografiLine(s.demografi)}
     ${table}
@@ -262,13 +279,20 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     ${demografiCard(mergeDemografi(rows.map((r) => r.stat.demografi)), L('Gender & kelompok usia anggota aktif', 'Gender & age groups of active members'))}
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori homecell', 'Homecell categories')}</div><div class="card-s">Single · Couple · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
   </div>
-  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>
+    ${tamuCard(
+      tot.tamuVisits,
+      tot.tamuUnique,
+      rows.flatMap((r) => r.stat.homecells.map((h) => ({ nama: h.nama, sub: r.nama, visits: h.tamuVisits }))),
+    )}
+  </div>
 
   <h2 class="sec">${L('Detail per area', 'Area details')}</h2>
   ${areaCards || `<p class="muted">${L('Tidak ada area yang sesuai filter.', 'No areas match the filter.')}</p>`}
 
   <div class="foot">
-    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Kehadiran = total hadir ÷ (anggota aktif × jumlah pertemuan)', 'Attendance = total present ÷ (active members × meetings)')}</div>
+    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Kehadiran = total hadir anggota ÷ (anggota aktif × jumlah pertemuan) · tamu dicatat terpisah', 'Attendance = members present ÷ (active members × meetings) · guests recorded separately')}</div>
     <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
   </div>
 </div>

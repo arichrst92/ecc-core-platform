@@ -22,6 +22,8 @@ interface HomecellArea extends Record<string, unknown> {
   meetingCount?: number;
   attendancePercent?: number | null;
   homecellNoMeeting?: number;
+  tamuVisits?: number;
+  tamuUnique?: number;
   demografi?: {
     pria: number;
     wanita: number;
@@ -162,6 +164,11 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
               {row.meetingCount ?? 0} pertemuan
               {row.homecellNoMeeting ? <span className="text-red-600">· {row.homecellNoMeeting} tanpa pertemuan</span> : null}
             </span>
+            {row.tamuVisits ? (
+              <span className="text-[11px] text-teal-700" title="Tamu dicatat terpisah — tidak masuk % kehadiran">
+                +{row.tamuVisits} kunjungan tamu · {row.tamuUnique ?? 0} tamu
+              </span>
+            ) : null}
           </div>
         );
       },

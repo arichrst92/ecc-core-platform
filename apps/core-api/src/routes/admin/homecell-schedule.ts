@@ -11,6 +11,11 @@
  *   POST   /admin/homecell/:homecellId/schedule/:scheduleId/attendance   — scan QR
  *   DELETE /admin/homecell/:homecellId/schedule/:scheduleId/attendance/:attendanceId
  *   DELETE /admin/homecell/:homecellId/schedule/:scheduleId  — delete schedule
+ *   POST   /admin/homecell/:homecellId/schedule/:scheduleId/tamu          — tandai tamu hadir
+ *   DELETE /admin/homecell/:homecellId/schedule/:scheduleId/tamu/:tamuId  — batalkan
+ *
+ * Kehadiran TAMU dicatat terpisah (HomecellTamuAttendance) — tidak masuk
+ * attendanceCount / % kehadiran anggota.
  *
  * Auth: PIC homecell / PIC area parent / admin fulltimer (via assertCanManageHomecell).
  *
@@ -140,7 +145,7 @@ homecellScheduleRouter.get('/', async (req, res) => {
       orderBy: { tanggal: 'desc' },
       take: q.limit,
       include: {
-        _count: { select: { attendances: true } },
+        _count: { select: { attendances: true, tamuAttendances: true } },
         creator: { select: { id: true, namaLengkap: true } },
       },
     }),
@@ -160,6 +165,7 @@ homecellScheduleRouter.get('/', async (req, res) => {
       creator: r.creator,
       createdAt: r.createdAt,
       attendanceCount: r._count.attendances,
+      tamuCount: r._count.tamuAttendances,
     })),
     meta: { total, limit: q.limit },
   });
@@ -188,6 +194,15 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
             select: { id: true, namaLengkap: true, kode: true, fotoUrl: true },
           },
           scanner: { select: { id: true, namaLengkap: true } },
+        },
+      },
+      tamuAttendances: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          createdAt: true,
+          tamu: { select: { id: true, namaLengkap: true, noHp: true } },
+          markedBy: { select: { id: true, namaLengkap: true } },
         },
       },
     },
@@ -225,6 +240,15 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       kode: m.jemaat.kode,
     }));
 
+  // Tamu terdaftar di homecell yang belum ditandai hadir di pertemuan ini.
+  const tamuHadirIds = new Set(schedule.tamuAttendances.map((t) => t.tamu.id));
+  const tamuList = await prisma.homecellTamu.findMany({
+    where: { homecellId },
+    orderBy: { createdAt: 'desc' },
+    select: { tamu: { select: { id: true, namaLengkap: true, noHp: true } } },
+  });
+  const tamuBelumHadir = tamuList.map((t) => t.tamu).filter((t) => !tamuHadirIds.has(t.id));
+
   res.json({
     success: true,
     data: {
@@ -242,6 +266,9 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       memberCount: members.length,
       attendances: schedule.attendances,
       missingMembers,
+      tamuCount: schedule.tamuAttendances.length,
+      tamuAttendances: schedule.tamuAttendances,
+      tamuBelumHadir,
       files: schedule.files,
     },
   });
@@ -613,16 +640,18 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
 
   const before = await prisma.homecellSchedule.findFirst({
     where: { id: scheduleId, homecellId },
-    include: { _count: { select: { attendances: true } } },
+    include: { _count: { select: { attendances: true, tamuAttendances: true } } },
   });
   if (!before) throw NotFound('Schedule tidak ditemukan.');
 
   const force = req.query.force === 'true';
-  if (before._count.attendances > 0 && !force) {
+  if (before._count.attendances + before._count.tamuAttendances > 0 && !force) {
     throw new ApiError(
       400,
       'HAS_ATTENDANCE',
-      `Schedule punya ${before._count.attendances} attendance. ` +
+      `Schedule punya ${before._count.attendances} kehadiran anggota` +
+        (before._count.tamuAttendances ? ` + ${before._count.tamuAttendances} tamu` : '') +
+        '. ' +
         `Hapus attendance satu per satu dulu, baru delete schedule.`,
     );
   }
@@ -647,6 +676,57 @@ homecellScheduleRouter.delete('/:scheduleId', async (req, res) => {
   });
 
   res.json({ success: true, data: { deleted: true, attendanceDeleted: before._count.attendances, filesDeleted: files.length } });
+});
+
+// ============================================================
+// Kehadiran TAMU — terpisah dari anggota.
+//   POST   /:scheduleId/tamu          { tamuIds: uuid[] }  (harus tamu homecell ini)
+//   DELETE /:scheduleId/tamu/:tamuId
+// ============================================================
+const tamuHadirSchema = z.object({ tamuIds: z.array(z.string().uuid()).min(1).max(100) });
+
+homecellScheduleRouter.post('/:scheduleId/tamu', async (req, res) => {
+  const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
+  const scheduleId = req.params.scheduleId;
+  if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
+  const requester = await getRequester(req);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  const { tamuIds } = tamuHadirSchema.parse(req.body ?? {});
+
+  const schedule = await prisma.homecellSchedule.findFirst({ where: { id: scheduleId, homecellId }, select: { id: true, tanggal: true } });
+  if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+
+  const valid = await prisma.homecellTamu.findMany({
+    where: { homecellId, tamuId: { in: tamuIds } },
+    select: { tamuId: true },
+  });
+  if (valid.length === 0) throw BadRequest('Tamu belum tercatat di homecell ini. Tambahkan tamu dulu.');
+  const r = await prisma.homecellTamuAttendance.createMany({
+    data: valid.map((v) => ({ scheduleId, tamuId: v.tamuId, markedById: requester.jemaatId })),
+    skipDuplicates: true,
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'homecell_tamu_attendance',
+    resourceId: scheduleId,
+    resourceLabel: `${r.count} tamu hadir di pertemuan ${schedule.tanggal.toISOString().slice(0, 10)}`,
+  });
+  const tamuCount = await prisma.homecellTamuAttendance.count({ where: { scheduleId } });
+  res.json({ success: true, data: { recorded: r.count, tamuCount } });
+});
+
+homecellScheduleRouter.delete('/:scheduleId/tamu/:tamuId', async (req, res) => {
+  const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
+  const { scheduleId, tamuId } = req.params;
+  if (!homecellId || !scheduleId || !tamuId) throw BadRequest('homecellId + scheduleId + tamuId required.');
+  const requester = await getRequester(req);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  const r = await prisma.homecellTamuAttendance.deleteMany({
+    where: { scheduleId, tamuId, schedule: { homecellId } },
+  });
+  if (r.count === 0) throw NotFound('Kehadiran tamu tidak ditemukan.');
+  audit(req, { action: 'DELETE', resource: 'homecell_tamu_attendance', resourceId: scheduleId, resourceLabel: `batal hadir tamu ${tamuId}` });
+  res.json({ success: true, data: { deleted: true } });
 });
 
 // ============================================================

@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Cake, CalendarCheck, FileText, Loader2, TrendingUp, UserCheck, Users } from 'lucide-react';
+import { Cake, CalendarCheck, FileText, Loader2, TrendingUp, UserCheck, UserPlus, Users } from 'lucide-react';
 import { homecellAttendanceTier } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { PERIODE_OPTIONS, type PeriodePreset } from '@/components/homecell/homecell-filter-bar';
@@ -37,6 +37,9 @@ interface Stats {
   lastMeetingAt: string | null;
   lastMeetingDaysAgo: number | null;
   members: Member[];
+  /** Kunjungan tamu di periode — terpisah, tidak masuk % kehadiran. */
+  tamuVisits?: number;
+  tamus?: { nama: string; noHp: string | null; dicatat: string; hadir: number; lastAt: string | null }[];
   period: { from: string; to: string } | null;
 }
 
@@ -154,7 +157,7 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
         <div className="py-8 text-center text-sm text-red-600">Gagal memuat laporan.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
             <Kpi icon={Users} color="#f97316" label="Anggota aktif" value={members.length} sub={`${pria} L · ${wanita} P`} />
             <Kpi icon={Cake} color="#f59e0b" label="Usia rata-rata" value={s.avgAge != null ? `${s.avgAge} th` : '—'} sub={`dari ${ageKnown} anggota`} />
             <Kpi icon={CalendarCheck} color="#3b82f6" label="Pertemuan" value={s.meetingCount} sub="di periode" />
@@ -166,6 +169,13 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
               sub="hadir ÷ (anggota × pertemuan)"
             />
             <Kpi icon={UserCheck} color="#10b981" label="Pertemuan terakhir" value={<span className="text-base">{fmt(s.lastMeetingAt)}</span>} sub={s.lastMeetingDaysAgo != null ? `${s.lastMeetingDaysAgo} hari lalu` : 'belum ada'} />
+            <Kpi
+              icon={UserPlus}
+              color="#14b8a6"
+              label="Kunjungan tamu"
+              value={s.tamuVisits ?? 0}
+              sub={`${(s.tamus ?? []).filter((t) => t.hadir > 0).length} tamu · tidak masuk %`}
+            />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-4">
@@ -266,6 +276,39 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
               </tbody>
             </table>
           </div>
+
+          {(s.tamus ?? []).length ? (
+            <div className="overflow-x-auto">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-700 mb-1.5">
+                Tamu ({s.tamus!.length}) · dicatat terpisah, tidak masuk % kehadiran
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-teal-50/60 text-neutral-500 text-xs">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-2">Nama</th>
+                    <th className="text-left font-medium px-3 py-2">Dicatat</th>
+                    <th className="text-right font-medium px-3 py-2">Hadir di periode</th>
+                    <th className="text-left font-medium px-3 py-2">Terakhir hadir</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...s.tamus!]
+                    .sort((a, b) => b.hadir - a.hadir || a.nama.localeCompare(b.nama))
+                    .map((t) => (
+                      <tr key={`${t.nama}-${t.noHp}`} className="border-t border-neutral-100">
+                        <td className="px-3 py-1.5">
+                          <div className="font-medium text-neutral-900">{t.nama}</div>
+                          <div className="text-[11px] text-neutral-400">{t.noHp ?? ''}</div>
+                        </td>
+                        <td className="px-3 py-1.5 text-xs">{fmt(t.dicatat)}</td>
+                        <td className="px-3 py-1.5 text-right">{s.meetingCount > 0 ? `${t.hadir}/${s.meetingCount}` : '—'}</td>
+                        <td className="px-3 py-1.5 text-xs">{t.lastAt ? fmt(t.lastAt) : <span className="text-neutral-400">belum pernah</span>}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </>
       )}
     </div>

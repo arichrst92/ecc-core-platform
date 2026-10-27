@@ -21,6 +21,7 @@ import {
   Loader2,
   MapPinned,
   TrendingUp,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
@@ -51,6 +52,8 @@ interface HcStat {
   attendancePercent: number | null;
   lastMeetingAt: string | null;
   demografi: Demografi;
+  tamuVisits?: number;
+  tamuUnique?: number;
 }
 interface StatsResp {
   area: {
@@ -74,6 +77,8 @@ interface StatsResp {
     kategori: { SINGLE: number; COUPLE: number; UMUM: number };
     homecells: HcStat[];
     demografi: Demografi;
+    tamuVisits?: number;
+    tamuUnique?: number;
   };
 }
 
@@ -236,7 +241,7 @@ export default function HomecellAreaDetailPage() {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi icon={Home} color="#8b5cf6" label="Homecell aktif" value={s.homecellCount} sub={`${s.kategori.SINGLE} single · ${s.kategori.COUPLE} couple · ${s.kategori.UMUM} umum`} />
             <Kpi icon={Users} color="#0ea5e9" label="Anggota aktif" value={s.memberCount} sub={`${demo.pria} laki-laki · ${demo.wanita} perempuan`} />
             <Kpi icon={Cake} color="#f59e0b" label="Usia rata-rata" value={s.avgAge != null ? `${s.avgAge} th` : '—'} sub={`dari ${s.ageKnown} anggota dengan tanggal lahir`} />
@@ -249,6 +254,8 @@ export default function HomecellAreaDetailPage() {
               sub="hadir ÷ (anggota × pertemuan)"
             />
             <Kpi icon={AlertTriangle} color="#ef4444" label="Perlu perhatian" value={attention.length} sub="kehadiran ≤ 25% / tanpa pertemuan" />
+            <Kpi icon={UserPlus} color="#14b8a6" label="Kunjungan tamu" value={s.tamuVisits ?? 0} sub="dicatat terpisah, tidak masuk %" />
+            <Kpi icon={UserPlus} color="#0d9488" label="Tamu berbeda" value={s.tamuUnique ?? 0} sub="tamu yang hadir di periode" />
           </div>
 
           <Card icon={TrendingUp} color="#22c55e" title="Performa kehadiran per homecell" sub="Diurutkan dari tertinggi">
@@ -350,6 +357,7 @@ export default function HomecellAreaDetailPage() {
                   <th className="text-right font-medium px-4 py-2">Usia rata²</th>
                   <th className="text-right font-medium px-4 py-2">Pertemuan</th>
                   <th className="text-right font-medium px-4 py-2">Kehadiran</th>
+                  <th className="text-right font-medium px-4 py-2" title="Kunjungan tamu (terpisah dari kehadiran anggota)">Tamu</th>
                   <th className="text-left font-medium px-4 py-2">Terakhir</th>
                 </tr>
               </thead>
@@ -383,12 +391,13 @@ export default function HomecellAreaDetailPage() {
                     <td className="px-4 py-2 text-right">
                       {h.attendanceTotal === 0 ? <span className="text-neutral-400 text-xs">—</span> : <PctBadge p={h.attendancePercent} />}
                     </td>
+                    <td className="px-4 py-2 text-right">{h.tamuVisits ? <span className="text-teal-700 font-medium">{h.tamuVisits}×</span> : <span className="text-neutral-400 text-xs">—</span>}</td>
                     <td className="px-4 py-2 text-neutral-600">{fmt(h.lastMeetingAt)}</td>
                   </tr>
                 ))}
                 {s.homecells.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-neutral-400">
+                    <td colSpan={9} className="px-4 py-8 text-center text-neutral-400">
                       Belum ada homecell aktif.
                     </td>
                   </tr>

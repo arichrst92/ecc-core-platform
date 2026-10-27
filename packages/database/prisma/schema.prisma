@@ -253,6 +253,8 @@ model Jemaat {
   diundangSebagaiTamu          JemaatTamu[]                  @relation("TamuGuest")
   tamuHomecell                 HomecellTamu[]                @relation("HomecellTamuGuest")
   tamuHomecellDicatat          HomecellTamu[]                @relation("HomecellTamuAddedBy")
+  tamuHomecellHadir            HomecellTamuAttendance[]      @relation("HomecellTamuHadir")
+  tamuHomecellHadirDicatat     HomecellTamuAttendance[]      @relation("HomecellTamuHadirMarker")
   tamuFollowupBy               Jemaat?                       @relation("TamuFollowup", fields: [tamuFollowupById], references: [id], onDelete: SetNull)
   tamuDifollowup               Jemaat[]                      @relation("TamuFollowup")
   homecellScheduleCreator      HomecellSchedule[]            @relation("HomecellScheduleCreator")
@@ -2267,6 +2269,8 @@ model HomecellSchedule {
   homecell    Homecell             @relation(fields: [homecellId], references: [id], onDelete: Cascade)
   creator     Jemaat?              @relation("HomecellScheduleCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   attendances HomecellAttendance[]
+  // Kehadiran tamu dicatat TERPISAH — tidak masuk % kehadiran anggota.
+  tamuAttendances HomecellTamuAttendance[]
   files       HomecellScheduleFile[]
 
   @@index([homecellId, tanggal(sort: Desc)])
@@ -3624,4 +3628,22 @@ model HomecellTamu {
   @@unique([homecellId, tamuId])
   @@index([tamuId])
   @@map("homecell_tamu")
+}
+
+/// Kehadiran tamu di pertemuan homecell. Terpisah dari HomecellAttendance
+/// (anggota) supaya % kehadiran anggota tidak terdistorsi oleh tamu.
+model HomecellTamuAttendance {
+  id         String   @id @default(uuid()) @db.Uuid
+  scheduleId String   @map("schedule_id") @db.Uuid
+  tamuId     String   @map("tamu_id") @db.Uuid
+  markedById String?  @map("marked_by_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  schedule HomecellSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  tamu     Jemaat           @relation("HomecellTamuHadir", fields: [tamuId], references: [id], onDelete: Cascade)
+  markedBy Jemaat?          @relation("HomecellTamuHadirMarker", fields: [markedById], references: [id], onDelete: SetNull)
+
+  @@unique([scheduleId, tamuId])
+  @@index([tamuId])
+  @@map("homecell_tamu_attendance")
 }

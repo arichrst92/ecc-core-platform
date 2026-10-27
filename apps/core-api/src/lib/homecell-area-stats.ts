@@ -5,6 +5,8 @@
  *   - anggota aktif + rata-rata usia (yang tanggal lahirnya terisi)
  *   - pertemuan = jadwal dengan tanggal ≤ hari ini (dan dalam periode bila dipilih)
  *   - kehadiran % = total hadir / (anggota aktif × jumlah pertemuan)
+ *   - tamu dicatat TERPISAH (HomecellTamuAttendance): kunjungan & tamu unik,
+ *     tidak ikut menghitung % kehadiran anggota.
  * Per area: agregat dari homecell-homecell di dalamnya (kehadiran berbobot).
  */
 import { prisma, type HomecellKategori } from '@ecc/database';
@@ -83,6 +85,10 @@ export interface HomecellStat {
   attendancePercent: number | null;
   lastMeetingAt: string | null;
   demografi: Demografi;
+  /** Kunjungan tamu (tamu × pertemuan) di periode. */
+  tamuVisits: number;
+  /** Jumlah tamu berbeda yang hadir di periode. */
+  tamuUnique: number;
 }
 
 export interface AreaStat {
@@ -98,6 +104,8 @@ export interface AreaStat {
   kategori: { SINGLE: number; COUPLE: number; UMUM: number };
   homecells: HomecellStat[];
   demografi: Demografi;
+  tamuVisits: number;
+  tamuUnique: number;
 }
 
 const ageOf = (lahir: Date, now: Date) => {
@@ -127,7 +135,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       members: { where: { isActive: true }, select: { jemaat: { select: { tanggalLahir: true, jenisKelamin: true } } } },
       schedules: {
         where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
-        select: { tanggal: true, _count: { select: { attendances: true } } },
+        select: { tanggal: true, _count: { select: { attendances: true } }, tamuAttendances: { select: { tamuId: true } } },
       },
     },
   });
@@ -146,11 +154,14 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       kategori: { SINGLE: 0, COUPLE: 0, UMUM: 0 },
       homecells: [],
       demografi: newDemografi(),
+      tamuVisits: 0,
+      tamuUnique: 0,
     });
   }
   const ageSum = new Map<string, number>();
   const hadirSum = new Map<string, number>();
   const potensiSum = new Map<string, number>();
+  const tamuSet = new Map<string, Set<string>>();
 
   for (const h of homecells) {
     const a = out.get(h.areaId)!;
@@ -161,6 +172,10 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
     const ages = h.members.map((m) => (m.jemaat.tanggalLahir ? ageOf(m.jemaat.tanggalLahir, now) : null)).filter((x): x is number => x != null);
     const hadir = h.schedules.reduce((n, s) => n + s._count.attendances, 0);
     const potensi = h.members.length * h.schedules.length;
+    const tamuIds = h.schedules.flatMap((s) => s.tamuAttendances.map((t) => t.tamuId));
+    const areaTamu = tamuSet.get(h.areaId) ?? new Set<string>();
+    for (const id of tamuIds) areaTamu.add(id);
+    tamuSet.set(h.areaId, areaTamu);
     const last = h.schedules
       .filter((s) => s._count.attendances > 0)
       .reduce<Date | null>((mx, s) => (!mx || s.tanggal > mx ? s.tanggal : mx), null);
@@ -178,7 +193,10 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       attendancePercent: potensi > 0 ? Math.min(100, Math.round((hadir / potensi) * 100)) : null,
       lastMeetingAt: last ? last.toISOString().slice(0, 10) : null,
       demografi: demo,
+      tamuVisits: tamuIds.length,
+      tamuUnique: new Set(tamuIds).size,
     });
+    a.tamuVisits += tamuIds.length;
     a.homecellCount++;
     a.memberCount += h.members.length;
     a.ageKnown += ages.length;
@@ -193,6 +211,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
 
   for (const a of out.values()) {
     a.demografi = mergeDemografi(a.homecells.map((h) => h.demografi));
+    a.tamuUnique = tamuSet.get(a.areaId)?.size ?? 0;
     a.avgAge = a.ageKnown ? Math.round((ageSum.get(a.areaId) ?? 0) / a.ageKnown) : null;
     const pot = potensiSum.get(a.areaId) ?? 0;
     a.attendancePercent = pot > 0 ? Math.min(100, Math.round(((hadirSum.get(a.areaId) ?? 0) / pot) * 100)) : null;

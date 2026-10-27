@@ -7,7 +7,7 @@
 import { esc } from './print-report.js';
 import { L, fmtTglL as fmtTgl, generatedAt, setReportLang, usiaLabelL, yrs, type ReportLang } from './report-i18n.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
-import { EXTRA_CSS, ICON_PATHS, TIER, demografiCard, demografiLine, ic, pctBadge, tierOf } from './homecell-area-report-html.js';
+import { EXTRA_CSS, ICON_PATHS, TIER, demografiCard, demografiLine, ic, pctBadge, tamuCard, tierOf } from './homecell-area-report-html.js';
 import { addDemografi, mergeDemografi, newDemografi, type Demografi } from './homecell-area-stats.js';
 import { HOMECELL_KATEGORI_LABEL, type HomecellAttendanceTier } from '@ecc/shared-types';
 
@@ -21,6 +21,16 @@ export interface HcMemberRow {
   hadir: number;
   lastAt: string | null;
   lastDaysAgo: number | null;
+}
+
+export interface HcTamuRow {
+  nama: string;
+  noHp: string | null;
+  dicatat: string;
+  /** Hadir di periode. */
+  hadir: number;
+  /** Terakhir hadir (seluruh waktu). */
+  lastAt: string | null;
 }
 
 export interface HcReportRow {
@@ -40,6 +50,9 @@ export interface HcReportRow {
   lastMeetingAt: string | null;
   lastMeetingDaysAgo: number | null;
   members: HcMemberRow[];
+  /** Kunjungan tamu di periode — terpisah dari kehadiran anggota. */
+  tamuVisits: number;
+  tamus: HcTamuRow[];
 }
 
 const CSS = `
@@ -82,9 +95,11 @@ export function renderHomecellReportHtml(
       for (const m of r.members) if (m.usia != null) (a.ageSum += m.usia), a.ageKnown++;
       a.kat[r.kategori ?? 'UMUM']++;
       if (r.attendanceTotal === 0) a.noMeet++;
+      a.tamuVisits += r.tamuVisits;
+      a.tamuUnique += r.tamus.filter((t) => t.hadir > 0).length;
       return a;
     },
-    { mem: 0, meet: 0, hadir: 0, pot: 0, ageSum: 0, ageKnown: 0, noMeet: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
+    { tamuVisits: 0, tamuUnique: 0, mem: 0, meet: 0, hadir: 0, pot: 0, ageSum: 0, ageKnown: 0, noMeet: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
   );
   // Demografi per homecell + gabungan.
   const demoOf = new Map<HcReportRow, Demografi>();
@@ -166,6 +181,17 @@ export function renderHomecellReportHtml(
             })
             .join('')}</tbody></table>`
         : `<p class="muted">${L('Belum ada anggota aktif.', 'No active members yet.')}</p>`;
+      const tamuTable = r.tamus.length
+        ? `<div class="sub-h">${ic('user', 10, '#0f766e')} ${L('Tamu', 'Guests')} (${n(r.tamus.length)}) · ${L('dicatat terpisah, tidak masuk % kehadiran', 'recorded separately, not in attendance %')}</div>
+<table><thead><tr><th>#</th><th>${L('Nama', 'Name')}</th><th>${L('No HP', 'Phone')}</th><th>${L('Dicatat', 'Added')}</th><th class="r">${L('Hadir di periode', 'Attended in period')}</th><th>${L('Terakhir hadir', 'Last attended')}</th></tr></thead><tbody>${r.tamus
+            .map(
+              (t, i) =>
+                `<tr><td class="n">${i + 1}</td><td><b>${esc(t.nama)}</b></td><td>${esc(t.noHp ?? '—')}</td><td>${fmtTgl(t.dicatat)}</td><td class="r">${
+                  r.meetingCount > 0 ? `${t.hadir}/${r.meetingCount}` : '<span class="muted">—</span>'
+                }</td><td>${t.lastAt ? fmtTgl(t.lastAt) : `<span class="muted">${L('belum pernah', 'never')}</span>`}</td></tr>`,
+            )
+            .join('')}</tbody></table>`
+        : '';
       return `<div class="area">
   <div class="area-h hc">
     <span class="area-ic hc">${ic('home', 15)}</span>
@@ -174,14 +200,16 @@ export function renderHomecellReportHtml(
     <div class="area-p"><div class="v" style="color:${t ? TIER[t].fg : '#94a3b8'}">${r.attendancePercent != null && r.attendanceTotal > 0 ? `${r.attendancePercent}%` : '—'}</div><div class="l">${L('Kehadiran', 'Attendance')}</div></div>
   </div>
   <div class="area-b">
-    <div class="stats4">
+    <div class="stats5">
       ${st('users', '#f97316', n(r.members.length), L('Anggota aktif', 'Active members'))}
       ${st('cake', '#f59e0b', r.avgAge != null ? `${r.avgAge} ${yrs()}` : '—', L('Usia rata-rata', 'Average age'))}
       ${st('calendarCheck', '#3b82f6', n(r.meetingCount), L('Pertemuan di periode', 'Meetings in period'))}
       ${st('userCheck', '#10b981', r.lastMeetingAt ? fmtTgl(r.lastMeetingAt) : '—', L('Pertemuan terakhir', 'Last meeting'))}
+      ${st('user', '#14b8a6', n(r.tamuVisits), `${L('Kunjungan tamu', 'Guest visits')} · ${n(r.tamus.filter((t) => t.hadir > 0).length)} ${L('tamu', 'guests')}`)}
     </div>
     ${demografiLine(demoOf.get(r)!)}
     ${memberTable}
+    ${tamuTable}
   </div>
 </div>`;
     })
@@ -220,13 +248,16 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     ${demografiCard(demoAll, L('Gender & kelompok usia anggota aktif', 'Gender & age groups of active members'))}
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori', 'Categories')}</div><div class="card-s">Single · Couple · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
   </div>
-  <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>
+    ${tamuCard(tot.tamuVisits, tot.tamuUnique, rows.map((r) => ({ nama: r.nama, sub: r.area, visits: r.tamuVisits })))}
+  </div>
 
   <h2 class="sec">${L('Detail per homecell', 'Homecell details')}</h2>
   ${cards || `<p class="muted">${L('Tidak ada homecell yang sesuai filter.', 'No homecells match the filter.')}</p>`}
 
   <div class="foot">
-    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Terakhir hadir: hijau ≤ 7 hari, kuning ≤ 30 hari, merah &gt; 30 hari · Usia oranye = di luar rentang usia homecell', 'Last attended: green ≤ 7 days, yellow ≤ 30 days, red &gt; 30 days · Orange age = outside the homecell age range')}</div>
+    <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Terakhir hadir: hijau ≤ 7 hari, kuning ≤ 30 hari, merah &gt; 30 hari · Usia oranye = di luar rentang usia homecell', 'Last attended: green ≤ 7 days, yellow ≤ 30 days, red &gt; 30 days · Orange age = outside the homecell age range')} · ${L('Tamu dicatat terpisah, tidak masuk % kehadiran', 'Guests recorded separately, not in attendance %')}</div>
     <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
   </div>
 </div>

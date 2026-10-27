@@ -25,12 +25,17 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dialog';
 import { HomecellBoardSection } from '@/components/group/group-content';
 import { todayYmd, parseYmd } from '@/lib/dates';
+import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
+import { ATTENDANCE_TIER_CLASS } from '@/lib/resources/homecell-config';
 
 interface Homecell {
   id: string;
   nama: string;
   deskripsi: string | null;
   isActive: boolean;
+  kategori?: 'SINGLE' | 'COUPLE' | null;
+  usiaMin?: number | null;
+  usiaMax?: number | null;
   area: {
     id: string;
     nama: string;
@@ -157,6 +162,20 @@ export default function HomecellDetailPage() {
             >
               Area: {h.area.nama}
             </Link>
+            {h.kategori ? (
+              <span
+                className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  h.kategori === 'COUPLE' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'
+                }`}
+              >
+                {HOMECELL_KATEGORI_LABEL[h.kategori]}
+              </span>
+            ) : null}
+            {homecellUsiaLabel(h.usiaMin, h.usiaMax) ? (
+              <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-100 text-neutral-600">
+                Usia {homecellUsiaLabel(h.usiaMin, h.usiaMax)}
+              </span>
+            ) : null}
           </div>
         </div>
         {!h.isActive && (
@@ -298,7 +317,7 @@ export default function HomecellDetailPage() {
       </div>
 
       {/* Jadwal Pertemuan section — read-only di portal, CRUD via mobile PIC */}
-      <SchedulesSection homecellId={homecellId} />
+      <SchedulesSection homecellId={homecellId} activeMemberCount={activeMembers.length} />
 
       {addOpen && (
         <AddMemberModal
@@ -469,7 +488,7 @@ function AddMemberModal({
   );
 }
 
-function SchedulesSection({ homecellId }: { homecellId: string }) {
+function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: string; activeMemberCount: number }) {
   const [deleting, setDeleting] = useState<ScheduleListItem | null>(null);
   const q = useQuery({
     queryKey: ['homecell', 'schedules', homecellId],
@@ -557,10 +576,21 @@ function SchedulesSection({ homecellId }: { homecellId: string }) {
                 </td>
                 <td className="px-5 py-3 text-neutral-600">{s.creator?.namaLengkap ?? '-'}</td>
                 <td className="px-5 py-3 text-center">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-700 rounded font-medium tabular-nums">
-                    <Users className="w-3 h-3" />
-                    {s.attendanceCount}
-                  </span>
+                  {(() => {
+                    // Indikator per pertemuan: hadir / anggota aktif.
+                    const pct = activeMemberCount > 0 ? Math.round((s.attendanceCount / activeMemberCount) * 100) : null;
+                    const cls = pct == null ? 'bg-neutral-100 text-neutral-600' : ATTENDANCE_TIER_CLASS[homecellAttendanceTier(pct)];
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium tabular-nums ${cls}`}
+                        title={pct == null ? undefined : `${s.attendanceCount} dari ${activeMemberCount} anggota aktif`}
+                      >
+                        <Users className="w-3 h-3" />
+                        {s.attendanceCount}
+                        {pct != null ? <span className="text-[11px] font-semibold">· {Math.min(pct, 100)}%</span> : null}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-5 py-3 text-right whitespace-nowrap">
                   <button

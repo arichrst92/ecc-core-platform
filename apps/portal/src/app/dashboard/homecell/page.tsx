@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
-import { homecellResource } from '@/lib/resources/homecell-config';
+import { ATTENDANCE_TIER_CLASS, homecellResource } from '@/lib/resources/homecell-config';
 import { apiClient } from '@/lib/api-client';
 import {
   HomecellFilterBar,
@@ -60,6 +60,13 @@ function HomecellInner() {
         </button>
       </div>
       <HomecellFilterBar value={filter} onChange={setFilter} />
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500 mb-3">
+        <span className="font-medium">Indikator rata² hadir:</span>
+        <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE_TIER_CLASS.merah}`}>0–25%</span>
+        <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE_TIER_CLASS.oranye}`}>26–50%</span>
+        <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE_TIER_CLASS.kuning}`}>51–75%</span>
+        <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE_TIER_CLASS.hijau}`}>76–100%</span>
+      </div>
       <CrudPage config={homecellResource} extraParams={extraParams} />
     </div>
   );

@@ -5,6 +5,9 @@ import { prisma, type Prisma } from '@ecc/database';
 import {
   createHomecellSchema,
   updateHomecellSchema,
+  HOMECELL_KATEGORI_LABEL,
+  homecellAttendanceTier,
+  homecellUsiaLabel,
   addHomecellMemberSchema,
   updateHomecellMemberSchema,
   paginationQuerySchema,
@@ -57,6 +60,9 @@ function homecellFilter(req: import('express').Request, search?: string) {
   if (cabangId) areaFilter.cabangId = cabangId;
   if (sinodeId) areaFilter.cabang = { sinodeId };
   if (Object.keys(areaFilter).length > 0) where.area = areaFilter;
+  const kategori = str('kategori');
+  if (kategori === 'SINGLE' || kategori === 'COUPLE') where.kategori = kategori;
+  if (kategori === 'UMUM') where.kategori = null;
   if (status === 'aktif') where.isActive = true;
   if (status === 'nonaktif') where.isActive = false;
 
@@ -212,8 +218,12 @@ homecellRouter.get('/export', async (req, res) => {
       id: true,
       nama: true,
       isActive: true,
+      kategori: true,
+      usiaMin: true,
+      usiaMax: true,
       area: { select: { nama: true, cabang: { select: { nama: true } } } },
       picJemaat: { select: { namaLengkap: true, noHp: true } },
+      schedules: { select: { _count: { select: { attendances: true } } } },
       members: {
         where: { isActive: true },
         orderBy: { jemaat: { namaLengkap: 'asc' } },
@@ -257,6 +267,14 @@ homecellRouter.get('/export', async (req, res) => {
   const sections = rows
     .map((h) => {
       const lm = lastMeetingOf(h.id, lastMap);
+      // Rata-rata kehadiran (sama dengan kolom "Rata² Hadir" di portal).
+      const totalHadir = h.schedules.reduce((n, s) => n + s._count.attendances, 0);
+      const pct = h.members.length > 0 && h.schedules.length > 0
+        ? Math.round((totalHadir / (h.members.length * h.schedules.length)) * 100)
+        : null;
+      const segmen = [h.kategori ? HOMECELL_KATEGORI_LABEL[h.kategori] : null, homecellUsiaLabel(h.usiaMin, h.usiaMax)]
+        .filter(Boolean)
+        .join(' · ');
       const memberRows = h.members
         .map((m, i) => {
           const la = memberMap.get(`${h.id}:${m.jemaat.id}`);
@@ -275,9 +293,10 @@ homecellRouter.get('/export', async (req, res) => {
   <div class="hc-head">
     <div>
       <h2>${esc(h.nama)}${h.isActive ? '' : ' <span class="tag">nonaktif</span>'}</h2>
-      <div class="sub">${esc(h.area?.nama ?? '')} · ${esc(h.area?.cabang?.nama ?? '')} · PIC: ${esc(h.picJemaat?.namaLengkap ?? '—')}</div>
+      <div class="sub">${esc(h.area?.nama ?? '')} · ${esc(h.area?.cabang?.nama ?? '')} · PIC: ${esc(h.picJemaat?.namaLengkap ?? '—')}${segmen ? ` · ${esc(segmen)}` : ''}</div>
     </div>
     <div class="last">
+      <div>Rata² hadir: ${pct == null ? '<span class="muted">—</span>' : `<span class="tier tier-${homecellAttendanceTier(pct)}">${pct}%</span>`}</div>
       <div>Terakhir homecell: <strong>${fmtTgl(lm.lastMeetingAt)}</strong></div>
       <div>${relHari(lm.lastMeetingDaysAgo)}</div>
       ${periodCounts ? `<div class="muted">${periodCounts.get(h.id) ?? 0} pertemuan dalam periode</div>` : ''}
@@ -318,6 +337,11 @@ homecellRouter.get('/export', async (req, res) => {
   .warn { color: #b45309; font-weight: 600; }
   .bad { color: #dc2626; font-weight: 600; }
   .muted { color: #94a3b8; }
+  .tier { display: inline-block; padding: 0 6px; border-radius: 8px; font-weight: 700; }
+  .tier-merah { background: #fee2e2; color: #b91c1c; }
+  .tier-oranye { background: #ffedd5; color: #c2410c; }
+  .tier-kuning { background: #fef9c3; color: #a16207; }
+  .tier-hijau { background: #dcfce7; color: #15803d; }
   .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
   .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
   @media print {
@@ -352,7 +376,7 @@ ${
 ${filterParts.length ? `<div class="filters">${filterParts.map(esc).join(' · ')}</div>` : ''}
 ${sections || '<p class="muted">Tidak ada homecell yang sesuai filter.</p>'}
 <div class="footer-row">
-  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Keterangan warna: hijau ≤7 hari, kuning ≤30 hari, merah &gt;30 hari</div>
+  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Terakhir hadir: hijau ≤7 hari, kuning ≤30 hari, merah &gt;30 hari · Rata² hadir: <span class="tier tier-merah">0–25%</span> <span class="tier tier-oranye">26–50%</span> <span class="tier tier-kuning">51–75%</span> <span class="tier tier-hijau">76–100%</span></div>
   <div class="powered">
     <span>Powered by</span>
     <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/>
@@ -490,6 +514,12 @@ homecellRouter.patch('/:id', async (req, res) => {
   }
   const before = await prisma.homecell.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Homecell tidak ditemukan');
+  // PATCH parsial: cek rentang usia terhadap nilai yang sudah tersimpan juga.
+  const nextMin = input.usiaMin === undefined ? before.usiaMin : input.usiaMin;
+  const nextMax = input.usiaMax === undefined ? before.usiaMax : input.usiaMax;
+  if (nextMin != null && nextMax != null && nextMin > nextMax) {
+    throw BadRequest('Usia minimal tidak boleh lebih besar dari usia maksimal.');
+  }
   const { mapsUrl, ...rest } = input;
   const updated = await prisma.homecell.update({
     where: { id: req.params.id },

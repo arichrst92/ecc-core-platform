@@ -60,6 +60,9 @@ const listSelect = {
   latitude: true,
   longitude: true,
   mapsUrl: true,
+  kategori: true,
+  usiaMin: true,
+  usiaMax: true,
   area: { select: { id: true, nama: true, cabang: { select: { id: true, nama: true } } } },
   picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
   _count: { select: { members: { where: { isActive: true } } } },
@@ -197,11 +200,13 @@ meHomecellRouter.get('/browse', async (req, res) => {
   const jemaatId = me(req).jemaatId;
   const from = parseLatLng(req.query as Record<string, unknown>);
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const kat = req.query.kategori;
   const cabangId = await targetCabangId(req, jemaatId);
   const rows = await prisma.homecell.findMany({
     where: {
       isActive: true,
       area: { cabangId, isActive: true },
+      ...(kat === 'SINGLE' || kat === 'COUPLE' ? { kategori: kat } : {}),
       ...(q
         ? {
             OR: [

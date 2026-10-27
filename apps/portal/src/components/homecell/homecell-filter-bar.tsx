@@ -15,6 +15,7 @@ export interface HomecellFilterState {
   cabangId: string;
   areaId: string;
   status: '' | 'aktif' | 'nonaktif';
+  kategori: '' | 'SINGLE' | 'COUPLE' | 'UMUM';
   periode: PeriodePreset;
   from: string; // YYYY-MM-DD (periode=custom)
   to: string;
@@ -25,6 +26,7 @@ export const defaultHomecellFilter: HomecellFilterState = {
   cabangId: '',
   areaId: '',
   status: '',
+  kategori: '',
   periode: '',
   from: '',
   to: '',
@@ -48,6 +50,7 @@ export function toHomecellQueryParams(s: HomecellFilterState): Record<string, st
     cabangId: s.cabangId || undefined,
     areaId: s.areaId || undefined,
     status: s.status || undefined,
+    kategori: s.kategori || undefined,
     periode: custom && !s.from && !s.to ? undefined : s.periode || undefined,
     from: custom ? s.from || undefined : undefined,
     to: custom ? s.to || undefined : undefined,
@@ -134,6 +137,18 @@ export function HomecellFilterBar({
             <option value="">Semua</option>
             <option value="aktif">Aktif</option>
             <option value="nonaktif">Nonaktif</option>
+          </select>
+        </Field>
+        <Field label="Kategori">
+          <select
+            value={value.kategori}
+            onChange={(e) => patch({ kategori: e.target.value as HomecellFilterState['kategori'] })}
+            className={selectCls}
+          >
+            <option value="">Semua</option>
+            <option value="SINGLE">Single</option>
+            <option value="COUPLE">Couple</option>
+            <option value="UMUM">Umum (tanpa kategori)</option>
           </select>
         </Field>
         <Field label="Periode pertemuan">

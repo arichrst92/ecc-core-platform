@@ -1023,6 +1023,11 @@ model HomecellArea {
   @@map("homecell_area")
 }
 
+enum HomecellKategori {
+  SINGLE
+  COUPLE
+}
+
 model Homecell {
   id          String      @id @default(uuid()) @db.Uuid
   areaId      String      @map("area_id") @db.Uuid
@@ -1031,6 +1036,10 @@ model Homecell {
   alamat      String?     @db.Text // lokasi pertemuan
   hari        HariMinggu? // jadwal hari pertemuan
   jam         String?     @db.VarChar(5) // HH:mm
+  // Segmen homecell: SINGLE / COUPLE + rentang usia anggota (tahun). Opsional.
+  kategori    HomecellKategori?
+  usiaMin     Int?        @map("usia_min")
+  usiaMax     Int?        @map("usia_max")
   // Lokasi pertemuan untuk "Cari homecell terdekat". Diisi leader/admin dengan
   // menempel link / koordinat Google Maps → lat/lng di-parse server (WGS84).
   latitude    Float?

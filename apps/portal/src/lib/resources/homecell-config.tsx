@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { Eye, Users, CalendarDays, TrendingUp } from 'lucide-react';
-import { createHomecellSchema, updateHomecellSchema } from '@ecc/shared-types';
+import {
+  HOMECELL_KATEGORI_LABEL,
+  createHomecellSchema,
+  homecellAttendanceTier,
+  homecellUsiaLabel,
+  updateHomecellSchema,
+} from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
 
@@ -10,6 +16,9 @@ interface Homecell extends Record<string, unknown> {
   nama: string;
   deskripsi: string | null;
   picJemaatId: string | null;
+  kategori?: 'SINGLE' | 'COUPLE' | null;
+  usiaMin?: number | null;
+  usiaMax?: number | null;
   isActive: boolean;
   area?: { id: string; nama: string; cabang?: { id: string; nama: string } };
   picJemaat?: { id: string; namaLengkap: string } | null;
@@ -24,6 +33,14 @@ interface Homecell extends Record<string, unknown> {
   /** Jumlah pertemuan dalam periode filter; null kalau tidak ada filter periode. */
   periodMeetingCount?: number | null;
 }
+
+/** Warna indikator kehadiran homecell (lihat homecellAttendanceTier). */
+export const ATTENDANCE_TIER_CLASS = {
+  merah: 'bg-red-100 text-red-700',
+  oranye: 'bg-orange-100 text-orange-700',
+  kuning: 'bg-yellow-100 text-yellow-800',
+  hijau: 'bg-green-100 text-green-700',
+} as const;
 
 /** "Terakhir homecell: 6 Okt 2026 · 7 hari lalu" di bawah nama homecell. */
 function LastMeeting({ date, daysAgo }: { date?: string | null; daysAgo?: number | null }) {
@@ -66,6 +83,29 @@ export const homecellResource: ResourceConfig<Homecell> = {
           <LastMeeting date={row.lastMeetingAt} daysAgo={row.lastMeetingDaysAgo} />
         </div>
       ),
+    },
+    {
+      key: 'kategori',
+      label: 'Kategori',
+      width: '130px',
+      render: (_v, row) => {
+        const usia = homecellUsiaLabel(row.usiaMin, row.usiaMax);
+        if (!row.kategori && !usia) return <span className="text-neutral-400 text-xs">Umum</span>;
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            {row.kategori ? (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  row.kategori === 'COUPLE' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'
+                }`}
+              >
+                {HOMECELL_KATEGORI_LABEL[row.kategori]}
+              </span>
+            ) : null}
+            {usia ? <span className="text-[11px] text-neutral-500">{usia}</span> : null}
+          </div>
+        );
+      },
     },
     { key: 'area', label: 'Area', render: nestedField('area.nama'), width: '160px' },
     { key: 'cabang', label: 'Cabang', render: nestedField('area.cabang.nama'), width: '140px' },
@@ -118,13 +158,8 @@ export const homecellResource: ResourceConfig<Homecell> = {
         if (pct === null || pct === undefined) {
           return <span className="text-neutral-400 text-xs">—</span>;
         }
-        // Color tier: <50% merah, 50-74% amber, ≥75% hijau.
-        const color =
-          pct >= 75
-            ? 'bg-green-100 text-green-700'
-            : pct >= 50
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-red-100 text-red-700';
+        // Indikator: merah 0–25 · oranye 26–50 · kuning 51–75 · hijau 76–100.
+        const color = ATTENDANCE_TIER_CLASS[homecellAttendanceTier(pct)];
         return (
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ${color}`}
@@ -157,6 +192,20 @@ export const homecellResource: ResourceConfig<Homecell> = {
       },
       helperText: 'Hanya jemaat dengan Pelayanan Penggembalaan + role Homecell Leader yang tampil.',
     },
+    {
+      name: 'kategori',
+      label: 'Kategori',
+      type: 'select',
+      defaultValue: '',
+      options: [
+        { value: '', label: 'Umum (single & couple)' },
+        { value: 'SINGLE', label: 'Single' },
+        { value: 'COUPLE', label: 'Couple' },
+      ],
+      helperText: 'Tampil di app saat jemaat mencari homecell.',
+    },
+    { name: 'usiaMin', label: 'Usia dari (tahun)', type: 'number', placeholder: 'Mis. 20', helperText: 'Kosongkan bila tanpa batas bawah.' },
+    { name: 'usiaMax', label: 'Usia sampai (tahun)', type: 'number', placeholder: 'Mis. 35', helperText: 'Kosongkan bila tanpa batas atas.' },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
     { name: 'alamat', label: 'Alamat Pertemuan', type: 'textarea', placeholder: 'Mis. Rumah Pak Yohanes, Jl. Mawar 5' },
     {

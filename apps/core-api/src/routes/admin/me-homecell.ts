@@ -24,6 +24,8 @@ import {
 } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
 import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
+import { createReportToken, REPORT_LINK_TTL_SEC } from '../../lib/report-link.js';
+import { apiBase } from '../../lib/worship.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -576,6 +578,29 @@ meHomecellRouter.delete('/:id/join-request', async (req, res) => {
 // ------------------------------------------------------------------ leader: lokasi
 
 const lokasiSchema = z.object({ mapsUrl: z.string().trim().max(2000).nullable() });
+
+// Link laporan PDF (print view) untuk app — homecell (pemimpin / PIC area) atau
+// area (PIC area). Berlaku 30 menit. Body: { kind, id, periode?, from?, to? }.
+const reportLinkSchema = z.object({
+  kind: z.enum(['homecell', 'area']),
+  id: z.string().regex(UUID_RE),
+  periode: z.enum(['last_7d', 'this_week', 'last_week', 'last_30d', 'this_month', 'last_month', 'custom']).optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+meHomecellRouter.post('/report-link', async (req, res) => {
+  const u = me(req);
+  const input = reportLinkSchema.parse(req.body ?? {});
+  if (input.kind === 'homecell') {
+    await assertLeaderOrAreaPic(req, input.id);
+  } else if (!u.isFulltimer) {
+    const area = await prisma.homecellArea.findUnique({ where: { id: input.id }, select: { picJemaatId: true } });
+    if (!area) throw NotFound('Homecell Area tidak ditemukan');
+    if (area.picJemaatId !== u.jemaatId) throw Forbidden('Hanya PIC area ini yang dapat membuka laporannya.');
+  }
+  const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to });
+  res.json({ success: true, data: { url: `${apiBase(req)}/public/report/${token}`, expiresInSec: REPORT_LINK_TTL_SEC } });
+});
 
 /** Pemimpin homecell ATAU PIC area homecell tsb (atau fulltimer). */
 async function assertLeaderOrAreaPic(req: Request, homecellId: string) {

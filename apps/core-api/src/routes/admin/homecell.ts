@@ -172,7 +172,7 @@ homecellRouter.get('/', async (req, res) => {
 });
 
 /** Data laporan homecell (dipakai Export PDF & halaman detail portal). */
-async function buildHomecellReportRows(
+export async function buildHomecellReportRows(
   where: Prisma.HomecellWhereInput,
   period: { from: Date; to: Date } | null,
 ): Promise<HcReportRow[]> {
@@ -279,7 +279,7 @@ async function buildHomecellReportRows(
 // GET /admin/homecell/export?format=pdf&<filter sama dengan list>
 // Per homecell: info + pertemuan terakhir, lalu daftar anggota aktif lengkap
 // dengan kehadiran terakhir masing-masing.
-const PERIOD_LABEL: Record<string, string> = {
+export const PERIOD_LABEL: Record<string, string> = {
   last_7d: '7 hari terakhir',
   this_week: 'Minggu ini',
   last_week: 'Minggu lalu',

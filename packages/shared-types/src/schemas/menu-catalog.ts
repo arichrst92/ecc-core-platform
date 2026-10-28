@@ -72,6 +72,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'role-access', label: 'Role Access', href: '/dashboard/role-access', group: 'Developer Tools' },
   { key: 'maintenance', label: 'Maintenance', href: '/dashboard/maintenance', group: 'Developer Tools' },
   { key: 'server-health', label: 'Server Health', href: '/dashboard/server-health', group: 'Developer Tools' },
+  { key: 'analitik', label: 'Analitik App', href: '/dashboard/analitik', group: 'Developer Tools' },
   { key: 'credential', label: 'Credential', href: '/dashboard/credential', group: 'Developer Tools' },
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
   { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },

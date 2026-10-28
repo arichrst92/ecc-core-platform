@@ -16,6 +16,8 @@ import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
 import { getConfig, renderTemplate } from './wa-notif.js';
 import { logger } from './logger.js';
+import { flushApiMetrics } from './api-metrics.js';
+import { samplePresence } from './telemetry.js';
 
 // ===== Intervals =====
 const REFRESH_TOKEN_INTERVAL_MS = 6 * 60 * 60 * 1000;       // 6 jam
@@ -434,6 +436,19 @@ export async function dispatchBirthdayGreetings(): Promise<{
   return { sent, failed, skipped };
 }
 
+// ===============================================================
+// Analitik: retensi data (metrik API 90 hari, kunjungan halaman 400 hari)
+// ===============================================================
+const API_METRIC_RETENTION_DAYS = Number(process.env.API_METRIC_RETENTION_DAYS ?? 90);
+const PAGE_VIEW_RETENTION_DAYS = Number(process.env.PAGE_VIEW_RETENTION_DAYS ?? 400);
+
+export async function cleanupAnalytics() {
+  const day = 24 * 60 * 60 * 1000;
+  const a = await prisma.apiMetric.deleteMany({ where: { bucket: { lt: new Date(Date.now() - API_METRIC_RETENTION_DAYS * day) } } });
+  const p = await prisma.pageViewDaily.deleteMany({ where: { date: { lt: new Date(Date.now() - PAGE_VIEW_RETENTION_DAYS * day) } } });
+  return { apiMetric: a.count, pageViewDaily: p.count };
+}
+
 const intervalHandles: NodeJS.Timeout[] = [];
 
 export function startScheduledJobs() {
@@ -483,6 +498,8 @@ export function startScheduledJobs() {
     return dispatchBirthdayGreetings();
   });
 
+  const analyticsCleanupJob = wrap('cleanup-analytics', cleanupAnalytics);
+
   // Initial run (delayed) untuk semua job.
   setTimeout(() => {
     void refreshTokenJob();
@@ -492,6 +509,7 @@ export function startScheduledJobs() {
     void faceTelemetryJob();
     void diagnosticsErrorJob();
     void birthdayJob();
+    void analyticsCleanupJob();
   }, STARTUP_DELAY_MS);
 
   const h1 = setInterval(() => void refreshTokenJob(), REFRESH_TOKEN_INTERVAL_MS);
@@ -504,7 +522,13 @@ export function startScheduledJobs() {
   const h6 = setInterval(() => void diagnosticsErrorJob(), AUDIT_LOG_INTERVAL_MS);
   // Birthday — tiap 1 jam cek, hanya kirim di window 7-10 AM supaya 1 hari sekali
   const h7 = setInterval(() => void birthdayJob(), REMINDER_DISPATCH_INTERVAL_MS);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7]) {
+  // Analitik: tulis metrik API tiap menit (tanpa log — terlalu sering) + catat jumlah aktif.
+  const h8 = setInterval(() => {
+    samplePresence();
+    flushApiMetrics().catch((err) => logger.warn({ err }, 'flush-api-metrics failed'));
+  }, 60_000);
+  const h9 = setInterval(() => void analyticsCleanupJob(), AUDIT_LOG_INTERVAL_MS);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9]) {
     h.unref?.();
     intervalHandles.push(h);
   }

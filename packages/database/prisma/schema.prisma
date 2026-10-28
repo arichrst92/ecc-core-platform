@@ -3681,3 +3681,46 @@ model HomecellGuestRequest {
   @@index([noHp, status])
   @@map("homecell_guest_request")
 }
+
+/// Metrik API per 5 menit — latency & status per endpoint.
+/// source = 'server' (diukur core-api) | 'app' (diukur di Els App/web, termasuk jaringan).
+/// hist = jumlah request per ember latency (batas lihat lib/api-metrics.ts).
+model ApiMetric {
+  id       String   @id @default(uuid()) @db.Uuid
+  bucket   DateTime
+  source   String   @db.VarChar(10)
+  platform String   @db.VarChar(10)
+  method   String   @db.VarChar(8)
+  route    String   @db.VarChar(160)
+  count    Int      @default(0)
+  sumMs    BigInt   @default(0) @map("sum_ms")
+  c2xx     Int      @default(0) @map("c_2xx")
+  c4xx     Int      @default(0) @map("c_4xx")
+  c5xx     Int      @default(0) @map("c_5xx")
+  cNet     Int      @default(0) @map("c_net")
+  hist     Int[]
+
+  @@unique([bucket, source, platform, method, route])
+  @@index([bucket])
+  @@map("api_metric")
+}
+
+/// Kunjungan halaman Els App (iOS/Android/web) per hari × perangkat anonim × halaman.
+/// installId = ID acak dari app (tidak terhubung ke akun). route = pola
+/// halaman yang dinormalkan, mis. /event/[id].
+model PageViewDaily {
+  date        DateTime @db.Date
+  installId   String   @map("install_id") @db.VarChar(64)
+  route       String   @db.VarChar(160)
+  platform    String   @db.VarChar(10)
+  mode        String   @db.VarChar(10)
+  appVersion  String?  @map("app_version") @db.VarChar(20)
+  views       Int      @default(0)
+  durationSec Int      @default(0) @map("duration_sec")
+
+  @@id([date, installId, route])
+  @@index([route, installId, date])
+  @@index([installId, date])
+  @@index([date])
+  @@map("page_view_daily")
+}

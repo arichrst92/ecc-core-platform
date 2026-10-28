@@ -3,8 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { reportPublicRouter } from './routes/report-public.js';
 import { publicHomecellRouter } from './routes/public-homecell.js';
+import { telemetryRouter } from './routes/telemetry.js';
 import compression from 'compression';
 import morgan from 'morgan';
+import { apiMetricsMiddleware } from './lib/api-metrics.js';
 import swaggerUi from 'swagger-ui-express';
 
 import { errorHandler } from './middleware/error-handler.js';
@@ -86,6 +88,8 @@ export function createApp(): Express {
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan('dev'));
+  // Latency & status per endpoint → menu Analitik (Performa API).
+  app.use(apiMetricsMiddleware);
 
   // ---------- Health & docs ----------
   app.get('/health', (_req: Request, res: Response) => {
@@ -144,6 +148,9 @@ export function createApp(): Express {
   // Diagnostics — mobile fire-and-forget error reporting. No auth.
   // Lihat docs/backend-request-diagnostics-error-endpoint.md.
   app.use('/diagnostics', diagnosticsRouter);
+
+  // Analitik anonim Els App (halaman, aktif sekarang, latency sisi app). Limiter sendiri.
+  app.use('/telemetry', telemetryRouter);
 
   // Fallback global limiter untuk endpoint lain (mis. /health di luar trust)
   app.use(globalLimiter);

@@ -2,6 +2,7 @@
 
 /** Tab "Aktif sekarang": pengguna yang sedang membuka app & halaman apa (±30–60 dtk). */
 import { useLive } from '@/lib/analytics/use-analytics';
+import { pageLabel } from '@/lib/analytics/labels';
 import { Card, Loading, PlatformBar, Sparkline, fmtNum } from './ui';
 
 export function LiveTab() {
@@ -41,11 +42,14 @@ export function LiveTab() {
         </div>
 
         <Card title="Halaman yang sedang dibuka" sub="Jumlah orang di setiap halaman saat ini">
+          {s.pages.length === 0 ? (
+            <p className="text-sm text-neutral-500 py-6 text-center">Belum ada yang membuka Els App saat ini.</p>
+          ) : null}
           <div className="space-y-2.5">
             {s.pages.map((p) => (
               <div key={p.route} className="grid grid-cols-[minmax(0,180px)_minmax(0,1fr)_44px] gap-3 items-center text-sm">
                 <div className="min-w-0">
-                  <div className="truncate text-neutral-800">{p.label}</div>
+                  <div className="truncate text-neutral-800">{pageLabel(p.route)}</div>
                   {p.route !== '*' ? <div className="truncate text-[11px] text-neutral-400 font-mono">{p.route}</div> : null}
                 </div>
                 <div className="h-2.5 bg-neutral-100 rounded-full overflow-hidden">

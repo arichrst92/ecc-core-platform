@@ -6,23 +6,28 @@
  *   Tab Aktif sekarang : pengguna yang sedang membuka app & halamannya (langsung).
  *   Tab Performa API   : latency (server & app) dan success rate.
  *
- * Tahap 1: tampilan dengan DATA CONTOH (lib/analytics/mock.ts). Pencatatan di
- * app & core-api menyusul — sumber data cukup diganti di use-analytics.ts.
+ *   Tab Monitor Ibadah : ringkasan langsung satu ibadah (juga menu sendiri
+ *                        /dashboard/monitor-ibadah untuk layar command room).
+ *
+ * Data: core-api /admin/analytics & /admin/ibadah-monitor. Kunjungan halaman
+ * & latency sisi app berasal dari Els App ≥ 2.4.4 dan Els App web.
  */
 import { useState } from 'react';
-import { Activity, BarChart3, FlaskConical, Gauge, Radio } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, BarChart3, ExternalLink, Gauge, MonitorPlay, Radio } from 'lucide-react';
 import { PagesTab } from '@/components/analytics/pages-tab';
 import { LiveTab } from '@/components/analytics/live-tab';
 import { ApiTab } from '@/components/analytics/api-tab';
-import { ANALYTICS_IS_MOCK } from '@/lib/analytics/use-analytics';
+import { IbadahMonitor } from '@/components/analytics/ibadah-monitor';
 import type { AnalyticsFilter, ModeFilter, Periode, PlatformFilter } from '@/lib/analytics/types';
 
-type Tab = 'halaman' | 'live' | 'api';
+type Tab = 'halaman' | 'live' | 'api' | 'monitor';
 
 const TABS: { k: Tab; label: string; icon: typeof Activity }[] = [
   { k: 'halaman', label: 'Halaman', icon: BarChart3 },
   { k: 'live', label: 'Aktif sekarang', icon: Radio },
   { k: 'api', label: 'Performa API', icon: Gauge },
+  { k: 'monitor', label: 'Monitor Ibadah', icon: MonitorPlay },
 ];
 
 const PERIODE: { v: Periode; l: string }[] = [
@@ -59,7 +64,15 @@ export default function AnalitikPage() {
             <p className="text-sm text-neutral-500">Penggunaan Els App (iOS, Android, web) dan performa API. Anonim — tanpa data jemaat.</p>
           </div>
         </div>
-        {tab !== 'live' ? (
+        {tab === 'monitor' ? (
+          <Link
+            href="/dashboard/monitor-ibadah?kiosk=1"
+            target="_blank"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
+          >
+            <ExternalLink className="w-4 h-4" /> Buka di monitor
+          </Link>
+        ) : tab !== 'live' ? (
           <div className="flex flex-wrap gap-2">
             <Seg options={PERIODE} value={filter.periode} onChange={(v) => set('periode', v)} />
             <Select options={PLATFORM} value={filter.platform} onChange={(v) => set('platform', v)} />
@@ -68,15 +81,6 @@ export default function AnalitikPage() {
         ) : null}
       </div>
 
-      {ANALYTICS_IS_MOCK ? (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <FlaskConical className="w-4 h-4 shrink-0 mt-px" />
-          <span>
-            <b>Data contoh.</b> Tampilan ini untuk meninjau rancangan — angka belum berasal dari app. Pencatatan di Els App (2.4.4) dan core-api
-            menyusul.
-          </span>
-        </div>
-      ) : null}
 
       <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto">
         {TABS.map(({ k, label, icon: Icon }) => (
@@ -93,7 +97,15 @@ export default function AnalitikPage() {
         ))}
       </div>
 
-      {tab === 'halaman' ? <PagesTab filter={filter} /> : tab === 'live' ? <LiveTab /> : <ApiTab filter={filter} />}
+      {tab === 'halaman' ? (
+        <PagesTab filter={filter} />
+      ) : tab === 'live' ? (
+        <LiveTab />
+      ) : tab === 'api' ? (
+        <ApiTab filter={filter} />
+      ) : (
+        <IbadahMonitor />
+      )}
     </div>
   );
 }

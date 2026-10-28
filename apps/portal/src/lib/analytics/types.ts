@@ -1,8 +1,4 @@
-/**
- * Bentuk data menu Analitik (portal). Dipakai bersama oleh data contoh
- * (mock.ts) dan nanti respons API core-api — jadi saat backend siap, cukup
- * ganti sumber data di use-analytics.ts tanpa mengubah tampilan.
- */
+/** Bentuk data menu Analitik & Monitor Ibadah — sama dengan respons core-api /admin/analytics & /admin/ibadah-monitor. */
 
 export type Periode = '7d' | '30d' | '90d';
 export type PlatformFilter = 'all' | 'ios' | 'android' | 'web';
@@ -18,10 +14,10 @@ export interface AnalyticsFilter {
 
 export interface PageSummary {
   activeUsers: number;
-  activeUsersDeltaPct: number;
+  activeUsersDeltaPct: number | null;
   views: number;
   /** % pengguna yang kembali ke app dalam 7 hari. */
-  return7: number;
+  return7: number | null;
   avgSessionSec: number;
   avgSessionLoginSec: number;
   avgSessionTamuSec: number;
@@ -29,14 +25,13 @@ export interface PageSummary {
 }
 
 export interface PageRow {
-  /** Pola route yang sudah dinormalkan, mis. /event/[id]. */
+  /** Pola route yang sudah dinormalkan, mis. /event/[id]. Label: lib/analytics/labels.ts */
   route: string;
-  label: string;
   views: number;
   visitors: number;
   avgDurationSec: number;
-  return7: number;
-  return30: number;
+  return7: number | null;
+  return30: number | null;
   activeNow: number;
 }
 
@@ -62,7 +57,7 @@ export interface LiveSnapshot {
   platform: { android: number; ios: number; web: number };
   login: number;
   tamu: number;
-  pages: { route: string; label: string; n: number }[];
+  pages: { route: string; n: number }[];
   /** Jumlah aktif per menit, 30 menit terakhir (lama → baru). */
   last30: number[];
 }
@@ -70,15 +65,15 @@ export interface LiveSnapshot {
 // ---------------------------------------------------------------- Performa API
 
 export interface ApiSummary {
-  successApp: number;
-  successServer: number;
-  networkFailPct: number;
+  successApp: number | null;
+  successServer: number | null;
+  networkFailPct: number | null;
   err5xx: number;
   total: number;
-  p50Server: number;
-  p95Server: number;
-  p50App: number;
-  p95App: number;
+  p50Server: number | null;
+  p95Server: number | null;
+  p50App: number | null;
+  p95App: number | null;
   rpm: number;
   peakRpm: number;
   peakAt: string;
@@ -86,15 +81,16 @@ export interface ApiSummary {
 
 export interface ApiHourly {
   hour: string;
-  p95App: number;
-  p95Server: number;
-  active: number;
+  p95App: number | null;
+  p95Server: number | null;
+  /** Jumlah request server pada jam itu. */
+  requests: number;
 }
 
 export interface FlowRate {
   key: string;
   label: string;
-  success: number;
+  success: number | null;
   attempts: number;
   note?: string;
 }
@@ -116,7 +112,6 @@ export interface TopError {
   path: string;
   count: number;
   last: string;
-  note?: string;
 }
 
 export interface ApiPerformance {
@@ -126,3 +121,45 @@ export interface ApiPerformance {
   endpoints: EndpointRow[];
   topErrors: TopError[];
 }
+
+// ---------------------------------------------------------------- Monitor Ibadah
+
+export type IbadahStatus = 'BELUM' | 'BERLANGSUNG' | 'SELESAI';
+
+export interface IbadahMonitorOptions {
+  tanggal: string;
+  items: { id: string; nama: string; jamMulai: string; jamSelesai: string; isKidsIbadah: boolean; status: IbadahStatus }[];
+}
+
+export interface IbadahMonitorData {
+  empty: false;
+  updatedAt: string;
+  tz: string;
+  tanggal: string;
+  ibadah: {
+    id: string;
+    nama: string;
+    cabang: { id: string; nama: string };
+    lokasi: string | null;
+    jamMulai: string;
+    jamSelesai: string;
+    kapasitasSeat: number | null;
+    isKidsIbadah: boolean;
+    linkOnline: string | null;
+  };
+  status: IbadahStatus;
+  startAt: string;
+  endAt: string;
+  kehadiran: { hadir: number; reservasi: number; belumDatang: number; batal: number; tamu: number; last15m: number };
+  arrival: { t: string; n: number; cum: number }[];
+  methods: Record<string, number>;
+  scanners: { nama: string; n: number }[];
+  tamu: { total: number; diundang: number; walkIn: number; homecell: number; pertamaKali: number };
+  lastWeek: { tanggal: string; hadir: number; hadirSaatIni: number; reservasi: number } | null;
+  ckids: { id: string; nama: string; jamMulai: string; jamSelesai: string; hadir: number; belumDijemput: number; menitSejakSelesai: number | null }[];
+  app: { aktif: number; tiket: number; alkitab: number; worship: number };
+  system: { requests15m: number; successPct: number | null; p95Ms: number | null; checkinSuccessPct: number | null };
+  alerts: { level: 'danger' | 'warning' | 'info'; text: string }[];
+}
+
+export type IbadahMonitor = IbadahMonitorData | { empty: true; cabang: { id: string; nama: string }; tanggal: string };

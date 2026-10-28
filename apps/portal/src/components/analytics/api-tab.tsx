@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, ArrowDown, CheckCircle2, Gauge, Server, Smartphone } from 'lucide-react';
 import { useApiPerformance } from '@/lib/analytics/use-analytics';
 import type { AnalyticsFilter, ApiHourly, EndpointRow } from '@/lib/analytics/types';
-import { Card, Kpi, Loading, fmtMs, fmtNum, fmtPct, successClass } from './ui';
+import { Card, Kpi, Loading, fmtMs, fmtNum, fmtPct, msOrDash, pctOrDash, successClass } from './ui';
 
 const MIX = [
   { k: 'ok', label: '2xx', c: '#16a34a' },
@@ -33,14 +33,21 @@ export function ApiTab({ filter }: { filter: AnalyticsFilter }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi icon={Smartphone} color="#16a34a" label="Success rate app" value={fmtPct(s.successApp)} valueClass={successClass(s.successApp)} sub={`gagal jaringan ${fmtPct(s.networkFailPct)}`} />
-        <Kpi icon={Server} color="#16a34a" label="Success rate server" value={fmtPct(s.successServer, 2)} valueClass={successClass(s.successServer)} sub={`5xx: ${fmtNum(s.err5xx)} dari ${fmtNum(s.total)}`} />
-        <Kpi icon={Gauge} color="#f97316" label="p95 server" value={fmtMs(s.p95Server)} sub={`p50 ${fmtMs(s.p50Server)}`} />
-        <Kpi icon={Smartphone} color="#2563eb" label="p95 di app" value={fmtMs(s.p95App)} sub={`p50 ${fmtMs(s.p50App)} · termasuk jaringan`} />
+        <Kpi
+          icon={Smartphone}
+          color="#16a34a"
+          label="Success rate app"
+          value={pctOrDash(s.successApp)}
+          valueClass={successClass(s.successApp)}
+          sub={s.networkFailPct == null ? 'menunggu Els App 2.4.4' : `gagal jaringan ${fmtPct(s.networkFailPct)}`}
+        />
+        <Kpi icon={Server} color="#16a34a" label="Success rate server" value={pctOrDash(s.successServer, 2)} valueClass={successClass(s.successServer)} sub={`5xx: ${fmtNum(s.err5xx)} dari ${fmtNum(s.total)}`} />
+        <Kpi icon={Gauge} color="#f97316" label="p95 server" value={msOrDash(s.p95Server)} sub={`p50 ${msOrDash(s.p50Server)}`} />
+        <Kpi icon={Smartphone} color="#2563eb" label="p95 di app" value={msOrDash(s.p95App)} sub={`p50 ${msOrDash(s.p50App)} · termasuk jaringan`} />
         <Kpi icon={Activity} color="#8b5cf6" label="Request / menit" value={fmtNum(s.rpm)} sub={`puncak ${fmtNum(s.peakRpm)} · ${s.peakAt}`} />
       </div>
 
-      <Card title="Latency p95 per jam" sub="Server = waktu proses core-api · app = dirasakan jemaat (termasuk jaringan) · batang = pengguna aktif">
+      <Card title="Latency p95 per jam · 24 jam terakhir" sub="Server = waktu proses core-api · app = dirasakan jemaat (termasuk jaringan) · batang = jumlah request">
         <LatencyChart data={d.hourly} />
       </Card>
 
@@ -49,7 +56,7 @@ export function ApiTab({ filter }: { filter: AnalyticsFilter }) {
           {d.flows.map((f) => (
             <div key={f.key} className="rounded-lg bg-neutral-50 p-3">
               <div className="text-xs text-neutral-500">{f.label}</div>
-              <div className={`text-xl font-bold tabular-nums ${successClass(f.success)}`}>{fmtPct(f.success)}</div>
+              <div className={`text-xl font-bold tabular-nums ${successClass(f.success)}`}>{pctOrDash(f.success)}</div>
               <div className="text-[11px] text-neutral-500">{fmtNum(f.attempts)} percobaan</div>
               {f.note ? <div className="text-[11px] text-neutral-500 mt-1 leading-snug">{f.note}</div> : null}
             </div>
@@ -97,16 +104,16 @@ export function ApiTab({ filter }: { filter: AnalyticsFilter }) {
       </Card>
 
       <Card title="Error terbanyak hari ini" right={<AlertTriangle className="w-4 h-4 text-red-500" />}>
-        <div className="divide-y divide-neutral-100 border border-neutral-100 rounded-lg">
+        {d.topErrors.length === 0 ? <p className="text-sm text-green-700 py-2">Tidak ada error 5xx / gagal jaringan hari ini.</p> : null}
+        <div className="divide-y divide-neutral-100 border border-neutral-100 rounded-lg empty:hidden">
           {d.topErrors.map((x) => (
             <div key={`${x.code}${x.path}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
               <span className="font-mono text-xs">
-                <span className={x.code === 'timeout' ? 'text-neutral-500' : 'text-red-600'}>{x.code}</span>{' '}
+                <span className={x.code === 'jaringan' ? 'text-neutral-500' : 'text-red-600'}>{x.code}</span>{' '}
                 <span className="text-neutral-500">{x.method}</span> {x.path}
               </span>
               <span className="text-xs text-neutral-500">
                 {fmtNum(x.count)}× · terakhir {x.last}
-                {x.note ? ` · ${x.note}` : ''}
               </span>
             </div>
           ))}
@@ -178,11 +185,25 @@ function LatencyChart({ data }: { data: ApiHourly[] }) {
   const pb = 26;
   const iw = W - pl - pr;
   const ih = H - pt - pb;
-  const maxMs = Math.max(500, ...data.map((d) => Math.max(d.p95App, d.p95Server)));
-  const maxAct = Math.max(1, ...data.map((d) => d.active));
+  const maxMs = Math.max(500, ...data.map((d) => Math.max(d.p95App ?? 0, d.p95Server ?? 0)));
+  const maxAct = Math.max(1, ...data.map((d) => d.requests));
   const x = (i: number) => pl + (i + 0.5) * (iw / data.length);
   const y = (v: number) => pt + ih - (v / maxMs) * ih;
-  const path = (key: 'p95App' | 'p95Server') => data.map((d, i) => `${i ? 'L' : 'M'}${x(i)} ${y(d[key])}`).join(' ');
+  /** Garis terputus pada jam tanpa data. */
+  const path = (key: 'p95App' | 'p95Server') => {
+    let out = '';
+    let pen = false;
+    data.forEach((d, i) => {
+      const v = d[key];
+      if (v == null) {
+        pen = false;
+        return;
+      }
+      out += `${pen ? 'L' : 'M'}${x(i)} ${y(v)} `;
+      pen = true;
+    });
+    return out.trim();
+  };
   const ticks = [0, maxMs / 2, maxMs];
   const h = hover != null ? data[hover] : null;
   return (
@@ -195,11 +216,11 @@ function LatencyChart({ data }: { data: ApiHourly[] }) {
           <span className="w-4 border-t-2 border-dashed border-orange-500" /> Server
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-neutral-200" /> Pengguna aktif
+          <span className="w-2.5 h-2.5 rounded-sm bg-neutral-200" /> Request
         </span>
         {h ? (
           <span className="ml-auto text-neutral-900 tabular-nums">
-            {h.hour} · app {fmtMs(h.p95App)} · server {fmtMs(h.p95Server)} · {fmtNum(h.active)} aktif
+            {h.hour} · app {msOrDash(h.p95App)} · server {msOrDash(h.p95Server)} · {fmtNum(h.requests)} request
           </span>
         ) : null}
       </div>
@@ -214,7 +235,7 @@ function LatencyChart({ data }: { data: ApiHourly[] }) {
         ))}
         {data.map((d, i) => {
           const bw = (iw / data.length) * 0.6;
-          const bh = (d.active / maxAct) * ih * 0.9;
+          const bh = (d.requests / maxAct) * ih * 0.9;
           return (
             <g key={d.hour} onMouseEnter={() => setHover(i)}>
               <rect x={x(i) - (iw / data.length) / 2} y={pt} width={iw / data.length} height={ih} fill="transparent" />

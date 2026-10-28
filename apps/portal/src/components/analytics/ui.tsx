@@ -20,10 +20,16 @@ export const fmtPct = (p: number, digits = 1) =>
   `${p.toLocaleString('id-ID', { maximumFractionDigits: p >= 99.9 && p < 100 ? 2 : digits })}%`;
 
 /** Retensi: hijau ≥ 50%, kuning 30–49%, merah < 30%. */
-export const retentionClass = (p: number) => (p >= 50 ? 'text-green-700' : p >= 30 ? 'text-amber-700' : 'text-red-600');
+export const retentionClass = (p: number | null) =>
+  p == null ? 'text-neutral-400' : p >= 50 ? 'text-green-700' : p >= 30 ? 'text-amber-700' : 'text-red-600';
 
 /** Success rate: hijau ≥ 99,5%, kuning 98–99,4%, merah < 98%. */
-export const successClass = (p: number) => (p >= 99.5 ? 'text-green-700' : p >= 98 ? 'text-amber-700' : 'text-red-600');
+export const successClass = (p: number | null) =>
+  p == null ? 'text-neutral-400' : p >= 99.5 ? 'text-green-700' : p >= 98 ? 'text-amber-700' : 'text-red-600';
+
+/** Persen atau "—" bila belum cukup data. */
+export const pctOrDash = (p: number | null | undefined, digits = 1) => (p == null ? '—' : fmtPct(p, digits));
+export const msOrDash = (ms: number | null | undefined) => (ms == null ? '—' : fmtMs(ms));
 
 export function Kpi({
   icon: Icon,

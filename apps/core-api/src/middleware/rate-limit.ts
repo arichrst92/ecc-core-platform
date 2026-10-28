@@ -145,6 +145,21 @@ export const publicBrowseLimiter = makeLimiter('public-browse', {
   limit: 60,
 });
 
+/**
+ * Telemetri Els App — per perangkat (installId), BUKAN per IP: ratusan HP di
+ * WiFi gereja tampil sebagai satu IP. Terpisah dari limiter API utama supaya
+ * kiriman analitik tidak pernah menghabiskan jatah check-in / reservasi.
+ * App mengirim ±2×/menit; 30/menit memberi ruang untuk kirim ulang offline.
+ */
+export const appTelemetryLimiter = makeLimiter('app-telemetry', {
+  windowMs: 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => {
+    const id = (req.body as { installId?: unknown } | undefined)?.installId;
+    return typeof id === 'string' && id.length >= 16 && id.length <= 64 ? `i:${id}` : `ip:${req.ip ?? 'unknown'}`;
+  },
+});
+
 /** Mode tamu: minta bergabung homecell (tanpa akun) — anti-spam per IP. */
 export const guestJoinLimiter = makeLimiter('guest-join', {
   windowMs: 60 * 60 * 1000,

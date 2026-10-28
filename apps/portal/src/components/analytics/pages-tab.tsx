@@ -6,9 +6,10 @@ import { ArrowDown, Clock, Eye, RotateCcw, Users } from 'lucide-react';
 import { LineChart } from '@/components/charts/simple-charts';
 import { usePageDetail, usePageSummary, usePages } from '@/lib/analytics/use-analytics';
 import type { AnalyticsFilter, PageRow } from '@/lib/analytics/types';
-import { Card, Kpi, Loading, PlatformBar, fmtDur, fmtNum, retentionClass } from './ui';
+import { pageLabel } from '@/lib/analytics/labels';
+import { Card, Kpi, Loading, PlatformBar, fmtDur, fmtNum, pctOrDash, retentionClass } from './ui';
 
-type SortKey = 'label' | 'views' | 'visitors' | 'avgDurationSec' | 'return7' | 'return30' | 'activeNow';
+type SortKey = 'route' | 'views' | 'visitors' | 'avgDurationSec' | 'return7' | 'return30' | 'activeNow';
 
 const COLS: { k: SortKey; label: string; title?: string }[] = [
   { k: 'views', label: 'Dibuka' },
@@ -27,7 +28,9 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
 
   const rows = useMemo(() => {
     const r = [...(pages.data ?? [])];
-    r.sort((a, b) => (sort === 'label' ? a.label.localeCompare(b.label) : (b[sort] as number) - (a[sort] as number)));
+    r.sort((a, b) =>
+      sort === 'route' ? pageLabel(a.route).localeCompare(pageLabel(b.route)) : ((b[sort] as number | null) ?? -1) - ((a[sort] as number | null) ?? -1),
+    );
     return r;
   }, [pages.data, sort]);
   const route = selected ?? rows[0]?.route ?? null;
@@ -41,10 +44,25 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi icon={Users} color="#2563eb" label="Pengunjung aktif" value={fmtNum(s.activeUsers)} sub={<span className="text-green-700">+{s.activeUsersDeltaPct}% vs periode lalu</span>} />
+            <Kpi
+              icon={Users}
+              color="#2563eb"
+              label="Pengunjung aktif"
+              value={fmtNum(s.activeUsers)}
+              sub={
+                s.activeUsersDeltaPct == null ? (
+                  'perangkat unik di periode'
+                ) : (
+                  <span className={s.activeUsersDeltaPct >= 0 ? 'text-green-700' : 'text-red-600'}>
+                    {s.activeUsersDeltaPct >= 0 ? '+' : ''}
+                    {s.activeUsersDeltaPct}% vs periode lalu
+                  </span>
+                )
+              }
+            />
             <Kpi icon={Eye} color="#f97316" label="Halaman dibuka" value={fmtNum(s.views)} sub={`rata-rata ${Math.round(s.views / Math.max(1, s.activeUsers))} per orang`} />
-            <Kpi icon={RotateCcw} color="#16a34a" label="Kembali dalam 7 hari" value={`${s.return7}%`} valueClass={retentionClass(s.return7)} sub="seluruh app" />
-            <Kpi icon={Clock} color="#8b5cf6" label="Rata-rata durasi sesi" value={fmtDur(s.avgSessionSec)} sub={`login ${fmtDur(s.avgSessionLoginSec)} · tamu ${fmtDur(s.avgSessionTamuSec)}`} />
+            <Kpi icon={RotateCcw} color="#16a34a" label="Kembali dalam 7 hari" value={pctOrDash(s.return7, 0)} valueClass={retentionClass(s.return7)} sub={s.return7 == null ? 'butuh data ≥ 7 hari' : 'seluruh app'} />
+            <Kpi icon={Clock} color="#8b5cf6" label="Rata-rata waktu per hari" value={fmtDur(s.avgSessionSec)} sub={`login ${fmtDur(s.avgSessionLoginSec)} · tamu ${fmtDur(s.avgSessionTamuSec)}`} />
           </div>
           <div className="bg-white border border-neutral-200 rounded-xl p-4">
             <div className="text-xs text-neutral-500 mb-2">Platform</div>
@@ -56,12 +74,16 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
       <Card title="Halaman" sub="Klik judul kolom untuk mengurutkan · klik baris untuk melihat detail">
         {pages.isPending ? (
           <Loading />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-neutral-500 py-8 text-center">
+            Belum ada data kunjungan. Data mulai masuk setelah jemaat memakai Els App versi 2.4.4 atau Els App web terbaru.
+          </p>
         ) : (
           <div className="overflow-x-auto -mx-4">
             <table className="w-full text-sm min-w-[720px]">
               <thead className="text-xs text-neutral-500 bg-neutral-50">
                 <tr>
-                  <Th active={sort === 'label'} onClick={() => setSort('label')} left>
+                  <Th active={sort === 'route'} onClick={() => setSort('route')} left>
                     Halaman
                   </Th>
                   {COLS.map((c) => (
@@ -81,7 +103,8 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
         )}
         <p className="text-[11px] text-neutral-400 mt-2">
           Retensi: <span className="text-green-700">hijau ≥ 50%</span> · <span className="text-amber-700">kuning 30–49%</span> ·{' '}
-          <span className="text-red-600">merah &lt; 30%</span>. Halaman dengan ID (mis. detail event) digabung jadi satu baris.
+          <span className="text-red-600">merah &lt; 30%</span> · “—” = belum cukup data (butuh ≥ 7 / 30 hari). Halaman dengan ID (mis. detail
+          event) digabung jadi satu baris.
         </p>
       </Card>
 
@@ -121,14 +144,14 @@ function PageTr({ r, active, onClick }: { r: PageRow; active: boolean; onClick: 
   return (
     <tr onClick={onClick} className={`border-t border-neutral-100 cursor-pointer ${active ? 'bg-brand-50' : 'hover:bg-neutral-50'}`}>
       <td className="px-4 py-2">
-        <div className="font-medium text-neutral-900">{r.label}</div>
+        <div className="font-medium text-neutral-900">{pageLabel(r.route)}</div>
         <div className="text-[11px] text-neutral-400 font-mono">{r.route}</div>
       </td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(r.views)}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(r.visitors)}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtDur(r.avgDurationSec)}</td>
-      <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return7)}`}>{r.return7}%</td>
-      <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return30)}`}>{r.return30}%</td>
+      <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return7)}`}>{pctOrDash(r.return7, 0)}</td>
+      <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return30)}`}>{pctOrDash(r.return30, 0)}</td>
       <td className="px-4 py-2 text-right tabular-nums">
         <span className="inline-flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -149,8 +172,8 @@ function PageDetailCard({ row, filter }: { row: PageRow; filter: AnalyticsFilter
   const d = q.data;
   return (
     <Card
-      title={row.label}
-      sub={`${row.route} · ${fmtNum(row.visitors)} pengunjung · durasi ${fmtDur(row.avgDurationSec)} · kembali 7 hari ${row.return7}%`}
+      title={pageLabel(row.route)}
+      sub={`${row.route} · ${fmtNum(row.visitors)} pengunjung · durasi ${fmtDur(row.avgDurationSec)} · kembali 7 hari ${pctOrDash(row.return7, 0)}`}
     >
       {!d ? (
         <Loading />

@@ -46,6 +46,7 @@ import {
   BarChart3,
   Footprints,
   Contact,
+  MonitorPlay,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -94,6 +95,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', icon: UserPlus, menuKey: 'ministry-join-requests' },
       { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
       { href: '/dashboard/laporan-ibadah', label: 'Laporan Ibadah', icon: BarChart3, menuKey: 'laporan-ibadah' },
+      { href: '/dashboard/monitor-ibadah', label: 'Monitor Ibadah', icon: MonitorPlay, menuKey: 'monitor-ibadah' },
     ],
   },
   {

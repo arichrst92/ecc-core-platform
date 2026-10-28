@@ -5,29 +5,25 @@
  *   Tab Halaman        : halaman paling sering dibuka, durasi, retensi per halaman.
  *   Tab Aktif sekarang : pengguna yang sedang membuka app & halamannya (langsung).
  *   Tab Performa API   : latency (server & app) dan success rate.
+ *   Export PDF         : laporan ringkas untuk pimpinan / non-IT (sesuai filter).
  *
- *   Tab Monitor Ibadah : ringkasan langsung satu ibadah (juga menu sendiri
- *                        /dashboard/monitor-ibadah untuk layar command room).
- *
- * Data: core-api /admin/analytics & /admin/ibadah-monitor. Kunjungan halaman
+ * Data: core-api /admin/analytics. Kunjungan halaman
  * & latency sisi app berasal dari Els App ≥ 2.4.4 dan Els App web.
  */
 import { useState } from 'react';
-import Link from 'next/link';
-import { Activity, BarChart3, ExternalLink, Gauge, MonitorPlay, Radio } from 'lucide-react';
+import { Activity, BarChart3, FileText, Gauge, Loader2, Radio } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 import { PagesTab } from '@/components/analytics/pages-tab';
 import { LiveTab } from '@/components/analytics/live-tab';
 import { ApiTab } from '@/components/analytics/api-tab';
-import { IbadahMonitor } from '@/components/analytics/ibadah-monitor';
 import type { AnalyticsFilter, ModeFilter, Periode, PlatformFilter } from '@/lib/analytics/types';
 
-type Tab = 'halaman' | 'live' | 'api' | 'monitor';
+type Tab = 'halaman' | 'live' | 'api';
 
 const TABS: { k: Tab; label: string; icon: typeof Activity }[] = [
   { k: 'halaman', label: 'Halaman', icon: BarChart3 },
   { k: 'live', label: 'Aktif sekarang', icon: Radio },
   { k: 'api', label: 'Performa API', icon: Gauge },
-  { k: 'monitor', label: 'Monitor Ibadah', icon: MonitorPlay },
 ];
 
 const PERIODE: { v: Periode; l: string }[] = [
@@ -51,6 +47,31 @@ export default function AnalitikPage() {
   const [tab, setTab] = useState<Tab>('halaman');
   const [filter, setFilter] = useState<AnalyticsFilter>({ periode: '30d', platform: 'all', mode: 'all' });
   const set = <K extends keyof AnalyticsFilter>(k: K, v: AnalyticsFilter[K]) => setFilter((f) => ({ ...f, [k]: v }));
+  const [exporting, setExporting] = useState(false);
+
+  async function exportPdf() {
+    // Buka tab dulu (sinkron) supaya tidak diblok popup blocker, lalu isi laporan.
+    const win = window.open('', '_blank');
+    setExporting(true);
+    try {
+      const res = await apiClient.get('/admin/analytics/export', {
+        params: { periode: filter.periode, platform: filter.platform, mode: filter.mode },
+        responseType: 'blob',
+        timeout: 120_000,
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      if (win) win.location.href = url;
+      else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      if (win) win.close();
+      // eslint-disable-next-line no-console
+      console.error('[analitik export] gagal', e);
+      alert('Gagal membuat laporan. Coba lagi.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -64,21 +85,24 @@ export default function AnalitikPage() {
             <p className="text-sm text-neutral-500">Penggunaan Els App (iOS, Android, web) dan performa API. Anonim — tanpa data jemaat.</p>
           </div>
         </div>
-        {tab === 'monitor' ? (
-          <Link
-            href="/dashboard/monitor-ibadah?kiosk=1"
-            target="_blank"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
+        <div className="flex flex-wrap gap-2">
+          {tab !== 'live' ? (
+            <>
+              <Seg options={PERIODE} value={filter.periode} onChange={(v) => set('periode', v)} />
+              <Select options={PLATFORM} value={filter.platform} onChange={(v) => set('platform', v)} />
+              {tab === 'halaman' ? <Select options={MODE} value={filter.mode} onChange={(v) => set('mode', v)} /> : null}
+            </>
+          ) : null}
+          <button
+            onClick={exportPdf}
+            disabled={exporting}
+            title="Laporan ringkas sesuai filter periode & platform. Ctrl/Cmd+P untuk simpan PDF."
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-rose-200 bg-white text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60"
           >
-            <ExternalLink className="w-4 h-4" /> Buka di monitor
-          </Link>
-        ) : tab !== 'live' ? (
-          <div className="flex flex-wrap gap-2">
-            <Seg options={PERIODE} value={filter.periode} onChange={(v) => set('periode', v)} />
-            <Select options={PLATFORM} value={filter.platform} onChange={(v) => set('platform', v)} />
-            {tab === 'halaman' ? <Select options={MODE} value={filter.mode} onChange={(v) => set('mode', v)} /> : null}
-          </div>
-        ) : null}
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            Export PDF
+          </button>
+        </div>
       </div>
 
 
@@ -101,10 +125,8 @@ export default function AnalitikPage() {
         <PagesTab filter={filter} />
       ) : tab === 'live' ? (
         <LiveTab />
-      ) : tab === 'api' ? (
-        <ApiTab filter={filter} />
       ) : (
-        <IbadahMonitor />
+        <ApiTab filter={filter} />
       )}
     </div>
   );

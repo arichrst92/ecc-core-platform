@@ -1,22 +1,14 @@
 /**
- * Monitor Ibadah — layar command room (menu: monitor-ibadah) — /admin/ibadah-monitor
- *
- *   GET /options?cabangId=                 ibadah hari ini di cabang (untuk pilihan)
- *   GET /?cabangId=&ibadahId=&tanggal=     ringkasan langsung satu ibadah
- *       (tanpa ibadahId → otomatis: ibadah yang sedang / akan berlangsung)
- *
- * Hanya angka & nama petugas scan — tanpa no HP, alamat, atau catatan anak.
+ * Monitor Ibadah — ringkasan langsung satu ibadah untuk layar monitor
+ * (portal /monitor, kode akses). Hanya angka & nama petugas scan — tanpa
+ * no HP, alamat, atau catatan anak.
  */
-import { Router } from 'express';
 import { prisma } from '@ecc/database';
-import { requireMenu } from '../../middleware/require-menu.js';
-import { BadRequest, NotFound } from '../../lib/errors.js';
-import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
-import { todayInTz, tzOr, wallToInstant } from '../../lib/tz.js';
-import { appActivity, systemHealth } from '../../lib/monitor-common.js';
+import { BadRequest, NotFound } from './errors.js';
+import { generateOccurrences } from './ibadah-occurrences.js';
+import { todayInTz, tzOr, wallToInstant } from './tz.js';
+import { appActivity, systemHealth } from './monitor-common.js';
 
-export const ibadahMonitorRouter = Router();
-ibadahMonitorRouter.use(requireMenu('monitor-ibadah'));
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -87,17 +79,6 @@ export async function buildIbadahOptions(cabangId: string | null | undefined) {
     }),
   };
 }
-
-ibadahMonitorRouter.get('/options', async (req, res) => {
-  const data = await buildIbadahOptions(typeof req.query.cabangId === 'string' ? req.query.cabangId : null);
-  if (!data) throw BadRequest('cabangId wajib diisi.');
-  res.json({ success: true, data });
-});
-
-ibadahMonitorRouter.get('/', async (req, res) => {
-  const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : null);
-  res.json({ success: true, data: await buildIbadahMonitor({ ibadahId: str('ibadahId'), cabangId: str('cabangId'), tanggal: str('tanggal') }) });
-});
 
 /**
  * Ringkasan langsung satu ibadah. Tanpa ibadahId → ibadah cabang yang sedang

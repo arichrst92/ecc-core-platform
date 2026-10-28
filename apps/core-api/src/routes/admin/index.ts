@@ -35,7 +35,6 @@ import { feedbackRouter } from './feedback.js';
 import { prayerRequestRouter } from './prayer-request.js';
 import { bible365AdminRouter } from './bible365.js';
 import { analyticsRouter } from './analytics.js';
-import { ibadahMonitorRouter } from './ibadah-monitor.js';
 import { jemaatResolusiRouter } from './jemaat-resolusi.js';
 import { worshipAdminRouter } from './worship.js';
 import { reportRouter } from './report.js';
@@ -81,9 +80,8 @@ adminRouter.use('/feedback', feedbackRouter);
 // Prayer Request (Doa) — inbox, assign petugas, konfigurasi role petugas.
 adminRouter.use('/prayer-request', prayerRequestRouter);
 adminRouter.use('/bible365', bible365AdminRouter);
-// Analitik Els App (halaman, aktif sekarang, performa API) & Monitor Ibadah (command room).
+// Analitik Els App (halaman, aktif sekarang, performa API).
 adminRouter.use('/analytics', analyticsRouter);
-adminRouter.use('/ibadah-monitor', ibadahMonitorRouter);
 // ECC Worship — album, lagu, sinkron lirik (Elsa), statistik.
 adminRouter.use('/worship', worshipAdminRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).

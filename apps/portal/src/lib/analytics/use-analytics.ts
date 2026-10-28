@@ -1,11 +1,9 @@
-/** Sumber data menu Analitik & Monitor Ibadah (core-api /admin/analytics, /admin/ibadah-monitor). */
+/** Sumber data menu Analitik (core-api /admin/analytics). */
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type {
   AnalyticsFilter,
   ApiPerformance,
-  IbadahMonitor,
-  IbadahMonitorOptions,
   LiveSnapshot,
   PageDetail,
   PageRow,
@@ -48,26 +46,5 @@ export function useApiPerformance(f: AnalyticsFilter) {
     queryKey: ['analytics', 'api', f.periode, f.platform],
     queryFn: () => get<ApiPerformance>('/admin/analytics/api', { periode: f.periode, platform: f.platform }),
     refetchInterval: 60_000,
-  });
-}
-
-export function useIbadahMonitorOptions(cabangId: string) {
-  return useQuery({
-    queryKey: ['ibadah-monitor', 'options', cabangId],
-    queryFn: () => get<IbadahMonitorOptions>('/admin/ibadah-monitor/options', { cabangId }),
-    enabled: !!cabangId,
-    refetchInterval: 5 * 60_000,
-  });
-}
-
-/** Diperbarui tiap 15 detik; data terakhir tetap tampil bila koneksi putus. */
-export function useIbadahMonitor(p: { cabangId: string; ibadahId?: string }) {
-  return useQuery({
-    queryKey: ['ibadah-monitor', p.cabangId, p.ibadahId ?? 'auto'],
-    queryFn: () => get<IbadahMonitor>('/admin/ibadah-monitor', { cabangId: p.cabangId, ibadahId: p.ibadahId || undefined }),
-    enabled: !!p.cabangId || !!p.ibadahId,
-    refetchInterval: 15_000,
-    refetchIntervalInBackground: true,
-    retry: 2,
   });
 }

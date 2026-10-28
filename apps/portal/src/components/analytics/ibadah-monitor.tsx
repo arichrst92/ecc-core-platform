@@ -1,18 +1,14 @@
 'use client';
 
 /**
- * Monitor Ibadah — layar command room. Latar gelap, angka besar, diperbarui
- * tiap 15 detik. `kiosk` = layar penuh (menutupi menu portal) untuk monitor
- * terpisah. Data: GET /admin/ibadah-monitor.
+ * Papan Monitor Ibadah (latar gelap, angka besar) + komponen bersama papan
+ * event. Dipakai layar /monitor (tanpa login, kode akses).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   AlertTriangle,
   Baby,
-  Expand,
   Info,
-  Loader2,
-  Minimize,
   QrCode,
   Radio,
   ScanLine,
@@ -20,15 +16,9 @@ import {
   Smartphone,
   UserPlus,
   Users,
-  WifiOff,
 } from 'lucide-react';
-import { useCabangOptions } from '@/components/report/report-ui';
-import { useIbadahMonitor, useIbadahMonitorOptions } from '@/lib/analytics/use-analytics';
 import type { IbadahMonitorData } from '@/lib/analytics/types';
 import { monitorText, type MonitorLang } from '@/lib/monitor-i18n';
-
-const LS_CABANG = 'monitor-ibadah.cabangId';
-const LS_IBADAH = 'monitor-ibadah.ibadahId';
 
 export const fmt = (n: number) => Math.round(n).toLocaleString('id-ID');
 export const METHOD_LABEL: Record<string, string> = {
@@ -38,126 +28,6 @@ export const METHOD_LABEL: Record<string, string> = {
   MANUAL: 'Manual',
   LAINNYA: 'Lainnya',
 };
-
-function readLs(k: string) {
-  try {
-    return window.localStorage.getItem(k) ?? '';
-  } catch {
-    return '';
-  }
-}
-function writeLs(k: string, v: string) {
-  try {
-    if (v) window.localStorage.setItem(k, v);
-    else window.localStorage.removeItem(k);
-  } catch {
-    /* abaikan */
-  }
-}
-
-export function IbadahMonitor({ kiosk = false, onToggleKiosk }: { kiosk?: boolean; onToggleKiosk?: () => void }) {
-  const cabangQ = useCabangOptions();
-  const [cabangId, setCabangId] = useState('');
-  const [ibadahId, setIbadahId] = useState('');
-  useEffect(() => {
-    setCabangId(readLs(LS_CABANG));
-    setIbadahId(readLs(LS_IBADAH));
-  }, []);
-  useEffect(() => {
-    if (!cabangId && cabangQ.data?.[0]) setCabangId(cabangQ.data[0].id);
-  }, [cabangId, cabangQ.data]);
-
-  const opts = useIbadahMonitorOptions(cabangId);
-  const q = useIbadahMonitor({ cabangId, ibadahId: ibadahId || undefined });
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const h = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(h);
-  }, []);
-
-  const d = q.data && !q.data.empty ? q.data : null;
-  const stale = q.isError || (q.dataUpdatedAt && now - q.dataUpdatedAt > 60_000);
-
-  const shell = kiosk
-    ? 'fixed inset-0 z-[100] overflow-auto bg-neutral-950 text-white p-5'
-    : 'rounded-2xl bg-neutral-950 text-white p-5';
-
-  return (
-    <div className={shell}>
-      {/* Baris kontrol */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <select
-          value={cabangId}
-          onChange={(e) => {
-            setCabangId(e.target.value);
-            setIbadahId('');
-            writeLs(LS_CABANG, e.target.value);
-            writeLs(LS_IBADAH, '');
-          }}
-          className="select-dark h-9 rounded-lg px-3 text-sm"
-        >
-          {(cabangQ.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nama}
-            </option>
-          ))}
-        </select>
-        <select
-          value={ibadahId}
-          onChange={(e) => {
-            setIbadahId(e.target.value);
-            writeLs(LS_IBADAH, e.target.value);
-          }}
-          className="select-dark h-9 rounded-lg px-3 text-sm max-w-xs"
-        >
-          <option value="">Otomatis (sedang / akan berlangsung)</option>
-          {(opts.data?.items ?? []).map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.jamMulai} · {o.nama}
-              {o.isKidsIbadah ? ' (anak)' : ''}
-            </option>
-          ))}
-        </select>
-        <div className="ml-auto flex items-center gap-3 text-xs text-neutral-400">
-          {stale ? (
-            <span className="inline-flex items-center gap-1 text-amber-400">
-              <WifiOff className="w-3.5 h-3.5" /> Terakhir diperbarui{' '}
-              {q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Langsung · tiap 15 detik
-            </span>
-          )}
-          {onToggleKiosk ? (
-            <button
-              onClick={onToggleKiosk}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-neutral-700 text-neutral-200 hover:bg-neutral-800"
-            >
-              {kiosk ? <Minimize className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
-              {kiosk ? 'Keluar layar penuh' : 'Layar penuh'}
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {q.isPending && !q.data ? (
-        <div className="flex items-center justify-center gap-2 py-24 text-neutral-400">
-          <Loader2 className="w-5 h-5 animate-spin" /> Memuat…
-        </div>
-      ) : q.data?.empty ? (
-        <div className="py-24 text-center text-neutral-400">
-          <div className="text-2xl font-semibold text-neutral-200">Tidak ada ibadah hari ini</div>
-          <div className="mt-1">{q.data.cabang.nama}</div>
-        </div>
-      ) : !d ? (
-        <div className="py-24 text-center text-red-400">Gagal memuat data monitor. Mencoba lagi otomatis…</div>
-      ) : (
-        <IbadahBoard d={d} now={now} />
-      )}
-    </div>
-  );
-}
 
 export function Panel({ title, icon: Icon, children, className = '' }: { title: string; icon: typeof Users; children: React.ReactNode; className?: string }) {
   return (

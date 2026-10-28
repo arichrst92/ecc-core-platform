@@ -6,6 +6,7 @@
  *   GET /pages/detail?route=&…        pengunjung harian + kohort mingguan satu halaman
  *   GET /live                         aktif sekarang (presence di memori)
  *   GET /api?periode=&platform=       performa API: latency & success rate
+ *   GET /export?periode=&platform=&mode=   laporan PDF (print view) untuk pimpinan / non-IT
  *
  * Semua anonim: tidak ada data jemaat. Retensi dihitung per perangkat (installId).
  */
@@ -15,6 +16,7 @@ import { requireMenu } from '../../middleware/require-menu.js';
 import { DEFAULT_TZ, addDays, todayInTz } from '../../lib/tz.js';
 import { LATENCY_EDGES, pendingRows, percentileFromHist, recentRpm } from '../../lib/api-metrics.js';
 import { activePresence, presenceHistory } from '../../lib/telemetry.js';
+import { renderAnalyticsReportHtml } from '../../lib/analytics-report-html.js';
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireMenu('analitik'));
@@ -48,8 +50,8 @@ const n = (v: unknown) => Number(v ?? 0);
 
 // ------------------------------------------------------------------ halaman: ringkasan
 
-analyticsRouter.get('/pages/summary', async (req, res) => {
-  const f = filterOf(req);
+export async function computePageSummary(f: F) {
+
   const w = pvFilter(f);
   const prevStart = addDays(f.start, -f.days);
   const prevEnd = addDays(f.start, -1);
@@ -89,9 +91,7 @@ analyticsRouter.get('/pages/summary', async (req, res) => {
   const platTot = byPlatform.reduce((a, r) => a + n(r.users), 0);
   for (const r of byPlatform) plat[r.platform] = platTot ? Math.round((n(r.users) / platTot) * 100) : 0;
 
-  res.json({
-    success: true,
-    data: {
+  return {
       activeUsers: users,
       activeUsersDeltaPct: n(prev?.users) ? Math.round(((users - n(prev?.users)) / n(prev?.users)) * 100) : null,
       views: n(cur?.views),
@@ -100,14 +100,17 @@ analyticsRouter.get('/pages/summary', async (req, res) => {
       avgSessionLoginSec: avg(byMode.filter((r) => r.mode === 'login')),
       avgSessionTamuSec: avg(byMode.filter((r) => r.mode === 'tamu')),
       platform: { android: plat.android ?? 0, ios: plat.ios ?? 0, web: plat.web ?? 0 },
-    },
-  });
+  };
+}
+
+analyticsRouter.get('/pages/summary', async (req, res) => {
+  res.json({ success: true, data: await computePageSummary(filterOf(req)) });
 });
 
 // ------------------------------------------------------------------ halaman: daftar
 
-analyticsRouter.get('/pages', async (req, res) => {
-  const f = filterOf(req);
+export async function computePages(f: F) {
+
   const w = pvFilter(f);
   const rows = await prisma.$queryRaw<{ route: string; views: bigint; visitors: bigint; dur: bigint }[]>`
     SELECT route, SUM(views) AS views, COUNT(DISTINCT install_id) AS visitors, SUM(duration_sec) AS dur
@@ -139,9 +142,7 @@ analyticsRouter.get('/pages', async (req, res) => {
     if (p.route) live.set(p.route, (live.get(p.route) ?? 0) + 1);
   }
   const pct = (a: bigint | undefined, b: bigint | undefined) => (n(b) ? Math.round((n(a) / n(b)) * 100) : null);
-  res.json({
-    success: true,
-    data: rows.map((r) => {
+  return rows.map((r) => {
       const rt = retMap.get(r.route);
       return {
         route: r.route,
@@ -152,8 +153,11 @@ analyticsRouter.get('/pages', async (req, res) => {
         return30: pct(rt?.r30, rt?.e30),
         activeNow: live.get(r.route) ?? 0,
       };
-    }),
-  });
+    });
+}
+
+analyticsRouter.get('/pages', async (req, res) => {
+  res.json({ success: true, data: await computePages(filterOf(req)) });
 });
 
 // ------------------------------------------------------------------ halaman: detail
@@ -284,8 +288,8 @@ const addAgg = (a: Agg, r: { count: number; c2xx: number; c4xx: number; c5xx: nu
 /** Sukses = bukan 5xx & bukan gagal jaringan (4xx = ditolak wajar). */
 const successPct = (a: Agg) => (a.count ? Math.round(((a.count - a.c5xx - a.cNet) / a.count) * 10000) / 100 : null);
 
-analyticsRouter.get('/api', async (req, res) => {
-  const f = filterOf(req);
+export async function computeApiPerformance(f: F) {
+
   const since = new Date(Date.now() - f.days * 86_400_000);
   const appPlatform = f.platform === 'all' ? undefined : f.platform;
 
@@ -381,9 +385,7 @@ analyticsRouter.get('/api', async (req, res) => {
       };
     });
 
-  res.json({
-    success: true,
-    data: {
+  return {
       summary: {
         successApp: successPct(app),
         successServer: successPct(server),
@@ -416,6 +418,48 @@ analyticsRouter.get('/api', async (req, res) => {
           count: e.count,
           last: new Date(e.last).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: DEFAULT_TZ }),
         })),
-    },
+  };
+}
+
+analyticsRouter.get('/api', async (req, res) => {
+  res.json({ success: true, data: await computeApiPerformance(filterOf(req)) });
+});
+
+// ------------------------------------------------------------------ export PDF (print view)
+
+const PERIODE_LABEL: Record<string, string> = { '7d': '7 hari terakhir', '30d': '30 hari terakhir', '90d': '90 hari terakhir' };
+const PLATFORM_LABEL: Record<string, string> = { all: 'Semua platform (iOS, Android, web)', ios: 'iPhone (iOS)', android: 'Android', web: 'Els App web' };
+const MODE_LABEL: Record<string, string> = { all: 'Jemaat login & mode tamu', login: 'Jemaat login', tamu: 'Mode tamu' };
+
+analyticsRouter.get('/export', async (req, res) => {
+  const f = filterOf(req);
+  const w = pvFilter(f);
+  const [summary, pages, api, daily] = await Promise.all([
+    computePageSummary(f),
+    computePages(f),
+    computeApiPerformance(f),
+    prisma.$queryRaw<{ date: Date; users: bigint; views: bigint }[]>`
+      SELECT date, COUNT(DISTINCT install_id) AS users, SUM(views) AS views FROM page_view_daily
+      WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY date ORDER BY date`,
+  ]);
+  const byDate = new Map(daily.map((d) => [ymd(d.date), d]));
+  const ua = (req.get('user-agent') ?? '').toLowerCase();
+  const html = renderAnalyticsReportHtml({
+    periodeLabel: PERIODE_LABEL[f.periode] ?? f.periode,
+    from: ymd(f.start),
+    to: ymd(f.end),
+    platformLabel: PLATFORM_LABEL[f.platform] ?? f.platform,
+    modeLabel: MODE_LABEL[f.mode] ?? f.mode,
+    isMobileUa: /mobi|android|iphone|ipad|ipod/.test(ua),
+    summary,
+    pages,
+    daily: Array.from({ length: f.days }, (_, i) => {
+      const d = ymd(addDays(f.start, i));
+      const r = byDate.get(d);
+      return { date: d, users: n(r?.users), views: n(r?.views) };
+    }),
+    api: { summary: api.summary, flows: api.flows },
   });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });

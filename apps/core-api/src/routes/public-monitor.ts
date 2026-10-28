@@ -18,7 +18,7 @@ import { ApiError, BadRequest } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { checkMonitorCode, createMonitorToken, monitorCode, verifyMonitorToken } from '../lib/monitor-access.js';
 import { buildEventMonitor, buildEventOptions } from '../lib/event-monitor.js';
-import { buildIbadahMonitor, buildIbadahOptions } from './admin/ibadah-monitor.js';
+import { buildIbadahMonitor, buildIbadahOptions } from '../lib/ibadah-monitor.js';
 import { monitorLimiter, monitorUnlockLimiter } from '../middleware/rate-limit.js';
 
 export const publicMonitorRouter = Router();

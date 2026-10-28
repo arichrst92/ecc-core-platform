@@ -39,7 +39,6 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'ministry-join-requests', label: 'Permintaan Volunteer', href: '/dashboard/pelayanan/join-requests', group: 'Service' },
   { key: 'kehadiran', label: 'Kehadiran', href: '/dashboard/kehadiran', group: 'Service' },
   { key: 'laporan-ibadah', label: 'Laporan Ibadah', href: '/dashboard/laporan-ibadah', group: 'Service' },
-  { key: 'monitor-ibadah', label: 'Monitor Ibadah', href: '/dashboard/monitor-ibadah', group: 'Service' },
 
   // People
   { key: 'jemaat', label: 'Jemaat', href: '/dashboard/jemaat', group: 'People' },

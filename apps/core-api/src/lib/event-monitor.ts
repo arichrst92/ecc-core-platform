@@ -96,7 +96,9 @@ export async function buildEventOptions(cabangId?: string | null) {
   };
 }
 
-export async function buildEventMonitor(eventId: string | null | undefined) {
+export async function buildEventMonitor(eventId: string | null | undefined, lang?: string | null) {
+  const en = lang === 'en';
+  const L = (id: string, eng: string) => (en ? eng : id);
   if (!eventId || !UUID_RE.test(eventId)) throw BadRequest('Pilih event.');
   const ev = await prisma.event.findUnique({ where: { id: eventId }, select: eventSelect });
   if (!ev) throw NotFound('Event tidak ditemukan.');
@@ -153,17 +155,17 @@ export async function buildEventMonitor(eventId: string | null | undefined) {
   const quota = ev.quotaPeserta ?? null;
   if (quota) {
     const pct = (aktif.length / quota) * 100;
-    if (pct >= 100) alerts.push({ level: 'warning', text: `Kuota peserta penuh: ${aktif.length} dari ${quota}.` });
-    else if (pct >= 90) alerts.push({ level: 'info', text: `Kuota peserta hampir penuh (${Math.round(pct)}%).` });
+    if (pct >= 100) alerts.push({ level: 'warning', text: L(`Kuota peserta penuh: ${aktif.length} dari ${quota}.`, `Participant quota full: ${aktif.length} of ${quota}.`) });
+    else if (pct >= 90) alerts.push({ level: 'info', text: L(`Kuota peserta hampir penuh (${Math.round(pct)}%).`, `Participant quota almost full (${Math.round(pct)}%).`) });
   }
   if (system.checkinSuccessPct != null && system.checkinSuccessPct < 98 && system.checkinRequests >= 10) {
-    alerts.push({ level: 'danger', text: `Check-in event sering gagal: sukses ${system.checkinSuccessPct}% dalam 15 menit terakhir.` });
+    alerts.push({ level: 'danger', text: L(`Check-in event sering gagal: sukses ${system.checkinSuccessPct}% dalam 15 menit terakhir.`, `Event check-in failing often: ${system.checkinSuccessPct}% success in the last 15 minutes.`) });
   }
   if (system.p95Ms != null && system.p95Ms > 2000 && system.requests15m >= 30) {
-    alerts.push({ level: 'warning', text: `Server melambat: p95 ${(system.p95Ms / 1000).toFixed(1)} dtk dalam 15 menit terakhir.` });
+    alerts.push({ level: 'warning', text: L(`Server melambat: p95 ${(system.p95Ms / 1000).toFixed(1)} dtk dalam 15 menit terakhir.`, `Server slow: p95 ${(system.p95Ms / 1000).toFixed(1)} s in the last 15 minutes.`) });
   }
   if (!ev.butuhKehadiran) {
-    alerts.push({ level: 'info', text: 'Event ini tidak mencatat kehadiran — angka hadir mungkin kosong.' });
+    alerts.push({ level: 'info', text: L('Event ini tidak mencatat kehadiran — angka hadir mungkin kosong.', 'This event does not record attendance — the present count may be empty.') });
   }
 
   return {

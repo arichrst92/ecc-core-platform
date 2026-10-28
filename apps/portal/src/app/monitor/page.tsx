@@ -18,10 +18,12 @@ import { CalendarDays, Church, Expand, KeyRound, Loader2, LogOut, Minimize, Refr
 import { IbadahBoard } from '@/components/analytics/ibadah-monitor';
 import { EventBoard } from '@/components/monitor/event-board';
 import type { EventMonitorData, EventMonitorOptions, IbadahMonitor, IbadahMonitorOptions } from '@/lib/analytics/types';
+import { monitorText, type MonitorLang, type MonitorText } from '@/lib/monitor-i18n';
 
 const API = process.env.NEXT_PUBLIC_CORE_API_URL ?? 'http://localhost:4000';
 const LS_TOKEN = 'ecc-monitor.token';
 const LS_SEL = 'ecc-monitor.selection';
+const LS_LANG = 'ecc-monitor.lang';
 
 type Jenis = 'ibadah' | 'event';
 interface Selection {
@@ -29,6 +31,7 @@ interface Selection {
   cabangId: string;
   /** '' = otomatis (ibadah sedang / akan berlangsung). */
   id: string;
+  /** Nama ibadah/event; untuk otomatis = nama cabang. */
   label: string;
 }
 
@@ -52,9 +55,16 @@ const ls = {
 
 class TokenInvalid extends Error {}
 
+/** Bahasa aktif dipakai juga untuk teks peringatan dari server. */
+let currentLang: MonitorLang = 'id';
+
 async function call<T>(token: string, path: string, params?: Record<string, string | undefined>): Promise<T> {
   try {
-    const res = await axios.get<{ data: T }>(`${API}/public/monitor${path}`, { params, headers: { 'X-Monitor-Token': token }, timeout: 20_000 });
+    const res = await axios.get<{ data: T }>(`${API}/public/monitor${path}`, {
+      params: { ...params, lang: currentLang },
+      headers: { 'X-Monitor-Token': token },
+      timeout: 20_000,
+    });
     return res.data.data;
   } catch (e) {
     if (e instanceof AxiosError && e.response?.status === 401) throw new TokenInvalid();
@@ -66,9 +76,22 @@ export default function MonitorPage() {
   const [ready, setReady] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [sel, setSel] = useState<Selection | null>(null);
+  const [lang, setLangState] = useState<MonitorLang>('id');
+  currentLang = lang;
+  const T = monitorText(lang);
+  const setLang = (l: MonitorLang) => {
+    currentLang = l;
+    setLangState(l);
+    ls.set(LS_LANG, l);
+  };
 
   useEffect(() => {
     setToken(ls.get(LS_TOKEN));
+    const l = ls.get(LS_LANG);
+    if (l === 'en' || l === 'id') {
+      currentLang = l;
+      setLangState(l);
+    }
     try {
       const s = ls.get(LS_SEL);
       if (s) setSel(JSON.parse(s) as Selection);
@@ -92,23 +115,61 @@ export default function MonitorPage() {
     <div className="min-h-screen bg-neutral-950 text-white">
       {!ready ? null : !token ? (
         <CodeScreen
+          T={T}
+          langSwitch={<LangSwitch lang={lang} onChange={setLang} />}
           onUnlocked={(t) => {
             ls.set(LS_TOKEN, t);
             setToken(t);
           }}
         />
       ) : !sel ? (
-        <PickScreen token={token} onPick={choose} onInvalid={lock} />
+        <PickScreen T={T} langSwitch={<LangSwitch lang={lang} onChange={setLang} />} token={token} onPick={choose} onInvalid={lock} />
       ) : (
-        <BoardScreen token={token} sel={sel} onChange={() => choose(null)} onInvalid={lock} />
+        <BoardScreen
+          T={T}
+          lang={lang}
+          langSwitch={<LangSwitch lang={lang} onChange={setLang} />}
+          token={token}
+          sel={sel}
+          onChange={() => choose(null)}
+          onInvalid={lock}
+        />
       )}
+    </div>
+  );
+}
+
+function LangSwitch({ lang, onChange }: { lang: MonitorLang; onChange: (l: MonitorLang) => void }) {
+  return (
+    <div className="inline-flex rounded-lg border border-neutral-700 bg-neutral-900 p-0.5 text-xs font-semibold">
+      {(['id', 'en'] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => onChange(l)}
+          className={`px-2.5 h-7 rounded-md ${lang === l ? 'bg-orange-500 text-white' : 'text-neutral-400 hover:text-white'}`}
+          aria-pressed={lang === l}
+        >
+          {l === 'id' ? 'ID' : 'EN'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Powered by IDEA" — logo dibuat putih agar terbaca di latar gelap. */
+function PoweredByIdea({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex items-center justify-center gap-2 text-xs text-neutral-500 ${className}`}>
+      <span>Powered by</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-idea.webp" alt="IDEA" className="h-5 w-auto brightness-0 invert opacity-80" />
     </div>
   );
 }
 
 // ------------------------------------------------------------------ 1. kode akses
 
-function CodeScreen({ onUnlocked }: { onUnlocked: (token: string) => void }) {
+function CodeScreen({ T, langSwitch, onUnlocked }: { T: MonitorText; langSwitch: React.ReactNode; onUnlocked: (token: string) => void }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -116,7 +177,7 @@ function CodeScreen({ onUnlocked }: { onUnlocked: (token: string) => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim()) {
-      setErr('Masukkan kode akses.');
+      setErr(T.enterCode);
       return;
     }
     setBusy(true);
@@ -125,25 +186,34 @@ function CodeScreen({ onUnlocked }: { onUnlocked: (token: string) => void }) {
       const res = await axios.post<{ data: { token: string } }>(`${API}/public/monitor/unlock`, { code: code.trim() }, { timeout: 15_000 });
       onUnlocked(res.data.data.token);
     } catch (e) {
-      const msg = e instanceof AxiosError ? (e.response?.data as { error?: { message?: string } } | undefined)?.error?.message : null;
-      setErr(msg ?? 'Tidak dapat terhubung ke server. Periksa koneksi internet.');
+      const code = e instanceof AxiosError ? (e.response?.data as { error?: { code?: string } } | undefined)?.error?.code : null;
+      setErr(
+        code === 'MONITOR_CODE_INVALID'
+          ? T.wrongCode
+          : code === 'RATE_LIMIT_EXCEEDED'
+            ? T.tooMany
+            : code === 'MONITOR_NOT_CONFIGURED'
+              ? T.notConfigured
+              : T.netError,
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6">
+      <div className="w-full max-w-sm flex justify-end">{langSwitch}</div>
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 p-6">
         <div className="flex items-center gap-3 mb-5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-ecc.webp" alt="ECC" className="w-10 h-10 rounded-lg" />
           <div>
-            <div className="font-bold text-lg">Monitor ECC</div>
-            <div className="text-xs text-neutral-400">Layar ibadah & event · command room</div>
+            <div className="font-bold text-lg">{T.appTitle}</div>
+            <div className="text-xs text-neutral-400">{T.appSub}</div>
           </div>
         </div>
-        <label className="block text-sm text-neutral-300 mb-1.5">Kode akses</label>
+        <label className="block text-sm text-neutral-300 mb-1.5">{T.accessCode}</label>
         <div className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-700 px-3 focus-within:border-orange-500">
           <KeyRound className="w-4 h-4 text-neutral-500" />
           <input
@@ -165,17 +235,30 @@ function CodeScreen({ onUnlocked }: { onUnlocked: (token: string) => void }) {
           disabled={busy}
           className="mt-4 w-full h-11 rounded-lg bg-orange-500 hover:bg-orange-600 font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Buka monitor
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {T.openMonitor}
         </button>
-        <p className="text-[11px] text-neutral-500 mt-3">Kode diberikan oleh tim IT. Monitor ini tetap terbuka 30 hari tanpa perlu memasukkan kode lagi.</p>
+        <p className="text-[11px] text-neutral-500 mt-3">{T.codeHint}</p>
       </form>
+      <PoweredByIdea />
     </div>
   );
 }
 
 // ------------------------------------------------------------------ 2. pilih ibadah / event
 
-function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: Selection) => void; onInvalid: () => void }) {
+function PickScreen({
+  T,
+  langSwitch,
+  token,
+  onPick,
+  onInvalid,
+}: {
+  T: MonitorText;
+  langSwitch: React.ReactNode;
+  token: string;
+  onPick: (s: Selection) => void;
+  onInvalid: () => void;
+}) {
   const [jenis, setJenis] = useState<Jenis | null>(null);
   const [cabangId, setCabangId] = useState(() => ls.get('ecc-monitor.cabangId') ?? '');
 
@@ -205,30 +288,33 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
   const cabangNama = cabang.data?.find((c) => c.id === cabangId)?.nama ?? '';
   const statusPill = (s: string) =>
     s === 'BERLANGSUNG' ? (
-      <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-300 text-xs font-semibold">Berlangsung</span>
+      <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-300 text-xs font-semibold">{T.stRunning}</span>
     ) : s === 'BELUM' ? (
-      <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 text-xs font-semibold">Akan datang</span>
+      <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 text-xs font-semibold">{T.stUpcoming}</span>
     ) : (
-      <span className="px-2 py-0.5 rounded-full bg-neutral-700/60 text-neutral-300 text-xs font-semibold">Selesai</span>
+      <span className="px-2 py-0.5 rounded-full bg-neutral-700/60 text-neutral-300 text-xs font-semibold">{T.stEnded}</span>
     );
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-2xl font-bold">Pilih yang ditampilkan</div>
-          <div className="text-sm text-neutral-400">Monitor ini akan mengingat pilihan Anda.</div>
+          <div className="text-2xl font-bold">{T.pickTitle}</div>
+          <div className="text-sm text-neutral-400">{T.pickSub}</div>
         </div>
-        <button onClick={onInvalid} className="text-xs text-neutral-400 hover:text-white inline-flex items-center gap-1">
-          <LogOut className="w-3.5 h-3.5" /> Kunci monitor
-        </button>
+        <div className="flex items-center gap-3">
+          {langSwitch}
+          <button onClick={onInvalid} className="text-xs text-neutral-400 hover:text-white inline-flex items-center gap-1">
+            <LogOut className="w-3.5 h-3.5" /> {T.lock}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {(
           [
-            ['ibadah', 'Ibadah', 'Kehadiran, check-in, CKids, tamu', Church],
-            ['event', 'Event', 'Peserta, kuota, check-in, tamu', CalendarDays],
+            ['ibadah', T.ibadah, T.ibadahSub, Church],
+            ['event', T.event, T.eventSub, CalendarDays],
           ] as const
         ).map(([k, label, sub, Icon]) => (
           <button
@@ -251,9 +337,9 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
               setCabangId(e.target.value);
               ls.set('ecc-monitor.cabangId', e.target.value);
             }}
-            className="h-11 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-white"
+            className="select-dark h-11 w-full rounded-lg px-3"
           >
-            {jenis === 'event' ? <option value="">Semua cabang</option> : null}
+            {jenis === 'event' ? <option value="">{T.allBranches}</option> : null}
             {(cabang.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nama}
@@ -265,15 +351,15 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
             <div className="space-y-2">
               {cabangId ? (
                 <button
-                  onClick={() => onPick({ jenis: 'ibadah', cabangId, id: '', label: `Otomatis · ${cabangNama}` })}
+                  onClick={() => onPick({ jenis: 'ibadah', cabangId, id: '', label: cabangNama })}
                   className="w-full rounded-xl border border-dashed border-orange-500/60 bg-orange-500/5 p-4 text-left hover:bg-orange-500/10"
                 >
-                  <div className="font-semibold">Otomatis</div>
-                  <div className="text-sm text-neutral-400">Selalu tampilkan ibadah yang sedang / akan berlangsung hari ini di {cabangNama}</div>
+                  <div className="font-semibold">{T.auto}</div>
+                  <div className="text-sm text-neutral-400">{T.autoSub(cabangNama)}</div>
                 </button>
               ) : null}
-              {ibadah.isPending && cabangId ? <Loading /> : null}
-              {ibadah.data?.items.length === 0 ? <div className="text-sm text-neutral-500 py-4 text-center">Tidak ada ibadah hari ini di cabang ini.</div> : null}
+              {ibadah.isPending && cabangId ? <Loading text={T.loading} /> : null}
+              {ibadah.data?.items.length === 0 ? <div className="text-sm text-neutral-500 py-4 text-center">{T.noIbadahToday}</div> : null}
               {(ibadah.data?.items ?? []).map((o) => (
                 <button
                   key={o.id}
@@ -286,7 +372,7 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate">{o.nama}</div>
-                    {o.isKidsIbadah ? <div className="text-xs text-neutral-400">Ibadah anak (CKids)</div> : null}
+                    {o.isKidsIbadah ? <div className="text-xs text-neutral-400">{T.kids}</div> : null}
                   </div>
                   {statusPill(o.status)}
                 </button>
@@ -294,10 +380,8 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
             </div>
           ) : (
             <div className="space-y-2">
-              {events.isPending ? <Loading /> : null}
-              {events.data?.items.length === 0 ? (
-                <div className="text-sm text-neutral-500 py-4 text-center">Tidak ada event dari kemarin sampai 7 hari ke depan.</div>
-              ) : null}
+              {events.isPending ? <Loading text={T.loading} /> : null}
+              {events.data?.items.length === 0 ? <div className="text-sm text-neutral-500 py-4 text-center">{T.noEvents}</div> : null}
               {(events.data?.items ?? []).map((o) => (
                 <button
                   key={o.id}
@@ -306,13 +390,13 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
                 >
                   <div className="w-28 text-sm">
                     <div className="font-bold">
-                      {new Date(`${o.tanggal}T00:00:00Z`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                      {new Date(`${o.tanggal}T00:00:00Z`).toLocaleDateString(T.locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
                     </div>
                     <div className="text-neutral-500">{o.jamMulai ?? ''}</div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate">{o.judul}</div>
-                    <div className="text-xs text-neutral-400">{o.cabang}</div>
+                    <div className="text-xs text-neutral-400">{o.cabang === 'Sinode' ? T.sinode : o.cabang}</div>
                   </div>
                   {statusPill(o.status)}
                 </button>
@@ -325,19 +409,35 @@ function PickScreen({ token, onPick, onInvalid }: { token: string; onPick: (s: S
   );
 }
 
-function Loading() {
+function Loading({ text }: { text: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-6 text-neutral-400 text-sm">
-      <Loader2 className="w-4 h-4 animate-spin" /> Memuat…
+      <Loader2 className="w-4 h-4 animate-spin" /> {text}
     </div>
   );
 }
 
 // ------------------------------------------------------------------ 3. papan
 
-function BoardScreen({ token, sel, onChange, onInvalid }: { token: string; sel: Selection; onChange: () => void; onInvalid: () => void }) {
+function BoardScreen({
+  T,
+  lang,
+  langSwitch,
+  token,
+  sel,
+  onChange,
+  onInvalid,
+}: {
+  T: MonitorText;
+  lang: MonitorLang;
+  langSwitch: React.ReactNode;
+  token: string;
+  sel: Selection;
+  onChange: () => void;
+  onInvalid: () => void;
+}) {
   const q = useQuery<IbadahMonitor | EventMonitorData>({
-    queryKey: ['monitor', 'board', sel.jenis, sel.cabangId, sel.id],
+    queryKey: ['monitor', 'board', sel.jenis, sel.cabangId, sel.id, lang],
     queryFn: (): Promise<IbadahMonitor | EventMonitorData> =>
       sel.jenis === 'ibadah'
         ? call<IbadahMonitor>(token, '/ibadah', { cabangId: sel.cabangId || undefined, ibadahId: sel.id || undefined })
@@ -381,52 +481,54 @@ function BoardScreen({ token, sel, onChange, onInvalid }: { token: string; sel: 
   const data = q.data;
 
   return (
-    <div className="p-5">
+    <div className="p-5 min-h-screen flex flex-col">
       <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-neutral-400">
-        <span className="font-semibold text-neutral-300">{sel.jenis === 'ibadah' ? 'Ibadah' : 'Event'}</span>
-        <span>· {sel.label}</span>
+        <span className="font-semibold text-neutral-300">{sel.jenis === 'ibadah' ? T.ibadah : T.event}</span>
+        <span>· {sel.jenis === 'ibadah' && !sel.id ? T.autoLabel(sel.label) : sel.label}</span>
         <div className="ml-auto flex items-center gap-3">
           {stale ? (
             <span className="inline-flex items-center gap-1 text-amber-400">
-              <WifiOff className="w-3.5 h-3.5" /> Terakhir diperbarui{' '}
-              {q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'}
+              <WifiOff className="w-3.5 h-3.5" />{' '}
+              {T.lastUpdated(q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit' }) : '—')}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Langsung · tiap 15 detik
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> {T.live}
             </span>
           )}
-          <button onClick={() => void q.refetch()} className="h-8 px-2 rounded-lg border border-neutral-800 hover:bg-neutral-900" aria-label="Muat ulang">
+          <button onClick={() => void q.refetch()} className="h-8 px-2 rounded-lg border border-neutral-800 hover:bg-neutral-900" aria-label={T.reload}>
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
+          {langSwitch}
           <button onClick={onChange} className="h-8 px-3 rounded-lg border border-neutral-800 hover:bg-neutral-900">
-            Ganti
+            {T.change}
           </button>
           <button onClick={toggleFull} className="h-8 px-3 rounded-lg border border-neutral-800 hover:bg-neutral-900 inline-flex items-center gap-1.5">
             {full ? <Minimize className="w-3.5 h-3.5" /> : <Expand className="w-3.5 h-3.5" />}
-            {full ? 'Keluar layar penuh' : 'Layar penuh'}
+            {full ? T.exitFullscreen : T.fullscreen}
           </button>
         </div>
       </div>
 
       {!data ? (
         q.isError ? (
-          <div className="py-24 text-center text-red-400">Gagal memuat data. Mencoba lagi otomatis…</div>
+          <div className="py-24 text-center text-red-400">{T.loadFailed}</div>
         ) : (
-          <Loading />
+          <Loading text={T.loading} />
         )
       ) : sel.jenis === 'ibadah' ? (
         (data as IbadahMonitor).empty ? (
           <div className="py-24 text-center text-neutral-400">
-            <div className="text-2xl font-semibold text-neutral-200">Tidak ada ibadah hari ini</div>
+            <div className="text-2xl font-semibold text-neutral-200">{T.noIbadahTodayBig}</div>
             <div className="mt-1">{(data as Extract<IbadahMonitor, { empty: true }>).cabang.nama}</div>
           </div>
         ) : (
-          <IbadahBoard d={data as Extract<IbadahMonitor, { empty: false }>} now={now} />
+          <IbadahBoard d={data as Extract<IbadahMonitor, { empty: false }>} now={now} lang={lang} />
         )
       ) : (
-        <EventBoard d={data as EventMonitorData} now={now} />
+        <EventBoard d={data as EventMonitorData} now={now} lang={lang} />
       )}
+      <PoweredByIdea className="mt-auto pt-6" />
     </div>
   );
 }

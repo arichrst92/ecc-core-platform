@@ -61,7 +61,12 @@ publicMonitorRouter.get('/ibadah/options', async (req, res) => {
 publicMonitorRouter.get('/ibadah', async (req, res) => {
   res.json({
     success: true,
-    data: await buildIbadahMonitor({ ibadahId: str(req.query.ibadahId), cabangId: str(req.query.cabangId), tanggal: str(req.query.tanggal) }),
+    data: await buildIbadahMonitor({
+      ibadahId: str(req.query.ibadahId),
+      cabangId: str(req.query.cabangId),
+      tanggal: str(req.query.tanggal),
+      lang: str(req.query.lang),
+    }),
   });
 });
 
@@ -70,5 +75,5 @@ publicMonitorRouter.get('/event/options', async (req, res) => {
 });
 
 publicMonitorRouter.get('/event', async (req, res) => {
-  res.json({ success: true, data: await buildEventMonitor(str(req.query.eventId)) });
+  res.json({ success: true, data: await buildEventMonitor(str(req.query.eventId), str(req.query.lang)) });
 });

@@ -2,12 +2,13 @@
 
 /** Papan Monitor Event — gaya sama dengan Monitor Ibadah (latar gelap, angka besar). */
 import { AlertTriangle, Info, QrCode, Radio, ScanLine, Server, Smartphone, UserPlus, Users } from 'lucide-react';
-import { ArrivalChart, METHOD_LABEL, Panel, Row, Stat, fmt } from '@/components/analytics/ibadah-monitor';
+import { ArrivalChart, Panel, Row, Stat, fmt } from '@/components/analytics/ibadah-monitor';
+import { monitorText, type MonitorLang } from '@/lib/monitor-i18n';
 import type { EventMonitorData } from '@/lib/analytics/types';
 
-const tgl = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
+export function EventBoard({ d, now, lang = 'id' }: { d: EventMonitorData; now: number; lang?: MonitorLang }) {
+  const T = monitorText(lang);
+  const tgl = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString(T.locale, { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const start = new Date(d.startAt).getTime();
   const end = new Date(d.endAt).getTime();
   const status = d.status === 'SELESAI' ? 'SELESAI' : now < start ? 'BELUM' : now <= end ? 'BERLANGSUNG' : 'SELESAI';
@@ -15,10 +16,10 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
     const s = Math.max(0, Math.floor(ms / 1000));
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
-    if (h >= 48) return `${Math.floor(h / 24)} hari`;
+    if (h >= 48) return T.days(Math.floor(h / 24));
     return h ? `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
   };
-  const clock = new Date(now).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz });
+  const clock = new Date(now).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz });
   const k = d.kehadiran;
   const q = d.event.quota;
   const qPct = q ? Math.round((k.terdaftar / q) * 100) : null;
@@ -32,7 +33,7 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-neutral-400 text-sm">
-            Event · {d.event.cabang}
+            {T.event} · {d.event.cabang === 'Sinode' ? T.sinode : d.event.cabang}
             {d.event.lokasi ? ` · ${d.event.lokasi}` : ''}
           </div>
           <div className="text-3xl lg:text-4xl font-bold leading-tight">{d.event.judul}</div>
@@ -42,13 +43,13 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
               {d.event.jamMulai ? ` · ${d.event.jamMulai}${d.event.jamSelesai ? `–${d.event.jamSelesai}` : ''}` : ''}
             </span>
             {status === 'BELUM' ? (
-              <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 text-sm font-semibold">Mulai dalam {mmss(start - now)}</span>
+              <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 text-sm font-semibold">{T.startsIn(mmss(start - now))}</span>
             ) : status === 'BERLANGSUNG' ? (
               <span className="px-3 py-1 rounded-full bg-green-500/15 text-green-300 text-sm font-semibold inline-flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5" /> Berlangsung {mmss(now - start)}
+                <Radio className="w-3.5 h-3.5" /> {T.running(mmss(now - start))}
               </span>
             ) : (
-              <span className="px-3 py-1 rounded-full bg-neutral-700/50 text-neutral-300 text-sm font-semibold">Selesai</span>
+              <span className="px-3 py-1 rounded-full bg-neutral-700/50 text-neutral-300 text-sm font-semibold">{T.ended}</span>
             )}
           </div>
         </div>
@@ -76,19 +77,19 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Panel title="Kehadiran" icon={Users} className="lg:col-span-2">
+        <Panel title={T.attendance} icon={Users} className="lg:col-span-2">
           <div className="flex flex-wrap items-end gap-6">
             <div>
               <div className="text-7xl font-bold tabular-nums leading-none">{fmt(k.hadir)}</div>
-              <div className="text-neutral-400 mt-1">hadir{hadirPct != null ? ` · ${hadirPct}% dari terdaftar` : ''}</div>
+              <div className="text-neutral-400 mt-1">{hadirPct != null ? T.presentOfRegistered(hadirPct) : T.present}</div>
             </div>
             <div className="flex-1 min-w-[220px]">
               {q ? (
                 <>
                   <div className="flex justify-between text-sm text-neutral-400 mb-1">
-                    <span>Kuota terisi</span>
+                    <span>{T.quotaFilled}</span>
                     <span className={`font-semibold ${qPct! >= 100 ? 'text-red-400' : qPct! >= 90 ? 'text-amber-300' : 'text-white'}`}>
-                      {qPct}% dari {fmt(q)}
+                      {T.pctOf(qPct!, fmt(q))}
                     </span>
                   </div>
                   <div className="h-4 rounded-full bg-neutral-800 overflow-hidden">
@@ -99,33 +100,31 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-neutral-500">Tanpa batas kuota peserta.</div>
+                <div className="text-sm text-neutral-500">{T.noQuota}</div>
               )}
               <div className="grid grid-cols-3 gap-3 mt-3">
-                <Stat label="Terdaftar" value={fmt(k.terdaftar)} />
-                <Stat label="Belum datang" value={fmt(k.belumDatang)} />
-                <Stat label="15 menit terakhir" value={`+${fmt(k.last15m)}`} />
+                <Stat label={T.registered} value={fmt(k.terdaftar)} />
+                <Stat label={T.notArrived} value={fmt(k.belumDatang)} />
+                <Stat label={T.last15} value={`+${fmt(k.last15m)}`} />
               </div>
               {k.sudahBayar != null ? (
-                <div className="text-sm text-neutral-400 mt-3">
-                  Sudah bayar: <span className="text-white font-semibold">{fmt(k.sudahBayar)}</span> dari {fmt(k.terdaftar)} peserta
-                </div>
+                <div className="text-sm text-neutral-400 mt-3">{T.paid(fmt(k.sudahBayar), fmt(k.terdaftar))}</div>
               ) : null}
             </div>
           </div>
         </Panel>
 
-        <Panel title="Kedatangan per 5 menit (hari ini)" icon={ScanLine} className="lg:col-span-2">
-          <ArrivalChart data={d.arrival} startLabel={d.event.jamMulai ?? ''} />
+        <Panel title={T.arrivalsToday} icon={ScanLine} className="lg:col-span-2">
+          <ArrivalChart data={d.arrival} startLabel={d.event.jamMulai ?? ''} lang={lang} />
         </Panel>
 
-        <Panel title="Check-in" icon={QrCode}>
+        <Panel title={T.checkin} icon={QrCode}>
           <div className="space-y-2">
-            {methods.length === 0 ? <div className="text-sm text-neutral-500">Belum ada check-in.</div> : null}
+            {methods.length === 0 ? <div className="text-sm text-neutral-500">{T.noCheckin}</div> : null}
             {methods.map(([m, v]) => (
               <div key={m}>
                 <div className="flex justify-between text-sm">
-                  <span className="text-neutral-300">{METHOD_LABEL[m] ?? m}</span>
+                  <span className="text-neutral-300">{T.method[m] ?? m}</span>
                   <span className="tabular-nums font-semibold">{fmt(v)}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-neutral-800 mt-1">
@@ -134,49 +133,46 @@ export function EventBoard({ d, now }: { d: EventMonitorData; now: number }) {
               </div>
             ))}
           </div>
-          {k.batal ? <div className="text-xs text-neutral-500 mt-3">{fmt(k.batal)} peserta batal</div> : null}
+          {k.batal ? <div className="text-xs text-neutral-500 mt-3">{T.cancelled(fmt(k.batal))}</div> : null}
         </Panel>
 
-        <Panel title="Tamu & jemaat baru" icon={UserPlus}>
+        <Panel title={T.guests} icon={UserPlus}>
           <div className="text-5xl font-bold tabular-nums">{fmt(d.tamu.total)}</div>
-          <div className="text-neutral-400 text-sm mb-2">tamu hadir</div>
-          <Row label="Diundang jemaat" value={fmt(d.tamu.diundang)} />
-          <Row label="Walk-in" value={fmt(d.tamu.walkIn)} />
-          <Row label="Pertama kali hadir di ECC" value={fmt(d.tamu.pertamaKali)} tone="text-green-400" />
+          <div className="text-neutral-400 text-sm mb-2">{T.guestsPresent}</div>
+          <Row label={T.invited} value={fmt(d.tamu.diundang)} />
+          <Row label={T.walkIn} value={fmt(d.tamu.walkIn)} />
+          <Row label={T.firstTime} value={fmt(d.tamu.pertamaKali)} tone="text-green-400" />
         </Panel>
 
-        <Panel title="Els App & sistem" icon={Server} className="lg:col-span-2">
+        <Panel title={T.appSystem} icon={Server} className="lg:col-span-2">
           <div className="flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-neutral-400" />
             <span className="text-4xl font-bold tabular-nums">{fmt(d.app.aktif)}</span>
-            <span className="text-neutral-400 text-sm">aktif di Els App</span>
+            <span className="text-neutral-400 text-sm">{T.activeInApp}</span>
           </div>
-          <div className="text-[11px] text-neutral-500 mb-2">
-            seluruh cabang · halaman Event {fmt(d.app.event)} · Tiket {fmt(d.app.tiket)}
-          </div>
+          <div className="text-[11px] text-neutral-500 mb-2">{T.appBreakdownEvent(fmt(d.app.event), fmt(d.app.tiket))}</div>
           <div className="grid sm:grid-cols-3 gap-x-6">
             <Row
-              label="Check-in berhasil"
-              value={d.system.checkinSuccessPct == null ? '—' : `${d.system.checkinSuccessPct.toLocaleString('id-ID')}%`}
+              label={T.checkinOk}
+              value={d.system.checkinSuccessPct == null ? '—' : `${d.system.checkinSuccessPct.toLocaleString(T.locale)}%`}
               tone={d.system.checkinSuccessPct == null ? 'text-neutral-500' : d.system.checkinSuccessPct >= 99 ? 'text-green-400' : d.system.checkinSuccessPct >= 98 ? 'text-amber-300' : 'text-red-400'}
             />
             <Row
-              label="API sukses"
-              value={d.system.successPct == null ? '—' : `${d.system.successPct.toLocaleString('id-ID')}%`}
+              label={T.apiOk}
+              value={d.system.successPct == null ? '—' : `${d.system.successPct.toLocaleString(T.locale)}%`}
               tone={d.system.successPct == null ? 'text-neutral-500' : d.system.successPct >= 99.5 ? 'text-green-400' : d.system.successPct >= 98 ? 'text-amber-300' : 'text-red-400'}
             />
             <Row
-              label="Respons p95"
-              value={d.system.p95Ms == null ? '—' : d.system.p95Ms >= 1000 ? `${(d.system.p95Ms / 1000).toFixed(1)} dtk` : `${d.system.p95Ms} ms`}
+              label={T.p95}
+              value={d.system.p95Ms == null ? '—' : d.system.p95Ms >= 1000 ? `${(d.system.p95Ms / 1000).toFixed(1)} ${T.sec}` : `${d.system.p95Ms} ms`}
               tone={d.system.p95Ms == null ? 'text-neutral-500' : d.system.p95Ms <= 800 ? 'text-green-400' : d.system.p95Ms <= 2000 ? 'text-amber-300' : 'text-red-400'}
             />
           </div>
-          <div className="text-[11px] text-neutral-600 mt-1">15 menit terakhir</div>
+          <div className="text-[11px] text-neutral-600 mt-1">{T.last15Short}</div>
         </Panel>
       </div>
       <div className="text-[11px] text-neutral-600">
-        Diperbarui {new Date(d.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz })} · tanpa
-        data pribadi peserta
+        {T.updated(new Date(d.updatedAt).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz }))}
       </div>
     </div>
   );

@@ -103,7 +103,9 @@ ibadahMonitorRouter.get('/', async (req, res) => {
  * Ringkasan langsung satu ibadah. Tanpa ibadahId → ibadah cabang yang sedang
  * / akan berlangsung hari ini. Dipakai portal (JWT) & /public/monitor (kode akses).
  */
-export async function buildIbadahMonitor(q: { ibadahId?: string | null; cabangId?: string | null; tanggal?: string | null }) {
+export async function buildIbadahMonitor(q: { ibadahId?: string | null; cabangId?: string | null; tanggal?: string | null; lang?: string | null }) {
+  const en = q.lang === 'en';
+  const L = (id: string, eng: string) => (en ? eng : id);
   const now = Date.now();
   const qIbadah = q.ibadahId && UUID_RE.test(q.ibadahId) ? q.ibadahId : null;
   const qTanggal = q.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(q.tanggal) ? q.tanggal : null;
@@ -269,24 +271,27 @@ export async function buildIbadahMonitor(q: { ibadahId?: string | null; cabangId
   const cap = ib.kapasitasSeat ?? null;
   if (cap) {
     const pct = (hadir.length / cap) * 100;
-    if (pct >= 100) alerts.push({ level: 'danger', text: `Kursi penuh: ${hadir.length} hadir dari ${cap} kursi.` });
-    else if (pct >= 90) alerts.push({ level: 'warning', text: `Kursi hampir penuh (${Math.round(pct)}%).` });
+    if (pct >= 100) alerts.push({ level: 'danger', text: L(`Kursi penuh: ${hadir.length} hadir dari ${cap} kursi.`, `Seats full: ${hadir.length} present of ${cap} seats.`) });
+    else if (pct >= 90) alerts.push({ level: 'warning', text: L(`Kursi hampir penuh (${Math.round(pct)}%).`, `Seats almost full (${Math.round(pct)}%).`) });
   }
   for (const k of ckids) {
     if (k.belumDijemput > 0 && k.menitSejakSelesai != null && k.menitSejakSelesai >= 15) {
-      alerts.push({ level: 'danger', text: `${k.belumDijemput} anak di ${k.nama} belum dijemput (${k.menitSejakSelesai} menit setelah selesai).` });
+      alerts.push({ level: 'danger', text: L(
+          `${k.belumDijemput} anak di ${k.nama} belum dijemput (${k.menitSejakSelesai} menit setelah selesai).`,
+          `${k.belumDijemput} children in ${k.nama} not picked up yet (${k.menitSejakSelesai} min after the end).`,
+        ) });
     }
   }
   if (system.checkinSuccessPct != null && system.checkinSuccessPct < 98 && system.checkinRequests >= 10) {
-    alerts.push({ level: 'danger', text: `Check-in sering gagal: sukses ${system.checkinSuccessPct}% dalam 15 menit terakhir.` });
+    alerts.push({ level: 'danger', text: L(`Check-in sering gagal: sukses ${system.checkinSuccessPct}% dalam 15 menit terakhir.`, `Check-in failing often: ${system.checkinSuccessPct}% success in the last 15 minutes.`) });
   }
   if (system.p95Ms != null && system.p95Ms > 2000 && system.requests15m >= 30) {
-    alerts.push({ level: 'warning', text: `Server melambat: p95 ${(system.p95Ms / 1000).toFixed(1)} dtk dalam 15 menit terakhir.` });
+    alerts.push({ level: 'warning', text: L(`Server melambat: p95 ${(system.p95Ms / 1000).toFixed(1)} dtk dalam 15 menit terakhir.`, `Server slow: p95 ${(system.p95Ms / 1000).toFixed(1)} s in the last 15 minutes.`) });
   }
   if (lastWeek && status === 'BERLANGSUNG' && now - start.getTime() >= 10 * 60_000 && lastWeek.hadirSaatIni >= 20) {
     const diff = (hadir.length - lastWeek.hadirSaatIni) / lastWeek.hadirSaatIni;
     if (diff <= -0.25) {
-      alerts.push({ level: 'warning', text: `Kehadiran ${Math.round(-diff * 100)}% di bawah kebaktian sebelumnya pada jam yang sama.` });
+      alerts.push({ level: 'warning', text: L(`Kehadiran ${Math.round(-diff * 100)}% di bawah kebaktian sebelumnya pada jam yang sama.`, `Attendance ${Math.round(-diff * 100)}% below the previous service at the same time.`) });
     }
   }
 

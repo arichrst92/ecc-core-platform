@@ -25,6 +25,7 @@ import {
 import { useCabangOptions } from '@/components/report/report-ui';
 import { useIbadahMonitor, useIbadahMonitorOptions } from '@/lib/analytics/use-analytics';
 import type { IbadahMonitorData } from '@/lib/analytics/types';
+import { monitorText, type MonitorLang } from '@/lib/monitor-i18n';
 
 const LS_CABANG = 'monitor-ibadah.cabangId';
 const LS_IBADAH = 'monitor-ibadah.ibadahId';
@@ -93,7 +94,7 @@ export function IbadahMonitor({ kiosk = false, onToggleKiosk }: { kiosk?: boolea
             writeLs(LS_CABANG, e.target.value);
             writeLs(LS_IBADAH, '');
           }}
-          className="h-9 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-neutral-200"
+          className="select-dark h-9 rounded-lg px-3 text-sm"
         >
           {(cabangQ.data ?? []).map((c) => (
             <option key={c.id} value={c.id}>
@@ -107,7 +108,7 @@ export function IbadahMonitor({ kiosk = false, onToggleKiosk }: { kiosk?: boolea
             setIbadahId(e.target.value);
             writeLs(LS_IBADAH, e.target.value);
           }}
-          className="h-9 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-neutral-200 max-w-xs"
+          className="select-dark h-9 rounded-lg px-3 text-sm max-w-xs"
         >
           <option value="">Otomatis (sedang / akan berlangsung)</option>
           {(opts.data?.items ?? []).map((o) => (
@@ -178,7 +179,8 @@ export function Row({ label, value, tone }: { label: string; value: React.ReactN
   );
 }
 
-export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
+export function IbadahBoard({ d, now, lang = 'id' }: { d: IbadahMonitorData; now: number; lang?: MonitorLang }) {
+  const T = monitorText(lang);
   const start = new Date(d.startAt).getTime();
   const end = new Date(d.endAt).getTime();
   const status = now < start ? 'BELUM' : now <= end ? 'BERLANGSUNG' : 'SELESAI';
@@ -188,7 +190,7 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
     const m = Math.floor((s % 3600) / 60);
     return h ? `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
   };
-  const clock = new Date(now).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz });
+  const clock = new Date(now).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz });
   const k = d.kehadiran;
   const cap = d.ibadah.kapasitasSeat;
   const capPct = cap ? Math.round((k.hadir / cap) * 100) : null;
@@ -211,13 +213,13 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
               {d.ibadah.jamMulai}–{d.ibadah.jamSelesai}
             </span>
             {status === 'BELUM' ? (
-              <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 text-sm font-semibold">Mulai dalam {mmss(start - now)}</span>
+              <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 text-sm font-semibold">{T.startsIn(mmss(start - now))}</span>
             ) : status === 'BERLANGSUNG' ? (
               <span className="px-3 py-1 rounded-full bg-green-500/15 text-green-300 text-sm font-semibold inline-flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5" /> Berlangsung {mmss(now - start)}
+                <Radio className="w-3.5 h-3.5" /> {T.running(mmss(now - start))}
               </span>
             ) : (
-              <span className="px-3 py-1 rounded-full bg-neutral-700/50 text-neutral-300 text-sm font-semibold">Selesai {mmss(now - end)} lalu</span>
+              <span className="px-3 py-1 rounded-full bg-neutral-700/50 text-neutral-300 text-sm font-semibold">{T.endedAgo(mmss(now - end))}</span>
             )}
           </div>
         </div>
@@ -243,19 +245,19 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Kehadiran */}
-        <Panel title="Kehadiran" icon={Users} className="lg:col-span-2">
+        <Panel title={T.attendance} icon={Users} className="lg:col-span-2">
           <div className="flex flex-wrap items-end gap-6">
             <div>
               <div className="text-7xl font-bold tabular-nums leading-none">{fmt(k.hadir)}</div>
-              <div className="text-neutral-400 mt-1">hadir</div>
+              <div className="text-neutral-400 mt-1">{T.present}</div>
             </div>
             <div className="flex-1 min-w-[220px]">
               {cap ? (
                 <>
                   <div className="flex justify-between text-sm text-neutral-400 mb-1">
-                    <span>Kursi terisi</span>
+                    <span>{T.seatsFilled}</span>
                     <span className={`font-semibold ${capPct! >= 100 ? 'text-red-400' : capPct! >= 90 ? 'text-amber-300' : 'text-white'}`}>
-                      {capPct}% dari {fmt(cap)}
+                      {T.pctOf(capPct!, fmt(cap))}
                     </span>
                   </div>
                   <div className="h-4 rounded-full bg-neutral-800 overflow-hidden">
@@ -266,19 +268,22 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-neutral-500">Kapasitas kursi belum diisi di data ibadah.</div>
+                <div className="text-sm text-neutral-500">{T.noCapacity}</div>
               )}
               <div className="grid grid-cols-3 gap-3 mt-3">
-                <Stat label="Reservasi" value={fmt(k.reservasi)} />
-                <Stat label="Belum datang" value={fmt(k.belumDatang)} />
-                <Stat label="15 menit terakhir" value={`+${fmt(k.last15m)}`} />
+                <Stat label={T.reservations} value={fmt(k.reservasi)} />
+                <Stat label={T.notArrived} value={fmt(k.belumDatang)} />
+                <Stat label={T.last15} value={`+${fmt(k.last15m)}`} />
               </div>
             </div>
           </div>
           {d.lastWeek ? (
             <div className="mt-3 text-sm text-neutral-400">
-              Kebaktian sebelumnya ({new Date(`${d.lastWeek.tanggal}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })}): {fmt(d.lastWeek.hadirSaatIni)} pada jam
-              yang sama · total {fmt(d.lastWeek.hadir)}
+              {T.prevService(
+                new Date(`${d.lastWeek.tanggal}T00:00:00Z`).toLocaleDateString(T.locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+                fmt(d.lastWeek.hadirSaatIni),
+                fmt(d.lastWeek.hadir),
+              )}
               {vsLast != null ? (
                 <span className={`ml-2 font-semibold ${vsLast >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {vsLast >= 0 ? '▲' : '▼'} {Math.abs(vsLast)}%
@@ -289,18 +294,18 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
         </Panel>
 
         {/* Kurva kedatangan */}
-        <Panel title="Kedatangan per 5 menit" icon={ScanLine} className="lg:col-span-2">
-          <ArrivalChart data={d.arrival} startLabel={d.ibadah.jamMulai} />
+        <Panel title={T.arrivals} icon={ScanLine} className="lg:col-span-2">
+          <ArrivalChart data={d.arrival} startLabel={d.ibadah.jamMulai} lang={lang} />
         </Panel>
 
         {/* Cara check-in & petugas */}
-        <Panel title="Check-in" icon={QrCode}>
+        <Panel title={T.checkin} icon={QrCode}>
           <div className="space-y-2">
-            {methods.length === 0 ? <div className="text-sm text-neutral-500">Belum ada check-in.</div> : null}
+            {methods.length === 0 ? <div className="text-sm text-neutral-500">{T.noCheckin}</div> : null}
             {methods.map(([m, v]) => (
               <div key={m}>
                 <div className="flex justify-between text-sm">
-                  <span className="text-neutral-300">{METHOD_LABEL[m] ?? m}</span>
+                  <span className="text-neutral-300">{T.method[m] ?? m}</span>
                   <span className="tabular-nums font-semibold">{fmt(v)}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-neutral-800 mt-1">
@@ -311,7 +316,7 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
           </div>
           {d.scanners.length ? (
             <div className="mt-4">
-              <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">Petugas scan teraktif</div>
+              <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">{T.topScanners}</div>
               {d.scanners.map((s) => (
                 <div key={s.nama} className="flex justify-between text-sm py-0.5">
                   <span className="text-neutral-300 truncate">{s.nama}</span>
@@ -323,8 +328,8 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
         </Panel>
 
         {/* CKids */}
-        <Panel title="CKids" icon={Baby}>
-          {d.ckids.length === 0 ? <div className="text-sm text-neutral-500">Tidak ada ibadah anak di jam ini.</div> : null}
+        <Panel title={T.ckids} icon={Baby}>
+          {d.ckids.length === 0 ? <div className="text-sm text-neutral-500">{T.noKids}</div> : null}
           <div className="space-y-3">
             {d.ckids.map((c) => {
               const late = c.belumDijemput > 0 && c.menitSejakSelesai != null && c.menitSejakSelesai >= 15;
@@ -336,14 +341,15 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
                   <div className="flex items-end justify-between mt-1">
                     <div>
                       <div className="text-3xl font-bold tabular-nums">{fmt(c.hadir)}</div>
-                      <div className="text-xs text-neutral-500">anak hadir</div>
+                      <div className="text-xs text-neutral-500">{T.kidsPresent}</div>
                     </div>
                     <div className="text-right">
                       <div className={`text-3xl font-bold tabular-nums ${late ? 'text-red-400' : c.belumDijemput ? 'text-amber-300' : 'text-green-400'}`}>
                         {fmt(c.belumDijemput)}
                       </div>
                       <div className="text-xs text-neutral-500">
-                        belum dijemput{c.menitSejakSelesai != null ? ` · ${c.menitSejakSelesai} mnt stlh selesai` : ''}
+                        {T.notPicked}
+                        {c.menitSejakSelesai != null ? ` · ${T.minAfterEnd(c.menitSejakSelesai)}` : ''}
                       </div>
                     </div>
                   </div>
@@ -354,44 +360,43 @@ export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
         </Panel>
 
         {/* Tamu */}
-        <Panel title="Tamu & jemaat baru" icon={UserPlus}>
+        <Panel title={T.guests} icon={UserPlus}>
           <div className="text-5xl font-bold tabular-nums">{fmt(d.tamu.total)}</div>
-          <div className="text-neutral-400 text-sm mb-2">tamu hadir</div>
-          <Row label="Diundang jemaat" value={fmt(d.tamu.diundang)} />
-          <Row label="Walk-in" value={fmt(d.tamu.walkIn)} />
-          <Row label="Dari homecell" value={fmt(d.tamu.homecell)} />
-          <Row label="Pertama kali hadir di ECC" value={fmt(d.tamu.pertamaKali)} tone="text-green-400" />
+          <div className="text-neutral-400 text-sm mb-2">{T.guestsPresent}</div>
+          <Row label={T.invited} value={fmt(d.tamu.diundang)} />
+          <Row label={T.walkIn} value={fmt(d.tamu.walkIn)} />
+          <Row label={T.fromHomecell} value={fmt(d.tamu.homecell)} />
+          <Row label={T.firstTime} value={fmt(d.tamu.pertamaKali)} tone="text-green-400" />
         </Panel>
 
         {/* Els App & sistem */}
-        <Panel title="Els App & sistem" icon={Server}>
+        <Panel title={T.appSystem} icon={Server}>
           <div className="flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-neutral-400" />
             <span className="text-4xl font-bold tabular-nums">{fmt(d.app.aktif)}</span>
-            <span className="text-neutral-400 text-sm">aktif di Els App</span>
+            <span className="text-neutral-400 text-sm">{T.activeInApp}</span>
           </div>
-          <div className="text-[11px] text-neutral-500 mb-2">seluruh cabang · Tiket {fmt(d.app.tiket)} · Alkitab {fmt(d.app.alkitab)} · Worship {fmt(d.app.worship)}</div>
+          <div className="text-[11px] text-neutral-500 mb-2">{T.appBreakdown(fmt(d.app.tiket), fmt(d.app.alkitab), fmt(d.app.worship))}</div>
           <Row
-            label="Check-in berhasil (15 mnt)"
-            value={d.system.checkinSuccessPct == null ? '—' : `${d.system.checkinSuccessPct.toLocaleString('id-ID')}%`}
+            label={T.checkinOk15}
+            value={d.system.checkinSuccessPct == null ? '—' : `${d.system.checkinSuccessPct.toLocaleString(T.locale)}%`}
             tone={d.system.checkinSuccessPct == null ? 'text-neutral-500' : d.system.checkinSuccessPct >= 99 ? 'text-green-400' : d.system.checkinSuccessPct >= 98 ? 'text-amber-300' : 'text-red-400'}
           />
           <Row
-            label="API sukses (15 mnt)"
-            value={d.system.successPct == null ? '—' : `${d.system.successPct.toLocaleString('id-ID')}%`}
+            label={T.apiOk15}
+            value={d.system.successPct == null ? '—' : `${d.system.successPct.toLocaleString(T.locale)}%`}
             tone={d.system.successPct == null ? 'text-neutral-500' : d.system.successPct >= 99.5 ? 'text-green-400' : d.system.successPct >= 98 ? 'text-amber-300' : 'text-red-400'}
           />
           <Row
-            label="Waktu respons p95"
-            value={d.system.p95Ms == null ? '—' : d.system.p95Ms >= 1000 ? `${(d.system.p95Ms / 1000).toFixed(1)} dtk` : `${d.system.p95Ms} ms`}
+            label={T.p95}
+            value={d.system.p95Ms == null ? '—' : d.system.p95Ms >= 1000 ? `${(d.system.p95Ms / 1000).toFixed(1)} ${T.sec}` : `${d.system.p95Ms} ms`}
             tone={d.system.p95Ms == null ? 'text-neutral-500' : d.system.p95Ms <= 800 ? 'text-green-400' : d.system.p95Ms <= 2000 ? 'text-amber-300' : 'text-red-400'}
           />
           {d.ibadah.linkOnline ? <div className="text-[11px] text-neutral-500 mt-2 truncate">Online: {d.ibadah.linkOnline}</div> : null}
         </Panel>
       </div>
       <div className="text-[11px] text-neutral-600">
-        Diperbarui {new Date(d.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz })} · tanpa
-        data pribadi jemaat
+        {T.updated(new Date(d.updatedAt).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: d.tz }))}
       </div>
     </div>
   );
@@ -407,7 +412,8 @@ export function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /** Batang = datang per 5 menit; garis = total kumulatif; garis putus = jam mulai. */
-export function ArrivalChart({ data, startLabel }: { data: { t: string; n: number; cum: number }[]; startLabel: string }) {
+export function ArrivalChart({ data, startLabel, lang = 'id' }: { data: { t: string; n: number; cum: number }[]; startLabel: string; lang?: MonitorLang }) {
+  const T = monitorText(lang);
   const W = 800;
   const H = 230;
   const pl = 8;
@@ -447,15 +453,15 @@ export function ArrivalChart({ data, startLabel }: { data: { t: string; n: numbe
       </svg>
       <div className="flex flex-wrap gap-4 text-xs text-neutral-400 mt-1">
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-sky-500/60" /> datang per 5 menit
+          <span className="w-2.5 h-2.5 rounded-sm bg-sky-500/60" /> {T.perFive}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-4 border-t-[3px] border-orange-500" /> total hadir
+          <span className="w-4 border-t-[3px] border-orange-500" /> {T.totalPresent}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-4 border-t-2 border-dashed border-green-500" /> mulai {startLabel}
+          <span className="w-4 border-t-2 border-dashed border-green-500" /> {T.startAt(startLabel)}
         </span>
-        {peak.n ? <span className="ml-auto">Puncak {peak.t} · {fmt(peak.n)} orang</span> : null}
+        {peak.n ? <span className="ml-auto">{T.peak(peak.t, fmt(peak.n))}</span> : null}
       </div>
     </div>
   );

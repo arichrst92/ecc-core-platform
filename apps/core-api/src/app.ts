@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { reportPublicRouter } from './routes/report-public.js';
 import { publicHomecellRouter } from './routes/public-homecell.js';
 import { telemetryRouter } from './routes/telemetry.js';
+import { publicMonitorRouter } from './routes/public-monitor.js';
 import compression from 'compression';
 import morgan from 'morgan';
 import { apiMetricsMiddleware } from './lib/api-metrics.js';
@@ -141,6 +142,8 @@ export function createApp(): Express {
   app.use('/public/report', reportPublicRouter);
   // Mode tamu: cari homecell & minta bergabung (tanpa akun).
   app.use('/public/homecell', publicHomecellRouter);
+  // Layar monitor ibadah/event tanpa login (kode akses .env MONITOR_ACCESS_CODE).
+  app.use('/public/monitor', publicMonitorRouter);
   app.use('/public', publicUnauthRouter);
   // ECC Worship — streaming audio via URL bertanda tangan (tanpa JWT).
   app.use('/worship-media', worshipMediaRouter);

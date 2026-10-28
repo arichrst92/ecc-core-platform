@@ -128,6 +128,7 @@ export type IbadahStatus = 'BELUM' | 'BERLANGSUNG' | 'SELESAI';
 
 export interface IbadahMonitorOptions {
   tanggal: string;
+  cabang?: { id: string; nama: string };
   items: { id: string; nama: string; jamMulai: string; jamSelesai: string; isKidsIbadah: boolean; status: IbadahStatus }[];
 }
 
@@ -163,3 +164,36 @@ export interface IbadahMonitorData {
 }
 
 export type IbadahMonitor = IbadahMonitorData | { empty: true; cabang: { id: string; nama: string }; tanggal: string };
+
+// ---------------------------------------------------------------- Monitor Event (layar /monitor)
+
+export interface EventMonitorOptions {
+  items: { id: string; judul: string; tanggal: string; tanggalSelesai: string; jamMulai: string | null; jamSelesai: string | null; cabang: string; status: IbadahStatus }[];
+}
+
+export interface EventMonitorData {
+  updatedAt: string;
+  tz: string;
+  event: {
+    id: string;
+    judul: string;
+    cabang: string;
+    lokasi: string | null;
+    tanggal: string;
+    tanggalSelesai: string;
+    jamMulai: string | null;
+    jamSelesai: string | null;
+    quota: number | null;
+    berbayar: boolean;
+  };
+  status: IbadahStatus;
+  startAt: string;
+  endAt: string;
+  kehadiran: { hadir: number; terdaftar: number; belumDatang: number; batal: number; sudahBayar: number | null; last15m: number };
+  arrival: { t: string; n: number; cum: number }[];
+  methods: Record<string, number>;
+  tamu: { total: number; diundang: number; walkIn: number; pertamaKali: number };
+  app: { aktif: number; tiket: number; alkitab: number; worship: number; event: number };
+  system: { requests15m: number; successPct: number | null; p95Ms: number | null; checkinSuccessPct: number | null };
+  alerts: { level: 'danger' | 'warning' | 'info'; text: string }[];
+}

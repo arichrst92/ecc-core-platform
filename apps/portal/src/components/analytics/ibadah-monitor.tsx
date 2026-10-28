@@ -29,8 +29,8 @@ import type { IbadahMonitorData } from '@/lib/analytics/types';
 const LS_CABANG = 'monitor-ibadah.cabangId';
 const LS_IBADAH = 'monitor-ibadah.ibadahId';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('id-ID');
-const METHOD_LABEL: Record<string, string> = {
+export const fmt = (n: number) => Math.round(n).toLocaleString('id-ID');
+export const METHOD_LABEL: Record<string, string> = {
   SELF: 'Self check-in (app)',
   SCAN: 'Scan QR petugas',
   WALK_IN: 'Walk-in (tamu)',
@@ -152,13 +152,13 @@ export function IbadahMonitor({ kiosk = false, onToggleKiosk }: { kiosk?: boolea
       ) : !d ? (
         <div className="py-24 text-center text-red-400">Gagal memuat data monitor. Mencoba lagi otomatis…</div>
       ) : (
-        <Board d={d} now={now} />
+        <IbadahBoard d={d} now={now} />
       )}
     </div>
   );
 }
 
-function Panel({ title, icon: Icon, children, className = '' }: { title: string; icon: typeof Users; children: React.ReactNode; className?: string }) {
+export function Panel({ title, icon: Icon, children, className = '' }: { title: string; icon: typeof Users; children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-xl bg-neutral-900 border border-neutral-800 p-4 ${className}`}>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-3">
@@ -169,7 +169,7 @@ function Panel({ title, icon: Icon, children, className = '' }: { title: string;
   );
 }
 
-function Row({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
+export function Row({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
       <span className="text-neutral-400 text-sm">{label}</span>
@@ -178,7 +178,7 @@ function Row({ label, value, tone }: { label: string; value: React.ReactNode; to
   );
 }
 
-function Board({ d, now }: { d: IbadahMonitorData; now: number }) {
+export function IbadahBoard({ d, now }: { d: IbadahMonitorData; now: number }) {
   const start = new Date(d.startAt).getTime();
   const end = new Date(d.endAt).getTime();
   const status = now < start ? 'BELUM' : now <= end ? 'BERLANGSUNG' : 'SELESAI';
@@ -397,7 +397,7 @@ function Board({ d, now }: { d: IbadahMonitorData; now: number }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+export function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
@@ -407,7 +407,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /** Batang = datang per 5 menit; garis = total kumulatif; garis putus = jam mulai. */
-function ArrivalChart({ data, startLabel }: { data: { t: string; n: number; cum: number }[]; startLabel: string }) {
+export function ArrivalChart({ data, startLabel }: { data: { t: string; n: number; cum: number }[]; startLabel: string }) {
   const W = 800;
   const H = 230;
   const pl = 8;

@@ -160,6 +160,21 @@ export const appTelemetryLimiter = makeLimiter('app-telemetry', {
   },
 });
 
+/** Layar monitor (/public/monitor): coba kode akses — anti tebak per IP. */
+export const monitorUnlockLimiter = makeLimiter('monitor-unlock', {
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+});
+
+/**
+ * Layar monitor: polling tiap 15 detik. Banyak monitor di satu gereja keluar
+ * lewat satu IP → batas longgar per IP.
+ */
+export const monitorLimiter = makeLimiter('monitor', {
+  windowMs: 60 * 1000,
+  limit: 300,
+});
+
 /** Mode tamu: minta bergabung homecell (tanpa akun) — anti-spam per IP. */
 export const guestJoinLimiter = makeLimiter('guest-join', {
   windowMs: 60 * 60 * 1000,

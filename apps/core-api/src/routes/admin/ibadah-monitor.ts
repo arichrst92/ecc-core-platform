@@ -7,14 +7,13 @@
  *
  * Hanya angka & nama petugas scan — tanpa no HP, alamat, atau catatan anak.
  */
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { todayInTz, tzOr, wallToInstant } from '../../lib/tz.js';
-import { activePresence } from '../../lib/telemetry.js';
-import { pendingRows, percentileFromHist, LATENCY_EDGES } from '../../lib/api-metrics.js';
+import { appActivity, systemHealth } from '../../lib/monitor-common.js';
 
 export const ibadahMonitorRouter = Router();
 ibadahMonitorRouter.use(requireMenu('monitor-ibadah'));
@@ -42,9 +41,8 @@ const ibadahSelect = {
   cabang: { select: { id: true, nama: true, timezone: true } },
 } as const;
 
-async function cabangOf(req: Request) {
-  const id = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
-  if (UUID_RE.test(id)) {
+async function cabangById(id: string | null | undefined) {
+  if (id && UUID_RE.test(id)) {
     const c = await prisma.cabangGereja.findUnique({ where: { id }, select: { id: true, nama: true, timezone: true } });
     if (c) return c;
   }
@@ -72,29 +70,43 @@ function windowOf(ib: { jamMulai: string; jamSelesai: string }, tanggal: Date, t
 const statusOf = (now: number, start: Date, end: Date) =>
   now < start.getTime() ? 'BELUM' : now <= end.getTime() ? 'BERLANGSUNG' : 'SELESAI';
 
-ibadahMonitorRouter.get('/options', async (req, res) => {
-  const c = await cabangOf(req);
-  if (!c) throw BadRequest('cabangId wajib diisi.');
+/** Ibadah hari ini di cabang (untuk pilihan). null = cabang tidak valid. */
+export async function buildIbadahOptions(cabangId: string | null | undefined) {
+  const c = await cabangById(cabangId);
+  if (!c) return null;
   const tz = tzOr(c.timezone);
   const tanggal = todayInTz(tz);
   const now = Date.now();
   const list = await occurrencesOn(c.id, tanggal);
-  res.json({
-    success: true,
-    data: {
-      tanggal: ymd(tanggal),
-      items: list.map((ib) => {
-        const w = windowOf(ib, tanggal, tz);
-        return { id: ib.id, nama: ib.nama, jamMulai: ib.jamMulai, jamSelesai: ib.jamSelesai, isKidsIbadah: ib.isKidsIbadah, status: statusOf(now, w.start, w.end) };
-      }),
-    },
-  });
+  return {
+    tanggal: ymd(tanggal),
+    cabang: { id: c.id, nama: c.nama },
+    items: list.map((ib) => {
+      const w = windowOf(ib, tanggal, tz);
+      return { id: ib.id, nama: ib.nama, jamMulai: ib.jamMulai, jamSelesai: ib.jamSelesai, isKidsIbadah: ib.isKidsIbadah, status: statusOf(now, w.start, w.end) };
+    }),
+  };
+}
+
+ibadahMonitorRouter.get('/options', async (req, res) => {
+  const data = await buildIbadahOptions(typeof req.query.cabangId === 'string' ? req.query.cabangId : null);
+  if (!data) throw BadRequest('cabangId wajib diisi.');
+  res.json({ success: true, data });
 });
 
 ibadahMonitorRouter.get('/', async (req, res) => {
+  const str = (k: string) => (typeof req.query[k] === 'string' ? (req.query[k] as string) : null);
+  res.json({ success: true, data: await buildIbadahMonitor({ ibadahId: str('ibadahId'), cabangId: str('cabangId'), tanggal: str('tanggal') }) });
+});
+
+/**
+ * Ringkasan langsung satu ibadah. Tanpa ibadahId → ibadah cabang yang sedang
+ * / akan berlangsung hari ini. Dipakai portal (JWT) & /public/monitor (kode akses).
+ */
+export async function buildIbadahMonitor(q: { ibadahId?: string | null; cabangId?: string | null; tanggal?: string | null }) {
   const now = Date.now();
-  const qIbadah = typeof req.query.ibadahId === 'string' && UUID_RE.test(req.query.ibadahId) ? req.query.ibadahId : null;
-  const qTanggal = typeof req.query.tanggal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.tanggal) ? req.query.tanggal : null;
+  const qIbadah = q.ibadahId && UUID_RE.test(q.ibadahId) ? q.ibadahId : null;
+  const qTanggal = q.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(q.tanggal) ? q.tanggal : null;
 
   // ---- tentukan ibadah & tanggal
   let ib: Awaited<ReturnType<typeof occurrencesOn>>[number] | null = null;
@@ -108,7 +120,7 @@ ibadahMonitorRouter.get('/', async (req, res) => {
     ib = found;
     tanggal = qTanggal ? new Date(`${qTanggal}T00:00:00.000Z`) : todayInTz(tzOr(found.cabang.timezone));
   } else {
-    const c = await cabangOf(req);
+    const c = await cabangById(q.cabangId);
     if (!c) throw BadRequest('Pilih cabang atau ibadah.');
     const tz = tzOr(c.timezone);
     tanggal = todayInTz(tz);
@@ -119,8 +131,7 @@ ibadahMonitorRouter.get('/', async (req, res) => {
     const next = withW.find(({ w }) => w.start.getTime() > now);
     ib = (running ?? next ?? withW[withW.length - 1])?.x ?? null;
     if (!ib) {
-      res.json({ success: true, data: { empty: true, cabang: { id: c.id, nama: c.nama }, tanggal: ymd(tanggal) } });
-      return;
+      return { empty: true as const, cabang: { id: c.id, nama: c.nama }, tanggal: ymd(tanggal) };
     }
   }
   const tz = tzOr(ib.cabang.timezone);
@@ -249,45 +260,9 @@ ibadahMonitorRouter.get('/', async (req, res) => {
     }),
   );
 
-  // Els App: pengguna aktif sekarang (seluruh app, semua cabang).
-  const act = activePresence();
-  const on = (re: RegExp) => act.filter((p) => p.route && re.test(p.route)).length;
-  const app = {
-    aktif: act.length,
-    tiket: on(/^\/(reservasi|tiket|my-reservasi)/),
-    alkitab: on(/^\/(bible|bible365)/),
-    worship: on(/^\/worship/),
-  };
-
-  // Sistem: 15 menit terakhir (ember di memori + DB).
-  const since = new Date(now - 15 * 60_000);
-  const recent = [
-    ...pendingRows().map((r) => ({ ...r, bucket: new Date(r.bucket) })),
-    ...(await prisma.apiMetric.findMany({
-      where: { bucket: { gte: since } },
-      select: { bucket: true, source: true, platform: true, method: true, route: true, count: true, c2xx: true, c4xx: true, c5xx: true, cNet: true, hist: true },
-    })),
-  ].filter((r) => r.source === 'server');
-  const hist = new Array(LATENCY_EDGES.length + 1).fill(0) as number[];
-  let tot = 0;
-  let c5 = 0;
-  let ckTot = 0;
-  let ckBad = 0;
-  for (const r of recent) {
-    tot += r.count;
-    c5 += r.c5xx;
-    r.hist.forEach((v, i) => (hist[i] = (hist[i] ?? 0) + (v ?? 0)));
-    if (/checkin/.test(r.route) && r.method === 'POST') {
-      ckTot += r.count;
-      ckBad += r.c5xx;
-    }
-  }
-  const system = {
-    requests15m: tot,
-    successPct: tot ? Math.round(((tot - c5) / tot) * 1000) / 10 : null,
-    p95Ms: percentileFromHist(hist, 0.95),
-    checkinSuccessPct: ckTot ? Math.round(((ckTot - ckBad) / ckTot) * 1000) / 10 : null,
-  };
+  // Els App (seluruh cabang) & kondisi sistem 15 menit terakhir.
+  const app = appActivity();
+  const system = await systemHealth(/\/(self-)?checkin$/);
 
   // ---- peringatan
   const alerts: { level: 'danger' | 'warning' | 'info'; text: string }[] = [];
@@ -302,10 +277,10 @@ ibadahMonitorRouter.get('/', async (req, res) => {
       alerts.push({ level: 'danger', text: `${k.belumDijemput} anak di ${k.nama} belum dijemput (${k.menitSejakSelesai} menit setelah selesai).` });
     }
   }
-  if (system.checkinSuccessPct != null && system.checkinSuccessPct < 98 && ckTot >= 10) {
+  if (system.checkinSuccessPct != null && system.checkinSuccessPct < 98 && system.checkinRequests >= 10) {
     alerts.push({ level: 'danger', text: `Check-in sering gagal: sukses ${system.checkinSuccessPct}% dalam 15 menit terakhir.` });
   }
-  if (system.p95Ms != null && system.p95Ms > 2000 && tot >= 30) {
+  if (system.p95Ms != null && system.p95Ms > 2000 && system.requests15m >= 30) {
     alerts.push({ level: 'warning', text: `Server melambat: p95 ${(system.p95Ms / 1000).toFixed(1)} dtk dalam 15 menit terakhir.` });
   }
   if (lastWeek && status === 'BERLANGSUNG' && now - start.getTime() >= 10 * 60_000 && lastWeek.hadirSaatIni >= 20) {
@@ -315,10 +290,8 @@ ibadahMonitorRouter.get('/', async (req, res) => {
     }
   }
 
-  res.json({
-    success: true,
-    data: {
-      empty: false,
+  return {
+      empty: false as const,
       updatedAt: new Date(now).toISOString(),
       tz,
       tanggal: ymd(tanggal),
@@ -359,6 +332,6 @@ ibadahMonitorRouter.get('/', async (req, res) => {
       app,
       system,
       alerts,
-    },
-  });
-});
+  };
+}
+

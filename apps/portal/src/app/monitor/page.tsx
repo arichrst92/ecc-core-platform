@@ -11,7 +11,7 @@
  *
  * Data: core-api /public/monitor/* (header X-Monitor-Token).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, Church, Expand, KeyRound, Loader2, LogOut, Minimize, RefreshCw, WifiOff } from 'lucide-react';
@@ -481,7 +481,7 @@ function BoardScreen({
   const data = q.data;
 
   return (
-    <div className="p-5 min-h-screen flex flex-col">
+    <div className="h-screen overflow-hidden flex flex-col px-5 pt-4 pb-3">
       <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-neutral-400">
         <span className="font-semibold text-neutral-300">{sel.jenis === 'ibadah' ? T.ibadah : T.event}</span>
         <span>· {sel.jenis === 'ibadah' && !sel.id ? T.autoLabel(sel.label) : sel.label}</span>
@@ -510,6 +510,7 @@ function BoardScreen({
         </div>
       </div>
 
+      <FitToScreen>
       {!data ? (
         q.isError ? (
           <div className="py-24 text-center text-red-400">{T.loadFailed}</div>
@@ -528,7 +529,68 @@ function BoardScreen({
       ) : (
         <EventBoard d={data as EventMonitorData} now={now} lang={lang} />
       )}
-      <PoweredByIdea className="mt-auto pt-6" />
+      </FitToScreen>
+      <PoweredByIdea className="shrink-0 pt-2" />
+    </div>
+  );
+}
+
+/**
+ * Papan selalu muat dalam satu layar (tanpa scroll vertikal): isi diperkecil
+ * (atau diperbesar di layar TV) proporsional mengikuti tinggi layar, lebarnya
+ * dikompensasi supaya tetap memenuhi layar. Di layar sangat kecil (skala
+ * < 0,55) kembali ke mode scroll biasa agar teks tetap terbaca.
+ */
+function FitToScreen({ children }: { children: React.ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const MIN = 0.55;
+  /** Layar TV besar: isi diperbesar sampai 1,35× supaya tidak banyak ruang kosong. */
+  const MAX = 1.35;
+
+  useLayoutEffect(() => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i) return;
+    let raf = 0;
+    const fit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const avail = o.clientHeight;
+        if (!avail) return;
+        let s = 1;
+        for (let k = 0; k < 5; k++) {
+          i.style.width = `${100 / s}%`;
+          const h = i.scrollHeight;
+          const next = Math.min(MAX, avail / Math.max(1, h));
+          if (Math.abs(next - s) < 0.004) {
+            s = next;
+            break;
+          }
+          s = next;
+        }
+        if (s < MIN) s = 1; // terlalu kecil → biarkan scroll
+        i.style.width = `${100 / s}%`;
+        setScale((prev) => (Math.abs(prev - s) < 0.004 ? prev : s));
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(o);
+    ro.observe(i);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+
+  const scrolling = scale === 1;
+  return (
+    <div ref={outer} className={`flex-1 min-h-0 ${scrolling ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+      <div ref={inner} style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: 'top left', width: `${100 / scale}%` }}>
+        {children}
+      </div>
     </div>
   );
 }

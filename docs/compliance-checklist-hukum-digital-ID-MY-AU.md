@@ -1,7 +1,7 @@
 # Checklist Kepatuhan Hukum Digital — Ekosistem Els App (Indonesia · Malaysia · Australia)
 
 **Cakupan:** Els App (iOS, Android, web), Portal admin, CKids, core-api, layar `/monitor`.
-**Per tanggal:** 29 Oktober 2026 (revisi 6 — implementasi No. 2, 5, 13, 14; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
+**Per tanggal:** 29 Oktober 2026 (revisi 7 — server ter-deploy 30 Okt 2026; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
 
 > **Bukan nasihat hukum.** Dokumen ini adalah daftar periksa teknis–operasional untuk membantu tim. Keputusan akhir (mis. penunjukan DPO, isi Kebijakan Privasi, dasar hukum pemrosesan) perlu dikonfirmasi dengan penasihat hukum di masing-masing negara.
 
@@ -39,10 +39,10 @@
 | No | Kewajiban | 🇮🇩 Indonesia | 🇲🇾 Malaysia | 🇦🇺 Australia | Status | Kondisi di sistem saat ini | Tindak lanjut | Prioritas | Pemilik |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | **Kebijakan Privasi & Syarat Layanan** dipublikasikan | Wajib (UU PDP Ps. 21, PP 33) | Wajib (Notice & Choice Principle) | Wajib (APP 1) | ✅ Sudah | **6 dokumen v3.0 tayang** (PRIVACY & TERMS × id/en/ms): pengendali data, server Indonesia, vendor, hak, retensi, DPO, regulator. Sisa kecil: DPO `[NAMA]` & judul "Notic" di PRIVACY/ms; klausul bahasa S&K ID/EN belum sebut BM | Rapikan sisa kecil; review LEGAL berkala | Rendah | LEGAL + IT |
-| 2 | **Persetujuan (consent) yang tercatat** | Wajib eksplisit, tertulis/terekam, untuk tujuan spesifik (Ps. 20–22) | Wajib; data sensitif butuh **persetujuan eksplisit** | Data sensitif butuh consent (APP 3.3) | ✅ Sudah | **Dibangun 29 Okt 2026** (aktif setelah deploy & rilis app): model `UserConsent` (versi S&K/Privasi, data sensitif, kelompok usia, platform, IP, waktu); centang saat daftar + layar setuju ulang (`ConsentGate`) bila versi `id` berubah; badge di Portal → detail jemaat | Rilis app; pantau cakupan persetujuan | Sedang | IT |
+| 2 | **Persetujuan (consent) yang tercatat** | Wajib eksplisit, tertulis/terekam, untuk tujuan spesifik (Ps. 20–22) | Wajib; data sensitif butuh **persetujuan eksplisit** | Data sensitif butuh consent (APP 3.3) | ✅ Sudah | **Aktif di server sejak 30 Okt 2026** (layar persetujuan tampil di app 2.4.4 & web): model `UserConsent` (versi S&K/Privasi, data sensitif, kelompok usia, platform, IP, waktu); centang saat daftar + layar setuju ulang (`ConsentGate`) bila versi `id` berubah; badge di Portal → detail jemaat | Rilis app; pantau cakupan persetujuan | Sedang | IT |
 | 3 | **Data sensitif: keyakinan agama** (keanggotaan gereja) | Bukan "data spesifik" eksplisit di UU PDP, tetap data pribadi | **Data sensitif** | **Sensitive information** | ✅ Sudah | Persetujuan eksplisit data sensitif (termasuk agama) wajib & tercatat (No. 2) | — | — | LEGAL + IT |
 | 4 | **Hak akses & koreksi data** | Wajib (Ps. 6–7) | Wajib (Access & Correction) | Wajib (APP 12–13) | ✅ Sudah | Jemaat melihat & mengubah profil sendiri di app (Ubah Profil, Keluarga) | — | — | — |
-| 5 | **Hak hapus / tarik persetujuan** | Wajib (Ps. 8–9) | Retention Principle; tarik persetujuan | Hapus/de-identifikasi bila tak diperlukan (APP 11.2) | ✅ Sudah | **Dibangun 29 Okt 2026** (aktif setelah deploy): Portal → Jemaat → **Hapus data permanen** (`POST /admin/jemaat/:id/purge`, ketik HAPUS PERMANEN) + akun nonaktif disamarkan otomatis setelah 3 th | SOP permintaan via privacy@ (3×24 jam) | Sedang | IT |
+| 5 | **Hak hapus / tarik persetujuan** | Wajib (Ps. 8–9) | Retention Principle; tarik persetujuan | Hapus/de-identifikasi bila tak diperlukan (APP 11.2) | ✅ Sudah | **Aktif sejak 30 Okt 2026**: Portal → Jemaat → **Hapus data permanen** (`POST /admin/jemaat/:id/purge`, ketik HAPUS PERMANEN) + akun nonaktif disamarkan otomatis setelah 3 th | SOP permintaan via privacy@ (3×24 jam) | Sedang | IT |
 | 6 | **Hak portabilitas / salinan data** | Hak memperoleh & memakai data (Ps. 13) | **Wajib sejak 1 Jun 2025** | Hak akses (APP 12) | 🟡 Sebagian | Tersedia **manual** via privacy@eccchurch.global (JSON/PDF) sesuai Kebijakan v3.0; belum ada tombol di app | Siapkan skrip ekspor manual; fitur "Unduh data saya" menyusul | Sedang | IT |
 | 7 | **Pengaturan privasi oleh pengguna** | Prinsip minimisasi & kontrol | Choice | APP 6 | ✅ Sudah | Pengaturan Privasi per data (siapa boleh melihat), opsi ditemukan via no HP, saklar analitik anonim | — | — | — |
 | 8 | **Notifikasi kebocoran data** | 3×24 jam ke subjek & Lembaga (Ps. 46) | **72 jam** ke Komisioner bila merugikan signifikan; ke subjek | Segera ke OAIC & individu (NDB) | ❌ Belum | Tenggat dijanjikan di Kebijakan v3.0 Bag. 13 (ID 3×24 jam, MY 72 jam, AU segera); **SOP internal belum ada** | Susun **SOP respons insiden** (deteksi → penilaian → notifikasi per negara) + kontak resmi | Tinggi | ORG + IT |
@@ -50,8 +50,8 @@
 | 10 | **Keamanan data teknis** | Wajib (Ps. 35–39) | Security Principle | APP 11 | ✅ Sudah (inti) | HTTPS, Helmet, JWT berumur pendek + rotasi refresh token, OTP, rate limit, RBAC per menu (Role Access), Audit Log, Master password Credential | Lihat No. 11–13 untuk celah | — | — |
 | 11 | **Enkripsi data sensitif saat disimpan** | Wajib sesuai risiko | Security Principle | APP 11 | 🟡 Sebagian | Database **tidak terenkripsi per kolom**; vault **Credential menyimpan password pihak ketiga tanpa enkripsi** (hanya digerbang master password) | Enkripsi kolom `credential` (AES-256-GCM, kunci di .env) & pertimbangkan enkripsi disk VPS | Tinggi | IT |
 | 12 | **Backup aman** | Wajib | Security | APP 11 | 🟡 Sebagian | Backup `pg_dump` tersedia di portal (Maintenance); file **belum dienkripsi** & disimpan di server yang sama | Enkripsi backup + simpan salinan di lokasi terpisah (off-site) dengan akses terbatas | Sedang | IT |
-| 13 | **Data biometrik (wajah)** | Data spesifik | **Data sensitif** (sejak 1 Apr 2025) | Sensitive info | ✅ Sudah | **Dibangun 29 Okt 2026** (aktif setelah deploy): migrasi `20261029180000_consent_purge_face` mengosongkan data wajah & telemetri wajah; `/auth/face/*` → 410 Gone | — | — | IT |
-| 14 | **Retensi data** | Wajib dimusnahkan bila tujuan selesai (Ps. 43–44) | Retention Principle | APP 11.2 | ✅ Sudah | **Dibangun 29 Okt 2026** (aktif setelah deploy): job harian `data-retention` — akun nonaktif >3 th & tamu tanpa kunjungan >3 th disamarkan (`dataPurgedAt`), bukti transfer dihapus 1 th setelah event (env `*_RETENTION_DAYS`, `DATA_RETENTION_ENABLED`) | — | — | ORG + IT |
+| 13 | **Data biometrik (wajah)** | Data spesifik | **Data sensitif** (sejak 1 Apr 2025) | Sensitive info | ✅ Sudah | **Aktif sejak 30 Okt 2026**: migrasi `20261029180000_consent_purge_face` mengosongkan data wajah & telemetri wajah; `/auth/face/*` → 410 Gone | — | — | IT |
+| 14 | **Retensi data** | Wajib dimusnahkan bila tujuan selesai (Ps. 43–44) | Retention Principle | APP 11.2 | ✅ Sudah | **Aktif sejak 30 Okt 2026**: job harian `data-retention` — akun nonaktif >3 th & tamu tanpa kunjungan >3 th disamarkan (`dataPurgedAt`), bukti transfer dihapus 1 th setelah event (env `*_RETENTION_DAYS`, `DATA_RETENTION_ENABLED`) | — | — | ORG + IT |
 | 15 | **Transfer data ke luar negeri** | Wajib setara/perlindungan memadai/persetujuan (Ps. 56) | Guideline 29 Apr 2025 (dasar hukum/TIA) | APP 8 | 🟡 Sebagian | Dijelaskan di Kebijakan v3.0: server **Indonesia**; SendGrid & Anthropic (AS); Fonnte & IDEA (ID) | DPA vendor (No. 16) | Sedang | ORG + LEGAL |
 | 16 | **Perjanjian dengan pemroses (vendor)** | Wajib (prosesor) | Processor terikat Security Principle | APP 8 / kontrak | ⚪ Konfirmasi | Belum ada DPA | DPA dengan IDEA, Fonnte, hosting; cek DPA standar SendGrid & Anthropic | Sedang | ORG + LEGAL |
 | 17 | **Catatan aktivitas pemrosesan & DPIA** | Wajib (rekam pemrosesan; DPIA untuk risiko tinggi) | Disarankan / bagian akuntabilitas | Disarankan (PIA) | ❌ Belum | Belum ada | Buat Record of Processing (RoPA) + DPIA untuk CKids, analitik, monitor | Sedang | ORG + IT |
@@ -121,6 +121,8 @@
 
 **Perubahan dari revisi 1:** No. 1, 6, 9, 15, 18 · A2 · MY-1, MY-4 · AU-2.
 
+**Revisi 7 (30 Okt 2026):** deploy server dicek — `sisa_wajah = 0`, job `data-retention` berjalan (0 data lewat masa simpan), `user_consent` siap (0, menunggu app 2.4.4). Dokumen legal sudah ditempel ulang.
+
 **Revisi 6:** dibangun persetujuan tercatat (No. 2, 3, A1), hapus data wajah (No. 13), hapus permanen & retensi otomatis (No. 5, 14, ID-4); status Sudah berlaku setelah deploy & rilis app.
 
 **Cek ulang (revisi 5):** placeholder & kurung siku hilang, No. 1 → Sudah; sisa kecil di PRIVACY/ms (nama DPO).
@@ -135,14 +137,13 @@
 
 | Urutan | Pekerjaan | Pemilik | Target |
 |---|---|---|---|
-| 1 | Deploy server (migrasi persetujuan, data wajah, retensi) & rilis app versi baru | IT | Nov 2026 |
+| 1 | Rilis app 2.4.4 & deploy Els App web (layar persetujuan); pantau jumlah persetujuan | IT | Nov 2026 |
 | 2 | SOP kebocoran data & SOP permintaan hak jemaat (3×24 jam) | ORG + DPO + IT | Nov 2026 |
-| 3 | Tempel ulang dokumen legal yang dirapikan (tanpa ubah Version) | IT | Nov 2026 |
-| 4 | Enkripsi vault Credential & backup | IT | Q1 2027 |
-| 5 | Fitur "Unduh data saya" & preferensi WA/email di app | IT | Q1 2027 |
-| 6 | DPA vendor, RoPA + DPIA (CKids, analitik, monitor) | ORG + LEGAL | Q1 2027 |
-| 7 | PP Tunas: verifikasi usia sesuai Permen teknis | IT | Saat Permen terbit |
-| 8 | Cek PSE (ID), ambang DPO Malaysia, status usaha kecil (AU), pantau aturan baru | ORG + LEGAL | Berkala |
+| 3 | Enkripsi vault Credential & backup | IT | Q1 2027 |
+| 4 | Fitur "Unduh data saya" & preferensi WA/email di app | IT | Q1 2027 |
+| 5 | DPA vendor, RoPA + DPIA (CKids, analitik, monitor) | ORG + LEGAL | Q1 2027 |
+| 6 | PP Tunas: verifikasi usia sesuai Permen teknis | IT | Saat Permen terbit |
+| 7 | Cek PSE (ID), ambang DPO Malaysia, status usaha kecil (AU), pantau aturan baru | ORG + LEGAL | Berkala |
 
 ---
 

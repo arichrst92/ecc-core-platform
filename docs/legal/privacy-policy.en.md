@@ -159,11 +159,11 @@ We may also disclose information where **required by law** or requested by a law
 |---|---|
 | **Be informed** about processing | This policy, or ask privacy@eccchurch.global |
 | **Access & correct** your data | Profile / Edit Profile / Family in the app |
-| **Receive a copy (portability)** | Email privacy@eccchurch.global; we send it in a readable format (JSON/PDF) |
+| **Receive a copy (portability)** | Settings → Privacy → **Download my data** (JSON file), or email privacy@eccchurch.global |
 | **Delete your data / account** | Settings → **Delete Account** (account deactivated), or request **permanent deletion** at privacy@eccchurch.global |
 | **Withdraw consent** | Settings → Privacy (e.g. analytics), or email us |
 | **Control who sees your data** | Settings → **Privacy** |
-| **Stop non-essential WhatsApp/email** (reminders, greetings, announcements) | Email privacy@eccchurch.global or contact your branch admin; security messages (OTP) are still sent |
+| **Stop non-essential WhatsApp/email** (reminders, greetings, announcements) | Settings → Privacy → **WhatsApp messages**, or email privacy@eccchurch.global; security messages (OTP) are still sent |
 | **Object or complain** | See Section 14 |
 
 **Response times:** we respond **within 3×24 hours** for users in Indonesia as required by the PDP Law, within **21 days** for access requests in Malaysia, and within **30 days** in Australia. We may need to verify your identity first.
@@ -191,7 +191,7 @@ We may also disclose information where **required by law** or requested by a law
 - Role-based access (*Role Access*) — people only see what their role requires.
 - Activity logs for every admin change.
 - Login rate limiting and system monitoring.
-- Regular backups with restricted access.
+- Credential vault contents and regular backups are stored **encrypted (AES-256)** with restricted access.
 
 No system is 100% secure. If you suspect your account is being misused, contact support@eccchurch.global immediately.
 

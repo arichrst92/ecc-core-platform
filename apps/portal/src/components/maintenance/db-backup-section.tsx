@@ -32,6 +32,7 @@ interface BackupFile {
   size: number;
   createdAt: string;
   kind: 'manual' | 'pre-restore' | 'upload';
+  encrypted?: boolean;
 }
 interface DbJob {
   id: string;
@@ -211,6 +212,15 @@ export function DbBackupSection() {
                   <td className="px-5 py-2.5 font-mono text-xs break-all">{f.name}</td>
                   <td className="px-5 py-2.5">
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${KIND_LABEL[f.kind].cls}`}>{KIND_LABEL[f.kind].label}</span>
+                    {f.encrypted ? (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700" title="Terenkripsi AES-256-GCM — butuh DATA_ENCRYPTION_KEY untuk dibuka">
+                        Terenkripsi
+                      </span>
+                    ) : (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700" title="Belum terenkripsi — set DATA_ENCRYPTION_KEY di server">
+                        Belum terenkripsi
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-2.5 text-right tabular-nums">{fmtSize(f.size)}</td>
                   <td className="px-5 py-2.5 text-neutral-600 whitespace-nowrap">{fmtDT(f.createdAt)}</td>

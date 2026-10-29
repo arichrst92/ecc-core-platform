@@ -13,9 +13,12 @@
  * Untuk skala lebih besar, pindah ke external cron (k8s CronJob).
  */
 import { runDataRetention } from './data-purge.js';
+import { encryptLegacyCredentials } from './credential-crypto.js';
+import { encryptLegacyBackups } from './db-backup.js';
 import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
 import { getConfig, renderTemplate } from './wa-notif.js';
+import { waAllowedForJemaat } from './comm-prefs.js';
 import { logger } from './logger.js';
 import { flushApiMetrics } from './api-metrics.js';
 import { samplePresence } from './telemetry.js';
@@ -132,7 +135,7 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
   let skipped = 0;
 
   for (const r of reservasis) {
-    if (!r.jemaat.isActive || !r.jemaat.noHp) {
+    if (!r.jemaat.isActive || !r.jemaat.noHp || !(await waAllowedForJemaat(r.jemaatId, 'IBADAH_REMINDER_H1'))) {
       skipped++;
       continue;
     }
@@ -252,7 +255,7 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
   let skipped = 0;
 
   for (const p of participations) {
-    if (!p.jemaat.isActive || !p.jemaat.noHp) {
+    if (!p.jemaat.isActive || !p.jemaat.noHp || !(await waAllowedForJemaat(p.jemaatId, 'EVENT_REMINDER_H1'))) {
       skipped++;
       continue;
     }
@@ -378,6 +381,10 @@ export async function dispatchBirthdayGreetings(): Promise<{
   let skipped = 0;
   for (const r of rows) {
     if (!r.no_hp || !r.tanggal_lahir) {
+      skipped++;
+      continue;
+    }
+    if (!(await waAllowedForJemaat(r.id, 'BIRTHDAY_GREETING'))) {
       skipped++;
       continue;
     }
@@ -517,6 +524,8 @@ export function startScheduledJobs() {
     void birthdayJob();
     void analyticsCleanupJob();
     void dataRetentionJob();
+    void wrap('encrypt-legacy-credentials', async () => ({ encrypted: await encryptLegacyCredentials() }))();
+    void wrap('encrypt-legacy-backups', async () => ({ encrypted: await encryptLegacyBackups() }))();
   }, STARTUP_DELAY_MS);
 
   const h1 = setInterval(() => void refreshTokenJob(), REFRESH_TOKEN_INTERVAL_MS);

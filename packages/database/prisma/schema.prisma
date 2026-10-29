@@ -2061,12 +2061,13 @@ model Credential {
   id              String   @id @default(uuid()) @db.Uuid
   // Display name — wajib supaya bisa di-list + di-search.
   nama            String   @db.VarChar(255)
-  email           String?  @db.VarChar(255)
-  username        String?  @db.VarChar(255)
+  // Kolom rahasia di bawah disimpan terenkripsi (AES-256-GCM, lib/crypto-at-rest).
+  email           String?  @db.Text
+  username        String?  @db.Text
   // Free format (boleh + atau tanpa +, bisa berisi label "+62...(WA bisnis)")
-  noHpTerdaftar   String?  @map("no_hp_terdaftar") @db.VarChar(100)
+  noHpTerdaftar   String?  @map("no_hp_terdaftar") @db.Text
   linkAkses       String?  @map("link_akses") @db.Text
-  recoveryEmail   String?  @map("recovery_email") @db.VarChar(255)
+  recoveryEmail   String?  @map("recovery_email") @db.Text
   // Catatan bebas — password, 2FA backup codes, tips login, dll.
   catatan         String?  @db.Text
   createdByUserId String?  @map("created_by_user_id") @db.Uuid
@@ -3253,6 +3254,10 @@ model JemaatPrivacy {
   jemaatId            String   @id @map("jemaat_id") @db.Uuid
   settings            Json     @default("{}")
   discoverableByPhone Boolean  @default(true) @map("discoverable_by_phone")
+  // Preferensi pesan WhatsApp non-wajib (kepatuhan no. 19). OTP/tautan login selalu dikirim.
+  waReminders         Boolean  @default(true) @map("wa_reminders") // pengingat ibadah & event H-1
+  waGreetings         Boolean  @default(true) @map("wa_greetings") // ucapan ulang tahun
+  waUpdates           Boolean  @default(true) @map("wa_updates") // info aktivitas (group, event, pelayanan, keluarga)
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)

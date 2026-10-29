@@ -11,6 +11,7 @@
 import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
 import { logger } from './logger.js';
+import { waAllowedForNoHp } from './comm-prefs.js';
 
 /** Known WA notif types — subset untuk type safety. String bebas tetap OK. */
 export type WaNotifType =
@@ -93,6 +94,11 @@ export async function sendWaIfEnabled(
   try {
     const cfg = await getConfig(type);
     if (!cfg || !cfg.isEnabled || !cfg.template.trim()) return;
+    // Hormati preferensi jemaat (Pengaturan → Privasi → Pesan WhatsApp).
+    if (!(await waAllowedForNoHp(noHp, type))) {
+      logger.info({ type }, '[wa-notif] dilewati — jemaat menonaktifkan jenis pesan ini');
+      return;
+    }
 
     const message = renderTemplate(cfg.template, vars);
     const result = await sendWhatsAppText(noHp, message);

@@ -12,14 +12,20 @@
  * Job berjalan async (spawn child process) dengan status di memori; portal
  * mem-poll status. Butuh `pg_dump` / `pg_restore` (paket postgresql-client)
  * dengan versi ≥ versi server PostgreSQL.
+ *
+ * Enkripsi (kepatuhan no. 12): bila DATA_ENCRYPTION_KEY di-set, setiap file
+ * backup disimpan terenkripsi AES-256-GCM (header ECCENC1). File diunduh
+ * tetap terenkripsi — aman disimpan di luar server. Saat restore file
+ * didekripsi sementara lalu langsung dihapus.
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
+import { mkdir, readdir, rename, stat, unlink, utimes } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { prisma } from '@ecc/database';
 import { logger } from './logger.js';
+import { decryptFile, encryptFile, encryptionEnabled, isEncryptedFile } from './crypto-at-rest.js';
 
 export const BACKUP_DIR = process.env.DB_BACKUP_DIR || path.join(os.homedir(), 'ecc-db-backups');
 const BACKUP_RE = /^[A-Za-z0-9._-]+\.(dump|backup)$/;
@@ -55,6 +61,7 @@ export interface BackupFile {
   size: number;
   createdAt: string;
   kind: 'manual' | 'pre-restore' | 'upload';
+  encrypted: boolean;
 }
 
 export async function listBackups(): Promise<BackupFile[]> {
@@ -62,9 +69,11 @@ export async function listBackups(): Promise<BackupFile[]> {
   const names = (await readdir(BACKUP_DIR)).filter(isSafeBackupName);
   const files = await Promise.all(
     names.map(async (name) => {
-      const st = await stat(path.join(BACKUP_DIR, name));
+      const full = path.join(BACKUP_DIR, name);
+      const st = await stat(full);
       const kind: BackupFile['kind'] = name.includes('_pre-restore') ? 'pre-restore' : name.startsWith('upload_') ? 'upload' : 'manual';
-      return { name, size: st.size, createdAt: st.mtime.toISOString(), kind };
+      const encrypted = await isEncryptedFile(full).catch(() => false);
+      return { name, size: st.size, createdAt: st.mtime.toISOString(), kind, encrypted };
     }),
   );
   return files.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -141,8 +150,52 @@ export async function toolVersions(): Promise<{ pgDump: string | null; pgRestore
 async function dumpTo(name: string, job: DbJob): Promise<string> {
   await mkdir(BACKUP_DIR, { recursive: true });
   const file = path.join(BACKUP_DIR, name);
-  await run('pg_dump', ['--format=custom', '--no-owner', '--no-privileges', `--file=${file}`, `--dbname=${pgConnUrl()}`], job);
+  if (!encryptionEnabled()) {
+    await run('pg_dump', ['--format=custom', '--no-owner', '--no-privileges', `--file=${file}`, `--dbname=${pgConnUrl()}`], job);
+    return name;
+  }
+  // Dump ke file sementara → enkripsi → hapus file sementara.
+  const tmp = `${file}.plain.tmp`;
+  try {
+    await run('pg_dump', ['--format=custom', '--no-owner', '--no-privileges', `--file=${tmp}`, `--dbname=${pgConnUrl()}`], job);
+    job.log.push('Mengenkripsi file backup (AES-256-GCM)');
+    await encryptFile(tmp, file);
+  } finally {
+    await unlink(tmp).catch(() => {});
+  }
   return name;
+}
+
+/** File siap dipakai pg_restore: dekripsi sementara bila terenkripsi. */
+async function plainCopyFor(file: string, job: DbJob): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  if (!(await isEncryptedFile(file))) return { path: file, cleanup: async () => {} };
+  const tmp = path.join(BACKUP_DIR, `restore_${randomUUID()}.plain.tmp`);
+  job.log.push('Membuka enkripsi file backup');
+  await decryptFile(file, tmp);
+  return { path: tmp, cleanup: () => unlink(tmp).catch(() => {}) };
+}
+
+/** Sekali saat server start: enkripsi file backup lama yang belum terenkripsi. */
+export async function encryptLegacyBackups(): Promise<number> {
+  if (!encryptionEnabled()) return 0;
+  await mkdir(BACKUP_DIR, { recursive: true });
+  let n = 0;
+  for (const name of (await readdir(BACKUP_DIR)).filter(isSafeBackupName)) {
+    const full = path.join(BACKUP_DIR, name);
+    if (await isEncryptedFile(full).catch(() => true)) continue;
+    const st = await stat(full);
+    const tmp = `${full}.enc.tmp`;
+    try {
+      await encryptFile(full, tmp);
+      await rename(tmp, full);
+      await utimes(full, st.atime, st.mtime); // urutan daftar tetap
+      n++;
+    } catch (err) {
+      await unlink(tmp).catch(() => {});
+      logger.warn({ err, name }, '[db-backup] gagal mengenkripsi backup lama');
+    }
+  }
+  return n;
 }
 
 function newJob(kind: DbJobKind, byUserId: string | null): DbJob {
@@ -213,7 +266,9 @@ export function startRestore(fileName: string, byUserId: string | null): DbJob {
 
   (async () => {
     job.step = 'Memeriksa file backup';
-    await run('pg_restore', ['--list', file], job);
+    const plain = await plainCopyFor(file, job);
+    try {
+    await run('pg_restore', ['--list', plain.path], job);
 
     job.step = 'Membuat backup pengaman (pre-restore)';
     job.safetyBackup = await dumpTo(backupFileName(new Date(), 'pre-restore'), job);
@@ -227,7 +282,7 @@ export function startRestore(fileName: string, byUserId: string | null): DbJob {
       job.step = 'Memulihkan database (pg_restore)';
       await run(
         'pg_restore',
-        ['--clean', '--if-exists', '--no-owner', '--no-privileges', '--single-transaction', '--exit-on-error', `--dbname=${pgConnUrl()}`, file],
+        ['--clean', '--if-exists', '--no-owner', '--no-privileges', '--single-transaction', '--exit-on-error', `--dbname=${pgConnUrl()}`, plain.path],
         job,
       );
     } catch (e) {
@@ -238,6 +293,9 @@ export function startRestore(fileName: string, byUserId: string | null): DbJob {
     // Tabel maintenance_mode ikut ter-restore → set ulang ke kondisi sebelum restore.
     await setMaintenance(before?.isEnabled ?? false, before?.message ?? null, byUserId).catch(() => {});
     if (restoreErr) throw restoreErr;
+    } finally {
+      await plain.cleanup();
+    }
   })()
     .then(() => finish(job))
     .catch((e) => finish(job, e));

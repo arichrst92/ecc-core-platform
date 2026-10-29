@@ -159,11 +159,11 @@ Kami juga dapat mengungkapkan data bila **diwajibkan oleh hukum** atau atas perm
 |---|---|
 | **Mendapat informasi** tentang pemrosesan data | Kebijakan ini, atau tanya ke privacy@eccchurch.global |
 | **Melihat & memperbaiki** data | Menu Profil / Ubah Profil / Keluarga di aplikasi |
-| **Mendapat salinan data (portabilitas)** | Kirim permintaan ke privacy@eccchurch.global; kami kirimkan dalam format yang mudah dibaca (JSON/PDF) |
+| **Mendapat salinan data (portabilitas)** | Pengaturan → Privasi → **Unduh data saya** (file JSON), atau email privacy@eccchurch.global |
 | **Menghapus data / akun** | Pengaturan → **Hapus Akun** (akun dinonaktifkan), atau minta **penghapusan permanen** ke privacy@eccchurch.global |
 | **Menarik persetujuan** | Pengaturan → Privasi (mis. analitik), atau email kami |
 | **Membatasi siapa yang melihat data** | Pengaturan → **Privasi** |
-| **Berhenti menerima pesan WhatsApp/email non-wajib** (pengingat, ucapan, pengumuman) | Email privacy@eccchurch.global atau hubungi admin cabang; pesan keamanan (OTP) tetap dikirim |
+| **Berhenti menerima pesan WhatsApp/email non-wajib** (pengingat, ucapan, pengumuman) | Pengaturan → Privasi → **Pesan WhatsApp**, atau email privacy@eccchurch.global; pesan keamanan (OTP) tetap dikirim |
 | **Mengajukan keberatan atau keluhan** | Lihat Bagian 14 |
 
 **Batas waktu tanggapan:** kami akan menanggapi permintaan **paling lambat 3×24 jam** untuk pengguna di Indonesia sesuai UU PDP, **21 hari** untuk permintaan akses di Malaysia, dan **30 hari** di Australia. Kami dapat meminta verifikasi identitas sebelum memproses permintaan.
@@ -191,7 +191,7 @@ Kami juga dapat mengungkapkan data bila **diwajibkan oleh hukum** atau atas perm
 - Akses berdasarkan peran (*Role Access*) — setiap orang hanya melihat yang diperlukan untuk tugasnya.
 - Catatan aktivitas untuk setiap perubahan data oleh admin.
 - Pembatasan percobaan login dan pemantauan sistem.
-- Salinan cadangan (backup) rutin dengan akses terbatas.
+- Isi brankas kredensial dan salinan cadangan (backup) rutin disimpan **terenkripsi (AES-256)** dengan akses terbatas.
 
 Tidak ada sistem yang 100% aman. Jika Anda mencurigai akun Anda disalahgunakan, segera hubungi support@eccchurch.global.
 

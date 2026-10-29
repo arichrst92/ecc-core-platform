@@ -62,7 +62,7 @@ Menyediakan aplikasi (log masuk, tempahan, daftar masuk, keluarga, homecell, CKi
 
 Kami **tidak** menjual data, memaparkan iklan, menjejak anda merentas aplikasi lain, atau membuat keputusan automatik yang memberi kesan ketara kepada anda.
 
-**Pemasaran langsung:** anda berhak meminta kami berhenti menghantar mesej yang bukan wajib (peringatan, ucapan, pengumuman) dengan menghubungi privacy@eccchurch.global atau pentadbir cawangan.
+**Pemasaran langsung:** anda berhak meminta kami berhenti menghantar mesej yang bukan wajib (peringatan, ucapan, pengumuman) melalui **Settings → Privacy → WhatsApp messages** dalam aplikasi, atau dengan menghubungi privacy@eccchurch.global atau pentadbir cawangan.
 
 ---
 
@@ -102,9 +102,9 @@ Apabila anda mendaftarkan **tetamu**, pastikan mereka **mengetahui dan bersetuju
 |---|---|
 | Akses kepada data | Menu Profil dalam aplikasi atau e-mel privacy@eccchurch.global — **dijawab dalam 21 hari** |
 | Pembetulan data | Profil / Ubah Profil / Keluarga |
-| **Kemudahalihan data** | E-mel privacy@eccchurch.global; dihantar dalam format yang boleh dibaca (JSON/PDF) |
+| **Kemudahalihan data** | Settings → Privacy → **Download my data** (fail JSON), atau e-mel privacy@eccchurch.global |
 | Menarik balik persetujuan / memadam akaun | Tetapan → Privasi atau **Padam Akaun**, atau minta pemadaman kekal melalui e-mel |
-| Menghalang pemprosesan bagi pemasaran langsung | E-mel kami atau hubungi pentadbir cawangan |
+| Menghalang pemprosesan bagi pemasaran langsung | Settings → Privacy → **WhatsApp messages**, e-mel kami atau hubungi pentadbir cawangan |
 | Mengawal siapa melihat data | Tetapan → **Privasi** |
 
 ---
@@ -113,7 +113,7 @@ Apabila anda mendaftarkan **tetamu**, pastikan mereka **mengetahui dan bersetuju
 
 Data akaun disimpan selagi akaun aktif. Selepas akaun dipadam, data peribadi **dipadam atau dinyahkenal pasti secara kekal dalam tempoh 3 tahun**, atau lebih awal jika diminta. Resit bayaran disimpan sehingga 1 tahun selepas acara; log aktiviti 1 tahun; laporan ralat 30 hari; analitik tanpa nama kira-kira 13 bulan.
 
-Langkah keselamatan termasuk sambungan disulitkan (HTTPS/TLS), log masuk melalui OTP tanpa kata laluan, kawalan akses berasaskan peranan, log aktiviti, dan sandaran berkala dengan akses terhad.
+Langkah keselamatan termasuk sambungan disulitkan (HTTPS/TLS), log masuk melalui OTP tanpa kata laluan, kawalan akses berasaskan peranan, log aktiviti, dan sandaran berkala yang **disulitkan (AES-256)** dengan akses terhad.
 
 ---
 

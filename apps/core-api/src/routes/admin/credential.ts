@@ -12,6 +12,7 @@
  * Semua endpoint di-gate dengan `requireMasterAccess` middleware (kecuali
  * /unlock yg specifically verify password).
  */
+import { decryptCredential, encryptCredentialFields } from '../../lib/credential-crypto.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
@@ -63,24 +64,15 @@ credentialRouter.use(requireMasterAccess);
 
 credentialRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const where = q.search
-    ? {
-        OR: [
-          { nama: { contains: q.search, mode: 'insensitive' as const } },
-          { email: { contains: q.search, mode: 'insensitive' as const } },
-          { username: { contains: q.search, mode: 'insensitive' as const } },
-        ],
-      }
-    : {};
-  const [rows, total] = await Promise.all([
-    prisma.credential.findMany({
-      where,
-      skip: (q.page - 1) * q.limit,
-      take: q.limit,
-      orderBy: [{ [q.sortBy ?? 'nama']: q.sortOrder }],
-    }),
-    prisma.credential.count({ where }),
-  ]);
+  // Kolom rahasia terenkripsi → pencarian dilakukan setelah dekripsi
+  // (jumlah credential kecil, aman dilakukan di memori).
+  const all = (await prisma.credential.findMany({ orderBy: [{ [q.sortBy ?? 'nama']: q.sortOrder }] })).map(decryptCredential);
+  const term = q.search?.toLowerCase();
+  const filtered = term
+    ? all.filter((r) => [r.nama, r.email, r.username].some((v) => v?.toLowerCase().includes(term)))
+    : all;
+  const total = filtered.length;
+  const rows = filtered.slice((q.page - 1) * q.limit, q.page * q.limit);
   res.json({
     success: true,
     data: rows,
@@ -91,14 +83,14 @@ credentialRouter.get('/', async (req, res) => {
 credentialRouter.get('/:id', async (req, res) => {
   const row = await prisma.credential.findUnique({ where: { id: req.params.id } });
   if (!row) throw NotFound('Credential tidak ditemukan');
-  res.json({ success: true, data: row });
+  res.json({ success: true, data: decryptCredential(row) });
 });
 
 credentialRouter.post('/', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const input = createCredentialSchema.parse(req.body);
   const created = await prisma.credential.create({
-    data: { ...input, createdByUserId: req.user.sub },
+    data: { ...encryptCredentialFields(input), createdByUserId: req.user.sub },
   });
   audit(req, {
     action: 'CREATE',
@@ -108,7 +100,7 @@ credentialRouter.post('/', async (req, res) => {
     // PENTING: jangan log full after — content sensitive. Cuma nama + id.
     metadata: { kind: 'credential-create' },
   });
-  res.status(201).json({ success: true, data: created });
+  res.status(201).json({ success: true, data: decryptCredential(created) });
 });
 
 credentialRouter.patch('/:id', async (req, res) => {
@@ -135,7 +127,7 @@ credentialRouter.patch('/:id', async (req, res) => {
     throw BadRequest('Tidak ada field yang diubah.');
   }
 
-  const updated = await prisma.credential.update({ where: { id }, data });
+  const updated = await prisma.credential.update({ where: { id }, data: encryptCredentialFields(data) });
   audit(req, {
     action: 'UPDATE',
     resource: 'credential',
@@ -147,7 +139,7 @@ credentialRouter.patch('/:id', async (req, res) => {
       changedKeys: Object.keys(data),
     },
   });
-  res.json({ success: true, data: updated });
+  res.json({ success: true, data: decryptCredential(updated) });
 });
 
 credentialRouter.delete('/:id', async (req, res) => {

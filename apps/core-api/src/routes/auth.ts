@@ -1,3 +1,4 @@
+import { assertAgeAllowed, recordConsent } from '../lib/consent.js';
 import { Router, type Request } from 'express';
 import { prisma, Prisma } from '@ecc/database';
 import {
@@ -60,6 +61,16 @@ export const authRouter = Router();
 
 // Mount face telemetry sub-router di /auth/face/* (no auth, fire-and-forget).
 // Lihat docs/backend-request-face-confidence-threshold-and-telemetry.md.
+// Kepatuhan no. 13 — login wajah DIHENTIKAN. Semua endpoint /auth/face/*
+// (termasuk telemetri) menjawab 410 Gone dan data wajah sudah dihapus lewat
+// migrasi 20261029180000_consent_purge_face. Handler lama di bawah tidak
+// lagi terjangkau dan bisa dibuang di pembersihan berikutnya.
+authRouter.use('/face', (_req, res) => {
+  res.status(410).json({
+    success: false,
+    error: { code: 'GONE', message: 'Login wajah sudah dihentikan. Silakan masuk dengan OTP WhatsApp atau tautan email.' },
+  });
+});
 authRouter.use('/face', faceTelemetryRouter);
 
 // ============================================================
@@ -319,6 +330,10 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
  */
 authRouter.post('/register', registerLimiter, async (req, res) => {
   const input = registerJemaatSchema.parse(req.body);
+  // Batas usia (S&K 3.1 / PP Tunas) — dicek sebelum data apa pun dibuat.
+  if (input.consent) {
+    assertAgeAllowed(input.tanggalLahir ? new Date(input.tanggalLahir) : null, input.consent.ageGroup);
+  }
 
   // 1. Cek nomor belum terdaftar. Tamu (tanpa akun) → record-nya di-upgrade.
   const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
@@ -424,6 +439,11 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 
   // 8. Create User row (auth account)
   const user = await prisma.user.create({ data: { jemaatId: created.id } });
+
+  // 8b. Bukti persetujuan S&K + Kebijakan Privasi (kepatuhan no. 2)
+  if (input.consent) {
+    await recordConsent(prisma, req, created.id, input.consent, 'REGISTER');
+  }
 
   // 9. Optional foto profile (base64)
   if (input.fotoBase64) {

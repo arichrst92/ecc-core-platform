@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { consentAcceptSchema } from './consent.js';
 import { noHpSchema, uuidSchema } from './common.js';
 
 // ===== Request OTP =====
@@ -194,6 +195,9 @@ export const registerJemaatSchema = z
           'Pilihan jemaat tetap vs jemaat baru (default JEMAAT_TETAP). Backend ' +
           'auto-assign sub-role Jemaat:Jemaat Tetap atau Jemaat:New Comer.',
       }),
+    // Persetujuan S&K + Kebijakan Privasi saat daftar (opsional untuk
+    // kompatibilitas app lama; app lama diminta setuju di layar persetujuan).
+    consent: consentAcceptSchema.optional(),
   })
   .openapi('RegisterJemaatInput');
 export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;

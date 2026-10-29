@@ -217,6 +217,8 @@ model Jemaat {
   // gate access; field ini hanya untuk audit trail.
   deactivatedAt         DateTime? @map("deactivated_at")
   deactivationReason    String?   @map("deactivation_reason") @db.Text
+  // Data pribadi sudah dihapus/disamarkan permanen (retensi 3 th atau permintaan).
+  dataPurgedAt          DateTime? @map("data_purged_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
@@ -263,6 +265,7 @@ model Jemaat {
   homecellAttendance           HomecellAttendance[]          @relation("HomecellAttendanceJemaat")
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
   eventPartisipasi             EventParticipation[]          @relation("EventPartisipasi")
+  consents                     UserConsent[]
   eventApprovals               EventParticipation[]          @relation("EventApprover")
   eventVolunteer               EventPelayananPetugas[]       @relation("EventVolunteer")
   eventDonationApprovals       EventDonation[]               @relation("EventDonationApprover")
@@ -3723,4 +3726,33 @@ model PageViewDaily {
   @@index([installId, date])
   @@index([date])
   @@map("page_view_daily")
+}
+
+// ============================================================
+// UserConsent — bukti persetujuan S&K + Kebijakan Privasi (UU PDP Ps. 22,
+// PDPA MY, APP 3.3). Satu baris per persetujuan; persetujuan terbaru yang
+// versinya = versi dokumen 'id' yang sedang terbit dianggap berlaku.
+// ============================================================
+model UserConsent {
+  id             String   @id @default(uuid()) @db.Uuid
+  jemaatId       String   @map("jemaat_id") @db.Uuid
+  termsVersion   String   @map("terms_version") @db.VarChar(20)
+  privacyVersion String   @map("privacy_version") @db.VarChar(20)
+  // Persetujuan eksplisit untuk data sensitif (keyakinan agama, data anak, dll).
+  sensitiveData  Boolean  @default(false) @map("sensitive_data")
+  // ADULT | MINOR_WITH_GUARDIAN (13–<18 dengan izin orang tua/wali)
+  ageGroup       String?  @map("age_group") @db.VarChar(24)
+  // REGISTER | RECONSENT
+  source         String   @db.VarChar(20)
+  language       String?  @db.VarChar(5)
+  platform       String?  @db.VarChar(20)
+  appVersion     String?  @map("app_version") @db.VarChar(20)
+  ipAddress      String?  @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.Text
+  acceptedAt     DateTime @default(now()) @map("accepted_at")
+
+  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([jemaatId, acceptedAt])
+  @@map("user_consent")
 }

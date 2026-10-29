@@ -1,6 +1,6 @@
 # Notis Privasi Els App
 
-**Versi 3.0** · Berkuat kuasa apabila diterbitkan dalam aplikasi (draf 29 Oktober 2026)
+**Versi 3.0**
 **Terpakai kepada:** Els App (iOS, Android dan web di elsapp.eccchurch.global), Portal ECC, CKids, skrin monitor dan laman web eccchurch.global
 **Sebelum ini:** Versi 2.0 — 23 Ogos 2026
 
@@ -21,7 +21,7 @@
 
 ## 1. Siapa kami
 
-Notis ini dikeluarkan oleh **Elshaddai Creative Community** ("ECC", "kami", "gereja"), [NAMA ENTITI SAH & ALAMAT BERDAFTAR], sebagai **pengawal data** bagi Els App dan perkhidmatan berkaitan. Aplikasi ini dibangunkan dan diselenggara oleh **IDEA** sebagai **pemproses data** bagi pihak ECC.
+Notis ini dikeluarkan oleh **Elshaddai Creative Community** ("ECC", "kami", "gereja"), Gereja Elshaddai Injil Sepenuh, Jl. Pungkur No. 216B, Bandung, Indonesia, sebagai **pengawal data** bagi Els App dan perkhidmatan berkaitan. Aplikasi ini dibangunkan dan diselenggara oleh **IDEA** sebagai **pemproses data** bagi pihak ECC.
 
 ---
 
@@ -42,7 +42,7 @@ Notis ini dikeluarkan oleh **Elshaddai Creative Community** ("ECC", "kami", "ger
 
 **Kebenaran peranti** (hanya semasa ciri digunakan): lokasi untuk daftar masuk sendiri dan mencari homecell terdekat (**tidak disimpan**), kamera untuk imbasan QR, galeri untuk memuat naik/menyimpan gambar, kalendar untuk menambah jadual (**tidak dibaca**), dan pemberitahuan untuk peringatan Bible 365.
 
-**Kami tidak mengumpul:** senarai kenalan, nombor kad kredit/debit, atau data biometrik. Ciri log masuk wajah telah **dihentikan** dan data wajah yang pernah disimpan sedang dipadam secara kekal.
+**Kami tidak mengumpul:** senarai kenalan, nombor kad kredit/debit, atau data biometrik. Ciri log masuk wajah telah **dihentikan** dan data wajah yang pernah disimpan telah dipadam secara kekal.
 
 ---
 
@@ -74,7 +74,7 @@ Kami **tidak** menjual data, memaparkan iklan, menjejak anda merentas aplikasi l
 - **Pentadbir & sepenuh masa gereja** — mengikut kebenaran peranan; setiap akses direkodkan.
 - **Skrin monitor & laporan** — hanya **jumlah agregat**.
 
-**Pembekal perkhidmatan:** penyedia pelayan ECC ([LOKASI PELAYAN — cth. Indonesia]); Fonnte (WhatsApp, Indonesia); SendGrid / Twilio Inc. (e-mel, Amerika Syarikat); Anthropic (pembantu AI "Elsa" dalam Portal pentadbir, Amerika Syarikat); Apple App Store / Google Play; IDEA (pembangun, Indonesia).
+**Pembekal perkhidmatan:** penyedia pelayan ECC (Indonesia); Fonnte (WhatsApp, Indonesia); SendGrid / Twilio Inc. (e-mel, Amerika Syarikat); Anthropic (pembantu AI "Elsa" dalam Portal pentadbir, Amerika Syarikat); Apple App Store / Google Play; IDEA (pembangun, Indonesia).
 
 ---
 
@@ -126,7 +126,7 @@ Jika berlaku pelanggaran data peribadi yang menyebabkan atau mungkin menyebabkan
 ## 12. Hubungi kami & aduan
 
 **Pegawai Perlindungan Data**
-[NAMA] — Elshaddai Creative Community
+Caroline Gugun Hartanti — Elshaddai Creative Community
 E-mel: **privacy@eccchurch.global**
 
 Jika aduan anda tidak diselesaikan, anda boleh menghubungi **Jabatan Perlindungan Data Peribadi / Pesuruhjaya Perlindungan Data Peribadi** (www.pdp.gov.my).
@@ -139,4 +139,4 @@ Perubahan penting akan dimaklumkan dalam aplikasi atau melalui e-mel **sekurang-
 
 ---
 
-**Versi 3.0** · Draf 29 Oktober 2026
+**Versi 3.0**

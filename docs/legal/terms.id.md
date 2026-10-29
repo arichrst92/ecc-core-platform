@@ -1,6 +1,6 @@
 # Syarat & Ketentuan Els App
 
-**Versi 3.0** · Berlaku sejak dipublikasikan di aplikasi (draf 29 Oktober 2026)
+**Versi 3.0**
 **Berlaku untuk:** Els App (iOS, Android, web elsapp.eccchurch.global), Portal ECC, CKids, layar monitor, dan website eccchurch.global
 **Sebelumnya:** Versi 2.0 — 23 Agustus 2026
 
@@ -16,7 +16,7 @@ Jika Anda tidak setuju, mohon tidak menggunakan Aplikasi.
 
 ## 2. Tentang layanan
 
-Els App adalah aplikasi resmi jemaat **Elshaddai Creative Community** ("ECC", "gereja", "kami"), [NAMA BADAN HUKUM & ALAMAT], yang dikembangkan oleh IDEA. Fitur utama meliputi:
+Els App adalah aplikasi resmi jemaat **Elshaddai Creative Community** ("ECC", "gereja", "kami"), Gereja Elshaddai Injil Sepenuh, Jl. Pungkur No. 216B, Bandung, Indonesia, yang dikembangkan oleh IDEA. Fitur utama meliputi:
 
 - Jadwal ibadah, reservasi, tiket, dan check-in
 - Event gereja (pendaftaran, tiket, pembayaran)
@@ -160,7 +160,7 @@ Perubahan penting akan diberitahukan melalui Aplikasi atau email **minimal 14 ha
 - **Keterpisahan:** jika satu ketentuan tidak sah, ketentuan lain tetap berlaku.
 - **Pengalihan:** Anda tidak dapat mengalihkan hak/kewajiban dalam S&K ini.
 - **Keseluruhan perjanjian:** S&K ini bersama Kebijakan Privasi merupakan keseluruhan perjanjian terkait layanan.
-- **Bahasa:** S&K tersedia dalam Bahasa Indonesia dan English. Bila ada perbedaan, versi Bahasa Indonesia yang berlaku, kecuali hukum setempat menentukan lain.
+- **Bahasa:** S&K tersedia dalam Bahasa Indonesia, English, dan Bahasa Melayu. Bila ada perbedaan, versi Bahasa Indonesia yang berlaku, kecuali hukum setempat menentukan lain.
 
 ---
 
@@ -174,5 +174,5 @@ Website: https://eccchurch.global
 
 ---
 
-**Versi 3.0** · Draf 29 Oktober 2026
+**Versi 3.0**
 Riwayat: Versi 2.0 — 23 Agustus 2026 · Versi 1.0 — 22 Mei 2026

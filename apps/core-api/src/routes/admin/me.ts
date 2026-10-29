@@ -56,6 +56,7 @@ import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { mePrivacyRouter } from './me-privacy.js';
+import { meConsentRouter } from './me-consent.js';
 import { meSpiritualJourneyRouter } from './me-spiritual-journey.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
@@ -79,6 +80,7 @@ meRouter.use('/visits', meVisitRouter);
 // Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
 meRouter.use('/homecell', meHomecellRouter);
 meRouter.use('/privacy', mePrivacyRouter);
+meRouter.use('/consent', meConsentRouter);
 meRouter.use('/spiritual-journey', meSpiritualJourneyRouter);
 // Self check-in ibadah (saya + keluarga) → me-ibadah.ts
 meRouter.use('/ibadah', meIbadahRouter);

@@ -12,6 +12,7 @@
  * dedup-by-unique-key membuat aman idempotent — hanya boros query.
  * Untuk skala lebih besar, pindah ke external cron (k8s CronJob).
  */
+import { runDataRetention } from './data-purge.js';
 import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
 import { getConfig, renderTemplate } from './wa-notif.js';
@@ -450,6 +451,7 @@ export async function cleanupAnalytics() {
 }
 
 const intervalHandles: NodeJS.Timeout[] = [];
+const DATA_RETENTION_ENABLED = process.env.DATA_RETENTION_ENABLED !== 'false';
 
 export function startScheduledJobs() {
   if (started) {
@@ -499,6 +501,10 @@ export function startScheduledJobs() {
   });
 
   const analyticsCleanupJob = wrap('cleanup-analytics', cleanupAnalytics);
+  // Kepatuhan no. 5 & 14 — retensi data pribadi (akun nonaktif 3 th, tamu 3 th,
+  // bukti transfer 1 th setelah event). Matikan dengan DATA_RETENTION_ENABLED=false.
+  const dataRetentionJob = wrap('data-retention', async () =>
+    DATA_RETENTION_ENABLED ? runDataRetention() : { skipped: true, reason: 'disabled' });
 
   // Initial run (delayed) untuk semua job.
   setTimeout(() => {
@@ -510,6 +516,7 @@ export function startScheduledJobs() {
     void diagnosticsErrorJob();
     void birthdayJob();
     void analyticsCleanupJob();
+    void dataRetentionJob();
   }, STARTUP_DELAY_MS);
 
   const h1 = setInterval(() => void refreshTokenJob(), REFRESH_TOKEN_INTERVAL_MS);
@@ -528,7 +535,8 @@ export function startScheduledJobs() {
     flushApiMetrics().catch((err) => logger.warn({ err }, 'flush-api-metrics failed'));
   }, 60_000);
   const h9 = setInterval(() => void analyticsCleanupJob(), AUDIT_LOG_INTERVAL_MS);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9]) {
+  const h10 = setInterval(() => void dataRetentionJob(), AUDIT_LOG_INTERVAL_MS);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10]) {
     h.unref?.();
     intervalHandles.push(h);
   }

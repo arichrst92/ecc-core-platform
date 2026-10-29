@@ -1,3 +1,4 @@
+import { purgeJemaatPersonalData } from '../../lib/data-purge.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '@ecc/database';
@@ -6,7 +7,8 @@ import {
   updateJemaatSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
+import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { audit } from '../../lib/audit.js';
 import {
@@ -374,6 +376,11 @@ async function fetchJemaatForExport(where: any) {
         take: 3,
       },
       user: { select: { lastLoginAt: true } },
+      consents: {
+        orderBy: { acceptedAt: 'desc' },
+        take: 1,
+        select: { termsVersion: true, privacyVersion: true, ageGroup: true, source: true, platform: true, acceptedAt: true },
+      },
     },
   });
 }
@@ -1633,6 +1640,25 @@ jemaatRouter.patch('/:id', async (req, res) => {
   const updated = await prisma.jemaat.update({ where: { id: req.params.id }, data });
   audit(req, { action: 'UPDATE', resource: 'jemaat', resourceId: updated.id, resourceLabel: updated.namaLengkap, before, after: updated });
   res.json({ success: true, data: updated });
+});
+
+// Kepatuhan no. 5 — hapus/samarkan data pribadi permanen atas permintaan
+// jemaat (Kebijakan Privasi Bag. 10). Baris tetap ada supaya statistik
+// kehadiran historis tidak berubah; nama/kontak/foto/catatan dihapus.
+jemaatRouter.post('/:id/purge', async (req, res) => {
+  const body = z.object({ confirmText: z.literal('HAPUS PERMANEN'), reason: z.string().trim().min(3).max(300) }).parse(req.body ?? {});
+  const before = await prisma.jemaat.findUnique({ where: { id: req.params.id }, select: { id: true, namaLengkap: true, kode: true, dataPurgedAt: true } });
+  if (!before) throw NotFound('Jemaat tidak ditemukan');
+  if (before.dataPurgedAt) throw Conflict('Data jemaat ini sudah dihapus permanen.');
+  await purgeJemaatPersonalData(before.id, `Permintaan jemaat: ${body.reason}`);
+  audit(req, {
+    action: 'DELETE',
+    resource: 'jemaat_personal_data',
+    resourceId: before.id,
+    resourceLabel: `Hapus data permanen: ${before.kode ?? before.id}`,
+    metadata: { reason: body.reason },
+  });
+  res.json({ success: true, data: { purged: true } });
 });
 
 jemaatRouter.delete('/:id', async (req, res) => {

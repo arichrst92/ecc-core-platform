@@ -41,6 +41,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
+import { PurgePersonalDataButton } from '@/components/jemaat/purge-personal-data';
 import { ResolusiSection } from '@/components/jemaat/resolusi-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
@@ -87,6 +88,8 @@ interface Jemaat {
   cabang?: { id: string; nama: string };
   jemaatRoles?: JemaatRoleAssignment[];
   user?: { lastLoginAt: string | null } | null;
+  dataPurgedAt?: string | null;
+  consents?: { termsVersion: string; privacyVersion: string; ageGroup: string | null; source: string; platform: string | null; acceptedAt: string }[];
 }
 
 interface RoleDetail {
@@ -259,6 +262,7 @@ export default function JemaatDetailPage() {
         >
           <ArrowLeft className="w-3 h-3" /> Kembali ke daftar jemaat
         </Link>
+        <div className="flex items-center gap-2">
         <button
           onClick={async () => {
             // Buka tab dulu di user-gesture context (iOS Safari popup fix)
@@ -288,6 +292,8 @@ export default function JemaatDetailPage() {
           <FileText className="w-4 h-4" />
           Export PDF
         </button>
+        {!j.dataPurgedAt && <PurgePersonalDataButton jemaatId={j.id} nama={j.namaLengkap} />}
+        </div>
       </div>
 
       {/* Profile header */}
@@ -345,6 +351,26 @@ export default function JemaatDetailPage() {
                 Nonaktif
               </span>
             )}
+            {j.dataPurgedAt ? (
+              <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700 border border-red-200">
+                Data pribadi dihapus {new Date(j.dataPurgedAt).toLocaleDateString('id-ID')}
+              </span>
+            ) : !j.isTamu && j.consents ? (
+              j.consents[0] ? (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-sky-50 text-sky-700 border border-sky-200"
+                  title={`S&K ${j.consents[0].termsVersion} · Privasi ${j.consents[0].privacyVersion}${j.consents[0].ageGroup === 'MINOR_WITH_GUARDIAN' ? ' · izin orang tua/wali' : ''} · ${j.consents[0].platform ?? ''}`}
+                >
+                  <Shield className="w-3 h-3" />
+                  Setuju S&K {new Date(j.consents[0].acceptedAt).toLocaleDateString('id-ID')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <Shield className="w-3 h-3" />
+                  Belum setuju S&K
+                </span>
+              )
+            ) : null}
           </div>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
             {j.noHp && (

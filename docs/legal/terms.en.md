@@ -1,6 +1,6 @@
 # Els App Terms & Conditions
 
-**Version 3.0** · Effective from publication in the app (draft 29 October 2026)
+**Version 3.0**
 **Applies to:** Els App (iOS, Android, web at elsapp.eccchurch.global), the ECC Portal, CKids, monitor screens and the eccchurch.global website
 **Previous:** Version 2.0 — 23 August 2026
 
@@ -16,7 +16,7 @@ If you do not agree, please do not use the App.
 
 ## 2. About the service
 
-Els App is the official member app of **Elshaddai Creative Community** ("ECC", "the church", "we"), [LEGAL ENTITY NAME & ADDRESS], developed by IDEA. Main features include:
+Els App is the official member app of **Elshaddai Creative Community** ("ECC", "the church", "we"), Gereja Elshaddai Injil Sepenuh, Jl. Pungkur No. 216B, Bandung, Indonesia, developed by IDEA. Main features include:
 
 - Service schedules, reservations, tickets and check-in
 - Church events (registration, tickets, payments)
@@ -160,7 +160,7 @@ Material changes will be notified in the App or by email **at least 14 days befo
 - **Severability:** if any provision is invalid, the rest remain in effect.
 - **Assignment:** you may not transfer your rights/obligations under these Terms.
 - **Entire agreement:** these Terms together with the Privacy Policy form the entire agreement regarding the service.
-- **Language:** these Terms are available in Bahasa Indonesia and English. If there is any inconsistency, the Bahasa Indonesia version prevails unless local law requires otherwise.
+- **Language:** these Terms are available in Bahasa Indonesia, English and Bahasa Melayu. If there is any inconsistency, the Bahasa Indonesia version prevails unless local law requires otherwise.
 
 ---
 
@@ -174,5 +174,5 @@ Website: https://eccchurch.global
 
 ---
 
-**Version 3.0** · Draft 29 October 2026
+**Version 3.0**
 History: Version 2.0 — 23 August 2026 · Version 1.0 — 22 May 2026

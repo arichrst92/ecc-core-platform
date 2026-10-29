@@ -1,6 +1,6 @@
 # Els App Privacy Policy
 
-**Version 3.0** · Effective from publication in the app (draft 29 October 2026)
+**Version 3.0**
 **Applies to:** Els App (iOS, Android and web at elsapp.eccchurch.global), the ECC Portal, CKids, monitor screens and the eccchurch.global website
 **Previous:** Version 2.0 — 23 August 2026
 
@@ -19,7 +19,7 @@
 
 ## 1. Who we are
 
-This policy is issued by **Elshaddai Creative Community** ("ECC", "we", "the church"), [LEGAL ENTITY NAME & REGISTERED ADDRESS], as the **data controller** for Els App and related services. The app is developed and maintained by **IDEA** as a **data processor** acting on ECC's instructions.
+This policy is issued by **Elshaddai Creative Community** ("ECC", "we", "the church"), Gereja Elshaddai Injil Sepenuh, Jl. Pungkur No. 216B, Bandung, Indonesia, as the **data controller** for Els App and related services. The app is developed and maintained by **IDEA** as a **data processor** acting on ECC's instructions.
 
 This policy is written to meet:
 - **Indonesia** — Law No. 27 of 2022 on Personal Data Protection (PDP Law) and its implementing regulations;
@@ -63,7 +63,7 @@ Users in Malaysia can read this policy in **Bahasa Melayu** and **English**.
 - Your device contacts.
 - Credit/debit card numbers (payments are handled by banks/payment providers).
 - Health information as a category. However, prayer requests you write may contain personal information — please share only what you are comfortable with.
-- **Biometric data:** face login has been **discontinued**. Face data previously stored by that feature is being permanently deleted. Face ID/fingerprint on your device is processed by the operating system and never sent to us.
+- **Biometric data:** face login has been **discontinued**. Face data previously stored by that feature has been permanently deleted. Face ID/fingerprint on your device is processed by the operating system and never sent to us.
 
 ---
 
@@ -140,7 +140,7 @@ We share only what is necessary with these service providers:
 
 | Provider | Data | Purpose | Location |
 |---|---|---|---|
-| ECC's server/hosting provider | All app data | Storage & operations | [SERVER LOCATION — e.g. Indonesia] |
+| ECC's server/hosting provider | All app data | Storage & operations | Indonesia |
 | Fonnte (WhatsApp messaging service) | Mobile number, message content | OTP & WhatsApp notifications | Indonesia |
 | SendGrid (Twilio Inc.) | Email address | Login links & notifications | United States |
 | Anthropic (AI assistant "Elsa" in the admin Portal) | Admin questions and church data relevant to the question | Helping admins prepare information & reports | United States |
@@ -210,7 +210,7 @@ If a data breach is likely to put you at risk, we will:
 ## 14. Contact & complaints
 
 **Data Protection Officer**
-[NAME] — Elshaddai Creative Community
+Caroline Gugun Hartanti — Elshaddai Creative Community
 Email: **privacy@eccchurch.global**
 General support: support@eccchurch.global · https://eccchurch.global/support
 
@@ -227,5 +227,5 @@ We may update this policy. Material changes will be notified in the app or by em
 
 ---
 
-**Version 3.0** · Draft 29 October 2026
+**Version 3.0**
 History: Version 2.0 — 23 August 2026 · Version 1.0 — 22 May 2026

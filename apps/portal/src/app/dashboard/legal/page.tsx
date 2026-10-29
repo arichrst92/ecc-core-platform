@@ -232,6 +232,12 @@ function Editor({
             placeholder="2026-05-22"
             className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-mono"
           />
+          {lang === 'id' && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              Mengubah Version versi Indonesia akan meminta <b>semua jemaat menyetujui ulang</b> di app.
+              Untuk perbaikan kecil (salah ketik), jangan ubah Version.
+            </p>
+          )}
         </div>
       </div>
 

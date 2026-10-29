@@ -47,7 +47,7 @@ Urutan:
 3. Keluarga, **Tamu** (→ Tamu Saya), **Group** (→ Group Saya), Homecell
 4. Ministry, (Area — PIC area saja), Visit, Local Market
 
-- Baris terakhir yang kurang diisi **placeholder gaya A** (kotak garis putus, non-interaktif, tidak dibaca screen reader). Jumlah = `(4 - n % 4) % 4`.
+- **Tanpa placeholder**: jumlah kolom mengikuti lebar layar (min 4, tile ±84px); layar lebar (tablet/web) menampilkan lebih banyak tile per baris, baris terakhir dibiarkan apa adanya.
 - Tile **Doa** membawa badge jumlah "belum didoakan" untuk petugas doa.
 - **Scanner** keluar dari grid → ikon di header Home, kiri ikon QR (hanya petugas scanner).
 - **Kalender** keluar dari grid → ikon di header **Profil**, kiri ikon Notif.

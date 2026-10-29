@@ -29,7 +29,7 @@ function parseKey(raw: string) {
 
 function parseLang(raw: string) {
   const result = legalLanguageSchema.safeParse(raw);
-  if (!result.success) throw BadRequest('Language tidak valid (id | en).');
+  if (!result.success) throw BadRequest('Language tidak valid (id | en | ms).');
   return result.data;
 }
 

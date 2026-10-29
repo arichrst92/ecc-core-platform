@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 
 type LegalKey = 'TERMS' | 'PRIVACY';
-type LegalLang = 'id' | 'en';
+type LegalLang = 'id' | 'en' | 'ms';
 
 interface LegalDoc {
   id: string;
@@ -32,6 +32,7 @@ const KEY_LABEL: Record<LegalKey, string> = {
 const LANG_LABEL: Record<LegalLang, string> = {
   id: 'Bahasa Indonesia',
   en: 'English',
+  ms: 'Bahasa Melayu',
 };
 
 function todayIso() {
@@ -56,7 +57,7 @@ export default function LegalPage() {
   const docMap = new Map<string, LegalDoc>();
   for (const d of docs) docMap.set(`${d.key}/${d.language}`, d);
   const currentDoc = docMap.get(`${activeKey}/${activeLang}`);
-  const hasEn = (key: LegalKey) => docMap.has(`${key}/en`);
+  const hasLang = (key: LegalKey, l: LegalLang) => docMap.has(`${key}/${l}`);
 
   return (
     <div>
@@ -95,7 +96,7 @@ export default function LegalPage() {
         {/* Sub-tabs: language */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-100 bg-neutral-50/50">
           <span className="text-xs text-neutral-500 mr-2">Bahasa:</span>
-          {(['id', 'en'] as LegalLang[]).map((l) => (
+          {(['id', 'en', 'ms'] as LegalLang[]).map((l) => (
             <button
               key={l}
               onClick={() => setActiveLang(l)}
@@ -109,7 +110,7 @@ export default function LegalPage() {
               {l === 'id' && (
                 <span className="ml-1 text-[10px] opacity-70">(wajib)</span>
               )}
-              {l === 'en' && !hasEn(activeKey) && (
+              {l !== 'id' && !hasLang(activeKey, l) && (
                 <span className="ml-1 text-[10px] opacity-70">(belum ada)</span>
               )}
             </button>
@@ -200,12 +201,12 @@ function Editor({
 
   return (
     <div className="p-6 space-y-4">
-      {isEmpty && lang === 'en' && (
+      {isEmpty && lang !== 'id' && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded-lg flex items-start gap-2">
           <Plus className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>
-            Versi English belum ada. Kalau di-skip, mobile akan fallback ke
-            versi Bahasa Indonesia. Untuk publish, isi field & klik Simpan.
+            Versi {LANG_LABEL[lang]} belum ada. Kalau di-skip, mobile akan fallback ke
+            {lang === 'ms' ? ' versi English, lalu' : ''} versi Bahasa Indonesia. Untuk publish, isi field & klik Simpan.
           </span>
         </div>
       )}
@@ -263,13 +264,13 @@ function Editor({
       </label>
 
       <div className="flex items-center justify-between pt-4 border-t border-neutral-100">
-        {existing && lang === 'en' ? (
+        {existing && lang !== 'id' ? (
           <button
             onClick={() => setDeleting(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"
           >
             <Trash2 className="w-4 h-4" />
-            Hapus versi English
+            Hapus versi {LANG_LABEL[lang]}
           </button>
         ) : (
           <span />

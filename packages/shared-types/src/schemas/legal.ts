@@ -1,7 +1,7 @@
 /**
  * Legal Documents — Terms & Privacy, multi-language.
  *
- * Public read (no auth): GET /public/legal/:key?lang=id|en.
+ * Public read (no auth): GET /public/legal/:key?lang=id|en|ms (ms = Bahasa Melayu, notis PDPA Malaysia).
  * Admin CRUD (RBAC menuKey 'legal'): GET/PUT /admin/legal/:key/:lang.
  */
 import { z } from 'zod';
@@ -14,7 +14,7 @@ export const legalLanguageSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .pipe(z.enum(['id', 'en']));
+  .pipe(z.enum(['id', 'en', 'ms']));
 export type LegalLanguage = z.infer<typeof legalLanguageSchema>;
 
 /** Upsert single legal document untuk (key, lang). Title + content + version. */

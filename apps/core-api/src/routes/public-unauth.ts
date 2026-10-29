@@ -103,7 +103,7 @@ publicUnauthRouter.get('/maintenance', async (_req, res) => {
 });
 
 // ============================================================
-//  GET /public/legal/:key?lang=id|en
+//  GET /public/legal/:key?lang=id|en|ms
 //  Mobile fetch Terms/Privacy. Fallback ke 'id' kalau lang yg di-minta
 //  tidak tersedia.
 // ============================================================
@@ -117,16 +117,15 @@ publicUnauthRouter.get('/legal/:key', async (req, res) => {
   const langParsed = legalLanguageSchema.safeParse(langRaw);
   const lang = langParsed.success ? langParsed.data : 'id';
 
-  // Coba lang yg diminta dulu; fallback ke 'id' kalau tidak ada.
-  // Pakai findFirst supaya bisa filter isPublished (findUnique hanya boleh
-  // pakai unique fields).
-  let doc = await prisma.legalDocument.findFirst({
-    where: { key, language: lang, isPublished: true },
-  });
-  if (!doc && lang !== 'id') {
+  // Coba lang yg diminta dulu, lalu fallback: ms → en → id, en → id.
+  // Pakai findFirst supaya bisa filter isPublished.
+  const chain = lang === 'ms' ? ['ms', 'en', 'id'] : lang === 'en' ? ['en', 'id'] : ['id'];
+  let doc = null as Awaited<ReturnType<typeof prisma.legalDocument.findFirst>>;
+  for (const l of chain) {
     doc = await prisma.legalDocument.findFirst({
-      where: { key, language: 'id', isPublished: true },
+      where: { key, language: l, isPublished: true },
     });
+    if (doc) break;
   }
   if (!doc) throw NotFound('Dokumen tidak ditemukan.');
   res.json({

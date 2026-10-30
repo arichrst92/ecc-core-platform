@@ -104,6 +104,24 @@ const HEADER_ALIASES: Record<keyof Omit<SheetRow, 'rowNo'>, string[]> = {
   ],
 };
 
+/**
+ * Satu sel ministry bisa berisi lebih dari satu pelayanan, dipisah koma,
+ * titik koma, garis miring, garis tegak, atau baris baru dalam sel — mis.
+ * "Worship, Multimedia", "Usher / CKids", "Worship; Doa". Hasil: nama unik, huruf besar.
+ */
+export function splitMinistries(v: string | null | undefined): string[] {
+  if (!v) return [];
+  return [
+    ...new Set(
+      v
+        // "&" dan "dan" TIDAK dipakai sebagai pemisah — bisa bagian nama (mis. "Praise & Worship", "Doa dan Syafaat").
+        .split(/[,;\/\n|]+/)
+        .map((x) => x.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missingColumns: string[] } {
   const header = (rows[0] ?? []).map((h) => String(h ?? '').trim().toLowerCase());
   const idx = {} as Record<keyof typeof HEADER_ALIASES, number>;
@@ -132,7 +150,7 @@ export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missing
       zoneLeader: normalizeName(at('zoneLeader')) ? text(at('zoneLeader')) : null,
       homecell: text(at('homecell'))?.toUpperCase() ?? null,
       homeLeader: normalizeName(at('homeLeader')) ? text(at('homeLeader')) : null,
-      ministry: text(at('ministry'))?.toUpperCase() ?? null,
+      ministry: splitMinistries(text(at('ministry'))).join('; ') || null,
       // Kolom "Status" bisa berarti status nikah (rekap Shiftsoft) atau
       // Aktif/Nonaktif (export portal) — ambil hanya nilai status nikah.
       statusPernikahan: status && MARITAL.has(status.toLowerCase()) ? status : null,

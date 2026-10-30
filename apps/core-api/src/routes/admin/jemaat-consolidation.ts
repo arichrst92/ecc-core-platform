@@ -35,6 +35,7 @@ import {
   parseSheetRows,
   suggestJourneyStep,
   suggestPelayanan,
+  splitMinistries,
   type JemaatLite,
 } from '../../lib/jemaat-consolidation.js';
 
@@ -225,11 +226,13 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
     orderBy: { nama: 'asc' },
     select: { id: true, nama: true },
   });
-  const ministryNames = [...new Set(rows.map((r) => r.ministry).filter((x): x is string => !!x))].sort();
+  // Satu jemaat bisa punya beberapa ministry (dipisah koma / titik koma / garis miring / baris baru,
+  // atau baris terpisah di sheet) — setiap nama dipetakan sendiri.
+  const ministryNames = [...new Set(rows.flatMap((r) => splitMinistries(r.ministry)))].sort();
   const ministries = ministryNames.map((nama) => ({
     sheetNama: nama,
     suggestedPelayananId: suggestPelayanan(nama, pelayanan),
-    memberCount: rows.filter((r) => r.ministry === nama).length,
+    memberCount: rows.filter((r) => splitMinistries(r.ministry).includes(nama)).length,
   }));
 
   // ---- Spiritual Journey ----
@@ -307,7 +310,7 @@ const applySchema = z.object({
           updates: fieldUpdates.default({}),
           area: z.string().trim().max(100).nullable(),
           homecell: z.string().trim().max(150).nullable(),
-          ministry: z.string().trim().max(100).nullable(),
+          ministry: z.string().trim().max(500).nullable(),
           spiritualJourney: z.string().trim().max(150).nullable().optional(),
         })
         .refine((r) => !!r.jemaatId !== !!r.create, 'Tiap baris wajib jemaatId atau create (salah satu).'),
@@ -488,11 +491,22 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
 
   // ---- Per jemaat ----
   const results: RowResult[] = [];
+  // Orang yang sama bisa muncul di beberapa baris (mis. satu baris per ministry).
+  // Jemaat baru hanya dibuat sekali; baris berikutnya memakai jemaat yang sama.
+  const createdByKey = new Map<string, string>();
+  const createKeys = (c: { namaLengkap: string; noHp?: string | null; email?: string | null }) =>
+    [c.noHp ? `hp:${c.noHp}` : null, c.email ? `em:${c.email.toLowerCase()}` : null, !c.noHp && !c.email ? `nm:${normalizeName(c.namaLengkap)}` : null].filter(
+      (k): k is string => !!k,
+    );
   for (const r of input.rows) {
     const changes: string[] = [];
     let jemaatId: string | null = r.jemaatId ?? null;
     try {
-      if (r.create) {
+      const reuse = r.create ? createKeys(r.create).map((k) => createdByKey.get(k)).find(Boolean) : undefined;
+      if (r.create && reuse) {
+        jemaatId = reuse;
+        changes.push('baris tambahan (jemaat sama)');
+      } else if (r.create) {
         // Jemaat baru dari baris sheet (dicentang admin).
         const c = r.create;
         const created = await prisma.jemaat.create({
@@ -509,6 +523,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
           select: { id: true },
         });
         jemaatId = created.id;
+        for (const k of createKeys(c)) createdByKey.set(k, created.id);
         changes.push('dibuat');
         summary.jemaatCreated += 1;
       }
@@ -605,9 +620,11 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
         }
       }
 
-      // Ministry
-      const mt = r.ministry ? ministryTarget.get(r.ministry.toUpperCase()) : undefined;
-      if (mt) {
+      // Ministry — bisa lebih dari satu per jemaat (sel berisi beberapa nama
+      // dan/atau beberapa baris sheet untuk orang yang sama).
+      for (const nama of splitMinistries(r.ministry)) {
+        const mt = ministryTarget.get(nama);
+        if (!mt) continue;
         const exists = await prisma.jemaatPelayanan.findFirst({
           where: { jemaatId: jemaatId, pelayananId: mt.pelayananId, isActive: true },
           select: { id: true },
@@ -616,7 +633,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
           await prisma.jemaatPelayanan.create({
             data: { jemaatId: jemaatId, pelayananId: mt.pelayananId, pelayananRoleId: mt.roleId, isActive: true },
           });
-          changes.push('ministry');
+          if (!changes.includes('ministry')) changes.push('ministry');
           summary.ministryMembers += 1;
         }
       }

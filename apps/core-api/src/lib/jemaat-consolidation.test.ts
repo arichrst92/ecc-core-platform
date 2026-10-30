@@ -194,3 +194,17 @@ describe('spiritual journey', () => {
     expect(rows[0]!.spiritualJourney).toBe('Expand');
   });
 });
+
+import { splitMinistries } from './jemaat-consolidation.js';
+describe('splitMinistries', () => {
+  it('memecah beberapa ministry dalam satu sel', () => {
+    expect(splitMinistries('Worship, Multimedia')).toEqual(['WORSHIP', 'MULTIMEDIA']);
+    expect(splitMinistries('Usher / CKids')).toEqual(['USHER', 'CKIDS']);
+    expect(splitMinistries('worship; doa ; WORSHIP')).toEqual(['WORSHIP', 'DOA']);
+    expect(splitMinistries('Worship\nMultimedia')).toEqual(['WORSHIP', 'MULTIMEDIA']);
+  });
+  it('tidak memecah nama yang memakai & / dan', () => {
+    expect(splitMinistries('Praise & Worship')).toEqual(['PRAISE & WORSHIP']);
+    expect(splitMinistries('Doa dan Syafaat')).toEqual(['DOA DAN SYAFAAT']);
+  });
+});

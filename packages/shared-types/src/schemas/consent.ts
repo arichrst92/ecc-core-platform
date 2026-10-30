@@ -22,11 +22,19 @@ export const consentAcceptSchema = z.object({
   language: z.string().trim().max(5).optional(),
   platform: z.string().trim().max(20).optional(),
   appVersion: z.string().trim().max(20).optional(),
+  /**
+   * Koreksi tanggal lahir oleh jemaat sendiri (YYYY-MM-DD) — mis. data impor
+   * Shiftsoft salah sehingga terbaca < 13 / < 18 tahun. Disimpan ke profil
+   * sebelum batas usia dicek.
+   */
+  tanggalLahir: z.string().date().optional(),
 });
 export type ConsentAcceptInput = z.infer<typeof consentAcceptSchema>;
 
 export interface ConsentStatus {
   required: boolean;
+  /** Tanggal lahir tercatat (YYYY-MM-DD) — app menawarkan koreksi bila < 18 th. */
+  birthDate: string | null;
   current: { termsVersion: string | null; privacyVersion: string | null };
   latest: {
     termsVersion: string;

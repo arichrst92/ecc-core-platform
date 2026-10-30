@@ -25,13 +25,14 @@ export async function getCurrentLegalVersions(db: Db = prisma) {
 }
 
 export async function getConsentStatus(jemaatId: string): Promise<ConsentStatus> {
-  const [current, latest] = await Promise.all([
+  const [current, latest, jemaat] = await Promise.all([
     getCurrentLegalVersions(),
     prisma.userConsent.findFirst({
       where: { jemaatId },
       orderBy: { acceptedAt: 'desc' },
       select: { termsVersion: true, privacyVersion: true, ageGroup: true, acceptedAt: true },
     }),
+    prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { tanggalLahir: true } }),
   ]);
   // Belum ada dokumen terbit → tidak ada yang bisa disetujui.
   const hasDocs = !!(current.termsVersion && current.privacyVersion);
@@ -42,6 +43,7 @@ export async function getConsentStatus(jemaatId: string): Promise<ConsentStatus>
       latest.privacyVersion !== current.privacyVersion);
   return {
     required,
+    birthDate: jemaat?.tanggalLahir ? jemaat.tanggalLahir.toISOString().slice(0, 10) : null,
     current,
     latest: latest ? { ...latest, acceptedAt: latest.acceptedAt.toISOString() } : null,
   };
@@ -64,10 +66,10 @@ export function assertAgeAllowed(tanggalLahir: Date | null | undefined, ageGroup
   const age = ageFrom(tanggalLahir);
   if (age == null) return;
   if (age < 13) {
-    throw Forbidden('Anak di bawah 13 tahun tidak dapat memiliki akun sendiri. Minta orang tua/wali mendaftarkan melalui menu Keluarga.');
+    throw Forbidden('Menurut tanggal lahir yang tercatat, usia Anda di bawah 13 tahun. Bila tanggal lahir salah, perbaiki di layar ini. Anak di bawah 13 tahun didaftarkan orang tua/wali melalui menu Keluarga.');
   }
   if (age < 18 && ageGroup !== 'MINOR_WITH_GUARDIAN') {
-    throw BadRequest('Pengguna di bawah 18 tahun wajib mendapat izin orang tua/wali.');
+    throw BadRequest('Menurut tanggal lahir yang tercatat, usia Anda di bawah 18 tahun — pilih "13–17 tahun dengan izin orang tua", atau perbaiki tanggal lahir bila salah.');
   }
 }
 

@@ -69,6 +69,7 @@ import {
   Contact,
   ShieldAlert,
   CloudUpload,
+  ClipboardList,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -167,6 +168,7 @@ const GROUPS: NavGroup[] = [
     icon: ShieldAlert,
     items: [
       { href: '/dashboard/compliance/sop', label: 'SOP Compliance', icon: ShieldAlert, menuKey: 'compliance-sop' },
+      { href: '/dashboard/compliance/pemrosesan', label: 'Catatan Pemrosesan & Risiko', icon: ClipboardList, menuKey: 'compliance-ropa' },
       { href: '/dashboard/compliance/backup-email', label: 'Kirim Backup Bulanan', icon: CloudUpload, menuKey: 'compliance-backup' },
     ],
   },

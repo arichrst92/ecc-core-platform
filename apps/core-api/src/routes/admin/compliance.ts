@@ -186,3 +186,153 @@ complianceRouter.post('/backup-email/send-now', ...backupGate, async (req, res) 
   audit(req, { action: 'UPDATE', resource: 'backup_email_config', resourceId: 'global', resourceLabel: 'Kirim uji backup bulanan' });
   res.status(202).json({ success: true, data: { started: true } });
 });
+
+// ------------------------------------------------------------------
+// Catatan aktivitas pemrosesan (RoPA) + penilaian risiko — RBAC 'compliance-ropa'
+// ------------------------------------------------------------------
+const nonEmpty = z.string().trim().min(1).max(5000);
+const activitySchema = z.object({
+  kode: z.string().trim().min(1).max(10),
+  nama: z.string().trim().min(3).max(200),
+  tujuan: nonEmpty,
+  subjekData: nonEmpty,
+  kategoriData: nonEmpty,
+  dataSensitif: z.boolean(),
+  dasarHukum: nonEmpty,
+  penerima: nonEmpty,
+  transferLuarNegeri: nonEmpty,
+  retensi: nonEmpty,
+  keamanan: nonEmpty,
+  pemilik: z.string().trim().min(1).max(200),
+  negara: z.array(z.enum(COUNTRIES)).min(1),
+  risikoKemungkinan: z.coerce.number().int().min(1).max(3),
+  risikoDampak: z.coerce.number().int().min(1).max(3),
+  risiko: nonEmpty,
+  mitigasi: nonEmpty,
+  risikoSisa: z.enum(['RENDAH', 'SEDANG', 'TINGGI']),
+  tinjauBerikutnya: z.union([z.string().date(), z.literal(''), z.null()]).optional(),
+  urutan: z.coerce.number().int().min(0).max(999).optional(),
+});
+
+const toData = (i: z.infer<typeof activitySchema>) => ({
+  ...i,
+  tinjauBerikutnya: i.tinjauBerikutnya ? new Date(i.tinjauBerikutnya) : null,
+});
+
+export const riskLevel = (l: number, d: number) => {
+  const s = l * d;
+  return s >= 6 ? 'TINGGI' : s >= 3 ? 'SEDANG' : 'RENDAH';
+};
+
+complianceRouter.get('/processing', requireMenu('compliance-ropa'), async (_req, res) => {
+  const rows = await prisma.processingActivity.findMany({ orderBy: [{ urutan: 'asc' }, { kode: 'asc' }] });
+  res.json({ success: true, data: rows });
+});
+
+complianceRouter.post('/processing', requireMenu('compliance-ropa', 'write'), async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const input = activitySchema.parse(req.body ?? {});
+  const created = await prisma.processingActivity.create({ data: { ...toData(input), updatedByUserId: req.user.sub } });
+  audit(req, { action: 'CREATE', resource: 'processing_activity', resourceId: created.id, resourceLabel: `${created.kode} ${created.nama}` });
+  res.status(201).json({ success: true, data: created });
+});
+
+complianceRouter.put('/processing/:id', requireMenu('compliance-ropa', 'write'), async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const input = activitySchema.parse(req.body ?? {});
+  const before = await prisma.processingActivity.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Aktivitas tidak ditemukan');
+  const updated = await prisma.processingActivity.update({ where: { id: before.id }, data: { ...toData(input), updatedByUserId: req.user.sub } });
+  audit(req, { action: 'UPDATE', resource: 'processing_activity', resourceId: updated.id, resourceLabel: `${updated.kode} ${updated.nama}` });
+  res.json({ success: true, data: updated });
+});
+
+complianceRouter.delete('/processing/:id', requireMenu('compliance-ropa', 'delete'), async (req, res) => {
+  const before = await prisma.processingActivity.findUnique({ where: { id: req.params.id } });
+  if (!before) throw NotFound('Aktivitas tidak ditemukan');
+  await prisma.processingActivity.delete({ where: { id: before.id } });
+  audit(req, { action: 'DELETE', resource: 'processing_activity', resourceId: before.id, resourceLabel: `${before.kode} ${before.nama}` });
+  res.status(204).end();
+});
+
+complianceRouter.get('/processing/print', requireMenu('compliance-ropa'), async (req, res) => {
+  const rows = await prisma.processingActivity.findMany({ orderBy: [{ urutan: 'asc' }, { kode: 'asc' }] });
+  const portal = (process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '');
+  const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
+  const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const lvlCls = (v: string) => (v === 'TINGGI' ? 'hi' : v === 'SEDANG' ? 'md' : 'lo');
+  const count = (v: string) => rows.filter((r) => r.risikoSisa === v).length;
+  const tinjau = (d: Date | null) => (d ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+  const field = (k: string, v: string) => `<tr><th>${esc(k)}</th><td>${esc(v).replace(/\n/g, '<br/>')}</td></tr>`;
+  const cards = rows
+    .map((r) => {
+      const awal = riskLevel(r.risikoKemungkinan, r.risikoDampak);
+      return `<section class="act">
+      <div class="act-h"><span class="kode">${esc(r.kode)}</span><b>${esc(r.nama)}</b>
+        ${r.dataSensitif ? '<span class="tag sens">Data sensitif</span>' : ''}
+        <span class="tag">${esc(r.negara.join(' · '))}</span>
+        <span class="tag ${lvlCls(r.risikoSisa)}">Risiko sisa: ${esc(r.risikoSisa)}</span></div>
+      <table class="kv">
+        ${field('Tujuan', r.tujuan)}
+        ${field('Subjek data', r.subjekData)}
+        ${field('Kategori data', r.kategoriData)}
+        ${field('Dasar hukum', r.dasarHukum)}
+        ${field('Penerima / pemroses', r.penerima)}
+        ${field('Transfer luar negeri', r.transferLuarNegeri)}
+        ${field('Lama simpan', r.retensi)}
+        ${field('Pengamanan', r.keamanan)}
+        ${field('Pemilik proses', r.pemilik)}
+      </table>
+      <div class="risk">
+        <div><div class="lbl">Risiko awal</div><span class="tag ${lvlCls(awal)}">${awal}</span> <span class="muted">(kemungkinan ${r.risikoKemungkinan} × dampak ${r.risikoDampak})</span></div>
+        <div><div class="lbl">Tinjau berikutnya</div>${esc(tinjau(r.tinjauBerikutnya))}</div>
+      </div>
+      <table class="kv">${field('Risiko utama', r.risiko)}${field('Mitigasi', r.mitigasi)}</table>
+    </section>`;
+    })
+    .join('');
+  const html = `<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><title>Catatan Pemrosesan & Penilaian Risiko</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; font-size: 10.5px; color: #1f2937; margin: 0; line-height: 1.45; }
+  .page { padding: 6mm; }
+  .hero { background: linear-gradient(135deg, #ea580c, #f59e0b); color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .hero img { width: 42px; height: 42px; border-radius: 9px; background: #fff; padding: 4px; }
+  .hero .k { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; opacity: .9; }
+  .hero h1 { margin: 2px 0 0; font-size: 19px; }
+  .intro { margin: 0 0 10px; color: #4b5563; }
+  .sum { display: flex; gap: 8px; margin-bottom: 12px; }
+  .sum div { flex: 1; border: 1px solid #fed7aa; background: #fff7ed; border-radius: 8px; padding: 7px 10px; }
+  .sum b { display: block; font-size: 18px; color: #c2410c; }
+  .act { border: 1px solid #e5e7eb; border-radius: 9px; padding: 10px 12px; margin-bottom: 10px; page-break-inside: avoid; }
+  .act-h { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+  .kode { background: #ea580c; color: #fff; font-weight: 700; border-radius: 5px; padding: 1px 6px; font-size: 10px; }
+  .tag { font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #f3f4f6; color: #374151; }
+  .tag.sens { background: #fce7f3; color: #9d174d; } .tag.lo { background: #dcfce7; color: #166534; }
+  .tag.md { background: #fef3c7; color: #92400e; } .tag.hi { background: #fee2e2; color: #991b1b; }
+  table.kv { width: 100%; border-collapse: collapse; margin: 4px 0; }
+  table.kv th { width: 26%; text-align: left; vertical-align: top; color: #9a3412; font-weight: 600; padding: 3px 6px 3px 0; }
+  table.kv td { padding: 3px 0; border-bottom: 1px solid #f3f4f6; }
+  .risk { display: flex; gap: 24px; background: #fafafa; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+  .lbl { font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; font-weight: 700; }
+  .muted { color: #6b7280; }
+  .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; color: #9ca3af; font-size: 9px; }
+  .noprint { padding: 10px 14px; background: #fff7ed; border-bottom: 1px solid #fed7aa; font-size: 12px; }
+  .noprint button { margin-left: 8px; padding: 6px 12px; background: #ea580c; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-weight: 600; }
+  @media print { .noprint { display: none !important; } .page { padding: 0; } }
+</style></head><body>
+${isMobileUa ? '<script>setTimeout(() => window.print(), 600);</script>' : '<div class="noprint"><strong>Print Preview</strong> — Catatan Pemrosesan & Penilaian Risiko. Tekan Ctrl/Cmd + P → Save as PDF.<button onclick="window.print()">Print / Save as PDF</button></div>'}
+<div class="page">
+  <div class="hero"><img src="${portal}/logo-ecc.webp" alt="" onerror="this.style.display='none'"/>
+    <div><div class="k">Compliance · RoPA & DPIA</div><h1>Catatan Aktivitas Pemrosesan & Penilaian Risiko</h1></div></div>
+  <p class="intro">Daftar seluruh kegiatan Els App yang memproses data pribadi jemaat, beserta penilaian risikonya (UU PDP Indonesia, PDPA Malaysia, Privacy Act Australia). Per ${esc(today)}. Risiko = kemungkinan (1–3) × dampak (1–3): 1–2 rendah, 3–4 sedang, 6–9 tinggi.</p>
+  <div class="sum"><div><b>${rows.length}</b>aktivitas</div><div><b>${rows.filter((r) => r.dataSensitif).length}</b>memuat data sensitif</div><div><b>${count('TINGGI')} / ${count('SEDANG')} / ${count('RENDAH')}</b>risiko sisa tinggi / sedang / rendah</div></div>
+  ${cards || '<p class="muted">Belum ada aktivitas.</p>'}
+  <div class="footer"><span>© ${new Date().getFullYear()} Elshaddai Creative Community · Dokumen internal</span><span>Powered by IDEA</span></div>
+</div></body></html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(html);
+});

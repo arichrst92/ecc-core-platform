@@ -1,7 +1,7 @@
 # Checklist Kepatuhan Hukum Digital — Ekosistem Els App (Indonesia · Malaysia · Australia)
 
 **Cakupan:** Els App (iOS, Android, web), Portal admin, CKids, core-api, layar `/monitor`.
-**Per tanggal:** 29 Oktober 2026 (revisi 9 — menu Compliance: SOP & backup bulanan; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
+**Per tanggal:** 29 Oktober 2026 (revisi 10 — Compliance: SOP, backup bulanan, catatan pemrosesan; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
 
 > **Bukan nasihat hukum.** Dokumen ini adalah daftar periksa teknis–operasional untuk membantu tim. Keputusan akhir (mis. penunjukan DPO, isi Kebijakan Privasi, dasar hukum pemrosesan) perlu dikonfirmasi dengan penasihat hukum di masing-masing negara.
 
@@ -54,7 +54,7 @@
 | 14 | **Retensi data** | Wajib dimusnahkan bila tujuan selesai (Ps. 43–44) | Retention Principle | APP 11.2 | ✅ Sudah | **Aktif sejak 30 Okt 2026**: job harian `data-retention` — akun nonaktif >3 th & tamu tanpa kunjungan >3 th disamarkan (`dataPurgedAt`), bukti transfer dihapus 1 th setelah event (env `*_RETENTION_DAYS`, `DATA_RETENTION_ENABLED`) | — | — | ORG + IT |
 | 15 | **Transfer data ke luar negeri** | Wajib setara/perlindungan memadai/persetujuan (Ps. 56) | Guideline 29 Apr 2025 (dasar hukum/TIA) | APP 8 | 🟡 Sebagian | Dijelaskan di Kebijakan v3.0: server **Indonesia**; SendGrid & Anthropic (AS); Fonnte & IDEA (ID) | DPA vendor (No. 16) | Sedang | ORG + LEGAL |
 | 16 | **Perjanjian dengan pemroses (vendor)** | Wajib (prosesor) | Processor terikat Security Principle | APP 8 / kontrak | ⚪ Konfirmasi | Belum ada DPA | DPA dengan IDEA, Fonnte, hosting; cek DPA standar SendGrid & Anthropic | Sedang | ORG + LEGAL |
-| 17 | **Catatan aktivitas pemrosesan & DPIA** | Wajib (rekam pemrosesan; DPIA untuk risiko tinggi) | Disarankan / bagian akuntabilitas | Disarankan (PIA) | ❌ Belum | Belum ada | Buat Record of Processing (RoPA) + DPIA untuk CKids, analitik, monitor | Sedang | ORG + IT |
+| 17 | **Catatan aktivitas pemrosesan & DPIA** | Wajib (rekam pemrosesan; DPIA untuk risiko tinggi) | Disarankan / bagian akuntabilitas | Disarankan (PIA) | ✅ Sudah | **Dibangun 30 Okt 2026**: Portal → **Compliance → Catatan Pemrosesan & Risiko** (`ProcessingActivity`, seed 11 aktivitas di migrasi `20261030190000`), editable, unduh PDF | Tinjau tiap 6 bulan / saat fitur baru | Rendah | ORG + IT |
 | 18 | **Analitik / pelacakan** | Perlu dasar hukum & transparansi | Notice | APP 5, 6 | ✅ Sudah | Analitik anonim, saklar matikan di Privasi; **dijelaskan di Kebijakan v3.0** | — | — | LEGAL |
 | 19 | **Pesan WhatsApp / email** (pengingat ibadah, ulang tahun, notifikasi) | Perlu persetujuan & cara berhenti | Hak menolak direct marketing | Spam Act: consent + **unsubscribe** (pesan komersial) | ✅ Sudah | **Dibangun 30 Okt 2026**: `jemaat_privacy.wa_reminders/wa_greetings/wa_updates` + Pengaturan → Privasi → **Pesan WhatsApp**; `sendWaIfEnabled`, pengingat H-1 & ucapan ulang tahun menghormati pilihan. OTP/tautan login tetap dikirim | — | — | IT |
 | 20 | **Pengungkapan data ke pihak lain di dalam gereja** | Sesuai tujuan | Disclosure Principle | APP 6 | ✅ Sudah | Sesuai Pengaturan Privasi & Role Access; laporan/monitor agregat; link laporan 30 menit; **S&K v3.0 Bag. 10** mengatur kewajiban admin/petugas/kode monitor | — | — | — |
@@ -80,7 +80,7 @@
 | No | Kewajiban | Status | Kondisi | Tindak lanjut | Prioritas | Pemilik |
 |---|---|---|---|---|---|---|
 | ID-1 | Pendaftaran **PSE Lingkup Privat** (Komdigi / OSS) untuk Els App & portal | ⚪ Konfirmasi | Belum diketahui apakah sudah terdaftar | Cek & daftarkan bila belum | Tinggi | ORG |
-| ID-2 | Siap mengikuti **PP 33/2026** (berlaku ±16 Jan 2027) | 🟡 Sebagian | Sisa No. 17 (RoPA/DPIA) | Tutup No. 17 sebelum Jan 2027 | Tinggi | ORG + IT |
+| ID-2 | Siap mengikuti **PP 33/2026** (berlaku ±16 Jan 2027) | ✅ Sudah | Semua kontrol inti ada (No. 1–17) | Pantau aturan teknis & Lembaga PDP | Sedang | ORG + IT |
 | ID-3 | Bahasa Indonesia untuk dokumen hukum & pemberitahuan | ✅ Sudah | Kebijakan & S&K v3.0 dalam Bahasa Indonesia | — | — | — |
 | ID-4 | Data keuangan (bukti transfer event) = data spesifik | ✅ Sudah | Dihapus otomatis 1 th setelah event (No. 14) | — | — | ORG + IT |
 
@@ -111,15 +111,17 @@
 
 | Area | ✅ Sudah | 🟡 Sebagian | ❌ Belum | ⚪ Konfirmasi |
 |---|---|---|---|---|
-| Kontrol umum (21) | 17 | 2 | 1 | 1 |
+| Kontrol umum (21) | 18 | 2 | 0 | 1 |
 | Data anak (4) | 1 | 2 | 0 | 1 |
-| Indonesia (4) | 2 | 1 | 0 | 1 |
+| Indonesia (4) | 3 | 0 | 0 | 1 |
 | Malaysia (5) | 3 | 0 | 0 | 2 |
 | Australia (6) | 4 | 0 | 0 | 2 (termasuk 1 tidak berlaku) |
 
 **Kesimpulan (revisi 5):** dengan terbitnya Kebijakan Privasi & S&K **v3.0** dan penunjukan **DPO**, sisi dokumen hampir lengkap. Fokus berikutnya adalah **menjalankan janji di dokumen**: persetujuan tercatat (No. 2), hapus data wajah (No. 13), hapus permanen & retensi otomatis (No. 5, 14), SOP kebocoran & permintaan data 3×24 jam (No. 8), dan DPA vendor. Dokumen sudah tayang dalam 3 bahasa.
 
 **Perubahan dari revisi 1:** No. 1, 6, 9, 15, 18 · A2 · MY-1, MY-4 · AU-2.
+
+**Revisi 10 (30 Okt 2026):** dibangun Compliance → Catatan Pemrosesan & Risiko (No. 17, ID-2).
 
 **Revisi 9 (30 Okt 2026):** `DATA_ENCRYPTION_KEY` terpasang. Dibangun menu **Compliance**: SOP kebocoran & permintaan data per negara (No. 8, MY-3, AU-3) dan Kirim Backup Bulanan (No. 12).
 
@@ -144,7 +146,8 @@
 | 1 | Lengkapi SOP (nama tim respons), bagikan PDF ke petugas & latihan simulasi | ORG + DPO | Nov 2026 |
 | 2 | Aktifkan Kirim Backup Bulanan & simpan file di luar server | IT + ORG | Nov 2026 |
 | 3 | Rilis app 2.4.4 (persetujuan, unduh data, pesan WA) & deploy Els App web | IT | Nov 2026 |
-| 4 | DPA vendor, RoPA + DPIA (CKids, analitik, monitor) | ORG + LEGAL | Q1 2027 |
+| 4 | Perjanjian pemrosesan data (DPA) dengan vendor | ORG + LEGAL | Q1 2027 |
+| 4b | Tinjau Catatan Pemrosesan & Risiko | DPO | Tiap 6 bulan |
 | 5 | PP Tunas: verifikasi usia sesuai Permen teknis | IT | Saat Permen terbit |
 | 6 | Cek PSE (ID), ambang DPO Malaysia, status usaha kecil (AU), pantau aturan baru | ORG + LEGAL | Berkala |
 

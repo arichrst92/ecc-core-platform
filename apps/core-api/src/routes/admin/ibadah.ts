@@ -93,7 +93,7 @@ ibadahRouter.get('/calendar', async (req, res) => {
   const ibadahs = await prisma.ibadah.findMany({
     where,
     include: {
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
       kategoriIbadah: { select: { id: true, nama: true } },
     },
   });
@@ -180,7 +180,7 @@ ibadahRouter.get('/', async (req, res) => {
       orderBy: [{ kategoriIbadah: { nama: 'asc' } }, { [q.sortBy ?? 'nama']: q.sortOrder }],
       include: {
         // lat/lng cabang: fallback titik self check-in (ditampilkan di list portal).
-        cabang: { select: { id: true, nama: true, latitude: true, longitude: true } },
+        cabang: { select: { id: true, nama: true, latitude: true, longitude: true, timezone: true } },
         kategoriIbadah: { select: { id: true, nama: true } },
         // Nested count untuk hitung total petugas: sum dari semua ibadahPelayanan link
         ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },

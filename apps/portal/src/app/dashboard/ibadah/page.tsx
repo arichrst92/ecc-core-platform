@@ -1,5 +1,6 @@
 'use client';
 
+import { jamZone } from '@/lib/tz-label';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -365,7 +366,7 @@ function CabangSection({
                         : ''}
                   </td>
                   <td className="px-4 py-2.5 text-neutral-700 tabular-nums">
-                    {i.jamMulai}–{i.jamSelesai}
+                    {jamZone(i.jamMulai, i.jamSelesai, (i.cabang as { timezone?: string } | undefined)?.timezone)}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {typeof i.kapasitasSeat === 'number' && i.kapasitasSeat > 0 ? (

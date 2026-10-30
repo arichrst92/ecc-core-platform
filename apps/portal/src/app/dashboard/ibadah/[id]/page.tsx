@@ -1,5 +1,6 @@
 'use client';
 
+import { tzZoneLabel } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -270,7 +271,7 @@ export default function IbadahDetailPage() {
             {i.tipeJadwal === 'MONTHLY' && i.mingguKe ? ` minggu ke-${i.mingguKe}` : ''}
           </Info>
           <Info icon={Clock} label="Jam">
-            {i.jamMulai} – {i.jamSelesai}
+            {i.jamMulai} – {i.jamSelesai} {tzZoneLabel((i.cabang as { timezone?: string } | undefined)?.timezone)}
           </Info>
           <Info icon={Calendar} label="Mulai">
             {parseYmd(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}

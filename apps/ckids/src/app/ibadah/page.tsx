@@ -26,6 +26,12 @@ import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
 import { resolveMediaUrl } from '@/lib/media';
 
+/** Tanggal hari ini menurut jam perangkat (zona cabang tempat meja CKids), bukan UTC. */
+const localYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 type Mode = 'checkin' | 'checkout' | 'pickup';
 
 interface IbadahItem {
@@ -545,7 +551,7 @@ function AddGuestModal({
               <input
                 type="date"
                 value={tanggalLahir}
-                max={new Date().toISOString().slice(0, 10)}
+                max={localYmd()}
                 onChange={(e) => setTanggalLahir(e.target.value)}
                 className={inputCls}
               />
@@ -589,7 +595,7 @@ function ActionPanel({
   const ctx = useIbadahContextStore();
   const [ibadahId, setIbadahId] = useState<string | null>(ctx.ibadahId);
   const [tanggal, setTanggal] = useState<string>(
-    ctx.tanggalIbadah ?? new Date().toISOString().slice(0, 10),
+    ctx.tanggalIbadah ?? localYmd(),
   );
   const [lastResult, setLastResult] = useState<any>(null);
   const [pointDialog, setPointDialog] = useState<null | {

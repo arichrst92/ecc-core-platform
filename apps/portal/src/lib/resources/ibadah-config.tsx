@@ -1,3 +1,4 @@
+import { jamZone } from '../tz-label';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
 import { createIbadahSchema, updateIbadahSchema } from '@ecc/shared-types';
@@ -94,8 +95,8 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
     {
       key: 'jamMulai',
       label: 'Jam',
-      width: '120px',
-      render: (_v, row) => `${row.jamMulai}–${row.jamSelesai}`,
+      width: '170px',
+      render: (_v, row) => jamZone(row.jamMulai, row.jamSelesai, (row.cabang as { timezone?: string } | undefined)?.timezone),
     },
     {
       key: 'isOnline',

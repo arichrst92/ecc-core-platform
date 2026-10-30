@@ -11,6 +11,7 @@
  *   - Participation lifecycle (DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR / BATAL)
  *   - Bukti transfer upload per participation + admin approval
  */
+import { eventDateLabel, instantInTzLabel } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -872,11 +873,7 @@ eventRouter.post('/:id/peserta', async (req, res) => {
     await sendWaIfEnabled('EVENT_REGISTERED', j.noHp, {
       nama: j.namaLengkap,
       event_judul: event.judul,
-      event_tanggal: new Date(event.tanggalMulai).toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }),
+      event_tanggal: eventDateLabel(event.tanggalMulai, (await prisma.cabangGereja.findUnique({ where: { id: event.cabangId ?? '00000000-0000-0000-0000-000000000000' }, select: { timezone: true } }))?.timezone),
       status: event.tipeBayar !== 'GRATIS' ? 'DAFTAR (menunggu pembayaran)' : 'DAFTAR',
     });
   })();
@@ -1078,11 +1075,7 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
       await sendWaIfEnabled('EVENT_REGISTERED', j.noHp, {
         nama: j.namaLengkap,
         event_judul: event.judul,
-        event_tanggal: new Date(event.tanggalMulai).toLocaleDateString('id-ID', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-        }),
+        event_tanggal: eventDateLabel(event.tanggalMulai, (await prisma.cabangGereja.findUnique({ where: { id: event.cabangId ?? '00000000-0000-0000-0000-000000000000' }, select: { timezone: true } }))?.timezone),
         status: event.tipeBayar !== 'GRATIS' ? 'DAFTAR (menunggu pembayaran)' : 'DAFTAR',
       });
     })();
@@ -2253,7 +2246,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     jemaatId: jemaat.id,
     type: 'EVENT_CHECKED_IN',
     title: `Kehadiran tercatat: ${event.judul}`,
-    body: `Anda sudah check-in di event "${event.judul}" pada ${now.toLocaleString('id-ID')}. Terima kasih atas partisipasinya.`,
+    body: `Anda sudah check-in di event "${event.judul}" pada ${instantInTzLabel(now, (await prisma.cabangGereja.findUnique({ where: { id: event.cabangId ?? '00000000-0000-0000-0000-000000000000' }, select: { timezone: true } }))?.timezone)}. Terima kasih atas partisipasinya.`,
     actionUrl: `/event/${event.id}`,
     metadata: { eventId: event.id, eventJudul: event.judul, participationId: updated.id },
   });

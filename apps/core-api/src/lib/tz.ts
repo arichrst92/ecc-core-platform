@@ -92,3 +92,40 @@ export function calendarDateOf(d: Date, tz: string): Date {
 }
 
 export const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY_MS);
+
+const TZ_CITY_ID: Record<string, string> = {
+  'Asia/Jakarta': 'Jakarta',
+  'Asia/Pontianak': 'Pontianak',
+  'Asia/Makassar': 'Makassar',
+  'Asia/Jayapura': 'Jayapura',
+  'Asia/Kuala_Lumpur': 'Kuala Lumpur',
+  'Asia/Kuching': 'Kuching',
+  'Asia/Singapore': 'Singapura',
+};
+
+/** "Waktu Kuala Lumpur" — label zona cabang untuk pesan/laporan. */
+export function tzZoneLabel(tz: string | null | undefined): string {
+  const key = tzOr(tz);
+  const city = TZ_CITY_ID[key] ?? (key.split('/').pop() ?? key).replace(/_/g, ' ');
+  return `Waktu ${city}`;
+}
+
+/** "10.00 - 12.00 Waktu Kuala Lumpur" dari jam dinding cabang. */
+export function jamWithZone(jamMulai: string | null | undefined, jamSelesai: string | null | undefined, tz: string | null | undefined): string {
+  const f = (s: string) => s.slice(0, 5).replace(':', '.');
+  if (!jamMulai) return tzZoneLabel(tz);
+  return `${f(jamMulai)}${jamSelesai && jamSelesai !== jamMulai ? ` - ${f(jamSelesai)}` : ''} ${tzZoneLabel(tz)}`;
+}
+
+/** "Sab, 26 Okt 2026 10.05 Waktu Kuala Lumpur" — instant di zona cabang. */
+export function instantInTzLabel(at: Date, tz: string | null | undefined, withDate = true): string {
+  const z = tzOr(tz);
+  const time = at.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: z });
+  const date = withDate ? `${at.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: z })} ` : '';
+  return `${date}${time} ${tzZoneLabel(z)}`;
+}
+
+/** Tanggal kalender event (zona cabang) → "26 Okt 2026". */
+export function eventDateLabel(tanggalMulai: Date, tz: string | null | undefined): string {
+  return calendarDateOf(tanggalMulai, tzOr(tz)).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}

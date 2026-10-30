@@ -1,5 +1,6 @@
 'use client';
 
+import { jamZone } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
 import { useRef, useState } from 'react';
@@ -47,7 +48,9 @@ interface EventDetail {
   tanggalSelesai: string | null;
   lokasi: string | null;
   sinode: { id: string; nama: string } | null;
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string } | null;
+  jamMulai?: string | null;
+  jamSelesai?: string | null;
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS';
   nominal: string | null;
   qrisImageUrl: string | null;
@@ -351,6 +354,7 @@ export default function EventDetailPage() {
               {e.tanggalSelesai && e.tanggalSelesai !== e.tanggalMulai && (
                 <> – {formatTanggalShort(e.tanggalSelesai)}</>
               )}
+              <div className="text-xs text-neutral-500 mt-0.5">{jamZone(e.jamMulai, e.jamSelesai, e.cabang?.timezone)}</div>
             </InfoBlock>
             {e.lokasi && (
               <InfoBlock icon={MapPin} label="Lokasi">

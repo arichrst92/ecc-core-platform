@@ -1,5 +1,6 @@
 'use client';
 
+import { jamZone } from '@/lib/tz-label';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -392,7 +393,7 @@ function EventActionPopup({
                 <span>·</span>
                 <span className="inline-flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  {event.jamMulai}–{event.jamSelesai}
+                  {jamZone(event.jamMulai, event.jamSelesai, (event.cabang as { timezone?: string } | undefined)?.timezone)}
                 </span>
               </div>
             </div>

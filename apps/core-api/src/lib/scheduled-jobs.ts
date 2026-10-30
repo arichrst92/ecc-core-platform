@@ -12,6 +12,7 @@
  * dedup-by-unique-key membuat aman idempotent — hanya boros query.
  * Untuk skala lebih besar, pindah ke external cron (k8s CronJob).
  */
+import { calendarDateOf, jamWithZone, tzOr } from './tz.js';
 import { runDataRetention } from './data-purge.js';
 import { encryptLegacyCredentials } from './credential-crypto.js';
 import { encryptLegacyBackups } from './db-backup.js';
@@ -125,7 +126,7 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
           jamSelesai: true,
           lokasi: true,
           isOnline: true,
-          cabang: { select: { nama: true } },
+          cabang: { select: { nama: true, timezone: true } },
         },
       },
     },
@@ -166,8 +167,10 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
         day: '2-digit',
         month: 'short',
         year: 'numeric',
+        timeZone: 'UTC', // kolom @db.Date (tengah malam UTC) — jangan geser ke zona server
       }),
-      jam: `${r.ibadah.jamMulai} - ${r.ibadah.jamSelesai}`,
+      // Jam dinding cabang + label zona (jemaat bisa di negara lain).
+      jam: jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone),
       lokasi: r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-'),
     });
 
@@ -228,12 +231,13 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
   const tomorrowIso = tomorrow.toISOString().slice(0, 10);
   const dayAfter = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
 
-  // Event punya tanggalMulai DateTime (full timestamp), bukan @db.Date.
-  // Window: tanggalMulai >= tomorrow 00:00 UTC AND < day-after 00:00 UTC.
-  const participations = await prisma.eventParticipation.findMany({
+  // Event punya tanggalMulai DateTime. Ambil jendela ±1 hari lalu saring
+  // berdasarkan TANGGAL KALENDER di zona cabang event (event lama bisa
+  // tersimpan sebagai timestamp, bukan tengah malam UTC).
+  const participationsRaw = await prisma.eventParticipation.findMany({
     where: {
       event: {
-        tanggalMulai: { gte: tomorrow, lt: dayAfter },
+        tanggalMulai: { gte: new Date(tomorrow.getTime() - 24 * 60 * 60 * 1000), lt: new Date(dayAfter.getTime() + 24 * 60 * 60 * 1000) },
         isPublished: true,
       },
       status: { in: ['DAFTAR', 'BAYAR', 'MENUNGGU_VERIFIKASI'] },
@@ -245,11 +249,17 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
           id: true,
           judul: true,
           tanggalMulai: true,
+          jamMulai: true,
+          jamSelesai: true,
           lokasi: true,
+          cabang: { select: { timezone: true } },
         },
       },
     },
   });
+  const participations = participationsRaw.filter(
+    (p) => calendarDateOf(p.event.tanggalMulai, tzOr(p.event.cabang?.timezone)).toISOString().slice(0, 10) === tomorrowIso,
+  );
 
   let sent = 0;
   let failed = 0;
@@ -275,13 +285,13 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       skipped++;
       continue;
     }
-    const eventTime = new Date(p.event.tanggalMulai).toLocaleString('id-ID', {
+    // Tanggal kalender + jam dinding cabang + label zona (bukan jam server).
+    const eventTime = `${tomorrow.toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+      timeZone: 'UTC',
+    })}, ${jamWithZone(p.event.jamMulai, p.event.jamSelesai, p.event.cabang?.timezone)}`;
     const message = renderTemplate(cfg.template, {
       nama: p.jemaat.namaLengkap,
       event_judul: p.event.judul,

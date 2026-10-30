@@ -59,8 +59,11 @@ interface KehadiranSummary {
   batal: number;
 }
 
-/** Hari ini (WIB) YYYY-MM-DD. */
-const todayWib = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+/** Hari ini menurut jam perangkat admin (cabang mana pun), YYYY-MM-DD. */
+const todayWib = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const STATUS_COLOR: Record<ReservasiStatus, string> = {
   RESERVE: 'bg-amber-100 text-amber-800',

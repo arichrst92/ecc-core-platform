@@ -832,6 +832,7 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
+          timeZone: 'UTC', // kolom tanggal (@db.Date) — jangan geser zona server
         }),
         posisi: a.pelayananRole.nama,
         notes: a.notes ? `Catatan: ${a.notes}` : '',

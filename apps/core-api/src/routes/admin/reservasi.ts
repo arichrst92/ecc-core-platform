@@ -1,3 +1,4 @@
+import { instantInTzLabel } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -932,7 +933,12 @@ async function notifyKidsPickup(
 ): Promise<void> {
   const guardians = await resolveGuardianJemaatIds(anakId);
   if (guardians.length === 0) return;
-  const jam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  // Jam jemput di zona waktu cabang ibadah (bukan zona server).
+  const tzRow = await prisma.reservasi.findUnique({
+    where: { id: reservasiId },
+    select: { ibadah: { select: { cabang: { select: { timezone: true } } } } },
+  });
+  const jam = instantInTzLabel(new Date(), tzRow?.ibadah.cabang.timezone, false);
   await createNotificationBatch(guardians, {
     type: 'CKIDS_PICKUP',
     title: `${anakNama} sudah dijemput`,

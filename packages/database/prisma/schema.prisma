@@ -266,6 +266,7 @@ model Jemaat {
   homecellAttendanceScans      HomecellAttendance[]          @relation("HomecellAttendanceScanner")
   eventPartisipasi             EventParticipation[]          @relation("EventPartisipasi")
   consents                     UserConsent[]
+  serviceReviews               ServiceReview[]
   eventApprovals               EventParticipation[]          @relation("EventApprover")
   eventVolunteer               EventPelayananPetugas[]       @relation("EventVolunteer")
   eventDonationApprovals       EventDonation[]               @relation("EventDonationApprover")
@@ -913,6 +914,7 @@ model Reservasi {
   // Modul 27 — parent yg jemput (nullable, cuma set setelah pickup)
   pickedUpBy Jemaat? @relation("ReservasiPickedUpBy", fields: [pickedUpByJemaatId], references: [id], onDelete: SetNull)
 
+  review ServiceReview? @relation("ReviewReservasi")
   @@unique([jemaatId, ibadahId, tanggalIbadah])
   @@index([ibadahId, tanggalIbadah])
   @@index([jemaatId])
@@ -1458,6 +1460,7 @@ model EventParticipation {
   approver  Jemaat?         @relation("EventApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
   donations EventDonation[]
 
+  review ServiceReview? @relation("ReviewParticipation")
   @@unique([eventId, jemaatId])
   @@index([eventId])
   @@index([jemaatId])
@@ -3841,4 +3844,35 @@ model ProcessingActivity {
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@map("processing_activity")
+}
+
+// ============================================================
+// ServiceReview — ulasan & rating jemaat untuk ibadah / event, diberikan
+// dari tiket (reservasi / partisipasi event) saat acara sudah dimulai
+// sampai 14 hari setelah selesai. Satu ulasan per tiket (bisa diubah).
+// ============================================================
+model ServiceReview {
+  id              String   @id @default(uuid()) @db.Uuid
+  kind            String   @db.VarChar(10) // IBADAH | EVENT
+  reservasiId     String?  @unique @map("reservasi_id") @db.Uuid
+  participationId String?  @unique @map("participation_id") @db.Uuid
+  ibadahId        String?  @map("ibadah_id") @db.Uuid
+  tanggal         DateTime? @db.Date // tanggal ibadah (IBADAH)
+  eventId         String?  @map("event_id") @db.Uuid
+  jemaatId        String   @map("jemaat_id") @db.Uuid
+  cabangId        String?  @map("cabang_id") @db.Uuid
+  rating          Int // 1–5
+  komentar        String?  @db.Text
+  isAnonim        Boolean  @default(false) @map("is_anonim")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  reservasi     Reservasi?          @relation("ReviewReservasi", fields: [reservasiId], references: [id], onDelete: Cascade)
+  participation EventParticipation? @relation("ReviewParticipation", fields: [participationId], references: [id], onDelete: Cascade)
+  jemaat        Jemaat              @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([ibadahId, tanggal])
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("service_review")
 }

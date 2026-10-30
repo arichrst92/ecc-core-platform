@@ -100,6 +100,7 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
       data: { isi: '[dihapus]', untukNama: null, kesaksian: null, catatanPetugas: null },
     });
     await tx.feedback.updateMany({ where: { jemaatId: j.id }, data: { isi: '[dihapus]' } });
+    await tx.serviceReview.updateMany({ where: { jemaatId: j.id }, data: { komentar: null, isAnonim: true } });
     await tx.jemaatSertifikat.deleteMany({ where: { jemaatId: j.id } });
     await tx.magicLinkToken.deleteMany({ where: { jemaatId: j.id } });
     await tx.webActionToken.deleteMany({ where: { jemaatId: j.id } });

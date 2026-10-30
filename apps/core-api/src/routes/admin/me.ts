@@ -59,6 +59,7 @@ import { mePrivacyRouter } from './me-privacy.js';
 import { meConsentRouter } from './me-consent.js';
 import { meExportRouter } from './me-export.js';
 import { meCommPrefsRouter } from './me-comm-prefs.js';
+import { meReviewRouter } from './me-review.js';
 import { meSpiritualJourneyRouter } from './me-spiritual-journey.js';
 import { privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
@@ -85,6 +86,7 @@ meRouter.use('/privacy', mePrivacyRouter);
 meRouter.use('/consent', meConsentRouter);
 meRouter.use('/export', meExportRouter);
 meRouter.use('/communication', meCommPrefsRouter);
+meRouter.use('/reviews', meReviewRouter);
 meRouter.use('/spiritual-journey', meSpiritualJourneyRouter);
 // Self check-in ibadah (saya + keluarga) → me-ibadah.ts
 meRouter.use('/ibadah', meIbadahRouter);

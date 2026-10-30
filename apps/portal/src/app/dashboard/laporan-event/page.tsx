@@ -4,6 +4,9 @@
  * Laporan Event — terdaftar vs hadir per event, cara check-in, tamu.
  * API: /admin/report/event
  */
+import { ReviewReportCard, type ReviewItem, type ReviewSummary } from '@/components/reviews/review-panel';
+
+type ReviewReport = { overall: ReviewSummary; perItem: (ReviewSummary & { key: string; label: string })[]; comments: ReviewItem[] };
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -52,8 +55,11 @@ interface EventReport {
     persenHadir: number | null;
     tamuTerdaftar: number;
     tamuHadir: number;
+    ratingAvg?: number | null;
+    ratingCount?: number;
     methods: MethodCount;
   }[];
+  reviews?: ReviewReport;
   guests: {
     eventId: string;
     eventJudul: string;
@@ -149,6 +155,7 @@ export default function LaporanEventPage() {
                     <th className="text-right px-4 py-2 font-medium">%</th>
                     <th className="text-right px-4 py-2 font-medium">Tamu</th>
                     <th className="text-right px-4 py-2 font-medium">Batal</th>
+                    <th className="text-right px-4 py-2 font-medium">Rating</th>
                     <th className="text-left px-4 py-2 font-medium">Cara check-in</th>
                   </tr>
                 </thead>
@@ -182,6 +189,13 @@ export default function LaporanEventPage() {
                         {e.tamuHadir}/{e.tamuTerdaftar}
                       </td>
                       <td className="px-4 py-2 text-right text-neutral-500">{e.batal || ''}</td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {e.ratingAvg != null ? (
+                          <span className="font-semibold text-amber-600">{e.ratingAvg}★ <span className="text-[11px] text-neutral-400 font-normal">({e.ratingCount})</span></span>
+                        ) : (
+                          <span className="text-neutral-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2">
                         <MethodInline methods={e.methods} />
                       </td>
@@ -189,7 +203,7 @@ export default function LaporanEventPage() {
                   ))}
                   {d.events.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center text-neutral-400 py-8">
+                      <td colSpan={8} className="text-center text-neutral-400 py-8">
                         Tidak ada event di periode ini.
                       </td>
                     </tr>
@@ -198,6 +212,9 @@ export default function LaporanEventPage() {
               </table>
             </div>
           </div>
+
+          {/* Ulasan jemaat */}
+          <ReviewReportCard data={d.reviews} itemHeader="Event" />
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-neutral-100">

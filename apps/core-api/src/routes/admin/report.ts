@@ -16,6 +16,8 @@ import { resolveJemaatAccess } from '../../lib/menu-access.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { resolvePeriod, todayWib, ymd } from '../../lib/last-attendance.js';
 import { esc, fmtTgl, sendCsv, sendPrintHtml, summaryCards } from '../../lib/print-report.js';
+import { buildReviewReport, eventReviews, ibadahReviews } from '../../lib/service-review.js';
+import { reviewSectionHtml } from '../../lib/service-review-html.js';
 import { renderIbadahReportHtml } from '../../lib/ibadah-report-html.js';
 import {
   CHECKIN_METHODS,
@@ -182,8 +184,21 @@ async function ibadahReportData(req: Request) {
     ibadahLabel,
   });
 
+  // Ulasan jemaat (rating 1–5 + komentar) untuk pertemuan di periode.
+  const rvRaw = buildReviewReport(await ibadahReviews(ids, period.from, period.to), (r) => r.ibadahId);
+  const ibLbl = (id: string | null) => {
+    const l = id ? ibadahLabel(id) : null;
+    return l ? `${l.nama}${l.jamMulai ? ` ${l.jamMulai}` : ''}${l.cabang ? ` · ${l.cabang}` : ''}` : '—';
+  };
+  const reviews = {
+    overall: rvRaw.overall,
+    perItem: rvRaw.perKey.map((p) => ({ ...p, label: ibLbl(p.key) })),
+    comments: rvRaw.comments.map((c) => ({ ...c, label: ibLbl(c.ibadahId) })),
+  };
+
   return {
     period: { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' },
+    reviews,
     summary: { ...report.summary, okupansi: occ.overall },
     insights,
     kids,
@@ -559,6 +574,14 @@ reportRouter.get('/ibadah/export', async (req, res) => {
         ...CHECKIN_METHODS.map((m) => o.methods[m]),
       ]),
       [],
+      ['ULASAN JEMAAT', 'Jumlah', 'Rata-rata (1–5)', 'Komentar'],
+      ['Semua ibadah', d.reviews.overall.count, d.reviews.overall.avg ?? '', d.reviews.overall.withComment],
+      ...d.reviews.perItem.map((p) => [p.label, p.count, p.avg ?? '', p.withComment]),
+      ['Sebaran bintang', '5★', '4★', '3★', '2★', '1★'],
+      ['', ...[5, 4, 3, 2, 1].map((k) => d.reviews.overall.dist[k - 1])],
+      ['Komentar', 'Tanggal', 'Rating', 'Ibadah', 'Nama'],
+      ...d.reviews.comments.map((c) => [c.komentar ?? '', c.tanggal ?? '', c.rating, c.label, c.nama]),
+      [],
       ['DAFTAR TAMU'],
       ['Nama', 'No HP', 'Status', 'Kunjungan (periode)', 'Kunjungan pertama', 'Kunjungan terakhir', 'Ibadah', 'Dibawa oleh', 'Walk-in'],
       ...d.guests.map((g) => [
@@ -631,6 +654,8 @@ async function eventReportData(req: Request) {
       })
     : [];
   const report = buildEventReport(ids, rows);
+  const rvRaw = buildReviewReport(await eventReviews(ids), (r) => r.eventId);
+  const rvByEvent = new Map(rvRaw.perKey.map((p) => [p.key, p]));
   const inviterNames = await namesOf([...new Set(report.guests.map((g) => g.inviterId).filter((x): x is string => !!x))]);
   const evById = new Map(events.map((e) => [e.id, e]));
   return {
@@ -638,10 +663,18 @@ async function eventReportData(req: Request) {
       ? { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' }
       : null,
     summary: report.summary,
+    reviews: {
+      overall: rvRaw.overall,
+      perItem: rvRaw.perKey.map((p) => ({ ...p, label: evById.get(p.key)?.judul ?? '—' })),
+      comments: rvRaw.comments.map((c) => ({ ...c, label: (c.eventId && evById.get(c.eventId)?.judul) || '—' })),
+    },
     events: report.events.map((r) => {
       const e = evById.get(r.eventId)!;
+      const rv = rvByEvent.get(r.eventId);
       return {
         ...r,
+        ratingAvg: rv?.avg ?? null,
+        ratingCount: rv?.count ?? 0,
         judul: e.judul,
         tanggalMulai: e.tanggalMulai,
         tanggalSelesai: e.tanggalSelesai,
@@ -679,7 +712,7 @@ reportRouter.get('/event/export', async (req, res) => {
   const format = (q(req, 'format') ?? 'pdf').toLowerCase();
   if (format === 'csv') {
     const lines = [
-      ['Tanggal', 'Event', 'Cabang', 'Terdaftar', 'Hadir', '% Hadir', 'Batal', 'Tamu terdaftar', 'Tamu hadir', ...CHECKIN_METHODS.map((m) => METHOD_LABEL[m])],
+      ['Tanggal', 'Event', 'Cabang', 'Terdaftar', 'Hadir', '% Hadir', 'Batal', 'Tamu terdaftar', 'Tamu hadir', 'Rating (1–5)', 'Ulasan', ...CHECKIN_METHODS.map((m) => METHOD_LABEL[m])],
       ...d.events.map((e) => [
         ymd(e.tanggalMulai),
         e.judul,
@@ -690,8 +723,15 @@ reportRouter.get('/event/export', async (req, res) => {
         e.batal,
         e.tamuTerdaftar,
         e.tamuHadir,
+        e.ratingAvg ?? '',
+        e.ratingCount,
         ...CHECKIN_METHODS.map((m) => e.methods[m]),
       ]),
+      [],
+      ['ULASAN JEMAAT', 'Jumlah', 'Rata-rata (1–5)', 'Komentar'],
+      ['Semua event', d.reviews.overall.count, d.reviews.overall.avg ?? '', d.reviews.overall.withComment],
+      ['Komentar', 'Rating', 'Event', 'Nama'],
+      ...d.reviews.comments.map((c) => [c.komentar ?? '', c.rating, c.label, c.nama]),
       [],
       ['DAFTAR TAMU'],
       ['Event', 'Nama', 'No HP', 'Status', 'Dibawa oleh / walk-in'],
@@ -708,17 +748,20 @@ ${summaryCards([
   ['% Hadir', s.persenHadir != null ? `${s.persenHadir}%` : '—'],
   ['Tamu hadir', s.tamuHadir],
   ['Tamu unik', s.tamuUnik],
+  ['Rating', d.reviews.overall.avg != null ? `${d.reviews.overall.avg} ★ (${d.reviews.overall.count})` : '—'],
 ])}
 ${methodLine(s.methods)}
 <h2>Per event</h2>
-<table><thead><tr><th>Tanggal</th><th>Event</th><th>Cabang</th><th class="r">Terdaftar</th><th class="r">Hadir</th><th class="r">%</th><th class="r">Batal</th><th class="r">Tamu</th><th>Cara check-in</th></tr></thead><tbody>
+<table><thead><tr><th>Tanggal</th><th>Event</th><th>Cabang</th><th class="r">Terdaftar</th><th class="r">Hadir</th><th class="r">%</th><th class="r">Batal</th><th class="r">Tamu</th><th class="r">Rating</th><th>Cara check-in</th></tr></thead><tbody>
 ${d.events
   .map(
     (e) =>
-      `<tr><td>${fmtTgl(ymd(e.tanggalMulai))}</td><td>${esc(e.judul)}</td><td>${esc(e.cabang ?? 'Global')}</td><td class="r">${e.terdaftar}</td><td class="r b">${e.hadir}</td><td class="r">${e.persenHadir != null ? `${e.persenHadir}%` : '—'}</td><td class="r">${e.batal}</td><td class="r">${e.tamuHadir}/${e.tamuTerdaftar}</td><td class="muted">${methodInline(e.methods)}</td></tr>`,
+      `<tr><td>${fmtTgl(ymd(e.tanggalMulai))}</td><td>${esc(e.judul)}</td><td>${esc(e.cabang ?? 'Global')}</td><td class="r">${e.terdaftar}</td><td class="r b">${e.hadir}</td><td class="r">${e.persenHadir != null ? `${e.persenHadir}%` : '—'}</td><td class="r">${e.batal}</td><td class="r">${e.tamuHadir}/${e.tamuTerdaftar}</td><td class="r">${e.ratingAvg != null ? `${e.ratingAvg}★ <span class="muted">(${e.ratingCount})</span>` : '—'}</td><td class="muted">${methodInline(e.methods)}</td></tr>`,
   )
   .join('')}
 </tbody></table>
+<h2>Ulasan jemaat</h2>
+${reviewSectionHtml(d.reviews, 'Event')}
 <h2>Daftar tamu (${d.guests.length})</h2>
 ${
   d.guests.length

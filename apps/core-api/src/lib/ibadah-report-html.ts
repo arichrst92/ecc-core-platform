@@ -7,6 +7,7 @@
 import { esc, fmtTgl } from './print-report.js';
 import { CHECKIN_METHODS, METHOD_LABEL, type MethodCount } from './attendance-report.js';
 import { REPORT_CSS, barRow, columnChart, donut, kpi, n, pctTxt, section } from './cabang-report-html.js';
+import { reviewSectionHtml } from './service-review-html.js';
 
 /** Bentuk data dari routes/admin/report.ts → ibadahReportData(). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,6 +196,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   ${kidsSection}
   ${section('Ringkasan per Ibadah', '⛪', '#f97316', perIbadahTable, 'Pertemuan ada kehadiran / terjadwal · okupansi = rata-rata hadir ÷ seat · vs lalu = total dibanding periode sebelumnya')}
   ${section('Sorotan Pertemuan', '⭐', '#f59e0b', highlights)}
+  ${section('Ulasan Jemaat', '💬', '#f59e0b', reviewSectionHtml(d.reviews, 'Ibadah'), d.reviews.overall.count ? `Rating 1–5 dari tiket reservasi · ${d.reviews.overall.count} ulasan` : 'Rating 1–5 dari tiket reservasi')}
   ${section(`Tamu (${n(d.guests.length)})`, '🙋', '#8b5cf6', guests, 'Untuk tindak lanjut tim penyambutan')}
 
   <div class="foot">

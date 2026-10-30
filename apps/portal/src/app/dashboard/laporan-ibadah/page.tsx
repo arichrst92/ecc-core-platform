@@ -4,6 +4,9 @@
  * Laporan Ibadah — kehadiran jemaat & tamu, tren mingguan, cara check-in,
  * per pertemuan, dan daftar tamu (untuk tindak lanjut). API: /admin/report/ibadah
  */
+import { ReviewReportCard, type ReviewItem, type ReviewSummary } from '@/components/reviews/review-panel';
+
+type ReviewReport = { overall: ReviewSummary; perItem: (ReviewSummary & { key: string; label: string })[]; comments: ReviewItem[] };
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -252,6 +255,7 @@ interface IbadahReport {
     melebihi: number;
     ibadah: IbadahLabel;
   }[];
+  reviews?: ReviewReport;
   guests: {
     id: string;
     namaLengkap: string;
@@ -479,6 +483,9 @@ export default function LaporanIbadahPage() {
               ) : null}
             </div>
           </div>
+
+          {/* Ulasan jemaat */}
+          <ReviewReportCard data={d.reviews} itemHeader="Ibadah" />
 
           {/* Ringkasan per ibadah */}
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">

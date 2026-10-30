@@ -1,5 +1,6 @@
 'use client';
 
+import { ReviewPanel } from '@/components/reviews/review-panel';
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -392,6 +393,8 @@ export default function IbadahDetailPage() {
           )}
         </div>
       </section>
+
+      <ReviewPanel kind="ibadah" id={ibadahId} />
 
       {addLinkOpen && (
         <AddPelayananLinkModal

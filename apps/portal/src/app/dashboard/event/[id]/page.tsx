@@ -1,5 +1,6 @@
 'use client';
 
+import { ReviewPanel } from '@/components/reviews/review-panel';
 import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
 import { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -481,6 +482,9 @@ export default function EventDetailPage() {
 
       {/* Ministry & Volunteer (hanya untuk event yang butuh kehadiran) */}
       {e.butuhKehadiran && <EventMinistrySection eventId={eventId} />}
+
+      {/* Ulasan jemaat (rating dari tiket) */}
+      <ReviewPanel kind="event" id={eventId} />
 
       {/* Peserta section */}
       <div className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">

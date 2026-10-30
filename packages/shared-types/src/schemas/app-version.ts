@@ -18,6 +18,8 @@ export const upsertAppVersionSchema = z.object({
   latestVersion: z.string().trim().regex(semverRegex, 'Format harus semver MAJOR.MINOR.PATCH (mis. 1.2.0)'),
   minSupportedVersion: z.string().trim().regex(semverRegex, 'Format harus semver MAJOR.MINOR.PATCH'),
   releaseNotes: emptyToUndefined(z.string().trim().max(5000)),
+  /** Catatan rilis bahasa Inggris — untuk app yang memakai bahasa English. */
+  releaseNotesEn: emptyToUndefined(z.string().trim().max(5000)),
   downloadUrl: z.string().trim().url().max(500),
   isPublished: z.boolean().default(false),
 });

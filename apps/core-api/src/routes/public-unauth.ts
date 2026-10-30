@@ -79,6 +79,7 @@ publicUnauthRouter.get('/maintenance', async (_req, res) => {
       data: {
         isEnabled: false,
         message: null,
+        messageEn: null,
         startedAt: null,
         estimatedEndAt: null,
       },
@@ -96,6 +97,7 @@ publicUnauthRouter.get('/maintenance', async (_req, res) => {
     data: {
       isEnabled,
       message: row.message,
+      messageEn: row.messageEn,
       startedAt: row.startedAt,
       estimatedEndAt: row.estimatedEndAt,
     },
@@ -164,6 +166,7 @@ publicUnauthRouter.get('/app-version', async (req, res) => {
         updateAvailable: false,
         forceUpdate: false,
         releaseNotes: null,
+        releaseNotesEn: null,
         downloadUrl: null,
         publishedAt: null,
       },
@@ -186,6 +189,7 @@ publicUnauthRouter.get('/app-version', async (req, res) => {
       updateAvailable,
       forceUpdate,
       releaseNotes: row.releaseNotes,
+      releaseNotesEn: row.releaseNotesEn,
       downloadUrl: row.downloadUrl,
       publishedAt: row.publishedAt,
     },

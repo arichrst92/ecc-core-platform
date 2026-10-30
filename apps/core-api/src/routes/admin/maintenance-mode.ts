@@ -52,6 +52,7 @@ maintenanceModeRouter.put('/', async (req, res) => {
       id: SINGLETON_ID,
       isEnabled: input.isEnabled,
       message: input.message ?? null,
+      messageEn: input.messageEn ?? null,
       startedAt,
       estimatedEndAt,
       updatedByUserId: req.user.sub,
@@ -59,6 +60,7 @@ maintenanceModeRouter.put('/', async (req, res) => {
     update: {
       isEnabled: input.isEnabled,
       message: input.message ?? null,
+      messageEn: input.messageEn ?? null,
       startedAt,
       estimatedEndAt,
       updatedByUserId: req.user.sub,

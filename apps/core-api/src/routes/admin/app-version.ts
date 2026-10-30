@@ -53,6 +53,7 @@ appVersionRouter.post('/', async (req, res) => {
         latestVersion: input.latestVersion,
         minSupportedVersion: input.minSupportedVersion,
         releaseNotes: input.releaseNotes,
+        releaseNotesEn: input.releaseNotesEn,
         downloadUrl: input.downloadUrl,
         isPublished: input.isPublished,
         publishedAt: input.isPublished ? now : null,
@@ -92,6 +93,8 @@ appVersionRouter.patch('/:id', async (req, res) => {
     if (input.latestVersion !== undefined) data.latestVersion = input.latestVersion;
     if (input.minSupportedVersion !== undefined) data.minSupportedVersion = input.minSupportedVersion;
     if (input.releaseNotes !== undefined) data.releaseNotes = input.releaseNotes;
+    // Form Portal selalu mengirim field EN; kosong = hapus (pakai catatan Indonesia).
+    if ('releaseNotesEn' in req.body) data.releaseNotesEn = input.releaseNotesEn ?? null;
     if (input.downloadUrl !== undefined) data.downloadUrl = input.downloadUrl;
     if (input.isPublished !== undefined) {
       data.isPublished = input.isPublished;

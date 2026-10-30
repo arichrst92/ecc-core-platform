@@ -1859,6 +1859,8 @@ model AppVersion {
   latestVersion       String    @map("latest_version") @db.VarChar(20)
   minSupportedVersion String    @map("min_supported_version") @db.VarChar(20)
   releaseNotes        String?   @map("release_notes") @db.Text // markdown atau plain
+  // Catatan rilis bahasa Inggris (app bahasa English). Kosong → pakai releaseNotes.
+  releaseNotesEn      String?   @map("release_notes_en") @db.Text
   downloadUrl         String    @map("download_url") @db.Text
   isPublished         Boolean   @default(false) @map("is_published")
   publishedAt         DateTime? @map("published_at")
@@ -2036,6 +2038,8 @@ model MaintenanceMode {
   // Pesan yang ditampilkan ke user mobile. Mendukung plain text atau markdown
   // singkat. Optional — default "Sistem sedang dalam pemeliharaan."
   message         String?   @db.Text
+  // Pesan bahasa Inggris (app bahasa English). Kosong → pakai message.
+  messageEn       String?   @map("message_en") @db.Text
   // Kapan maintenance dimulai. Diset otomatis ke now() saat enable.
   startedAt       DateTime? @map("started_at")
   // Estimasi selesai. Diset otomatis = startedAt + durasi user input.

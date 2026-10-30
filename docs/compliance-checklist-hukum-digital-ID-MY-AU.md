@@ -1,7 +1,7 @@
 # Checklist Kepatuhan Hukum Digital — Ekosistem Els App (Indonesia · Malaysia · Australia)
 
 **Cakupan:** Els App (iOS, Android, web), Portal admin, CKids, core-api, layar `/monitor`.
-**Per tanggal:** 29 Oktober 2026 (revisi 10 — Compliance: SOP, backup bulanan, catatan pemrosesan; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
+**Per tanggal:** 29 Oktober 2026 (revisi 11 — + ulasan ibadah/event di Catatan Pemrosesan (P-12); cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
 
 > **Bukan nasihat hukum.** Dokumen ini adalah daftar periksa teknis–operasional untuk membantu tim. Keputusan akhir (mis. penunjukan DPO, isi Kebijakan Privasi, dasar hukum pemrosesan) perlu dikonfirmasi dengan penasihat hukum di masing-masing negara.
 
@@ -120,6 +120,8 @@
 **Kesimpulan (revisi 5):** dengan terbitnya Kebijakan Privasi & S&K **v3.0** dan penunjukan **DPO**, sisi dokumen hampir lengkap. Fokus berikutnya adalah **menjalankan janji di dokumen**: persetujuan tercatat (No. 2), hapus data wajah (No. 13), hapus permanen & retensi otomatis (No. 5, 14), SOP kebocoran & permintaan data 3×24 jam (No. 8), dan DPA vendor. Dokumen sudah tayang dalam 3 bahasa.
 
 **Perubahan dari revisi 1:** No. 1, 6, 9, 15, 18 · A2 · MY-1, MY-4 · AU-2.
+
+**Revisi 11 (30 Okt 2026):** Catatan Pemrosesan kini 12 aktivitas (P-12 Ulasan ibadah & event, risiko rendah). Fitur kepatuhan untuk jemaat dirilis di app 2.4.4.
 
 **Revisi 10 (30 Okt 2026):** dibangun Compliance → Catatan Pemrosesan & Risiko (No. 17, ID-2).
 

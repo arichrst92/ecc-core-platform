@@ -25,6 +25,7 @@ interface AppVersionItem {
   latestVersion: string;
   minSupportedVersion: string;
   releaseNotes: string | null;
+  releaseNotesEn: string | null;
   downloadUrl: string;
   isPublished: boolean;
   publishedAt: string | null;
@@ -39,8 +40,8 @@ const PLATFORM_LABEL: Record<Platform, string> = {
 };
 
 const PLATFORM_DEFAULT_URL: Record<Platform, string> = {
-  IOS: 'https://apps.apple.com/id/app/ecc-global/',
-  ANDROID: 'https://play.google.com/store/apps/details?id=asia.ide.ecc',
+  IOS: 'https://apps.apple.com/id/app/els-app/id6804400672',
+  ANDROID: 'https://play.google.com/store/apps/details?id=idea.eccchurch.global',
 };
 
 export default function AppVersionPage() {
@@ -179,6 +180,7 @@ function VersionRow({
   const [latestVersion, setLatestVersion] = useState(row.latestVersion);
   const [minSupportedVersion, setMinSupportedVersion] = useState(row.minSupportedVersion);
   const [releaseNotes, setReleaseNotes] = useState(row.releaseNotes ?? '');
+  const [releaseNotesEn, setReleaseNotesEn] = useState(row.releaseNotesEn ?? '');
   const [downloadUrl, setDownloadUrl] = useState(row.downloadUrl);
   const [isPublished, setIsPublished] = useState(row.isPublished);
 
@@ -186,6 +188,7 @@ function VersionRow({
     setLatestVersion(row.latestVersion);
     setMinSupportedVersion(row.minSupportedVersion);
     setReleaseNotes(row.releaseNotes ?? '');
+    setReleaseNotesEn(row.releaseNotesEn ?? '');
     setDownloadUrl(row.downloadUrl);
     setIsPublished(row.isPublished);
   }, [row]);
@@ -196,6 +199,7 @@ function VersionRow({
         latestVersion,
         minSupportedVersion,
         releaseNotes,
+        releaseNotesEn,
         downloadUrl,
         isPublished,
       }),
@@ -274,13 +278,25 @@ function VersionRow({
           />
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1">
-              Release notes <span className="text-neutral-400">(plain text atau markdown)</span>
+              Release notes (Indonesia) <span className="text-neutral-400">(plain text atau markdown)</span>
             </label>
             <textarea
               value={releaseNotes}
               onChange={(e) => setReleaseNotes(e.target.value)}
               rows={5}
               placeholder={'- Fix bug X\n- New feature Y'}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">
+              Release notes (English) <span className="text-neutral-400">— untuk app bahasa English; kosong = tanpa catatan rilis</span>
+            </label>
+            <textarea
+              value={releaseNotesEn}
+              onChange={(e) => setReleaseNotesEn(e.target.value)}
+              rows={5}
+              placeholder={'- Fixed X\n- New Y'}
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-mono"
             />
           </div>
@@ -343,6 +359,7 @@ function CreateModal({
   const [latestVersion, setLatestVersion] = useState('1.0.0');
   const [minSupportedVersion, setMinSupportedVersion] = useState('1.0.0');
   const [releaseNotes, setReleaseNotes] = useState('');
+  const [releaseNotesEn, setReleaseNotesEn] = useState('');
   const [downloadUrl, setDownloadUrl] = useState(PLATFORM_DEFAULT_URL[defaultPlatform]);
   const [isPublished, setIsPublished] = useState(true);
 
@@ -357,6 +374,7 @@ function CreateModal({
         latestVersion,
         minSupportedVersion,
         releaseNotes,
+        releaseNotesEn,
         downloadUrl,
         isPublished,
       }),
@@ -406,13 +424,25 @@ function CreateModal({
             <Field label="Download URL" value={downloadUrl} onChange={setDownloadUrl} />
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">
-                Release notes
+                Release notes (Indonesia)
               </label>
               <textarea
                 value={releaseNotes}
                 onChange={(e) => setReleaseNotes(e.target.value)}
                 rows={5}
                 placeholder={'- Fix bug X\n- New feature Y'}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">
+                Release notes (English) <span className="text-neutral-400">— untuk app bahasa English; kosong = tanpa catatan rilis</span>
+              </label>
+              <textarea
+                value={releaseNotesEn}
+                onChange={(e) => setReleaseNotesEn(e.target.value)}
+                rows={5}
+                placeholder={'- Fixed X\n- New Y'}
                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-mono"
               />
             </div>

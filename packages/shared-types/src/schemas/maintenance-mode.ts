@@ -21,6 +21,8 @@ import { emptyToUndefined } from './common.js';
 export const setMaintenanceModeSchema = z.object({
   isEnabled: z.boolean(),
   message: emptyToUndefined(z.string().trim().max(1000)),
+  /** Pesan bahasa Inggris — untuk app yang memakai bahasa English. */
+  messageEn: emptyToUndefined(z.string().trim().max(1000)),
   /**
    * Durasi estimasi maintenance dalam menit. Range 1 menit – 24 jam.
    * Diabaikan saat isEnabled=false.

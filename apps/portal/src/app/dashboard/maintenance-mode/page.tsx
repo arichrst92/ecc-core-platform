@@ -19,6 +19,7 @@ interface MaintenanceMode {
   id: string;
   isEnabled: boolean;
   message: string | null;
+  messageEn: string | null;
   startedAt: string | null;
   estimatedEndAt: string | null;
   updatedByUserId: string | null;
@@ -28,6 +29,7 @@ interface MaintenanceMode {
 
 const DEFAULT_MESSAGE =
   'Sistem sedang dalam pemeliharaan. Mohon coba kembali sebentar lagi.';
+const DEFAULT_MESSAGE_EN = "We're doing some maintenance. Please try again shortly.";
 
 function fmtDuration(ms: number): string {
   if (ms <= 0) return 'Selesai';
@@ -69,12 +71,16 @@ export default function MaintenanceModePage() {
 
   // Local edit form state
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
+  const [messageEn, setMessageEn] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number | ''>(60);
 
   // Sync form dengan status saat data datang (kalau aktif, isi message dari server)
   useEffect(() => {
     if (status?.message) setMessage(status.message);
   }, [status?.message]);
+  useEffect(() => {
+    if (status?.messageEn) setMessageEn(status.messageEn);
+  }, [status?.messageEn]);
 
   // Live countdown
   const [now, setNow] = useState(() => Date.now());
@@ -95,6 +101,7 @@ export default function MaintenanceModePage() {
       await apiClient.put('/admin/maintenance-mode', {
         isEnabled: true,
         message: message.trim() || undefined,
+        messageEn: messageEn.trim() || undefined,
         durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
       });
     },
@@ -122,6 +129,7 @@ export default function MaintenanceModePage() {
       await apiClient.put('/admin/maintenance-mode', {
         isEnabled: true,
         message: message.trim() || undefined,
+        messageEn: messageEn.trim() || undefined,
         durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
       });
     },
@@ -225,7 +233,7 @@ export default function MaintenanceModePage() {
           <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Pesan ke user
+                Pesan ke jemaat (Bahasa Indonesia)
               </label>
               <textarea
                 value={message}
@@ -237,6 +245,23 @@ export default function MaintenanceModePage() {
               <p className="text-xs text-neutral-500 mt-1">
                 Tampil di modal mobile saat maintenance aktif. Plain text — markdown
                 singkat OK (bold/italic). Default kalau kosong: "{DEFAULT_MESSAGE}"
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Pesan ke jemaat (English)
+              </label>
+              <textarea
+                value={messageEn}
+                onChange={(e) => setMessageEn(e.target.value)}
+                rows={3}
+                placeholder={DEFAULT_MESSAGE_EN}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+              />
+              <p className="text-xs text-neutral-500 mt-1">
+                Untuk jemaat yang memakai app dalam bahasa English. Kosong → app memakai
+                teks bawaan English (pesan Indonesia di atas tidak ditampilkan ke mereka).
               </p>
             </div>
 

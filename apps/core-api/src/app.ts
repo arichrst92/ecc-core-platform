@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { reportPublicRouter } from './routes/report-public.js';
+import { publicBackupRouter } from './routes/public-backup.js';
 import { publicHomecellRouter } from './routes/public-homecell.js';
 import { telemetryRouter } from './routes/telemetry.js';
 import { publicMonitorRouter } from './routes/public-monitor.js';
@@ -140,6 +141,7 @@ export function createApp(): Express {
   // saja karena unauthenticated.
   // Laporan homecell/area untuk app mobile (link bertanda tangan, tanpa JWT).
   app.use('/public/report', reportPublicRouter);
+  app.use('/public/backup', publicBackupRouter);
   // Mode tamu: cari homecell & minta bergabung (tanpa akun).
   app.use('/public/homecell', publicHomecellRouter);
   // Layar monitor ibadah/event tanpa login (kode akses .env MONITOR_ACCESS_CODE).

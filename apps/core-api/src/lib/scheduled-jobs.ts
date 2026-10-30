@@ -15,6 +15,7 @@
 import { runDataRetention } from './data-purge.js';
 import { encryptLegacyCredentials } from './credential-crypto.js';
 import { encryptLegacyBackups } from './db-backup.js';
+import { backupEmailTick } from './backup-email.js';
 import { prisma } from '@ecc/database';
 import { sendWhatsAppText } from '@ecc/auth';
 import { getConfig, renderTemplate } from './wa-notif.js';
@@ -545,7 +546,12 @@ export function startScheduledJobs() {
   }, 60_000);
   const h9 = setInterval(() => void analyticsCleanupJob(), AUDIT_LOG_INTERVAL_MS);
   const h10 = setInterval(() => void dataRetentionJob(), AUDIT_LOG_INTERVAL_MS);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10]) {
+  // Kirim backup terenkripsi bulanan via email (Portal → Compliance). Cek tiap jam.
+  const backupEmailJob = wrap('backup-email-monthly', () =>
+    backupEmailTick(process.env.PUBLIC_API_URL ?? 'https://api.eccchurch.global'),
+  );
+  const h11 = setInterval(() => void backupEmailJob(), 60 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11]) {
     h.unref?.();
     intervalHandles.push(h);
   }

@@ -1,7 +1,7 @@
 # Checklist Kepatuhan Hukum Digital — Ekosistem Els App (Indonesia · Malaysia · Australia)
 
 **Cakupan:** Els App (iOS, Android, web), Portal admin, CKids, core-api, layar `/monitor`.
-**Per tanggal:** 29 Oktober 2026 (revisi 8 — enkripsi, unduh data, preferensi WA; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
+**Per tanggal:** 29 Oktober 2026 (revisi 9 — menu Compliance: SOP & backup bulanan; cek ulang dokumen yang tayang di api.eccchurch.global) · **Disusun dari:** pemeriksaan kode di repo `ecc-core-platform` & `ecc-mobile-app` + ringkasan regulasi terbaru (lihat Sumber).
 
 > **Bukan nasihat hukum.** Dokumen ini adalah daftar periksa teknis–operasional untuk membantu tim. Keputusan akhir (mis. penunjukan DPO, isi Kebijakan Privasi, dasar hukum pemrosesan) perlu dikonfirmasi dengan penasihat hukum di masing-masing negara.
 
@@ -45,11 +45,11 @@
 | 5 | **Hak hapus / tarik persetujuan** | Wajib (Ps. 8–9) | Retention Principle; tarik persetujuan | Hapus/de-identifikasi bila tak diperlukan (APP 11.2) | ✅ Sudah | **Aktif sejak 30 Okt 2026**: Portal → Jemaat → **Hapus data permanen** (`POST /admin/jemaat/:id/purge`, ketik HAPUS PERMANEN) + akun nonaktif disamarkan otomatis setelah 3 th | SOP permintaan via privacy@ (3×24 jam) | Sedang | IT |
 | 6 | **Hak portabilitas / salinan data** | Hak memperoleh & memakai data (Ps. 13) | **Wajib sejak 1 Jun 2025** | Hak akses (APP 12) | ✅ Sudah | **Dibangun 30 Okt 2026**: `POST /admin/me/export/link` (PDF via link 10 menit, 3x/jam, tercatat di Audit Log) + tombol **Unduh data saya** di Pengaturan → Privasi (app 2.4.4 & web) | — | — | IT |
 | 7 | **Pengaturan privasi oleh pengguna** | Prinsip minimisasi & kontrol | Choice | APP 6 | ✅ Sudah | Pengaturan Privasi per data (siapa boleh melihat), opsi ditemukan via no HP, saklar analitik anonim | — | — | — |
-| 8 | **Notifikasi kebocoran data** | 3×24 jam ke subjek & Lembaga (Ps. 46) | **72 jam** ke Komisioner bila merugikan signifikan; ke subjek | Segera ke OAIC & individu (NDB) | ❌ Belum | Tenggat dijanjikan di Kebijakan v3.0 Bag. 13 (ID 3×24 jam, MY 72 jam, AU segera); **SOP internal belum ada** | Susun **SOP respons insiden** (deteksi → penilaian → notifikasi per negara) + kontak resmi | Tinggi | ORG + IT |
+| 8 | **Notifikasi kebocoran data** | 3×24 jam ke subjek & Lembaga (Ps. 46) | **72 jam** ke Komisioner bila merugikan signifikan; ke subjek | Segera ke OAIC & individu (NDB) | ✅ Sudah | **Dibangun 30 Okt 2026**: Portal → **Compliance → SOP Compliance** — SOP kebocoran & permintaan data per negara (model `ComplianceDocument`, seed 6 dokumen di migrasi `20261030170000`), editable, unduh PDF | Isi nama tim respons, sosialisasi & simulasi tahunan | Sedang | ORG + IT |
 | 9 | **Petugas Pelindungan Data (DPO)** | Wajib bila pemrosesan skala besar / data spesifik / pemantauan sistematis | Wajib bila ambang terpenuhi; registrasi portal ≤ 21 hari; residen/terhubung Malaysia, fasih BM & EN | Tidak wajib (disarankan Privacy Officer) | ✅ Sudah | **Ditunjuk: Caroline Gugun Hartanti** — privacy@eccchurch.global, tercantum di Kebijakan v3.0 | Pastikan privacy@ dipantau harian (tenggat 3×24 jam); DPO Malaysia lihat MY-2 | Sedang | ORG |
 | 10 | **Keamanan data teknis** | Wajib (Ps. 35–39) | Security Principle | APP 11 | ✅ Sudah (inti) | HTTPS, Helmet, JWT berumur pendek + rotasi refresh token, OTP, rate limit, RBAC per menu (Role Access), Audit Log, Master password Credential | Lihat No. 11–13 untuk celah | — | — |
 | 11 | **Enkripsi data sensitif saat disimpan** | Wajib sesuai risiko | Security Principle | APP 11 | ✅ Sudah | **Dibangun 30 Okt 2026**: kolom rahasia Credential dienkripsi AES-256-GCM (`lib/crypto-at-rest.ts`, `lib/credential-crypto.ts`); data lama dienkripsi otomatis saat start. Aktif setelah `DATA_ENCRYPTION_KEY` di-set | Simpan salinan kunci di luar server | Tinggi | IT |
-| 12 | **Backup aman** | Wajib | Security | APP 11 | 🟡 Sebagian | **Dibangun 30 Okt 2026**: file backup dienkripsi AES-256-GCM (header ECCENC1), backup lama ikut dienkripsi, restore mendekripsi sementara; badge "Terenkripsi" di portal. Salinan masih di server yang sama | Unduh backup terenkripsi berkala ke luar server | Sedang | IT |
+| 12 | **Backup aman** | Wajib | Security | APP 11 | ✅ Sudah | Backup terenkripsi + **Dibangun 30 Okt 2026**: **Compliance → Kirim Backup Bulanan** (`BackupEmailConfig`, job per jam, link unduh bertanda tangan `/public/backup/:token`) | Aktifkan & isi penerima; simpan file di luar server | Sedang | IT |
 | 13 | **Data biometrik (wajah)** | Data spesifik | **Data sensitif** (sejak 1 Apr 2025) | Sensitive info | ✅ Sudah | **Aktif sejak 30 Okt 2026**: migrasi `20261029180000_consent_purge_face` mengosongkan data wajah & telemetri wajah; `/auth/face/*` → 410 Gone | — | — | IT |
 | 14 | **Retensi data** | Wajib dimusnahkan bila tujuan selesai (Ps. 43–44) | Retention Principle | APP 11.2 | ✅ Sudah | **Aktif sejak 30 Okt 2026**: job harian `data-retention` — akun nonaktif >3 th & tamu tanpa kunjungan >3 th disamarkan (`dataPurgedAt`), bukti transfer dihapus 1 th setelah event (env `*_RETENTION_DAYS`, `DATA_RETENTION_ENABLED`) | — | — | ORG + IT |
 | 15 | **Transfer data ke luar negeri** | Wajib setara/perlindungan memadai/persetujuan (Ps. 56) | Guideline 29 Apr 2025 (dasar hukum/TIA) | APP 8 | 🟡 Sebagian | Dijelaskan di Kebijakan v3.0: server **Indonesia**; SendGrid & Anthropic (AS); Fonnte & IDEA (ID) | DPA vendor (No. 16) | Sedang | ORG + LEGAL |
@@ -80,7 +80,7 @@
 | No | Kewajiban | Status | Kondisi | Tindak lanjut | Prioritas | Pemilik |
 |---|---|---|---|---|---|---|
 | ID-1 | Pendaftaran **PSE Lingkup Privat** (Komdigi / OSS) untuk Els App & portal | ⚪ Konfirmasi | Belum diketahui apakah sudah terdaftar | Cek & daftarkan bila belum | Tinggi | ORG |
-| ID-2 | Siap mengikuti **PP 33/2026** (berlaku ±16 Jan 2027) | 🟡 Sebagian | Kebijakan, DPO, persetujuan, hapus data & retensi beres; sisa No. 8, 17 | Tutup No. 8 & 17 sebelum Jan 2027 | Tinggi | ORG + IT |
+| ID-2 | Siap mengikuti **PP 33/2026** (berlaku ±16 Jan 2027) | 🟡 Sebagian | Sisa No. 17 (RoPA/DPIA) | Tutup No. 17 sebelum Jan 2027 | Tinggi | ORG + IT |
 | ID-3 | Bahasa Indonesia untuk dokumen hukum & pemberitahuan | ✅ Sudah | Kebijakan & S&K v3.0 dalam Bahasa Indonesia | — | — | — |
 | ID-4 | Data keuangan (bukti transfer event) = data spesifik | ✅ Sudah | Dihapus otomatis 1 th setelah event (No. 14) | — | — | ORG + IT |
 
@@ -90,7 +90,7 @@
 |---|---|---|---|---|---|---|
 | MY-1 | Pemberitahuan (Notice) dalam **Bahasa Melayu & Inggris** | ✅ Sudah | **PRIVACY/ms & TERMS/ms tayang** (29 Okt 2026) | Isi nama DPO di PRIVACY/ms | Rendah | IT + LEGAL |
 | MY-2 | Cek ambang **DPO** (>20.000 subjek / >10.000 data sensitif) — agama = sensitif | ⚪ Konfirmasi | DPO umum sudah ada; hitung jumlah jemaat cabang Malaysia | Bila melewati ambang: tunjuk DPO residen, daftar di portal PDP ≤ 21 hari | Tinggi | ORG |
-| MY-3 | Notifikasi kebocoran ≤ 72 jam (guideline 1 Jun 2025) | ❌ Belum | Lihat No. 8 | SOP insiden dengan jalur Malaysia | Tinggi | ORG |
+| MY-3 | Notifikasi kebocoran ≤ 72 jam (guideline 1 Jun 2025) | ✅ Sudah | SOP kebocoran Malaysia (No. 8) | — | — | ORG |
 | MY-4 | Hak portabilitas | ✅ Sudah | Unduh data saya (No. 6) | — | — | IT |
 | MY-5 | Registrasi sebagai data user wajib (kategori tertentu) | ➖ Tidak berlaku / ⚪ | Organisasi keagamaan umumnya tidak termasuk kelas wajib registrasi | Konfirmasi dengan LEGAL | Rendah | LEGAL |
 
@@ -100,7 +100,7 @@
 |---|---|---|---|---|---|---|
 | AU-1 | Cek **pengecualian usaha kecil** (omzet tahunan < AUD 3 juta) | ⚪ Konfirmasi | Bila entitas Australia di bawah ambang, sebagian besar APP mungkin tidak wajib; tetap disarankan dipatuhi | Konfirmasi status entitas & omzet | Sedang | ORG + LEGAL |
 | AU-2 | Kebijakan Privasi sesuai **APP 1** + pemberitahuan pengumpulan (**APP 5**) | ✅ Sudah | Kebijakan v3.0: transfer luar negeri (APP 8), cara mengeluh & kontak OAIC; S&K v3.0 menghormati Australian Consumer Law | — | — | LEGAL |
-| AU-3 | **Notifiable Data Breaches** | ❌ Belum | Lihat No. 8 | Jalur OAIC dalam SOP insiden | Sedang | ORG |
+| AU-3 | **Notifiable Data Breaches** | ✅ Sudah | SOP kebocoran Australia (No. 8) | — | — | ORG |
 | AU-4 | Transparansi **keputusan otomatis (ADM)** — mulai 10 Des 2026 | ➖ Tidak berlaku | Els App tidak membuat keputusan otomatis yang berdampak signifikan bagi individu (Elsa/analitik hanya bantuan & agregat) | Tinjau ulang bila ada fitur otomatis baru | Rendah | IT |
 | AU-5 | **Tort privasi serius** (sejak 10 Jun 2025) | ✅ Sudah (mitigasi) | Kontrol akses & privasi mengurangi risiko penyalahgunaan data | Pelatihan singkat untuk admin/petugas tentang penggunaan data | Rendah | ORG |
 | AU-6 | **Spam Act** untuk pesan WA/email | ✅ Sudah | Pilihan berhenti menerima WA di app (No. 19) | — | — | IT |
@@ -111,15 +111,17 @@
 
 | Area | ✅ Sudah | 🟡 Sebagian | ❌ Belum | ⚪ Konfirmasi |
 |---|---|---|---|---|
-| Kontrol umum (21) | 15 | 3 | 2 | 1 |
+| Kontrol umum (21) | 17 | 2 | 1 | 1 |
 | Data anak (4) | 1 | 2 | 0 | 1 |
 | Indonesia (4) | 2 | 1 | 0 | 1 |
-| Malaysia (5) | 2 | 0 | 1 | 2 |
-| Australia (6) | 3 | 0 | 1 | 2 (termasuk 1 tidak berlaku) |
+| Malaysia (5) | 3 | 0 | 0 | 2 |
+| Australia (6) | 4 | 0 | 0 | 2 (termasuk 1 tidak berlaku) |
 
 **Kesimpulan (revisi 5):** dengan terbitnya Kebijakan Privasi & S&K **v3.0** dan penunjukan **DPO**, sisi dokumen hampir lengkap. Fokus berikutnya adalah **menjalankan janji di dokumen**: persetujuan tercatat (No. 2), hapus data wajah (No. 13), hapus permanen & retensi otomatis (No. 5, 14), SOP kebocoran & permintaan data 3×24 jam (No. 8), dan DPA vendor. Dokumen sudah tayang dalam 3 bahasa.
 
 **Perubahan dari revisi 1:** No. 1, 6, 9, 15, 18 · A2 · MY-1, MY-4 · AU-2.
+
+**Revisi 9 (30 Okt 2026):** `DATA_ENCRYPTION_KEY` terpasang. Dibangun menu **Compliance**: SOP kebocoran & permintaan data per negara (No. 8, MY-3, AU-3) dan Kirim Backup Bulanan (No. 12).
 
 **Revisi 8 (30 Okt 2026):** dibangun enkripsi Credential (No. 11) & backup (No. 12), Unduh data saya (No. 6, MY-4), preferensi pesan WA (No. 19, AU-6). Enkripsi aktif setelah `DATA_ENCRYPTION_KEY` dipasang; fitur jemaat di app 2.4.4 & web.
 
@@ -139,13 +141,12 @@
 
 | Urutan | Pekerjaan | Pemilik | Target |
 |---|---|---|---|
-| 1 | Pasang `DATA_ENCRYPTION_KEY` di server & simpan salinan kunci di luar server; deploy | IT + ORG | Nov 2026 |
-| 2 | Rilis app 2.4.4 (persetujuan, unduh data, pesan WA) & deploy Els App web | IT | Nov 2026 |
-| 3 | SOP kebocoran data & SOP permintaan hak jemaat (3×24 jam) | ORG + DPO + IT | Nov 2026 |
-| 4 | Salinan backup terenkripsi di luar server secara berkala | IT | Bulanan |
-| 5 | DPA vendor, RoPA + DPIA (CKids, analitik, monitor) | ORG + LEGAL | Q1 2027 |
-| 6 | PP Tunas: verifikasi usia sesuai Permen teknis | IT | Saat Permen terbit |
-| 7 | Cek PSE (ID), ambang DPO Malaysia, status usaha kecil (AU), pantau aturan baru | ORG + LEGAL | Berkala |
+| 1 | Lengkapi SOP (nama tim respons), bagikan PDF ke petugas & latihan simulasi | ORG + DPO | Nov 2026 |
+| 2 | Aktifkan Kirim Backup Bulanan & simpan file di luar server | IT + ORG | Nov 2026 |
+| 3 | Rilis app 2.4.4 (persetujuan, unduh data, pesan WA) & deploy Els App web | IT | Nov 2026 |
+| 4 | DPA vendor, RoPA + DPIA (CKids, analitik, monitor) | ORG + LEGAL | Q1 2027 |
+| 5 | PP Tunas: verifikasi usia sesuai Permen teknis | IT | Saat Permen terbit |
+| 6 | Cek PSE (ID), ambang DPO Malaysia, status usaha kecil (AU), pantau aturan baru | ORG + LEGAL | Berkala |
 
 ---
 

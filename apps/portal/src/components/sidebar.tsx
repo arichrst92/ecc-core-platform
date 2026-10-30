@@ -46,6 +46,8 @@ import {
   BarChart3,
   Footprints,
   Contact,
+  ShieldAlert,
+  CloudUpload,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -132,6 +134,13 @@ const groups: NavGroup[] = [
       { href: '/dashboard/news', label: 'News', icon: Newspaper, menuKey: 'news' },
       { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
       { href: '/dashboard/worship', label: 'ECC Worship', icon: Music, menuKey: 'ecc-worship' },
+    ],
+  },
+  {
+    label: 'Compliance',
+    items: [
+      { href: '/dashboard/compliance/sop', label: 'SOP Compliance', icon: ShieldAlert, menuKey: 'compliance-sop' },
+      { href: '/dashboard/compliance/backup-email', label: 'Kirim Backup Bulanan', icon: CloudUpload, menuKey: 'compliance-backup' },
     ],
   },
   {

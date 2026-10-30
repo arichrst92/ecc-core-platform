@@ -94,6 +94,10 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'website-content', label: 'Konten Website', href: '/dashboard/website/content', group: 'Website' },
 
   // App Settings — content untuk mobile app (legal, version)
+  // Compliance — SOP kepatuhan per negara & kiriman backup off-site
+  { key: 'compliance-sop', label: 'SOP Compliance', href: '/dashboard/compliance/sop', group: 'Compliance' },
+  { key: 'compliance-backup', label: 'Kirim Backup Bulanan', href: '/dashboard/compliance/backup-email', group: 'Compliance' },
+
   { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },
   { key: 'app-version', label: 'App Versions', href: '/dashboard/app-version', group: 'App Settings' },
   { key: 'maintenance-mode', label: 'Maintenance Mode', href: '/dashboard/maintenance-mode', group: 'App Settings' },

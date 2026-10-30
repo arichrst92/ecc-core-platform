@@ -3764,3 +3764,47 @@ model UserConsent {
   @@index([jemaatId, acceptedAt])
   @@map("user_consent")
 }
+
+// ============================================================
+// ComplianceDocument — SOP kepatuhan per negara (menu Compliance).
+//   key     : SOP_BREACH (kebocoran data) | SOP_DSR (permintaan data subjek)
+//   country : ID | MY | AU
+// Konten markdown, bisa diedit di portal & diunduh sebagai PDF.
+// ============================================================
+model ComplianceDocument {
+  id              String   @id @default(uuid()) @db.Uuid
+  key             String   @db.VarChar(30)
+  country         String   @db.VarChar(2)
+  title           String   @db.VarChar(255)
+  content         String   @db.Text
+  version         String   @db.VarChar(20)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([key, country])
+  @@map("compliance_document")
+}
+
+// ============================================================
+// BackupEmailConfig — kirim backup DB terenkripsi tiap bulan via email
+// (link unduh bertanda tangan) supaya ada salinan di luar server.
+// ============================================================
+model BackupEmailConfig {
+  id              String    @id @default("global")
+  isEnabled       Boolean   @default(false) @map("is_enabled")
+  recipients      String[]  @default([])
+  dayOfMonth      Int       @default(1) @map("day_of_month") // 1–28
+  hour            Int       @default(2) // jam WIB 0–23
+  linkValidDays   Int       @default(7) @map("link_valid_days")
+  lastSentAt      DateTime? @map("last_sent_at")
+  lastStatus      String?   @map("last_status") @db.VarChar(20) // SUCCESS | FAILED
+  lastError       String?   @map("last_error") @db.Text
+  lastFile        String?   @map("last_file") @db.VarChar(255)
+  // Bulan terakhir kiriman terjadwal berhasil (YYYY-MM, WIB) — kirim uji tidak mengubah ini.
+  lastScheduledMonth String? @map("last_scheduled_month") @db.VarChar(7)
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("backup_email_config")
+}

@@ -1727,6 +1727,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
               jamMulai: true,
               jamSelesai: true,
               lokasi: true,
+              cabang: { select: { timezone: true } },
             },
           },
           assignments: {
@@ -1750,6 +1751,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     ibadahJamMulai: r.schedule.ibadah?.jamMulai ?? null,
     ibadahJamSelesai: r.schedule.ibadah?.jamSelesai ?? null,
     ibadahLokasi: r.schedule.ibadah?.lokasi ?? null,
+    timezone: r.schedule.ibadah?.cabang?.timezone ?? null,
     ministryId: r.schedule.pelayanan.id,
     ministryNama: r.schedule.pelayanan.nama,
     posisi: r.pelayananRole.nama,
@@ -1783,6 +1785,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
           mingguKe: true,
           tanggalMulai: true,
           hari: true,
+          cabang: { select: { timezone: true } },
         },
       },
       petugas: {

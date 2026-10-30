@@ -227,7 +227,7 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
   const ibadahs = await prisma.ibadah.findMany({
     where,
     include: {
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
       kategoriIbadah: { select: { id: true, nama: true } },
     },
   });
@@ -343,7 +343,7 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
         lokasi: true,
         tipeBayar: true,
         nominal: true,
-        cabang: { select: { id: true, nama: true } },
+        cabang: { select: { id: true, nama: true, timezone: true } },
       },
     }),
     prisma.event.count({ where }),
@@ -396,7 +396,7 @@ publicUnauthRouter.get('/local-market', publicBrowseLimiter, async (req, res) =>
         owner: {
           select: {
             namaLengkap: true,
-            cabang: { select: { id: true, nama: true } },
+            cabang: { select: { id: true, nama: true, timezone: true } },
           },
         },
       },
@@ -441,7 +441,7 @@ publicUnauthRouter.get('/local-market/:id', publicBrowseLimiter, async (req, res
       // Owner: cuma cabang (tidak include nama jemaat — privacy).
       owner: {
         select: {
-          cabang: { select: { id: true, nama: true } },
+          cabang: { select: { id: true, nama: true, timezone: true } },
         },
       },
     },
@@ -523,7 +523,7 @@ publicUnauthRouter.get('/news', publicBrowseLimiter, async (req, res) => {
         heroImageUrl: true,
         publishedAt: true,
         tags: true,
-        cabang: { select: { id: true, nama: true } },
+        cabang: { select: { id: true, nama: true, timezone: true } },
         author: {
           select: {
             jemaat: { select: { namaLengkap: true } },
@@ -574,7 +574,7 @@ publicUnauthRouter.get('/news/:id', publicBrowseLimiter, async (req, res) => {
       publishedAt: true,
       tags: true,
       viewCount: true,
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
       author: {
         select: {
           jemaat: { select: { namaLengkap: true } },
@@ -749,7 +749,7 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       bankAtasNama: true,
       tags: true,
       viewCount: true,
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
     },
   });
   if (!row) throw NotFound('Event tidak ditemukan atau belum di-publish.');

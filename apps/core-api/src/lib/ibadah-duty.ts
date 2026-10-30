@@ -25,6 +25,7 @@ export interface DutyLink {
     jamSelesai: string;
     lokasi: string | null;
     isActive: boolean;
+    cabang?: { timezone: string } | null;
   };
   pelayanan: { id: string; nama: string };
   rows: DutyRow[];
@@ -38,6 +39,8 @@ export interface IbadahDuty {
   ibadahJamMulai: string;
   ibadahJamSelesai: string;
   ibadahLokasi: string | null;
+  /** Zona waktu cabang (IANA) — jam ibadah = jam dinding di zona ini. */
+  timezone: string | null;
   ministryId: string;
   ministryNama: string;
   posisi: string;
@@ -74,6 +77,7 @@ export function resolveIbadahDuties(
         ibadahJamMulai: link.ibadah.jamMulai,
         ibadahJamSelesai: link.ibadah.jamSelesai,
         ibadahLokasi: link.ibadah.lokasi,
+        timezone: link.ibadah.cabang?.timezone ?? null,
         ministryId: link.pelayanan.id,
         ministryNama: link.pelayanan.nama,
         posisi: mine.role.nama,

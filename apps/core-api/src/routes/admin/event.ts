@@ -271,7 +271,7 @@ eventRouter.get('/', async (req, res) => {
       orderBy: [{ tanggalMulai: 'desc' }, { createdAt: 'desc' }],
       include: {
         sinode: { select: { id: true, nama: true } },
-        cabang: { select: { id: true, nama: true } },
+        cabang: { select: { id: true, nama: true, timezone: true } },
         author: { select: { id: true, jemaat: { select: { namaLengkap: true } } } },
         // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md
         // 2026-09-01). Alias `partisipasiAll` return total termasuk BATAL untuk audit.
@@ -314,7 +314,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
     where: idOrSlugWhere(key),
     include: {
       sinode: { select: { id: true, nama: true } },
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
       author: { select: { id: true, jemaat: { select: { id: true, namaLengkap: true } } } },
       ...roleConfigInclude,
       // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md 2026-09-01).
@@ -692,7 +692,7 @@ eventRouter.get('/:id/peserta', async (req, res) => {
           noHp: true,
           fotoUrl: true,
           isTamu: true,
-          cabang: { select: { id: true, nama: true } },
+          cabang: { select: { id: true, nama: true, timezone: true } },
         },
       },
       approver: { select: { id: true, namaLengkap: true } },

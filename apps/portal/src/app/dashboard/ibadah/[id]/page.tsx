@@ -36,6 +36,7 @@ interface Ibadah {
   tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
   tanggalMulai: string;
   hari: string | null;
+  mingguKe?: number | null;
   jamMulai: string;
   jamSelesai: string;
   lokasi: string | null;
@@ -265,6 +266,7 @@ export default function IbadahDetailPage() {
           <Info icon={Calendar} label="Jadwal">
             {TIPE_LABEL[i.tipeJadwal] ?? i.tipeJadwal}
             {i.hari && ` · ${HARI_LABEL[i.hari] ?? i.hari}`}
+            {i.tipeJadwal === 'MONTHLY' && i.mingguKe ? ` minggu ke-${i.mingguKe}` : ''}
           </Info>
           <Info icon={Clock} label="Jam">
             {i.jamMulai} – {i.jamSelesai}

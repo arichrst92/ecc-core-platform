@@ -187,7 +187,7 @@ tamuRouter.get('/ibadah-options', async (req, res) => {
   const rows = await prisma.ibadah.findMany({
     where: { isActive: true },
     orderBy: [{ cabang: { nama: 'asc' } }, { nama: 'asc' }],
-    select: { id: true, nama: true, jamMulai: true, jamSelesai: true, hari: true, tipeJadwal: true, isKidsIbadah: true, cabang: { select: { id: true, nama: true } } },
+    select: { id: true, nama: true, jamMulai: true, jamSelesai: true, hari: true, tipeJadwal: true, mingguKe: true, isKidsIbadah: true, cabang: { select: { id: true, nama: true } } },
   });
   res.json({ success: true, data: rows });
 });

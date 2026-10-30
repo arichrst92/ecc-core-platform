@@ -133,7 +133,7 @@ ibadahRouter.get('/calendar', async (req, res) => {
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
-      { tipeJadwal: i.tipeJadwal, tanggalMulai: i.tanggalMulai, hari: i.hari },
+      { tipeJadwal: i.tipeJadwal, tanggalMulai: i.tanggalMulai, hari: i.hari, mingguKe: i.mingguKe },
       from,
       to,
     );
@@ -315,7 +315,13 @@ ibadahRouter.post('/', async (req, res) => {
   const input = createIbadahSchema.parse(req.body);
   const loc = await mapsUrlToFields(input.mapsUrl);
   if (loc === null) throw BadRequest(MAPS_URL_ERROR);
-  const data = { ...input, ...(loc ?? {}), tanggalMulai: new Date(input.tanggalMulai) };
+  const data = {
+    ...input,
+    ...(loc ?? {}),
+    tanggalMulai: new Date(input.tanggalMulai),
+    // minggu ke-N hanya berarti untuk jadwal Bulanan
+    mingguKe: input.tipeJadwal === 'MONTHLY' ? (input.mingguKe ?? null) : null,
+  };
   const pointErr = await radiusPointError({
     radiusM: input.selfCheckinRadiusM,
     latitude: loc?.latitude,
@@ -346,7 +352,15 @@ ibadahRouter.patch('/:id', async (req, res) => {
     cabangId: input.cabangId ?? before.cabangId,
   });
   if (pointErr) throw BadRequest(pointErr);
-  const updated = await prisma.ibadah.update({ where: { id: req.params.id }, data });
+  // Validasi jadwal hasil gabungan (nilai baru + nilai lama).
+  const tipe = input.tipeJadwal ?? before.tipeJadwal;
+  const hari = input.hari !== undefined ? input.hari : before.hari;
+  const mingguKe = tipe === 'MONTHLY' ? (input.mingguKe !== undefined ? input.mingguKe : before.mingguKe) : null;
+  if (tipe !== 'ONCE' && !hari) throw BadRequest('Pilih hari ibadah.');
+  if (tipe === 'MONTHLY' && input.tipeJadwal === 'MONTHLY' && before.tipeJadwal !== 'MONTHLY' && mingguKe == null) {
+    throw BadRequest('Pilih minggu ke-berapa (pertama–keempat) untuk jadwal Bulanan.');
+  }
+  const updated = await prisma.ibadah.update({ where: { id: req.params.id }, data: { ...data, mingguKe } });
   audit(req, { action: 'UPDATE', resource: 'ibadah', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
   res.json({ success: true, data: updated });
 });
@@ -416,7 +430,7 @@ ibadahRouter.post('/:id/occurrence/:tanggal/cancel', async (req, res) => {
   // Validasi: pastikan tanggal benar-benar adalah occurrence dari ibadah ini
   // (mencegah cancel tanggal sembarangan yang bahkan tidak terjadwal).
   const occurrences = generateOccurrences(
-    { tipeJadwal: ibadah.tipeJadwal, tanggalMulai: ibadah.tanggalMulai, hari: ibadah.hari },
+    { tipeJadwal: ibadah.tipeJadwal, tanggalMulai: ibadah.tanggalMulai, hari: ibadah.hari, mingguKe: ibadah.mingguKe },
     tanggalDate,
     tanggalDate,
   );
@@ -569,7 +583,7 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
 
   // Validate tanggal harus occurrence valid (sesuai jadwal recurring/ONCE)
   const occurrences = generateOccurrences(
-    { tipeJadwal: ibadah.tipeJadwal, tanggalMulai: ibadah.tanggalMulai, hari: ibadah.hari },
+    { tipeJadwal: ibadah.tipeJadwal, tanggalMulai: ibadah.tanggalMulai, hari: ibadah.hari, mingguKe: ibadah.mingguKe },
     tanggalDate,
     tanggalDate,
   );

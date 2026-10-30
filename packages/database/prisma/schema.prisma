@@ -474,7 +474,10 @@ model Ibadah {
   nama             String      @db.VarChar(255)
   tipeJadwal       TipeJadwal  @map("tipe_jadwal")
   tanggalMulai     DateTime    @map("tanggal_mulai") @db.Date
-  hari             HariMinggu? // diisi untuk weekly/biweekly
+  hari             HariMinggu? // weekly/biweekly; MONTHLY + mingguKe
+  // MONTHLY: minggu ke-berapa dalam bulan (1–4) di `hari` (mis. Sabtu minggu ke-2).
+  // NULL pada MONTHLY = data lama: tanggal yang sama dengan tanggalMulai.
+  mingguKe         Int?        @map("minggu_ke") @db.SmallInt
   jamMulai         String      @map("jam_mulai") @db.VarChar(5) // HH:mm
   jamSelesai       String      @map("jam_selesai") @db.VarChar(5)
   lokasi           String?     @db.Text

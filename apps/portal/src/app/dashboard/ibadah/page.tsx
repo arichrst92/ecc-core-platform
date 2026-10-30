@@ -38,6 +38,7 @@ interface IbadahItem extends Record<string, unknown> {
   tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
   tanggalMulai: string;
   hari: string | null;
+  mingguKe?: number | null;
   jamMulai: string;
   jamSelesai: string;
   lokasi: string | null;
@@ -360,7 +361,7 @@ function CabangSection({
                     {i.tipeJadwal === 'ONCE'
                       ? ` · ${parseYmd(i.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
                       : i.hari
-                        ? ` · ${HARI_LABEL[i.hari] ?? i.hari}`
+                        ? ` · ${HARI_LABEL[i.hari] ?? i.hari}${i.tipeJadwal === 'MONTHLY' && i.mingguKe ? ` minggu ke-${i.mingguKe}` : ''}`
                         : ''}
                   </td>
                   <td className="px-4 py-2.5 text-neutral-700 tabular-nums">

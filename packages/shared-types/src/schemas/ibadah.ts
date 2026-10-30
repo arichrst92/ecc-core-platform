@@ -23,6 +23,12 @@ const kapasitasSeatSchema = z
 export const tipeJadwalSchema = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY', 'ONCE']);
 export const hariMingguSchema = z.enum(['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']);
 
+/** Jadwal Bulanan: minggu ke-1..4 dalam bulan (dipakai bersama `hari`). */
+const mingguKeSchema = z.preprocess(
+  (v) => (v === '' || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? undefined : v),
+  z.union([z.null(), z.coerce.number().int().min(1, 'Minggu ke 1–4').max(4, 'Minggu ke 1–4')]).optional(),
+);
+
 // ===== Kategori Ibadah =====
 export const createKategoriIbadahSchema = z.object({
   nama: z.string().trim().min(2).max(100),
@@ -48,6 +54,7 @@ export const createIbadahSchema = z
     tipeJadwal: tipeJadwalSchema,
     tanggalMulai: z.string().date(),
     hari: emptyToUndefined(hariMingguSchema),
+    mingguKe: mingguKeSchema,
     jamMulai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     jamSelesai: z.string().regex(jamRegex, 'Format jam HH:mm'),
     lokasi: emptyToUndefined(z.string().trim()),
@@ -65,10 +72,14 @@ export const createIbadahSchema = z
     deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
-    // Hari hanya wajib untuk recurring weekly/biweekly.
-    // MONTHLY pakai day-of-month dari tanggalMulai, ONCE = sekali di tanggal_mulai.
-    (d) => (d.tipeJadwal === 'WEEKLY' || d.tipeJadwal === 'BIWEEKLY' ? !!d.hari : true),
-    { message: 'Field hari wajib untuk jadwal Mingguan / Dua Mingguan', path: ['hari'] },
+    // Hari wajib untuk Mingguan / Dua Mingguan / Bulanan. ONCE = sekali di tanggalMulai.
+    (d) => (d.tipeJadwal === 'ONCE' ? true : !!d.hari),
+    { message: 'Pilih hari ibadah', path: ['hari'] },
+  )
+  .refine(
+    // Bulanan: pilih minggu ke-berapa (1–4) — mis. "Sabtu minggu ke-2".
+    (d) => (d.tipeJadwal === 'MONTHLY' ? d.mingguKe != null : true),
+    { message: 'Pilih minggu ke-berapa (pertama–keempat)', path: ['mingguKe'] },
   )
   .refine(
     (d) => (!d.isOnline ? true : !!d.linkOnline),
@@ -83,6 +94,7 @@ export const updateIbadahSchema = z.object({
   tipeJadwal: tipeJadwalSchema.optional(),
   tanggalMulai: emptyToUndefined(z.string().date()),
   hari: emptyToUndefined(hariMingguSchema),
+  mingguKe: mingguKeSchema,
   jamMulai: emptyToUndefined(z.string().regex(jamRegex)),
   jamSelesai: emptyToUndefined(z.string().regex(jamRegex)),
   lokasi: emptyToUndefined(z.string().trim()),

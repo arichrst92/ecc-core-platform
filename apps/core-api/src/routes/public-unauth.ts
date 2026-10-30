@@ -264,7 +264,7 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
-      { tipeJadwal: i.tipeJadwal, tanggalMulai: i.tanggalMulai, hari: i.hari },
+      { tipeJadwal: i.tipeJadwal, tanggalMulai: i.tanggalMulai, hari: i.hari, mingguKe: i.mingguKe },
       from,
       to,
     );

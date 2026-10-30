@@ -89,6 +89,7 @@ async function ibadahReportData(req: Request) {
       nama: true,
       jamMulai: true,
       tipeJadwal: true,
+      mingguKe: true,
       tanggalMulai: true,
       hari: true,
       isActive: true,

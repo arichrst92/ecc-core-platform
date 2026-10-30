@@ -21,6 +21,7 @@ const ibadahSelect = {
   id: true,
   nama: true,
   tipeJadwal: true,
+  mingguKe: true,
   tanggalMulai: true,
   hari: true,
   jamMulai: true,

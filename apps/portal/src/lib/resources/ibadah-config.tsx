@@ -12,6 +12,7 @@ interface Ibadah extends Record<string, unknown> {
   tipeJadwal: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'ONCE';
   tanggalMulai: string;
   hari: string | null;
+  mingguKe?: number | null;
   jamMulai: string;
   jamSelesai: string;
   lokasi: string | null;
@@ -33,6 +34,26 @@ const HARI_OPTIONS = [
   { value: 'JUMAT', label: 'Jumat' },
   { value: 'SABTU', label: 'Sabtu' },
 ];
+
+const MINGGU_KE_OPTIONS = [
+  { value: '1', label: 'Minggu pertama' },
+  { value: '2', label: 'Minggu kedua' },
+  { value: '3', label: 'Minggu ketiga' },
+  { value: '4', label: 'Minggu keempat' },
+];
+const MINGGU_KE_LABEL = ['', 'pertama', 'kedua', 'ketiga', 'keempat'];
+
+/** "Bulanan · Sabtu minggu kedua" / "Mingguan · Minggu". */
+export function jadwalLabel(row: { tipeJadwal: string; hari: string | null; mingguKe?: number | null; tanggalMulai: string }) {
+  const tipe = TIPE_OPTIONS.find((t) => t.value === row.tipeJadwal)?.label ?? row.tipeJadwal;
+  if (row.tipeJadwal === 'ONCE') return `${tipe} · ${dateLocal(row.tanggalMulai)}`;
+  const hari = row.hari ? HARI_OPTIONS.find((h) => h.value === row.hari)?.label : null;
+  if (row.tipeJadwal === 'MONTHLY') {
+    if (row.mingguKe && hari) return `${tipe} · ${hari} minggu ${MINGGU_KE_LABEL[row.mingguKe]}`;
+    return `${tipe} · tiap tgl ${new Date(row.tanggalMulai).getUTCDate()}`;
+  }
+  return `${tipe}${hari ? ` · ${hari}` : ''}`;
+}
 
 const TIPE_OPTIONS = [
   { value: 'WEEKLY', label: 'Mingguan' },
@@ -68,14 +89,7 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       key: 'tipeJadwal',
       label: 'Jadwal',
       width: '180px',
-      render: (_v, row) => {
-        const tipe = TIPE_OPTIONS.find((t) => t.value === row.tipeJadwal)?.label ?? row.tipeJadwal;
-        if (row.tipeJadwal === 'ONCE') {
-          return `${tipe} · ${dateLocal(row.tanggalMulai)}`;
-        }
-        const hari = row.hari ? HARI_OPTIONS.find((h) => h.value === row.hari)?.label : null;
-        return `${tipe}${hari ? ` · ${hari}` : ''}`;
-      },
+      render: (_v, row) => jadwalLabel(row),
     },
     {
       key: 'jamMulai',
@@ -116,13 +130,21 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
     { name: 'nama', label: 'Nama Ibadah', type: 'text', required: true, placeholder: 'Ibadah Umum Pagi' },
     { name: 'tipeJadwal', label: 'Tipe Jadwal', type: 'select', required: true, options: TIPE_OPTIONS },
     {
+      name: 'mingguKe',
+      label: 'Setiap minggu ke',
+      type: 'select',
+      options: MINGGU_KE_OPTIONS,
+      helperText: 'Jadwal Bulanan: pilih minggu ke-berapa dalam bulan, lalu pilih harinya.',
+      showIf: (v) => v.tipeJadwal === 'MONTHLY',
+    },
+    {
       name: 'hari',
       label: 'Hari',
       type: 'select',
       options: HARI_OPTIONS,
-      helperText: 'Wajib untuk jadwal Mingguan / Dua Mingguan.',
-      // Hide untuk MONTHLY (pakai tanggal-of-month) dan ONCE (pakai tanggal spesifik)
-      showIf: (v) => v.tipeJadwal === 'WEEKLY' || v.tipeJadwal === 'BIWEEKLY',
+      helperText: 'Mingguan / Dua Mingguan: hari ibadah. Bulanan: hari pada minggu yang dipilih (mis. Sabtu minggu kedua).',
+      // Hide untuk ONCE (pakai tanggal spesifik)
+      showIf: (v) => v.tipeJadwal === 'WEEKLY' || v.tipeJadwal === 'BIWEEKLY' || v.tipeJadwal === 'MONTHLY',
     },
     {
       name: 'tanggalMulai',

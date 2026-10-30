@@ -4,8 +4,10 @@
  * Aturan per tipe_jadwal:
  *   WEEKLY    — setiap 7 hari dari tanggalMulai, di hari yang sesuai `hari`
  *   BIWEEKLY  — setiap 14 hari dari tanggalMulai, di hari yang sesuai `hari`
- *   MONTHLY   — setiap bulan di tanggal yang sama dengan tanggalMulai
- *               (mis. tanggalMulai 5 Jan → 5 Feb, 5 Mar, dst.)
+ *   MONTHLY   — dengan `mingguKe` + `hari`: hari ke-N dalam bulan
+ *               (mis. mingguKe 2 + SABTU → Sabtu kedua tiap bulan).
+ *               Tanpa `mingguKe` (data lama): tanggal yang sama dengan
+ *               tanggalMulai (mis. 5 Jan → 5 Feb, 5 Mar, dst.)
  *   ONCE      — sekali di tanggalMulai
  *
  * Edge case MONTHLY: kalau tanggalMulai = 31 dan bulan tujuan hanya 30 hari,
@@ -36,6 +38,15 @@ export interface IbadahForOccurrence {
   tipeJadwal: TipeJadwal;
   tanggalMulai: Date;
   hari: HariMinggu | null;
+  /** MONTHLY: minggu ke-1..4 dalam bulan (null = pola tanggal lama). */
+  mingguKe: number | null;
+}
+
+/** Tanggal (UTC midnight) hari `dow` ke-`n` (1–4) pada bulan `month`. */
+export function nthWeekdayOfMonth(year: number, month: number, dow: number, n: number): Date {
+  const first = new Date(Date.UTC(year, month, 1));
+  const offset = (dow - first.getUTCDay() + 7) % 7;
+  return new Date(Date.UTC(year, month, 1 + offset + (n - 1) * 7));
 }
 
 /**
@@ -78,6 +89,23 @@ export function generateOccurrences(
         dates.push(new Date(cur));
       }
       cur.setUTCDate(cur.getUTCDate() + interval);
+    }
+    return dates;
+  }
+
+  if (ibadah.tipeJadwal === 'MONTHLY' && ibadah.mingguKe && ibadah.hari) {
+    const dow = HARI_TO_DOW[ibadah.hari];
+    const n = Math.min(4, Math.max(1, ibadah.mingguKe));
+    const base = from.getTime() > startMs ? from : ibadah.tanggalMulai;
+    let year = base.getUTCFullYear();
+    let month = base.getUTCMonth();
+    for (let guard = 0; guard < 72; guard++) {
+      const candidate = nthWeekdayOfMonth(year, month, dow, n);
+      const ms = candidate.getTime();
+      if (ms > toMs) break;
+      if (ms >= fromMs && ms >= startMs) dates.push(candidate);
+      month += 1;
+      if (month > 11) { month = 0; year += 1; }
     }
     return dates;
   }

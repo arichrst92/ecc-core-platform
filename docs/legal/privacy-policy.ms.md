@@ -102,7 +102,7 @@ Apabila anda mendaftarkan **tetamu**, pastikan mereka **mengetahui dan bersetuju
 |---|---|
 | Akses kepada data | Menu Profil dalam aplikasi atau e-mel privacy@eccchurch.global — **dijawab dalam 21 hari** |
 | Pembetulan data | Profil / Ubah Profil / Keluarga |
-| **Kemudahalihan data** | Settings → Privacy → **Download my data** (fail JSON), atau e-mel privacy@eccchurch.global |
+| **Kemudahalihan data** | Settings → Privacy → **Download my data** (PDF), atau e-mel privacy@eccchurch.global |
 | Menarik balik persetujuan / memadam akaun | Tetapan → Privasi atau **Padam Akaun**, atau minta pemadaman kekal melalui e-mel |
 | Menghalang pemprosesan bagi pemasaran langsung | Settings → Privacy → **WhatsApp messages**, e-mel kami atau hubungi pentadbir cawangan |
 | Mengawal siapa melihat data | Tetapan → **Privasi** |

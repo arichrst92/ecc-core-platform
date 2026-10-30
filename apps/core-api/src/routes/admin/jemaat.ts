@@ -1119,9 +1119,76 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
 //  GET /admin/jemaat/:id/export?format=pdf
 //  Print-view HTML — user Ctrl+P → save as PDF.
 // ============================================================
-jemaatRouter.get('/:id/export', async (req, res) => {
-  const format = (getQueryString(req, 'format') ?? 'pdf').toLowerCase();
-  const jemaatId = req.params.id;
+/**
+ * Bagian tambahan untuk salinan milik jemaat sendiri ("Unduh data saya" —
+ * hak akses/portabilitas): persetujuan, pengaturan pesan, prayer request,
+ * Bible 365 dan ringkasan hak.
+ */
+async function selfCopyExtras(jemaatId: string): Promise<{ html: string }> {
+  const [consents, privacy, prayers, plans] = await Promise.all([
+    prisma.userConsent.findMany({ where: { jemaatId }, orderBy: { acceptedAt: 'desc' }, take: 10 }),
+    prisma.jemaatPrivacy.findUnique({ where: { jemaatId }, select: { discoverableByPhone: true, waReminders: true, waGreetings: true, waUpdates: true } }),
+    prisma.prayerRequest.findMany({ where: { jemaatId }, orderBy: { createdAt: 'desc' }, take: 50, select: { createdAt: true, kategori: true, isi: true, status: true, isAnonim: true } }),
+    prisma.bible365Plan.findMany({ where: { jemaatId }, orderBy: { startDate: 'desc' }, select: { putaran: true, startDate: true, status: true, _count: { select: { readings: true, notes: true } } } }),
+  ]);
+  const t = (d: Date) => d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const yn = (b: boolean | undefined) => (b === false ? 'Mati' : 'Aktif');
+  const html = `
+      <section>
+        <h3>Persetujuan & Pengaturan Privasi</h3>
+        ${
+          consents.length
+            ? `<table><thead><tr><th>Tanggal</th><th>S&amp;K</th><th>Privasi</th><th>Data sensitif</th><th>Usia</th><th>Lewat</th></tr></thead><tbody>
+          ${consents.map((c) => `<tr><td>${t(c.acceptedAt)}</td><td>${escapeHtml(c.termsVersion)}</td><td>${escapeHtml(c.privacyVersion)}</td><td>${c.sensitiveData ? 'Setuju' : '-'}</td><td>${c.ageGroup === 'MINOR_WITH_GUARDIAN' ? '13–17 (izin orang tua)' : '18+'}</td><td>${escapeHtml(c.platform ?? c.source)}</td></tr>`).join('')}
+          </tbody></table>`
+            : '<p class="empty">Belum ada persetujuan tercatat.</p>'
+        }
+        <div class="info-row" style="margin-top:6px"><div class="lbl">Pesan WhatsApp</div><div class="val">Pengingat: ${yn(privacy?.waReminders)} · Ucapan ulang tahun: ${yn(privacy?.waGreetings)} · Info aktivitas: ${yn(privacy?.waUpdates)}</div></div>
+        <div class="info-row"><div class="lbl">Bisa ditemukan lewat no HP</div><div class="val">${privacy?.discoverableByPhone === false ? 'Tidak' : 'Ya'}</div></div>
+      </section>
+
+      <section>
+        <h3>Prayer Request <span class="count">${prayers.length}</span></h3>
+        ${
+          prayers.length
+            ? `<table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Isi</th><th>Status</th></tr></thead><tbody>
+          ${prayers.map((p) => `<tr><td>${t(p.createdAt)}</td><td>${escapeHtml(p.kategori)}${p.isAnonim ? ' (anonim)' : ''}</td><td>${escapeHtml(p.isi.length > 300 ? p.isi.slice(0, 300) + '…' : p.isi)}</td><td>${escapeHtml(p.status)}</td></tr>`).join('')}
+          </tbody></table>`
+            : '<p class="empty">Tidak ada.</p>'
+        }
+      </section>
+
+      ${
+        plans.length
+          ? `<section>
+        <h3>Bible 365</h3>
+        <table><thead><tr><th>Putaran</th><th>Mulai</th><th>Status</th><th>Pasal dibaca</th><th>Catatan</th></tr></thead><tbody>
+        ${plans.map((p) => `<tr><td>${p.putaran}</td><td>${t(p.startDate)}</td><td>${escapeHtml(p.status)}</td><td>${p._count.readings}</td><td>${p._count.notes}</td></tr>`).join('')}
+        </tbody></table>
+      </section>`
+          : ''
+      }
+
+      <section style="background:#fff7ed;border-color:#fed7aa">
+        <h3>Hak Anda atas data ini</h3>
+        <div style="font-size:9.5px;line-height:1.5">
+          Dokumen ini adalah salinan data pribadi Anda di Els App (UU PDP Indonesia, PDPA Malaysia, Privacy Act Australia).
+          Ubah data di <b>Profil → Ubah Profil</b>; atur siapa yang bisa melihat & pesan WhatsApp di <b>Pengaturan → Privasi</b>;
+          minta koreksi, salinan lengkap, atau <b>penghapusan permanen</b> ke <b>privacy@eccchurch.global</b> (dijawab paling lambat 3×24 jam).
+          Simpan dokumen ini dengan aman — berisi data pribadi.
+        </div>
+      </section>`;
+  return { html };
+}
+
+/**
+ * Profil jemaat (print view → "Save as PDF"). Dipakai Portal → detail jemaat
+ * (Export PDF) dan oleh jemaat sendiri lewat "Unduh data saya" (selfCopy).
+ */
+export async function renderJemaatProfileHtml(
+  jemaatId: string,
+  ctx: { apiBase: string; isMobileUa: boolean; selfCopy?: boolean },
+): Promise<string> {
 
   const j = await prisma.jemaat.findUnique({
     where: { id: jemaatId },
@@ -1233,9 +1300,6 @@ jemaatRouter.get('/:id/export', async (req, res) => {
             ? { label: 'Aktif', color: '#4d7c0f', bar: '#84cc16', emoji: '🙌', pct: 80 }
             : { label: 'Sangat Aktif', color: '#047857', bar: '#10b981', emoji: '🔥', pct: 100 };
 
-  if (format === 'csv') {
-    throw BadRequest('CSV export belum didukung untuk detail jemaat. Pakai format=pdf.');
-  }
 
   const fmtDate = (d: Date | null | undefined) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -1268,8 +1332,7 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   // Base URL untuk uploads — kalau fotoUrl relative, prepend. Pakai env atau
   // request host sebagai fallback.
   const apiBase =
-    process.env.PUBLIC_API_URL ??
-    `${req.protocol}://${req.get('host')}`;
+    process.env.PUBLIC_API_URL ?? ctx.apiBase;
   const resolveImg = (url: string | null | undefined): string => {
     if (!url) return '';
     if (/^https?:/i.test(url)) return url;
@@ -1304,20 +1367,20 @@ jemaatRouter.get('/:id/export', async (req, res) => {
       <div class="family-info">
         <div class="family-name">${escapeHtml(r.jemaatTerkait.namaLengkap)} ${sexBadge}</div>
         <div class="family-role">${escapeHtml(r.tipeRelasi.nama)}${usia ? ` · ${usia}` : ''}</div>
-        ${r.jemaatTerkait.noHp ? `<div class="family-contact">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
-        ${r.jemaatTerkait.email ? `<div class="family-contact">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
-        ${r.jemaatTerkait.tanggalLahir ? `<div class="family-contact">🎂 ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.noHp ? `<div class="family-contact">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.email ? `<div class="family-contact">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.tanggalLahir ? `<div class="family-contact">🎂 ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
       </div>
     </div>`;
     })
     .join('');
 
-  const uaDetailStr = (req.get('user-agent') ?? '').toLowerCase();
-  const isMobileUaDetail = /mobi|android|iphone|ipad|ipod/.test(uaDetailStr);
+  const isMobileUaDetail = ctx.isMobileUa;
+  const self = ctx.selfCopy ? await selfCopyExtras(jemaatId) : null;
 
   const html = `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
-<title>Profil Jemaat — ${escapeHtml(j.namaLengkap)}</title>
+<title>${self ? 'Salinan Data Pribadi' : 'Profil Jemaat'} — ${escapeHtml(j.namaLengkap)}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   * { box-sizing: border-box; }
@@ -1402,7 +1465,7 @@ ${
   isMobileUaDetail
     ? ''
     : `<div class="noprint">
-  <span><strong>Print Preview</strong> — Profil ${escapeHtml(j.namaLengkap)}. Tekan <kbd>Ctrl/Cmd + P</kbd> → Save as PDF.</span>
+  <span><strong>Print Preview</strong> — ${self ? 'Salinan data pribadi' : 'Profil'} ${escapeHtml(j.namaLengkap)}. Tekan <kbd>Ctrl/Cmd + P</kbd> → Save as PDF.</span>
   <button onclick="doPrint()">Print / Save as PDF</button>
 </div>`
 }
@@ -1591,12 +1654,13 @@ ${
         }
       </section>
 
+      ${self ? self.html : ''}
     </div>
   </div>
 
   <div class="footer">
     <div class="meta-txt">
-      © ${new Date().getFullYear()} Elshaddai Creative Community · Export ${new Date().toLocaleDateString('id-ID')}
+      © ${new Date().getFullYear()} Elshaddai Creative Community · ${self ? 'Salinan data pribadi, dibuat' : 'Export'} ${new Date().toLocaleDateString('id-ID')}${self ? ' · Pertanyaan/koreksi/hapus data: privacy@eccchurch.global' : ''}
     </div>
     <div class="powered">
       <span>Powered by</span>
@@ -1606,6 +1670,18 @@ ${
 </div>
 </body></html>`;
 
+  return html;
+}
+
+jemaatRouter.get('/:id/export', async (req, res) => {
+  const format = (getQueryString(req, 'format') ?? 'pdf').toLowerCase();
+  if (format === 'csv') {
+    throw BadRequest('CSV export belum didukung untuk detail jemaat. Pakai format=pdf.');
+  }
+  const html = await renderJemaatProfileHtml(req.params.id!, {
+    apiBase: `${req.protocol}://${req.get('host')}`,
+    isMobileUa: /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase()),
+  });
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });

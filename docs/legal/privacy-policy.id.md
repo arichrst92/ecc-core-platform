@@ -159,7 +159,7 @@ Kami juga dapat mengungkapkan data bila **diwajibkan oleh hukum** atau atas perm
 |---|---|
 | **Mendapat informasi** tentang pemrosesan data | Kebijakan ini, atau tanya ke privacy@eccchurch.global |
 | **Melihat & memperbaiki** data | Menu Profil / Ubah Profil / Keluarga di aplikasi |
-| **Mendapat salinan data (portabilitas)** | Pengaturan → Privasi → **Unduh data saya** (file JSON), atau email privacy@eccchurch.global |
+| **Mendapat salinan data (portabilitas)** | Pengaturan → Privasi → **Unduh data saya** (PDF), atau email privacy@eccchurch.global |
 | **Menghapus data / akun** | Pengaturan → **Hapus Akun** (akun dinonaktifkan), atau minta **penghapusan permanen** ke privacy@eccchurch.global |
 | **Menarik persetujuan** | Pengaturan → Privasi (mis. analitik), atau email kami |
 | **Membatasi siapa yang melihat data** | Pengaturan → **Privasi** |

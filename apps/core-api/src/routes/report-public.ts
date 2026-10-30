@@ -13,6 +13,8 @@ import { computeAreaStats } from '../lib/homecell-area-stats.js';
 import { renderHomecellAreaReportHtml } from '../lib/homecell-area-report-html.js';
 import { renderHomecellReportHtml } from '../lib/homecell-report-html.js';
 import { buildHomecellReportRows } from './admin/homecell.js';
+import { renderJemaatProfileHtml } from './admin/jemaat.js';
+import { apiBase } from '../lib/worship.js';
 
 export const reportPublicRouter = Router();
 
@@ -29,7 +31,10 @@ reportPublicRouter.get('/:token', async (req, res) => {
   const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(ua);
 
   let html: string;
-  if (p.k === 'homecell') {
+  if (p.k === 'self') {
+    // Salinan data pribadi (Unduh data saya) — link 10 menit milik jemaat ybs.
+    html = await renderJemaatProfileHtml(p.id, { apiBase: apiBase(req), isMobileUa, selfCopy: true });
+  } else if (p.k === 'homecell') {
     const rows = await buildHomecellReportRows({ id: p.id }, period);
     if (!rows[0]) throw NotFound('Homecell tidak ditemukan');
     html = renderHomecellReportHtml(rows, { isMobileUa, title: `Homecell — ${rows[0].nama}`, filterParts: [], periodLabel, lang });

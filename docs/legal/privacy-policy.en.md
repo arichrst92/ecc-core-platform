@@ -159,7 +159,7 @@ We may also disclose information where **required by law** or requested by a law
 |---|---|
 | **Be informed** about processing | This policy, or ask privacy@eccchurch.global |
 | **Access & correct** your data | Profile / Edit Profile / Family in the app |
-| **Receive a copy (portability)** | Settings → Privacy → **Download my data** (JSON file), or email privacy@eccchurch.global |
+| **Receive a copy (portability)** | Settings → Privacy → **Download my data** (PDF), or email privacy@eccchurch.global |
 | **Delete your data / account** | Settings → **Delete Account** (account deactivated), or request **permanent deletion** at privacy@eccchurch.global |
 | **Withdraw consent** | Settings → Privacy (e.g. analytics), or email us |
 | **Control who sees your data** | Settings → **Privacy** |

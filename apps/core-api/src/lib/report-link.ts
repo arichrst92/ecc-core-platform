@@ -8,7 +8,8 @@ import crypto from 'node:crypto';
 const SECRET = process.env.REPORT_LINK_SECRET ?? process.env.JWT_SECRET ?? 'dev-report-secret';
 export const REPORT_LINK_TTL_SEC = 30 * 60;
 
-export type ReportKind = 'homecell' | 'area';
+// 'self' = salinan data pribadi milik jemaat (Unduh data saya)
+export type ReportKind = 'homecell' | 'area' | 'self';
 export interface ReportPayload {
   k: ReportKind;
   id: string;
@@ -34,7 +35,7 @@ export function verifyReportToken(token: string): ReportPayload | null {
   if (expected.length !== got.length || !crypto.timingSafeEqual(expected, got)) return null;
   try {
     const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as ReportPayload;
-    if (!p || (p.k !== 'homecell' && p.k !== 'area') || typeof p.id !== 'string') return null;
+    if (!p || (p.k !== 'homecell' && p.k !== 'area' && p.k !== 'self') || typeof p.id !== 'string') return null;
     if (!Number.isFinite(p.exp) || p.exp < Math.floor(Date.now() / 1000)) return null;
     return p;
   } catch {

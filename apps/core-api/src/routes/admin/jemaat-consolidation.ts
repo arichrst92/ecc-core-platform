@@ -14,6 +14,14 @@
  *
  * Kolom "Spiritual Journey" (mis. "Expand"): jemaat diberi role yang
  * disyaratkan tahap tersebut DAN semua tahap sebelumnya (yang belum dipenuhi).
+ *
+ * Kolom Tanggal Lahir & Jenis Kelamin: seperti field lain (isi yang kosong,
+ * yang berbeda dipilih admin).
+ *
+ * Kolom Nama/Email/No HP Ayah, Ibu, Wali: dicocokkan ke jemaat yang ada
+ * (email / no HP / nama) atau dibuat sebagai jemaat baru, lalu dihubungkan
+ * dua arah di Keluarga (anak → Ayah/Ibu/Wali, orang tua → Anak). Relasi yang
+ * sudah ada antara dua orang yang sama tidak diubah. Tanpa notifikasi/WA.
  */
 import { Router } from 'express';
 import multer from 'multer';
@@ -26,7 +34,13 @@ import { readXlsx } from '../../lib/xlsx-lite.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import {
   DIFF_FIELDS,
+  GUARDIAN_GENDER,
+  GUARDIAN_ROLES,
+  GUARDIAN_TIPE,
   buildIndex,
+  normalizeEmail,
+  normalizePhone,
+  personKeys,
   diffField,
   majority,
   matchRow,
@@ -36,8 +50,10 @@ import {
   suggestJourneyStep,
   suggestPelayanan,
   splitMinistries,
+  type GuardianRole,
   type JemaatLite,
 } from '../../lib/jemaat-consolidation.js';
+import { reciprocalTipeNama } from '../../lib/family-relation.js';
 
 export const jemaatConsolidationRouter = Router();
 jemaatConsolidationRouter.use(requireFulltimer);
@@ -55,6 +71,8 @@ async function loadAllJemaat(): Promise<JemaatLite[]> {
       alamat: true,
       statusPernikahan: true,
       tanggalBergabungGereja: true,
+      tanggalLahir: true,
+      jenisKelamin: true,
       cabangId: true,
       cabang: { select: { nama: true } },
     },
@@ -70,6 +88,8 @@ async function loadAllJemaat(): Promise<JemaatLite[]> {
     tanggalBergabungGereja: r.tanggalBergabungGereja
       ? r.tanggalBergabungGereja.toISOString().slice(0, 10)
       : null,
+    tanggalLahir: r.tanggalLahir ? r.tanggalLahir.toISOString().slice(0, 10) : null,
+    jenisKelamin: r.jenisKelamin,
     cabangId: r.cabangId,
     cabangNama: r.cabang.nama,
   }));
@@ -148,13 +168,34 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
       alamat: j.alamat,
       statusPernikahan: j.statusPernikahan,
       tanggalBergabungGereja: j.tanggalBergabungGereja,
+      tanggalLahir: j.tanggalLahir,
+      jenisKelamin: j.jenisKelamin,
       cabang: j.cabangNama,
       cabangSama: j.cabangId === cabang.id,
     };
   };
 
+  // Orang tua/wali yang belum ada di DB tapi ada sebagai baris lain di sheet
+  // → saat apply memakai jemaat dari baris itu (dibuat sekali).
+  const sheetRowByKey = new Map<string, number>();
+  for (const r of rows) for (const k of personKeys({ namaLengkap: r.nama, noHp: r.noHp, email: r.email })) {
+    if (!sheetRowByKey.has(k)) sheetRowByKey.set(k, r.rowNo);
+  }
+
+  const matches = new Map(rows.map((r) => [r.rowNo, matchRow(r, ix, cabang.id)]));
+  // Relasi keluarga yang sudah ada (untuk menandai "sudah terhubung").
+  const matchedIds = [...new Set([...matches.values()].map((m) => m.jemaatId).filter((x): x is string => !!x))];
+  const existingRel = matchedIds.length
+    ? await prisma.jemaatRelasi.findMany({
+        where: { jemaatId: { in: matchedIds } },
+        select: { jemaatId: true, jemaatTerkaitId: true, tipeRelasi: { select: { nama: true } } },
+      })
+    : [];
+  const relKey = (a: string, b: string) => `${a}|${b}`;
+  const relMap = new Map(existingRel.map((x) => [relKey(x.jemaatId, x.jemaatTerkaitId), x.tipeRelasi.nama]));
+
   const outRows = rows.map((r) => {
-    const m = matchRow(r, ix, cabang.id);
+    const m = matches.get(r.rowNo)!;
     const target = m.jemaatId ? ix.byId.get(m.jemaatId)! : null;
     const diff = target
       ? Object.fromEntries(
@@ -169,6 +210,32 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
         candidates: m.candidates.map((c) => ({ ...jemaatOut(c.id), via: c.via })),
       },
       diff,
+      family: Object.fromEntries(
+        GUARDIAN_ROLES.map((g) => {
+          const p = r[g];
+          if (!p) return [g, null];
+          const exclude = new Set<string>(m.jemaatId ? [m.jemaatId] : []);
+          const gm = matchRow({ kode: null, nama: p.nama, email: p.email, noHp: p.noHp }, ix, cabang.id, exclude);
+          const inSheet = personKeys({ namaLengkap: p.nama, noHp: p.noHp, email: p.email })
+            .map((k) => sheetRowByKey.get(k))
+            .find((n) => n !== undefined && n !== r.rowNo);
+          return [
+            g,
+            {
+              ...p,
+              match: {
+                status: gm.status,
+                jemaatId: gm.jemaatId,
+                candidates: gm.candidates.map((c) => ({ ...jemaatOut(c.id), via: c.via })),
+              },
+              inSheetRowNo: inSheet ?? null,
+              existingRelasi: m.jemaatId && gm.jemaatId ? (relMap.get(relKey(m.jemaatId, gm.jemaatId)) ?? null) : null,
+              // No HP / email baris anak sama dengan orang tua → kemungkinan milik orang tua.
+              sharesContact: (!!p.noHp && p.noHp === r.noHp) || (!!p.email && p.email === r.email),
+            },
+          ];
+        }),
+      ),
     };
   });
 
@@ -283,6 +350,8 @@ const fieldUpdates = z
     alamat: z.string().trim().max(2000).optional(),
     statusPernikahan: z.string().trim().max(50).optional(),
     tanggalBergabungGereja: z.string().date().optional(),
+    tanggalLahir: z.string().date().optional(),
+    jenisKelamin: z.enum(['L', 'P']).optional(),
   })
   .strict();
 
@@ -294,8 +363,26 @@ const createJemaat = z
     alamat: z.string().trim().max(2000).optional(),
     statusPernikahan: z.string().trim().max(50).optional(),
     tanggalBergabungGereja: z.string().date().optional(),
+    tanggalLahir: z.string().date().optional(),
+    jenisKelamin: z.enum(['L', 'P']).optional(),
   })
   .strict();
+
+/** Orang tua / wali: pakai jemaat yang ada ATAU buat baru. */
+const familyLink = z
+  .object({
+    peran: z.enum(['ayah', 'ibu', 'wali']),
+    jemaatId: z.string().uuid().optional(),
+    create: z
+      .object({
+        namaLengkap: z.string().trim().min(2).max(255),
+        noHp: z.string().trim().min(8).max(20).optional(),
+        email: z.string().trim().email().max(255).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .refine((x) => !!x.jemaatId !== !!x.create, 'Orang tua/wali: jemaatId atau create (salah satu).');
 
 const applySchema = z.object({
   cabangId: z.string().uuid(),
@@ -312,6 +399,7 @@ const applySchema = z.object({
           homecell: z.string().trim().max(150).nullable(),
           ministry: z.string().trim().max(500).nullable(),
           spiritualJourney: z.string().trim().max(150).nullable().optional(),
+          family: z.array(familyLink).max(3).default([]),
         })
         .refine((r) => !!r.jemaatId !== !!r.create, 'Tiap baris wajib jemaatId atau create (salah satu).'),
     )
@@ -367,6 +455,9 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
     ministryMembers: 0,
     penggembalaanAdded: 0,
     journeyRolesAdded: 0,
+    keluargaDibuat: 0,
+    relasiDibuat: 0,
+    relasiSudahAda: 0,
   };
 
   // ---- Spiritual Journey: tahap + sub role yang diberikan ----
@@ -491,13 +582,13 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
 
   // ---- Per jemaat ----
   const results: RowResult[] = [];
+  // Relasi keluarga diproses SETELAH semua baris, supaya orang tua yang juga
+  // muncul sebagai baris sheet (dibuat di atas) bisa dipakai.
+  const familyQueue: { rowNo: number; childId: string; links: z.infer<typeof familyLink>[] }[] = [];
   // Orang yang sama bisa muncul di beberapa baris (mis. satu baris per ministry).
   // Jemaat baru hanya dibuat sekali; baris berikutnya memakai jemaat yang sama.
   const createdByKey = new Map<string, string>();
-  const createKeys = (c: { namaLengkap: string; noHp?: string | null; email?: string | null }) =>
-    [c.noHp ? `hp:${c.noHp}` : null, c.email ? `em:${c.email.toLowerCase()}` : null, !c.noHp && !c.email ? `nm:${normalizeName(c.namaLengkap)}` : null].filter(
-      (k): k is string => !!k,
-    );
+  const createKeys = personKeys;
   for (const r of input.rows) {
     const changes: string[] = [];
     let jemaatId: string | null = r.jemaatId ?? null;
@@ -519,6 +610,8 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
             alamat: c.alamat ?? null,
             statusPernikahan: c.statusPernikahan ?? null,
             tanggalBergabungGereja: c.tanggalBergabungGereja ? new Date(c.tanggalBergabungGereja) : null,
+            tanggalLahir: c.tanggalLahir ? new Date(c.tanggalLahir) : null,
+            jenisKelamin: c.jenisKelamin ?? null,
           },
           select: { id: true },
         });
@@ -537,6 +630,8 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
         if (u.alamat) data.alamat = u.alamat;
         if (u.statusPernikahan) data.statusPernikahan = u.statusPernikahan;
         if (u.tanggalBergabungGereja) data.tanggalBergabungGereja = new Date(u.tanggalBergabungGereja);
+        if (u.tanggalLahir) data.tanggalLahir = new Date(u.tanggalLahir);
+        if (u.jenisKelamin) data.jenisKelamin = u.jenisKelamin;
       }
       if (Object.keys(data).length) {
         await prisma.jemaat.update({ where: { id: jemaatId }, data });
@@ -639,6 +734,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
       }
 
       results.push({ rowNo: r.rowNo, jemaatId, ok: true, created: !!r.create, changes });
+      if (r.family.length) familyQueue.push({ rowNo: r.rowNo, childId: jemaatId, links: r.family });
     } catch (e) {
       const code = (e as { code?: string }).code;
       const msg =
@@ -650,6 +746,104 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
             ? 'Jemaat tidak ditemukan.'
             : (e as Error).message;
       results.push({ rowNo: r.rowNo, jemaatId, ok: false, created: false, changes, error: msg });
+    }
+  }
+
+  // ---- Relasi keluarga (orang tua / wali) ----
+  const tipeByNama = new Map(
+    (await prisma.tipeRelasiKeluarga.findMany({ select: { id: true, nama: true } })).map((t) => [t.nama, t.id]),
+  );
+  async function resolveGuardian(link: z.infer<typeof familyLink>): Promise<{ id: string; created: boolean; note?: string }> {
+    if (link.jemaatId) {
+      const ex = await prisma.jemaat.findUnique({ where: { id: link.jemaatId }, select: { id: true } });
+      if (!ex) throw new Error('jemaat tidak ditemukan');
+      return { id: ex.id, created: false };
+    }
+    const c = link.create!;
+    const keys = personKeys(c);
+    const reuse = keys.map((k) => createdByKey.get(k)).find(Boolean);
+    if (reuse) return { id: reuse, created: false };
+    const hp = c.noHp ? normalizePhone(c.noHp) : null;
+    const em = c.email ? normalizeEmail(c.email) : null;
+    // No HP / email unik — kalau sudah dipakai jemaat lain, pakai jemaat itu.
+    const byContact = hp || em
+      ? await prisma.jemaat.findFirst({
+          where: { OR: [...(hp ? [{ noHp: hp }] : []), ...(em ? [{ email: em }] : [])] },
+          select: { id: true, namaLengkap: true },
+        })
+      : null;
+    if (byContact && normalizeName(byContact.namaLengkap) === normalizeName(c.namaLengkap)) {
+      for (const k of keys) createdByKey.set(k, byContact.id);
+      return { id: byContact.id, created: false };
+    }
+    // Kontak dipakai orang lain (mis. nomor anak = nomor orang tua) → buat tanpa kontak itu.
+    const takenHp = hp && byContact ? !!(await prisma.jemaat.findFirst({ where: { noHp: hp }, select: { id: true } })) : false;
+    const takenEm = em && byContact ? !!(await prisma.jemaat.findFirst({ where: { email: em }, select: { id: true } })) : false;
+    const created = await prisma.jemaat.create({
+      data: {
+        cabangId: cabang!.id,
+        kode: await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } }))),
+        namaLengkap: c.namaLengkap,
+        noHp: hp && !takenHp ? hp : null,
+        email: em && !takenEm ? em : null,
+        jenisKelamin: GUARDIAN_GENDER[link.peran],
+      },
+      select: { id: true },
+    });
+    for (const k of keys) createdByKey.set(k, created.id);
+    summary.keluargaDibuat += 1;
+    const dropped = [takenHp ? 'No HP' : null, takenEm ? 'email' : null].filter(Boolean);
+    return {
+      id: created.id,
+      created: true,
+      note: dropped.length ? `${dropped.join(' & ')} sudah dipakai jemaat lain, tidak disimpan` : undefined,
+    };
+  }
+
+  for (const item of familyQueue) {
+    const res = results.find((x) => x.rowNo === item.rowNo)!;
+    const child = await prisma.jemaat.findUnique({ where: { id: item.childId }, select: { jenisKelamin: true } });
+    for (const link of item.links) {
+      const label = GUARDIAN_TIPE[link.peran as GuardianRole];
+      try {
+        const g = await resolveGuardian(link);
+        if (g.id === item.childId) {
+          res.changes.push(`${label}: dilewati (orang yang sama dengan jemaat ini)`);
+          continue;
+        }
+        // Lengkapi jenis kelamin orang tua bila kosong.
+        const gender = GUARDIAN_GENDER[link.peran as GuardianRole];
+        if (gender) await prisma.jemaat.updateMany({ where: { id: g.id, jenisKelamin: null }, data: { jenisKelamin: gender } });
+
+        const existing = await prisma.jemaatRelasi.findFirst({
+          where: {
+            OR: [
+              { jemaatId: item.childId, jemaatTerkaitId: g.id },
+              { jemaatId: g.id, jemaatTerkaitId: item.childId },
+            ],
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          summary.relasiSudahAda += 1;
+          res.changes.push(`${label}: sudah terhubung`);
+          continue;
+        }
+        const tipeA = tipeByNama.get(label);
+        const tipeB = tipeByNama.get(reciprocalTipeNama(label, child?.jenisKelamin ?? null));
+        if (!tipeA || !tipeB) throw new Error(`tipe relasi "${label}" belum ada`);
+        await prisma.jemaatRelasi.createMany({
+          data: [
+            { jemaatId: item.childId, jemaatTerkaitId: g.id, tipeRelasiId: tipeA, keterangan: 'Konsolidasi data' },
+            { jemaatId: g.id, jemaatTerkaitId: item.childId, tipeRelasiId: tipeB, keterangan: 'Konsolidasi data' },
+          ],
+          skipDuplicates: true,
+        });
+        summary.relasiDibuat += 1;
+        res.changes.push(`${label}${g.created ? ' (jemaat baru)' : ''}: terhubung${g.note ? ` — ${g.note}` : ''}`);
+      } catch (e) {
+        res.changes.push(`${label}: gagal — ${(e as Error).message}`);
+      }
     }
   }
 

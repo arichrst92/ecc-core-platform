@@ -21,6 +21,8 @@ const J = (o: Partial<JemaatLite> & { id: string; namaLengkap: string }): Jemaat
   alamat: null,
   statusPernikahan: null,
   tanggalBergabungGereja: null,
+  tanggalLahir: null,
+  jenisKelamin: null,
   cabangId: 'jkt',
   cabangNama: 'ECC Jakarta',
   ...o,
@@ -42,6 +44,12 @@ const row = (o: Partial<SheetRow>): SheetRow => ({
   statusPernikahan: null,
   tanggalBergabungGereja: null,
   username: null,
+  spiritualJourney: null,
+  tanggalLahir: null,
+  jenisKelamin: null,
+  ayah: null,
+  ibu: null,
+  wali: null,
   ...o,
 });
 
@@ -181,6 +189,8 @@ describe('spiritual journey', () => {
     const held = [{ roleId: 'r2', subRoleId: 'sr2', subRoleStatusId: null }];
     expect(journeyStepsToGrant(steps, 2, held).map((s) => s.id)).toEqual(['s1', 's3']);
     expect(journeyStepsToGrant(steps, 0, []).map((s) => s.id)).toEqual(['s1']);
+    // Jemaat A: "Expand" tanpa role apa pun → Connect, Grow, Expand semua diberikan.
+    expect(journeyStepsToGrant(steps, 2, []).map((s) => s.id)).toEqual(['s1', 's2', 's3']);
     expect(journeyStepsToGrant(steps, -1, []).map((s) => s.id)).toEqual([]);
     // Status wajib: role sama tanpa status belum memenuhi tahap 3.
     expect(journeyStepsToGrant(steps, 2, [...held, { roleId: 'r1', subRoleId: 'x', subRoleStatusId: null }, { roleId: 'r3', subRoleId: 'y', subRoleStatusId: null }]).map((s) => s.id)).toEqual(['s3']);
@@ -206,5 +216,46 @@ describe('splitMinistries', () => {
   it('tidak memecah nama yang memakai & / dan', () => {
     expect(splitMinistries('Praise & Worship')).toEqual(['PRAISE & WORSHIP']);
     expect(splitMinistries('Doa dan Syafaat')).toEqual(['DOA DAN SYAFAAT']);
+  });
+});
+
+import { birthDate, dateOnly, normalizeGender, personKeys } from './jemaat-consolidation.js';
+describe('tanggal lahir, jenis kelamin, orang tua / wali', () => {
+  it('format tanggal Excel & Indonesia', () => {
+    expect(dateOnly('2005-03-07')).toBe('2005-03-07');
+    expect(dateOnly('07/03/2005')).toBe('2005-03-07');
+    expect(dateOnly('7-3-2005')).toBe('2005-03-07');
+    expect(dateOnly('31/02/2005')).toBe(null);
+    expect(dateOnly(38418)).toBe('2005-03-07');
+    expect(birthDate('01/01/2999')).toBe(null);
+  });
+  it('jenis kelamin', () => {
+    expect(normalizeGender('Laki-laki')).toBe('L');
+    expect(normalizeGender('P')).toBe('P');
+    expect(normalizeGender('Wanita')).toBe('P');
+    expect(normalizeGender('?')).toBe(null);
+  });
+  it('membaca kolom ayah / ibu / wali', () => {
+    const { rows } = parseSheetRows([
+      ['Nama Lengkap', 'No HP', 'Tanggal Lahir', 'Jenis Kelamin', 'Nama Ayah', 'Email Ayah', 'No HP Ayah', 'Nama Ibu', 'Email Ibu', 'No HP Ibu', 'Nama Wali', 'Email Wali', 'No HP Wali', 'Spiritual Journey'],
+      ['Kevin', '', '15/08/2015', 'L', 'Budi', 'BUDI@x.com', '0812-1111-2222', 'Sari', '', '08123334444', '', '', '', 'Expand'],
+    ]);
+    const r = rows[0]!;
+    expect(r.tanggalLahir).toBe('2015-08-15');
+    expect(r.jenisKelamin).toBe('L');
+    expect(r.ayah).toEqual({ nama: 'Budi', email: 'budi@x.com', noHp: '+6281211112222' });
+    expect(r.ibu).toEqual({ nama: 'Sari', email: null, noHp: '+628123334444' });
+    expect(r.wali).toBe(null);
+    expect(r.spiritualJourney).toBe('Expand');
+  });
+  it('mencari orang tua tanpa menunjuk anak sendiri', () => {
+    // Nomor anak = nomor ayah (sering di data Shiftsoft).
+    const ix = buildIndex([J({ id: 'anak', namaLengkap: 'Kevin', noHp: '+6281211112222' })]);
+    const m = matchRow({ kode: null, nama: 'Budi', email: null, noHp: '+6281211112222' }, ix, 'jkt', new Set(['anak']));
+    expect(m.status).toBe('NOT_FOUND');
+  });
+  it('kunci orang (hindari jemaat ganda)', () => {
+    expect(personKeys({ namaLengkap: 'Budi', noHp: '0812-1111-2222' })).toEqual(['hp:+6281211112222']);
+    expect(personKeys({ namaLengkap: 'Ps. Budi  S' })).toEqual(['nm:budi s']);
   });
 });

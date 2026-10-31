@@ -45,11 +45,44 @@ function text(v: CellValue | undefined): string | null {
   return s ? s : null;
 }
 
-function dateOnly(v: CellValue | undefined): string | null {
+const pad2 = (n: number) => String(n).padStart(2, '0');
+function validYmd(y: number, m: number, d: number): string | null {
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCMonth() !== m - 1) return null; // mis. 31/02
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+
+/**
+ * Tanggal → YYYY-MM-DD. Menerima serial Excel, "YYYY-MM-DD", "YYYY/MM/DD",
+ * dan format Indonesia "DD/MM/YYYY" / "DD-MM-YYYY" / "DD.MM.YYYY".
+ */
+export function dateOnly(v: CellValue | undefined): string | null {
   if (v === null || v === undefined || v === '') return null;
   if (typeof v === 'number') return excelSerialToDate(v).toISOString().slice(0, 10);
   const s = String(v).trim();
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (m) return validYmd(Number(m[1]), Number(m[2]), Number(m[3]));
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (m) return validYmd(Number(m[3]), Number(m[2]), Number(m[1]));
+  return null;
+}
+
+/** Tanggal lahir: seperti dateOnly, tapi tidak boleh di masa depan. */
+export function birthDate(v: CellValue | undefined, today = new Date()): string | null {
+  const d = dateOnly(v);
+  if (!d) return null;
+  return d > today.toISOString().slice(0, 10) ? null : d;
+}
+
+/** "L" / "P" dari L, P, Laki-laki, Perempuan, Pria, Wanita, Male, Female, M, F. */
+export function normalizeGender(v: CellValue | undefined): 'L' | 'P' | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim().toLowerCase();
+  if (!s) return null;
+  if (['l', 'lk', 'laki', 'laki-laki', 'laki laki', 'pria', 'male', 'm'].includes(s)) return 'L';
+  if (['p', 'pr', 'perempuan', 'wanita', 'female', 'f', 'w'].includes(s)) return 'P';
+  return null;
 }
 
 const MARITAL = new Set(['single', 'sudah menikah', 'menikah', 'janda/duda', 'janda', 'duda']);
@@ -76,9 +109,35 @@ export interface SheetRow {
   username: string | null;
   /** Tahap Spiritual Journey (teks bebas dari sheet, mis. "Expand"). */
   spiritualJourney: string | null;
+  tanggalLahir: string | null; // YYYY-MM-DD
+  jenisKelamin: 'L' | 'P' | null;
+  /** Orang tua / wali (relasi keluarga). Null kalau nama kosong. */
+  ayah: GuardianSheet | null;
+  ibu: GuardianSheet | null;
+  wali: GuardianSheet | null;
 }
 
-const HEADER_ALIASES: Record<keyof Omit<SheetRow, 'rowNo'>, string[]> = {
+export type GuardianRole = 'ayah' | 'ibu' | 'wali';
+export const GUARDIAN_ROLES: GuardianRole[] = ['ayah', 'ibu', 'wali'];
+export interface GuardianSheet {
+  nama: string;
+  email: string | null;
+  noHp: string | null;
+}
+
+const guardianAliases = (who: string) => ({
+  nama: [`nama ${who}`, `nama lengkap ${who}`, `${who}`],
+  email: [`email ${who}`, `e-mail ${who}`],
+  noHp: [`no hp ${who}`, `no. hp ${who}`, `hp ${who}`, `nomor hp ${who}`, `no telp ${who}`, `telepon ${who}`, `phone ${who}`],
+});
+const GUARDIAN_ALIASES: Record<GuardianRole, ReturnType<typeof guardianAliases>> = {
+  ayah: guardianAliases('ayah'),
+  ibu: guardianAliases('ibu'),
+  wali: guardianAliases('wali'),
+};
+
+type ScalarKey = Exclude<keyof SheetRow, 'rowNo' | GuardianRole>;
+const HEADER_ALIASES: Record<ScalarKey, string[]> = {
   kode: ['kode'],
   nama: ['nama lengkap', 'nama', 'name'],
   noHp: ['no hp', 'main phone', 'phone', 'no. hp'],
@@ -102,6 +161,8 @@ const HEADER_ALIASES: Record<keyof Omit<SheetRow, 'rowNo'>, string[]> = {
     'fase',
     'tahap',
   ],
+  tanggalLahir: ['tanggal lahir', 'tgl lahir', 'tgl. lahir', 'tanggal_lahir', 'date of birth', 'birth date', 'birthdate', 'dob'],
+  jenisKelamin: ['jenis kelamin', 'gender', 'l/p', 'sex', 'jk'],
 };
 
 /**
@@ -124,17 +185,31 @@ export function splitMinistries(v: string | null | undefined): string[] {
 
 export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missingColumns: string[] } {
   const header = (rows[0] ?? []).map((h) => String(h ?? '').trim().toLowerCase());
+  const norm = (h: string) => h.replace(/[_\s]+/g, ' ').trim();
+  const find = (aliases: string[]) => header.findIndex((h) => aliases.includes(norm(h)));
   const idx = {} as Record<keyof typeof HEADER_ALIASES, number>;
   const missing: string[] = [];
   for (const [key, aliases] of Object.entries(HEADER_ALIASES) as [keyof typeof HEADER_ALIASES, string[]][]) {
-    idx[key] = header.findIndex((h) => aliases.includes(h));
+    idx[key] = find(aliases);
   }
+  const gIdx = Object.fromEntries(
+    GUARDIAN_ROLES.map((g) => [
+      g,
+      { nama: find(GUARDIAN_ALIASES[g].nama), email: find(GUARDIAN_ALIASES[g].email), noHp: find(GUARDIAN_ALIASES[g].noHp) },
+    ]),
+  ) as Record<GuardianRole, { nama: number; email: number; noHp: number }>;
   if (idx.nama < 0) missing.push('Nama Lengkap');
   if (idx.email < 0 && idx.noHp < 0) missing.push('Email / No HP');
 
   const out: SheetRow[] = [];
   rows.slice(1).forEach((r, i) => {
     const at = (k: keyof typeof HEADER_ALIASES) => (idx[k] >= 0 ? r[idx[k]] : null);
+    const cell = (i: number) => (i >= 0 ? r[i] : null);
+    const guardian = (g: GuardianRole): GuardianSheet | null => {
+      const n = text(cell(gIdx[g].nama));
+      if (!n || !normalizeName(n) || n === '-') return null;
+      return { nama: n, email: normalizeEmail(cell(gIdx[g].email)), noHp: normalizePhone(cell(gIdx[g].noHp)) };
+    };
     const nama = text(at('nama'));
     if (!nama) return;
     const status = text(at('statusPernikahan'));
@@ -157,6 +232,11 @@ export function parseSheetRows(rows: CellValue[][]): { rows: SheetRow[]; missing
       tanggalBergabungGereja: dateOnly(at('tanggalBergabungGereja')),
       username: text(at('username')),
       spiritualJourney: text(at('spiritualJourney')),
+      tanggalLahir: birthDate(at('tanggalLahir')),
+      jenisKelamin: normalizeGender(at('jenisKelamin')),
+      ayah: guardian('ayah'),
+      ibu: guardian('ibu'),
+      wali: guardian('wali'),
     });
   });
   return { rows: out, missingColumns: missing };
@@ -175,6 +255,8 @@ export interface JemaatLite {
   alamat: string | null;
   statusPernikahan: string | null;
   tanggalBergabungGereja: string | null; // YYYY-MM-DD
+  tanggalLahir: string | null; // YYYY-MM-DD
+  jenisKelamin: string | null; // 'L' | 'P'
   cabangId: string;
   cabangNama: string;
 }
@@ -220,10 +302,17 @@ export interface MatchResult {
   candidates: { id: string; via: MatchVia[] }[];
 }
 
-export function matchRow(row: SheetRow, ix: JemaatIndex, preferCabangId?: string): MatchResult {
+export function matchRow(
+  row: Pick<SheetRow, 'kode' | 'email' | 'noHp' | 'nama'>,
+  ix: JemaatIndex,
+  preferCabangId?: string,
+  /** Jemaat yang tidak boleh jadi hasil (mis. anak sendiri saat mencari orang tua). */
+  exclude?: Set<string>,
+): MatchResult {
   const via = new Map<string, Set<MatchVia>>();
   const add = (ids: string[] | undefined, v: MatchVia) => {
     for (const id of ids ?? []) {
+      if (exclude?.has(id)) continue;
       if (!via.has(id)) via.set(id, new Set());
       via.get(id)!.add(v);
     }
@@ -258,7 +347,15 @@ export function matchRow(row: SheetRow, ix: JemaatIndex, preferCabangId?: string
 //  Diff field
 // ------------------------------------------------------------
 
-export const DIFF_FIELDS = ['noHp', 'email', 'alamat', 'statusPernikahan', 'tanggalBergabungGereja'] as const;
+export const DIFF_FIELDS = [
+  'noHp',
+  'email',
+  'alamat',
+  'tanggalLahir',
+  'jenisKelamin',
+  'statusPernikahan',
+  'tanggalBergabungGereja',
+] as const;
 export type DiffField = (typeof DIFF_FIELDS)[number];
 export type DiffState = 'same' | 'fill' | 'differ' | 'none';
 
@@ -266,7 +363,8 @@ const cmp = (f: DiffField, v: string | null): string | null => {
   if (v === null) return null;
   if (f === 'noHp') return normalizePhone(v);
   if (f === 'email') return normalizeEmail(v);
-  if (f === 'tanggalBergabungGereja') return v.slice(0, 10);
+  if (f === 'tanggalBergabungGereja' || f === 'tanggalLahir') return v.slice(0, 10);
+  if (f === 'jenisKelamin') return normalizeGender(v);
   return v.trim().toLowerCase().replace(/\s+/g, ' ');
 };
 
@@ -341,4 +439,28 @@ export function suggestJourneyStep(sheetVal: string, steps: { id: string; judul:
 export function journeyStepsToGrant<S extends StepRequirement>(steps: S[], targetIndex: number, held: HeldRole[]): S[] {
   if (targetIndex < 0) return [];
   return steps.slice(0, targetIndex + 1).filter((s) => !meetsStep(s, held));
+}
+
+// ------------------------------------------------------------
+//  Relasi keluarga (orang tua / wali)
+// ------------------------------------------------------------
+
+/** Nama tipe relasi dari sisi ANAK: "orang ini adalah Ayah/Ibu/Wali saya". */
+export const GUARDIAN_TIPE: Record<GuardianRole, 'Ayah' | 'Ibu' | 'Wali'> = { ayah: 'Ayah', ibu: 'Ibu', wali: 'Wali' };
+
+/** Jenis kelamin yang tersirat dari peran (wali tidak diketahui). */
+export const GUARDIAN_GENDER: Record<GuardianRole, 'L' | 'P' | null> = { ayah: 'L', ibu: 'P', wali: null };
+
+/** Kunci pencocokan orang yang dibuat dalam satu kali apply (hindari jemaat ganda). */
+export function personKeys(p: { namaLengkap: string; noHp?: string | null; email?: string | null }): string[] {
+  const keys: string[] = [];
+  const hp = p.noHp ? normalizePhone(p.noHp) : null;
+  const em = p.email ? normalizeEmail(p.email) : null;
+  if (hp) keys.push(`hp:${hp}`);
+  if (em) keys.push(`em:${em}`);
+  if (!hp && !em) {
+    const nm = normalizeName(p.namaLengkap);
+    if (nm) keys.push(`nm:${nm}`);
+  }
+  return keys;
 }

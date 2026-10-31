@@ -3,27 +3,33 @@
 /**
  * Konsolidasi data jemaat dari spreadsheet (rekap manual Shiftsoft).
  * Alur: upload .xlsx → preview (pencocokan ke DB + diff) → human check per
- * baris / field / homecell / ministry / Spiritual Journey → Apply → laporan hasil.
+ * baris / field / keluarga (ayah, ibu, wali) / homecell / ministry / Spiritual Journey
+ * → Apply → laporan hasil.
  * Backend: /admin/jemaat-consolidation/{preview,apply} (Fulltimer only).
  */
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
 // ---------- Tipe respons ----------
 type MatchStatus = 'MATCHED' | 'CONFLICT' | 'NAME_ONLY' | 'NOT_FOUND';
-const FIELDS = ['noHp', 'email', 'alamat', 'statusPernikahan', 'tanggalBergabungGereja'] as const;
+const FIELDS = ['noHp', 'email', 'alamat', 'tanggalLahir', 'jenisKelamin', 'statusPernikahan', 'tanggalBergabungGereja'] as const;
 type Field = (typeof FIELDS)[number];
 const FIELD_LABEL: Record<Field, string> = {
   noHp: 'No HP',
   email: 'Email',
   alamat: 'Alamat',
+  tanggalLahir: 'Tanggal Lahir',
+  jenisKelamin: 'Jenis Kelamin',
   statusPernikahan: 'Status Nikah',
   tanggalBergabungGereja: 'Bergabung Sejak',
 };
+type Peran = 'ayah' | 'ibu' | 'wali';
+const PERAN: Peran[] = ['ayah', 'ibu', 'wali'];
+const PERAN_LABEL: Record<Peran, string> = { ayah: 'Ayah', ibu: 'Ibu', wali: 'Wali' };
 
 interface Candidate {
   id: string;
@@ -34,9 +40,21 @@ interface Candidate {
   alamat: string | null;
   statusPernikahan: string | null;
   tanggalBergabungGereja: string | null;
+  tanggalLahir: string | null;
+  jenisKelamin: string | null;
   cabang: string;
   cabangSama: boolean;
   via?: string[];
+}
+interface FamilyPlan {
+  nama: string;
+  email: string | null;
+  noHp: string | null;
+  match: { status: MatchStatus; jemaatId: string | null; candidates: Candidate[] };
+  /** Orang tua juga ada sebagai baris lain di sheet (belum ada di DB). */
+  inSheetRowNo: number | null;
+  existingRelasi: string | null;
+  sharesContact: boolean;
 }
 interface Row {
   rowNo: number;
@@ -51,7 +69,10 @@ interface Row {
   spiritualJourney?: string | null;
   statusPernikahan: string | null;
   tanggalBergabungGereja: string | null;
+  tanggalLahir: string | null;
+  jenisKelamin: string | null;
   match: { status: MatchStatus; jemaatId: string | null; candidates: Candidate[] };
+  family?: Partial<Record<Peran, FamilyPlan | null>>;
 }
 interface LeaderPlan {
   nama: string;
@@ -99,7 +120,7 @@ const norm = (f: Field, v: string | null) => {
     if (d.startsWith('0')) d = '62' + d.slice(1);
     return d || null;
   }
-  if (f === 'tanggalBergabungGereja') return v.slice(0, 10);
+  if (f === 'tanggalBergabungGereja' || f === 'tanggalLahir') return v.slice(0, 10);
   return v.trim().toLowerCase().replace(/\s+/g, ' ') || null;
 };
 type DiffState = 'same' | 'fill' | 'differ' | 'none';
@@ -111,20 +132,64 @@ function diff(f: Field, sheet: string | null, cur: string | null): DiffState {
   return a === b ? 'same' : 'differ';
 }
 const validSheetValue = (f: Field, v: string | null) =>
-  !!v && (f !== 'email' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) && (f !== 'noHp' || v.length >= 8);
+  !!v &&
+  (f !== 'email' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) &&
+  (f !== 'noHp' || v.length >= 8) &&
+  (f !== 'tanggalLahir' || /^\d{4}-\d{2}-\d{2}$/.test(v)) &&
+  (f !== 'jenisKelamin' || v === 'L' || v === 'P');
+const fieldText = (f: Field, v: string | null) =>
+  f === 'jenisKelamin' && v ? (v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : v) : v;
 
 interface RowChoice {
   jemaatId: string | null; // null = skip baris (kecuali create)
   fields: Field[]; // field yang diambil dari sheet
   /** Tambahkan sebagai jemaat baru (baris tidak ada di production). */
   create: boolean;
+  /** Orang tua / wali: '' = lewati, 'create' = jemaat baru, selain itu jemaatId. */
+  family: Partial<Record<Peran, string>>;
 }
+
+/** Default pilihan orang tua/wali. */
+function defaultFamilyChoice(p: FamilyPlan | null | undefined): string {
+  if (!p) return '';
+  if (p.match.status === 'MATCHED') return p.match.jemaatId ?? '';
+  if (p.match.status === 'NAME_ONLY') {
+    const same = p.match.candidates.filter((c) => c.cabangSama);
+    return same.length === 1 ? same[0]!.id : ''; // ragu → admin pilih
+  }
+  if (p.match.status === 'NOT_FOUND') return 'create';
+  return ''; // CONFLICT
+}
+const familyNeedsReview = (r: Row, c: RowChoice | undefined) =>
+  PERAN.some((g) => {
+    const p = r.family?.[g];
+    return !!p && (p.match.status === 'CONFLICT' || p.match.status === 'NAME_ONLY') && !c?.family[g];
+  });
 
 /** Data jemaat baru dari baris sheet — hanya nilai yang valid. */
 function createPayload(r: Row) {
   const out: Record<string, string> = { namaLengkap: r.nama.trim() };
   for (const f of FIELDS) if (validSheetValue(f, r[f])) out[f] = r[f]!;
+  // No HP / email yang sama dengan orang tua/wali dianggap milik orang tua.
+  for (const g of PERAN) {
+    const p = r.family?.[g];
+    if (p?.noHp && p.noHp === out.noHp) delete out.noHp;
+    if (p?.email && p.email === out.email) delete out.email;
+  }
   return out;
+}
+type FamilyLinkPayload = { peran: Peran; jemaatId?: string; create?: { namaLengkap: string; noHp?: string; email?: string } };
+function familyPayload(r: Row, c: RowChoice): FamilyLinkPayload[] {
+  return PERAN.flatMap((g): FamilyLinkPayload[] => {
+    const p = r.family?.[g];
+    const v = c.family[g];
+    if (!p || !v) return [];
+    if (v !== 'create') return [{ peran: g, jemaatId: v }];
+    const create: { namaLengkap: string; noHp?: string; email?: string } = { namaLengkap: p.nama.trim() };
+    if (p.noHp && p.noHp.length >= 8) create.noHp = p.noHp;
+    if (p.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) create.email = p.email;
+    return create.namaLengkap.length >= 2 ? [{ peran: g, create }] : [];
+  });
 }
 const canCreate = (r: Row) => r.match.status !== 'MATCHED' && r.nama.trim().length >= 2;
 const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -165,6 +230,7 @@ export default function JemaatConsolidationPage() {
       const target = r.match.status === 'MATCHED' ? r.match.candidates[0] : undefined;
       ch[r.rowNo] = {
         create: false,
+        family: Object.fromEntries(PERAN.map((g) => [g, defaultFamilyChoice(r.family?.[g])])),
         jemaatId: target?.id ?? null,
         // Default: isi field yang kosong di production; yang beda tetap production.
         fields: target ? FIELDS.filter((f) => diff(f, r[f], target[f]) === 'fill' && validSheetValue(f, r[f])) : [],
@@ -216,11 +282,11 @@ export default function JemaatConsolidationPage() {
         .map((r) => {
           const c = choices[r.rowNo]!;
           if (!c.jemaatId && c.create) {
-            return { rowNo: r.rowNo, create: createPayload(r), area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null };
+            return { rowNo: r.rowNo, create: createPayload(r), area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null, family: familyPayload(r, c) };
           }
           const updates: Record<string, string> = {};
           for (const f of c.fields) if (r[f]) updates[f] = r[f]!;
-          return { rowNo: r.rowNo, jemaatId: c.jemaatId!, updates, area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null };
+          return { rowNo: r.rowNo, jemaatId: c.jemaatId!, updates, area: r.area, homecell: r.homecell, ministry: r.ministry, spiritualJourney: r.spiritualJourney ?? null, family: familyPayload(r, c) };
         });
       const ministryMap: Record<string, { pelayananId: string } | { createNama: string } | null> = {};
       for (const [k, v] of Object.entries(ministry)) {
@@ -254,7 +320,7 @@ export default function JemaatConsolidationPage() {
 
   // ---------- Ringkasan ----------
   const stats = useMemo(() => {
-    const s = { total: 0, MATCHED: 0, CONFLICT: 0, NAME_ONLY: 0, NOT_FOUND: 0, included: 0, fieldChanges: 0, created: 0 };
+    const s = { total: 0, MATCHED: 0, CONFLICT: 0, NAME_ONLY: 0, NOT_FOUND: 0, included: 0, fieldChanges: 0, created: 0, relasi: 0, keluargaBaru: 0 };
     if (!data) return s;
     for (const r of data.rows) {
       s.total++;
@@ -266,6 +332,15 @@ export default function JemaatConsolidationPage() {
       } else if (c?.create) {
         s.included++;
         s.created++;
+      }
+      if (c && (c.jemaatId || c.create)) {
+        for (const g of PERAN) {
+          const p = r.family?.[g];
+          const v = c.family[g];
+          if (!p || !v || p.existingRelasi) continue;
+          s.relasi++;
+          if (v === 'create' && !p.inSheetRowNo) s.keluargaBaru++;
+        }
       }
     }
     return s;
@@ -288,7 +363,8 @@ export default function JemaatConsolidationPage() {
         return (
           r.match.status !== 'MATCHED' ||
           (target && !target.cabangSama) ||
-          (target && FIELDS.some((f) => diff(f, r[f], target[f]) === 'differ'))
+          (target && FIELDS.some((f) => diff(f, r[f], target[f]) === 'differ')) ||
+          familyNeedsReview(r, c)
         );
       }
       if (filter === 'changes') return (choices[r.rowNo]?.fields.length ?? 0) > 0 || !!choices[r.rowNo]?.create;
@@ -460,7 +536,8 @@ export default function JemaatConsolidationPage() {
                 Default: field yang <span className="text-blue-700 font-medium">kosong di production</span> diisi dari sheet;
                 field yang <span className="text-amber-700 font-medium">berbeda</span> tetap production — centang untuk
                 menimpa. Baris yang tidak cocok otomatis di-skip sampai kandidat dipilih — atau centang{' '}
-                <span className="text-blue-700 font-medium">Tambahkan sebagai jemaat baru</span>.
+                <span className="text-blue-700 font-medium">Tambahkan sebagai jemaat baru</span>. Kolom Nama/Email/No HP{' '}
+                <b>Ayah, Ibu, Wali</b> dicocokkan ke jemaat yang ada (atau dibuat baru) lalu dihubungkan di Keluarga.
               </p>
               <div className="space-y-3">
                 {visibleRows.length === 0 && <div className="text-sm text-neutral-500 p-6 text-center">Tidak ada baris.</div>}
@@ -474,6 +551,7 @@ export default function JemaatConsolidationPage() {
                     onPick={(id) => pickCandidate(r, id)}
                     onCreate={(on) => setCreate(r, on)}
                     onToggle={(f, v) => toggleField(r.rowNo, f, v)}
+                    onFamily={(g, v) => setRow(r.rowNo, { family: { ...choices[r.rowNo]!.family, [g]: v } })}
                   />
                 ))}
               </div>
@@ -580,7 +658,14 @@ export default function JemaatConsolidationPage() {
                     <b>{stats.created} jemaat baru</b> ditambahkan ke cabang {data.cabang?.nama} (kode jemaat dibuat otomatis).
                   </li>
                 )}
-                <li>{stats.fieldChanges} field data pribadi diperbarui dari sheet.</li>
+                <li>{stats.fieldChanges} field data pribadi diperbarui dari sheet (termasuk tanggal lahir & jenis kelamin).</li>
+                {stats.relasi > 0 && (
+                  <li>
+                    <b>{stats.relasi} relasi keluarga</b> (ayah / ibu / wali) dihubungkan dua arah
+                    {stats.keluargaBaru > 0 ? `, ±${stats.keluargaBaru} orang tua/wali dibuat sebagai jemaat baru` : ''}. Relasi
+                    yang sudah ada tidak diubah; tidak ada notifikasi ke jemaat.
+                  </li>
+                )}
                 <li>Role jemaat dipastikan Jemaat → Jemaat Tetap (role lain tidak diubah).</li>
                 <li>
                   Area baru: {data.areas.filter((a) => !a.existingId).length}, homecell baru:{' '}
@@ -698,6 +783,7 @@ function RowCard({
   onPick,
   onCreate,
   onToggle,
+  onFamily,
 }: {
   row: Row;
   choice: RowChoice;
@@ -706,6 +792,7 @@ function RowCard({
   onPick: (id: string | null) => void;
   onCreate: (on: boolean) => void;
   onToggle: (f: Field, useSheet: boolean) => void;
+  onFamily: (g: Peran, v: string) => void;
 }) {
   const creating = !choice.jemaatId && choice.create;
   const skipped = !choice.jemaatId && !creating;
@@ -778,7 +865,7 @@ function RowCard({
                     <td className="py-1 pr-2 text-neutral-600">{FIELD_LABEL[f]}</td>
                     <td className="py-1 break-words">
                       {validSheetValue(f, row[f]) ? (
-                        <span className="text-blue-700">{row[f]}</span>
+                        <span className="text-blue-700">{fieldText(f, row[f])}</span>
                       ) : (
                         <span className="text-red-600">{row[f]} — tidak valid, dikosongkan</span>
                       )}
@@ -822,8 +909,8 @@ function RowCard({
                 return (
                   <tr key={f} className="border-t border-neutral-100 align-top">
                     <td className="py-1 pr-2 text-neutral-600">{FIELD_LABEL[f]}</td>
-                    <td className="py-1 pr-2 text-neutral-800 break-words">{target[f] ?? <i className="text-neutral-400">kosong</i>}</td>
-                    <td className={`py-1 pr-2 break-words ${color}`}>{row[f]}</td>
+                    <td className="py-1 pr-2 text-neutral-800 break-words">{fieldText(f, target[f]) ?? <i className="text-neutral-400">kosong</i>}</td>
+                    <td className={`py-1 pr-2 break-words ${color}`}>{fieldText(f, row[f])}</td>
                     <td className="py-1">
                       {st === 'same' ? (
                         <span className="text-neutral-400">sama</span>
@@ -844,6 +931,59 @@ function RowCard({
           </table>
         </div>
       )}
+
+      {!skipped && PERAN.some((g) => row.family?.[g]) && (
+        <FamilySection row={row} choice={choice} onFamily={onFamily} />
+      )}
+    </div>
+  );
+}
+
+function FamilySection({ row, choice, onFamily }: { row: Row; choice: RowChoice; onFamily: (g: Peran, v: string) => void }) {
+  return (
+    <div className="mt-3 pt-2 border-t border-neutral-100">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-700 mb-1.5">
+        <Users className="w-3.5 h-3.5" /> Keluarga
+      </div>
+      <div className="space-y-1.5">
+        {PERAN.map((g) => {
+          const p = row.family?.[g];
+          if (!p) return null;
+          const v = choice.family[g] ?? '';
+          return (
+            <div key={g} className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="w-12 text-neutral-500">{PERAN_LABEL[g]}</span>
+              <span className="font-medium text-neutral-900">{p.nama}</span>
+              <span className="text-neutral-500">{[p.noHp, p.email].filter(Boolean).join(' · ')}</span>
+              <span className={`px-1.5 py-0.5 rounded-full ${STATUS_STYLE[p.match.status]}`}>{p.match.status}</span>
+              <select
+                value={v}
+                onChange={(e) => onFamily(g, e.target.value)}
+                className="border border-neutral-300 rounded-lg px-2 py-1 text-xs max-w-full"
+              >
+                <option value="">— Lewati —</option>
+                {p.match.candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {candLabel(c)}
+                  </option>
+                ))}
+                <option value="create">
+                  {p.inSheetRowNo ? `Pakai jemaat dari baris #${p.inSheetRowNo}` : '+ Buat sebagai jemaat baru'}
+                </option>
+              </select>
+              {p.existingRelasi && v && v !== 'create' && v === p.match.jemaatId && (
+                <span className="text-neutral-400">sudah terhubung ({p.existingRelasi})</span>
+              )}
+              {p.sharesContact && (
+                <span className="text-amber-700">No HP/email sama dengan baris ini — dianggap milik {PERAN_LABEL[g].toLowerCase()}</span>
+              )}
+              {!v && (p.match.status === 'NAME_ONLY' || p.match.status === 'CONFLICT') && (
+                <span className="text-amber-700">pilih orangnya</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

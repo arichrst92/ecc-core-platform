@@ -108,8 +108,9 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       restart_delay: 4000,
-      // Reload kalau memory > 500MB (sharp + tensorflow bisa leak).
-      max_memory_restart: '500M',
+      // Reload kalau memory > 1GB. VPS 8 GB; 500 MB terlalu mepet saat ribuan
+      // jemaat aktif bersamaan (restart = semua request gagal beberapa detik).
+      max_memory_restart: '1G',
       // Env inline — di-load dari root .env via dotenv di top file ini.
       env: sharedEnv,
       // Logging — PM2 simpan di ~/.pm2/logs/<name>-{out,error}.log

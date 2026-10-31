@@ -140,7 +140,8 @@ export default function MaintenancePage() {
     mutationFn: async () => apiClient.post('/admin/maintenance/dispatch-ibadah-reminder'),
     onSuccess: (r: any) => {
       const d = r.data.data;
-      toast.success(`Ibadah: sent ${d.sent}, failed ${d.failed}, skipped ${d.skipped}`);
+      if (d.alreadyRunning) toast('Ibadah: pengiriman sedang berjalan — tunggu sampai selesai.');
+      else toast.success(`Ibadah: terkirim ${d.sent}, gagal ${d.failed}, dilewati ${d.skipped} (yang sudah terkirim tidak dikirim ulang)`);
       refreshAll();
     },
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
@@ -150,7 +151,8 @@ export default function MaintenancePage() {
     mutationFn: async () => apiClient.post('/admin/maintenance/dispatch-event-reminder'),
     onSuccess: (r: any) => {
       const d = r.data.data;
-      toast.success(`Event: sent ${d.sent}, failed ${d.failed}, skipped ${d.skipped}`);
+      if (d.alreadyRunning) toast('Event: pengiriman sedang berjalan — tunggu sampai selesai.');
+      else toast.success(`Event: terkirim ${d.sent}, gagal ${d.failed}, dilewati ${d.skipped} (yang sudah terkirim tidak dikirim ulang)`);
       refreshAll();
     },
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),

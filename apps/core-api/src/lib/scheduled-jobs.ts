@@ -18,7 +18,7 @@ import { encryptLegacyCredentials } from './credential-crypto.js';
 import { encryptLegacyBackups } from './db-backup.js';
 import { backupEmailTick } from './backup-email.js';
 import { prisma } from '@ecc/database';
-import { sendWhatsAppText } from '@ecc/auth';
+import { sendWaOnce, withJobLock } from './wa-dispatch.js';
 import { getConfig, renderTemplate } from './wa-notif.js';
 import { waAllowedForJemaat } from './comm-prefs.js';
 import { logger } from './logger.js';
@@ -107,9 +107,16 @@ function tomorrowAsUtcMidnight(): Date {
 //   7. Send via Fonnte. Update status SENT/FAILED.
 //
 // ===============================================================
-export async function dispatchIbadahReminders(): Promise<{ sent: number; failed: number; skipped: number }> {
+export function dispatchIbadahReminders() {
+  return withJobLock('ibadah-reminder', dispatchIbadahRemindersInner);
+}
+
+async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: number; skipped: number }> {
   const tomorrow = tomorrowAsUtcMidnight();
   const tomorrowIso = tomorrow.toISOString().slice(0, 10);
+
+  const cfg = await getConfig('IBADAH_REMINDER_H1');
+  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
 
   const reservasis = await prisma.reservasi.findMany({
     where: {
@@ -130,6 +137,9 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
         },
       },
     },
+    // Urutan stabil: reservasi paling awal (biasanya pemilik akun) menang
+    // bila beberapa jemaat memakai nomor HP yang sama.
+    orderBy: { createdAt: 'asc' },
   });
 
   let sent = 0;
@@ -138,25 +148,6 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
 
   for (const r of reservasis) {
     if (!r.jemaat.isActive || !r.jemaat.noHp || !(await waAllowedForJemaat(r.jemaatId, 'IBADAH_REMINDER_H1'))) {
-      skipped++;
-      continue;
-    }
-    const dedupKey = `IBADAH_REMINDER:${r.ibadahId}:${tomorrowIso}:${r.jemaatId}`;
-
-    // Idempotent insert. Pakai upsert supaya kalau row sudah ada (status apapun),
-    // tidak duplicate. Cek status: kalau SENT, skip. Kalau FAILED/PENDING bisa retry.
-    const existing = await prisma.notificationLog.findUnique({
-      where: { dedupKey },
-      select: { status: true },
-    });
-    if (existing?.status === 'SENT') {
-      skipped++;
-      continue;
-    }
-
-    // Template dari WaNotificationConfig — admin bisa toggle + edit via portal
-    const cfg = await getConfig('IBADAH_REMINDER_H1');
-    if (!cfg || !cfg.isEnabled) {
       skipped++;
       continue;
     }
@@ -173,51 +164,18 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
       jam: jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone),
       lokasi: r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-'),
     });
-
-    const log = await prisma.notificationLog.upsert({
-      where: { dedupKey },
-      create: {
-        jemaatId: r.jemaatId,
-        noHp: r.jemaat.noHp,
-        type: 'IBADAH_REMINDER',
-        dedupKey,
-        status: 'PENDING',
-        messageBody: message,
-        attemptCount: 1,
-      },
-      update: {
-        attemptCount: { increment: 1 },
-        // Reset status ke PENDING saat retry — biar dispatch coba kirim lagi.
-        status: 'PENDING',
-      },
+    const groupPrefix = `IBADAH_REMINDER:${r.ibadahId}:${tomorrowIso}:`;
+    const outcome = await sendWaOnce({
+      dedupKey: `${groupPrefix}${r.jemaatId}`,
+      type: 'IBADAH_REMINDER',
+      jemaatId: r.jemaatId,
+      noHp: r.jemaat.noHp,
+      message,
+      phoneGroupPrefix: groupPrefix,
     });
-
-    try {
-      const result = await sendWhatsAppText(r.jemaat.noHp, message);
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'SENT',
-          messageId: result.messageId,
-          sentAt: new Date(),
-          errorReason: null,
-        },
-      });
-      sent++;
-    } catch (err: any) {
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'FAILED',
-          errorReason: err?.message ? String(err.message).slice(0, 1000) : 'Unknown error',
-        },
-      });
-      failed++;
-      logger.warn(
-        { dedupKey, err: err?.message },
-        'Ibadah reminder dispatch failed — will retry di interval berikutnya kalau eligible.',
-      );
-    }
+    if (outcome === 'sent') sent++;
+    else if (outcome === 'failed') failed++;
+    else skipped++;
   }
 
   return { sent, failed, skipped };
@@ -226,10 +184,17 @@ export async function dispatchIbadahReminders(): Promise<{ sent: number; failed:
 // ===============================================================
 // Job 4: Dispatch Event H-1 reminder
 // ===============================================================
-export async function dispatchEventReminders(): Promise<{ sent: number; failed: number; skipped: number }> {
+export function dispatchEventReminders() {
+  return withJobLock('event-reminder', dispatchEventRemindersInner);
+}
+
+async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: number; skipped: number }> {
   const tomorrow = tomorrowAsUtcMidnight();
   const tomorrowIso = tomorrow.toISOString().slice(0, 10);
   const dayAfter = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
+
+  const cfg = await getConfig('EVENT_REMINDER_H1');
+  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
 
   // Event punya tanggalMulai DateTime. Ambil jendela ±1 hari lalu saring
   // berdasarkan TANGGAL KALENDER di zona cabang event (event lama bisa
@@ -242,6 +207,7 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       },
       status: { in: ['DAFTAR', 'BAYAR', 'MENUNGGU_VERIFIKASI'] },
     },
+    orderBy: { registeredAt: 'asc' },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, noHp: true, isActive: true } },
       event: {
@@ -270,21 +236,6 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       skipped++;
       continue;
     }
-    const dedupKey = `EVENT_REMINDER:${p.eventId}:${tomorrowIso}:${p.jemaatId}`;
-    const existing = await prisma.notificationLog.findUnique({
-      where: { dedupKey },
-      select: { status: true },
-    });
-    if (existing?.status === 'SENT') {
-      skipped++;
-      continue;
-    }
-
-    const cfg = await getConfig('EVENT_REMINDER_H1');
-    if (!cfg || !cfg.isEnabled) {
-      skipped++;
-      continue;
-    }
     // Tanggal kalender + jam dinding cabang + label zona (bukan jam server).
     const eventTime = `${tomorrow.toLocaleDateString('id-ID', {
       weekday: 'long',
@@ -298,44 +249,18 @@ export async function dispatchEventReminders(): Promise<{ sent: number; failed: 
       tanggal: eventTime,
       lokasi: p.event.lokasi ?? '-',
     });
-
-    const log = await prisma.notificationLog.upsert({
-      where: { dedupKey },
-      create: {
-        jemaatId: p.jemaatId,
-        noHp: p.jemaat.noHp,
-        type: 'EVENT_REMINDER',
-        dedupKey,
-        status: 'PENDING',
-        messageBody: message,
-        attemptCount: 1,
-      },
-      update: { attemptCount: { increment: 1 }, status: 'PENDING' },
+    const groupPrefix = `EVENT_REMINDER:${p.eventId}:${tomorrowIso}:`;
+    const outcome = await sendWaOnce({
+      dedupKey: `${groupPrefix}${p.jemaatId}`,
+      type: 'EVENT_REMINDER',
+      jemaatId: p.jemaatId,
+      noHp: p.jemaat.noHp,
+      message,
+      phoneGroupPrefix: groupPrefix,
     });
-
-    try {
-      const result = await sendWhatsAppText(p.jemaat.noHp, message);
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'SENT',
-          messageId: result.messageId,
-          sentAt: new Date(),
-          errorReason: null,
-        },
-      });
-      sent++;
-    } catch (err: any) {
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'FAILED',
-          errorReason: err?.message ? String(err.message).slice(0, 1000) : 'Unknown error',
-        },
-      });
-      failed++;
-      logger.warn({ dedupKey, err: err?.message }, 'Event reminder dispatch failed.');
-    }
+    if (outcome === 'sent') sent++;
+    else if (outcome === 'failed') failed++;
+    else skipped++;
   }
 
   return { sent, failed, skipped };
@@ -362,7 +287,11 @@ let started = false;
 // ============================================================
 // Birthday greeting dispatch — sekali per jemaat per tahun
 // ============================================================
-export async function dispatchBirthdayGreetings(): Promise<{
+export function dispatchBirthdayGreetings() {
+  return withJobLock('birthday-greeting', dispatchBirthdayGreetingsInner);
+}
+
+async function dispatchBirthdayGreetingsInner(): Promise<{
   sent: number;
   failed: number;
   skipped: number;
@@ -399,58 +328,21 @@ export async function dispatchBirthdayGreetings(): Promise<{
       skipped++;
       continue;
     }
-    const dedupKey = `BIRTHDAY_${r.id}_${today.getFullYear()}`;
-    const existing = await prisma.notificationLog.findUnique({
-      where: { dedupKey },
-      select: { status: true },
-    });
-    if (existing?.status === 'SENT') {
-      skipped++;
-      continue;
-    }
     const usia = today.getFullYear() - new Date(r.tanggal_lahir).getFullYear();
     const message = renderTemplate(cfg.template, {
       nama: r.nama_lengkap,
       usia: String(usia),
     });
-
-    const log = await prisma.notificationLog.upsert({
-      where: { dedupKey },
-      create: {
-        jemaatId: r.id,
-        noHp: r.no_hp,
-        type: 'BIRTHDAY_GREETING' as any,
-        dedupKey,
-        status: 'PENDING',
-        messageBody: message,
-        attemptCount: 1,
-      },
-      update: { attemptCount: { increment: 1 }, status: 'PENDING' },
+    const outcome = await sendWaOnce({
+      dedupKey: `BIRTHDAY_${r.id}_${today.getFullYear()}`,
+      type: 'BIRTHDAY_GREETING',
+      jemaatId: r.id,
+      noHp: r.no_hp,
+      message,
     });
-
-    try {
-      const result = await sendWhatsAppText(r.no_hp, message);
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'SENT',
-          messageId: result.messageId,
-          sentAt: new Date(),
-          errorReason: null,
-        },
-      });
-      sent++;
-    } catch (err: any) {
-      await prisma.notificationLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'FAILED',
-          errorReason: err?.message ? String(err.message).slice(0, 1000) : 'Unknown',
-        },
-      });
-      failed++;
-      logger.warn({ dedupKey, err: err?.message }, 'Birthday dispatch failed.');
-    }
+    if (outcome === 'sent') sent++;
+    else if (outcome === 'failed') failed++;
+    else skipped++;
   }
   return { sent, failed, skipped };
 }

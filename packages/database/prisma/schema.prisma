@@ -1912,6 +1912,7 @@ model NotificationLog {
   @@index([jemaatId])
   @@index([type, status])
   @@index([createdAt])
+  @@index([noHp])
   @@map("notification_log")
 }
 
@@ -1922,6 +1923,7 @@ enum NotificationType {
   GROUP_MEMBER_ADDED // jemaat di-add ke group (via PIC atau via join code)
   GROUP_MEMBER_REMOVED // jemaat di-remove oleh PIC
   GROUP_DISMISSED // group di-dismiss (soft-delete) — notif ke all members
+  BIRTHDAY_GREETING // ucapan ulang tahun (dedup per jemaat per tahun)
 
   @@map("notification_type")
 }

@@ -37,6 +37,30 @@ export function appendSignature(body: string): string {
   return body + WA_SIGNATURE;
 }
 
+/**
+ * Baca respons Fonnte dengan aman.
+ * - Gagal pasti (pesan TIDAK dikirim): `status`/`Status` false → throw "Fonnte error: …".
+ * - Sukses: id bisa string atau angka → selalu dikembalikan sebagai string
+ *   (id angka sebelumnya membuat pencatatan "SENT" gagal → dianggap gagal →
+ *   reminder dikirim ulang tiap jam).
+ * - Respons tidak bisa dibaca padahal HTTP 200 → dianggap TERKIRIM (id kosong),
+ *   bukan gagal, supaya tidak memicu kirim ulang.
+ */
+async function parseFonnteResponse(res: Response): Promise<string> {
+  let data: Record<string, unknown> = {};
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    return '';
+  }
+  const status = data.status ?? data.Status;
+  if (status === false) {
+    throw new Error(`Fonnte error: ${String(data.reason ?? data.detail ?? 'unknown')}`);
+  }
+  const id = Array.isArray(data.id) ? data.id[0] : data.id;
+  return id === undefined || id === null ? '' : String(id).slice(0, 100);
+}
+
 export interface SendOtpResult {
   messageId: string;
   to: string;
@@ -76,20 +100,7 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
     throw new Error(`Fonnte send failed (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as {
-    status?: boolean;
-    reason?: string;
-    id?: string[] | string;
-    detail?: string;
-  };
-
-  // Fonnte response: { status: true, id: ["123"], detail: "..." }
-  // Atau saat error: { status: false, reason: "..." }
-  if (data.status === false) {
-    throw new Error(`Fonnte error: ${data.reason ?? data.detail ?? 'unknown'}`);
-  }
-
-  const messageId = Array.isArray(data.id) ? (data.id[0] ?? '') : (data.id ?? '');
+  const messageId = await parseFonnteResponse(res);
   return { messageId, to: target };
 }
 
@@ -128,16 +139,7 @@ export async function sendWhatsAppText(
     const text = await res.text();
     throw new Error(`Fonnte send failed (${res.status}): ${text}`);
   }
-  const data = (await res.json()) as {
-    status?: boolean;
-    reason?: string;
-    id?: string[] | string;
-    detail?: string;
-  };
-  if (data.status === false) {
-    throw new Error(`Fonnte error: ${data.reason ?? data.detail ?? 'unknown'}`);
-  }
-  const messageId = Array.isArray(data.id) ? (data.id[0] ?? '') : (data.id ?? '');
+  const messageId = await parseFonnteResponse(res);
   return { messageId, to: target };
 }
 

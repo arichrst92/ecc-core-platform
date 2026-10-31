@@ -92,13 +92,9 @@ export async function sendWaOnce(opts: {
   }
 
   // ---- Kirim (hanya pemenang klaim)
+  let messageId: string;
   try {
-    const result = await sendWhatsAppText(noHp, message);
-    await prisma.notificationLog.update({
-      where: { id: logId },
-      data: { status: 'SENT', messageId: result.messageId, sentAt: new Date(), errorReason: null },
-    });
-    return 'sent';
+    messageId = (await sendWhatsAppText(noHp, message)).messageId;
   } catch (err: any) {
     const raw = err?.message ? String(err.message) : 'Unknown error';
     const reason = (isDefiniteFailure(raw) ? raw : UNCERTAIN_PREFIX + raw).slice(0, 1000);
@@ -108,6 +104,17 @@ export async function sendWaOnce(opts: {
     logger.warn({ dedupKey, err: raw, retry: isDefiniteFailure(raw) }, 'WA dispatch gagal');
     return 'failed';
   }
+
+  // Pesan SUDAH diterima Fonnte. Gagal mencatat di DB tidak boleh membuatnya
+  // dianggap gagal (itu penyebab reminder terkirim ulang tiap jam). Baris tetap
+  // PENDING bila update gagal — PENDING tidak pernah dikirim ulang.
+  await prisma.notificationLog
+    .update({
+      where: { id: logId },
+      data: { status: 'SENT', messageId: messageId || null, sentAt: new Date(), errorReason: null },
+    })
+    .catch((err) => logger.error({ dedupKey, err: err?.message }, 'WA terkirim tapi gagal dicatat SENT'));
+  return 'sent';
 }
 
 const running = new Set<string>();

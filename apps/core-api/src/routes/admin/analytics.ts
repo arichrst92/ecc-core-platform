@@ -364,7 +364,7 @@ export async function computeApiPerformance(f: F) {
     }
     // Pakai angka sisi app bila cukup sampel (mencakup gagal jaringan), selain itu sisi server.
     const use = a.count >= 20 ? a : s;
-    return { key: fl.key, label: fl.label, success: successPct(use), attempts: s.count || a.count, note: fl.note };
+    return { key: fl.key, label: fl.label, success: successPct(use), attempts: s.count || a.count, failed: use.c5xx + use.cNet, samples: use.count, note: fl.note };
   });
 
   const endpoints = [...perEndpoint.values()]
@@ -382,6 +382,10 @@ export async function computeApiPerformance(f: F) {
         p95: percentileFromHist(e.server.hist, 0.95) ?? 0,
         success: successPct(mixSrc) ?? 100,
         mix: { ok: pct(mixSrc.c2xx), c4xx: pct(mixSrc.c4xx), c5xx: pct(mixSrc.c5xx), network: pct(mixSrc.cNet) },
+        // Jumlah mentah di balik persentase — supaya 2 gagal dari 32 sampel tidak terlihat seperti masalah besar.
+        failed: mixSrc.c5xx + mixSrc.cNet,
+        samples: mixSrc.count,
+        basis: mixSrc === e.app ? ('app' as const) : ('server' as const),
       };
     });
 

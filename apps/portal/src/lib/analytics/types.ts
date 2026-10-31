@@ -92,6 +92,8 @@ export interface FlowRate {
   label: string;
   success: number | null;
   attempts: number;
+  failed?: number;
+  samples?: number;
   note?: string;
 }
 
@@ -104,6 +106,10 @@ export interface EndpointRow {
   success: number;
   /** Persentase per kelas status; total ≈ 100. */
   mix: { ok: number; c4xx: number; c5xx: number; network: number };
+  /** Request gagal (5xx + jaringan) dan jumlah sampel dasar persentase. */
+  failed?: number;
+  samples?: number;
+  basis?: 'app' | 'server';
 }
 
 export interface TopError {

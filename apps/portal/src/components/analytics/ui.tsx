@@ -27,6 +27,22 @@ export const retentionClass = (p: number | null) =>
 export const successClass = (p: number | null) =>
   p == null ? 'text-neutral-400' : p >= 99.5 ? 'text-green-700' : p >= 98 ? 'text-amber-700' : 'text-red-600';
 
+/**
+ * Warna success rate dengan memperhitungkan jumlah gagal: sedikit kegagalan
+ * (≤ 3, mis. saat server restart ketika deploy) tampil kuning, bukan merah,
+ * walau persentasenya turun karena sampelnya kecil.
+ */
+export const failureClass = (p: number | null, failed?: number) =>
+  failed == null ? successClass(p) : failed === 0 ? 'text-green-700' : failed <= 3 ? 'text-amber-700' : successClass(p);
+
+/** "2 gagal dari 32 sampel app" / "tanpa kegagalan". */
+export const failedText = (failed?: number, samples?: number, basis?: 'app' | 'server') =>
+  failed == null || samples == null
+    ? null
+    : failed === 0
+      ? `0 gagal dari ${fmtNum(samples)}`
+      : `${fmtNum(failed)} gagal dari ${fmtNum(samples)}${basis === 'app' ? ' sampel app' : basis === 'server' ? ' request' : ''}`;
+
 /** Persen atau "—" bila belum cukup data. */
 export const pctOrDash = (p: number | null | undefined, digits = 1) => (p == null ? '—' : fmtPct(p, digits));
 export const msOrDash = (ms: number | null | undefined) => (ms == null ? '—' : fmtMs(ms));

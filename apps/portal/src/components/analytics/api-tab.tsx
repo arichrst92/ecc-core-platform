@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, ArrowDown, CheckCircle2, Gauge, Server, Smartphone } from 'lucide-react';
 import { useApiPerformance } from '@/lib/analytics/use-analytics';
 import type { AnalyticsFilter, ApiHourly, EndpointRow } from '@/lib/analytics/types';
-import { Card, Kpi, Loading, fmtMs, fmtNum, fmtPct, msOrDash, pctOrDash, successClass } from './ui';
+import { Card, Kpi, Loading, failedText, failureClass, fmtMs, fmtNum, fmtPct, msOrDash, pctOrDash, successClass } from './ui';
 
 const MIX = [
   { k: 'ok', label: '2xx', c: '#16a34a' },
@@ -56,15 +56,17 @@ export function ApiTab({ filter }: { filter: AnalyticsFilter }) {
           {d.flows.map((f) => (
             <div key={f.key} className="rounded-lg bg-neutral-50 p-3">
               <div className="text-xs text-neutral-500">{f.label}</div>
-              <div className={`text-xl font-bold tabular-nums ${successClass(f.success)}`}>{pctOrDash(f.success)}</div>
-              <div className="text-[11px] text-neutral-500">{fmtNum(f.attempts)} percobaan</div>
+              <div className={`text-xl font-bold tabular-nums ${failureClass(f.success, f.failed)}`}>{pctOrDash(f.success)}</div>
+              <div className="text-[11px] text-neutral-500">
+                {fmtNum(f.attempts)} percobaan{f.failed ? ` · ${fmtNum(f.failed)} gagal` : ''}
+              </div>
               {f.note ? <div className="text-[11px] text-neutral-500 mt-1 leading-snug">{f.note}</div> : null}
             </div>
           ))}
         </div>
       </Card>
 
-      <Card title="Endpoint" sub="Klik judul kolom untuk mengurutkan · Sukses diurutkan dari yang terendah">
+      <Card title="Endpoint" sub="Klik judul kolom untuk mengurutkan · Sukses diurutkan dari yang terendah · kuning = 1–3 request gagal (mis. saat server restart ketika deploy), merah = lebih banyak">
         <div className="overflow-x-auto -mx-4">
           <table className="w-full text-sm min-w-[760px]">
             <thead className="text-xs text-neutral-500 bg-neutral-50">
@@ -162,7 +164,12 @@ function EndpointTr({ e }: { e: EndpointRow }) {
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(e.count)}</td>
       <td className="px-4 py-2 text-right tabular-nums text-neutral-500">{fmtMs(e.p50)}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtMs(e.p95)}</td>
-      <td className={`px-4 py-2 text-right tabular-nums font-semibold ${successClass(e.success)}`}>{fmtPct(e.success, 2)}</td>
+      <td className="px-4 py-2 text-right">
+        <div className={`tabular-nums font-semibold ${failureClass(e.success, e.failed)}`}>{fmtPct(e.success, 2)}</div>
+        {e.failed ? (
+          <div className="text-[11px] text-neutral-500 whitespace-nowrap">{failedText(e.failed, e.samples, e.basis)}</div>
+        ) : null}
+      </td>
       <td className="px-4 py-2">
         <div className="flex h-2.5 rounded overflow-hidden gap-px bg-neutral-100" title={MIX.map((m) => `${m.label} ${e.mix[m.k]}%`).join(' · ')}>
           {MIX.map((m) =>

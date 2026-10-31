@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Els App · Uji Beban & Monitor Server</title>
+<style>
+  :root {
+    --brand: #f97316; --brand-d: #c2410c; --brand-l: #fff7ed; --ink: #171717; --muted: #525252; --faint: #a3a3a3;
+    --line: #e5e5e5; --bg: #fafafa; --card: #fff; --green: #15803d; --green-l: #dcfce7; --amber: #b45309; --amber-l: #fef3c7;
+    --red: #dc2626; --red-l: #fee2e2; --blue: #2563eb; --violet: #7c3aed; --gray: #737373;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: linear-gradient(135deg, #f97316, #c2410c); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  header .sub { opacity: .85; font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; background: rgba(255,255,255,.18); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d4d4d4; }
+  .dot.live { background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.3); }
+  .dot.warn { background: #fbbf24; } .dot.err { background: #f87171; }
+  main { padding: 18px 24px 40px; max-width: 1500px; margin: 0 auto; }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .g8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  @media (max-width: 1100px) { .g8 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .g2 { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; }
+  .card .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .kpi .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .l { color: var(--muted); font-size: 12px; }
+  .kpi .s { color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .ok { color: var(--green); } .warn { color: var(--amber); } .bad { color: var(--red); }
+  label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  input, select { font: inherit; padding: 6px 9px; border: 1px solid #d4d4d4; border-radius: 8px; background: #fff; min-width: 0; }
+  button { font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid #d4d4d4; background: #fff; padding: 7px 14px; cursor: pointer; }
+  button.primary { background: linear-gradient(135deg, #f97316, #c2410c); color: #fff; border: 0; }
+  button.danger { background: var(--red); color: #fff; border: 0; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .presets button { font-size: 12px; padding: 5px 10px; }
+  .presets button.on { border-color: var(--brand); background: var(--brand-l); color: var(--brand-d); }
+  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+  canvas { width: 100%; height: 220px; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid #f1f1f1; font-variant-numeric: tabular-nums; }
+  td.n, th.n { text-align: right; }
+  .verdict { border-radius: 12px; padding: 14px 16px; border: 1px solid; }
+  .verdict.ok { background: var(--green-l); border-color: #86efac; color: #14532d; }
+  .verdict.warn { background: var(--amber-l); border-color: #fcd34d; color: #78350f; }
+  .verdict.bad { background: var(--red-l); border-color: #fca5a5; color: #7f1d1d; }
+  .verdict.idle { background: #fff; border-color: var(--line); color: var(--muted); }
+  .verdict h3 { margin: 0 0 6px; font-size: 15px; }
+  .verdict ul { margin: 0; padding-left: 18px; }
+  pre.log { background: #0f0f10; color: #d4d4d4; border-radius: 10px; padding: 10px 12px; height: 180px; overflow: auto; font-size: 11.5px; margin: 0; white-space: pre-wrap; }
+  .bar { height: 8px; border-radius: 4px; background: #f1f1f1; overflow: hidden; display: flex; }
+  .muted { color: var(--muted); } .small { font-size: 12px; }
+  details summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  .hist tr { cursor: pointer; } .hist tr:hover td { background: var(--brand-l); }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #f1f1f1; color: var(--muted); }
+  @media print {
+    header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .noprint { display: none !important; } body { background: #fff; } .card { break-inside: avoid; }
+    main { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Els App · Uji Beban &amp; Monitor Server</h1>
+    <div class="sub">Hanya membaca API publik — tidak ada data yang dibuat di production. Monitor server lewat SSH (hanya membaca).</div>
+  </div>
+  <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">
+    <span class="chip"><span id="dotRun" class="dot"></span><span id="txtRun">Uji: siap</span></span>
+    <span class="chip"><span id="dotMon" class="dot"></span><span id="txtMon">Server: belum terhubung</span></span>
+    <button class="noprint" onclick="window.print()" style="padding:4px 10px">Cetak / PDF</button>
+  </div>
+</header>
+
+<main class="grid" style="gap:16px">
+  <!-- Kontrol -->
+  <section class="card noprint">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2>Jalankan uji</h2>
+        <p class="hint">Mulai dari pemanasan. Jalankan di luar jam ibadah &amp; di luar 07.00–10.00 (jam kirim reminder WA).</p>
+      </div>
+      <details style="max-width:560px">
+        <summary>Pengaturan koneksi</summary>
+        <div class="row" style="margin-top:8px">
+          <label class="f" style="flex:1 1 200px">SSH ke VPS (user@IP)<input id="cfSsh" placeholder="deploy@203.0.113.10" /></label>
+          <label class="f" style="flex:1 1 180px">Folder aplikasi di VPS<input id="cfDir" /></label>
+          <label class="f" style="flex:1 1 220px">URL API<input id="cfBase" /></label>
+          <button onclick="saveConf()">Simpan &amp; sambungkan</button>
+        </div>
+        <p class="small muted" style="margin:6px 0 0">Butuh login SSH tanpa password: <code>ssh-copy-id deploy@IP</code>. Yang dibaca: CPU, RAM, load, proses core-api &amp; PostgreSQL, jumlah koneksi database &amp; HTTPS, lalu lintas jaringan.</p>
+      </details>
+    </div>
+    <div class="presets row" style="margin:8px 0 12px">
+      <button data-p="warm">Pemanasan · 500 · 2 mnt</button>
+      <button data-p="target">Target launching · 2.000 · 5 mnt</button>
+      <button data-p="spike">Lonjakan 3x · 2.000</button>
+      <button data-p="c3k">Cari batas · 3.000</button>
+      <button data-p="c5k">Cari batas · 5.000</button>
+    </div>
+    <div class="row">
+      <label class="f">Jemaat aktif<input id="inUsers" type="number" min="10" max="20000" step="100" value="500" style="width:110px" /></label>
+      <label class="f">Naik dalam<input id="inRamp" value="1m" style="width:80px" /></label>
+      <label class="f">Bertahan<input id="inHold" value="2m" style="width:80px" /></label>
+      <label class="f">Skenario<select id="inScen"><option value="normal">Normal</option><option value="spike">Lonjakan 3x (30 dtk)</option></select></label>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="inAutoCpu" checked /> Hentikan otomatis bila CPU server ≥ 95% selama 30 dtk</label>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <button class="primary" id="btnStart" onclick="start()">▶ Mulai uji</button>
+        <button class="danger" id="btnStop" onclick="stop()" disabled>■ Hentikan</button>
+      </div>
+    </div>
+    <p class="small muted" id="estLine" style="margin:8px 0 0"></p>
+  </section>
+
+  <!-- Penilaian -->
+  <section id="verdict" class="verdict idle"><h3>Belum ada uji</h3><div class="small">Pilih preset lalu tekan Mulai uji. Penilaian muncul otomatis selama uji berjalan.</div></section>
+
+  <!-- KPI -->
+  <section class="grid g8">
+    <div class="card kpi"><div class="l">Request / detik</div><div class="v" id="kRps">–</div><div class="s" id="kRpsS">puncak –</div></div>
+    <div class="card kpi"><div class="l">Respons p95</div><div class="v" id="kP95">–</div><div class="s" id="kP95S">median –</div></div>
+    <div class="card kpi"><div class="l">Gagal</div><div class="v" id="kFail">–</div><div class="s" id="kFailS">429 · 5xx · jaringan</div></div>
+    <div class="card kpi"><div class="l">Jemaat virtual (VU)</div><div class="v" id="kVu">–</div><div class="s" id="kTime">–</div></div>
+    <div class="card kpi"><div class="l">CPU server</div><div class="v" id="kCpu">–</div><div class="s" id="kCpuS">puncak –</div></div>
+    <div class="card kpi"><div class="l">CPU core-api (1 inti)</div><div class="v" id="kApi">–</div><div class="s" id="kApiS">RAM proses –</div></div>
+    <div class="card kpi"><div class="l">RAM server</div><div class="v" id="kMem">–</div><div class="s" id="kMemS">–</div></div>
+    <div class="card kpi"><div class="l">Koneksi DB · HTTPS</div><div class="v" id="kConn">–</div><div class="s" id="kConnS">load –</div></div>
+  </section>
+
+  <!-- Grafik -->
+  <section class="grid g2">
+    <div class="card"><h2>Request per detik</h2><p class="hint">Hijau = berhasil · kuning = 429 (batas) · merah = 5xx · abu = jaringan/timeout</p><canvas id="cRps"></canvas></div>
+    <div class="card"><h2>Waktu respons</h2><p class="hint">p50 &amp; p95 per detik (ms, termasuk internet). Garis merah = batas 800 ms.</p><canvas id="cLat"></canvas></div>
+    <div class="card"><h2>CPU server</h2><p class="hint">Total server (% semua inti) · core-api &amp; PostgreSQL (% dari 1 inti; 100% = 1 inti penuh)</p><canvas id="cCpu"></canvas></div>
+    <div class="card"><h2>Memori, koneksi &amp; jaringan</h2><p class="hint">RAM terpakai (%) · koneksi database · koneksi HTTPS aktif · keluar (Mbps)</p><canvas id="cRes"></canvas></div>
+  </section>
+
+  <!-- Endpoint + log -->
+  <section class="grid g2">
+    <div class="card">
+      <h2>Per endpoint</h2>
+      <p class="hint">Diurutkan dari request terbanyak</p>
+      <table><thead><tr><th>Endpoint</th><th class="n">Request</th><th class="n">Berhasil</th><th class="n">429</th><th class="n">5xx</th><th class="n">Jaringan</th><th class="n">p50</th><th class="n">p95</th></tr></thead><tbody id="tEp"><tr><td colspan="8" class="muted">–</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <h2>Keluaran k6</h2>
+      <p class="hint" id="paramLine">–</p>
+      <pre class="log" id="log"></pre>
+    </div>
+  </section>
+
+  <section class="card noprint">
+    <h2>Riwayat uji</h2>
+    <p class="hint">Disimpan di <code>scripts/loadtest/runs/</code> (komputer ini). Klik untuk melihat lagi.</p>
+    <table class="hist"><thead><tr><th>Waktu</th><th>Skenario</th><th class="n">Jemaat</th><th class="n">Request</th><th class="n">Gagal</th><th class="n">p95</th><th>Status</th></tr></thead><tbody id="tHist"><tr><td colspan="7" class="muted">–</td></tr></tbody></table>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) => (n == null || isNaN(n) ? '–' : Number(n).toLocaleString('id-ID', { maximumFractionDigits: d, minimumFractionDigits: d }));
+const ms = (n) => (n == null ? '–' : n >= 1000 ? fmt(n / 1000, 2) + ' dtk' : fmt(n) + ' ms');
+const hhmmss = (t) => new Date(t).toLocaleTimeString('id-ID', { hour12: false });
+const dur = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const toSec = (v) => { const m = /^(\d+)([smh])$/.exec(v || ''); return m ? +m[1] * ({ s: 1, m: 60, h: 3600 }[m[2]]) : 0; };
+
+const PRESETS = {
+  warm: { users: 500, ramp: '1m', hold: '2m', scenario: 'normal' },
+  target: { users: 2000, ramp: '2m', hold: '5m', scenario: 'normal' },
+  spike: { users: 2000, ramp: '30s', hold: '2m', scenario: 'spike' },
+  c3k: { users: 3000, ramp: '2m', hold: '3m', scenario: 'normal' },
+  c5k: { users: 5000, ramp: '3m', hold: '3m', scenario: 'normal' },
+};
+
+let RUN = null; // snapshot + rows
+let SRV = [];   // sampel server
+let viewingHistory = false;
+let cpuHot = 0;
+
+// ---------------------------------------------------------------- grafik
+function chart(canvas, series, opt = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const c = canvas.getContext('2d'); c.scale(dpr, dpr); c.clearRect(0, 0, W, H);
+  const L = 44, R = opt.right ? 44 : 10, T = 22, B = 22, pw = W - L - R, ph = H - T - B;
+  const all = series.filter((s) => !s.axis2).flatMap((s) => s.data);
+  const t0 = opt.t0 ?? Math.min(...all.map((p) => p[0]), Date.now() - 60000);
+  const t1 = opt.t1 ?? Math.max(...all.map((p) => p[0]), t0 + 60000);
+  const stackTotals = opt.stack ? all.reduce((m, p) => { m[p[0]] = (m[p[0]] || 0) + p[1]; return m; }, {}) : null;
+  let yMax = opt.yMax ?? Math.max(1, ...(stackTotals ? Object.values(stackTotals) : all.map((p) => p[1] ?? 0)));
+  yMax = niceMax(Math.max(yMax, opt.yMin ?? 0));
+  const y2 = series.filter((s) => s.axis2).flatMap((s) => s.data.map((p) => p[1] ?? 0));
+  const y2Max = niceMax(Math.max(1, ...y2));
+  const X = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * pw;
+  const Y = (v) => T + ph - (v / yMax) * ph;
+  const Y2 = (v) => T + ph - (v / y2Max) * ph;
+  c.font = '10px -apple-system, sans-serif'; c.fillStyle = '#a3a3a3'; c.strokeStyle = '#f0f0f0'; c.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax / 4) * i, y = Y(v);
+    c.beginPath(); c.moveTo(L, y); c.lineTo(L + pw, y); c.stroke();
+    c.textAlign = 'right'; c.fillText(fmt(v, v < 10 && yMax <= 10 ? 1 : 0) + (opt.unit || ''), L - 5, y + 3);
+    if (opt.right) { c.textAlign = 'left'; c.fillText(fmt((y2Max / 4) * i), L + pw + 5, y + 3); }
+  }
+  c.textAlign = 'center';
+  for (let i = 0; i <= 4; i++) { const t = t0 + ((t1 - t0) / 4) * i; c.fillText(hhmmss(t), X(t), H - 6); }
+  if (opt.limit != null && opt.limit < yMax) {
+    c.strokeStyle = '#dc2626'; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(L, Y(opt.limit)); c.lineTo(L + pw, Y(opt.limit)); c.stroke(); c.setLineDash([]);
+  }
+  if (opt.stack) {
+    const base = {};
+    const bw = Math.max(1, pw / Math.max(1, (t1 - t0) / 1000) - 0.5);
+    for (const s of series) {
+      c.fillStyle = s.color;
+      for (const [t, v] of s.data) { if (!v) continue; const b0 = base[t] || 0; c.fillRect(X(t) - bw / 2, Y(b0 + v), bw, Y(b0) - Y(b0 + v)); base[t] = b0 + v; }
+    }
+  } else {
+    for (const s of series) {
+      const pts = s.data.filter((p) => p[1] != null);
+      if (!pts.length) continue;
+      const yf = s.axis2 ? Y2 : Y;
+      c.strokeStyle = s.color; c.lineWidth = s.width || 1.6; c.setLineDash(s.dash || []);
+      c.beginPath(); pts.forEach(([t, v], i) => (i ? c.lineTo(X(t), yf(v)) : c.moveTo(X(t), yf(v)))); c.stroke(); c.setLineDash([]);
+      if (s.fill) { c.lineTo(X(pts[pts.length - 1][0]), T + ph); c.lineTo(X(pts[0][0]), T + ph); c.closePath(); c.fillStyle = s.fill; c.fill(); }
+    }
+  }
+  // legenda
+  let lx = L; c.textAlign = 'left'; c.font = '11px -apple-system, sans-serif';
+  for (const s of series) {
+    const last = [...s.data].reverse().find((p) => p[1] != null);
+    const txt = `${s.label}${last ? ' ' + fmt(last[1], s.dec ?? 0) + (s.unit || '') : ''}`;
+    c.fillStyle = s.color; c.fillRect(lx, 6, 9, 9); c.fillStyle = '#525252'; c.fillText(txt, lx + 12, 14); lx += c.measureText(txt).width + 26;
+  }
+}
+function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 4, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+
+// ---------------------------------------------------------------- render
+function window_() {
+  if (RUN?.rows?.length) {
+    const t0 = RUN.startedAt; const t1 = RUN.endedAt ?? Math.max(Date.now(), t0 + 60000);
+    return [t0, t1];
+  }
+  const t1 = Date.now(); return [t1 - 10 * 60000, t1];
+}
+
+function render() {
+  const [t0, t1] = window_();
+  const rows = RUN?.rows || [];
+  chart($('cRps'), [
+    { label: 'berhasil', color: '#22c55e', data: rows.map((r) => [r.t, r.ok + r.c4xx]) },
+    { label: '429', color: '#f59e0b', data: rows.map((r) => [r.t, r.r429]) },
+    { label: '5xx', color: '#dc2626', data: rows.map((r) => [r.t, r.s5xx]) },
+    { label: 'jaringan', color: '#a3a3a3', data: rows.map((r) => [r.t, r.net]) },
+  ], { stack: true, t0, t1 });
+  chart($('cLat'), [
+    { label: 'p50', color: '#2563eb', data: rows.map((r) => [r.t, r.p50]), unit: ' ms' },
+    { label: 'p95', color: '#c2410c', data: rows.map((r) => [r.t, r.p95]), unit: ' ms', width: 2 },
+  ], { t0, t1, unit: '', limit: 800, yMin: 200 });
+  const srv = SRV.filter((s) => s.t >= t0 - 5000 && s.t <= t1 + 5000);
+  chart($('cCpu'), [
+    { label: 'Total server', color: '#c2410c', data: srv.map((s) => [s.t, s.cpu]), unit: '%', width: 2, fill: 'rgba(249,115,22,.10)' },
+    { label: 'core-api', color: '#7c3aed', data: srv.map((s) => [s.t, s.api]), unit: '%' },
+    { label: 'PostgreSQL', color: '#2563eb', data: srv.map((s) => [s.t, s.pg]), unit: '%' },
+  ], { t0, t1, yMax: Math.max(100, ...srv.map((s) => Math.max(s.api, s.pg))), unit: '%', limit: 80 });
+  chart($('cRes'), [
+    { label: 'RAM', color: '#15803d', data: srv.map((s) => [s.t, s.memUsed]), unit: '%' },
+    { label: 'Koneksi DB', color: '#2563eb', data: srv.map((s) => [s.t, s.pgConn >= 0 ? s.pgConn : null]), axis2: true },
+    { label: 'HTTPS', color: '#7c3aed', data: srv.map((s) => [s.t, s.https]), axis2: true },
+    { label: 'Keluar Mbps', color: '#737373', data: srv.map((s) => [s.t, s.txMbps]), axis2: true, dec: 1, dash: [3, 3] },
+  ], { t0, t1, yMax: 100, unit: '%', right: true });
+  renderKpi(); renderTable(); renderVerdict();
+}
+
+function plateau() {
+  // Detik pada beban puncak (≥ 80% rps maksimum, rata-rata 5 detik)
+  const rows = RUN?.rows || []; if (!rows.length) return [];
+  const peak = Math.max(...rows.map((r) => r.rps));
+  return rows.filter((r) => r.rps >= peak * 0.8);
+}
+
+function renderKpi() {
+  const rows = RUN?.rows || []; const last = rows.slice(-5);
+  const avg = (a, k) => (a.length ? a.reduce((s, r) => s + (r[k] || 0), 0) / a.length : null);
+  const tot = RUN?.totals;
+  $('kRps').textContent = fmt(avg(last, 'rps'));
+  $('kRpsS').textContent = `puncak ${fmt(Math.max(0, ...rows.map((r) => r.rps)))} · total ${fmt(tot?.reqs)}`;
+  const p95 = last.length ? Math.max(...last.map((r) => r.p95 || 0)) : null;
+  $('kP95').textContent = ms(tot?.p95 ?? null); $('kP95').className = 'v ' + cls(tot?.p95, 400, 800);
+  $('kP95S').textContent = `saat ini ${ms(p95)} · median ${ms(tot?.p50)}`;
+  $('kFail').textContent = tot ? fmt(tot.failPct, 2) + '%' : '–'; $('kFail').className = 'v ' + cls(tot?.failPct, 0.5, 1);
+  $('kFailS').textContent = tot ? `429: ${fmt(tot.r429)} · 5xx: ${fmt(tot.s5xx)} · jaringan: ${fmt(tot.net)}` : '429 · 5xx · jaringan';
+  $('kVu').textContent = fmt(RUN?.vus ?? (last.length ? last[last.length - 1].vus : null));
+  if (RUN) {
+    const el = ((RUN.endedAt ?? Date.now()) - RUN.startedAt) / 1000;
+    const total = RUN.params.SCENARIO === 'spike' ? 180 : toSec(RUN.params.RAMP) + toSec(RUN.params.HOLD) + 60;
+    $('kTime').textContent = `${dur(el)} / ±${dur(total)}`;
+  }
+  const s = SRV[SRV.length - 1];
+  const inRun = SRV.filter((x) => RUN && x.t >= RUN.startedAt && x.t <= (RUN.endedAt ?? Date.now()));
+  if (s) {
+    $('kCpu').textContent = fmt(s.cpu) + '%'; $('kCpu').className = 'v ' + cls(s.cpu, 70, 90);
+    $('kCpuS').textContent = `puncak uji ${fmt(Math.max(0, ...inRun.map((x) => x.cpu)))}% · ${s.ncpu} inti`;
+    $('kApi').textContent = fmt(s.api) + '%'; $('kApi').className = 'v ' + cls(s.api, 70, 90);
+    $('kApiS').textContent = `puncak ${fmt(Math.max(0, ...inRun.map((x) => x.api)))}% · RAM ${fmt(s.apiRssMb)} MB`;
+    $('kMem').textContent = fmt(s.memUsed) + '%'; $('kMem').className = 'v ' + cls(s.memUsed, 75, 90);
+    $('kMemS').textContent = `${fmt(s.memUsedMb)} / ${fmt(s.memTotalMb)} MB`;
+    $('kConn').textContent = `${s.pgConn >= 0 ? fmt(s.pgConn) : '?'} · ${fmt(s.https)}`;
+    $('kConnS').textContent = `load ${fmt(s.load1, 2)} · keluar ${fmt(s.txMbps, 1)} Mbps`;
+  }
+  if (RUN) $('paramLine').textContent = `${RUN.params.SCENARIO === 'spike' ? 'Lonjakan 3x' : 'Normal'} · ${fmt(+RUN.params.USERS)} jemaat · naik ${RUN.params.RAMP} · bertahan ${RUN.params.HOLD} · ${RUN.params.BASE_URL}`;
+  $('log').textContent = (RUN?.log || []).join('\n'); $('log').scrollTop = 1e9;
+}
+const cls = (v, w, b) => (v == null ? '' : v >= b ? 'bad' : v >= w ? 'warn' : 'ok');
+
+function renderTable() {
+  const eps = RUN?.endpoints || [];
+  $('tEp').innerHTML = eps.length
+    ? eps.map((e) => `<tr><td>${e.name}</td><td class="n">${fmt(e.reqs)}</td><td class="n ${cls(100 - e.okPct, 0.5, 1)}">${fmt(e.okPct, 1)}%</td><td class="n ${e.r429 ? 'warn' : ''}">${fmt(e.r429)}</td><td class="n ${e.s5xx ? 'bad' : ''}">${fmt(e.s5xx)}</td><td class="n">${fmt(e.net)}</td><td class="n">${ms(e.p50)}</td><td class="n ${cls(e.p95, 400, 800)}">${ms(e.p95)}</td></tr>`).join('')
+    : '<tr><td colspan="8" class="muted">–</td></tr>';
+}
+
+function renderVerdict() {
+  const el = $('verdict');
+  if (!RUN || !RUN.rows?.length) return;
+  const t = RUN.totals; const pl = plateau();
+  const inRun = SRV.filter((x) => x.t >= RUN.startedAt && x.t <= (RUN.endedAt ?? Date.now()));
+  const plSrv = inRun.filter((x) => pl.some((r) => Math.abs(r.t - x.t) < 3000));
+  const avg = (a, k) => (a.length ? a.reduce((s, r) => s + (r[k] || 0), 0) / a.length : null);
+  const rpsPl = avg(pl, 'rps'), apiPl = avg(plSrv, 'api'), cpuPl = avg(plSrv, 'cpu');
+  const cpuPeak = Math.max(0, ...inRun.map((x) => x.cpu)), apiPeak = Math.max(0, ...inRun.map((x) => x.api));
+  const notes = []; let level = 'ok';
+  const bump = (l) => { if (l === 'bad' || (l === 'warn' && level === 'ok')) level = l; };
+  const realFail = t.reqs ? ((t.s5xx + t.net) / t.reqs) * 100 : 0;
+  if (t.s5xx) { bump(t.s5xx / t.reqs > 0.005 ? 'bad' : 'warn'); notes.push(`${fmt(t.s5xx)} error server (5xx) — cek <code>pm2 logs ecc-core-api</code>.`); }
+  if (t.net) { bump(t.net / t.reqs > 0.01 ? 'bad' : 'warn'); notes.push(`${fmt(t.net)} gagal jaringan/timeout — bisa dari server kewalahan atau internet komputer ini (bandingkan dengan CPU server).`); }
+  if (t.r429) { bump('warn'); notes.push(`${fmt(t.r429)} ditolak batas per IP (429). Kalau batas baru sudah dideploy, endpoint mode tamu seharusnya tidak kena — cek deploy rate-limit.`); }
+  if (t.p95 > 800) { bump('bad'); notes.push(`Respons p95 ${ms(t.p95)} melewati 800 ms.`); }
+  else if (t.p95 > 400) { bump('warn'); notes.push(`Respons p95 ${ms(t.p95)} — masih di bawah 800 ms, mulai melambat.`); }
+  else notes.push(`Respons cepat: p95 ${ms(t.p95)} (batas 800 ms).`);
+  if (inRun.length) {
+    if (apiPeak >= 90) { bump('bad'); notes.push(`core-api memakai ${fmt(apiPeak)}% dari 1 inti — sudah di batas 1 proses. Saatnya 2 proses / server lebih besar.`); }
+    else if (apiPeak >= 70) { bump('warn'); notes.push(`core-api puncak ${fmt(apiPeak)}% dari 1 inti — ruang tersisa kecil.`); }
+    else notes.push(`core-api puncak ${fmt(apiPeak)}% dari 1 inti · CPU server puncak ${fmt(cpuPeak)}%.`);
+    if (rpsPl && apiPl > 5) {
+      const cap = Math.round((rpsPl / (apiPl / 100)) * 0.8);
+      notes.push(`Perkiraan kapasitas aman 1 proses core-api ≈ <b>${fmt(cap)} request/detik</b> (≈ ${fmt(cap / 0.1025 / 3)} jemaat aktif saat lonjakan 3x, ≈ ${fmt(cap / 0.1025)} jemaat beban normal). Dihitung dari ${fmt(rpsPl)} req/dtk saat core-api ${fmt(apiPl)}% · ruang 20%.`);
+    }
+  } else notes.push('Monitor server belum terhubung — kapasitas tidak bisa diperkirakan. Isi Pengaturan koneksi SSH.');
+  const title = RUN.state === 'running'
+    ? { ok: 'Sejauh ini aman', warn: 'Perhatian', bad: 'Tidak aman — pertimbangkan menghentikan uji' }[level]
+    : { ok: 'Aman untuk beban ini', warn: 'Aman dengan catatan', bad: 'Belum aman untuk beban ini' }[level];
+  el.className = 'verdict ' + level;
+  el.innerHTML = `<h3>${title} · ${fmt(+RUN.params.USERS)} jemaat ${RUN.params.SCENARIO === 'spike' ? '(lonjakan 3x)' : ''}</h3><ul>${notes.map((n) => `<li>${n}</li>`).join('')}</ul>${realFail < 1 && level !== 'bad' ? '' : ''}`;
+}
+
+function setRunState() {
+  const st = RUN?.state;
+  const map = { running: ['live', 'Uji berjalan'], done: ['', 'Uji selesai'], stopped: ['warn', 'Uji dihentikan'], 'failed-threshold': ['err', 'Uji selesai · ambang terlewati'], error: ['err', 'k6 gagal dijalankan'] };
+  const [d, txt] = map[st] || ['', 'Uji: siap'];
+  $('dotRun').className = 'dot ' + d; $('txtRun').textContent = viewingHistory ? 'Melihat riwayat' : txt;
+  $('btnStart').disabled = st === 'running'; $('btnStop').disabled = st !== 'running';
+}
+
+// ---------------------------------------------------------------- aksi
+function applyPreset(k) {
+  const p = PRESETS[k]; $('inUsers').value = p.users; $('inRamp').value = p.ramp; $('inHold').value = p.hold; $('inScen').value = p.scenario;
+  document.querySelectorAll('.presets button').forEach((b) => b.classList.toggle('on', b.dataset.p === k)); estimate();
+}
+function estimate() {
+  const u = +$('inUsers').value || 0; const spike = $('inScen').value === 'spike';
+  const rps = Math.round(u * 0.1025 * (spike ? 3 : 1));
+  const secs = spike ? 180 : toSec($('inRamp').value) + toSec($('inHold').value) + 60;
+  $('estLine').textContent = `Target ±${fmt(rps)} request/detik di puncak · durasi ±${dur(secs)} menit. Endpoint mode tamu dibatasi ±22/detik per IP oleh k6.`;
+}
+document.querySelectorAll('.presets button').forEach((b) => (b.onclick = () => applyPreset(b.dataset.p)));
+['inUsers', 'inRamp', 'inHold', 'inScen'].forEach((id) => $(id).addEventListener('input', estimate));
+
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || 'gagal'); return j;
+}
+async function start() {
+  const users = +$('inUsers').value;
+  if (users >= 2000 && !confirm(`Jalankan uji ${fmt(users)} jemaat ke production?\nPastikan di luar jam ibadah & di luar 07.00–10.00.`)) return;
+  viewingHistory = false; cpuHot = 0;
+  try { await post('/run', { users, ramp: $('inRamp').value, hold: $('inHold').value, scenario: $('inScen').value, autoMonitor: true }); }
+  catch (e) { alert(e.message); }
+}
+async function stop() { await post('/stop'); }
+async function saveConf() {
+  const c = await post('/config', { sshHost: $('cfSsh').value, appDir: $('cfDir').value, baseUrl: $('cfBase').value });
+  fillConf(c); await post('/monitor/start');
+}
+function fillConf(c) { $('cfSsh').value = c.sshHost || ''; $('cfDir').value = c.appDir || ''; $('cfBase').value = c.baseUrl || ''; }
+
+async function loadHistory() {
+  const list = await (await fetch('/runs')).json();
+  $('tHist').innerHTML = list.length
+    ? list.map((r) => `<tr data-id="${r.id}"><td>${new Date(r.startedAt).toLocaleString('id-ID')}</td><td><span class="tag">${r.params.SCENARIO === 'spike' ? 'Lonjakan 3x' : 'Normal'}</span></td><td class="n">${fmt(+r.params.USERS)}</td><td class="n">${fmt(r.totals.reqs)}</td><td class="n ${cls(r.totals.failPct, 0.5, 1)}">${fmt(r.totals.failPct, 2)}%</td><td class="n ${cls(r.totals.p95, 400, 800)}">${ms(r.totals.p95)}</td><td>${r.state}</td></tr>`).join('')
+    : '<tr><td colspan="7" class="muted">Belum ada</td></tr>';
+  $('tHist').querySelectorAll('tr[data-id]').forEach((tr) => (tr.onclick = async () => {
+    const r = await (await fetch('/runs/' + tr.dataset.id)).json();
+    viewingHistory = true; RUN = r; SRV = r.server || []; setRunState(); render(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  }));
+}
+
+// ---------------------------------------------------------------- SSE
+const es = new EventSource('/events');
+es.addEventListener('hello', (e) => {
+  const d = JSON.parse(e.data); fillConf(d.conf); SRV = d.server || []; RUN = d.run; monState(d.mon); setRunState(); render();
+});
+es.addEventListener('tick', (e) => {
+  if (viewingHistory) return;
+  const d = JSON.parse(e.data);
+  if (!RUN || RUN.id !== d.id) RUN = { ...d, rows: [] };
+  const rows = RUN.rows.concat(d.rows); RUN = { ...d, rows }; setRunState(); render();
+});
+es.addEventListener('run', (e) => {
+  const d = JSON.parse(e.data); viewingHistory = false; RUN = d; setRunState(); render(); if (d.state !== 'running') loadHistory();
+});
+es.addEventListener('srv', (e) => {
+  const s = JSON.parse(e.data); SRV.push(s); if (SRV.length > 4000) SRV.splice(0, SRV.length - 4000);
+  monState({ state: 'live' });
+  if (RUN?.state === 'running' && !viewingHistory && $('inAutoCpu').checked) {
+    cpuHot = s.cpu >= 95 ? cpuHot + 2 : 0;
+    if (cpuHot >= 30) { cpuHot = 0; post('/stop'); RUN.log = (RUN.log || []).concat('⚠ Dihentikan otomatis: CPU server ≥ 95% selama 30 detik'); }
+  }
+  if (!RUN || RUN.state !== 'running') render();
+});
+es.addEventListener('mon', (e) => monState(JSON.parse(e.data)));
+es.onerror = () => { $('txtRun').textContent = 'Dashboard terputus — jalankan ulang server.mjs'; $('dotRun').className = 'dot err'; };
+function monState(m) {
+  const map = { live: ['live', 'Server: terpantau'], connecting: ['warn', 'Server: menyambung…'], off: ['', 'Server: belum terhubung'] };
+  const [d, t] = map[m.state] || map.off;
+  $('dotMon').className = 'dot ' + (m.error ? 'err' : d); $('txtMon').textContent = m.error ? `Server: ${m.error}` : t;
+}
+
+window.addEventListener('resize', render);
+setInterval(() => { if (RUN?.state === 'running') renderKpi(); }, 1000);
+applyPreset('warm'); loadHistory();
+</script>
+</body>
+</html>

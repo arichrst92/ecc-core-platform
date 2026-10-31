@@ -61,3 +61,4 @@ apps/portal/public/face-models/*
 # Backup files & DB dumps
 *.bak
 ecc_platform_dump_*.sql
+scripts/loadtest/runs/

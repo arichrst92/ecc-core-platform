@@ -15,7 +15,24 @@ Beban meniru 2000 jemaat aktif (±205 request/detik):
 
 Jalankan **di luar jam ibadah dan di luar 07.00–10.00** (jam kirim reminder WA), **setelah** deploy batas per IP + koneksi database 20 + nginx 4096.
 
-## Jalankan (dari Mac)
+## Cara termudah: dashboard (GUI + monitor server)
+
+```bash
+brew install k6
+ssh-copy-id deploy@<IP-VPS>          # sekali saja: login SSH tanpa password
+cd ~/Projects/ecc-core-platform
+SSH_HOST=deploy@<IP-VPS> node scripts/loadtest/dashboard/server.mjs
+# buka http://localhost:5050
+```
+
+- Pilih preset (Pemanasan → Target 2.000 → Lonjakan 3x → Cari batas 3.000 / 5.000), tekan **Mulai uji**.
+- Grafik langsung: request/detik (berhasil / 429 / 5xx / jaringan), waktu respons p50/p95, CPU server, CPU core-api & PostgreSQL, RAM, koneksi database & HTTPS, lalu lintas jaringan.
+- Penilaian otomatis (aman / perhatian / tidak aman) + **perkiraan kapasitas 1 proses core-api** dari CPU yang terukur.
+- Berhenti otomatis bila CPU server ≥ 95% selama 30 detik (bisa dimatikan) atau > 5% request gagal.
+- Monitor server hanya membaca lewat SSH (`/proc`, `pm2 pid`, `select count(*) from pg_stat_activity`) — tidak menginstal / mengubah apa pun.
+- Riwayat uji tersimpan di `scripts/loadtest/runs/` (komputer ini); tombol **Cetak / PDF** untuk laporan.
+
+## Jalankan manual (tanpa dashboard)
 
 ```bash
 brew install k6

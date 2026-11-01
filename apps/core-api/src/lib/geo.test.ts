@@ -46,3 +46,12 @@ describe('distanceKm', () => {
     expect(Math.round(d * 10) / 10).toBe(2.2);
   });
 });
+
+describe('presisi koordinat (7 angka di belakang koma)', () => {
+  it('dibulatkan dari link dengan banyak digit', () =>
+    expect(parseMapsCoordinates('https://www.google.com/maps/place/x!3d-6.17539229999!4d106.82718369999')).toEqual({
+      lat: -6.1753923,
+      lng: 106.8271837,
+    }));
+  it('digit sedikit tetap apa adanya', () => expect(parseMapsCoordinates('-6.2088, 106.8456')).toEqual({ lat: -6.2088, lng: 106.8456 }));
+});

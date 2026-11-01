@@ -17,11 +17,19 @@ export interface LatLng {
 
 const NUM = String.raw`(-?\d{1,3}(?:\.\d+)?)`;
 
+/** Presisi koordinat yang disimpan: 7 angka di belakang koma (±1 cm). */
+export const COORD_DECIMALS = 7;
+
+/** Bulatkan koordinat ke 7 angka di belakang koma. */
+export function roundCoord(v: number): number {
+  return Number(v.toFixed(COORD_DECIMALS));
+}
+
 function valid(lat: number, lng: number): LatLng | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   if (lat === 0 && lng === 0) return null;
-  return { lat, lng };
+  return { lat: roundCoord(lat), lng: roundCoord(lng) };
 }
 
 /** Parse koordinat dari teks/URL (tanpa network). Null kalau tidak ketemu. */

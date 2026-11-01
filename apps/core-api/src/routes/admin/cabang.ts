@@ -8,7 +8,7 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { NotFound, BadRequest } from '../../lib/errors.js';
-import { MAPS_URL_ERROR, mapsUrlToFields } from '../../lib/geo.js';
+import { MAPS_URL_ERROR, mapsUrlToFields, roundCoord } from '../../lib/geo.js';
 import { audit } from '../../lib/audit.js';
 import { saveCabangRekeningQris, deleteCabangRekeningQris } from '../../lib/storage.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -126,6 +126,9 @@ cabangRouter.get('/:id', async (req, res) => {
 
 cabangRouter.post('/', async (req, res) => {
   const input = createCabangSchema.parse(req.body);
+  // Koordinat yang dikirim langsung (API lama) juga dibulatkan 7 angka di belakang koma.
+  if (input.latitude != null) input.latitude = roundCoord(input.latitude);
+  if (input.longitude != null) input.longitude = roundCoord(input.longitude);
   const loc = await mapsUrlToFields(input.mapsUrl);
   if (loc === null) throw BadRequest(MAPS_URL_ERROR);
   const created = await prisma.cabangGereja.create({ data: { ...input, ...(loc ?? {}) } });
@@ -135,6 +138,8 @@ cabangRouter.post('/', async (req, res) => {
 
 cabangRouter.patch('/:id', async (req, res) => {
   const input = updateCabangSchema.parse(req.body);
+  if (input.latitude != null) input.latitude = roundCoord(input.latitude);
+  if (input.longitude != null) input.longitude = roundCoord(input.longitude);
   const before = await prisma.cabangGereja.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Cabang tidak ditemukan');
   // Link Google Maps → latitude/longitude (link kosong = hapus titik).

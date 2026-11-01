@@ -127,7 +127,7 @@ export const cabangResource: ResourceConfig<Cabang> = {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-brand-600 hover:underline"
-            title={row.latitude != null && row.longitude != null ? `Titik: ${row.latitude}, ${row.longitude}` : undefined}
+            title={row.latitude != null && row.longitude != null ? `Titik: ${row.latitude.toFixed(7)}, ${row.longitude.toFixed(7)}` : undefined}
           >
             <MapPin className="w-3.5 h-3.5" />
             Buka peta

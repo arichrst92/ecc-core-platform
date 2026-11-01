@@ -511,7 +511,8 @@ groupRouter.delete('/:id', async (req, res) => {
       type: 'GROUP_DISMISSED',
       title: `Group "${before.nama}" ditutup`,
       body: `Grup Anda sudah tidak aktif. Untuk info lebih lanjut, hubungi PIC atau admin.`,
-      actionUrl: `/groups`,
+      // Grup ditutup → daftar grup (detail sudah tidak bisa dibuka).
+      actionUrl: `/group`,
       metadata: { groupId: req.params.id, groupNama: before.nama },
     },
   );
@@ -933,7 +934,7 @@ async function notifGroupMemberAddedInApp(groupId: string, jemaatId: string): Pr
     type: 'GROUP_MEMBER_ADDED',
     title: `Anda ditambahkan ke ${g.nama}`,
     body: `PIC atau admin menambahkan Anda sebagai member group "${g.nama}".`,
-    actionUrl: `/groups/${groupId}`,
+    actionUrl: `/group/${groupId}`,
     metadata: { groupId, groupNama: g.nama },
   });
   await sendWaIfEnabled('GROUP_MEMBER_ADDED', j.noHp, {
@@ -956,7 +957,8 @@ async function notifGroupMemberRemovedInApp(groupId: string, jemaatId: string): 
     type: 'GROUP_MEMBER_REMOVED',
     title: `Anda dikeluarkan dari ${g.nama}`,
     body: `Kalau ini kekeliruan, hubungi PIC group.`,
-    actionUrl: `/groups`,
+    // Dikeluarkan → daftar grup, bukan detail.
+    actionUrl: `/group`,
     metadata: { groupId, groupNama: g.nama },
   });
   await sendWaIfEnabled('GROUP_MEMBER_REMOVED', j.noHp, {

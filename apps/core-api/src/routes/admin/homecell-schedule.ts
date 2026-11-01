@@ -361,7 +361,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
         type: 'HOMECELL_ATTENDED',
         title: `Kehadiran tercatat di ${sched.homecell.nama}`,
         body: `Pertemuan ${sched.tanggal.toISOString().slice(0, 10)} @ ${sched.lokasi}. Terima kasih atas kehadirannya.`,
-        actionUrl: `/homecell/${sched.homecellId}`,
+        actionUrl: `/homecell/view/${sched.homecellId}`,
         metadata: { homecellId: sched.homecellId, scheduleId, lokasi: sched.lokasi },
       });
       void sendWaIfEnabled('HOMECELL_ATTENDED', jemaat.noHp, {
@@ -533,7 +533,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
         type: 'HOMECELL_ATTENDED',
         title: `Kehadiran tercatat di ${schedule.homecell.nama}`,
         body: `Pertemuan ${schedule.tanggal.toISOString().slice(0, 10)} @ ${schedule.lokasi}. Terima kasih atas kehadirannya.`,
-        actionUrl: `/homecell/${homecellId}`,
+        actionUrl: `/homecell/view/${homecellId}`,
         metadata: { homecellId, scheduleId, lokasi: schedule.lokasi },
       });
       void sendWaIfEnabled('HOMECELL_ATTENDED', jemaat.noHp, {

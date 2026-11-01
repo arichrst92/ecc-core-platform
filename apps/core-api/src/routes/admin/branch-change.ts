@@ -152,7 +152,7 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
       type: 'BRANCH_CHANGE_APPROVED',
       title: 'Perubahan cabang di-approve',
       body: `Permohonan pindah cabang Anda sudah disetujui. Cabang aktif Anda sudah di-update.${input.reviewNote ? ` Catatan admin: ${input.reviewNote}` : ''}`,
-      actionUrl: `/profile/branch`,
+      actionUrl: `/settings/change-branch`,
       metadata: {
         requestId: updated.id,
         targetCabangId: before.targetCabangId,
@@ -174,7 +174,7 @@ branchChangeRouter.post('/:id/review', async (req, res) => {
       type: 'BRANCH_CHANGE_REJECTED',
       title: 'Permohonan pindah cabang ditolak',
       body: `Permohonan Anda tidak disetujui.${input.reviewNote ? ` Alasan: ${input.reviewNote}` : ' Hubungi admin cabang untuk info lebih lanjut.'}`,
-      actionUrl: `/profile/branch`,
+      actionUrl: `/settings/change-branch`,
       metadata: {
         requestId: updated.id,
         targetCabangId: before.targetCabangId,

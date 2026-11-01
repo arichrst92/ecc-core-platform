@@ -178,7 +178,7 @@ meVisitRouter.post('/', async (req, res) => {
     type: 'VISIT_RECORDED',
     title: `${created.initiator.namaLengkap} mencatat visit dgn Anda`,
     body: `${created.judul}${input.lokasi ? ` @ ${input.lokasi}` : ''}. Kalau ini keliru, buka detail visit untuk klarifikasi.`,
-    actionUrl: `/visits/${created.id}`,
+    actionUrl: `/visit/${created.id}`,
     metadata: {
       visitId: created.id,
       initiatorId: jemaatId,

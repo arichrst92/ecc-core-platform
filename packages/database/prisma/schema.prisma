@@ -3311,7 +3311,7 @@ model JemaatGeocode {
   longitude  Float?
   provider   String   @default("nominatim") @db.VarChar(20)
   // Google place_id (boleh disimpan permanen) → tautan Google Maps tepat ke tempatnya.
-  placeId    String?  @map("place_id") @db.VarChar(255)
+  placeId    String?  @map("place_id") @db.Text
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)

@@ -370,6 +370,7 @@ const VALUE: Record<string, string> = {
   'elsa-cancel': 'membatalkan sinkronisasi Elsa',
   'geocode-run': 'menjalankan pemetaan alamat secara manual',
   'ibadah-reorder': 'mengubah urutan tampil ibadah di app',
+  'onboarding-apply-tanpa-role': 'memberi role ke jemaat yang role-nya kosong',
   manual: 'manual',
   // status umum
   RESERVE: 'Terdaftar (reservasi)',

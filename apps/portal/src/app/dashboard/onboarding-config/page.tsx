@@ -6,11 +6,11 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Info, Loader2, Plus, Save, Trash2, UserCheck } from 'lucide-react';
+import { Info, Loader2, Play, Plus, Save, Trash2, UserCheck, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
-type Jenis = 'SEMUA' | 'JEMAAT_TETAP' | 'NEW_COMER';
+type Jenis = 'SEMUA' | 'JEMAAT_TETAP' | 'NEW_COMER' | 'TANPA_ROLE';
 
 interface RoleCatalog {
   id: string;
@@ -48,6 +48,11 @@ const SECTIONS: { jenis: Jenis; title: string; desc: string }[] = [
     title: 'Memilih “New Comer”',
     desc: 'Pilihan di layar daftar app untuk orang yang baru mengenal ECC.',
   },
+  {
+    jenis: 'TANPA_ROLE',
+    title: 'Sudah onboard, role masih kosong',
+    desc: 'Untuk jemaat yang sudah menyelesaikan onboarding tapi belum punya role aktif. Diterapkan lewat tombol di bawah.',
+  },
 ];
 
 let seq = 0;
@@ -61,6 +66,28 @@ export default function OnboardingConfigPage() {
       (await apiClient.get<{ data: { rules: RuleRow[]; roles: RoleCatalog[] } }>('/admin/onboarding-config')).data.data,
   });
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
+  const tanpaRole = useQuery({
+    queryKey: ['onboarding-config', 'tanpa-role'],
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: {
+            count: number;
+            sample: { id: string; namaLengkap: string; kode: string | null; cabang: { nama: string } }[];
+            perCabang: { cabang: string; jumlah: number }[];
+          };
+        }>('/admin/onboarding-config/tanpa-role')
+      ).data.data,
+  });
+  const apply = useMutation({
+    mutationFn: async () =>
+      (await apiClient.post<{ data: { jemaat: number; roles: number } }>('/admin/onboarding-config/tanpa-role/apply')).data.data,
+    onSuccess: (r) => {
+      toast.success(`${r.jemaat.toLocaleString('id-ID')} jemaat diberi role (${r.roles.toLocaleString('id-ID')} role)`);
+      void qc.invalidateQueries({ queryKey: ['onboarding-config', 'tanpa-role'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menerapkan'),
+  });
 
   useEffect(() => {
     if (q.data && drafts === null) {
@@ -229,6 +256,54 @@ export default function OnboardingConfigPage() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+                {sec.jenis === 'TANPA_ROLE' && (
+                  <div className="px-5 py-3 border-t border-neutral-100 bg-amber-50/60">
+                    {tanpaRole.isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
+                    ) : tanpaRole.data && tanpaRole.data.count === 0 ? (
+                      <div className="text-sm text-emerald-700">Semua jemaat yang sudah onboard sudah punya role.</div>
+                    ) : tanpaRole.data ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm text-amber-900 inline-flex items-center gap-1.5">
+                            <UserX className="w-4 h-4" />
+                            <b>{tanpaRole.data.count.toLocaleString('id-ID')}</b> jemaat sudah onboard tapi role-nya kosong
+                          </div>
+                          <button
+                            onClick={() => {
+                              const n = tanpaRole.data!.count.toLocaleString('id-ID');
+                              if (confirm(`Beri role sesuai aturan di atas ke ${n} jemaat? Jemaat yang sudah punya role tidak tersentuh.`)) apply.mutate();
+                            }}
+                            disabled={apply.isPending || dirty || rows.length === 0}
+                            title={dirty ? 'Simpan perubahan aturan dulu' : rows.length === 0 ? 'Tambahkan aturan dulu' : undefined}
+                            className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                          >
+                            {apply.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                            Terapkan sekarang
+                          </button>
+                        </div>
+                        {tanpaRole.data.perCabang.length > 0 && (
+                          <div className="text-xs text-amber-800">
+                            Per cabang: {tanpaRole.data.perCabang.map((p) => `${p.cabang} (${p.jumlah.toLocaleString('id-ID')})`).join(' · ')}
+                          </div>
+                        )}
+                        <div className="text-xs text-amber-800">
+                          Contoh:{' '}
+                          {tanpaRole.data.sample.map((j, i) => (
+                            <span key={j.id}>
+                              {i > 0 ? ', ' : ''}
+                              <a href={`/dashboard/jemaat/${j.id}`} className="underline hover:text-amber-950">
+                                {j.namaLengkap}
+                              </a>
+                            </span>
+                          ))}
+                          {tanpaRole.data.count > tanpaRole.data.sample.length ? ', …' : ''}
+                        </div>
+                        {dirty ? <div className="text-xs text-amber-700">Simpan perubahan aturan dulu sebelum menerapkan.</div> : null}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>

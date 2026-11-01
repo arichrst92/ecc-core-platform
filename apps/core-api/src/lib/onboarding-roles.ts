@@ -2,18 +2,21 @@
  * Role otomatis saat jemaat selesai mendaftar / onboarding di app.
  * Diatur di Portal → App Settings → Onboarding Config (tabel onboarding_role_rule).
  *
- * jenis: JEMAAT_TETAP / NEW_COMER (pilihan di layar daftar) atau SEMUA.
+ * jenis: JEMAAT_TETAP / NEW_COMER (pilihan di layar daftar), SEMUA, atau
+ * TANPA_ROLE (jemaat yang sudah onboard tapi belum punya role — diterapkan
+ * dari Portal lewat tombol "Terapkan").
  */
 import { prisma, type Prisma } from '@ecc/database';
 
-export const ONBOARDING_JENIS = ['JEMAAT_TETAP', 'NEW_COMER', 'SEMUA'] as const;
+export const ONBOARDING_JENIS = ['JEMAAT_TETAP', 'NEW_COMER', 'SEMUA', 'TANPA_ROLE'] as const;
 export type OnboardingJenis = (typeof ONBOARDING_JENIS)[number];
 
 /** Daftar role (aktif) yang harus diberikan untuk pilihan jenis jemaat. */
-export async function onboardingRolesFor(jenis: 'JEMAAT_TETAP' | 'NEW_COMER') {
+export async function onboardingRolesFor(jenis: 'JEMAAT_TETAP' | 'NEW_COMER' | 'TANPA_ROLE') {
   const rules = await prisma.onboardingRoleRule.findMany({
     where: {
-      jenis: { in: [jenis, 'SEMUA'] },
+      // TANPA_ROLE berdiri sendiri; pendaftar baru = pilihan + SEMUA.
+      jenis: { in: jenis === 'TANPA_ROLE' ? ['TANPA_ROLE'] : [jenis, 'SEMUA'] },
       role: { isActive: true },
       subRole: { isActive: true },
     },
@@ -66,4 +69,37 @@ export async function grantOnboardingRoles(jemaatId: string, jenis: 'JEMAAT_TETA
     data: todo.map((r) => ({ jemaatId, roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true })),
   });
   return todo.length;
+}
+
+// ------------------------------------------------------------------ sudah onboard, role kosong
+
+/** Jemaat aktif (bukan tamu) yang sudah onboarding tapi tidak punya role aktif. */
+export const tanpaRoleWhere: Prisma.JemaatWhereInput = {
+  isActive: true,
+  isTamu: false,
+  onboardedAt: { not: null },
+  jemaatRoles: { none: { isActive: true } },
+};
+
+/**
+ * Terapkan aturan TANPA_ROLE ke semua jemaat yang sudah onboard tapi role-nya
+ * kosong. Dicek ulang per jemaat saat dijalankan (aman dijalankan berulang).
+ */
+export async function applyTanpaRole(): Promise<{ jemaat: number; roles: number }> {
+  const roles = await onboardingRolesFor('TANPA_ROLE');
+  if (!roles.length) return { jemaat: 0, roles: 0 };
+  let jemaat = 0;
+  let total = 0;
+  for (;;) {
+    const batch = await prisma.jemaat.findMany({ where: tanpaRoleWhere, select: { id: true }, take: 500 });
+    if (!batch.length) break;
+    const data = batch.flatMap((j) =>
+      roles.map((r) => ({ jemaatId: j.id, roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true })),
+    );
+    const res = await prisma.jemaatRole.createMany({ data });
+    jemaat += batch.length;
+    total += res.count;
+    if (batch.length < 500) break;
+  }
+  return { jemaat, roles: total };
 }

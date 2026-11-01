@@ -4,6 +4,8 @@
  *
  *   GET /admin/onboarding-config  → { rules[], roles[] (katalog role → sub role → status) }
  *   PUT /admin/onboarding-config  { rules: [{ jenis, roleId, subRoleId, subRoleStatusId? }] }  (ganti semua)
+ *   GET /admin/onboarding-config/tanpa-role         → jumlah jemaat sudah onboard tapi role kosong
+ *   POST /admin/onboarding-config/tanpa-role/apply  → beri role sesuai aturan TANPA_ROLE
  */
 import { Router } from 'express';
 import { z } from 'zod';
@@ -11,7 +13,7 @@ import { prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { ONBOARDING_JENIS } from '../../lib/onboarding-roles.js';
+import { ONBOARDING_JENIS, applyTanpaRole, tanpaRoleWhere } from '../../lib/onboarding-roles.js';
 
 export const onboardingConfigRouter = Router();
 onboardingConfigRouter.use(requireMenu('onboarding-config'));
@@ -106,4 +108,45 @@ onboardingConfigRouter.put('/', requireMenu('onboarding-config', 'write'), async
     after: { aturan: after.map(label) },
   });
   res.json({ success: true, data: { rules: after } });
+});
+
+/** Jemaat yang sudah onboard tapi role-nya kosong (ringkasan + contoh nama). */
+onboardingConfigRouter.get('/tanpa-role', async (_req, res) => {
+  const [count, sample, perCabang] = await Promise.all([
+    prisma.jemaat.count({ where: tanpaRoleWhere }),
+    prisma.jemaat.findMany({
+      where: tanpaRoleWhere,
+      orderBy: { onboardedAt: 'desc' },
+      take: 10,
+      select: { id: true, namaLengkap: true, kode: true, cabang: { select: { nama: true } } },
+    }),
+    prisma.jemaat.groupBy({ by: ['cabangId'], where: tanpaRoleWhere, _count: { _all: true } }),
+  ]);
+  const cabang = await prisma.cabangGereja.findMany({
+    where: { id: { in: perCabang.map((p) => p.cabangId) } },
+    select: { id: true, nama: true },
+  });
+  res.json({
+    success: true,
+    data: {
+      count,
+      sample,
+      perCabang: perCabang
+        .map((p) => ({ cabang: cabang.find((c) => c.id === p.cabangId)?.nama ?? '-', jumlah: p._count._all }))
+        .sort((a, b) => b.jumlah - a.jumlah),
+    },
+  });
+});
+
+onboardingConfigRouter.post('/tanpa-role/apply', requireMenu('onboarding-config', 'write'), async (req, res) => {
+  const rules = await prisma.onboardingRoleRule.count({ where: { jenis: 'TANPA_ROLE' } });
+  if (!rules) throw BadRequest('Belum ada aturan untuk "Sudah onboard, role kosong". Tambahkan & simpan dulu.');
+  const result = await applyTanpaRole();
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'onboarding_config',
+    resourceLabel: `Beri role ke ${result.jemaat} jemaat yang role-nya kosong`,
+    metadata: { kind: 'onboarding-apply-tanpa-role', jemaat: result.jemaat, rolesGranted: result.roles },
+  });
+  res.json({ success: true, data: result });
 });

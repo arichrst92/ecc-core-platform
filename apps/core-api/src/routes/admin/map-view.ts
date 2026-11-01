@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { geocodeEnabled, geocodeJemaatBatch, geocodeState } from '../../lib/jemaat-geocode.js';
+import { geocodeEnabled, geocodeJemaatBatch, geocodeState, nearCabang } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 
@@ -157,7 +157,7 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
   const [rows, total, byStatus] = await Promise.all([
     prisma.jemaatGeocode.findMany({
       where: { status: 'OK', jemaat: jemaatWhere },
-      select: { latitude: true, longitude: true },
+      select: { latitude: true, longitude: true, jemaat: { select: { cabang: { select: { latitude: true, longitude: true } } } } },
     }),
     prisma.jemaat.count({ where: { ...jemaatWhere, AND: [{ alamat: { not: null } }, { alamat: { not: '' } }] } }),
     prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } }),
@@ -165,6 +165,7 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
   const cells = new Map<string, [number, number, number]>();
   for (const r of rows) {
     if (r.latitude == null || r.longitude == null) continue;
+    if (!nearCabang(r, r.jemaat.cabang)) continue; // jaga-jaga: titik cabang berubah
     const lat = Math.round(r.latitude * 1000) / 1000;
     const lng = Math.round(r.longitude * 1000) / 1000;
     const k = `${lat},${lng}`;
@@ -215,7 +216,7 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
           jenisKelamin: true,
           noHp: true,
           alamat: true,
-          cabang: { select: { id: true, nama: true } },
+          cabang: { select: { id: true, nama: true, latitude: true, longitude: true } },
           homecellMembership: {
             where: { isActive: true, homecell: { isActive: true } },
             select: { homecell: { select: { id: true, nama: true } } },
@@ -227,12 +228,15 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
   });
   res.json({
     success: true,
-    data: rows.map(({ latitude, longitude, jemaat: { homecellMembership, ...j } }) => ({
-      ...j,
-      latitude: latitude!,
-      longitude: longitude!,
-      homecell: homecellMembership.map((m) => m.homecell),
-    })),
+    data: rows
+      .filter((r) => nearCabang(r, r.jemaat.cabang))
+      .map(({ latitude, longitude, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
+        ...j,
+        cabang,
+        latitude: latitude!,
+        longitude: longitude!,
+        homecell: homecellMembership.map((m) => m.homecell),
+      })),
   });
 });
 
@@ -250,6 +254,8 @@ async function geocodeCounts(cabangId?: string) {
     ok: count('OK'),
     tidakDitemukan: count('NOT_FOUND'),
     terlaluJauh: count('TOO_FAR'),
+    // Cabang jemaat belum punya link Google Maps → belum bisa dipetakan.
+    menungguCabang: count('NO_CABANG'),
     menunggu: Math.max(0, total - diproses),
   };
 }

@@ -569,6 +569,7 @@ interface GeocodeStatus {
   ok: number;
   tidakDitemukan: number;
   terlaluJauh: number;
+  menungguCabang: number;
   menunggu: number;
   aktif: boolean;
   intervalMenit: number;
@@ -587,7 +588,8 @@ interface GeocodeStatus {
 function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => void; msg: string | null }) {
   const n = (x: number) => x.toLocaleString('id-ID');
   const gagal = s.tidakDitemukan + s.terlaluJauh;
-  const selesai = s.ok + gagal;
+  const tungguCabang = s.menungguCabang ?? 0;
+  const selesai = s.ok + gagal + tungguCabang;
   const pct = s.total ? Math.round((selesai / s.total) * 100) : 100;
   const w = (x: number) => `${s.total ? (x / s.total) * 100 : 0}%`;
   const sisaBatch = Math.ceil(s.menunggu / s.perBatch);
@@ -616,11 +618,17 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
       </div>
       <div className="h-2.5 w-full rounded-full bg-neutral-100 overflow-hidden flex">
         <div className="h-full bg-emerald-500 transition-all" style={{ width: w(s.ok) }} />
-        <div className="h-full bg-amber-400 transition-all" style={{ width: w(gagal) }} />
+        <div className="h-full bg-amber-400 transition-all" style={{ width: w(gagal + tungguCabang) }} />
       </div>
       <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
         <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />{n(s.ok)} berhasil (tampil di peta)</span>
-        <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />{n(gagal)} alamat tidak dikenali</span>
+        <span>
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />
+          {n(gagal)} alamat tidak dikenali / di luar ±50 km dari cabang
+        </span>
+        {tungguCabang > 0 ? (
+          <span className="text-amber-700">{n(tungguCabang)} jemaat menunggu cabangnya diberi link Google Maps</span>
+        ) : null}
         <span><span className="inline-block w-2 h-2 rounded-full bg-neutral-300 mr-1" />{n(s.menunggu)} menunggu</span>
         {!s.aktif ? (
           <span className="text-red-600">Pemetaan dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).</span>

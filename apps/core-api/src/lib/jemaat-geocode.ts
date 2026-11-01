@@ -7,8 +7,11 @@
  *   - maks 1 permintaan/detik (jeda 1,1 detik), satu proses sekaligus;
  *   - User-Agent jelas; hasil disimpan (cache) — alamat yang sama tidak
  *     ditanyakan ulang; diproses bertahap, bukan sekaligus.
- * Hasil dibias ke sekitar titik cabang jemaat (viewbox) dan ditolak bila
- * lebih dari 150 km dari cabang (kemungkinan salah tempat).
+ * Pin SELALU dekat cabang jemaat: pencarian DIBATASI ke kotak ±50 km di
+ * sekitar titik cabang (viewbox + bounded=1), dan hasil yang tetap lebih dari
+ * GEOCODE_MAX_KM (default 50 km) dari cabang ditolak (TOO_FAR). Cabang tanpa
+ * titik lokasi → alamat jemaatnya belum diproses (NO_CABANG) sampai cabang
+ * diberi link Google Maps.
  *
  * Env:
  *   GEOCODE_JEMAAT_ENABLED=0   matikan proses (default aktif)
@@ -24,7 +27,9 @@ const BASE = (process.env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org'
 const USER_AGENT = 'ElsApp-ECC-Portal/1.0 (map view sebaran jemaat; https://eccchurch.global)';
 const GAP_MS = 1100;
 const BATCH = 250;
-const MAX_FROM_CABANG_KM = 150;
+const MAX_FROM_CABANG_KM = Number(process.env.GEOCODE_MAX_KM ?? 50);
+/** Naikkan versi bila aturan berubah → semua alamat diproses ulang bertahap. */
+export const GEOCODE_VERSION = 'nominatim-v2';
 
 export const alamatHash = (alamat: string) => createHash('md5').update(alamat, 'utf8').digest('hex');
 
@@ -37,14 +42,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Hit = { lat: number; lng: number } | null;
 
 /** Satu permintaan ke Nominatim. Lempar error bila layanan menolak (429/5xx) supaya batch berhenti. */
-export async function geocodeNominatim(alamat: string, near?: { lat: number; lng: number } | null): Promise<Hit> {
+export async function geocodeNominatim(alamat: string, near: { lat: number; lng: number }): Promise<Hit> {
   const p = new URLSearchParams({ q: alamat, format: 'jsonv2', limit: '1', 'accept-language': 'id' });
   if (process.env.NOMINATIM_EMAIL) p.set('email', process.env.NOMINATIM_EMAIL);
-  if (near) {
-    // Bias ke ±1,5° (≈165 km) sekitar cabang — tidak membatasi (bounded=0).
-    const d = 1.5;
-    p.set('viewbox', `${near.lng - d},${near.lat + d},${near.lng + d},${near.lat - d}`);
-  }
+  // Hanya cari di kotak sekitar cabang (bounded=1) — tidak "lompat" ke kota lain.
+  const dLat = MAX_FROM_CABANG_KM / 111;
+  const dLng = MAX_FROM_CABANG_KM / (111 * Math.max(0.2, Math.cos((near.lat * Math.PI) / 180)));
+  p.set('viewbox', `${near.lng - dLng},${near.lat + dLat},${near.lng + dLng},${near.lat - dLat}`);
+  p.set('bounded', '1');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
@@ -74,7 +79,12 @@ async function pending(limit: number): Promise<Pending[]> {
     LEFT JOIN jemaat_geocode g ON g.jemaat_id = j.id
     WHERE j.is_active = true AND j.is_tamu = false
       AND COALESCE(TRIM(j.alamat), '') <> ''
-      AND (g.jemaat_id IS NULL OR g.alamat_hash <> md5(j.alamat))
+      AND (
+        g.jemaat_id IS NULL
+        OR g.alamat_hash <> md5(j.alamat)
+        OR g.provider <> ${GEOCODE_VERSION}
+        OR (g.status = 'NO_CABANG' AND c.latitude IS NOT NULL)
+      )
     ORDER BY j.created_at DESC
     LIMIT ${limit}
   `;
@@ -112,29 +122,34 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
       const near = r.clat != null && r.clng != null ? { lat: r.clat, lng: r.clng } : null;
       const q = cleanAlamat(r.alamat);
       let hit: Hit = null;
-      try {
-        hit = q.length >= 6 ? await geocodeNominatim(q, near) : null;
-      } catch (err) {
-        logger.warn({ err }, 'geocode-jemaat: layanan menolak, batch dihentikan');
-        geocodeState.lastError = err instanceof Error ? err.message : String(err);
-        result = { processed, ok, notFound, stopped: 'rate-limited' };
-        return result;
+      let status: 'OK' | 'NOT_FOUND' | 'TOO_FAR' | 'NO_CABANG';
+      if (!near) {
+        // Tanpa titik cabang, kedekatan tidak bisa dijamin → tunggu cabang diberi link.
+        status = 'NO_CABANG';
+      } else {
+        try {
+          hit = q.length >= 6 ? await geocodeNominatim(q, near) : null;
+        } catch (err) {
+          logger.warn({ err }, 'geocode-jemaat: layanan menolak, batch dihentikan');
+          geocodeState.lastError = err instanceof Error ? err.message : String(err);
+          result = { processed, ok, notFound, stopped: 'rate-limited' };
+          return result;
+        }
+        status = !hit ? 'NOT_FOUND' : distanceKm(near, hit) > MAX_FROM_CABANG_KM ? 'TOO_FAR' : 'OK';
       }
-      let status: 'OK' | 'NOT_FOUND' | 'TOO_FAR' = hit ? 'OK' : 'NOT_FOUND';
-      if (hit && near && distanceKm(near, hit) > MAX_FROM_CABANG_KM) status = 'TOO_FAR';
       const data = {
         alamatHash: alamatHash(r.alamat),
         status,
         latitude: status === 'OK' ? hit!.lat : null,
         longitude: status === 'OK' ? hit!.lng : null,
-        provider: 'nominatim',
+        provider: GEOCODE_VERSION,
       };
       await prisma.jemaatGeocode.upsert({ where: { jemaatId: r.id }, create: { jemaatId: r.id, ...data }, update: data });
       processed++;
       geocodeState.batchDone = processed;
       if (status === 'OK') ok++;
       else notFound++;
-      await sleep(GAP_MS);
+      if (near) await sleep(GAP_MS); // jeda hanya bila benar-benar memanggil layanan
     }
     result = { processed, ok, notFound };
     return result;
@@ -145,4 +160,13 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
     running = false;
     Object.assign(geocodeState, { running: false, lastRunAt: new Date().toISOString(), lastResult: result ?? { processed, ok, notFound } });
   }
+}
+
+/** Titik jemaat masih dalam batas jarak dari cabangnya (dipakai saat menampilkan). */
+export function nearCabang(
+  p: { latitude: number | null; longitude: number | null },
+  c: { latitude: number | null; longitude: number | null },
+): boolean {
+  if (p.latitude == null || p.longitude == null || c.latitude == null || c.longitude == null) return false;
+  return distanceKm({ lat: c.latitude, lng: c.longitude }, { lat: p.latitude, lng: p.longitude }) <= MAX_FROM_CABANG_KM;
 }

@@ -181,7 +181,7 @@ async function pending(limit: number): Promise<Pending[]> {
         OR g.alamat_hash <> md5(j.alamat)
         OR (g.provider NOT LIKE ${GEOCODE_VERSION + '%'} AND NOT (g.status = 'OK' AND g.provider = ANY(${OK_STILL_VALID})))
         OR g.status = 'NO_CABANG'
-        OR (${USE_GOOGLE} AND g.provider LIKE 'google%' AND g.updated_at < NOW() - make_interval(days => ${GOOGLE_REFRESH_DAYS}))
+        OR (${USE_GOOGLE} AND g.provider LIKE 'google%' AND g.updated_at < NOW() - make_interval(days => ${GOOGLE_REFRESH_DAYS}::int))
       )
     ORDER BY j.created_at DESC
     LIMIT ${limit}

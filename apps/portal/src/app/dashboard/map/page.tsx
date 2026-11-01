@@ -346,9 +346,22 @@ export default function MapViewPage() {
     layers.cabang.clearMarkers();
     layers.homecell.clearMarkers();
     layers.jemaat.clearMarkers();
-    layers.area.forEach((o) => o.setMap(null));
+    layers.area.forEach((o) => (o.setMap ? o.setMap(null) : (o.map = null)));
     layers.area = [];
     markerIndex.current.clear();
+    // Cek Lokasi Member aktif → hanya homecell yang dicek (+ anggotanya, digambar terpisah).
+    if (cekHcId) {
+      const h = (q.data?.homecell ?? []).find((x) => x.id === cekHcId);
+      if (h) {
+        const pos = { lat: h.latitude, lng: h.longitude };
+        const html = homecellPopup(h);
+        markerIndex.current.set(`h:${h.id}`, { pos, html });
+        const m = makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, 40, 2200);
+        m.map = map;
+        layers.area.push(m); // ikut dibersihkan saat digambar ulang
+      }
+      return;
+    }
     const bounds = new g.maps.LatLngBounds();
     let nBounds = 0;
     const add = (p: { lat: number; lng: number }) => {
@@ -423,7 +436,7 @@ export default function MapViewPage() {
         });
       }
     }
-  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
 
   // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
   // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).
@@ -432,7 +445,7 @@ export default function MapViewPage() {
     const map = mapRef.current;
     heatRef.current.forEach((c) => c.setMap(null));
     heatRef.current = [];
-    if (!g || !map || !showSebaran || !sebaran.data) return;
+    if (!g || !map || !showSebaran || !sebaran.data || cekHcId) return; // disembunyikan saat Cek Lokasi Member
     const cells = sebaran.data.cells;
     const max = Math.max(3, ...cells.map((c) => c[2]));
     heatRef.current = cells.map(
@@ -448,7 +461,7 @@ export default function MapViewPage() {
           zIndex: 1,
         }),
     );
-  }, [tick, showSebaran, sebaran.data]);
+  }, [tick, showSebaran, sebaran.data, cekHcId]);
 
   // Garis lurus tebal homecell → anggota/PIC + balon jarak di tengah garis.
   useEffect(() => {

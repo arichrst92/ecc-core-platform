@@ -81,7 +81,7 @@ export default function WorshipAlbumPage() {
         <ArrowLeft className="w-4 h-4" /> ECC Worship
       </Link>
 
-      <div className="bg-white border border-neutral-200 rounded-xl p-5 flex flex-wrap gap-6">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 flex flex-wrap gap-6">
         <CoverPicker
           coverUrl={a.coverUrl}
           size={150}
@@ -140,7 +140,7 @@ export default function WorshipAlbumPage() {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+        <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-100">
           <div>
             <h2 className="font-semibold text-neutral-900">Lagu</h2>
             <p className="text-xs text-neutral-500">
@@ -154,7 +154,8 @@ export default function WorshipAlbumPage() {
         {a.songs.length === 0 ? (
           <p className="text-sm text-neutral-400 text-center py-10">Belum ada lagu.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
             <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase">
               <tr>
                 <th className="px-3 py-2 text-left w-10">#</th>
@@ -228,6 +229,7 @@ export default function WorshipAlbumPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -268,7 +270,7 @@ function AddSongModal({ albumId, tahun, onClose }: { albumId: string; tahun: num
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold">Tambah lagu</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
               <X className="w-4 h-4" />

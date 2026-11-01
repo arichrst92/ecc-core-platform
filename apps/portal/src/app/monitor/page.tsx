@@ -296,8 +296,8 @@ function PickScreen({
     );
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="w-full p-4 sm:p-6 space-y-6">
+      <div className="flex flex-wrap gap-3 items-center justify-between">
         <div>
           <div className="text-2xl font-bold">{T.pickTitle}</div>
           <div className="text-sm text-neutral-400">{T.pickSub}</div>
@@ -310,7 +310,7 @@ function PickScreen({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {(
           [
             ['ibadah', T.ibadah, T.ibadahSub, Church],

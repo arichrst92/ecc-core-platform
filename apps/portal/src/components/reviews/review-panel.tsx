@@ -139,7 +139,8 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
             <ReviewSummaryBlock s={q.data.summary} />
             {q.data.perTanggal && q.data.perTanggal.length > 1 && (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+            <table className="w-full text-sm">
                   <thead className="text-xs text-neutral-500 uppercase"><tr><th className="text-left py-1.5">Tanggal</th><th className="text-right">Ulasan</th><th className="text-right">Rata-rata</th><th /></tr></thead>
                   <tbody>
                     {q.data.perTanggal.map((p) => (
@@ -152,6 +153,7 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
                     ))}
                   </tbody>
                 </table>
+            </div>
               </div>
             )}
             <ReviewList items={q.data.items} />
@@ -172,7 +174,7 @@ export function ReviewReportCard({
 }) {
   if (!data) return null;
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-5">
+    <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5">
       <h3 className="font-semibold text-neutral-900 flex items-center gap-2 mb-4">
         <MessageSquareQuote className="w-4 h-4" /> Ulasan Jemaat
       </h3>

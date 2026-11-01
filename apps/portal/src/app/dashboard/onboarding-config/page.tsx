@@ -141,7 +141,7 @@ export default function OnboardingConfigPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
@@ -186,7 +186,7 @@ export default function OnboardingConfigPage() {
             const rows = drafts.filter((d) => d.jenis === sec.jenis);
             return (
               <div key={sec.jenis} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-                <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between gap-3">
+                <div className="px-4 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold text-neutral-900">{sec.title}</div>
                     <div className="text-xs text-neutral-500">{sec.desc}</div>

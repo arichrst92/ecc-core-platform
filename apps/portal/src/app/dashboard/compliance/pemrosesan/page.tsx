@@ -125,7 +125,7 @@ export default function ProcessingPage() {
             tiap 6 bulan atau saat ada fitur baru.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={downloadPdf} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-rose-700 border border-rose-200 hover:bg-rose-50 rounded-lg">
             <FileDown className="w-4 h-4" /> Unduh PDF
           </button>
@@ -252,7 +252,7 @@ function EditModal({ value, isNew, saving, onClose, onSave }: { value: Form; isN
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-xl w-full max-w-3xl my-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+        <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-4 border-b border-neutral-100">
           <h2 className="text-lg font-bold">{isNew ? 'Tambah aktivitas' : `Edit ${value.kode}`}</h2>
           <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-5 h-5" /></button>
         </div>

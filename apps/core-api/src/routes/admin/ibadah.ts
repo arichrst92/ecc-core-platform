@@ -375,18 +375,24 @@ ibadahRouter.patch('/:id', async (req, res) => {
   };
   const before = await prisma.ibadah.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Ibadah tidak ditemukan');
-  const pointErr = await radiusPointError({
-    radiusM: input.selfCheckinRadiusM !== undefined ? input.selfCheckinRadiusM : before.selfCheckinRadiusM,
-    latitude: loc ? loc.latitude : before.latitude,
-    longitude: loc ? loc.longitude : before.longitude,
-    cabangId: input.cabangId ?? before.cabangId,
-  });
+  // Validasi lokasi/jadwal hanya bila field terkait ikut diubah — ubah sebagian
+  // (mis. centang Rating dari daftar) tidak boleh gagal karena data lama.
+  const touchesLoc = input.selfCheckinRadiusM !== undefined || input.mapsUrl !== undefined || input.cabangId !== undefined;
+  const touchesJadwal = input.tipeJadwal !== undefined || input.hari !== undefined || input.mingguKe !== undefined;
+  const pointErr = touchesLoc
+    ? await radiusPointError({
+        radiusM: input.selfCheckinRadiusM !== undefined ? input.selfCheckinRadiusM : before.selfCheckinRadiusM,
+        latitude: loc ? loc.latitude : before.latitude,
+        longitude: loc ? loc.longitude : before.longitude,
+        cabangId: input.cabangId ?? before.cabangId,
+      })
+    : null;
   if (pointErr) throw BadRequest(pointErr);
   // Validasi jadwal hasil gabungan (nilai baru + nilai lama).
   const tipe = input.tipeJadwal ?? before.tipeJadwal;
   const hari = input.hari !== undefined ? input.hari : before.hari;
   const mingguKe = tipe === 'MONTHLY' ? (input.mingguKe !== undefined ? input.mingguKe : before.mingguKe) : null;
-  if (tipe !== 'ONCE' && !hari) throw BadRequest('Pilih hari ibadah.');
+  if (touchesJadwal && tipe !== 'ONCE' && !hari) throw BadRequest('Pilih hari ibadah.');
   if (tipe === 'MONTHLY' && input.tipeJadwal === 'MONTHLY' && before.tipeJadwal !== 'MONTHLY' && mingguKe == null) {
     throw BadRequest('Pilih minggu ke-berapa (pertama–keempat) untuk jadwal Bulanan.');
   }

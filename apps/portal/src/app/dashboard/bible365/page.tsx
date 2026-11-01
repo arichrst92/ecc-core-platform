@@ -134,7 +134,8 @@ export default function Bible365Page() {
             {s.perCabang.length === 0 ? (
               <div className="text-sm text-neutral-400 py-10 text-center">Belum ada jemaat yang memulai Bible 365.</div>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
                 <thead className="bg-neutral-50 text-neutral-500 text-xs">
                   <tr>
                     <th className="text-left font-medium px-4 py-2">Cabang</th>
@@ -156,6 +157,7 @@ export default function Bible365Page() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </>

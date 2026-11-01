@@ -45,7 +45,7 @@ export default function WorshipPage() {
             Album & lagu original ECC untuk didengarkan jemaat di Els App. Lagu draft hanya terlihat oleh pengelola.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setCreating('SINGLE')}
             className="flex items-center gap-2 h-9 px-3 border border-neutral-300 rounded-lg text-sm font-medium bg-white hover:bg-neutral-50"
@@ -67,7 +67,7 @@ export default function WorshipPage() {
         </div>
       ) : null}
 
-      <div className="flex gap-1 border-b border-neutral-200">
+      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto whitespace-nowrap">
         {(
           [
             ['ALBUM', `Album (${albums.length})`, Disc3],
@@ -259,7 +259,7 @@ function CreateModal({ tipe, onClose }: { tipe: 'ALBUM' | 'SINGLE'; onClose: () 
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold">{tipe === 'ALBUM' ? 'Album baru' : 'Single baru'}</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
               <X className="w-4 h-4" />

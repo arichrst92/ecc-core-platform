@@ -91,7 +91,7 @@ export default function BackupEmailPage() {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <CloudUpload className="w-6 h-6" />
@@ -110,7 +110,7 @@ export default function BackupEmailPage() {
         </div>
       )}
 
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 space-y-5">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 space-y-5">
         <label className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-neutral-900">Aktifkan kiriman bulanan</div>
@@ -197,7 +197,7 @@ export default function BackupEmailPage() {
         </div>
       </div>
 
-      <div className="mt-4 bg-white border border-neutral-200 rounded-xl p-5 text-sm">
+      <div className="mt-4 bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 text-sm">
         <div className="font-semibold text-neutral-900 mb-2">Kiriman terakhir</div>
         {cfg.lastSentAt ? (
           <div className="space-y-1 text-neutral-700">

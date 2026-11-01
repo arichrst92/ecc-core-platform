@@ -146,7 +146,7 @@ export default function WorshipSongPage() {
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Info */}
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3">
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-3">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold text-neutral-900 flex-1 truncate">{s.judul}</h1>
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${published ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>
@@ -213,7 +213,7 @@ export default function WorshipSongPage() {
         </div>
 
         {/* Audio */}
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
           <AudioSlot
             label="Audio vokal (wajib)"
             songId={s.id}
@@ -244,7 +244,7 @@ export default function WorshipSongPage() {
       </div>
 
       {/* Lirik */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-2">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-2">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-neutral-900 flex-1">Lirik</h2>
           <span className="text-xs text-neutral-500">{lyricLines(form.lirik).length} baris</span>
@@ -269,7 +269,7 @@ export default function WorshipSongPage() {
 
       {/* Sinkron & Uji Putar */}
       <div>
-        <div className="flex gap-1 border-b border-neutral-200 mb-4">
+        <div className="flex gap-1 border-b border-neutral-200 mb-4 overflow-x-auto whitespace-nowrap">
           {(
             [
               ['sync', 'Sinkron lirik'],

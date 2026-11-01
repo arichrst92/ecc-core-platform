@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
+import { GEOCODE_VERSION, geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 
@@ -258,7 +258,13 @@ async function geocodeCounts(cabangId?: string) {
     FROM jemaat
     WHERE (${cab}::uuid IS NULL OR cabang_id = ${cab}::uuid)
   `;
-  const byStatus = await prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } });
+  // Hanya hasil versi pemetaan sekarang yang dihitung; hasil versi lama (mis. OpenStreetMap
+  // sebelum pindah ke Google) dihitung "menunggu" karena akan diproses ulang.
+  const byStatus = await prisma.jemaatGeocode.groupBy({
+    by: ['status'],
+    where: { jemaat: jemaatWhere, provider: { startsWith: GEOCODE_VERSION } },
+    _count: { _all: true },
+  });
   const n = (v: bigint | undefined) => Number(v ?? 0);
   const total = n(rincian?.beralamat);
   const count = (st: string) => byStatus.find((b) => b.status === st)?._count._all ?? 0;

@@ -35,7 +35,7 @@ const BATCH = USE_GOOGLE ? 1000 : 250;
 /** Hasil Google boleh disimpan maks. 30 hari → disegarkan setelah itu. */
 const GOOGLE_REFRESH_DAYS = 30;
 /** Naikkan versi bila aturan berubah → semua alamat diproses ulang bertahap. */
-export const GEOCODE_VERSION = USE_GOOGLE ? 'google-v3' : 'nominatim-v5';
+export const GEOCODE_VERSION = USE_GOOGLE ? 'google-v4' : 'nominatim-v6';
 /** Versi lama yang hasil OK-nya masih dipakai (hanya yang gagal diproses ulang). */
 const OK_STILL_VALID: string[] = [];
 
@@ -47,8 +47,25 @@ export function cleanAlamat(alamat: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Ketelitian titik: RUMAH (alamat/gedung), JALAN (ruas jalan), KAWASAN (kelurahan/
+ * perumahan/kode pos). Lebih kasar dari itu (hanya kota/kecamatan/provinsi) →
+ * 'UMUM': tidak dipasang di peta karena hanya titik tengah kota (semua menumpuk).
+ */
+export type Presisi = 'RUMAH' | 'JALAN' | 'KAWASAN';
 /** placeId (Google) boleh disimpan permanen → dipakai untuk tautan Google Maps. */
-type Hit = { lat: number; lng: number; placeId?: string | null } | null;
+type Found = { lat: number; lng: number; placeId?: string | null; presisi: Presisi };
+type Hit = Found | 'UMUM' | null;
+
+const T_RUMAH = ['street_address', 'premise', 'subpremise', 'establishment', 'point_of_interest', 'plus_code'];
+const T_JALAN = ['route', 'intersection'];
+const T_KAWASAN = ['neighborhood', 'sublocality', 'sublocality_level_1', 'sublocality_level_2', 'sublocality_level_3', 'sublocality_level_4', 'sublocality_level_5', 'administrative_area_level_4', 'administrative_area_level_5', 'administrative_area_level_6', 'administrative_area_level_7', 'postal_code'];
+function presisiGoogle(types: string[]): Presisi | null {
+  if (types.some((t) => T_RUMAH.includes(t))) return 'RUMAH';
+  if (types.some((t) => T_JALAN.includes(t))) return 'JALAN';
+  if (types.some((t) => T_KAWASAN.includes(t))) return 'KAWASAN';
+  return null; // kota, kecamatan, kabupaten, provinsi, negara, pulau → terlalu umum
+}
 
 /**
  * Negara cabang dari zona waktunya (cabang tidak menyimpan negara). Dipakai
@@ -64,15 +81,6 @@ export function negaraDariZona(tz: string | null | undefined): string | null {
   return null;
 }
 
-/**
- * Hasil Google yang terlalu kasar (negara, provinsi, kabupaten, pulau/alam) ditolak:
- * Google mengembalikan titik tengah wilayah itu bila alamatnya tidak dikenali —
- * mis. semua alamat yang gagal jatuh di tengah Kalimantan.
- */
-const TERLALU_KASAR = new Set([
-  'country', 'continent', 'administrative_area_level_1', 'administrative_area_level_2',
-  'natural_feature', 'colloquial_area', 'archipelago',
-]);
 
 /** Satu permintaan ke Nominatim. Lempar error bila layanan menolak (429/5xx) supaya batch berhenti. */
 export async function geocodeNominatim(alamat: string, negara: string | null): Promise<Hit> {
@@ -88,11 +96,13 @@ export async function geocodeNominatim(alamat: string, negara: string | null): P
     const rows = (await res.json()) as { lat: string; lon: string; place_rank?: number }[];
     const r = rows[0];
     if (!r) return null;
-    if ((r.place_rank ?? 30) < 16) return null; // lebih kasar dari kota → tolak
+    const rank = r.place_rank ?? 30;
+    if (rank < 18) return 'UMUM'; // kota/kecamatan atau lebih kasar
+    const presisi: Presisi = rank >= 28 ? 'RUMAH' : rank >= 26 ? 'JALAN' : 'KAWASAN';
     const lat = Number(r.lat);
     const lng = Number(r.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat: roundCoord(lat), lng: roundCoord(lng) };
+    return { lat: roundCoord(lat), lng: roundCoord(lng), presisi };
   } finally {
     clearTimeout(timer);
   }
@@ -123,8 +133,9 @@ export async function geocodeGoogle(alamat: string, negara: string | null): Prom
     const top = body.results?.[0];
     const loc = top?.geometry.location;
     if (!loc) return null;
-    if ((top?.types ?? []).some((t) => TERLALU_KASAR.has(t))) return null; // titik tengah wilayah, bukan alamat
-    return { lat: roundCoord(loc.lat), lng: roundCoord(loc.lng), placeId: top?.place_id ?? null };
+    const presisi = presisiGoogle(top?.types ?? []);
+    if (!presisi) return 'UMUM'; // titik tengah kota/wilayah, bukan alamat
+    return { lat: roundCoord(loc.lat), lng: roundCoord(loc.lng), placeId: top?.place_id ?? null, presisi };
   } finally {
     clearTimeout(timer);
   }
@@ -249,12 +260,18 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
       // Google cukup 2 variasi (alamat + kota, lalu dirapikan); Nominatim sampai 4.
       const queries = USE_GOOGLE ? all.slice(0, 2) : all;
       const negara = negaraDariZona(r.ctz);
-      let hit: Hit = null;
+      let hit: Found | null = null;
+      let umum = false; // ada hasil, tapi hanya setingkat kota/wilayah
       let tahap = 0;
+      const coba = async (q: string, n: string | null) => {
+        const h = await geocodeOne(q, n);
+        if (h === 'UMUM') umum = true;
+        else if (h) hit = h;
+      };
       try {
         for (let i = 0; i < queries.length && !hit; i++) {
           if (i > 0) await sleep(GAP_MS);
-          hit = await geocodeOne(queries[i]!, negara);
+          await coba(queries[i]!, negara);
           tahap = i + 1;
         }
         // Cadangan: alamat di luar negara cabang (mis. jemaat cabang Sydney yang
@@ -262,7 +279,7 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
         // batas negara. Hasil yang terlalu kasar tetap ditolak.
         if (!hit && negara && r.alamat.trim().length >= 6) {
           await sleep(GAP_MS);
-          hit = await geocodeOne(r.alamat.trim(), null);
+          await coba(r.alamat.trim(), null);
           tahap = 9;
         }
       } catch (err) {
@@ -271,13 +288,16 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
         result = { processed, ok, notFound, stopped: 'rate-limited' };
         return result;
       }
-      const status: 'OK' | 'NOT_FOUND' = hit ? 'OK' : 'NOT_FOUND';
+      const found = hit as Found | null;
+      // TERLALU_UMUM: alamat hanya dikenali sampai tingkat kota (mis. cuma "Bandung").
+      const status: 'OK' | 'NOT_FOUND' | 'TERLALU_UMUM' = found ? 'OK' : umum ? 'TERLALU_UMUM' : 'NOT_FOUND';
       const data = {
         alamatHash: alamatHash(r.alamat),
         status,
-        latitude: status === 'OK' ? hit!.lat : null,
-        longitude: status === 'OK' ? hit!.lng : null,
-        placeId: status === 'OK' ? (hit!.placeId ?? null) : null,
+        latitude: found ? found.lat : null,
+        longitude: found ? found.lng : null,
+        placeId: found ? (found.placeId ?? null) : null,
+        presisi: found ? found.presisi : null,
         // Tahap variasi yang berhasil (1 = alamat asli, 4 = tingkat wilayah) — untuk evaluasi ketepatan.
         provider: status === 'OK' ? `${GEOCODE_VERSION}/${tahap}` : GEOCODE_VERSION,
       };

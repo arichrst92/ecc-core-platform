@@ -3306,12 +3306,14 @@ model JemaatGeocode {
   jemaatId   String   @id @map("jemaat_id") @db.Uuid
   // md5(alamat) saat diproses — alamat berubah → diproses ulang.
   alamatHash String   @map("alamat_hash") @db.VarChar(32)
-  status     String   @db.VarChar(16) // OK | NOT_FOUND | TOO_FAR
+  status     String   @db.VarChar(16) // OK | NOT_FOUND | TERLALU_UMUM
   latitude   Float?
   longitude  Float?
   provider   String   @default("nominatim") @db.VarChar(20)
   // Google place_id (boleh disimpan permanen) → tautan Google Maps tepat ke tempatnya.
   placeId    String?  @map("place_id") @db.Text
+  // Ketelitian titik: RUMAH | JALAN | KAWASAN (null bila tidak ditemukan).
+  presisi    String?  @db.VarChar(10)
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)

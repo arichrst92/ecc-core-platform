@@ -15,6 +15,7 @@ import { requireMenu } from '../../middleware/require-menu.js';
 import { GEOCODE_VERSION, alamatHash, geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
+import { distanceKm } from '../../lib/geo.js';
 
 export const mapViewRouter = Router();
 mapViewRouter.use(requireMenu('map-view'));
@@ -214,6 +215,7 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
       latitude: true,
       longitude: true,
       placeId: true,
+      presisi: true,
       alamatHash: true,
       jemaat: {
         select: {
@@ -238,15 +240,124 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
     success: true,
     data: rows
       .filter(alamatMasihSama) // alamat diubah/dikosongkan → pin lama disembunyikan sampai dipetakan ulang
-      .map(({ latitude, longitude, placeId, alamatHash: _h, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
+      .map(({ latitude, longitude, placeId, presisi, alamatHash: _h, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
         ...j,
         cabang,
         latitude: latitude!,
         longitude: longitude!,
         placeId,
+        presisi,
         homecell: homecellMembership.map((m) => m.homecell),
       })),
   });
+});
+
+/**
+ * Daftar jemaat yang alamatnya perlu dilengkapi (tidak dikenali / terlalu umum)
+ * → ditindaklanjuti admin atau jemaat sendiri. Butuh akses menu Jemaat.
+ *   GET /admin/map-view/alamat-perlu-dicek?cabangId=
+ */
+mapViewRouter.get('/alamat-perlu-dicek', requireMenu('jemaat'), async (req, res) => {
+  const { cabangId } = z.object({ cabangId: z.string().uuid().optional() }).parse(req.query);
+  const rows = await prisma.jemaatGeocode.findMany({
+    where: {
+      status: { in: ['NOT_FOUND', 'TERLALU_UMUM'] },
+      provider: { startsWith: GEOCODE_VERSION },
+      jemaat: { isActive: true, isTamu: false, ...(cabangId ? { cabangId } : {}) },
+    },
+    select: {
+      status: true,
+      alamatHash: true,
+      jemaat: { select: { id: true, namaLengkap: true, kode: true, noHp: true, alamat: true, cabang: { select: { nama: true } } } },
+    },
+    orderBy: { jemaat: { namaLengkap: 'asc' } },
+    take: 3000,
+  });
+  res.json({
+    success: true,
+    data: rows
+      .filter(alamatMasihSama) // alamat sudah diperbaiki → menunggu dipetakan ulang, tidak perlu dicek
+      .map(({ status, jemaat: { cabang, ...j } }) => ({ ...j, cabang: cabang.nama, status })),
+  });
+});
+
+/**
+ * Cek Lokasi Member — anggota aktif + PIC sebuah homecell beserta perkiraan lokasi
+ * rumahnya (dari pemetaan alamat) dan jarak garis lurus ke titik homecell.
+ * Butuh akses menu Jemaat (data pribadi).
+ *   GET /admin/map-view/homecell/:id/member
+ */
+mapViewRouter.get('/homecell/:id/member', requireMenu('jemaat'), async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const jemaatSelect = {
+    id: true,
+    namaLengkap: true,
+    kode: true,
+    fotoUrl: true,
+    jenisKelamin: true,
+    noHp: true,
+    alamat: true,
+    isActive: true,
+    cabang: { select: { id: true, nama: true } },
+    geocode: { select: { status: true, latitude: true, longitude: true, presisi: true, alamatHash: true, provider: true } },
+  } satisfies Prisma.JemaatSelect;
+  const hc = await prisma.homecell.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nama: true,
+      latitude: true,
+      longitude: true,
+      picJemaat: { select: jemaatSelect },
+      members: { where: { isActive: true, jemaat: { isActive: true } }, select: { jemaat: { select: jemaatSelect } } },
+    },
+  });
+  if (!hc) {
+    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Homecell tidak ditemukan.' } });
+    return;
+  }
+  const titikHc = hc.latitude != null && hc.longitude != null ? { lat: hc.latitude, lng: hc.longitude } : null;
+  type J = NonNullable<typeof hc.picJemaat>;
+  const ubah = (j: J, isPic: boolean, isMember: boolean) => {
+    const g = j.geocode;
+    const alamat = j.alamat?.trim() ? j.alamat : null;
+    // Titik hanya dipakai bila masih sesuai alamat sekarang.
+    const valid = !!(g && alamat && g.status === 'OK' && g.latitude != null && g.longitude != null && alamatHash(alamat) === g.alamatHash);
+    const lokasi: 'OK' | 'TANPA_ALAMAT' | 'TIDAK_DIKENALI' | 'TERLALU_UMUM' | 'MENUNGGU' = valid
+      ? 'OK'
+      : !alamat
+        ? 'TANPA_ALAMAT'
+        : g && alamatHash(alamat) === g.alamatHash && g.status === 'TERLALU_UMUM'
+          ? 'TERLALU_UMUM'
+          : g && alamatHash(alamat) === g.alamatHash && g.status === 'NOT_FOUND'
+            ? 'TIDAK_DIKENALI'
+            : 'MENUNGGU';
+    const latitude = valid ? g!.latitude! : null;
+    const longitude = valid ? g!.longitude! : null;
+    const { geocode: _g, isActive: _a, ...rest } = j;
+    return {
+      ...rest,
+      alamat,
+      isPic,
+      isMember,
+      lokasi,
+      latitude,
+      longitude,
+      presisi: valid ? g!.presisi : null,
+      jarakKm:
+        valid && titikHc ? Math.round(distanceKm(titikHc, { lat: latitude!, lng: longitude! }) * 100) / 100 : null,
+    };
+  };
+  const picId = hc.picJemaat?.id ?? null;
+  const anggota = hc.members.map((m) => ubah(m.jemaat, m.jemaat.id === picId, true));
+  if (hc.picJemaat && !anggota.some((a) => a.id === picId)) anggota.push(ubah(hc.picJemaat, true, false));
+  anggota.sort(
+    (a, b) =>
+      Number(b.isPic) - Number(a.isPic) ||
+      (a.jarakKm ?? Infinity) - (b.jarakKm ?? Infinity) ||
+      a.namaLengkap.localeCompare(b.namaLengkap, 'id'),
+  );
+  res.json({ success: true, data: { homecell: { id: hc.id, nama: hc.nama, latitude: hc.latitude, longitude: hc.longitude }, anggota } });
 });
 
 /** Hitungan status pemetaan alamat jemaat (semua / per cabang). */
@@ -282,6 +393,8 @@ async function geocodeCounts(cabangId?: string) {
     total,
     ok: count('OK'),
     tidakDitemukan: count('NOT_FOUND'),
+    // Alamat hanya setingkat kota (mis. cuma "Bandung") → tidak dipasang di peta.
+    terlaluUmum: count('TERLALU_UMUM'),
     terlaluJauh: count('TOO_FAR'),
     // Cabang jemaat belum punya link Google Maps → belum bisa dipetakan.
     menungguCabang: count('NO_CABANG'),

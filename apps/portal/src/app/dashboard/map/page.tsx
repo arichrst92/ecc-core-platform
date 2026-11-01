@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, ChevronUp, Loader2, MapPinned, Maximize2, Minimize2, Play, Search, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Loader2, MapPinned, Maximize2, Minimize2, Play, Search, Users, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   PIN_STYLE,
@@ -18,6 +18,15 @@ import {
   jemaatPinElement,
   jemaatPopup,
   sebarTitikSama,
+  convexHull,
+  formatJarak,
+  fotoSrc,
+  jarakLabelElement,
+  memberPopup,
+  LOKASI_LABEL,
+  MEMBER_COLOR,
+  PIC_COLOR,
+  type HomecellMemberData,
   loadGoogleMaps,
   makeAreaShape,
   pinElement,
@@ -159,6 +168,30 @@ export default function MapViewPage() {
     staleTime: 5 * 60_000,
     retry: false,
   });
+
+  // Cek Lokasi Member: homecell yang sedang dicek (dari tombol di balon homecell).
+  const [cekHcId, setCekHcId] = useState<string | null>(null);
+  const memberQ = useQuery({
+    queryKey: ['map-view', 'homecell-member', cekHcId],
+    queryFn: async () =>
+      (await apiClient.get<{ data: HomecellMemberData }>(`/admin/map-view/homecell/${cekHcId}/member`)).data.data,
+    enabled: !!cekHcId,
+    retry: false,
+  });
+  const memberOverlay = useRef<any[]>([]);
+  const memberIndex = useRef<Map<string, { pos: { lat: number; lng: number }; html: string }>>(new Map());
+  useEffect(() => {
+    // Tombol di balon homecell berupa HTML biasa → tangkap kliknya lewat delegasi.
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest?.('[data-cek-member]') as HTMLElement | null;
+      if (!el) return;
+      e.preventDefault();
+      setCekHcId(el.dataset.cekMember ?? null);
+      infoRef.current?.close();
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
 
   const cabangOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -418,6 +451,85 @@ export default function MapViewPage() {
     );
   }, [tick, showSebaran, sebaran.data]);
 
+  // Gambar garis homecell → anggota/PIC, poligon cakupan, label jarak.
+  useEffect(() => {
+    const g = GRef.current;
+    const map = mapRef.current;
+    memberOverlay.current.forEach((o) => (o.setMap ? o.setMap(null) : (o.map = null)));
+    memberOverlay.current = [];
+    memberIndex.current.clear();
+    const d = memberQ.data;
+    if (!g || !map || !cekHcId || !d || d.homecell.latitude == null || d.homecell.longitude == null) return;
+    const hc = { lat: d.homecell.latitude, lng: d.homecell.longitude };
+    const ada = d.anggota.filter((m) => m.latitude != null && m.longitude != null);
+    const bounds = new g.maps.LatLngBounds();
+    bounds.extend(hc);
+    const pts: [number, number][] = [[hc.lat, hc.lng]];
+    // Titik yang sama (satu rumah) disebar sedikit supaya semua pin terlihat.
+    const sebar = sebarTitikSama(
+      ada.map((m) => ({ ...m, latitude: m.latitude!, longitude: m.longitude!, homecell: [] })),
+    );
+    for (const m of ada) {
+      const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude!, lng: m.longitude! };
+      bounds.extend(pos);
+      pts.push([pos.lat, pos.lng]);
+    }
+    if (pts.length >= 3) {
+      const hull = convexHull(pts);
+      memberOverlay.current.push(
+        new g.maps.Polygon({
+          map,
+          paths: hull.map(([lat, lng]) => ({ lat, lng })),
+          strokeColor: PIN_STYLE.homecell.color,
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: PIN_STYLE.homecell.color,
+          fillOpacity: 0.08,
+          clickable: false,
+          zIndex: 5,
+        }),
+      );
+    }
+    for (const m of ada) {
+      const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude!, lng: m.longitude! };
+      const color = m.isPic ? PIC_COLOR : MEMBER_COLOR;
+      memberOverlay.current.push(
+        new g.maps.Polyline({
+          map,
+          path: [hc, pos],
+          geodesic: true,
+          strokeOpacity: 0,
+          icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: color, strokeWeight: 2.5, scale: 3 }, offset: '0', repeat: '12px' }],
+          clickable: false,
+          zIndex: 6,
+        }),
+      );
+      const mid = { lat: (hc.lat + pos.lat) / 2, lng: (hc.lng + pos.lng) / 2 };
+      const label = new g.maps.marker.AdvancedMarkerElement({ map, position: mid, content: jarakLabelElement(formatJarak(m.jarakKm), color), zIndex: 1500 });
+      memberOverlay.current.push(label);
+      const html = memberPopup(m, d.homecell);
+      memberIndex.current.set(m.id, { pos, html });
+      const mk = makeMarker(pos, jemaatPinElement(m, color), m.namaLengkap, html, 52, m.isPic ? 2100 : 2000);
+      mk.map = map;
+      memberOverlay.current.push(mk);
+    }
+    if (ada.length) map.fitBounds(bounds, 60);
+    else {
+      map.setCenter(hc);
+      map.setZoom(15);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, cekHcId, memberQ.data]);
+
+  function focusMember(id: string) {
+    const it = memberIndex.current.get(id);
+    const map = mapRef.current;
+    if (!it || !map) return;
+    map.panTo(it.pos);
+    if (map.getZoom() < 15) map.setZoom(15);
+    openInfo(it.html, it.pos, 52);
+  }
+
   function focus(key: string) {
     const g = GRef.current;
     const map = mapRef.current;
@@ -542,7 +654,7 @@ export default function MapViewPage() {
   );
   const statusEl = (
     <>
-      {(showJemaat || showSebaran) && geo.data && <GeocodeProgress s={geo.data} onRun={runNow} msg={runMsg} />}
+      {(showJemaat || showSebaran) && geo.data && <GeocodeProgress s={geo.data} onRun={runNow} msg={runMsg} cabangId={cabangId} />}
 
       {showJemaat && (jemaatQ.isLoading || jemaatQ.isError) && (
         <div
@@ -630,6 +742,16 @@ export default function MapViewPage() {
           // Tinggi eksplisit di layar penuh (persentase bisa 0 saat transisi fullscreen browser).
           style={fullscreen ? { height: '100dvh', minHeight: '100vh' } : undefined}
         />
+        {cekHcId && (
+          <MemberPanel
+            data={memberQ.data}
+            loading={memberQ.isLoading}
+            error={memberQ.isError ? ((memberQ.error as any)?.response?.status === 403 ? 'Butuh akses menu Jemaat.' : 'Gagal memuat anggota.') : null}
+            fullscreen={fullscreen}
+            onClose={() => setCekHcId(null)}
+            onFocus={focusMember}
+          />
+        )}
         {fullscreen && (
           <>
             {/* Panel saringan mengambang (kiri atas) */}
@@ -708,6 +830,129 @@ export default function MapViewPage() {
   );
 }
 
+/** Panel daftar anggota + PIC homecell, urut jarak ke homecell. */
+function MemberPanel({
+  data,
+  loading,
+  error,
+  fullscreen,
+  onClose,
+  onFocus,
+}: {
+  data: HomecellMemberData | undefined;
+  loading: boolean;
+  error: string | null;
+  fullscreen: boolean;
+  onClose: () => void;
+  onFocus: (id: string) => void;
+}) {
+  const ada = (data?.anggota ?? []).filter((m) => m.jarakKm != null);
+  const belum = (data?.anggota ?? []).filter((m) => m.latitude == null);
+  const jarak = ada.map((m) => m.jarakKm!);
+  const rata = jarak.length ? jarak.reduce((a, b) => a + b, 0) / jarak.length : null;
+  const maks = jarak.length ? Math.max(...jarak) : null;
+  const nAnggota = (data?.anggota ?? []).filter((m) => m.isMember).length;
+  return (
+    <div
+      className={`absolute right-3 z-[1001] w-[min(340px,calc(100%-24px))] max-h-[min(70%,560px)] flex flex-col bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg text-xs ${fullscreen ? 'top-16' : 'top-3'}`}
+    >
+      <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-neutral-100">
+        <div className="min-w-0">
+          <div className="font-semibold text-sm text-neutral-900 flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-violet-600" /> Lokasi member
+          </div>
+          <div className="text-neutral-500 truncate">{data?.homecell.nama ?? 'Memuat…'}</div>
+        </div>
+        <button onClick={onClose} className="p-1 rounded hover:bg-neutral-100 text-neutral-500" title="Tutup">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {loading ? (
+        <div className="p-4 text-center text-neutral-500"><Loader2 className="w-4 h-4 animate-spin inline" /> Memuat anggota…</div>
+      ) : error ? (
+        <div className="p-3 text-red-600">{error}</div>
+      ) : data ? (
+        <>
+          {data.homecell.latitude == null ? (
+            <div className="px-3 py-2 text-amber-700 bg-amber-50">Homecell belum punya titik lokasi, jarak tidak bisa dihitung.</div>
+          ) : null}
+          <div className="px-3 py-2 grid grid-cols-3 gap-2 border-b border-neutral-100">
+            <Ringkas label="Anggota" value={`${nAnggota}`} />
+            <Ringkas label="Rata-rata" value={formatJarak(rata)} />
+            <Ringkas label="Terjauh" value={formatJarak(maks)} />
+          </div>
+          <div className="px-3 pt-2 flex items-center gap-3 text-neutral-500">
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: PIC_COLOR }} /> PIC</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: MEMBER_COLOR }} /> Anggota</span>
+            <span className="ml-auto">Jarak garis lurus</span>
+          </div>
+          <div className="overflow-y-auto px-1.5 py-1.5">
+            {ada.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => onFocus(m.id)}
+                className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg hover:bg-neutral-50 text-left"
+              >
+                <Avatar nama={m.namaLengkap} foto={m.fotoUrl} color={m.isPic ? PIC_COLOR : MEMBER_COLOR} />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium text-neutral-800 truncate">{m.namaLengkap}</span>
+                  <span className="block text-neutral-400 truncate">{m.isPic ? (m.isMember ? 'PIC · anggota' : 'PIC') : 'Anggota'}</span>
+                </span>
+                <span className="font-semibold text-neutral-800 whitespace-nowrap">{formatJarak(m.jarakKm)}</span>
+              </button>
+            ))}
+            {belum.length ? (
+              <div className="mt-1 pt-1.5 border-t border-neutral-100">
+                <div className="px-1.5 pb-1 text-neutral-500 font-medium">Belum ada lokasi ({belum.length})</div>
+                {belum.map((m) => (
+                  <a
+                    key={m.id}
+                    href={`/dashboard/jemaat/${m.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-neutral-50"
+                  >
+                    <Avatar nama={m.namaLengkap} foto={m.fotoUrl} color="#A3A3A3" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-neutral-700 truncate">
+                        {m.namaLengkap}
+                        {m.isPic ? <span className="ml-1 text-amber-600 font-semibold">PIC</span> : null}
+                      </span>
+                      <span className="block text-neutral-400 truncate">{LOKASI_LABEL[m.lokasi]}</span>
+                    </span>
+                  </a>
+                ))}
+              </div>
+            ) : null}
+            {!data.anggota.length ? <div className="p-3 text-center text-neutral-500">Belum ada anggota.</div> : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function Ringkas({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-neutral-400">{label}</div>
+      <div className="text-sm font-semibold text-neutral-900">{value}</div>
+    </div>
+  );
+}
+
+function Avatar({ nama, foto, color }: { nama: string; foto: string | null; color: string }) {
+  const src = fotoSrc(foto);
+  const ini = nama.trim().split(/\s+/).filter(Boolean);
+  const teks = ((ini[0]?.[0] ?? '') + (ini.length > 1 ? ini[ini.length - 1]![0] : '')).toUpperCase();
+  return (
+    <span className="shrink-0 w-7 h-7 rounded-full border-2 overflow-hidden flex items-center justify-center bg-neutral-200 text-[10px] font-bold text-neutral-600" style={{ borderColor: color }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : teks || '?'}
+    </span>
+  );
+}
+
 function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'nonaktif' }) {
   const html = kind === 'nonaktif' ? pinHtml('homecell', false) : pinHtml(kind);
   return (
@@ -722,6 +967,7 @@ interface GeocodeStatus {
   total: number;
   ok: number;
   tidakDitemukan: number;
+  terlaluUmum?: number;
   terlaluJauh: number;
   menungguCabang: number;
   menunggu: number;
@@ -741,9 +987,12 @@ interface GeocodeStatus {
   };
 }
 
-function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => void; msg: string | null }) {
+function GeocodeProgress({ s, onRun, msg, cabangId }: { s: GeocodeStatus; onRun: () => void; msg: string | null; cabangId: string }) {
+  const [lihat, setLihat] = useState(false);
   const n = (x: number) => x.toLocaleString('id-ID');
-  const gagal = s.tidakDitemukan + s.terlaluJauh;
+  const umum = s.terlaluUmum ?? 0;
+  const tidakDikenali = s.tidakDitemukan + s.terlaluJauh;
+  const gagal = tidakDikenali + umum;
   const tungguCabang = s.menungguCabang ?? 0;
   const selesai = s.ok + gagal + tungguCabang;
   const pct = s.total ? Math.round((selesai / s.total) * 100) : 100;
@@ -787,7 +1036,13 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
         <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />{n(s.ok)} berhasil (tampil di peta)</span>
         <span>
           <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />
-          {n(gagal)} alamat tidak dikenali
+          {n(tidakDikenali)} alamat tidak dikenali
+          {umum > 0 ? ` · ${n(umum)} terlalu umum (hanya nama kota/kecamatan)` : ''}
+          {gagal > 0 ? (
+            <button onClick={() => setLihat((x) => !x)} className="ml-1.5 text-sky-700 font-medium hover:underline">
+              {lihat ? 'Tutup daftar' : 'Lihat daftar'}
+            </button>
+          ) : null}
         </span>
         <span><span className="inline-block w-2 h-2 rounded-full bg-neutral-300 mr-1" />{n(s.menunggu)} menunggu</span>
         {!s.aktif ? (
@@ -806,6 +1061,124 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
         )}
         {p.lastError ? <span className="text-red-600">Kendala terakhir: {p.lastError}</span> : null}
       </div>
+      {lihat ? <AlamatPerluDicek cabangId={cabangId} /> : null}
+    </div>
+  );
+}
+
+interface AlamatBermasalah {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  noHp: string | null;
+  alamat: string | null;
+  cabang: string;
+  status: 'NOT_FOUND' | 'TERLALU_UMUM';
+}
+
+/** Daftar jemaat yang alamatnya perlu dilengkapi — untuk ditindaklanjuti. */
+function AlamatPerluDicek({ cabangId }: { cabangId: string }) {
+  const [cari, setCari] = useState('');
+  const [jenis, setJenis] = useState<'' | 'NOT_FOUND' | 'TERLALU_UMUM'>('');
+  const q = useQuery({
+    queryKey: ['map-view', 'alamat-perlu-dicek', cabangId],
+    queryFn: async () =>
+      (await apiClient.get<{ data: AlamatBermasalah[] }>('/admin/map-view/alamat-perlu-dicek', { params: cabangId ? { cabangId } : {} }))
+        .data.data,
+  });
+  const rows = useMemo(() => {
+    const k = cari.trim().toLowerCase();
+    return (q.data ?? []).filter(
+      (r) =>
+        (!jenis || r.status === jenis) &&
+        (!k || `${r.namaLengkap} ${r.kode ?? ''} ${r.alamat ?? ''} ${r.cabang}`.toLowerCase().includes(k)),
+    );
+  }, [q.data, cari, jenis]);
+  const label = (st: AlamatBermasalah['status']) => (st === 'TERLALU_UMUM' ? 'Terlalu umum' : 'Tidak dikenali');
+  function unduhCsv() {
+    const esc = (v: string | null) => `"${(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [
+      ['Nama', 'Kode', 'No HP', 'Cabang', 'Alamat', 'Masalah'].join(','),
+      ...rows.map((r) => [esc(r.namaLengkap), esc(r.kode), esc(r.noHp), esc(r.cabang), esc(r.alamat), esc(label(r.status))].join(',')),
+    ];
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'alamat-jemaat-perlu-dicek.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  return (
+    <div className="mt-2.5 border-t border-neutral-100 pt-2.5">
+      <p className="text-[11px] text-neutral-500 mb-2">
+        <b>Tidak dikenali</b>: alamat tidak ditemukan di Google Maps. <b>Terlalu umum</b>: alamat hanya menyebut kota/kecamatan
+        (mis. cuma &quot;Bandung&quot;) sehingga titiknya hanya tengah kota. Minta jemaat melengkapi alamat (nama jalan, nomor,
+        kelurahan) di app atau ubah di detail jemaat — alamat yang diperbaiki otomatis dipetakan ulang.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <input
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama, kode, atau alamat"
+            className="w-full pl-7 pr-2 py-1.5 border border-neutral-300 rounded-md text-xs"
+          />
+        </div>
+        <select value={jenis} onChange={(e) => setJenis(e.target.value as typeof jenis)} className="px-2 py-1.5 border border-neutral-300 rounded-md text-xs bg-white">
+          <option value="">Semua masalah</option>
+          <option value="TERLALU_UMUM">Terlalu umum</option>
+          <option value="NOT_FOUND">Tidak dikenali</option>
+        </select>
+        <button
+          onClick={unduhCsv}
+          disabled={!rows.length}
+          className="px-2 py-1.5 rounded-md border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-medium disabled:opacity-50"
+        >
+          Unduh CSV
+        </button>
+        <span className="text-neutral-500">{rows.length.toLocaleString('id-ID')} jemaat</span>
+      </div>
+      {q.isLoading ? (
+        <div className="py-4 text-center text-neutral-500"><Loader2 className="w-4 h-4 animate-spin inline" /> Memuat…</div>
+      ) : q.isError ? (
+        <div className="py-3 text-red-600">Gagal memuat daftar (butuh akses menu Jemaat).</div>
+      ) : (
+        <div className="max-h-72 overflow-auto border border-neutral-200 rounded-md">
+          <table className="w-full text-xs">
+            <thead className="bg-neutral-50 sticky top-0">
+              <tr className="text-left text-neutral-500">
+                <th className="px-2 py-1.5 font-medium">Jemaat</th>
+                <th className="px-2 py-1.5 font-medium hidden sm:table-cell">Cabang</th>
+                <th className="px-2 py-1.5 font-medium">Alamat</th>
+                <th className="px-2 py-1.5 font-medium">Masalah</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-neutral-100 align-top">
+                  <td className="px-2 py-1.5">
+                    <a href={`/dashboard/jemaat/${r.id}`} target="_blank" rel="noopener noreferrer" className="text-sky-700 font-medium hover:underline">
+                      {r.namaLengkap}
+                    </a>
+                    {r.kode ? <div className="text-neutral-400">{r.kode}</div> : null}
+                  </td>
+                  <td className="px-2 py-1.5 hidden sm:table-cell">{r.cabang}</td>
+                  <td className="px-2 py-1.5 break-words max-w-[260px]">{r.alamat}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className={`px-1.5 py-0.5 rounded ${r.status === 'TERLALU_UMUM' ? 'bg-amber-50 text-amber-700' : 'bg-neutral-100 text-neutral-600'}`}>
+                      {label(r.status)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length ? (
+                <tr><td colSpan={4} className="px-2 py-4 text-center text-neutral-500">Tidak ada data.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

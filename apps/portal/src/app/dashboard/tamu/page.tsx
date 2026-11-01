@@ -18,6 +18,14 @@ import { ExportButtons, selectCls, useCabangOptions } from '@/components/report/
 import { todayYmd } from '@/lib/dates';
 
 type Status = 'DIUNDANG' | 'TERLIBAT' | 'FOLLOWUP' | 'TERDAFTAR';
+type Kategori = 'VISITOR' | 'NEW_COMER' | 'BELUM';
+const KATEGORI_ORDER: Kategori[] = ['NEW_COMER', 'VISITOR', 'BELUM'];
+const KATEGORI_LABEL: Record<Kategori, string> = { NEW_COMER: 'New Comer', VISITOR: 'Visitor saja', BELUM: 'Belum ditentukan' };
+const KATEGORI_STYLE: Record<Kategori, string> = {
+  NEW_COMER: 'bg-emerald-100 text-emerald-800',
+  VISITOR: 'bg-sky-100 text-sky-800',
+  BELUM: 'bg-neutral-100 text-neutral-600',
+};
 
 interface Tamu {
   id: string;
@@ -37,6 +45,7 @@ interface Tamu {
   terakhirAcara: { jenis: 'IBADAH' | 'EVENT'; id: string; nama: string; tanggal: string } | null;
   status: Status;
   statusLabel: string;
+  kategori: Kategori;
   statusTersimpan: string | null;
   statusDiubah: string | null;
   catatan: string | null;
@@ -52,6 +61,7 @@ interface ListResp {
     totalPages: number;
     totalAll: number;
     counts: Record<Status, number>;
+    kategoriCounts?: Record<Kategori, number>;
     statusOptions: { value: Status; label: string }[];
     followupPeople: { id: string; namaLengkap: string }[];
   };
@@ -85,6 +95,7 @@ export default function TamuPage() {
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
   const [followupBy, setFollowupBy] = useState('');
   const [sumber, setSumber] = useState('');
+  const [kategori, setKategori] = useState<Kategori | ''>('');
   const [adding, setAdding] = useState(false);
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
@@ -96,10 +107,11 @@ export default function TamuPage() {
     search: s || undefined,
     followupBy: followupBy || undefined,
     sumber: sumber || undefined,
+    kategori: kategori || undefined,
   };
 
   const q = useQuery({
-    queryKey: ['tamu', status, cabangId, s, followupBy, sumber, page],
+    queryKey: ['tamu', status, cabangId, s, followupBy, sumber, kategori, page],
     queryFn: async () =>
       (
         await apiClient.get<ListResp>('/admin/tamu', {
@@ -115,7 +127,7 @@ export default function TamuPage() {
       body,
     }: {
       id: string;
-      body: { status?: Status; catatan?: string | null; followupById?: string | null };
+      body: { status?: Status; catatan?: string | null; followupById?: string | null; kategori?: Kategori };
     }) =>
       apiClient.patch(`/admin/tamu/${id}`, body),
     onSuccess: () => {
@@ -178,6 +190,26 @@ export default function TamuPage() {
           >
             <div className="text-2xl font-bold text-neutral-900">{meta?.counts[st] ?? '—'}</div>
             <div className="text-xs text-neutral-500">{STATUS_LABEL[st]}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Kategori tamu (klik untuk filter) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-neutral-500">Kategori:</span>
+        {(['', ...KATEGORI_ORDER] as const).map((k) => (
+          <button
+            key={k || 'all'}
+            onClick={() => {
+              setKategori(k);
+              setPage(1);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+              kategori === k ? 'border-brand-400 ring-2 ring-brand-100 bg-white text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600'
+            }`}
+          >
+            {k ? KATEGORI_LABEL[k] : 'Semua kategori'}
+            {k && meta?.kategoriCounts ? <span className="ml-1 text-neutral-400">{meta.kategoriCounts[k]}</span> : null}
           </button>
         ))}
       </div>
@@ -251,6 +283,7 @@ export default function TamuPage() {
             <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Tamu</th>
+                <th className="text-left px-4 py-2 font-medium w-40">Kategori</th>
                 <th className="text-left px-4 py-2 font-medium">Diundang oleh</th>
                 <th className="text-left px-4 py-2 font-medium">Kehadiran</th>
                 <th className="text-left px-4 py-2 font-medium w-64">Status</th>
@@ -297,6 +330,20 @@ export default function TamuPage() {
                         ))}
                       </div>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={t.kategori}
+                      disabled={update.isPending}
+                      onChange={(e) => update.mutate({ id: t.id, body: { kategori: e.target.value as Kategori } })}
+                      className={`w-full text-xs font-semibold rounded-full px-3 py-1.5 border-0 ${KATEGORI_STYLE[t.kategori]}`}
+                    >
+                      {KATEGORI_ORDER.map((k) => (
+                        <option key={k} value={k}>
+                          {KATEGORI_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {t.pengundang.length === 0 ? (

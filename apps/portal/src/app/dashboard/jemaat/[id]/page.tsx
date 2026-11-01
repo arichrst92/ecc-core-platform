@@ -61,6 +61,7 @@ interface JemaatRoleAssignment {
 interface Jemaat {
   /** Tamu (non-anggota tanpa akun) — dibawa jemaat / walk-in ke event/ibadah. */
   isTamu?: boolean;
+  tamuKategori?: string | null;
   id: string;
   cabangId: string;
   namaLengkap: string;
@@ -319,6 +320,11 @@ export default function JemaatDetailPage() {
                 title="Non-anggota tanpa akun Els App (dibawa jemaat / walk-in). Otomatis jadi anggota saat mendaftar Els App dengan no HP yang sama."
               >
                 Tamu
+              </span>
+            ) : null}
+            {j.isTamu ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600" title="Kategori tamu — ubah di menu Tamu">
+                {j.tamuKategori === 'NEW_COMER' ? 'New Comer' : j.tamuKategori === 'VISITOR' ? 'Visitor saja' : 'Kategori belum ditentukan'}
               </span>
             ) : null}
           </h1>

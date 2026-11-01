@@ -65,7 +65,7 @@ import { privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
 import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
 import { tzOr } from '../../lib/tz.js';
-import { canCancelReservasi } from '../../lib/reservasi-window.js';
+import { canCancelCheckin, canCancelReservasi } from '../../lib/reservasi-window.js';
 import { ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
@@ -1444,6 +1444,8 @@ meRouter.get('/reservasi', async (req, res) => {
         },
         // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah (zona cabang).
         canCancel: canCancelReservasi(r, r.ibadah.jamMulai, now, tz),
+        // Self check-in bisa dibatalkan (salah input) sampai ibadah selesai.
+        canCancelCheckin: canCancelCheckin(r, r.ibadah, { userId, jemaatId }, now, tz),
       };
     }),
   });
@@ -1486,6 +1488,59 @@ meRouter.post('/reservasi/:id/cancel', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated, message: 'Reservasi dibatalkan.' });
+});
+
+/**
+ * POST /admin/me/reservasi/:id/cancel-checkin — batalkan SELF check-in yang
+ * salah (mis. ikut men-check-in-kan keluarga yang tidak datang), sampai
+ * ibadah selesai. Kembali ke "Terdaftar" bila sebelumnya reservasi; bila
+ * check-in tanpa reservasi → "Dibatalkan". Ulasan pada tiket itu dihapus.
+ */
+meRouter.post('/reservasi/:id/cancel-checkin', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const userId = req.user!.sub;
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) throw NotFound('Reservasi tidak ditemukan');
+  const r = await prisma.reservasi.findUnique({
+    where: { id: req.params.id },
+    include: {
+      ibadah: { select: { nama: true, jamMulai: true, jamSelesai: true, isKidsIbadah: true, cabang: { select: { timezone: true } } } },
+      jemaat: { select: { namaLengkap: true } },
+    },
+  });
+  if (!r) throw NotFound('Reservasi tidak ditemukan');
+  if (r.jemaatId !== jemaatId && r.checkedInBy !== userId) throw NotFound('Reservasi tidak ditemukan');
+  if (!canCancelCheckin(r, r.ibadah, { userId, jemaatId }, new Date(), tzOr(r.ibadah.cabang.timezone))) {
+    throw BadRequest(
+      r.status !== 'JOIN' || r.checkinMethod !== 'SELF'
+        ? 'Hanya self check-in dari aplikasi yang bisa dibatalkan. Hubungi usher / admin.'
+        : 'Check-in tidak bisa dibatalkan lagi karena ibadah sudah selesai. Hubungi admin.',
+    );
+  }
+  // Tanpa reservasi sebelumnya: baris dibuat saat check-in (reservedAt ≈ joinedAt).
+  const wasReserved = !!r.joinedAt && r.joinedAt.getTime() - r.reservedAt.getTime() > 10_000;
+  const [updated] = await prisma.$transaction([
+    prisma.reservasi.update({
+      where: { id: r.id },
+      data: wasReserved
+        ? { status: 'RESERVE', joinedAt: null, checkedInBy: null, checkinMethod: null }
+        : { status: 'CANCEL', cancelledAt: new Date(), joinedAt: null, checkedInBy: null, checkinMethod: null },
+    }),
+    prisma.serviceReview.deleteMany({ where: { reservasiId: r.id } }),
+  ]);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'reservasi',
+    resourceId: r.id,
+    resourceLabel: `Batal self check-in: ${r.jemaat.namaLengkap} → ${r.ibadah.nama} (${wasReserved ? 'kembali Terdaftar' : 'Dibatalkan'})`,
+    metadata: { kind: 'self-checkin-cancel' },
+    before: r,
+    after: updated,
+  });
+  res.json({
+    success: true,
+    data: updated,
+    message: wasReserved ? 'Check-in dibatalkan — reservasi kembali Terdaftar.' : 'Check-in dibatalkan.',
+  });
 });
 
 // ============================================================

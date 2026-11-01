@@ -138,6 +138,8 @@ const guestRequestSchema = z.object({
   noHp: noHpSchema,
   jenisKelamin: z.enum(['L', 'P']).optional(),
   usia: z.coerce.number().int().min(5).max(110).optional(),
+  // Dipilih tamu sendiri: sekadar berkunjung / ingin bergabung (app lama tidak mengirim).
+  kategori: z.enum(['VISITOR', 'NEW_COMER', 'BELUM']).optional(),
   pesan: z
     .string()
     .trim()
@@ -241,7 +243,7 @@ publicHomecellRouter.post('/:id/guest-request', guestJoinLimiter, async (req, re
     // Kirim ulang ke homecell yang sama (mis. ganti HP / app di-install ulang) → perbarui data & token.
     await prisma.homecellGuestRequest.update({
       where: { id: pending.id },
-      data: { nama: input.nama, jenisKelamin: input.jenisKelamin ?? null, usia: input.usia ?? null, pesan: input.pesan ?? null, tokenHash },
+      data: { nama: input.nama, jenisKelamin: input.jenisKelamin ?? null, usia: input.usia ?? null, pesan: input.pesan ?? null, kategori: input.kategori === 'VISITOR' || input.kategori === 'NEW_COMER' ? input.kategori : null, tokenHash },
     });
     id = pending.id;
   } else {
@@ -253,6 +255,7 @@ publicHomecellRouter.post('/:id/guest-request', guestJoinLimiter, async (req, re
         jenisKelamin: input.jenisKelamin ?? null,
         usia: input.usia ?? null,
         pesan: input.pesan ?? null,
+        kategori: input.kategori === 'VISITOR' || input.kategori === 'NEW_COMER' ? input.kategori : null,
         tokenHash,
       },
       select: { id: true },

@@ -39,6 +39,7 @@ interface EventReport {
     tamuTerdaftar: number;
     tamuHadir: number;
     tamuUnik: number;
+    tamuKategori?: { VISITOR: number; NEW_COMER: number; BELUM: number };
     methods: MethodCount;
   };
   events: {
@@ -69,8 +70,15 @@ interface EventReport {
     status: string;
     inviter: string | null;
     walkIn: boolean;
+    kategori?: 'VISITOR' | 'NEW_COMER' | 'BELUM';
   }[];
 }
+
+const KATEGORI_TAMU: Record<string, { label: string; cls: string }> = {
+  NEW_COMER: { label: 'New Comer', cls: 'bg-emerald-100 text-emerald-800' },
+  VISITOR: { label: 'Visitor saja', cls: 'bg-sky-100 text-sky-800' },
+  BELUM: { label: 'Belum ditentukan', cls: 'bg-neutral-100 text-neutral-600' },
+};
 
 const STATUS_LABEL: Record<string, string> = {
   DAFTAR: 'Daftar',
@@ -133,7 +141,12 @@ export default function LaporanEventPage() {
             <StatCard label="Hadir" value={d.summary.hadir} />
             <StatCard label="Tingkat kehadiran" value={d.summary.persenHadir != null ? `${d.summary.persenHadir}%` : '—'} />
             <StatCard label="Tamu hadir" value={d.summary.tamuHadir} hint={`${d.summary.tamuTerdaftar} tamu terdaftar`} accent="tamu" />
-            <StatCard label="Tamu unik" value={d.summary.tamuUnik} accent="tamu" />
+            <StatCard
+              label="Tamu unik"
+              value={d.summary.tamuUnik}
+              accent="tamu"
+              hint={d.summary.tamuKategori ? `New Comer ${d.summary.tamuKategori.NEW_COMER} · Visitor ${d.summary.tamuKategori.VISITOR}` : undefined}
+            />
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl p-4">
@@ -229,6 +242,7 @@ export default function LaporanEventPage() {
                     <th className="text-left px-4 py-2 font-medium">Event</th>
                     <th className="text-left px-4 py-2 font-medium">Nama</th>
                     <th className="text-left px-4 py-2 font-medium">No HP</th>
+                    <th className="text-left px-4 py-2 font-medium">Kategori</th>
                     <th className="text-left px-4 py-2 font-medium">Status</th>
                     <th className="text-left px-4 py-2 font-medium">Dibawa oleh</th>
                   </tr>
@@ -243,13 +257,18 @@ export default function LaporanEventPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-2 text-neutral-600">{g.noHp ?? '—'}</td>
+                      <td className="px-4 py-2">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${KATEGORI_TAMU[g.kategori ?? 'BELUM']!.cls}`}>
+                          {KATEGORI_TAMU[g.kategori ?? 'BELUM']!.label}
+                        </span>
+                      </td>
                       <td className="px-4 py-2">{STATUS_LABEL[g.status] ?? g.status}</td>
                       <td className="px-4 py-2 text-neutral-600">{g.walkIn ? 'Walk-in' : (g.inviter ?? '—')}</td>
                     </tr>
                   ))}
                   {d.guests.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center text-neutral-400 py-8">
+                      <td colSpan={6} className="text-center text-neutral-400 py-8">
                         Tidak ada tamu.
                       </td>
                     </tr>

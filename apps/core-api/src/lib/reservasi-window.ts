@@ -76,3 +76,37 @@ export function eligibleForKids(
   if (age === null) return p.isDependent;
   return age >= 0 && age <= KIDS_MAX_AGE;
 }
+
+/** Instant UTC jam selesai pertemuan (jamSelesai ≤ jamMulai → akhir hari). */
+export function occurrenceEnd(tanggal: string, jamMulai: string, jamSelesai: string | null, tz: string = DEFAULT_TZ): Date {
+  const start = hhmmToMin(jamMulai) ?? 0;
+  let end = hhmmToMin(jamSelesai) ?? 24 * 60 - 1;
+  if (end <= start) end = 24 * 60 - 1;
+  return wallToInstant(tanggal, end, tz);
+}
+
+/**
+ * Self check-in boleh dibatalkan (salah input) oleh jemaat yang melakukannya:
+ * status JOIN, cara SELF, dilakukan oleh user ini (atau milik jemaat ini),
+ * bukan ibadah anak / sudah check-out / punya kode jemput, dan ibadah belum selesai.
+ */
+export function canCancelCheckin(
+  r: {
+    status: string;
+    checkinMethod: string | null;
+    checkedInBy: string | null;
+    jemaatId: string;
+    tanggalIbadah: Date;
+    checkedOutAt?: Date | null;
+    pickupCode?: string | null;
+  },
+  ibadah: { jamMulai: string; jamSelesai: string | null; isKidsIbadah?: boolean | null },
+  me: { userId: string; jemaatId: string },
+  now: Date = new Date(),
+  tz: string = DEFAULT_TZ,
+): boolean {
+  if (r.status !== 'JOIN' || r.checkinMethod !== 'SELF') return false;
+  if (r.checkedInBy !== me.userId && r.jemaatId !== me.jemaatId) return false;
+  if (ibadah.isKidsIbadah || r.checkedOutAt || r.pickupCode) return false;
+  return now < occurrenceEnd(r.tanggalIbadah.toISOString().slice(0, 10), ibadah.jamMulai, ibadah.jamSelesai, tz);
+}

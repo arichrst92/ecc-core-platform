@@ -89,6 +89,8 @@ export interface HomecellStat {
   tamuVisits: number;
   /** Jumlah tamu berbeda yang hadir di periode. */
   tamuUnique: number;
+  /** Tamu berbeda berkategori New Comer. */
+  tamuNewComer: number;
 }
 
 export interface AreaStat {
@@ -106,6 +108,7 @@ export interface AreaStat {
   demografi: Demografi;
   tamuVisits: number;
   tamuUnique: number;
+  tamuNewComer: number;
 }
 
 const ageOf = (lahir: Date, now: Date) => {
@@ -135,7 +138,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       members: { where: { isActive: true }, select: { jemaat: { select: { tanggalLahir: true, jenisKelamin: true } } } },
       schedules: {
         where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
-        select: { tanggal: true, _count: { select: { attendances: true } }, tamuAttendances: { select: { tamuId: true } } },
+        select: { tanggal: true, _count: { select: { attendances: true } }, tamuAttendances: { select: { tamuId: true, tamu: { select: { tamuKategori: true } } } } },
       },
     },
   });
@@ -156,12 +159,14 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       demografi: newDemografi(),
       tamuVisits: 0,
       tamuUnique: 0,
+      tamuNewComer: 0,
     });
   }
   const ageSum = new Map<string, number>();
   const hadirSum = new Map<string, number>();
   const potensiSum = new Map<string, number>();
   const tamuSet = new Map<string, Set<string>>();
+  const newComerSet = new Map<string, Set<string>>();
 
   for (const h of homecells) {
     const a = out.get(h.areaId)!;
@@ -176,6 +181,12 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
     const areaTamu = tamuSet.get(h.areaId) ?? new Set<string>();
     for (const id of tamuIds) areaTamu.add(id);
     tamuSet.set(h.areaId, areaTamu);
+    const ncIds = new Set(
+      h.schedules.flatMap((s) => s.tamuAttendances.filter((t) => t.tamu?.tamuKategori === 'NEW_COMER').map((t) => t.tamuId)),
+    );
+    const areaNc = newComerSet.get(h.areaId) ?? new Set<string>();
+    for (const id of ncIds) areaNc.add(id);
+    newComerSet.set(h.areaId, areaNc);
     const last = h.schedules
       .filter((s) => s._count.attendances > 0)
       .reduce<Date | null>((mx, s) => (!mx || s.tanggal > mx ? s.tanggal : mx), null);
@@ -195,6 +206,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       demografi: demo,
       tamuVisits: tamuIds.length,
       tamuUnique: new Set(tamuIds).size,
+      tamuNewComer: ncIds.size,
     });
     a.tamuVisits += tamuIds.length;
     a.homecellCount++;
@@ -212,6 +224,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
   for (const a of out.values()) {
     a.demografi = mergeDemografi(a.homecells.map((h) => h.demografi));
     a.tamuUnique = tamuSet.get(a.areaId)?.size ?? 0;
+    a.tamuNewComer = newComerSet.get(a.areaId)?.size ?? 0;
     a.avgAge = a.ageKnown ? Math.round((ageSum.get(a.areaId) ?? 0) / a.ageKnown) : null;
     const pot = potensiSum.get(a.areaId) ?? 0;
     a.attendancePercent = pot > 0 ? Math.min(100, Math.round(((hadirSum.get(a.areaId) ?? 0) / pot) * 100)) : null;

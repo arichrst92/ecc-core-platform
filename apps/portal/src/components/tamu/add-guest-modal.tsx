@@ -67,6 +67,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
   const [nama, setNama] = useState('');
   const [noHp, setNoHp] = useState('');
   const [tanggalLahir, setTanggalLahir] = useState('');
+  const [kategori, setKategori] = useState<'BELUM' | 'VISITOR' | 'NEW_COMER'>('BELUM');
   // Ibadah
   const [ibadahId, setIbadahId] = useState('');
   const [tanggal, setTanggal] = useState(todayYmd());
@@ -111,6 +112,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
         nama: nama.trim(),
         noHp: jenis === 'DEWASA' ? noHp.trim() : null,
         tanggalLahir: jenis === 'ANAK' && tanggalLahir ? tanggalLahir : null,
+        kategori,
       };
       const body =
         tujuan === 'IBADAH'
@@ -161,6 +163,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
     setNama('');
     setNoHp('');
     setTanggalLahir('');
+    setKategori('BELUM');
     setQuotaFull(false);
   };
 
@@ -270,6 +273,15 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
                   <span className="text-[11px] text-neutral-500">Tanpa no HP. Membantu mengenali anak yang sama di kunjungan berikutnya.</span>
                 </label>
               )}
+
+              <label className="block">
+                <span className="text-sm font-medium text-neutral-700">Kategori tamu</span>
+                <select value={kategori} onChange={(e) => setKategori(e.target.value as typeof kategori)} className={inputCls}>
+                  <option value="BELUM">Belum ditentukan</option>
+                  <option value="NEW_COMER">New Comer — orang baru, berpotensi berjemaat</option>
+                  <option value="VISITOR">Visitor saja — hanya berkunjung</option>
+                </select>
+              </label>
 
               {tujuan === 'IBADAH' ? (
                 <>

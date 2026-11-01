@@ -30,6 +30,7 @@ const tamuSelect = {
   kode: true,
   isTamu: true,
   tamuStatus: true,
+  tamuKategori: true,
   tamuFollowupAt: true,
   // Nama petugas follow-up (bukan no HP — privasi petugas).
   tamuFollowupBy: { select: { id: true, namaLengkap: true } },

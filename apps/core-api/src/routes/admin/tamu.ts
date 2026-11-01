@@ -4,7 +4,8 @@
  *   GET   /       → daftar tamu (pernah diundang / walk-in) + pengundang,
  *                   kehadiran, status efektif. ?status=&cabangId=&search=&page=
  *   GET   /summary→ jumlah per status
- *   PATCH /:id    → { status?, catatan?, followupById? } status & petugas follow-up
+ *   PATCH /:id    → { status?, catatan?, followupById?, kategori? } status, petugas follow-up, kategori
+ *   ?kategori=VISITOR|NEW_COMER|BELUM menyaring daftar & export.
  *   GET   /export → ?format=pdf|csv, mengikuti filter yang sama
  *
  * Tamu = jemaat isTamu ATAU pernah ditambahkan sebagai tamu oleh jemaat lain
@@ -21,7 +22,7 @@ import { audit } from '../../lib/audit.js';
 import { resolveJemaatAccess } from '../../lib/menu-access.js';
 import { noHpSchema } from '@ecc/shared-types';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
-import { resolveTamu } from '../../lib/tamu.js';
+import { TAMU_KATEGORI_LABEL, kategoriKey, mergeKategori, normKategori, resolveTamu, tamuKategoriInput } from '../../lib/tamu.js';
 import { generateUniquePickupCode } from './reservasi.js';
 import {
   TAMU_STATUSES,
@@ -93,6 +94,7 @@ async function loadTamu(req: Request) {
       createdAt: true,
       tamuStatus: true,
       tamuStatusUpdatedAt: true,
+      tamuKategori: true,
       tamuCatatan: true,
       tamuFollowupAt: true,
       tamuFollowupBy: { select: { id: true, namaLengkap: true, noHp: true } },
@@ -131,6 +133,8 @@ async function loadTamu(req: Request) {
       terakhirAcara: a?.terakhirAcara ?? null,
       status,
       statusLabel: TAMU_STATUS_LABEL[status],
+      kategori: kategoriKey(r.tamuKategori),
+      kategoriLabel: TAMU_KATEGORI_LABEL[kategoriKey(r.tamuKategori)],
       statusTersimpan: r.tamuStatus,
       statusDiubah: r.tamuStatusUpdatedAt,
       catatan: r.tamuCatatan,
@@ -140,12 +144,21 @@ async function loadTamu(req: Request) {
   });
 }
 
+const KATEGORI_KEYS = ['VISITOR', 'NEW_COMER', 'BELUM'] as const;
+/** Saring kategori (?kategori=VISITOR|NEW_COMER|BELUM). */
+function byKategori<T extends { kategori: string }>(req: Request, rows: T[]): T[] {
+  const k = typeof req.query.kategori === 'string' ? req.query.kategori : '';
+  return (KATEGORI_KEYS as readonly string[]).includes(k) ? rows.filter((r) => r.kategori === k) : rows;
+}
+
 tamuRouter.get('/', async (req, res) => {
   await assertAccess(req, 'read');
   const status = typeof req.query.status === 'string' ? req.query.status : '';
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
-  const all = await loadTamu(req);
+  const loaded = await loadTamu(req);
+  const kategoriCounts = Object.fromEntries(KATEGORI_KEYS.map((k) => [k, loaded.filter((x) => x.kategori === k).length]));
+  const all = byKategori(req, loaded);
   const counts = Object.fromEntries(TAMU_STATUSES.map((s) => [s, all.filter((x) => x.status === s).length])) as Record<TamuStatus, number>;
   const filtered = (TAMU_STATUSES as readonly string[]).includes(status) ? all.filter((x) => x.status === status) : all;
   // Daftar petugas follow-up yang sedang menangani tamu (untuk filter).
@@ -165,6 +178,8 @@ tamuRouter.get('/', async (req, res) => {
       counts,
       totalAll: all.length,
       statusOptions: TAMU_STATUSES.map((s) => ({ value: s, label: TAMU_STATUS_LABEL[s] })),
+      kategoriCounts,
+      kategoriOptions: KATEGORI_KEYS.map((k) => ({ value: k, label: TAMU_KATEGORI_LABEL[k] })),
       followupPeople,
     },
   });
@@ -233,6 +248,7 @@ const createSchema = z
     nama: z.string().trim().min(2, 'Nama tamu minimal 2 karakter').max(255),
     noHp: z.string().trim().optional().nullable(),
     tanggalLahir: ymd.optional().nullable(),
+    kategori: tamuKategoriInput,
     // IBADAH
     ibadahId: z.string().uuid().optional(),
     tanggalIbadah: ymd.optional(),
@@ -262,21 +278,24 @@ type CreateInput = z.infer<typeof createSchema>;
 /** Cari / buat record tamu (dewasa via no HP, anak via nama + tgl lahir + cabang). */
 async function resolveGuest(input: CreateInput, cabangId: string) {
   if (input.jenis === 'DEWASA') {
-    const r = await resolveTamu({ nama: input.nama, noHp: noHpSchema.parse(input.noHp) }, cabangId);
+    const r = await resolveTamu({ nama: input.nama, noHp: noHpSchema.parse(input.noHp), kategori: input.kategori }, cabangId);
     return { tamu: r.tamu, created: r.created, member: r.member };
   }
   const lahir = input.tanggalLahir ? new Date(`${input.tanggalLahir}T00:00:00.000Z`) : null;
   const found = await prisma.jemaat.findFirst({
     where: { isTamu: true, noHp: null, cabangId, namaLengkap: { equals: input.nama, mode: 'insensitive' }, tanggalLahir: lahir },
-    select: { id: true, namaLengkap: true, kode: true, isActive: true },
+    select: { id: true, namaLengkap: true, kode: true, isActive: true, tamuKategori: true },
   });
   if (found) {
-    if (!found.isActive) await prisma.jemaat.update({ where: { id: found.id }, data: { isActive: true } });
-    return { tamu: found, created: false, member: false };
+    const kat = mergeKategori(found.tamuKategori, input.kategori);
+    if (!found.isActive || kat !== undefined) {
+      await prisma.jemaat.update({ where: { id: found.id }, data: { isActive: true, ...(kat !== undefined ? { tamuKategori: kat } : {}) } });
+    }
+    return { tamu: { id: found.id, namaLengkap: found.namaLengkap, kode: found.kode }, created: false, member: false };
   }
   const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
   const tamu = await prisma.jemaat.create({
-    data: { cabangId, namaLengkap: input.nama, noHp: null, tanggalLahir: lahir, kode, isTamu: true, isActive: true, tanggalBergabung: new Date() },
+    data: { cabangId, namaLengkap: input.nama, noHp: null, tanggalLahir: lahir, kode, isTamu: true, isActive: true, tamuKategori: normKategori(input.kategori), tanggalBergabung: new Date() },
     select: { id: true, namaLengkap: true, kode: true },
   });
   return { tamu, created: true, member: false };
@@ -471,6 +490,8 @@ const patchSchema = z.object({
   catatan: z.string().trim().max(2000).nullish(),
   /** Petugas follow-up (jemaat). null = lepas. */
   followupById: z.string().uuid().nullable().optional(),
+  /** Kategori tamu; BELUM = kosongkan. */
+  kategori: z.enum(['VISITOR', 'NEW_COMER', 'BELUM']).optional(),
 });
 
 tamuRouter.patch('/:id', async (req, res) => {
@@ -479,7 +500,7 @@ tamuRouter.patch('/:id', async (req, res) => {
   const input = patchSchema.parse(req.body ?? {});
   const before = await prisma.jemaat.findUnique({
     where: { id: req.params.id },
-    select: { id: true, namaLengkap: true, tamuStatus: true, tamuCatatan: true, tamuFollowupById: true },
+    select: { id: true, namaLengkap: true, tamuStatus: true, tamuCatatan: true, tamuFollowupById: true, tamuKategori: true },
   });
   if (!before) throw NotFound('Tamu tidak ditemukan');
   if (input.followupById) {
@@ -494,6 +515,7 @@ tamuRouter.patch('/:id', async (req, res) => {
     data.tamuStatusUpdatedById = req.user!.jemaatId;
   }
   if (input.catatan !== undefined) data.tamuCatatan = input.catatan || null;
+  if (input.kategori !== undefined) data.tamuKategori = normKategori(input.kategori);
   if (input.followupById !== undefined && input.followupById !== before.tamuFollowupById) {
     data.tamuFollowupBy = input.followupById ? { connect: { id: input.followupById } } : { disconnect: true };
     data.tamuFollowupAt = input.followupById ? new Date() : null;
@@ -510,6 +532,7 @@ tamuRouter.patch('/:id', async (req, res) => {
     select: {
       id: true,
       tamuStatus: true,
+      tamuKategori: true,
       tamuCatatan: true,
       tamuStatusUpdatedAt: true,
       tamuFollowupAt: true,
@@ -521,6 +544,8 @@ tamuRouter.patch('/:id', async (req, res) => {
     resource: 'tamu_status',
     resourceId: before.id,
     resourceLabel: `Tamu ${before.namaLengkap}: ${before.tamuStatus ?? 'DIUNDANG'} → ${updated.tamuStatus ?? 'DIUNDANG'}${
+      input.kategori !== undefined ? ` · kategori: ${TAMU_KATEGORI_LABEL[kategoriKey(updated.tamuKategori)]}` : ''
+    }${
       updated.tamuFollowupBy ? ` · follow-up: ${updated.tamuFollowupBy.namaLengkap}` : ''
     }`,
     before,
@@ -535,7 +560,7 @@ tamuRouter.patch('/:id', async (req, res) => {
 tamuRouter.get('/export', async (req, res) => {
   await assertAccess(req, 'read');
   const status = typeof req.query.status === 'string' ? req.query.status : '';
-  const all = await loadTamu(req);
+  const all = byKategori(req, await loadTamu(req));
   const rows = (TAMU_STATUSES as readonly string[]).includes(status) ? all.filter((x) => x.status === status) : all;
   const tgl = (d: Date | string | null | undefined) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }) : '—';
@@ -543,11 +568,12 @@ tamuRouter.get('/export', async (req, res) => {
 
   if (req.query.format === 'csv') {
     sendCsv(res, `tamu-${stamp}.csv`, [
-      ['Nama', 'No HP', 'Cabang', 'Diundang oleh', 'Dicatat', 'Kehadiran ibadah/event', 'Terakhir hadir', 'Acara terakhir', 'Kehadiran homecell', 'Homecell terakhir', 'Status', 'Difollow-up oleh', 'Catatan'],
+      ['Nama', 'No HP', 'Cabang', 'Kategori', 'Diundang oleh', 'Dicatat', 'Kehadiran ibadah/event', 'Terakhir hadir', 'Acara terakhir', 'Kehadiran homecell', 'Homecell terakhir', 'Status', 'Difollow-up oleh', 'Catatan'],
       ...rows.map((t) => [
         t.namaLengkap,
         t.noHp ?? '',
         t.cabang?.nama ?? '',
+        t.kategoriLabel,
         t.pengundang.map((p) => p.namaLengkap).join('; ') || 'Walk-in',
         tgl(t.pertamaDicatat),
         t.kehadiran,
@@ -566,6 +592,8 @@ tamuRouter.get('/export', async (req, res) => {
   // Label filter untuk judul
   const labels: string[] = [];
   if ((TAMU_STATUSES as readonly string[]).includes(status)) labels.push(`Status: ${TAMU_STATUS_LABEL[status as TamuStatus]}`);
+  const kq = typeof req.query.kategori === 'string' ? req.query.kategori : '';
+  if ((KATEGORI_KEYS as readonly string[]).includes(kq)) labels.push(`Kategori: ${TAMU_KATEGORI_LABEL[kq as (typeof KATEGORI_KEYS)[number]]}`);
   const cabangId = typeof req.query.cabangId === 'string' && UUID_RE.test(req.query.cabangId) ? req.query.cabangId : null;
   if (cabangId) {
     const c = await prisma.cabangGereja.findUnique({ where: { id: cabangId }, select: { nama: true } });
@@ -587,12 +615,15 @@ ${summaryCards([
   [TAMU_STATUS_LABEL.TERLIBAT, count('TERLIBAT')],
   [TAMU_STATUS_LABEL.FOLLOWUP, count('FOLLOWUP')],
   [TAMU_STATUS_LABEL.TERDAFTAR, count('TERDAFTAR')],
+  ['Visitor saja', rows.filter((x) => x.kategori === 'VISITOR').length],
+  ['New Comer', rows.filter((x) => x.kategori === 'NEW_COMER').length],
+  ['Kategori belum ditentukan', rows.filter((x) => x.kategori === 'BELUM').length],
 ])}
 <h2>Daftar tamu (${rows.length})</h2>
 <table><thead><tr><th>Tamu</th><th>Diundang oleh</th><th>Kehadiran</th><th>Status</th><th>Difollow-up oleh</th><th>Catatan</th></tr></thead><tbody>${rows
     .map(
       (t) => `<tr>
-<td><b>${esc(t.namaLengkap)}</b><br><span class="muted">${esc(t.noHp ?? 'Tanpa no HP')} · ${esc(t.cabang?.nama ?? '')}<br>dicatat ${esc(tgl(t.pertamaDicatat))}</span></td>
+<td><b>${esc(t.namaLengkap)}</b> <span class="muted">· ${esc(t.kategoriLabel)}</span><br><span class="muted">${esc(t.noHp ?? 'Tanpa no HP')} · ${esc(t.cabang?.nama ?? '')}<br>dicatat ${esc(tgl(t.pertamaDicatat))}</span></td>
 <td>${t.pengundang.length ? t.pengundang.map((p) => esc(p.namaLengkap)).join('<br>') : '<span class="muted">Walk-in</span>'}</td>
 <td>${t.kehadiran ? `${t.kehadiran}× · ${esc(tgl(t.terakhirHadir))}${t.terakhirAcara ? `<br><span class="muted">${esc(t.terakhirAcara.nama)}</span>` : ''}` : t.kehadiranHomecell ? '' : '<span class="muted">Belum hadir</span>'}${
   t.kehadiranHomecell && t.terakhirHomecell

@@ -200,7 +200,7 @@ export async function buildHomecellReportRows(
       // Tamu homecell (dicatat terpisah dari anggota).
       tamu: {
         orderBy: { createdAt: 'asc' },
-        select: { createdAt: true, tamu: { select: { id: true, namaLengkap: true, noHp: true } } },
+        select: { createdAt: true, tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } } },
       },
       members: {
         where: { isActive: true },

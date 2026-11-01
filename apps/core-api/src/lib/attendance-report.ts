@@ -27,6 +27,16 @@ export const isGuestRow = (r: { guestSource: string | null; jemaat: { isTamu: bo
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
+/** Kategori tamu (Visitor / New Comer / belum ditentukan) — dihitung per orang unik. */
+export type GuestKategori = 'VISITOR' | 'NEW_COMER' | 'BELUM';
+export const guestKategori = (v: string | null | undefined): GuestKategori =>
+  v === 'VISITOR' || v === 'NEW_COMER' ? v : 'BELUM';
+export const countKategori = (guests: { kategori: GuestKategori }[]): Record<GuestKategori, number> => ({
+  VISITOR: guests.filter((g) => g.kategori === 'VISITOR').length,
+  NEW_COMER: guests.filter((g) => g.kategori === 'NEW_COMER').length,
+  BELUM: guests.filter((g) => g.kategori === 'BELUM').length,
+});
+
 /** Senin (YYYY-MM-DD) dari minggu tanggal kalender `d` (UTC midnight). */
 export function weekStart(d: Date): string {
   const dow = (d.getUTCDay() + 6) % 7;
@@ -43,7 +53,7 @@ export interface IbadahAttendanceRow {
   checkinMethod: string | null;
   guestSource: string | null;
   invitedByJemaatId: string | null;
-  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean };
+  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean; tamuKategori?: string | null };
 }
 
 export interface OccurrenceKey {
@@ -59,6 +69,8 @@ export interface IbadahReport {
     uniqueJemaat: number;
     uniqueTamu: number;
     tamuBaru: number; // tamu unik yang kunjungan pertamanya ada di periode ini
+    /** Tamu unik per kategori. */
+    tamuKategori: Record<GuestKategori, number>;
     pertemuan: number; // pertemuan terjadwal di periode (s.d. hari ini)
     pertemuanAdaKehadiran: number;
     rataRata: number; // rata-rata hadir per pertemuan yang ada kehadirannya
@@ -85,6 +97,7 @@ export interface IbadahReport {
     ibadahIds: string[];
     inviterIds: string[];
     walkIn: boolean;
+    kategori: GuestKategori;
   }[];
 }
 
@@ -151,6 +164,7 @@ export function buildIbadahReport(
         ibadahIds: [],
         inviterIds: [],
         walkIn: false,
+        kategori: guestKategori(r.jemaat.tamuKategori),
       };
       // Tamu baru dihitung di pertemuan kunjungan pertamanya saja.
       if (baru && g.kunjunganPertama === tanggal && g.kunjungan === 0) o.tamuBaru++;
@@ -183,6 +197,7 @@ export function buildIbadahReport(
       uniqueJemaat: uniqueJemaat.size,
       uniqueTamu: guests.size,
       tamuBaru: guestList.filter((g) => g.isBaru).length,
+      tamuKategori: countKategori(guestList),
       pertemuan: occurrences.length,
       pertemuanAdaKehadiran: held,
       rataRata: held ? Math.round((total / held) * 10) / 10 : 0,
@@ -204,7 +219,7 @@ export interface EventParticipationRow {
   checkinMethod: string | null;
   guestSource: string | null;
   invitedByJemaatId: string | null;
-  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean };
+  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean; tamuKategori?: string | null };
 }
 
 export interface EventReportRow {
@@ -232,6 +247,7 @@ export function buildEventReport(eventIds: string[], rows: EventParticipationRow
     status: string;
     inviterId: string | null;
     walkIn: boolean;
+    kategori: GuestKategori;
   }[] = [];
   for (const r of rows) {
     const e = per.get(r.eventId);
@@ -259,6 +275,7 @@ export function buildEventReport(eventIds: string[], rows: EventParticipationRow
         status: r.status,
         inviterId: r.invitedByJemaatId,
         walkIn: r.guestSource === 'WALK_IN',
+        kategori: guestKategori(r.jemaat.tamuKategori),
       });
     }
   }
@@ -279,6 +296,7 @@ export function buildEventReport(eventIds: string[], rows: EventParticipationRow
       tamuTerdaftar: sum((e) => e.tamuTerdaftar),
       tamuHadir: sum((e) => e.tamuHadir),
       tamuUnik: new Set(guests.map((g) => g.id)).size,
+      tamuKategori: countKategori([...new Map(guests.map((g) => [g.id, g])).values()]),
       methods,
     },
     events,

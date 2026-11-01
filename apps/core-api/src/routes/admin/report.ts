@@ -135,7 +135,7 @@ async function ibadahReportData(req: Request) {
           invitedByJemaatId: true,
           checkedOutAt: true,
           pickedUpAt: true,
-          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, jenisKelamin: true, tanggalLahir: true } },
+          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, tamuKategori: true, jenisKelamin: true, tanggalLahir: true } },
         },
       })
     : [];
@@ -481,6 +481,9 @@ reportRouter.get('/ibadah/export', async (req, res) => {
       ['Pertemuan ada kehadiran / terjadwal', `${d.summary.pertemuanAdaKehadiran}/${d.summary.pertemuan}`, ins.prev.pertemuan, ''],
       ['Tamu baru', ins.tamu.baru, '', ''],
       ['Tamu berulang', ins.tamu.berulang, '', ''],
+      ['Tamu New Comer', d.summary.tamuKategori.NEW_COMER, '', ''],
+      ['Tamu Visitor saja', d.summary.tamuKategori.VISITOR, '', ''],
+      ['Tamu kategori belum ditentukan', d.summary.tamuKategori.BELUM, '', ''],
       ['Okupansi rata-rata (%)', d.summary.okupansi.rataOkupansi ?? '', '', ''],
       [],
       ['JANGKAUAN JEMAAT', 'Jemaat'],
@@ -583,10 +586,11 @@ reportRouter.get('/ibadah/export', async (req, res) => {
       ...d.reviews.comments.map((c) => [c.komentar ?? '', c.tanggal ?? '', c.rating, c.label, c.nama]),
       [],
       ['DAFTAR TAMU'],
-      ['Nama', 'No HP', 'Status', 'Kunjungan (periode)', 'Kunjungan pertama', 'Kunjungan terakhir', 'Ibadah', 'Dibawa oleh', 'Walk-in'],
+      ['Nama', 'No HP', 'Kategori', 'Status', 'Kunjungan (periode)', 'Kunjungan pertama', 'Kunjungan terakhir', 'Ibadah', 'Dibawa oleh', 'Walk-in'],
       ...d.guests.map((g) => [
         g.namaLengkap,
         g.noHp ?? '',
+        KATEGORI_LABEL[g.kategori],
         g.isBaru ? 'Baru' : 'Berulang',
         g.kunjungan,
         g.kunjunganPertama ?? '',
@@ -649,7 +653,7 @@ async function eventReportData(req: Request) {
           checkinMethod: true,
           guestSource: true,
           invitedByJemaatId: true,
-          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true } },
+          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, tamuKategori: true } },
         },
       })
     : [];
@@ -699,6 +703,8 @@ reportRouter.get('/event', async (req, res) => {
   res.json({ success: true, data: await eventReportData(req) });
 });
 
+const KATEGORI_LABEL: Record<string, string> = { VISITOR: 'Visitor saja', NEW_COMER: 'New Comer', BELUM: 'Belum ditentukan' };
+
 const STATUS_LABEL: Record<string, string> = {
   DAFTAR: 'Daftar',
   MENUNGGU_VERIFIKASI: 'Menunggu verifikasi',
@@ -734,8 +740,8 @@ reportRouter.get('/event/export', async (req, res) => {
       ...d.reviews.comments.map((c) => [c.komentar ?? '', c.rating, c.label, c.nama]),
       [],
       ['DAFTAR TAMU'],
-      ['Event', 'Nama', 'No HP', 'Status', 'Dibawa oleh / walk-in'],
-      ...d.guests.map((g) => [g.eventJudul, g.namaLengkap, g.noHp ?? '', STATUS_LABEL[g.status] ?? g.status, g.walkIn ? 'Walk-in' : (g.inviter ?? '')]),
+      ['Event', 'Nama', 'No HP', 'Kategori', 'Status', 'Dibawa oleh / walk-in'],
+      ...d.guests.map((g) => [g.eventJudul, g.namaLengkap, g.noHp ?? '', KATEGORI_LABEL[g.kategori], STATUS_LABEL[g.status] ?? g.status, g.walkIn ? 'Walk-in' : (g.inviter ?? '')]),
     ];
     return sendCsv(res, `laporan-event-${d.period?.from ?? 'event'}.csv`, lines);
   }
@@ -748,6 +754,8 @@ ${summaryCards([
   ['% Hadir', s.persenHadir != null ? `${s.persenHadir}%` : '—'],
   ['Tamu hadir', s.tamuHadir],
   ['Tamu unik', s.tamuUnik],
+  ['Tamu New Comer', s.tamuKategori.NEW_COMER],
+  ['Tamu Visitor saja', s.tamuKategori.VISITOR],
   ['Rating', d.reviews.overall.avg != null ? `${d.reviews.overall.avg} ★ (${d.reviews.overall.count})` : '—'],
 ])}
 ${methodLine(s.methods)}
@@ -765,11 +773,11 @@ ${reviewSectionHtml(d.reviews, 'Event')}
 <h2>Daftar tamu (${d.guests.length})</h2>
 ${
   d.guests.length
-    ? `<table><thead><tr><th>Event</th><th>Nama</th><th>No HP</th><th>Status</th><th>Dibawa oleh</th></tr></thead><tbody>
+    ? `<table><thead><tr><th>Event</th><th>Nama</th><th>No HP</th><th>Kategori</th><th>Status</th><th>Dibawa oleh</th></tr></thead><tbody>
 ${d.guests
   .map(
     (g) =>
-      `<tr><td>${esc(g.eventJudul)}</td><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${esc(STATUS_LABEL[g.status] ?? g.status)}</td><td>${esc(g.walkIn ? 'Walk-in' : (g.inviter ?? ''))}</td></tr>`,
+      `<tr><td>${esc(g.eventJudul)}</td><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${esc(KATEGORI_LABEL[g.kategori] ?? '')}</td><td>${esc(STATUS_LABEL[g.status] ?? g.status)}</td><td>${esc(g.walkIn ? 'Walk-in' : (g.inviter ?? ''))}</td></tr>`,
   )
   .join('')}
 </tbody></table>`

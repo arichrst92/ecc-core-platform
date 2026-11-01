@@ -579,11 +579,24 @@ async function computeExecutive(cabangId: string, from: Date, to: Date) {
   }
   const pct = (n: number) => (aktif ? Math.round((n * 1000) / aktif) / 10 : 0);
   const terhubung = pelayanan + homecell - keduanya;
+  // Tamu aktif per kategori (Visitor / New Comer / belum ditentukan).
+  const katRows = await prisma.jemaat.groupBy({
+    by: ['tamuKategori'],
+    where: { cabangId, isActive: true, isTamu: true },
+    _count: { _all: true },
+  });
+  const katCount = (k: string | null) => katRows.find((r) => r.tamuKategori === k)?._count._all ?? 0;
+  const tamuKategori = {
+    NEW_COMER: katCount('NEW_COMER'),
+    VISITOR: katCount('VISITOR'),
+    BELUM: tamuTotal - katCount('NEW_COMER') - katCount('VISITOR'),
+  };
 
   return {
     jemaat: {
       aktif,
       tamu: tamuTotal,
+      tamuKategori,
       baru: jemaatBaru,
       tamuBaru,
       pria,
@@ -757,7 +770,7 @@ cabangRouter.get('/:id/stats/export', async (req, res) => {
       ['RINGKASAN', 'Nilai', 'Catatan'],
       ['Jemaat aktif', x.jemaat.aktif, ''],
       ['Jemaat baru (periode)', x.jemaat.baru, 'terdaftar di periode'],
-      ['Tamu (data tamu)', x.jemaat.tamu, ''],
+      ['Tamu (data tamu)', x.jemaat.tamu, `New Comer ${x.jemaat.tamuKategori.NEW_COMER} · Visitor ${x.jemaat.tamuKategori.VISITOR} · belum ditentukan ${x.jemaat.tamuKategori.BELUM}`],
       ['Tamu baru (periode)', x.jemaat.tamuBaru, ''],
       ['Jemaat hadir ibadah (unik)', x.ibadah.jemaatHadirUnik, `${x.ibadah.jemaatHadirPct}% dari jemaat aktif`],
       ['Tamu hadir ibadah (unik)', x.ibadah.tamuHadirUnik, ''],

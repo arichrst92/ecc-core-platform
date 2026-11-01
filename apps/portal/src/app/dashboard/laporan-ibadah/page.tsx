@@ -225,6 +225,7 @@ interface IbadahReport {
     uniqueJemaat: number;
     uniqueTamu: number;
     tamuBaru: number;
+    tamuKategori?: { VISITOR: number; NEW_COMER: number; BELUM: number };
     pertemuan: number;
     pertemuanAdaKehadiran: number;
     rataRata: number;
@@ -267,8 +268,15 @@ interface IbadahReport {
     ibadah: string[];
     inviters: string[];
     walkIn: boolean;
+    kategori?: 'VISITOR' | 'NEW_COMER' | 'BELUM';
   }[];
 }
+
+const KATEGORI_TAMU: Record<string, { label: string; cls: string }> = {
+  NEW_COMER: { label: 'New Comer', cls: 'bg-emerald-100 text-emerald-800' },
+  VISITOR: { label: 'Visitor saja', cls: 'bg-sky-100 text-sky-800' },
+  BELUM: { label: 'Belum ditentukan', cls: 'bg-neutral-100 text-neutral-600' },
+};
 
 export default function LaporanIbadahPage() {
   const [cabangId, setCabangId] = useState('');
@@ -564,7 +572,12 @@ export default function LaporanIbadahPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <StatCard label="Total kehadiran" value={d.summary.totalHadir} hint={`${d.summary.jemaatHadir} jemaat + ${d.summary.tamuHadir} tamu`} />
             <StatCard label="Jemaat hadir (unik)" value={d.summary.uniqueJemaat} />
-            <StatCard label="Tamu (unik)" value={d.summary.uniqueTamu} accent="tamu" />
+            <StatCard
+              label="Tamu (unik)"
+              value={d.summary.uniqueTamu}
+              accent="tamu"
+              hint={d.summary.tamuKategori ? `New Comer ${d.summary.tamuKategori.NEW_COMER} · Visitor ${d.summary.tamuKategori.VISITOR}` : undefined}
+            />
             <StatCard label="Tamu baru" value={d.summary.tamuBaru} hint="Pertama kali datang di periode ini" accent="tamu" />
             <StatCard label="Pertemuan" value={`${d.summary.pertemuanAdaKehadiran}/${d.summary.pertemuan}`} hint="ada kehadiran / terjadwal" />
             <StatCard label="Rata-rata hadir" value={d.summary.rataRata} hint="per pertemuan" />
@@ -760,6 +773,7 @@ export default function LaporanIbadahPage() {
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Nama</th>
                     <th className="text-left px-4 py-2 font-medium">No HP</th>
+                    <th className="text-left px-4 py-2 font-medium">Kategori</th>
                     <th className="text-left px-4 py-2 font-medium">Status</th>
                     <th className="text-right px-4 py-2 font-medium">Kunjungan</th>
                     <th className="text-left px-4 py-2 font-medium">Terakhir</th>
@@ -777,6 +791,11 @@ export default function LaporanIbadahPage() {
                       </td>
                       <td className="px-4 py-2 text-neutral-600">{g.noHp ?? '—'}</td>
                       <td className="px-4 py-2">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${KATEGORI_TAMU[g.kategori ?? 'BELUM']!.cls}`}>
+                          {KATEGORI_TAMU[g.kategori ?? 'BELUM']!.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
                         {g.isBaru ? (
                           <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Baru</span>
                         ) : (
@@ -791,7 +810,7 @@ export default function LaporanIbadahPage() {
                   ))}
                   {d.guests.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center text-neutral-400 py-8">
+                      <td colSpan={8} className="text-center text-neutral-400 py-8">
                         Tidak ada tamu di periode ini.
                       </td>
                     </tr>

@@ -115,3 +115,25 @@ describe('okupansi seat', () => {
     expect(r.overall).toEqual({ rataOkupansi: 100, melebihi: 1, pertemuanDenganSeat: 2 });
   });
 });
+
+describe('kategori tamu', () => {
+  const t = (id: string, k: string | null) => ({ id, namaLengkap: id, noHp: null, isTamu: true, tamuKategori: k });
+  it('ibadah: dihitung per tamu unik', () => {
+    const rows = [
+      { ibadahId: 'A', tanggalIbadah: d('2026-10-04'), checkinMethod: 'WALK_IN', guestSource: 'WALK_IN', invitedByJemaatId: null, jemaat: t('a', 'NEW_COMER') },
+      { ibadahId: 'A', tanggalIbadah: d('2026-10-11'), checkinMethod: 'WALK_IN', guestSource: 'WALK_IN', invitedByJemaatId: null, jemaat: t('a', 'NEW_COMER') },
+      { ibadahId: 'A', tanggalIbadah: d('2026-10-11'), checkinMethod: 'SELF', guestSource: 'DIUNDANG', invitedByJemaatId: 'j1', jemaat: t('b', 'VISITOR') },
+      { ibadahId: 'A', tanggalIbadah: d('2026-10-11'), checkinMethod: 'SELF', guestSource: 'DIUNDANG', invitedByJemaatId: 'j1', jemaat: t('c', null) },
+    ];
+    const r = buildIbadahReport([], rows, new Map(), d('2026-10-01'));
+    expect(r.summary.tamuKategori).toEqual({ VISITOR: 1, NEW_COMER: 1, BELUM: 1 });
+    expect(r.guests.find((g) => g.id === 'c')!.kategori).toBe('BELUM');
+  });
+  it('event: tamu unik per kategori', () => {
+    const r = buildEventReport(['E'], [
+      { eventId: 'E', status: 'HADIR', checkinMethod: 'SCAN', guestSource: 'WALK_IN', invitedByJemaatId: null, jemaat: t('a', 'VISITOR') },
+      { eventId: 'E', status: 'DAFTAR', checkinMethod: null, guestSource: 'DIUNDANG', invitedByJemaatId: 'j', jemaat: t('b', 'NEW_COMER') },
+    ]);
+    expect(r.summary.tamuKategori).toEqual({ VISITOR: 1, NEW_COMER: 1, BELUM: 0 });
+  });
+});

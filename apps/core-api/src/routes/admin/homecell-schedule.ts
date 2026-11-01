@@ -201,7 +201,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
         select: {
           id: true,
           createdAt: true,
-          tamu: { select: { id: true, namaLengkap: true, noHp: true } },
+          tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } },
           markedBy: { select: { id: true, namaLengkap: true } },
         },
       },
@@ -245,7 +245,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
   const tamuList = await prisma.homecellTamu.findMany({
     where: { homecellId },
     orderBy: { createdAt: 'desc' },
-    select: { tamu: { select: { id: true, namaLengkap: true, noHp: true } } },
+    select: { tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } } },
   });
   const tamuBelumHadir = tamuList.map((t) => t.tamu).filter((t) => !tamuHadirIds.has(t.id));
 

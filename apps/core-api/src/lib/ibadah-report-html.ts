@@ -86,7 +86,7 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
     ${kpi('🙌', 'Total kehadiran', n(s.totalHadir), `${n(s.jemaatHadir)} jemaat + ${n(s.tamuHadir)} tamu`, '#f97316').replace('</div></div>', `</div>${growthBadge(ins.growth.totalHadir)}</div>`)}
     ${kpi('✅', d.filters.kidsOnly ? 'Anak hadir (unik)' : 'Jemaat hadir (unik)', n(s.uniqueJemaat), `${pctTxt(ins.jangkauan.pct)} dari ${n(ins.jangkauan.jemaatAktif)} ${d.filters.kidsOnly ? 'anak terdaftar' : 'jemaat aktif'}`, '#3b82f6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueJemaat)}</div>`)}
     ${kpi('📊', 'Rata-rata / pertemuan', n(s.rataRata), `${n(s.pertemuanAdaKehadiran)} dari ${n(s.pertemuan)} pertemuan ada kehadiran`, '#0ea5e9').replace('</div></div>', `</div>${growthBadge(ins.growth.rataRata)}</div>`)}
-    ${kpi('🙋', 'Tamu (unik)', n(s.uniqueTamu), `${n(ins.tamu.baru)} baru · ${n(ins.tamu.berulang)} berulang`, '#8b5cf6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueTamu)}</div>`)}
+    ${kpi('🙋', 'Tamu (unik)', n(s.uniqueTamu), `${n(ins.tamu.baru)} baru · ${n(ins.tamu.berulang)} berulang${s.tamuKategori ? ` · New Comer ${n(s.tamuKategori.NEW_COMER)} · Visitor ${n(s.tamuKategori.VISITOR)}` : ''}`, '#8b5cf6').replace('</div></div>', `</div>${growthBadge(ins.growth.uniqueTamu)}</div>`)}
     ${kpi('🪑', 'Okupansi rata-rata', pctTxt(s.okupansi.rataOkupansi), s.okupansi.melebihi ? `${s.okupansi.melebihi}× melebihi seat` : 'hadir ÷ jumlah seat', '#14b8a6')}
     ${kpi('🫥', 'Belum hadir', n(ins.jangkauan.belumHadir), 'jemaat aktif tanpa kehadiran di periode', '#94a3b8')}
   </div>`;
@@ -156,11 +156,11 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
   )}${ins.pertemuanTanpaKehadiran ? `<p class="muted small">${ins.pertemuanTanpaKehadiran} pertemuan terjadwal tanpa data kehadiran.</p>` : ''}</div></div>`;
 
   const guests = d.guests.length
-    ? `<table><thead><tr><th>Nama</th><th>No HP</th><th>Status</th><th class="r">Kunjungan</th><th>Terakhir</th><th>Dibawa oleh</th></tr></thead><tbody>${d.guests
+    ? `<table><thead><tr><th>Nama</th><th>No HP</th><th>Kategori</th><th>Status</th><th class="r">Kunjungan</th><th>Terakhir</th><th>Dibawa oleh</th></tr></thead><tbody>${d.guests
         .slice(0, 40)
         .map(
-          (g: { namaLengkap: string; noHp: string | null; isBaru: boolean; kunjungan: number; kunjunganTerakhir: string; inviters: string[]; walkIn: boolean }) =>
-            `<tr><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${g.isBaru ? '<b style="color:#15803d">Baru</b>' : 'Berulang'}</td><td class="r">${g.kunjungan}</td><td>${fmtTgl(
+          (g: { namaLengkap: string; noHp: string | null; isBaru: boolean; kunjungan: number; kunjunganTerakhir: string; inviters: string[]; walkIn: boolean; kategori?: string }) =>
+            `<tr><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${esc(({ VISITOR: 'Visitor saja', NEW_COMER: 'New Comer', BELUM: 'Belum ditentukan' } as Record<string, string>)[g.kategori ?? 'BELUM'] ?? '')}</td><td>${g.isBaru ? '<b style="color:#15803d">Baru</b>' : 'Berulang'}</td><td class="r">${g.kunjungan}</td><td>${fmtTgl(
               g.kunjunganTerakhir,
             )}</td><td>${esc(g.walkIn && !g.inviters.length ? 'Walk-in' : g.inviters.join(', '))}</td></tr>`,
         )

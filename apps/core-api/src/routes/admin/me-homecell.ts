@@ -413,6 +413,7 @@ meHomecellRouter.get('/guest-requests', async (req, res) => {
       jenisKelamin: true,
       usia: true,
       pesan: true,
+      kategori: true,
       homecell: { select: { id: true, nama: true } },
     },
   });
@@ -435,7 +436,7 @@ meHomecellRouter.post('/guest-requests/:reqId/approve', async (req, res) => {
   await assertLeaderOf(req, r.homecellId);
   if (r.status !== 'PENDING') throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
 
-  const { tamu, member } = await resolveTamu({ nama: r.nama, noHp: r.noHp }, r.homecell.area.cabangId);
+  const { tamu, member } = await resolveTamu({ nama: r.nama, noHp: r.noHp, kategori: (r.kategori as 'VISITOR' | 'NEW_COMER' | null) ?? undefined }, r.homecell.area.cabangId);
   if (member) {
     // Sejak meminta, nomor ini sudah daftar Els App → minta ia ajukan dari akunnya.
     await prisma.homecellGuestRequest.updateMany({
@@ -734,7 +735,7 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
       catatan: true,
       createdAt: true,
       addedBy: { select: { id: true, namaLengkap: true } },
-      tamu: { select: { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, tamuStatus: true } },
+      tamu: { select: { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, tamuStatus: true, tamuKategori: true } },
     },
   });
   const att = await tamuAttendance(rows.map((r) => r.tamu.id));
@@ -771,7 +772,7 @@ meHomecellRouter.post('/:id/tamu', async (req, res) => {
     select: { id: true, nama: true, area: { select: { cabangId: true } } },
   });
   if (!hc) throw NotFound('Homecell tidak ditemukan');
-  const { tamu, created, member } = await resolveTamu({ nama: input.nama, noHp: input.noHp }, hc.area.cabangId);
+  const { tamu, created, member } = await resolveTamu({ nama: input.nama, noHp: input.noHp, kategori: input.kategori }, hc.area.cabangId);
   if (member) throw memberPhoneError();
   await prisma.$transaction([
     prisma.homecellTamu.upsert({

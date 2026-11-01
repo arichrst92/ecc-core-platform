@@ -116,7 +116,7 @@ export async function buildEventMonitor(eventId: string | null | undefined, lang
       paidAt: true,
       checkinMethod: true,
       guestSource: true,
-      jemaat: { select: { isTamu: true } },
+      jemaat: { select: { isTamu: true, tamuKategori: true } },
     },
   });
   const aktif = rows.filter((r) => r.status !== 'BATAL');
@@ -200,6 +200,8 @@ export async function buildEventMonitor(eventId: string | null | undefined, lang
       total: guests.length,
       diundang: guests.filter((r) => r.guestSource === 'DIUNDANG').length,
       walkIn: guests.filter((r) => r.guestSource === 'WALK_IN').length,
+      newComer: guests.filter((r) => r.jemaat.tamuKategori === 'NEW_COMER').length,
+      visitor: guests.filter((r) => r.jemaat.tamuKategori === 'VISITOR').length,
       pertamaKali: hadir.filter((r) => !pernah.has(r.jemaatId)).length,
     },
     app,

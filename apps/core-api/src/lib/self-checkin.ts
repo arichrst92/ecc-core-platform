@@ -3,13 +3,17 @@
  *
  * Aturan: self check-in hanya terbuka pada HARI ibadah dijadwalkan (sesuai
  * tipeJadwal/hari/tanggalMulai, tidak dibatalkan) dan pada JAM ibadah:
- * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai jamSelesai, jam
- * dinding di zona waktu cabang (default Asia/Jakarta).
+ * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai CLOSE_AFTER_MIN
+ * (30) menit setelah jamSelesai, jam dinding di zona waktu cabang (default
+ * Asia/Jakarta). Tenggang setelah selesai: jemaat sering baru sempat check-in
+ * setelah ibadah karena fokus beribadah.
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { DEFAULT_TZ, calendarDateOf, todayInTz, wallToInstant } from './tz.js';
 
 export const OPEN_BEFORE_MIN = 15;
+/** Self check-in masih dibuka sampai N menit setelah ibadah/event selesai. */
+export const CLOSE_AFTER_MIN = 30;
 
 export type SelfCheckinReason =
   | 'INACTIVE'
@@ -40,39 +44,50 @@ export function hhmmToMin(s: string | null | undefined): number | null {
   return h * 60 + mi;
 }
 
-export function selfCheckinWindow(
-  ibadah: IbadahForOccurrence & {
-    isActive: boolean;
-    isKidsIbadah: boolean;
-    jamMulai: string;
-    jamSelesai: string;
-  },
-  cancelledDates: string[],
-  now: Date = new Date(),
-  /** Zona waktu cabang (IANA). Jam ibadah = jam dinding di zona ini. */
-  tz: string = DEFAULT_TZ,
-): SelfCheckinWindow {
-  const today = todayInTz(tz, now);
-  const tanggal = today.toISOString().slice(0, 10);
+type IbadahWin = IbadahForOccurrence & {
+  isActive: boolean;
+  isKidsIbadah: boolean;
+  jamMulai: string;
+  jamSelesai: string;
+};
+
+/** Jendela self check-in untuk occurrence pada `day` (UTC midnight, kalender zona cabang). */
+function windowForDay(ibadah: IbadahWin, cancelledDates: string[], day: Date, now: Date, tz: string): SelfCheckinWindow {
+  const tanggal = day.toISOString().slice(0, 10);
   const base = { tanggal, opensAt: null, closesAt: null };
   if (!ibadah.isActive) return { ...base, available: false, reason: 'INACTIVE' };
   if (ibadah.isKidsIbadah) return { ...base, available: false, reason: 'KIDS_IBADAH' };
 
-  const occ = generateOccurrences(ibadah, today, today);
+  const occ = generateOccurrences(ibadah, day, day);
   if (occ.length === 0) return { ...base, available: false, reason: 'NOT_TODAY' };
   if (cancelledDates.includes(tanggal)) return { ...base, available: false, reason: 'CANCELLED' };
 
   const start = hhmmToMin(ibadah.jamMulai) ?? 0;
   let end = hhmmToMin(ibadah.jamSelesai) ?? 24 * 60 - 1;
   if (end <= start) end = 24 * 60 - 1; // jam selesai lewat tengah malam → sampai akhir hari
-  // Jam dinding di zona cabang → instant UTC
-  const atMin = (min: number) => wallToInstant(today, min, tz);
-  const opens = atMin(Math.max(0, start - OPEN_BEFORE_MIN));
-  const closes = atMin(end);
+  // Jam dinding di zona cabang → instant UTC (menit > 1440 = lewat tengah malam, aman).
+  const opens = wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz);
+  const closes = wallToInstant(day, end + CLOSE_AFTER_MIN, tz);
   const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
   if (now < opens) return { ...win, available: false, reason: 'TOO_EARLY' };
   if (now > closes) return { ...win, available: false, reason: 'ENDED' };
   return { ...win, available: true, reason: null };
+}
+
+export function selfCheckinWindow(
+  ibadah: IbadahWin,
+  cancelledDates: string[],
+  now: Date = new Date(),
+  /** Zona waktu cabang (IANA). Jam ibadah = jam dinding di zona ini. */
+  tz: string = DEFAULT_TZ,
+): SelfCheckinWindow {
+  const today = todayInTz(tz, now);
+  const w = windowForDay(ibadah, cancelledDates, today, now, tz);
+  if (w.available || w.reason === 'ENDED' || w.reason === 'INACTIVE' || w.reason === 'KIDS_IBADAH') return w;
+  // Ibadah malam kemarin yang tenggangnya melewati tengah malam (mis. selesai 23:45).
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  const y = windowForDay(ibadah, cancelledDates, yesterday, now, tz);
+  return y.available ? y : w;
 }
 
 export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
@@ -81,7 +96,7 @@ export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
   NOT_TODAY: 'Hari ini tidak ada jadwal ibadah ini.',
   CANCELLED: 'Ibadah hari ini dibatalkan.',
   TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum ibadah dimulai.`,
-  ENDED: 'Ibadah hari ini sudah selesai.',
+  ENDED: `Self check-in ditutup ${CLOSE_AFTER_MIN} menit setelah ibadah selesai.`,
 };
 
 // ============================================================
@@ -94,7 +109,7 @@ export type EventSelfCheckinReason = 'DISABLED' | 'NO_ATTENDANCE' | 'INACTIVE' |
 
 /**
  * Jendela self check-in event: 15 menit sebelum (tanggalMulai + jamMulai)
- * s.d. (tanggalSelesai|tanggalMulai + jamSelesai), jam dinding zona cabang.
+ * s.d. 30 menit setelah (tanggalSelesai|tanggalMulai + jamSelesai), jam dinding zona cabang.
  * Tanpa jamMulai → 00:00; tanpa jamSelesai → 23:59 hari terakhir.
  */
 export function eventSelfCheckinWindow(
@@ -118,7 +133,7 @@ export function eventSelfCheckinWindow(
   let end = hhmmToMin(ev.jamSelesai) ?? 24 * 60 - 1;
   if (!ev.tanggalSelesai && end <= start) end = 24 * 60 - 1;
   const opens = wallToInstant(startDay, Math.max(0, start - OPEN_BEFORE_MIN), tz);
-  const closes = wallToInstant(endDay, end, tz);
+  const closes = wallToInstant(endDay, end + CLOSE_AFTER_MIN, tz);
   const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
   if (!ev.allowSelfCheckin) return { ...win, available: false, reason: 'DISABLED' };
   if (!ev.butuhKehadiran) return { ...win, available: false, reason: 'NO_ATTENDANCE' };
@@ -133,7 +148,7 @@ export const EVENT_SELF_CHECKIN_REASON_TEXT: Record<EventSelfCheckinReason, stri
   NO_ATTENDANCE: 'Event ini tidak mencatat kehadiran.',
   INACTIVE: 'Event ini tidak aktif.',
   TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum event dimulai.`,
-  ENDED: 'Event sudah selesai.',
+  ENDED: `Self check-in ditutup ${CLOSE_AFTER_MIN} menit setelah event selesai.`,
 };
 
 // ============================================================
@@ -213,7 +228,7 @@ export function venueInfo(
 
 /**
  * Jendela self check-in untuk SATU reservasi ibadah (tanggal tertentu), dipakai
- * tiket di "Reservasi Saya": 15 menit sebelum jamMulai s.d. jamSelesai, jam
+ * tiket di "Reservasi Saya": 15 menit sebelum jamMulai s.d. 30 menit setelah jamSelesai, jam
  * dinding zona cabang. Ibadah anak → check-in di meja CKids (mode DESK).
  * Validasi final tetap di POST /me/ibadah/:id/self-checkin.
  */
@@ -229,6 +244,6 @@ export function ibadahTicketCheckin(
   return {
     mode: ib.isKidsIbadah ? 'DESK' : 'SELF',
     opensAt: wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz).toISOString(),
-    closesAt: wallToInstant(day, end, tz).toISOString(),
+    closesAt: wallToInstant(day, end + CLOSE_AFTER_MIN, tz).toISOString(),
   };
 }

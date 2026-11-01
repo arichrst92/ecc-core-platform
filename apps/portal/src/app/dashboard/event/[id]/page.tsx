@@ -501,7 +501,7 @@ export default function EventDetailPage() {
             <p className="text-xs text-neutral-500 mt-0.5">
               {e.butuhKehadiran
                 ? e.allowSelfCheckin
-                  ? 'Event ini butuh kehadiran — scan QR jemaat, atau peserta self check-in dari aplikasi (15 menit sebelum mulai s.d. selesai).'
+                  ? 'Event ini butuh kehadiran — scan QR jemaat, atau peserta self check-in dari aplikasi (15 menit sebelum mulai s.d. 30 menit setelah selesai).'
                   : 'Event ini butuh kehadiran — gunakan tombol Check-in untuk scan QR jemaat.'
                 : 'Jemaat yang berpartisipasi di event ini.'}
             </p>

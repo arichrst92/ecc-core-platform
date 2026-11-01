@@ -11,7 +11,7 @@
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { DEFAULT_TZ, todayInTz, wallToInstant } from './tz.js';
-import { hhmmToMin } from './self-checkin.js';
+import { CLOSE_AFTER_MIN, hhmmToMin } from './self-checkin.js';
 
 export const RESERVE_DAYS_AHEAD = 30;
 export const KIDS_MAX_AGE = 13;
@@ -108,5 +108,7 @@ export function canCancelCheckin(
   if (r.status !== 'JOIN' || r.checkinMethod !== 'SELF') return false;
   if (r.checkedInBy !== me.userId && r.jemaatId !== me.jemaatId) return false;
   if (ibadah.isKidsIbadah || r.checkedOutAt || r.pickupCode) return false;
-  return now < occurrenceEnd(r.tanggalIbadah.toISOString().slice(0, 10), ibadah.jamMulai, ibadah.jamSelesai, tz);
+  // Sama dengan penutupan self check-in: sampai CLOSE_AFTER_MIN setelah ibadah selesai.
+  const end = occurrenceEnd(r.tanggalIbadah.toISOString().slice(0, 10), ibadah.jamMulai, ibadah.jamSelesai, tz);
+  return now.getTime() < end.getTime() + CLOSE_AFTER_MIN * 60_000;
 }

@@ -553,7 +553,7 @@ export function EventFormModal({
                   <div className="text-sm font-medium text-neutral-900">Perbolehkan self check-in</div>
                   <div className="text-xs text-neutral-500 mt-0.5">
                     Peserta bisa check-in sendiri dari aplikasi (dirinya + keluarga yang terdaftar di event ini),
-                    mulai 15 menit sebelum event sampai event selesai. Event berbayar: hanya peserta yang
+                    mulai 15 menit sebelum event sampai 30 menit setelah event selesai. Event berbayar: hanya peserta yang
                     pembayarannya sudah terverifikasi.
                   </div>
                 </div>

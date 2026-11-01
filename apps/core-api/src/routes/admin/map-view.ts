@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { GEOCODE_VERSION, geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
+import { GEOCODE_VERSION, alamatHash, geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 
@@ -141,6 +141,12 @@ mapViewRouter.get('/', async (req, res) => {
   });
 });
 
+/** Titik hanya dipakai bila dihitung dari alamat jemaat yang sekarang. */
+function alamatMasihSama(r: { alamatHash: string; jemaat: { alamat: string | null } }): boolean {
+  const a = r.jemaat.alamat;
+  return !!a && a.trim() !== '' && alamatHash(a) === r.alamatHash;
+}
+
 /**
  * Sebaran jemaat — perkiraan titik rumah (dari alamat) digabung per sel ±100 m
  * (koordinat dibulatkan 3 desimal) TANPA nama/ID. Untuk lapisan peta kepadatan.
@@ -157,7 +163,7 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
   const [rows, total, byStatus] = await Promise.all([
     prisma.jemaatGeocode.findMany({
       where: { status: 'OK', jemaat: jemaatWhere },
-      select: { latitude: true, longitude: true, jemaat: { select: { cabang: { select: { latitude: true, longitude: true } } } } },
+      select: { latitude: true, longitude: true, alamatHash: true, jemaat: { select: { alamat: true } } },
     }),
     prisma.jemaat.count({ where: { ...jemaatWhere, AND: [{ alamat: { not: null } }, { alamat: { not: '' } }] } }),
     prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } }),
@@ -165,6 +171,7 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
   const cells = new Map<string, [number, number, number]>();
   for (const r of rows) {
     if (r.latitude == null || r.longitude == null) continue;
+    if (!alamatMasihSama(r)) continue; // alamat diubah/dikosongkan → titik lama tidak dipakai
     const lat = Math.round(r.latitude * 1000) / 1000;
     const lng = Math.round(r.longitude * 1000) / 1000;
     const k = `${lat},${lng}`;
@@ -207,6 +214,7 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
       latitude: true,
       longitude: true,
       placeId: true,
+      alamatHash: true,
       jemaat: {
         select: {
           id: true,
@@ -229,7 +237,8 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
   res.json({
     success: true,
     data: rows
-      .map(({ latitude, longitude, placeId, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
+      .filter(alamatMasihSama) // alamat diubah/dikosongkan → pin lama disembunyikan sampai dipetakan ulang
+      .map(({ latitude, longitude, placeId, alamatHash: _h, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
         ...j,
         cabang,
         latitude: latitude!,

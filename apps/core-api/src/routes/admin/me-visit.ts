@@ -7,6 +7,7 @@
  * Cakupan:
  *   - GET    /admin/me/visits                  → list visit yang melibatkan saya
  *   - POST   /admin/me/visits                  → create via scan QR kode
+ *   - POST   /admin/me/visits/guest            → create dengan TAMU (nama + no HP)
  *   - GET    /admin/me/visits/:id              → detail (harus peserta)
  *   - PATCH  /admin/me/visits/:id              → edit judul/lokasi (initiator-only)
  *   - PATCH  /admin/me/visits/:id/note         → edit own note (initiator OR target)
@@ -16,6 +17,7 @@
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
+  createGuestVisitSchema,
   createVisitSchema,
   updateVisitMetaSchema,
   updateVisitNoteSchema,
@@ -25,6 +27,7 @@ import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../l
 import { privacyGate } from '../../lib/privacy.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
+import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 
 export const meVisitRouter = Router();
 
@@ -34,6 +37,7 @@ const jemaatLite = {
   namaLengkap: true,
   fotoUrl: true,
   noHp: true,
+  isTamu: true,
   cabang: { select: { id: true, nama: true } },
 } as const;
 
@@ -189,6 +193,58 @@ meVisitRouter.post('/', async (req, res) => {
   });
 
   res.status(201).json({ success: true, data: (await shapeGated([created], jemaatId))[0] });
+});
+
+// ============================================================
+//  CREATE dengan tamu (nama + no HP) — tamu juga masuk "Tamu saya"
+// ============================================================
+meVisitRouter.post('/guest', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = createGuestVisitSchema.parse(req.body ?? {});
+  const tamuInput = tamuInputSchema.parse({ nama: input.nama, noHp: input.noHp, kategori: input.kategori });
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true, noHp: true } });
+  if (!me) throw Unauthorized();
+  if (me.noHp && me.noHp === tamuInput.noHp) throw BadRequest('Tidak bisa mencatat pertemuan dengan diri sendiri.');
+  const { tamu, created: tamuBaru, member } = await resolveTamu(tamuInput, me.cabangId);
+  if (tamu.id === jemaatId) throw BadRequest('Tidak bisa mencatat pertemuan dengan diri sendiri.');
+  if (!member) {
+    // Tamu → masuk daftar "Tamu saya" pengundang (untuk tindak lanjut).
+    await prisma.jemaatTamu.upsert({
+      where: { inviterId_tamuId: { inviterId: jemaatId, tamuId: tamu.id } },
+      create: { inviterId: jemaatId, tamuId: tamu.id },
+      update: {},
+    });
+  }
+  const created = await prisma.visit.create({
+    data: { initiatorJemaatId: jemaatId, targetJemaatId: tamu.id, judul: input.judul, lokasi: input.lokasi },
+    include: { initiator: { select: jemaatLite }, target: { select: jemaatLite } },
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'visit',
+    resourceId: created.id,
+    resourceLabel: `${created.initiator.namaLengkap} → ${member ? '' : 'tamu '}${created.target.namaLengkap}: ${created.judul}`,
+    after: created,
+    metadata: { kind: 'visit-guest', tamuBaru, isMember: member },
+  });
+  if (member) {
+    // No HP ternyata milik anggota → anggota itu diberi tahu seperti visit biasa.
+    void createNotification({
+      jemaatId: tamu.id,
+      type: 'VISIT_RECORDED',
+      title: `${created.initiator.namaLengkap} mencatat visit dgn Anda`,
+      body: `${created.judul}${input.lokasi ? ` @ ${input.lokasi}` : ''}. Kalau ini keliru, buka detail visit untuk klarifikasi.`,
+      actionUrl: `/visit/${created.id}`,
+      metadata: { visitId: created.id, initiatorId: jemaatId, initiatorNama: created.initiator.namaLengkap, judul: created.judul },
+    });
+  }
+  res.status(201).json({
+    success: true,
+    data: (await shapeGated([created], jemaatId))[0],
+    message: member
+      ? `${tamu.namaLengkap} ternyata jemaat terdaftar — pertemuan dicatat dengan akunnya.`
+      : `Pertemuan dengan tamu ${tamu.namaLengkap} dicatat.`,
+  });
 });
 
 // ============================================================

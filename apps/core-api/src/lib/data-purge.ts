@@ -95,6 +95,7 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     await tx.jemaatTamu.deleteMany({ where: { OR: [{ inviterId: j.id }, { tamuId: j.id }] } });
     await tx.homecellTamu.updateMany({ where: { tamuId: j.id }, data: { catatan: null } });
     await tx.bible365Note.deleteMany({ where: { plan: { jemaatId: j.id } } });
+    await tx.catatanSaya.deleteMany({ where: { jemaatId: j.id } });
     await tx.prayerRequest.updateMany({
       where: { jemaatId: j.id },
       data: { isi: '[dihapus]', untukNama: null, kesaksian: null, catatanPetugas: null },

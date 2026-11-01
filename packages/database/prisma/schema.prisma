@@ -334,6 +334,7 @@ model Jemaat {
   prayerDidoakanBy             PrayerRequest[]               @relation("PrayerDidoakanBy")
   resolusi                     Resolusi[]                    @relation("ResolusiOwner")
   bible365Plans                Bible365Plan[]                @relation("Bible365Owner")
+  catatanSaya                  CatatanSaya[]                 @relation("CatatanSayaOwner")
   // ECC Worship (2026-10-20)
   worshipFavorites             WorshipFavorite[]             @relation("WorshipFavoriteJemaat")
 
@@ -3634,6 +3635,29 @@ model Bible365Note {
 
   @@unique([planId, day])
   @@map("bible365_note")
+}
+
+// Catatan saya (2.4.5) — catatan khotbah / catatan Alkitab PRIBADI.
+// Hanya pemilik yang bisa membaca (tidak tampil di portal). Isi berformat
+// markdown ringan (**tebal**, _miring_, # judul, - poin, 1. nomor, > kutipan, ==stabilo==).
+model CatatanSaya {
+  id          String   @id @default(uuid()) @db.Uuid
+  jemaatId    String   @map("jemaat_id") @db.Uuid
+  judul       String   @db.VarChar(200)
+  isi         String   @db.Text
+  // Ayat terkait, mis. ["Yoh 3:16", "Rm 8:28"] — teks bebas.
+  ayat        String[] @default([])
+  pengkhotbah String?  @db.VarChar(120)
+  tanggal     DateTime @db.Date
+  // Ibadah terkait (opsional, tanpa FK supaya catatan tetap ada bila ibadah dihapus).
+  ibadahId    String?  @map("ibadah_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation("CatatanSayaOwner", fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([jemaatId, tanggal(sort: Desc)])
+  @@map("catatan_saya")
 }
 
 // Tamu homecell — non-anggota yang dibawa / berkunjung ke homecell, dicatat

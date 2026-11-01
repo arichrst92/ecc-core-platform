@@ -186,11 +186,12 @@ export const homecellResource: ResourceConfig<Homecell> = {
       name: 'picJemaatId',
       label: 'PIC (Homecell Leader)',
       type: 'relation',
+      placeholder: '— Tanpa PIC (kosong) —',
       relation: {
         endpoint: '/admin/jemaat/by-pelayanan?pelayanan=Penggembalaan&role=Homecell%20Leader',
         labelKey: 'namaLengkap',
       },
-      helperText: 'Hanya jemaat dengan Pelayanan Penggembalaan + role Homecell Leader yang tampil.',
+      helperText: 'Opsional. Hanya jemaat dengan Pelayanan Penggembalaan + role Homecell Leader yang tampil. Pilih "Tanpa PIC" untuk mengosongkan.',
     },
     {
       name: 'kategori',

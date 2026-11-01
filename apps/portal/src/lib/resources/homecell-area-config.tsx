@@ -194,11 +194,12 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       name: 'picJemaatId',
       label: 'PIC (Zone Leader)',
       type: 'relation',
+      placeholder: '— Tanpa PIC (kosong) —',
       relation: {
         endpoint: '/admin/jemaat/by-pelayanan?pelayanan=Penggembalaan&role=Zone%20Leader',
         labelKey: 'namaLengkap',
       },
-      helperText: 'Hanya jemaat dengan Pelayanan Penggembalaan + role Zone Leader yang tampil.',
+      helperText: 'Opsional. Hanya jemaat dengan Pelayanan Penggembalaan + role Zone Leader yang tampil. Pilih "Tanpa PIC" untuk mengosongkan.',
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },

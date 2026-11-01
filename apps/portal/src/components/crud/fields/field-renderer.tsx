@@ -147,7 +147,7 @@ function RelationSelect({ field }: { field: FieldConfig }) {
       disabled={isLoading}
       className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white disabled:opacity-50"
     >
-      <option value="">{isLoading ? 'Memuat...' : '— pilih —'}</option>
+      <option value="">{isLoading ? 'Memuat...' : (field.placeholder ?? '— pilih —')}</option>
       {missing ? <option value={String(current)}>(data saat ini)</option> : null}
       {data?.map((item) => (
         <option key={String(item[valueKey])} value={String(item[valueKey])}>

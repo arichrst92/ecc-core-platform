@@ -4,6 +4,9 @@ import { uuidSchema, emptyToUndefined } from './common.js';
 
 // `hariMingguSchema` di-export dari schemas/ibadah.ts; tidak duplicate di sini.
 
+/** PIC saat UPDATE: '' / null = kosongkan PIC, undefined = tidak diubah. */
+const picUpdateField = z.preprocess((v) => (v === '' ? null : v), uuidSchema.nullable()).optional();
+
 // ====================== HOMECELL AREA ======================
 //
 // PIC area harus jemaat dengan active Pelayanan="Penggembalaan" + Role="Zone Leader".
@@ -25,7 +28,7 @@ export const updateHomecellAreaSchema = z
     cabangId: emptyToUndefined(uuidSchema),
     nama: z.string().trim().min(2).max(100).optional(),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
-    picJemaatId: emptyToUndefined(uuidSchema),
+    picJemaatId: picUpdateField,
     isActive: z.boolean().optional(),
   })
   .openapi('UpdateHomecellAreaInput');
@@ -104,7 +107,7 @@ export const updateHomecellSchema = z
     alamat: emptyToUndefined(z.string().trim().max(1000)),
     // '' / null = hapus lokasi; undefined = tidak diubah.
     mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
-    picJemaatId: emptyToUndefined(uuidSchema),
+    picJemaatId: picUpdateField,
     kategori: kategoriField,
     usiaMin: usiaField,
     usiaMax: usiaField,

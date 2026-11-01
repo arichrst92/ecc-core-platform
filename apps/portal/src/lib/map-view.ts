@@ -350,6 +350,7 @@ export interface MapJemaat {
   alamat: string | null;
   latitude: number;
   longitude: number;
+  placeId?: string | null;
   cabang: { id: string; nama: string };
   homecell: { id: string; nama: string }[];
 }
@@ -392,9 +393,10 @@ export function jemaatPopup(j: MapJemaat): string {
   const c = PIN_STYLE.jemaat.color;
   const wa = j.noHp ? j.noHp.replace(/\D/g, '') : null;
   const hc = j.homecell.length ? j.homecell.map((h) => esc(h.nama)).join(', ') : '<span style="color:#a3a3a3">Belum ikut homecell</span>';
-  const maps = j.alamat
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.alamat)}`
-    : `https://www.google.com/maps/search/?api=1&query=${j.latitude},${j.longitude}`;
+  // Titik hasil geocoding Google (place_id bila ada) → tepat ke lokasi yang dipetakan.
+  const maps = `https://www.google.com/maps/search/?api=1&query=${j.latitude},${j.longitude}${
+    j.placeId ? `&query_place_id=${encodeURIComponent(j.placeId)}` : ''
+  }`;
   return `<div style="min-width:240px;max-width:290px;font-family:inherit">
     <div style="display:flex;gap:10px;align-items:center">
       <div style="flex-shrink:0;border-radius:999px;border:3px solid ${c}">${avatarHtml(j, 56)}</div>

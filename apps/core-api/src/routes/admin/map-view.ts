@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState, nearCabang } from '../../lib/jemaat-geocode.js';
+import { geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 
@@ -165,7 +165,6 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
   const cells = new Map<string, [number, number, number]>();
   for (const r of rows) {
     if (r.latitude == null || r.longitude == null) continue;
-    if (!nearCabang(r, r.jemaat.cabang)) continue; // jaga-jaga: titik cabang berubah
     const lat = Math.round(r.latitude * 1000) / 1000;
     const lng = Math.round(r.longitude * 1000) / 1000;
     const k = `${lat},${lng}`;
@@ -207,6 +206,7 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
     select: {
       latitude: true,
       longitude: true,
+      placeId: true,
       jemaat: {
         select: {
           id: true,
@@ -229,12 +229,12 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
   res.json({
     success: true,
     data: rows
-      .filter((r) => nearCabang(r, r.jemaat.cabang))
-      .map(({ latitude, longitude, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
+      .map(({ latitude, longitude, placeId, jemaat: { homecellMembership, cabang: { latitude: _cl, longitude: _cg, ...cabang }, ...j } }) => ({
         ...j,
         cabang,
         latitude: latitude!,
         longitude: longitude!,
+        placeId,
         homecell: homecellMembership.map((m) => m.homecell),
       })),
   });

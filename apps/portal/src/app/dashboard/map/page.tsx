@@ -782,11 +782,8 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
         <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />{n(s.ok)} berhasil (tampil di peta)</span>
         <span>
           <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />
-          {n(gagal)} alamat tidak dikenali / di luar ±50 km dari cabang
+          {n(gagal)} alamat tidak dikenali
         </span>
-        {tungguCabang > 0 ? (
-          <span className="text-amber-700">{n(tungguCabang)} jemaat menunggu cabangnya diberi link Google Maps</span>
-        ) : null}
         <span><span className="inline-block w-2 h-2 rounded-full bg-neutral-300 mr-1" />{n(s.menunggu)} menunggu</span>
         {!s.aktif ? (
           <span className="text-red-600">Pemetaan dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).</span>

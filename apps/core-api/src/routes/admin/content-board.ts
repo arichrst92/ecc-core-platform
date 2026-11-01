@@ -352,6 +352,14 @@ export function buildBoardRouter(scope: BoardScope): Router {
       where: { id: poll.id },
       include: pollInclude(a.canManage),
     });
+    // Pilihan yang dipilih TIDAK dicatat (kerahasiaan suara) — hanya kejadiannya.
+    audit(req, {
+      action: check.optionIds.length ? 'UPDATE' : 'DELETE',
+      resource: `${scope.resource}_poll_vote`,
+      resourceId: poll.id,
+      resourceLabel: `${check.optionIds.length ? 'Memberi suara' : 'Menarik suara'}: ${(fresh as { pertanyaan?: string }).pertanyaan ?? ''} (${a.ownerNama})`,
+      metadata: { jumlahPilihan: check.optionIds.length },
+    });
     res.json({ success: true, data: serializePoll(fresh, a.jemaatId, a.canManage) });
   });
 

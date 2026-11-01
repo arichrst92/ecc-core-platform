@@ -11,6 +11,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { z } from 'zod';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
 import { eventReviewWindow, ibadahReviewWindow, type ReviewWindow } from '../../lib/service-review.js';
 
 export const meReviewRouter = Router();
@@ -124,5 +125,13 @@ meReviewRouter.put('/', async (req, res) => {
           create: { kind: 'EVENT', participationId: tg.participationId, eventId: tg.eventId, cabangId: tg.cabangId, jemaatId, ...data },
           update: data,
         });
+  const isNew = Math.abs(saved.updatedAt.getTime() - saved.createdAt.getTime()) < 1000;
+  audit(req, {
+    action: isNew ? 'CREATE' : 'UPDATE',
+    resource: 'service_review',
+    resourceId: saved.id,
+    resourceLabel: `Ulasan ${tg.kind === 'IBADAH' ? 'ibadah' : 'event'} · ${input.rating} bintang`,
+    metadata: { rating: input.rating, adaKomentar: !!data.komentar, isAnonim: data.isAnonim },
+  });
   res.json({ success: true, data: present(t.win, saved) });
 });

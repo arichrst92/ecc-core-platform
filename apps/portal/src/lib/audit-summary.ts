@@ -39,7 +39,7 @@ export interface AuditSummary {
 
 // ------------------------------------------------------------------ kamus
 
-const RESOURCE: Record<string, string> = {
+export const RESOURCE_LABEL: Record<string, string> = {
   reservasi: 'reservasi / kehadiran ibadah',
   jemaat: 'data jemaat',
   event_participation: 'pendaftaran event',
@@ -120,6 +120,34 @@ const RESOURCE: Record<string, string> = {
   shiftsoft_sync_preview: 'pratinjau sinkronisasi Shiftsoft',
   shiftsoft_sync_job: 'sinkronisasi Shiftsoft',
   shiftsoft_sync_commit: 'penerapan sinkronisasi Shiftsoft',
+  app_config: 'pengaturan aplikasi',
+  audit_log: 'audit log',
+  communication_prefs: 'preferensi komunikasi',
+  compliance_document: 'dokumen kepatuhan',
+  db_restore: 'pemulihan database',
+  elsa_chat: 'percakapan Elsa',
+  feedback_reply: 'balasan masukan',
+  jemaat_cabang: 'cabang jemaat',
+  jemaat_consolidation: 'penggabungan data jemaat',
+  jemaat_personal_data: 'data pribadi jemaat',
+  jemaat_point_balance: 'saldo poin jemaat',
+  jemaat_privacy: 'pengaturan privasi jemaat',
+  magic_link_token: 'tautan masuk email',
+  maintenance_mode: 'mode pemeliharaan',
+  personal_data_export: 'ekspor data pribadi',
+  point_transaction: 'transaksi poin',
+  prayer_request: 'pokok doa',
+  refresh_token: 'sesi masuk',
+  report_link: 'tautan laporan',
+  service_review: 'ulasan ibadah/event',
+  group_announcement: 'pengumuman grup',
+  group_poll: 'polling grup',
+  group_poll_vote: 'suara polling grup',
+  homecell_announcement: 'pengumuman homecell',
+  homecell_poll: 'polling homecell',
+  homecell_poll_vote: 'suara polling homecell',
+  'konten.news': 'berita',
+  'konten.renungan': 'renungan',
 };
 
 const VERB: Record<AuditAction, string> = {
@@ -217,6 +245,21 @@ const FIELD: Record<string, string> = {
   divisi: 'Divisi',
   jemaatIds: 'Jumlah jemaat',
   autoReciprocal: 'Hubungan balik otomatis',
+  rating: 'Nilai',
+  adaKomentar: 'Ada komentar',
+  isAnonim: 'Anonim',
+  untuk: 'Didoakan untuk',
+  tipe: 'Jenis',
+  pertamaKali: 'Pertama kali',
+  adaCatatan: 'Ada catatan',
+  dibukaKembali: 'Dibuka kembali',
+  jumlahPilihan: 'Jumlah pilihan',
+  jumlahLagu: 'Jumlah lagu',
+  jenis: 'Jenis',
+  periode: 'Periode',
+  dari: 'Dari',
+  sampai: 'Sampai',
+  berlakuMenit: 'Berlaku (menit)',
 };
 
 const VALUE: Record<string, string> = {
@@ -239,6 +282,87 @@ const VALUE: Record<string, string> = {
   'it-minister-update': 'mengubah IT minister',
   'it-minister-delete': 'menghapus IT minister',
   'cabang-rekening-qris': 'mengunggah QRIS rekening',
+  'admin-scanner': 'scan QR oleh usher',
+  'admin-scanner-checkout': 'check-out anak oleh usher',
+  'admin-pickup': 'penjemputan anak',
+  'mobile-scan': 'scan QR dari aplikasi',
+  'mobile-cancel': 'dibatalkan dari aplikasi',
+  'self-checkin-cancel': 'membatalkan check-in sendiri',
+  'event-self-checkin': 'self check-in event',
+  'event-self-cancel': 'membatalkan pendaftaran event sendiri',
+  'event-checkin': 'check-in event',
+  'event-walk-in-guest': 'tamu langsung datang ke event',
+  'ibadah-checkin': 'check-in ibadah',
+  'ibadah-walk-in-guest': 'tamu langsung datang ke ibadah',
+  'event-batch-register': 'daftar event sekaligus beberapa orang',
+  'event-family-cancel': 'membatalkan pendaftaran anggota keluarga',
+  'event-approve': 'menyetujui pendaftaran event',
+  'event-bukti': 'mengunggah bukti bayar',
+  'event-donation-create': 'membuat donasi/pembayaran',
+  'event-donation-approve': 'menyetujui pembayaran',
+  'event-donation-cancel': 'membatalkan pembayaran',
+  'event-donation-bukti': 'mengunggah bukti pembayaran',
+  'event-qris-delete': 'menghapus QRIS event',
+  'event-reactivate': 'mengaktifkan kembali event',
+  'family-link-kode': 'menautkan keluarga lewat kode',
+  'family-link-phone': 'menautkan keluarga lewat no HP',
+  'family-register-new': 'mendaftarkan anggota keluarga baru',
+  'face-enroll': 'mendaftarkan wajah',
+  'face-re-enroll': 'mendaftarkan ulang wajah',
+  'self-edit-mobile': 'mengubah profil sendiri dari aplikasi',
+  'self-foto-mobile': 'mengganti foto sendiri dari aplikasi',
+  'dependent-foto-mobile': 'mengganti foto anggota keluarga dari aplikasi',
+  'self-onboard-mobile': 'melengkapi data awal dari aplikasi',
+  'self-change-phone': 'mengganti no HP sendiri',
+  'phone-change-otp-request': 'meminta kode untuk ganti no HP',
+  'self-deactivate': 'menonaktifkan akun sendiri',
+  'self-dob-correction': 'mengoreksi tanggal lahir sendiri',
+  'self-export': 'mengekspor data pribadi',
+  'direct-branch-change-mobile': 'pindah cabang dari aplikasi',
+  'visit-guest': 'visit dengan tamu',
+  'visit-note': 'catatan visit',
+  'walk-in': 'langsung datang tanpa reservasi',
+  'walk-in-create': 'langsung datang tanpa reservasi',
+  'walk-in-pickup': 'penjemputan anak (langsung datang)',
+  'bulk-attendance': 'mencatat kehadiran sekaligus',
+  'spiritual-journey-add': 'menambah tahap perjalanan rohani',
+  'ministry-schedule-create': 'membuat jadwal pelayanan',
+  'ministry-schedule-update': 'mengubah jadwal pelayanan',
+  'ministry-schedule-delete': 'menghapus jadwal pelayanan',
+  'manual-dispatch-ibadah-reminder': 'mengirim pengingat ibadah secara manual',
+  'manual-dispatch-event-reminder': 'mengirim pengingat event secara manual',
+  'maintenance-mode-toggle': 'menyalakan/mematikan mode pemeliharaan',
+  'monitor-unlock': 'membuka monitor',
+  'monitor-unlock-failed': 'gagal membuka monitor',
+  'wa-config-update': 'mengubah pengaturan WhatsApp',
+  'wa-config-test': 'uji kirim WhatsApp',
+  'wa-config-test-failed': 'uji kirim WhatsApp gagal',
+  'credential-update': 'mengubah kredensial',
+  'local-business-logo': 'logo usaha',
+  'local-business-hero': 'gambar usaha',
+  'local-business-profile-pdf': 'PDF profil usaha',
+  'hero-image': 'gambar sampul',
+  'hero-image-delete': 'menghapus gambar sampul',
+  'user-avatar': 'foto akun',
+  'user-avatar-delete': 'menghapus foto akun',
+  'jemaat-profile': 'foto profil jemaat',
+  'jemaat-profile-delete': 'menghapus foto profil jemaat',
+  'qris-image': 'gambar QRIS',
+  'portal-tamu': 'dari menu Tamu di Portal',
+  'audit-log-cleanup': 'pembersihan audit log otomatis',
+  'refresh-token-cleanup': 'pembersihan sesi otomatis',
+  'prayer-edit': 'mengubah pokok doa',
+  'prayer-prayed': 'menandai sudah didoakan',
+  'prayer-answered': 'menandai doa terjawab',
+  'prayer-unanswered': 'membatalkan tanda terjawab',
+  'guest-request-resend': 'mengirim ulang permintaan',
+  'guest-request-cancel': 'membatalkan permintaan',
+  'worship-album-reorder': 'mengubah urutan album',
+  'worship-song-reorder': 'mengubah urutan lagu',
+  'worship-karaoke-delete': 'menghapus audio karaoke',
+  'worship-sync-delete': 'menghapus lirik sinkron',
+  'elsa-cancel': 'membatalkan sinkronisasi Elsa',
+  manual: 'manual',
   // status umum
   RESERVE: 'Terdaftar (reservasi)',
   JOIN: 'Hadir',
@@ -268,6 +392,16 @@ const VALUE: Record<string, string> = {
   BIWEEKLY: 'Dua minggu sekali',
   MONTHLY: 'Setiap bulan',
   ONCE: 'Sekali',
+  BELUM: 'Belum ditentukan',
+  homecell: 'homecell',
+  area: 'area homecell',
+  last_7d: '7 hari terakhir',
+  this_week: 'minggu ini',
+  last_week: 'minggu lalu',
+  last_30d: '30 hari terakhir',
+  this_month: 'bulan ini',
+  last_month: 'bulan lalu',
+  custom: 'rentang tanggal pilihan',
 };
 
 /** Kolom teknis yang tidak berarti bagi pembaca umum. */
@@ -316,6 +450,7 @@ function fmtValue(v: unknown, key = ''): string {
       return /T00:00:00(\.000)?Z$/.test(v) ? fmtDate(v, false) : fmtDate(v, true);
     }
     if (VALUE[v]) return VALUE[v];
+    if (/^(kind|method|via)$/.test(key) && /^[a-z0-9]+(-[a-z0-9]+)+$/.test(v)) return v.replace(/-/g, ' ');
     return v.length > 140 ? `${v.slice(0, 140)}…` : v;
   }
   if (Array.isArray(v)) {
@@ -374,7 +509,7 @@ const MAX_ROWS = 15;
 
 export function summarizeAudit(e: AuditLike): AuditSummary {
   const who = e.userDisplay?.namaLengkap ?? 'Sistem';
-  const what = RESOURCE[e.resource] ?? e.resource.replace(/_/g, ' ');
+  const what = RESOURCE_LABEL[e.resource] ?? e.resource.replace(/_/g, ' ');
   const target = e.resourceLabel ? ` "${e.resourceLabel}"` : '';
   const notes: string[] = [];
   const device = describeDevice(e.userAgent);

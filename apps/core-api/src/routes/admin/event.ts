@@ -664,6 +664,13 @@ eventRouter.delete('/:id/qris', async (req, res) => {
   if (!item) throw NotFound('Event tidak ditemukan');
   await deleteEventQris(item.id);
   await prisma.event.update({ where: { id: item.id }, data: { qrisImageUrl: null } });
+  audit(req, {
+    action: 'DELETE',
+    resource: 'event',
+    resourceId: item.id,
+    resourceLabel: `Hapus QRIS event ${item.judul}`,
+    metadata: { kind: 'event-qris-delete' },
+  });
   res.status(204).end();
 });
 

@@ -25,6 +25,7 @@ import { distanceKm, type LatLng } from '../lib/geo.js';
 import { getLastMeetingMap, lastMeetingOf } from '../lib/homecell-last-attendance.js';
 import { createNotification } from '../lib/notification.js';
 import { logger } from '../lib/logger.js';
+import { audit } from '../lib/audit.js';
 import { guestJoinLimiter, publicBrowseLimiter } from '../middleware/rate-limit.js';
 
 export const publicHomecellRouter = Router();
@@ -275,6 +276,20 @@ publicHomecellRouter.post('/:id/guest-request', guestJoinLimiter, async (req, re
     logger.info({ homecellId: hc.id, guestRequestId: id }, 'homecell: permintaan tamu baru');
   }
 
+  // Pelaku = tamu tanpa akun → nama dicatat sebagai userName.
+  audit(req, {
+    action: pending ? 'UPDATE' : 'CREATE',
+    resource: 'homecell_guest_request',
+    resourceId: id,
+    resourceLabel: `${input.nama} minta bergabung ke ${hc.nama}`,
+    userName: `Tamu (tanpa akun): ${input.nama}`,
+    metadata: {
+      homecellId: hc.id,
+      noHp: `${input.noHp.slice(0, 5)}••••${input.noHp.slice(-3)}`,
+      kategori: input.kategori ?? 'BELUM',
+      ...(pending ? { kind: 'guest-request-resend' } : {}),
+    },
+  });
   const row = await prisma.homecellGuestRequest.findUniqueOrThrow({ where: { id }, select: statusSelect });
   res.status(201).json({ success: true, data: { token, request: toStatus(row) } });
 });
@@ -301,10 +316,24 @@ publicHomecellRouter.post('/guest-request/status', publicBrowseLimiter, async (r
 
 publicHomecellRouter.post('/guest-request/cancel', publicBrowseLimiter, async (req, res) => {
   const { token } = z.object({ token: z.string().min(16).max(100) }).parse(req.body ?? {});
+  const target = await prisma.homecellGuestRequest.findFirst({
+    where: { tokenHash: hashGuestToken(token), status: 'PENDING' },
+    select: { id: true, nama: true, homecell: { select: { nama: true } } },
+  });
   const r = await prisma.homecellGuestRequest.updateMany({
     where: { tokenHash: hashGuestToken(token), status: 'PENDING' },
     data: { status: 'CANCELLED' },
   });
   if (r.count === 0) throw new ApiError(409, 'GUEST_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses atau tidak ditemukan.');
+  if (target) {
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'homecell_guest_request',
+      resourceId: target.id,
+      resourceLabel: `${target.nama} membatalkan permintaan bergabung ke ${target.homecell.nama}`,
+      userName: `Tamu (tanpa akun): ${target.nama}`,
+      metadata: { kind: 'guest-request-cancel' },
+    });
+  }
   res.json({ success: true, data: { cancelled: true } });
 });

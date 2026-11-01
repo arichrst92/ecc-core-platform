@@ -351,6 +351,13 @@ meRouter.post('/phone/request-otp', otpRequestLimiter, async (req, res) => {
     },
   });
   await sendOtpViaWhatsApp(noHp, otp);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat',
+    resourceId: jemaatId,
+    resourceLabel: `Minta kode ganti no HP ke ${noHp.slice(0, 5)}••••${noHp.slice(-3)}`,
+    metadata: { kind: 'phone-change-otp-request' },
+  });
   res.json({ success: true, message: 'Kode verifikasi dikirim via WhatsApp ke nomor baru.', data: { noHp } });
 });
 

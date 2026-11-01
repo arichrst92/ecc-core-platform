@@ -9,6 +9,7 @@
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
 import { createFeedbackSchema, feedbackPersonSelect, replySchema } from '../../lib/feedback.js';
 
 export const meFeedbackRouter = Router();
@@ -67,6 +68,13 @@ meFeedbackRouter.post('/', async (req, res) => {
       appInfo: input.appInfo ?? null,
     },
   });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'feedback',
+    resourceId: created.id,
+    resourceLabel: `Masukan (${input.tipe} · ${input.kategori})`,
+    metadata: { tipe: input.tipe, kategori: input.kategori },
+  });
   res.status(201).json({
     success: true,
     data: created,
@@ -110,5 +118,12 @@ meFeedbackRouter.post('/:id/replies', async (req, res) => {
       data: { lastActivityAt: now, status: fb.status === 'SELESAI' ? 'DIPROSES' : fb.status },
     }),
   ]);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'feedback_reply',
+    resourceId: reply.id,
+    resourceLabel: 'Balasan jemaat pada masukan',
+    metadata: { feedbackId: fb.id, dibukaKembali: fb.status === 'SELESAI' },
+  });
   res.status(201).json({ success: true, data: reply });
 });

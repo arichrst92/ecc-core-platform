@@ -17,6 +17,7 @@ import { prisma, type Prisma } from '@ecc/database';
 import { createPrayerSchema, markAnsweredSchema, markPrayedSchema, updatePrayerSchema } from '@ecc/shared-types';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
+import { audit } from '../../lib/audit.js';
 import {
   UUID_RE,
   assignedSelect,
@@ -108,6 +109,14 @@ mePrayerRouter.post('/', async (req, res) => {
     },
     select: mineSelect,
   });
+  // Isi doa TIDAK dicatat (pribadi) — hanya kejadiannya.
+  audit(req, {
+    action: 'CREATE',
+    resource: 'prayer_request',
+    resourceId: created.id,
+    resourceLabel: `Pokok doa (${input.kategori})`,
+    metadata: { kategori: input.kategori, untuk: input.untuk, isAnonim: input.isAnonim },
+  });
   res.status(201).json({
     success: true,
     data: serializeMine(created),
@@ -163,6 +172,13 @@ mePrayerRouter.post('/assigned/:id/prayed', async (req, res) => {
     select: assignedSelect,
   });
   if (first) void notifyPrayed(row.id);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'prayer_request',
+    resourceId: row.id,
+    resourceLabel: 'Pokok doa ditandai sudah didoakan',
+    metadata: { kind: 'prayer-prayed', pertamaKali: first, adaCatatan: !!catatan },
+  });
   res.json({ success: true, data: serializeAssigned(updated), message: 'Ditandai sudah didoakan.' });
 });
 
@@ -182,12 +198,20 @@ mePrayerRouter.patch('/:id', async (req, res) => {
     data: { kategori: input.kategori, untuk: input.untuk, ...target, isi: input.isi, isAnonim: input.isAnonim },
     select: mineSelect,
   });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'prayer_request',
+    resourceId: row.id,
+    resourceLabel: `Pokok doa (${input.kategori})`,
+    metadata: { kind: 'prayer-edit', kategori: input.kategori, untuk: input.untuk, isAnonim: input.isAnonim },
+  });
   res.json({ success: true, data: serializeMine(updated) });
 });
 
 mePrayerRouter.delete('/:id', async (req, res) => {
   const { row } = await loadMine(req);
   await prisma.prayerRequest.update({ where: { id: row.id }, data: { deletedAt: new Date() } });
+  audit(req, { action: 'DELETE', resource: 'prayer_request', resourceId: row.id, resourceLabel: 'Pokok doa dihapus pemiliknya' });
   res.json({ success: true, message: 'Prayer request dihapus.' });
 });
 
@@ -200,6 +224,13 @@ mePrayerRouter.post('/:id/answered', async (req, res) => {
       ? { terjawabAt: row.terjawabAt ?? new Date(), kesaksian }
       : { terjawabAt: null, kesaksian: null },
     select: mineSelect,
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'prayer_request',
+    resourceId: row.id,
+    resourceLabel: answered ? 'Pokok doa ditandai terjawab' : 'Tanda terjawab dibatalkan',
+    metadata: { kind: answered ? 'prayer-answered' : 'prayer-unanswered' },
   });
   res.json({
     success: true,

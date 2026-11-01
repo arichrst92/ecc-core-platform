@@ -714,6 +714,23 @@ meHomecellRouter.post('/report-link', async (req, res) => {
     if (area.picJemaatId !== u.jemaatId) throw Forbidden('Hanya PIC area ini yang dapat membuka laporannya.');
   }
   const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to, l: input.lang });
+  const target =
+    input.kind === 'homecell'
+      ? await prisma.homecell.findUnique({ where: { id: input.id }, select: { nama: true } })
+      : await prisma.homecellArea.findUnique({ where: { id: input.id }, select: { nama: true } });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'report_link',
+    resourceId: input.id,
+    resourceLabel: `Tautan laporan ${input.kind === 'homecell' ? 'homecell' : 'area'} ${target?.nama ?? ''}`.trim(),
+    metadata: {
+      jenis: input.kind,
+      periode: input.periode ?? 'last_30d',
+      ...(input.from ? { dari: input.from } : {}),
+      ...(input.to ? { sampai: input.to } : {}),
+      berlakuMenit: Math.round(REPORT_LINK_TTL_SEC / 60),
+    },
+  });
   res.json({ success: true, data: { url: `${apiBase(req)}/public/report/${token}`, expiresInSec: REPORT_LINK_TTL_SEC } });
 });
 

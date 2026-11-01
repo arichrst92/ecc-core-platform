@@ -16,7 +16,11 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
-import { summarizeAudit } from '@/lib/audit-summary';
+import { RESOURCE_LABEL, summarizeAudit } from '@/lib/audit-summary';
+
+const RESOURCE_OPTIONS = Object.entries(RESOURCE_LABEL)
+  .map(([value, label]) => ({ value, label: label.charAt(0).toUpperCase() + label.slice(1) }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'id'));
 
 type ActionKey = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'ENROLL_FACE' | 'RESET_FACE' | 'UPLOAD_PHOTO';
 
@@ -74,7 +78,7 @@ export default function AuditLogPage() {
             Audit Log
           </h1>
           <p className="text-neutral-500 mt-1">
-            Catatan semua operasi penting — siapa, kapan, apa.
+            Catatan semua tindakan penting — siapa, kapan, apa.
           </p>
         </div>
       </div>
@@ -85,7 +89,7 @@ export default function AuditLogPage() {
           <label className="block text-xs font-medium text-neutral-600 mb-1">Cari</label>
           <input
             type="text"
-            placeholder="Nama user / label resource..."
+            placeholder="Nama pengguna / nama data..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -95,45 +99,31 @@ export default function AuditLogPage() {
           />
         </div>
         <FilterSelect
-          label="Action"
+          label="Tindakan"
           value={filters.action ?? ''}
           onChange={(v) => {
             setFilters((f) => ({ ...f, action: (v || undefined) as ActionKey | undefined }));
             setPage(1);
           }}
           options={[
-            { value: 'CREATE', label: 'Create' },
-            { value: 'UPDATE', label: 'Update' },
-            { value: 'DELETE', label: 'Delete' },
-            { value: 'LOGIN', label: 'Login' },
-            { value: 'LOGOUT', label: 'Logout' },
-            { value: 'ENROLL_FACE', label: 'Enroll Face' },
-            { value: 'RESET_FACE', label: 'Reset Face' },
-            { value: 'UPLOAD_PHOTO', label: 'Upload Photo' },
+            { value: 'CREATE', label: 'Tambah' },
+            { value: 'UPDATE', label: 'Ubah' },
+            { value: 'DELETE', label: 'Hapus' },
+            { value: 'LOGIN', label: 'Masuk' },
+            { value: 'LOGOUT', label: 'Keluar' },
+            { value: 'ENROLL_FACE', label: 'Daftar wajah' },
+            { value: 'RESET_FACE', label: 'Atur ulang wajah' },
+            { value: 'UPLOAD_PHOTO', label: 'Unggah foto' },
           ]}
         />
         <FilterSelect
-          label="Resource"
+          label="Jenis data"
           value={filters.resource ?? ''}
           onChange={(v) => {
             setFilters((f) => ({ ...f, resource: v || undefined }));
             setPage(1);
           }}
-          options={[
-            { value: 'sinode', label: 'Sinode' },
-            { value: 'cabang_gereja', label: 'Cabang' },
-            { value: 'jemaat', label: 'Jemaat' },
-            { value: 'role', label: 'Role' },
-            { value: 'sub_role', label: 'Sub Role' },
-            { value: 'sub_role_status', label: 'Sub Role Status' },
-            { value: 'jemaat_role', label: 'Jemaat Role' },
-            { value: 'ibadah', label: 'Ibadah' },
-            { value: 'kategori_ibadah', label: 'Kategori Ibadah' },
-            { value: 'tipe_relasi_keluarga', label: 'Tipe Relasi' },
-            { value: 'jemaat_relasi', label: 'Jemaat Relasi' },
-            { value: 'auth', label: 'Auth' },
-            { value: 'user', label: 'User' },
-          ]}
+          options={RESOURCE_OPTIONS}
         />
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">Dari</label>
@@ -175,10 +165,10 @@ export default function AuditLogPage() {
             <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
               <tr>
                 <th className="px-4 py-3 text-left font-medium" style={{ width: '170px' }}>Waktu</th>
-                <th className="px-4 py-3 text-left font-medium" style={{ width: '200px' }}>User</th>
-                <th className="px-4 py-3 text-left font-medium" style={{ width: '120px' }}>Action</th>
-                <th className="px-4 py-3 text-left font-medium" style={{ width: '160px' }}>Resource</th>
-                <th className="px-4 py-3 text-left font-medium">Target</th>
+                <th className="px-4 py-3 text-left font-medium" style={{ width: '200px' }}>Pengguna</th>
+                <th className="px-4 py-3 text-left font-medium" style={{ width: '120px' }}>Tindakan</th>
+                <th className="px-4 py-3 text-left font-medium" style={{ width: '160px' }}>Jenis data</th>
+                <th className="px-4 py-3 text-left font-medium">Data</th>
                 <th className="px-4 py-3 text-right font-medium" style={{ width: '60px' }}></th>
               </tr>
             </thead>
@@ -208,8 +198,8 @@ export default function AuditLogPage() {
                     <td className="px-4 py-3">
                       <ActionBadge action={entry.action} />
                     </td>
-                    <td className="px-4 py-3 text-neutral-700">
-                      <code className="text-xs">{entry.resource}</code>
+                    <td className="px-4 py-3 text-neutral-700 text-xs" title={entry.resource}>
+                      {RESOURCE_LABEL[entry.resource] ?? entry.resource}
                     </td>
                     <td className="px-4 py-3 text-neutral-900">
                       {entry.resourceLabel ?? <span className="text-neutral-400">—</span>}
@@ -234,7 +224,7 @@ export default function AuditLogPage() {
         {list.data && list.data.meta.totalPages > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm">
             <div className="text-neutral-500">
-              <strong>{list.data.meta.total}</strong> entries · halaman {list.data.meta.page} dari{' '}
+              <strong>{list.data.meta.total}</strong> catatan · halaman {list.data.meta.page} dari{' '}
               {list.data.meta.totalPages}
             </div>
             <div className="flex items-center gap-1">
@@ -266,7 +256,7 @@ export default function AuditLogPage() {
 
 function UserCell({ user }: { user: AuditEntry['userDisplay'] }) {
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
-  if (!user) return <span className="text-neutral-400 text-xs italic">system / anonymous</span>;
+  if (!user) return <span className="text-neutral-400 text-xs italic">sistem / tanpa akun</span>;
   return (
     <div className="flex items-center gap-2">
       {user.fotoUrl ? (
@@ -287,14 +277,14 @@ function UserCell({ user }: { user: AuditEntry['userDisplay'] }) {
 }
 
 const ACTION_STYLE: Record<ActionKey, { bg: string; text: string; label: string }> = {
-  CREATE: { bg: 'bg-green-50', text: 'text-green-700', label: 'Create' },
-  UPDATE: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Update' },
-  DELETE: { bg: 'bg-red-50', text: 'text-red-700', label: 'Delete' },
-  LOGIN: { bg: 'bg-brand-50', text: 'text-brand-700', label: 'Login' },
-  LOGOUT: { bg: 'bg-neutral-100', text: 'text-neutral-700', label: 'Logout' },
-  ENROLL_FACE: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Enroll Face' },
-  RESET_FACE: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Reset Face' },
-  UPLOAD_PHOTO: { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Upload Photo' },
+  CREATE: { bg: 'bg-green-50', text: 'text-green-700', label: 'Tambah' },
+  UPDATE: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Ubah' },
+  DELETE: { bg: 'bg-red-50', text: 'text-red-700', label: 'Hapus' },
+  LOGIN: { bg: 'bg-brand-50', text: 'text-brand-700', label: 'Masuk' },
+  LOGOUT: { bg: 'bg-neutral-100', text: 'text-neutral-700', label: 'Keluar' },
+  ENROLL_FACE: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Daftar wajah' },
+  RESET_FACE: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Atur ulang wajah' },
+  UPLOAD_PHOTO: { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Unggah foto' },
 };
 
 function ActionBadge({ action }: { action: ActionKey }) {
@@ -356,7 +346,7 @@ function DetailDrawer({ entry, onClose }: { entry: AuditEntry | null; onClose: (
       <aside className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-2xl z-50 overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-neutral-900">Detail Audit Entry</h2>
+            <h2 className="font-semibold text-neutral-900">Detail catatan audit</h2>
             <p className="text-xs text-neutral-500">{formatDateTime(entry.createdAt)}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg">

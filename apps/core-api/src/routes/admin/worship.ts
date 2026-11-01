@@ -181,12 +181,14 @@ worshipAdminRouter.post('/albums/:id/cover', W, flexImageUpload({ maxBytes: 8 * 
   if (!req.file) throw BadRequest('File cover wajib diunggah.');
   const coverUrl = await saveWorshipCover(a.id, req.file.buffer);
   await prisma.worshipAlbum.update({ where: { id: a.id }, data: { coverUrl } });
+  audit(req, { action: 'UPLOAD_PHOTO', resource: 'worship_album', resourceId: a.id, resourceLabel: `Sampul album ${a.judul}`, metadata: { sizeBytes: req.file.size } });
   res.json({ success: true, data: { coverUrl: absUrl(req, coverUrl) } });
 });
 
 worshipAdminRouter.post('/albums/reorder', W, async (req, res) => {
   const { ids } = reorderIdsSchema.parse(req.body ?? {});
   await prisma.$transaction(ids.map((id, i) => prisma.worshipAlbum.updateMany({ where: { id }, data: { urutan: i } })));
+  audit(req, { action: 'UPDATE', resource: 'worship_album', resourceLabel: `Urutan album diubah (${ids.length} album)`, metadata: { kind: 'worship-album-reorder' } });
   res.json({ success: true });
 });
 
@@ -209,6 +211,7 @@ worshipAdminRouter.post('/albums/:id/songs/reorder', W, async (req, res) => {
   await prisma.$transaction(
     ids.map((id, i) => prisma.worshipSong.updateMany({ where: { id, albumId: a.id }, data: { urutan: i } })),
   );
+  audit(req, { action: 'UPDATE', resource: 'worship_album', resourceId: a.id, resourceLabel: `Urutan lagu di ${a.judul} diubah`, metadata: { kind: 'worship-song-reorder', jumlahLagu: ids.length } });
   res.json({ success: true });
 });
 
@@ -236,6 +239,14 @@ worshipAdminRouter.patch('/songs/:id', W, async (req, res) => {
     await prisma.worshipAlbum.update({ where: { id: s.album.id }, data: { judul: input.judul } });
   }
   const fresh = await loadSong(s.id);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'worship_song',
+    resourceId: s.id,
+    resourceLabel: fresh.judul,
+    before: { judul: s.judul, ciptaan: s.ciptaan, tahun: s.tahun, isPublished: s.isPublished, lirik: s.lirik ? `${s.lirik.length} karakter` : null },
+    after: { judul: fresh.judul, ciptaan: fresh.ciptaan, tahun: fresh.tahun, isPublished: fresh.isPublished, lirik: fresh.lirik ? `${fresh.lirik.length} karakter` : null },
+  });
   const { album, ...rest } = fresh;
   res.json({ success: true, data: { ...serializeSong(rest), album } });
 });
@@ -275,6 +286,7 @@ worshipAdminRouter.delete('/songs/:id/audio/KARAOKE', W, async (req, res) => {
     data: { karaokeFile: null, karaokeMime: null, karaokeSize: null, karaokeDurasi: null },
   });
   await deleteWorshipFile(s.karaokeFile);
+  audit(req, { action: 'DELETE', resource: 'worship_song', resourceId: s.id, resourceLabel: `Audio karaoke ${s.judul}`, metadata: { kind: 'worship-karaoke-delete' } });
   res.json({ success: true });
 });
 
@@ -299,6 +311,7 @@ worshipAdminRouter.put('/songs/:id/sync', W, async (req, res) => {
 worshipAdminRouter.delete('/songs/:id/sync', W, async (req, res) => {
   const s = await loadSong(idOf(req.params.id, 'Lagu'));
   await prisma.worshipSong.update({ where: { id: s.id }, data: { lirikSinkron: null as never } });
+  audit(req, { action: 'DELETE', resource: 'worship_song', resourceId: s.id, resourceLabel: `Lirik sinkron ${s.judul}`, metadata: { kind: 'worship-sync-delete' } });
   res.json({ success: true });
 });
 
@@ -367,6 +380,14 @@ worshipAdminRouter.post('/elsa/:jobId/cancel', W, async (req, res) => {
   });
   if (!r.count) throw BadRequest('Proses sudah selesai.');
   killRunningElsaJob(id);
+  const job = await prisma.worshipSyncJob.findUnique({ where: { id }, select: { songId: true, song: { select: { judul: true } } } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'worship_sync_job',
+    resourceId: id,
+    resourceLabel: `Batalkan sinkronisasi Elsa ${job?.song?.judul ?? ''}`.trim(),
+    metadata: { kind: 'elsa-cancel' },
+  });
   res.json({ success: true });
 });
 

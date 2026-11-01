@@ -247,6 +247,8 @@ const FIELD: Record<string, string> = {
   jemaatIds: 'Jumlah jemaat',
   autoReciprocal: 'Hubungan balik otomatis',
   rating: 'Nilai',
+  allowReview: 'Rating & ulasan',
+  urutan: 'Urutan tampil',
   adaKomentar: 'Ada komentar',
   isAnonim: 'Anonim',
   untuk: 'Didoakan untuk',
@@ -364,6 +366,7 @@ const VALUE: Record<string, string> = {
   'worship-sync-delete': 'menghapus lirik sinkron',
   'elsa-cancel': 'membatalkan sinkronisasi Elsa',
   'geocode-run': 'menjalankan pemetaan alamat secara manual',
+  'ibadah-reorder': 'mengubah urutan tampil ibadah di app',
   manual: 'manual',
   // status umum
   RESERVE: 'Terdaftar (reservasi)',

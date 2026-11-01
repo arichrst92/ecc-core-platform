@@ -261,6 +261,7 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     kategori: { id: string; nama: string };
     lokasi: string | null;
     isOnline: boolean;
+    urutan: number;
     // URL streaming Zoom/YouTube — guest bisa lihat tanpa login (link
     // biasanya public di poster). Mobile gate "Akses Online" button.
     linkOnline: string | null;
@@ -285,13 +286,16 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         kategori: i.kategoriIbadah!,
         lokasi: i.lokasi,
         isOnline: i.isOnline,
+        urutan: i.urutan,
         linkOnline: i.linkOnline,
       });
     }
   }
 
+  // tanggal → urutan (Portal) → jam
   events.sort((a, b) => {
     if (a.tanggal !== b.tanggal) return a.tanggal.localeCompare(b.tanggal);
+    if (a.urutan !== b.urutan) return a.urutan - b.urutan;
     return a.jam.localeCompare(b.jam);
   });
 

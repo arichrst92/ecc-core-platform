@@ -167,6 +167,13 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
         'Titik untuk cek radius self check-in. Kosong → memakai titik cabang (kalau ada).',
     },
     {
+      name: 'allowReview',
+      label: 'Rating & ulasan jemaat',
+      type: 'switch',
+      defaultValue: true,
+      helperText: 'Aktif = jemaat bisa memberi rating & ulasan dari tiket di app. Nonaktif = kartu ulasan tidak muncul.',
+    },
+    {
       name: 'selfCheckinRadiusM',
       label: 'Self check-in jemaat',
       type: 'select',

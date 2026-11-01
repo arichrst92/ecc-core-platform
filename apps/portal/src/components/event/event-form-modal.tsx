@@ -31,6 +31,8 @@ export type EventFormValues = {
   butuhKehadiran?: boolean;
   /** Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran). */
   allowSelfCheckin?: boolean;
+  /** Rating & ulasan peserta dari tiket di app. */
+  allowReview?: boolean;
   /** Radius self check-in (meter). '' / null = di mana saja. */
   selfCheckinRadiusM?: number | string | null;
   isPublished?: boolean;
@@ -89,6 +91,7 @@ const EMPTY: EventFormValues = {
   tags: [],
   butuhKehadiran: false,
   allowSelfCheckin: false,
+  allowReview: true,
   isPublished: false,
 };
 
@@ -188,6 +191,7 @@ export function EventFormModal({
         tags: (dv.tags as string[]) ?? [],
         butuhKehadiran: (dv.butuhKehadiran as boolean) ?? false,
         allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
+        allowReview: (dv.allowReview as boolean) ?? true,
         selfCheckinRadiusM: (dv.selfCheckinRadiusM as number | null | undefined) ?? '',
         isPublished: (dv.isPublished as boolean) ?? false,
       });
@@ -596,6 +600,21 @@ export function EventFormModal({
                   </p>
                 </div>
               ) : null}
+              <label className="flex items-start gap-2 cursor-pointer p-3 border border-neutral-200 rounded-lg hover:bg-neutral-50 mt-2">
+                <input
+                  type="checkbox"
+                  checked={values.allowReview !== false}
+                  onChange={(e) => patch({ allowReview: e.target.checked })}
+                  className="w-4 h-4 accent-brand-500 mt-0.5"
+                />
+                <div>
+                  <div className="text-sm font-medium text-neutral-900">Rating & ulasan peserta</div>
+                  <div className="text-xs text-neutral-500 mt-0.5">
+                    Aktif = peserta bisa memberi rating & ulasan dari tiket di app (mulai event dimulai sampai 14 hari setelah
+                    selesai). Nonaktif = kartu ulasan tidak muncul di app.
+                  </div>
+                </div>
+              </label>
             </Section>
 
             {/* Syarat & role peserta */}

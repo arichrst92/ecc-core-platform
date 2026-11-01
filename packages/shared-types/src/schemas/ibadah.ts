@@ -69,6 +69,8 @@ export const createIbadahSchema = z
     requiresCheckout: z.boolean().default(false),
     // Modul 27 — flag ibadah anak: mobile tampil badge, checkin auto-gen pickup code
     isKidsIbadah: z.boolean().default(false),
+    // Rating & ulasan jemaat dari tiket (off = tidak muncul di app)
+    allowReview: z.boolean().default(true),
     deskripsi: emptyToUndefined(z.string().trim()),
   })
   .refine(
@@ -106,6 +108,7 @@ export const updateIbadahSchema = z.object({
   linkOnline: emptyToUndefined(z.string().url()),
   requiresCheckout: z.boolean().optional(),
   isKidsIbadah: z.boolean().optional(),
+  allowReview: z.boolean().optional(),
   deskripsi: emptyToUndefined(z.string().trim()),
   isActive: z.boolean().optional(),
 });

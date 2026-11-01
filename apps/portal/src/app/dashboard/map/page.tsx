@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, MapPinned, Play, Search, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Loader2, MapPinned, Maximize2, Minimize2, Play, Search, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   PIN_STYLE,
@@ -47,6 +47,42 @@ export default function MapViewPage() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [showMissing, setShowMissing] = useState(false);
   const [tick, setTick] = useState(0);
+  // Layar penuh: peta memenuhi layar, saringan & legenda mengambang di atas peta.
+  const [fullscreen, setFullscreen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  async function toggleFullscreen() {
+    const el = wrapRef.current;
+    if (!fullscreen) {
+      setFullscreen(true);
+      try {
+        await el?.requestFullscreen?.();
+      } catch {
+        /* browser menolak → tetap layar penuh di dalam jendela */
+      }
+    } else {
+      setFullscreen(false);
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+    }
+  }
+  useEffect(() => {
+    // Esc / tombol browser keluar dari fullscreen → ikut keluar mode.
+    const onChange = () => {
+      if (!document.fullscreenElement) setFullscreen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFullscreen(false);
+    document.addEventListener('fullscreenchange', onChange);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  useEffect(() => {
+    // Ukuran peta berubah → Leaflet perlu menghitung ulang.
+    const t = setTimeout(() => mapRef.current?.invalidateSize(), 120);
+    return () => clearTimeout(t);
+  }, [fullscreen]);
 
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -361,39 +397,9 @@ export default function MapViewPage() {
       ].slice(0, 8)
     : [];
 
-  return (
-    <div className="flex flex-col gap-4">
-      <style>{`
-        .ecc-pin-wrap{background:transparent;border:0}
-        .ecc-pin{position:relative;transition:transform .15s ease}
-        .ecc-pin-wrap:hover .ecc-pin{transform:translateY(-3px) scale(1.06)}
-        .ecc-cluster{background:transparent;border:0}
-        .ecc-popup .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
-        .ecc-popup .leaflet-popup-content{margin:12px 14px}
-        .ecc-area-tip{font-weight:600;font-size:12px;border-radius:8px;padding:2px 8px}
-      `}</style>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <MapPinned className="w-6 h-6" />
-            Map View
-          </h1>
-          <p className="text-neutral-500 mt-1">
-            Lokasi cabang gereja, wilayah homecell area, dan homecell. Klik pin atau area untuk melihat informasinya.
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-sm">
-          <Legend kind="cabang" />
-          <AreaLegend />
-          <Legend kind="homecell" />
-          <JemaatLegend />
-          <Legend kind="nonaktif" />
-        </div>
-      </div>
-
-      {/* Saringan */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-3">
+  // Saringan & status dipakai di tampilan biasa maupun layar penuh (mengambang).
+  const filtersEl = (
+    <>
         <div className="flex flex-wrap items-center gap-1 pr-2 mr-1 border-r border-neutral-200">
           <span className="text-xs font-medium text-neutral-500 mr-1">Tampilkan:</span>
           <Toggle
@@ -480,8 +486,10 @@ export default function MapViewPage() {
             </div>
           )}
         </div>
-      </div>
-
+          </>
+  );
+  const statusEl = (
+    <>
       {(showJemaat || showSebaran) && geo.data && <GeocodeProgress s={geo.data} onRun={runNow} msg={runMsg} />}
 
       {showJemaat && (jemaatQ.isLoading || jemaatQ.isError) && (
@@ -505,9 +513,98 @@ export default function MapViewPage() {
         </div>
       )}
 
-      {/* Peta */}
-      <div className="relative bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div ref={mapEl} className="w-full h-[calc(100vh-320px)] min-h-[460px] z-0" />
+    </>
+  );
+  const legendEl = (
+    <>
+      <Legend kind="cabang" />
+      <AreaLegend />
+      <Legend kind="homecell" />
+      <JemaatLegend />
+      <Legend kind="nonaktif" />
+    </>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <style>{`
+        .ecc-pin-wrap{background:transparent;border:0}
+        .ecc-pin{position:relative;transition:transform .15s ease}
+        .ecc-pin-wrap:hover .ecc-pin{transform:translateY(-3px) scale(1.06)}
+        .ecc-cluster{background:transparent;border:0}
+        .ecc-popup .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+        .ecc-popup .leaflet-popup-content{margin:12px 14px}
+        .ecc-area-tip{font-weight:600;font-size:12px;border-radius:8px;padding:2px 8px}
+      `}</style>
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+            <MapPinned className="w-6 h-6" />
+            Map View
+          </h1>
+          <p className="text-neutral-500 mt-1">
+            Lokasi cabang gereja, wilayah homecell area, dan homecell. Klik pin atau area untuk melihat informasinya.
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-sm flex-wrap">
+          {legendEl}
+          <button
+            onClick={() => void toggleFullscreen()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-medium"
+            title="Layar penuh"
+          >
+            <Maximize2 className="w-4 h-4" /> Layar penuh
+          </button>
+        </div>
+      </div>
+
+      {/* Saringan */}
+      {!fullscreen && <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-3">{filtersEl}</div>}
+      {!fullscreen && statusEl}
+
+      {/* Peta — wrapper yang sama dipakai untuk layar penuh supaya peta tidak dibuat ulang */}
+      <div
+        ref={wrapRef}
+        className={
+          fullscreen
+            ? 'fixed inset-0 z-[2000] bg-white'
+            : 'relative bg-white border border-neutral-200 rounded-xl overflow-hidden'
+        }
+      >
+        <div ref={mapEl} className={`w-full z-0 ${fullscreen ? 'h-full' : 'h-[calc(100vh-320px)] min-h-[460px]'}`} />
+        {fullscreen && (
+          <>
+            {/* Panel saringan mengambang (kiri atas) */}
+            <div className="absolute top-3 left-14 z-[1000] w-[min(560px,calc(100vw-140px))] max-h-[calc(100vh-120px)] overflow-y-auto space-y-2">
+              <div className="bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg">
+                <button
+                  onClick={() => setPanelOpen((x) => !x)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-neutral-800"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <MapPinned className="w-4 h-4" /> Map View · Saringan
+                  </span>
+                  {panelOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {panelOpen && <div className="px-3 pb-3 flex flex-wrap items-center gap-3">{filtersEl}</div>}
+              </div>
+              {panelOpen && <div className="space-y-2 [&>*]:mt-0 [&>*]:shadow-lg">{statusEl}</div>}
+            </div>
+            {/* Legenda mengambang (kiri bawah) */}
+            <div className="absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm max-w-[calc(100vw-24px)]">
+              {legendEl}
+            </div>
+            {/* Keluar layar penuh (kanan atas) */}
+            <button
+              onClick={() => void toggleFullscreen()}
+              className="absolute top-3 right-3 z-[1000] inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/95 border border-neutral-200 shadow-lg text-sm font-medium text-neutral-800 hover:bg-white"
+              title="Keluar layar penuh (Esc)"
+            >
+              <Minimize2 className="w-4 h-4" /> Keluar
+            </button>
+          </>
+        )}
         {(q.isLoading || (!mapRef.current && !mapError)) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/60">
             <Loader2 className="w-6 h-6 animate-spin text-brand-600" />

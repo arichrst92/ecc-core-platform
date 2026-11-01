@@ -483,6 +483,7 @@ eventRouter.post('/', async (req, res) => {
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
       allowSelfCheckin: input.allowSelfCheckin ?? false,
+      allowReview: input.allowReview ?? true,
       selfCheckinRadiusM: input.selfCheckinRadiusM ?? null,
       ...(loc ?? {}),
       isPublished: input.isPublished ?? false,
@@ -553,6 +554,7 @@ eventRouter.patch('/:id', async (req, res) => {
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
     allowSelfCheckin: input.allowSelfCheckin,
+    allowReview: input.allowReview,
     selfCheckinRadiusM: input.selfCheckinRadiusM,
     isActive: input.isActive,
   };

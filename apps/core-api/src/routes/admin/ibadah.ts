@@ -10,6 +10,7 @@ import {
   ibadahCheckinSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
+import { z } from 'zod';
 import { NotFound, BadRequest, Forbidden, Conflict } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
@@ -126,6 +127,8 @@ ibadahRouter.get('/calendar', async (req, res) => {
     tipeJadwal: string;
     lokasi: string | null;
     isOnline: boolean;
+    /** Urutan tampil (Portal → Ibadah, kecil = atas) dalam satu tanggal. */
+    urutan: number;
     // URL streaming Zoom/YouTube — null kalau ibadah offline atau belum di-set.
     // Mobile gate "Akses Online" button dengan field ini.
     linkOnline: string | null;
@@ -152,14 +155,16 @@ ibadahRouter.get('/calendar', async (req, res) => {
         tipeJadwal: i.tipeJadwal,
         lokasi: i.lokasi,
         isOnline: i.isOnline,
+        urutan: i.urutan,
         linkOnline: i.linkOnline,
       });
     }
   }
 
-  // Sort by tanggal + jam
+  // Sort: tanggal → urutan (diatur di Portal) → jam mulai
   events.sort((a, b) => {
     if (a.tanggal !== b.tanggal) return a.tanggal.localeCompare(b.tanggal);
+    if (a.urutan !== b.urutan) return a.urutan - b.urutan;
     return a.jamMulai.localeCompare(b.jamMulai);
   });
 
@@ -311,6 +316,28 @@ ibadahRouter.get('/:id', async (req, res) => {
   res.json({ success: true, data: { ...rest, petugas, okupansi } });
 });
 
+/**
+ * Atur urutan tampil ibadah satu cabang (Portal → Ibadah). Urutan ini dipakai
+ * app untuk mengurutkan ibadah pada tanggal yang sama.
+ *   POST /admin/ibadah/reorder { cabangId, ids: string[] }  (ids = urutan baru, atas → bawah)
+ */
+ibadahRouter.post('/reorder', async (req, res) => {
+  const { cabangId, ids } = z
+    .object({ cabangId: z.string().uuid(), ids: z.array(z.string().uuid()).min(1).max(500) })
+    .parse(req.body ?? {});
+  const owned = await prisma.ibadah.findMany({ where: { cabangId, id: { in: ids } }, select: { id: true, nama: true } });
+  if (owned.length !== new Set(ids).size) throw BadRequest('Daftar ibadah tidak sesuai dengan cabang.');
+  await prisma.$transaction(ids.map((id, idx) => prisma.ibadah.update({ where: { id }, data: { urutan: idx + 1 } })));
+  const cabang = await prisma.cabangGereja.findUnique({ where: { id: cabangId }, select: { nama: true } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'ibadah',
+    resourceLabel: `Urutan ibadah ${cabang?.nama ?? ''} diubah`.trim(),
+    metadata: { kind: 'ibadah-reorder', urutan: ids.map((id) => owned.find((o) => o.id === id)?.nama ?? id) },
+  });
+  res.json({ success: true });
+});
+
 ibadahRouter.post('/', async (req, res) => {
   const input = createIbadahSchema.parse(req.body);
   const loc = await mapsUrlToFields(input.mapsUrl);
@@ -329,6 +356,9 @@ ibadahRouter.post('/', async (req, res) => {
     cabangId: input.cabangId,
   });
   if (pointErr) throw BadRequest(pointErr);
+  // Ibadah baru → paling bawah di urutan cabangnya.
+  const last = await prisma.ibadah.aggregate({ where: { cabangId: input.cabangId }, _max: { urutan: true } });
+  (data as Record<string, unknown>).urutan = (last._max.urutan ?? 0) + 1;
   const created = await prisma.ibadah.create({ data });
   audit(req, { action: 'CREATE', resource: 'ibadah', resourceId: created.id, resourceLabel: created.nama, after: created });
   res.status(201).json({ success: true, data: created });

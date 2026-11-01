@@ -21,6 +21,10 @@ import {
   Armchair,
   MapPin,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  MessageSquareOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -53,6 +57,9 @@ interface IbadahItem extends Record<string, unknown> {
   kategoriIbadah?: { id: string; nama: string };
   petugasCount?: number;
   pelayananCount?: number;
+  /** Urutan tampil di app (kecil = atas), diatur per cabang. */
+  urutan?: number;
+  allowReview?: boolean;
 }
 
 const HARI_LABEL: Record<string, string> = {
@@ -114,14 +121,9 @@ export default function IbadahPage() {
       arr.push(i);
       map.set(key, arr);
     }
-    // Sort items di dalam tiap cabang by kategori → nama
+    // Urutan di dalam tiap cabang = urutan tampil di app (bisa diatur ulang).
     for (const arr of map.values()) {
-      arr.sort((a, b) => {
-        const ka = a.kategoriIbadah?.nama ?? '';
-        const kb = b.kategoriIbadah?.nama ?? '';
-        if (ka !== kb) return ka.localeCompare(kb);
-        return a.nama.localeCompare(b.nama);
-      });
+      arr.sort((a, b) => (a.urutan ?? 0) - (b.urutan ?? 0) || a.nama.localeCompare(b.nama));
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [filteredItems]);
@@ -147,6 +149,27 @@ export default function IbadahPage() {
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
   });
 
+  // Simpan urutan baru satu cabang (optimistis: tampilan langsung berubah).
+  const reorderMut = useMutation({
+    mutationFn: async ({ cabangId, ids }: { cabangId: string; ids: string[] }) =>
+      apiClient.post('/admin/ibadah/reorder', { cabangId, ids }),
+    onMutate: async ({ ids }) => {
+      await qc.cancelQueries({ queryKey: ['ibadah', 'all'] });
+      const prev = qc.getQueryData<IbadahItem[]>(['ibadah', 'all']);
+      const pos = new Map(ids.map((id, i) => [id, i + 1]));
+      qc.setQueryData<IbadahItem[]>(['ibadah', 'all'], (old) =>
+        (old ?? []).map((it) => (pos.has(it.id) ? { ...it, urutan: pos.get(it.id) } : it)),
+      );
+      return { prev };
+    },
+    onError: (err: any, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['ibadah', 'all'], ctx.prev);
+      toast.error(err.response?.data?.error?.message ?? 'Gagal menyimpan urutan');
+    },
+    onSuccess: () => toast.success('Urutan tersimpan — app mengikuti urutan ini'),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['ibadah'] }),
+  });
+
   const deleteMut = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/admin/ibadah/${id}`),
     onSuccess: () => {
@@ -167,7 +190,7 @@ export default function IbadahPage() {
           </h1>
           <p className="text-neutral-500 mt-1">
             {view === 'list'
-              ? 'Jadwal ibadah dikelompokkan per cabang.'
+              ? 'Jadwal ibadah per cabang. Seret baris (atau pakai panah) untuk mengatur urutan tampil di app.'
               : 'Tampilan kalender per cabang — recurring occurrences di-generate otomatis.'}
           </p>
         </div>
@@ -240,6 +263,10 @@ export default function IbadahPage() {
               items={list}
               onEdit={setEditing}
               onDelete={setDeleting}
+              onReorder={(ids) => {
+                const cabangId = list[0]?.cabang?.id;
+                if (cabangId) reorderMut.mutate({ cabangId, ids });
+              }}
             />
           ))}
         </div>
@@ -291,13 +318,24 @@ function CabangSection({
   items,
   onEdit,
   onDelete,
+  onReorder,
 }: {
   cabang: string;
   items: IbadahItem[];
   onEdit: (i: IbadahItem) => void;
   onDelete: (i: IbadahItem) => void;
+  onReorder: (ids: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  function move(from: number, to: number) {
+    if (to < 0 || to >= items.length || from === to) return;
+    const ids = items.map((i) => i.id);
+    const [x] = ids.splice(from, 1);
+    ids.splice(to, 0, x!);
+    onReorder(ids);
+  }
   // Hitung unique kategori untuk display di header.
   const kategoriCount = new Set(items.map((i) => i.kategoriIbadah?.nama ?? '-')).size;
   return (
@@ -325,6 +363,9 @@ function CabangSection({
           <table className="w-full text-sm">
             <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
               <tr>
+                <th className="px-2 py-2 text-left font-medium" style={{ width: '84px' }} title="Urutan tampil di app — seret atau pakai panah">
+                  Urutan
+                </th>
                 <th className="px-4 py-2 text-left font-medium">Nama Ibadah</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '160px' }}>Kategori</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '170px' }}>Jadwal</th>
@@ -337,16 +378,75 @@ function CabangSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {items.map((i) => (
-                <tr key={i.id} className="hover:bg-neutral-50">
+              {items.map((i, idx) => (
+                <tr
+                  key={i.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragId(i.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    if (!dragId) return;
+                    e.preventDefault();
+                    setOverId(i.id);
+                  }}
+                  onDragLeave={() => setOverId((o) => (o === i.id ? null : o))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = items.findIndex((x) => x.id === dragId);
+                    setDragId(null);
+                    setOverId(null);
+                    if (from >= 0) move(from, idx);
+                  }}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setOverId(null);
+                  }}
+                  className={`hover:bg-neutral-50 ${dragId === i.id ? 'opacity-40' : ''} ${
+                    overId === i.id && dragId !== i.id ? 'outline outline-2 -outline-offset-2 outline-brand-400' : ''
+                  }`}
+                >
+                  <td className="px-2 py-2.5">
+                    <div className="flex items-center gap-0.5 text-neutral-400">
+                      <GripVertical className="w-4 h-4 cursor-grab active:cursor-grabbing" aria-label="Seret untuk mengubah urutan" />
+                      <span className="w-5 text-center text-xs tabular-nums text-neutral-500">{idx + 1}</span>
+                      <button
+                        onClick={() => move(idx, idx - 1)}
+                        disabled={idx === 0}
+                        className="p-0.5 rounded hover:bg-neutral-100 disabled:opacity-30"
+                        title="Naikkan"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => move(idx, idx + 1)}
+                        disabled={idx === items.length - 1}
+                        className="p-0.5 rounded hover:bg-neutral-100 disabled:opacity-30"
+                        title="Turunkan"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5">
-                    <Link
-                      href={`/dashboard/ibadah/${i.id}`}
-                      className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
-                    >
-                      <Eye className="w-3.5 h-3.5 shrink-0" />
-                      {i.nama}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/ibadah/${i.id}`}
+                        className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+                      >
+                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                        {i.nama}
+                      </Link>
+                      {i.allowReview === false ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-neutral-100 text-neutral-500"
+                          title="Rating & ulasan dimatikan — tidak muncul di app"
+                        >
+                          <MessageSquareOff className="w-3 h-3" /> Ulasan off
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5">
                     {i.kategoriIbadah?.nama ? (

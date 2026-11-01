@@ -28,6 +28,7 @@ const REASON_TEXT: Record<string, string> = {
   CLOSED: 'Masa pemberian ulasan sudah berakhir.',
   CANCELLED: 'Tiket ini dibatalkan.',
   NOT_OWNER: 'Hanya pemilik tiket yang bisa memberi ulasan.',
+  DISABLED: 'Ulasan tidak dibuka untuk acara ini.',
 };
 
 async function loadTicket(kind: 'IBADAH' | 'EVENT', ticketId: string, jemaatId: string) {
@@ -40,15 +41,17 @@ async function loadTicket(kind: 'IBADAH' | 'EVENT', ticketId: string, jemaatId: 
         status: true,
         tanggalIbadah: true,
         ibadahId: true,
-        ibadah: { select: { jamMulai: true, jamSelesai: true, cabangId: true, cabang: { select: { timezone: true } } } },
+        ibadah: { select: { jamMulai: true, jamSelesai: true, allowReview: true, cabangId: true, cabang: { select: { timezone: true } } } },
         review: true,
       },
     });
     if (!r) throw NotFound('Tiket tidak ditemukan');
-    const win: ReviewWindow =
-      r.jemaatId !== jemaatId
-        ? { ...ibadahReviewWindow(r, r.ibadah.cabang?.timezone), open: false, reason: 'NOT_OWNER' }
-        : ibadahReviewWindow(r, r.ibadah.cabang?.timezone);
+    const base = ibadahReviewWindow(r, r.ibadah.cabang?.timezone);
+    const win: ReviewWindow = !r.ibadah.allowReview
+      ? { ...base, open: false, reason: 'DISABLED' }
+      : r.jemaatId !== jemaatId
+        ? { ...base, open: false, reason: 'NOT_OWNER' }
+        : base;
     return {
       win,
       review: r.review,
@@ -62,13 +65,17 @@ async function loadTicket(kind: 'IBADAH' | 'EVENT', ticketId: string, jemaatId: 
       jemaatId: true,
       status: true,
       eventId: true,
-      event: { select: { tanggalMulai: true, tanggalSelesai: true, jamMulai: true, jamSelesai: true, cabangId: true, cabang: { select: { timezone: true } } } },
+      event: { select: { tanggalMulai: true, tanggalSelesai: true, jamMulai: true, jamSelesai: true, allowReview: true, cabangId: true, cabang: { select: { timezone: true } } } },
       review: true,
     },
   });
   if (!p) throw NotFound('Tiket tidak ditemukan');
   const base = eventReviewWindow(p, p.event.cabang?.timezone);
-  const win: ReviewWindow = p.jemaatId !== jemaatId ? { ...base, open: false, reason: 'NOT_OWNER' } : base;
+  const win: ReviewWindow = !p.event.allowReview
+    ? { ...base, open: false, reason: 'DISABLED' }
+    : p.jemaatId !== jemaatId
+      ? { ...base, open: false, reason: 'NOT_OWNER' }
+      : base;
   return {
     win,
     review: p.review,
@@ -86,6 +93,8 @@ meReviewRouter.get('/', async (req, res) => {
   const kind = kindSchema.parse(String(req.query.kind ?? '').toUpperCase());
   const ticketId = z.string().uuid().parse(req.query.ticketId);
   const t = await loadTicket(kind, ticketId, jemaatId);
+  // Ulasan dimatikan → tanpa data ulasan (app lama pun menyembunyikan kartu).
+  if (t.win.reason === 'DISABLED') return res.json({ success: true, data: present(t.win, null) });
   if (t.target.jemaatId !== jemaatId && !t.review) {
     // tiket keluarga/tamu: status saja, tanpa data ulasan orang lain
     return res.json({ success: true, data: present(t.win, null) });

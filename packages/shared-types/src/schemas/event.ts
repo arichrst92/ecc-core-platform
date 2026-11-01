@@ -132,6 +132,8 @@ export const createEventSchema = z
     butuhKehadiran: z.boolean().default(false),
     // Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran=true).
     allowSelfCheckin: z.boolean().default(false),
+    // Rating & ulasan peserta dari tiket (off = tidak muncul di app)
+    allowReview: z.boolean().default(true),
 
     isPublished: z.boolean().default(false),
     ...eventRoleFields,
@@ -201,6 +203,7 @@ export const updateEventSchema = z
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
     butuhKehadiran: z.boolean().optional(),
     allowSelfCheckin: z.boolean().optional(),
+    allowReview: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     isActive: z.boolean().optional(),
     ...eventRoleFields,

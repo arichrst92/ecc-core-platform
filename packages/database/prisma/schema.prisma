@@ -508,6 +508,10 @@ model Ibadah {
   // Default true = ibadah aktif otomatis appear di guest browse.
   // Admin bisa toggle false untuk ibadah internal (mis. ibadah pengurus,
   // latihan, ibadah khusus) yang tidak boleh ditampilkan ke guest.
+  // Rating & ulasan dari tiket (2.4.5) — off = kartu ulasan tidak muncul di app.
+  allowReview      Boolean     @default(true) @map("allow_review")
+  // Urutan tampil di app (diatur di Portal → Ibadah, kecil = atas).
+  urutan           Int         @default(0)
   isPublic         Boolean     @default(true) @map("is_public")
   // Toggle wajib checkout — kalau true, jemaat yang sudah check-in harus
   // di-scan lagi saat keluar (admin scan QR jemaat). Untuk ibadah anak
@@ -1363,6 +1367,8 @@ model Event {
   butuhKehadiran Boolean @default(false) @map("butuh_kehadiran")
   // Peserta boleh check-in sendiri dari aplikasi (dirinya + keluarga yang
   // terdaftar) mulai 15 menit sebelum event s.d. selesai. Butuh butuhKehadiran.
+  // Rating & ulasan dari tiket (2.4.5) — off = kartu ulasan tidak muncul di app.
+  allowReview      Boolean @default(true) @map("allow_review")
   allowSelfCheckin Boolean @default(false) @map("allow_self_checkin")
 
   // Role yang diberikan otomatis ke peserta (saat HADIR; kalau event tanpa

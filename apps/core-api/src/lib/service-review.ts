@@ -13,7 +13,7 @@ import { calendarDateOf, tzOr, wallToInstant } from './tz.js';
 export const REVIEW_WINDOW_DAYS = Number(process.env.REVIEW_WINDOW_DAYS ?? 14);
 const DAY_MS = 86_400_000;
 
-export type ReviewReason = 'NOT_STARTED' | 'CLOSED' | 'CANCELLED' | 'NOT_OWNER';
+export type ReviewReason = 'NOT_STARTED' | 'CLOSED' | 'CANCELLED' | 'NOT_OWNER' | 'DISABLED';
 export interface ReviewWindow {
   open: boolean;
   reason: ReviewReason | null;

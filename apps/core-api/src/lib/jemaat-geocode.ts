@@ -35,7 +35,7 @@ const BATCH = USE_GOOGLE ? 1000 : 250;
 /** Hasil Google boleh disimpan maks. 30 hari → disegarkan setelah itu. */
 const GOOGLE_REFRESH_DAYS = 30;
 /** Naikkan versi bila aturan berubah → semua alamat diproses ulang bertahap. */
-export const GEOCODE_VERSION = USE_GOOGLE ? 'google-v2' : 'nominatim-v4';
+export const GEOCODE_VERSION = USE_GOOGLE ? 'google-v3' : 'nominatim-v5';
 /** Versi lama yang hasil OK-nya masih dipakai (hanya yang gagal diproses ulang). */
 const OK_STILL_VALID: string[] = [];
 
@@ -50,20 +50,45 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** placeId (Google) boleh disimpan permanen → dipakai untuk tautan Google Maps. */
 type Hit = { lat: number; lng: number; placeId?: string | null } | null;
 
+/**
+ * Negara cabang dari zona waktunya (cabang tidak menyimpan negara). Dipakai
+ * supaya alamat jemaat cabang Sydney dicari di Australia, bukan dipaksa ke Indonesia.
+ */
+export function negaraDariZona(tz: string | null | undefined): string | null {
+  const z = tz ?? '';
+  if (/^Asia\/(Jakarta|Pontianak|Makassar|Jayapura)$/.test(z)) return 'id';
+  if (z.startsWith('Australia/')) return 'au';
+  if (/^Asia\/(Kuala_Lumpur|Kuching)$/.test(z)) return 'my';
+  if (z === 'Asia/Singapore') return 'sg';
+  if (z === 'Pacific/Auckland') return 'nz';
+  return null;
+}
+
+/**
+ * Hasil Google yang terlalu kasar (negara, provinsi, kabupaten, pulau/alam) ditolak:
+ * Google mengembalikan titik tengah wilayah itu bila alamatnya tidak dikenali —
+ * mis. semua alamat yang gagal jatuh di tengah Kalimantan.
+ */
+const TERLALU_KASAR = new Set([
+  'country', 'continent', 'administrative_area_level_1', 'administrative_area_level_2',
+  'natural_feature', 'colloquial_area', 'archipelago',
+]);
+
 /** Satu permintaan ke Nominatim. Lempar error bila layanan menolak (429/5xx) supaya batch berhenti. */
-export async function geocodeNominatim(alamat: string): Promise<Hit> {
+export async function geocodeNominatim(alamat: string, negara: string | null): Promise<Hit> {
   const p = new URLSearchParams({ q: alamat, format: 'jsonv2', limit: '1', 'accept-language': 'id' });
   if (process.env.NOMINATIM_EMAIL) p.set('email', process.env.NOMINATIM_EMAIL);
-  p.set('countrycodes', 'id');
+  if (negara) p.set('countrycodes', negara);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const res = await fetch(`${BASE}/search?${p}`, { headers: { 'User-Agent': USER_AGENT }, signal: ctrl.signal });
     if (res.status === 429 || res.status >= 500) throw new Error(`nominatim ${res.status}`);
     if (!res.ok) return null;
-    const rows = (await res.json()) as { lat: string; lon: string }[];
+    const rows = (await res.json()) as { lat: string; lon: string; place_rank?: number }[];
     const r = rows[0];
     if (!r) return null;
+    if ((r.place_rank ?? 30) < 16) return null; // lebih kasar dari kota → tolak
     const lat = Number(r.lat);
     const lng = Number(r.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -73,15 +98,15 @@ export async function geocodeNominatim(alamat: string): Promise<Hit> {
   }
 }
 
-/** Google Geocoding API — dibias ke kotak sekitar cabang, dibatasi ke Indonesia. */
-export async function geocodeGoogle(alamat: string): Promise<Hit> {
+/** Google Geocoding API — dibatasi ke negara cabang. */
+export async function geocodeGoogle(alamat: string, negara: string | null): Promise<Hit> {
   const p = new URLSearchParams({
     address: alamat,
     key: GOOGLE_KEY,
     language: 'id',
-    region: 'id',
-    components: 'country:ID',
+    region: negara ?? 'id',
   });
+  if (negara) p.set('components', `country:${negara.toUpperCase()}`);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
@@ -90,7 +115,7 @@ export async function geocodeGoogle(alamat: string): Promise<Hit> {
     const body = (await res.json()) as {
       status: string;
       error_message?: string;
-      results?: { place_id?: string; geometry: { location: { lat: number; lng: number } } }[];
+      results?: { place_id?: string; types?: string[]; geometry: { location: { lat: number; lng: number } } }[];
     };
     if (body.status === 'ZERO_RESULTS') return null;
     // Kunci salah / kuota habis / API belum diaktifkan → hentikan batch & tampilkan di Portal.
@@ -98,15 +123,16 @@ export async function geocodeGoogle(alamat: string): Promise<Hit> {
     const top = body.results?.[0];
     const loc = top?.geometry.location;
     if (!loc) return null;
+    if ((top?.types ?? []).some((t) => TERLALU_KASAR.has(t))) return null; // titik tengah wilayah, bukan alamat
     return { lat: roundCoord(loc.lat), lng: roundCoord(loc.lng), placeId: top?.place_id ?? null };
   } finally {
     clearTimeout(timer);
   }
 }
 
-const geocodeOne = (q: string) => (USE_GOOGLE ? geocodeGoogle(q) : geocodeNominatim(q));
+const geocodeOne = (q: string, negara: string | null) => (USE_GOOGLE ? geocodeGoogle(q, negara) : geocodeNominatim(q, negara));
 
-type Pending = { id: string; alamat: string; clat: number | null; clng: number | null; cnama: string };
+type Pending = { id: string; alamat: string; clat: number | null; clng: number | null; cnama: string; ctz: string | null };
 
 // ------------------------------------------------------------------ variasi kueri
 
@@ -170,7 +196,7 @@ export function buildQueries(alamat: string, kota: string): string[] {
 /** Jemaat aktif (bukan tamu) beralamat yang belum diproses / alamatnya berubah. */
 async function pending(limit: number): Promise<Pending[]> {
   return prisma.$queryRaw<Pending[]>`
-    SELECT j.id, j.alamat, c.latitude AS clat, c.longitude AS clng, c.nama AS cnama
+    SELECT j.id, j.alamat, c.latitude AS clat, c.longitude AS clng, c.nama AS cnama, c.timezone AS ctz
     FROM jemaat j
     JOIN cabang_gereja c ON c.id = j.cabang_id
     LEFT JOIN jemaat_geocode g ON g.jemaat_id = j.id
@@ -222,12 +248,13 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
       const all = buildQueries(r.alamat, kotaDariCabang(r.cnama ?? ''));
       // Google cukup 2 variasi (alamat + kota, lalu dirapikan); Nominatim sampai 4.
       const queries = USE_GOOGLE ? all.slice(0, 2) : all;
+      const negara = negaraDariZona(r.ctz);
       let hit: Hit = null;
       let tahap = 0;
       try {
         for (let i = 0; i < queries.length && !hit; i++) {
           if (i > 0) await sleep(GAP_MS);
-          hit = await geocodeOne(queries[i]!);
+          hit = await geocodeOne(queries[i]!, negara);
           tahap = i + 1;
         }
       } catch (err) {

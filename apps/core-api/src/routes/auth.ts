@@ -51,7 +51,7 @@ import {
   magicLinkLimiter,
   onboardingLimiter,
 } from '../middleware/rate-limit.js';
-import { grantOnboardingRoles, onboardingRolesCreate } from '../lib/onboarding-roles.js';
+import { grantOnboardingRoles, grantRegisterRoles } from '../lib/onboarding-roles.js';
 import { audit } from '../lib/audit.js';
 import { generateUniqueKode } from '../lib/kode-reservasi.js';
 import { saveProfilePhoto } from '../lib/storage.js';
@@ -370,10 +370,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
   );
 
-  // 5. Role otomatis sesuai pilihan jenis jemaat di layar daftar — diatur di
-  // Portal → App Settings → Onboarding Config (dulu hardcode Jemaat → Jemaat
-  // Tetap / New Comer). Tidak ada aturan → tanpa role (admin assign manual).
-  const onboardingRoles = await onboardingRolesCreate(input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
+  // 5. Role otomatis (Onboarding Config) diberikan SETELAH akun dibuat — lihat 7b.
 
   // 6. Create Jemaat — atau upgrade record tamu (riwayat event/ibadah tetap).
   const jemaatData = {
@@ -392,7 +389,6 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
       // Register lengkap = onboarded (skip wizard first login).
       onboardedAt: new Date(),
       isActive: true,
-      jemaatRoles: onboardingRoles ? { create: onboardingRoles } : undefined,
   };
   const created = upgradeTamu
     ? await prisma.jemaat.update({
@@ -400,6 +396,14 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
         data: { ...jemaatData, isTamu: false },
       })
     : await prisma.jemaat.create({ data: jemaatData });
+
+  // 7b. Role sesuai Portal → Onboarding Config (pilihan + "Semua pendaftar").
+  // Gagal → dicatat saja; pendaftaran tidak boleh terblokir karena role.
+  try {
+    await grantRegisterRoles(created.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
+  } catch (err) {
+    logger.error({ err, jemaatId: created.id }, 'register: gagal memberi role onboarding (akun tetap dibuat)');
+  }
 
   // 7. Optional homecell membership
   if (input.homecellId) {
@@ -1371,7 +1375,14 @@ authRouter.post(
     if (input.alamat !== undefined) updateData.alamat = input.alamat;
     if (input.cabangId !== undefined) updateData.cabangId = input.cabangId;
     if (input.email !== undefined) updateData.email = input.email;
-    if (!wasOnboarded) updateData.onboardedAt = new Date();
+
+    // Tandai onboarded secara atomik: hanya satu permintaan yang "menang" bila
+    // tombol ditekan dua kali / request terkirim ulang → role tidak dobel.
+    let firstTime = false;
+    if (!wasOnboarded) {
+      const claim = await prisma.jemaat.updateMany({ where: { id: existing.id, onboardedAt: null }, data: { onboardedAt: new Date() } });
+      firstTime = claim.count === 1;
+    }
 
     const updated = await prisma.jemaat.update({
       where: { id: existing.id },
@@ -1389,17 +1400,23 @@ authRouter.post(
       },
     });
 
-    // Login pertama (data dari impor/admin/keluarga) → role sesuai Onboarding Config, hanya bila belum punya role.
-    const rolesGranted = wasOnboarded
-      ? 0
-      : await grantOnboardingRoles(existing.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
+    // Login pertama (data dari impor/admin/keluarga) → role sesuai Onboarding
+    // Config, hanya bila belum punya role. Gagal tidak memblokir onboarding.
+    let rolesGranted = 0;
+    if (firstTime) {
+      try {
+        rolesGranted = await grantOnboardingRoles(existing.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
+      } catch (err) {
+        logger.error({ err, jemaatId: existing.id }, 'onboarding: gagal memberi role (onboarding tetap selesai)');
+      }
+    }
 
     audit(req, {
       action: 'UPDATE',
       resource: 'jemaat',
       resourceId: existing.id,
       resourceLabel: `Onboarding complete: ${existing.namaLengkap}`,
-      metadata: { firstTime: !wasOnboarded, fieldsSet: Object.keys(updateData), rolesGranted },
+      metadata: { firstTime, fieldsSet: Object.keys(updateData), rolesGranted },
     });
 
     res.json({

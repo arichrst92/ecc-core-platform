@@ -81,9 +81,10 @@ export default function OnboardingConfigPage() {
   });
   const apply = useMutation({
     mutationFn: async () =>
-      (await apiClient.post<{ data: { jemaat: number; roles: number } }>('/admin/onboarding-config/tanpa-role/apply')).data.data,
+      (await apiClient.post<{ data: { jemaat: number; roles: number; gagal: number } }>('/admin/onboarding-config/tanpa-role/apply')).data.data,
     onSuccess: (r) => {
       toast.success(`${r.jemaat.toLocaleString('id-ID')} jemaat diberi role (${r.roles.toLocaleString('id-ID')} role)`);
+      if (r.gagal > 0) toast.error(`${r.gagal.toLocaleString('id-ID')} jemaat gagal diproses — coba terapkan lagi.`);
       void qc.invalidateQueries({ queryKey: ['onboarding-config', 'tanpa-role'] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menerapkan'),

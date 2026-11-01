@@ -142,11 +142,15 @@ onboardingConfigRouter.post('/tanpa-role/apply', requireMenu('onboarding-config'
   const rules = await prisma.onboardingRoleRule.count({ where: { jenis: 'TANPA_ROLE' } });
   if (!rules) throw BadRequest('Belum ada aturan untuk "Sudah onboard, role kosong". Tambahkan & simpan dulu.');
   const result = await applyTanpaRole();
+  if (result.alreadyRunning) {
+    res.status(409).json({ success: false, error: { code: 'ALREADY_RUNNING', message: 'Proses pemberian role sedang berjalan. Tunggu sebentar lalu muat ulang.' } });
+    return;
+  }
   audit(req, {
     action: 'UPDATE',
     resource: 'onboarding_config',
     resourceLabel: `Beri role ke ${result.jemaat} jemaat yang role-nya kosong`,
-    metadata: { kind: 'onboarding-apply-tanpa-role', jemaat: result.jemaat, rolesGranted: result.roles },
+    metadata: { kind: 'onboarding-apply-tanpa-role', jemaat: result.jemaat, rolesGranted: result.roles, gagal: result.gagal },
   });
   res.json({ success: true, data: result });
 });

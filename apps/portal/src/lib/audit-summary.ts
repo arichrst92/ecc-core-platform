@@ -250,6 +250,7 @@ const FIELD: Record<string, string> = {
   rating: 'Nilai',
   aturan: 'Aturan',
   rolesGranted: 'Role diberikan',
+  gagal: 'Gagal',
   allowReview: 'Rating & ulasan',
   urutan: 'Urutan tampil',
   adaKomentar: 'Ada komentar',

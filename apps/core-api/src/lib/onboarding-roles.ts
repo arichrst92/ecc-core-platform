@@ -38,13 +38,37 @@ export async function onboardingRolesFor(jenis: 'JEMAAT_TETAP' | 'NEW_COMER' | '
   return out;
 }
 
-/** Bentuk `jemaatRoles: { create: [...] }` untuk prisma.jemaat.create/update. */
-export async function onboardingRolesCreate(
-  jenis: 'JEMAAT_TETAP' | 'NEW_COMER',
-): Promise<Prisma.JemaatRoleUncheckedCreateWithoutJemaatInput[] | undefined> {
-  const roles = await onboardingRolesFor(jenis);
-  if (!roles.length) return undefined;
-  return roles.map((r) => ({ roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true }));
+type RoleSpec = { roleId: string; subRoleId: string; subRoleStatusId: string | null };
+
+/**
+ * Beri role ke satu jemaat secara aman dari balapan (double tap, dua admin,
+ * job bersamaan): dikunci per jemaat (pg_advisory_xact_lock) lalu dicek ulang
+ * di dalam kunci — sub role yang sudah aktif tidak digandakan.
+ * onlyIfNoRole = hanya bila jemaat belum punya role aktif sama sekali.
+ */
+async function grantRoles(jemaatId: string, roles: RoleSpec[], onlyIfNoRole: boolean): Promise<number> {
+  if (!roles.length) return 0;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'jemaat-role:' + jemaatId}))`;
+    const active = await tx.jemaatRole.findMany({ where: { jemaatId, isActive: true }, select: { subRoleId: true } });
+    if (onlyIfNoRole && active.length > 0) return 0;
+    const have = new Set(active.map((a) => a.subRoleId));
+    const todo = roles.filter((r) => !have.has(r.subRoleId));
+    if (!todo.length) return 0;
+    const res = await tx.jemaatRole.createMany({
+      data: todo.map((r) => ({ jemaatId, roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true })),
+    });
+    return res.count;
+  });
+}
+
+/**
+ * Daftar akun baru (POST /auth/register) — role sesuai pilihan + SEMUA.
+ * Dipanggil SETELAH akun dibuat dan dibungkus try/catch oleh pemanggil, jadi
+ * kegagalan pemberian role tidak pernah menggagalkan pendaftaran.
+ */
+export async function grantRegisterRoles(jemaatId: string, jenis: 'JEMAAT_TETAP' | 'NEW_COMER'): Promise<number> {
+  return grantRoles(jemaatId, await onboardingRolesFor(jenis), false);
 }
 
 /**
@@ -54,21 +78,7 @@ export async function onboardingRolesCreate(
  * admin/impor tidak tertimpa atau bertambah tanpa sengaja.
  */
 export async function grantOnboardingRoles(jemaatId: string, jenis: 'JEMAAT_TETAP' | 'NEW_COMER'): Promise<number> {
-  const punyaRole = await prisma.jemaatRole.count({ where: { jemaatId, isActive: true } });
-  if (punyaRole > 0) return 0;
-  const roles = await onboardingRolesFor(jenis);
-  if (!roles.length) return 0;
-  const existing = await prisma.jemaatRole.findMany({
-    where: { jemaatId, isActive: true, subRoleId: { in: roles.map((r) => r.subRoleId) } },
-    select: { subRoleId: true },
-  });
-  const have = new Set(existing.map((e) => e.subRoleId));
-  const todo = roles.filter((r) => !have.has(r.subRoleId));
-  if (!todo.length) return 0;
-  await prisma.jemaatRole.createMany({
-    data: todo.map((r) => ({ jemaatId, roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true })),
-  });
-  return todo.length;
+  return grantRoles(jemaatId, await onboardingRolesFor(jenis), true);
 }
 
 // ------------------------------------------------------------------ sudah onboard, role kosong
@@ -81,25 +91,37 @@ export const tanpaRoleWhere: Prisma.JemaatWhereInput = {
   jemaatRoles: { none: { isActive: true } },
 };
 
+let applying = false;
+
 /**
  * Terapkan aturan TANPA_ROLE ke semua jemaat yang sudah onboard tapi role-nya
- * kosong. Dicek ulang per jemaat saat dijalankan (aman dijalankan berulang).
+ * kosong. Per jemaat dikunci & dicek ulang (aman dijalankan berulang / dobel klik);
+ * satu proses sekaligus. Kegagalan satu jemaat tidak menghentikan yang lain.
  */
-export async function applyTanpaRole(): Promise<{ jemaat: number; roles: number }> {
-  const roles = await onboardingRolesFor('TANPA_ROLE');
-  if (!roles.length) return { jemaat: 0, roles: 0 };
-  let jemaat = 0;
-  let total = 0;
-  for (;;) {
-    const batch = await prisma.jemaat.findMany({ where: tanpaRoleWhere, select: { id: true }, take: 500 });
-    if (!batch.length) break;
-    const data = batch.flatMap((j) =>
-      roles.map((r) => ({ jemaatId: j.id, roleId: r.roleId, subRoleId: r.subRoleId, subRoleStatusId: r.subRoleStatusId, isActive: true })),
-    );
-    const res = await prisma.jemaatRole.createMany({ data });
-    jemaat += batch.length;
-    total += res.count;
-    if (batch.length < 500) break;
+export async function applyTanpaRole(): Promise<{ jemaat: number; roles: number; gagal: number; alreadyRunning?: boolean }> {
+  if (applying) return { jemaat: 0, roles: 0, gagal: 0, alreadyRunning: true };
+  applying = true;
+  try {
+    const roles = await onboardingRolesFor('TANPA_ROLE');
+    if (!roles.length) return { jemaat: 0, roles: 0, gagal: 0 };
+    // Ambil semua ID sekali di awal → tidak ada perulangan tanpa akhir.
+    const ids = (await prisma.jemaat.findMany({ where: tanpaRoleWhere, select: { id: true } })).map((j) => j.id);
+    let jemaat = 0;
+    let total = 0;
+    let gagal = 0;
+    for (const id of ids) {
+      try {
+        const n = await grantRoles(id, roles, true);
+        if (n > 0) {
+          jemaat++;
+          total += n;
+        }
+      } catch {
+        gagal++;
+      }
+    }
+    return { jemaat, roles: total, gagal };
+  } finally {
+    applying = false;
   }
-  return { jemaat, roles: total };
 }

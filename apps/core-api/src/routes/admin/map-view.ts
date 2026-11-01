@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { geocodeEnabled, geocodeJemaatBatch, geocodeState, nearCabang } from '../../lib/jemaat-geocode.js';
+import { geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState, nearCabang } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 
@@ -295,7 +295,8 @@ mapViewRouter.get('/geocode-status', async (req, res) => {
       proses: { ...geocodeState },
       // Batch otomatis tiap 15 menit, maks 250 alamat (1 alamat/detik).
       intervalMenit: 15,
-      perBatch: 250,
+      perBatch: geocodePerBatch,
+      provider: geocodeProvider,
     },
   });
 });
@@ -316,4 +317,20 @@ mapViewRouter.post('/geocode-run', requireMenu('jemaat', 'write'), async (req, r
   void geocodeJemaatBatch().catch((err) => logger.warn({ err }, 'geocode-run manual gagal'));
   audit(req, { action: 'UPDATE', resource: 'jemaat_geocode', resourceLabel: 'Jalankan pemetaan alamat jemaat (manual)', metadata: { kind: 'geocode-run' } });
   res.status(202).json({ success: true, data: { started: true } });
+});
+
+/**
+ * Konfigurasi peta untuk Portal: kunci Google Maps JavaScript (kunci BROWSER,
+ * dibatasi HTTP referrer domain Portal) + Map ID. Disimpan di .env server
+ * supaya bisa diganti tanpa build ulang Portal.
+ *   GET /admin/map-view/config
+ */
+mapViewRouter.get('/config', (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      googleMapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY?.trim() || null,
+      mapId: process.env.GOOGLE_MAPS_MAP_ID?.trim() || null,
+    },
+  });
 });

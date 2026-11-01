@@ -3,7 +3,10 @@
  * Portal → Map View (tanpa nama). Tidak dipakai untuk petunjuk arah dan tidak
  * dikirim ke aplikasi.
  *
- * Layanan: OpenStreetMap Nominatim (gratis). Aturan pemakaiannya dipatuhi:
+ * Layanan: Google Geocoding API bila GOOGLE_GEOCODING_API_KEY diisi (lebih tepat
+ * untuk alamat Indonesia; hasil koordinat Google disegarkan maks. tiap 30 hari
+ * sesuai ketentuan penyimpanan Google). Tanpa kunci → OpenStreetMap Nominatim.
+ * Aturan Nominatim dipatuhi:
  *   - maks 1 permintaan/detik (jeda 1,1 detik), satu proses sekaligus;
  *   - User-Agent jelas; hasil disimpan (cache) — alamat yang sama tidak
  *     ditanyakan ulang; diproses bertahap, bukan sekaligus.
@@ -17,6 +20,7 @@
  *   GEOCODE_JEMAAT_ENABLED=0   matikan proses (default aktif)
  *   NOMINATIM_URL               default https://nominatim.openstreetmap.org
  *   NOMINATIM_EMAIL             opsional, kontak untuk operator Nominatim
+ *   GOOGLE_GEOCODING_API_KEY    kunci server (dibatasi IP VPS) → pakai Google
  */
 import { createHash } from 'node:crypto';
 import { prisma } from '@ecc/database';
@@ -25,13 +29,18 @@ import { logger } from './logger.js';
 
 const BASE = (process.env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org').replace(/\/+$/, '');
 const USER_AGENT = 'ElsApp-ECC-Portal/1.0 (map view sebaran jemaat; https://eccchurch.global)';
-const GAP_MS = 1100;
-const BATCH = 250;
+const GOOGLE_KEY = process.env.GOOGLE_GEOCODING_API_KEY?.trim() || '';
+const USE_GOOGLE = !!GOOGLE_KEY;
+// Google: cepat (jauh di bawah batas kuota per detik); Nominatim: 1 permintaan/detik.
+const GAP_MS = USE_GOOGLE ? 120 : 1100;
+const BATCH = USE_GOOGLE ? 1000 : 250;
+/** Hasil Google boleh disimpan maks. 30 hari → disegarkan setelah itu. */
+const GOOGLE_REFRESH_DAYS = 30;
 const MAX_FROM_CABANG_KM = Number(process.env.GEOCODE_MAX_KM ?? 50);
 /** Naikkan versi bila aturan berubah → semua alamat diproses ulang bertahap. */
-export const GEOCODE_VERSION = 'nominatim-v3';
+export const GEOCODE_VERSION = USE_GOOGLE ? 'google-v1' : 'nominatim-v3';
 /** Versi lama yang hasil OK-nya masih dipakai (hanya yang gagal diproses ulang). */
-const OK_STILL_VALID = ['nominatim-v2'];
+const OK_STILL_VALID = USE_GOOGLE ? [] : ['nominatim-v2'];
 
 export const alamatHash = (alamat: string) => createHash('md5').update(alamat, 'utf8').digest('hex');
 
@@ -69,6 +78,41 @@ export async function geocodeNominatim(alamat: string, near: { lat: number; lng:
     clearTimeout(timer);
   }
 }
+
+/** Google Geocoding API — dibias ke kotak sekitar cabang, dibatasi ke Indonesia. */
+export async function geocodeGoogle(alamat: string, near: { lat: number; lng: number }): Promise<Hit> {
+  const dLat = MAX_FROM_CABANG_KM / 111;
+  const dLng = MAX_FROM_CABANG_KM / (111 * Math.max(0.2, Math.cos((near.lat * Math.PI) / 180)));
+  const p = new URLSearchParams({
+    address: alamat,
+    key: GOOGLE_KEY,
+    language: 'id',
+    region: 'id',
+    components: 'country:ID',
+    bounds: `${near.lat - dLat},${near.lng - dLng}|${near.lat + dLat},${near.lng + dLng}`,
+  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${p}`, { signal: ctrl.signal });
+    if (res.status === 429 || res.status >= 500) throw new Error(`google ${res.status}`);
+    const body = (await res.json()) as {
+      status: string;
+      error_message?: string;
+      results?: { geometry: { location: { lat: number; lng: number } } }[];
+    };
+    if (body.status === 'ZERO_RESULTS') return null;
+    // Kunci salah / kuota habis / API belum diaktifkan → hentikan batch & tampilkan di Portal.
+    if (body.status !== 'OK') throw new Error(`google ${body.status}${body.error_message ? `: ${body.error_message}` : ''}`);
+    const loc = body.results?.[0]?.geometry.location;
+    if (!loc) return null;
+    return { lat: roundCoord(loc.lat), lng: roundCoord(loc.lng) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const geocodeOne = (q: string, near: { lat: number; lng: number }) => (USE_GOOGLE ? geocodeGoogle(q, near) : geocodeNominatim(q, near));
 
 type Pending = { id: string; alamat: string; clat: number | null; clng: number | null; cnama: string };
 
@@ -144,6 +188,7 @@ async function pending(limit: number): Promise<Pending[]> {
         OR g.alamat_hash <> md5(j.alamat)
         OR (g.provider NOT LIKE ${GEOCODE_VERSION + '%'} AND NOT (g.status = 'OK' AND g.provider = ANY(${OK_STILL_VALID})))
         OR (g.status = 'NO_CABANG' AND c.latitude IS NOT NULL)
+        OR (${USE_GOOGLE} AND g.provider LIKE 'google%' AND g.updated_at < NOW() - make_interval(days => ${GOOGLE_REFRESH_DAYS}))
       )
     ORDER BY j.created_at DESC
     LIMIT ${limit}
@@ -164,6 +209,8 @@ export const geocodeState: {
 } = { running: false, startedAt: null, batchSize: 0, batchDone: 0, lastRunAt: null, lastResult: null, lastError: null };
 
 export const geocodeEnabled = () => process.env.GEOCODE_JEMAAT_ENABLED !== '0';
+export const geocodeProvider = USE_GOOGLE ? 'Google Maps' : 'OpenStreetMap';
+export const geocodePerBatch = BATCH;
 
 /** Proses satu batch (dipanggil job berkala). Aman dipanggil berulang — hanya satu yang jalan. */
 export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: number; notFound: number; stopped?: string }> {
@@ -180,7 +227,9 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
     geocodeState.batchSize = rows.length;
     for (const r of rows) {
       const near = r.clat != null && r.clng != null ? { lat: r.clat, lng: r.clng } : null;
-      const queries = buildQueries(r.alamat, kotaDariCabang(r.cnama ?? ''));
+      const all = buildQueries(r.alamat, kotaDariCabang(r.cnama ?? ''));
+      // Google cukup 2 variasi (asli + dirapikan dgn kota); Nominatim sampai 4.
+      const queries = USE_GOOGLE ? all.slice(0, 2) : all;
       let hit: Hit = null;
       let tahap = 0;
       let status: 'OK' | 'NOT_FOUND' | 'TOO_FAR' | 'NO_CABANG';
@@ -192,7 +241,7 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
           // Coba variasi satu per satu (jeda 1,1 detik antar permintaan).
           for (let i = 0; i < queries.length && !hit; i++) {
             if (i > 0) await sleep(GAP_MS);
-            hit = await geocodeNominatim(queries[i]!, near);
+            hit = await geocodeOne(queries[i]!, near);
             if (hit && distanceKm(near, hit) > MAX_FROM_CABANG_KM) hit = null; // di luar wilayah → coba variasi lain
             tahap = i + 1;
           }

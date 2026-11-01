@@ -1,26 +1,15 @@
 /**
- * Map View — pemuat Leaflet (dari CDN, tanpa dependensi npm baru) + pembuat
- * pin & isi balon informasi. Dipakai app/dashboard/map/page.tsx.
+ * Map View — Google Maps (JavaScript API + Advanced Markers + MarkerClusterer)
+ * + pembuat pin & isi balon informasi. Dipakai app/dashboard/map/page.tsx.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type Leaflet = any;
+export type GMaps = any;
 
-const CDN = 'https://cdnjs.cloudflare.com/ajax/libs';
-const ASSETS = {
-  leafletCss: `${CDN}/leaflet/1.9.4/leaflet.min.css`,
-  leafletJs: `${CDN}/leaflet/1.9.4/leaflet.min.js`,
-  clusterCss: `${CDN}/leaflet.markercluster/1.5.3/MarkerCluster.min.css`,
-  clusterJs: `${CDN}/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js`,
-  heatJs: `${CDN}/leaflet.heat/0.2.0/leaflet-heat.js`,
-};
-
-function addCss(href: string) {
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const l = document.createElement('link');
-  l.rel = 'stylesheet';
-  l.href = href;
-  document.head.appendChild(l);
+/** Kunci & Map ID dari server (GET /admin/map-view/config) — tidak di-bundle di Portal. */
+export interface MapConfig {
+  googleMapsKey: string | null;
+  mapId: string | null;
 }
 
 function addScript(src: string): Promise<void> {
@@ -41,30 +30,33 @@ function addScript(src: string): Promise<void> {
   });
 }
 
-let loading: Promise<Leaflet> | null = null;
-export function loadLeaflet(): Promise<Leaflet> {
+const CLUSTERER_JS = 'https://unpkg.com/@googlemaps/markerclusterer@2.5.3/dist/index.min.js';
+
+let loading: Promise<GMaps> | null = null;
+/** Muat Google Maps JavaScript API (+ library marker) dan MarkerClusterer. */
+export function loadGoogleMaps(key: string): Promise<GMaps> {
   const w = window as any;
-  if (w.L?.markerClusterGroup) return Promise.resolve(w.L);
+  if (w.google?.maps?.marker?.AdvancedMarkerElement && w.markerClusterer) return Promise.resolve(w.google);
   if (!loading) {
-    loading = (async () => {
-      addCss(ASSETS.leafletCss);
-      addCss(ASSETS.clusterCss);
-      await addScript(ASSETS.leafletJs);
-      await addScript(ASSETS.clusterJs);
-      return w.L;
-    })().catch((e) => {
-      loading = null;
-      throw e;
-    });
+    loading = new Promise<GMaps>((resolve, reject) => {
+      w.__eccGmapsReady = () => resolve(w.google);
+      const url =
+        `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}` +
+        '&v=weekly&libraries=marker&language=id&region=ID&loading=async&callback=__eccGmapsReady';
+      addScript(url).catch(reject);
+      // Kunci ditolak (referrer/billing) → Google memanggil gm_authFailure.
+      w.gm_authFailure = () => reject(new Error('GOOGLE_AUTH'));
+    })
+      .then(async (g) => {
+        await addScript(CLUSTERER_JS);
+        return g;
+      })
+      .catch((e) => {
+        loading = null;
+        throw e;
+      });
   }
   return loading;
-}
-
-/** Plugin peta kepadatan — dimuat hanya saat lapisan Sebaran Jemaat dinyalakan. */
-export async function loadHeat(): Promise<Leaflet> {
-  const L = await loadLeaflet();
-  if (!L.heatLayer) await addScript(ASSETS.heatJs);
-  return L;
 }
 
 export interface SebaranJemaat {
@@ -165,17 +157,12 @@ export function pinHtml(kind: 'cabang' | 'homecell', active = true): string {
 </div>`;
 }
 
-export function makeIcon(L: Leaflet, kind: 'cabang' | 'homecell', active = true) {
-  const big = kind === 'cabang';
-  const w = big ? 40 : 32;
-  const h = big ? 52 : 42;
-  return L.divIcon({
-    html: pinHtml(kind, active),
-    className: 'ecc-pin-wrap',
-    iconSize: [w, h],
-    iconAnchor: [w / 2, h],
-    popupAnchor: [0, -h + 4],
-  });
+/** Elemen pin (untuk AdvancedMarkerElement — ujung pin = titik lokasi). */
+export function pinElement(kind: 'cabang' | 'homecell', active = true): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'ecc-pin-wrap';
+  el.innerHTML = pinHtml(kind, active);
+  return el;
 }
 
 // ------------------------------------------------------------------ balon
@@ -309,20 +296,22 @@ export function convexHull(points: Pt[]): Pt[] {
  *  ≥3 titik (tidak segaris) → poligon keliling terluar,
  *  2 titik / segaris → garis penghubung, 1 titik → lingkaran kecil.
  */
-export function makeAreaLayer(L: Leaflet, area: MapArea, points: Pt[]) {
+export function makeAreaShape(g: GMaps, map: any, area: MapArea, points: Pt[]) {
   const color = area.isActive ? areaColor(area.id) : PIN_STYLE.nonaktif.color;
   const style = {
-    color,
-    weight: 2.5,
-    opacity: 0.9,
+    map,
+    strokeColor: color,
+    strokeOpacity: 0.9,
+    strokeWeight: 2.5,
     fillColor: color,
     fillOpacity: 0.14,
-    dashArray: area.isActive ? undefined : '6 6',
+    clickable: true,
   };
   const hull = convexHull(points);
-  if (hull.length >= 3) return L.polygon(hull, style);
-  if (hull.length === 2) return L.polyline(hull, { ...style, weight: 5, dashArray: '8 6' });
-  return L.circle(hull[0], { ...style, radius: 350 });
+  const path = hull.map(([lat, lng]) => ({ lat, lng }));
+  if (hull.length >= 3) return new g.maps.Polygon({ ...style, paths: path });
+  if (hull.length === 2) return new g.maps.Polyline({ ...style, path, strokeWeight: 5 });
+  return new g.maps.Circle({ ...style, center: path[0], radius: 350 });
 }
 
 export function areaPopup(a: MapArea, homecellNames: string[]): string {
@@ -385,7 +374,7 @@ function avatarHtml(j: MapJemaat, size: number) {
 }
 
 /** Pin jemaat: foto profil bulat dengan bingkai biru + ujung penunjuk. */
-export function makeJemaatIcon(L: Leaflet, j: MapJemaat) {
+export function jemaatPinElement(j: MapJemaat): HTMLElement {
   const c = PIN_STYLE.jemaat.color;
   const html = `<div class="ecc-pin" style="width:44px;height:54px">
     <div style="box-sizing:border-box;width:44px;height:44px;border-radius:999px;background:${c};padding:3px;box-shadow:0 2px 4px rgba(0,0,0,.35)">
@@ -393,7 +382,10 @@ export function makeJemaatIcon(L: Leaflet, j: MapJemaat) {
     </div>
     <div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid ${c}"></div>
   </div>`;
-  return L.divIcon({ html, className: 'ecc-pin-wrap', iconSize: [44, 54], iconAnchor: [22, 54], popupAnchor: [0, -50] });
+  const el = document.createElement('div');
+  el.className = 'ecc-pin-wrap';
+  el.innerHTML = html;
+  return el;
 }
 
 export function jemaatPopup(j: MapJemaat): string {

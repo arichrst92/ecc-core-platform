@@ -15,14 +15,14 @@ import {
   areaPopup,
   cabangPopup,
   homecellPopup,
+  jemaatPinElement,
   jemaatPopup,
-  loadHeat,
-  loadLeaflet,
-  makeAreaLayer,
-  makeIcon,
-  makeJemaatIcon,
+  loadGoogleMaps,
+  makeAreaShape,
+  pinElement,
   pinHtml,
-  type Leaflet,
+  type GMaps,
+  type MapConfig,
   type MapJemaat,
   type MapViewData,
   type SebaranJemaat,
@@ -30,7 +30,11 @@ import {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const INDONESIA_CENTER: [number, number] = [-2.5, 118];
+const INDONESIA_CENTER = { lat: -2.5, lng: 118 };
+/** Warna sebaran: biru (sedikit) → hijau → kuning → merah (padat). */
+function densityColor(r: number) {
+  return r < 0.25 ? '#3B82F6' : r < 0.5 ? '#22C55E' : r < 0.75 ? '#EAB308' : '#DC2626';
+}
 
 export default function MapViewPage() {
   const [showCabang, setShowCabang] = useState(true);
@@ -40,7 +44,7 @@ export default function MapViewPage() {
   const [showSebaran, setShowSebaran] = useState(false);
   // Pin jemaat + foto profil (perkiraan lokasi dari alamat) — default mati.
   const [showJemaat, setShowJemaat] = useState(false);
-  const heatRef = useRef<any>(null);
+  const heatRef = useRef<any[]>([]);
   const [cabangId, setCabangId] = useState('');
   const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
   const [search, setSearch] = useState('');
@@ -78,18 +82,20 @@ export default function MapViewPage() {
       window.removeEventListener('keydown', onKey);
     };
   }, []);
-  useEffect(() => {
-    // Ukuran peta berubah → Leaflet perlu menghitung ulang. Fullscreen browser
-    // butuh beberapa ratus ms untuk berubah ukuran, jadi dicek beberapa kali.
-    const ts = [60, 250, 600].map((ms) => setTimeout(() => mapRef.current?.invalidateSize(), ms));
-    return () => ts.forEach(clearTimeout);
-  }, [fullscreen]);
 
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const LRef = useRef<Leaflet>(null);
-  const layerRef = useRef<{ cabang: any; homecell: any; area: any; jemaat: any } | null>(null);
-  const markerIndex = useRef<Map<string, any>>(new Map());
+  const GRef = useRef<GMaps>(null);
+  const infoRef = useRef<any>(null);
+  const layerRef = useRef<{ cabang: any; homecell: any; jemaat: any; area: any[] } | null>(null);
+  // Kunci → { posisi, html balon, objek peta } untuk fokus dari pencarian.
+  const markerIndex = useRef<Map<string, { pos: { lat: number; lng: number }; html: string; obj?: any; bounds?: any }>>(new Map());
+
+  const cfg = useQuery({
+    queryKey: ['map-view', 'config'],
+    queryFn: async () => (await apiClient.get<{ data: MapConfig }>('/admin/map-view/config')).data.data,
+    staleTime: Infinity,
+  });
   const fittedKey = useRef<string>('');
 
   const q = useQuery({
@@ -215,178 +221,212 @@ export default function MapViewPage() {
     [q.data, cabangId],
   );
 
-  // 1) Siapkan peta sekali.
+  // 1) Siapkan peta (Google Maps) sekali kunci tersedia.
   useEffect(() => {
+    if (!cfg.data) return;
+    if (!cfg.data.googleMapsKey) {
+      setMapError('Kunci Google Maps belum diatur di server (GOOGLE_MAPS_BROWSER_KEY).');
+      return;
+    }
     let cancelled = false;
-    loadLeaflet()
-      .then((L) => {
+    loadGoogleMaps(cfg.data.googleMapsKey)
+      .then((g) => {
         if (cancelled || !mapEl.current || mapRef.current) return;
-        LRef.current = L;
-        const map = L.map(mapEl.current, { zoomControl: true, worldCopyJump: true }).setView(INDONESIA_CENTER, 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        }).addTo(map);
-        const clusterOpts = (color: string) => ({
-          showCoverageOnHover: false,
-          maxClusterRadius: 45,
-          iconCreateFunction: (cl: any) => {
-            const n = cl.getChildCount();
-            const size = n < 10 ? 34 : n < 100 ? 40 : 46;
-            return L.divIcon({
-              html: `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:3px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3)">${n}</div>`,
-              className: 'ecc-cluster',
-              iconSize: [size, size],
-            });
+        GRef.current = g;
+        const map = new g.maps.Map(mapEl.current, {
+          center: INDONESIA_CENTER,
+          zoom: 5,
+          // Advanced Markers butuh Map ID; DEMO_MAP_ID hanya untuk uji coba.
+          mapId: cfg.data!.mapId || 'DEMO_MAP_ID',
+          gestureHandling: 'greedy',
+          fullscreenControl: false,
+          streetViewControl: false,
+          mapTypeControl: true,
+          // Peta/Satelit di tengah atas supaya tidak tertutup panel saringan (kiri) & tombol keluar (kanan).
+          mapTypeControlOptions: { position: g.maps.ControlPosition.TOP_CENTER },
+          clickableIcons: false,
+        });
+        infoRef.current = new g.maps.InfoWindow({ maxWidth: 320 });
+        const MC = (window as any).markerClusterer;
+        const renderer = (color: string) => ({
+          render: ({ count, position }: { count: number; position: any }) => {
+            const size = count < 10 ? 34 : count < 100 ? 40 : 46;
+            const el = document.createElement('div');
+            el.style.cssText = `width:${size}px;height:${size}px;border-radius:999px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:3px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3)`;
+            el.textContent = String(count);
+            return new g.maps.marker.AdvancedMarkerElement({ position, content: el, zIndex: 1000 + count });
           },
         });
+        const cluster = (color: string) => new MC.MarkerClusterer({ map, markers: [], renderer: renderer(color) });
         layerRef.current = {
-          // Poligon area di bawah pin (ditambahkan lebih dulu).
-          area: L.featureGroup().addTo(map),
-          cabang: L.markerClusterGroup(clusterOpts(PIN_STYLE.cabang.color)).addTo(map),
-          homecell: L.markerClusterGroup(clusterOpts(PIN_STYLE.homecell.color)).addTo(map),
-          // Jemaat serumah/berdekatan → angka; zoom maksimal → pin dibuka melingkar.
-          jemaat: L.markerClusterGroup({ ...clusterOpts(PIN_STYLE.jemaat.color), maxClusterRadius: 50 }).addTo(map),
+          area: [],
+          cabang: cluster(PIN_STYLE.cabang.color),
+          homecell: cluster(PIN_STYLE.homecell.color),
+          jemaat: cluster(PIN_STYLE.jemaat.color),
         };
         mapRef.current = map;
-        // Ukuran kontainer berubah kapan pun (layar penuh, rotasi HP, sidebar) → peta digambar ulang.
-        if (typeof ResizeObserver !== 'undefined' && mapEl.current) {
-          const ro = new ResizeObserver(() => map.invalidateSize({ pan: false }));
-          ro.observe(mapEl.current);
-          map.on('unload', () => ro.disconnect());
-        }
-        // Ukuran kontainer bisa berubah setelah layout selesai.
-        setTimeout(() => map.invalidateSize(), 50);
         setMapError(null);
         setTick((x) => x + 1);
       })
-      .catch(() => !cancelled && setMapError('Peta gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.'));
+      .catch((e) =>
+        !cancelled &&
+        setMapError(
+          e?.message === 'GOOGLE_AUTH'
+            ? 'Kunci Google Maps ditolak. Periksa pembatasan domain (HTTP referrer) & penagihan di Google Cloud.'
+            : 'Peta gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.',
+        ),
+      );
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cfg.data]);
 
-  useEffect(
-    () => () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    },
-    [],
-  );
+  /** Balon informasi di posisi tertentu (offset ke atas pin bila marker). */
+  function openInfo(html: string, pos: any, pinHeight = 0) {
+    const g = GRef.current;
+    const info = infoRef.current;
+    if (!g || !info) return;
+    info.setOptions({ content: html, position: pos, pixelOffset: new g.maps.Size(0, -pinHeight) });
+    info.open({ map: mapRef.current });
+  }
+
+  /** Marker Google (Advanced Marker) + klik → balon. */
+  function makeMarker(pos: { lat: number; lng: number }, content: HTMLElement, title: string, html: string, pinHeight: number, zIndex = 0) {
+    const g = GRef.current;
+    const m = new g.maps.marker.AdvancedMarkerElement({ position: pos, content, title, zIndex });
+    const open = () => openInfo(html, pos, pinHeight);
+    if ('gmpClickable' in m) {
+      (m as any).gmpClickable = true;
+      m.addEventListener('gmp-click', open);
+    } else {
+      m.addListener('click', open);
+    }
+    return m;
+  }
 
   // 2) Gambar ulang pin saat data / saringan berubah.
   useEffect(() => {
-    const L = LRef.current;
+    const g = GRef.current;
     const map = mapRef.current;
     const layers = layerRef.current;
-    if (!L || !map || !layers) return;
-    layers.cabang.clearLayers();
-    layers.homecell.clearLayers();
-    layers.area.clearLayers();
-    layers.jemaat.clearLayers();
+    if (!g || !map || !layers) return;
+    layers.cabang.clearMarkers();
+    layers.homecell.clearMarkers();
+    layers.jemaat.clearMarkers();
+    layers.area.forEach((o) => o.setMap(null));
+    layers.area = [];
     markerIndex.current.clear();
-    const bounds: [number, number][] = [];
+    const bounds = new g.maps.LatLngBounds();
+    let nBounds = 0;
+    const add = (p: { lat: number; lng: number }) => {
+      bounds.extend(p);
+      nBounds++;
+    };
 
     if (showArea) {
       for (const { area, points, names } of areaList) {
-        const shape = makeAreaLayer(L, area, points)
-          .bindPopup(areaPopup(area, names), { maxWidth: 300, className: 'ecc-popup' })
-          .bindTooltip(area.nama, { sticky: true, direction: 'top', className: 'ecc-area-tip' });
-        shape.on('mouseover', () => shape.setStyle?.({ fillOpacity: 0.28 }));
-        shape.on('mouseout', () => shape.setStyle?.({ fillOpacity: 0.14 }));
-        layers.area.addLayer(shape);
-        markerIndex.current.set(`a:${area.id}`, shape);
-        for (const p of points) bounds.push(p);
+        const shape = makeAreaShape(g, map, area, points);
+        const html = areaPopup(area, names);
+        shape.addListener('click', (e: any) => openInfo(html, e.latLng));
+        shape.addListener('mouseover', () => shape.setOptions({ fillOpacity: 0.28, strokeWeight: 3.5 }));
+        shape.addListener('mouseout', () => shape.setOptions({ fillOpacity: 0.14, strokeWeight: 2.5 }));
+        layers.area.push(shape);
+        const ab = new g.maps.LatLngBounds();
+        for (const [lat, lng] of points) {
+          ab.extend({ lat, lng });
+          add({ lat, lng });
+        }
+        markerIndex.current.set(`a:${area.id}`, { pos: ab.getCenter().toJSON(), html, bounds: ab });
       }
     }
 
     if (showCabang) {
-      for (const c of cabangList) {
-        const m = L.marker([c.latitude, c.longitude], {
-          icon: makeIcon(L, 'cabang', c.isActive),
-          title: c.nama,
-          zIndexOffset: 1000,
-        }).bindPopup(cabangPopup(c), { maxWidth: 300, className: 'ecc-popup' });
-        layers.cabang.addLayer(m);
-        markerIndex.current.set(`c:${c.id}`, m);
-        bounds.push([c.latitude, c.longitude]);
-      }
+      const ms = cabangList.map((c) => {
+        const pos = { lat: c.latitude, lng: c.longitude };
+        const html = cabangPopup(c);
+        markerIndex.current.set(`c:${c.id}`, { pos, html });
+        add(pos);
+        return makeMarker(pos, pinElement('cabang', c.isActive), c.nama, html, 48, 900);
+      });
+      layers.cabang.addMarkers(ms);
     }
     if (showHomecell) {
-      for (const h of homecellList) {
-        const m = L.marker([h.latitude, h.longitude], {
-          icon: makeIcon(L, 'homecell', h.isActive),
-          title: h.nama,
-        }).bindPopup(homecellPopup(h), { maxWidth: 300, className: 'ecc-popup' });
-        layers.homecell.addLayer(m);
-        markerIndex.current.set(`h:${h.id}`, m);
-        bounds.push([h.latitude, h.longitude]);
-      }
+      const ms = homecellList.map((h) => {
+        const pos = { lat: h.latitude, lng: h.longitude };
+        const html = homecellPopup(h);
+        markerIndex.current.set(`h:${h.id}`, { pos, html });
+        add(pos);
+        return makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, 40);
+      });
+      layers.homecell.addMarkers(ms);
     }
-
     if (showJemaat) {
-      for (const j of jemaatList) {
-        const m = L.marker([j.latitude, j.longitude], { icon: makeJemaatIcon(L, j), title: j.namaLengkap }).bindPopup(
-          jemaatPopup(j),
-          { maxWidth: 310, className: 'ecc-popup' },
-        );
-        layers.jemaat.addLayer(m);
-        markerIndex.current.set(`j:${j.id}`, m);
+      const ms = jemaatList.map((j) => {
+        const pos = { lat: j.latitude, lng: j.longitude };
+        const html = jemaatPopup(j);
+        markerIndex.current.set(`j:${j.id}`, { pos, html });
         // Jemaat tidak ikut menentukan zoom awal kecuali satu-satunya lapisan.
-        if (!showCabang && !showHomecell && !showArea) bounds.push([j.latitude, j.longitude]);
-      }
+        if (!showCabang && !showHomecell && !showArea) add(pos);
+        return makeMarker(pos, jemaatPinElement(j), j.namaLengkap, html, 52);
+      });
+      layers.jemaat.addMarkers(ms);
     }
 
     // Arahkan peta ke semua pin bila saringan berubah (bukan saat data dimuat ulang saja).
     const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showArea}|${showHomecell}|${showJemaat}|${q.dataUpdatedAt > 0}|${jemaatQ.dataUpdatedAt > 0}`;
-    if (bounds.length && fittedKey.current !== key) {
+    if (nBounds && fittedKey.current !== key) {
       fittedKey.current = key;
-      if (bounds.length === 1) map.setView(bounds[0], 15);
-      else map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      if (nBounds === 1) {
+        map.setCenter(bounds.getCenter());
+        map.setZoom(15);
+      } else {
+        map.fitBounds(bounds, 40);
+        g.maps.event.addListenerOnce(map, 'idle', () => {
+          if (map.getZoom() > 15) map.setZoom(15);
+        });
+      }
     }
   }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt]);
 
-  // Lapisan peta kepadatan (sebaran jemaat).
+  // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
+  // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).
   useEffect(() => {
+    const g = GRef.current;
     const map = mapRef.current;
-    if (!map) return;
-    if (heatRef.current) {
-      map.removeLayer(heatRef.current);
-      heatRef.current = null;
-    }
-    if (!showSebaran || !sebaran.data) return;
-    let cancelled = false;
-    loadHeat()
-      .then((L) => {
-        if (cancelled || !mapRef.current) return;
-        const max = Math.max(3, ...sebaran.data!.cells.map((c) => c[2]));
-        heatRef.current = L.heatLayer(sebaran.data!.cells, {
-          radius: 22,
-          blur: 18,
-          maxZoom: 14,
-          max,
-          minOpacity: 0.35,
-          gradient: { 0.2: '#3B82F6', 0.45: '#22C55E', 0.7: '#EAB308', 1: '#DC2626' },
-        }).addTo(mapRef.current);
-      })
-      .catch(() => setMapError('Lapisan sebaran jemaat gagal dimuat. Periksa koneksi internet.'));
-    return () => {
-      cancelled = true;
-    };
+    heatRef.current.forEach((c) => c.setMap(null));
+    heatRef.current = [];
+    if (!g || !map || !showSebaran || !sebaran.data) return;
+    const cells = sebaran.data.cells;
+    const max = Math.max(3, ...cells.map((c) => c[2]));
+    heatRef.current = cells.map(
+      ([lat, lng, n]) =>
+        new g.maps.Circle({
+          map,
+          center: { lat, lng },
+          radius: 90 + 70 * Math.sqrt(n),
+          strokeWeight: 0,
+          fillColor: densityColor(n / max),
+          fillOpacity: 0.45,
+          clickable: false,
+          zIndex: 1,
+        }),
+    );
   }, [tick, showSebaran, sebaran.data]);
 
   function focus(key: string) {
-    const m = markerIndex.current.get(key);
-    const layers = layerRef.current;
-    if (!m || !layers) return;
-    if (key.startsWith('a:')) {
-      const b = m.getBounds?.();
-      if (b) mapRef.current?.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
-      m.openPopup(b ? b.getCenter() : undefined);
+    const g = GRef.current;
+    const map = mapRef.current;
+    const it = markerIndex.current.get(key);
+    if (!g || !map || !it) return;
+    if (it.bounds) {
+      map.fitBounds(it.bounds, 40);
+      openInfo(it.html, it.pos);
       return;
     }
-    const group = key.startsWith('c:') ? layers.cabang : key.startsWith('j:') ? layers.jemaat : layers.homecell;
-    group.zoomToShowLayer(m, () => m.openPopup());
+    map.setCenter(it.pos);
+    map.setZoom(18); // cukup dekat supaya kluster terurai
+    const h = key.startsWith('c:') ? 48 : key.startsWith('j:') ? 52 : 40;
+    setTimeout(() => openInfo(it.html, it.pos, h), 300);
   }
 
   const missingCabang = (q.data?.tanpaTitik.cabang ?? []).filter((c) => !cabangId || c.id === cabangId);
@@ -539,9 +579,9 @@ export default function MapViewPage() {
         .ecc-pin{position:relative;transition:transform .15s ease}
         .ecc-pin-wrap:hover .ecc-pin{transform:translateY(-3px) scale(1.06)}
         .ecc-cluster{background:transparent;border:0}
-        .ecc-popup .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
-        .ecc-popup .leaflet-popup-content{margin:12px 14px}
-        .ecc-area-tip{font-weight:600;font-size:12px;border-radius:8px;padding:2px 8px}
+        .ecc-pin-wrap{cursor:pointer}
+        .gm-style .gm-style-iw-c{border-radius:14px;padding:12px 14px !important}
+        .gm-style .gm-style-iw-d{overflow:auto !important}
       `}</style>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -588,7 +628,7 @@ export default function MapViewPage() {
         {fullscreen && (
           <>
             {/* Panel saringan mengambang (kiri atas) */}
-            <div className="absolute top-3 left-14 z-[1000] w-[min(560px,calc(100vw-140px))] max-h-[calc(100vh-120px)] overflow-y-auto space-y-2">
+            <div className="absolute top-3 left-3 z-[1000] w-[min(560px,calc(100vw-140px))] max-h-[calc(100vh-120px)] overflow-y-auto space-y-2">
               <div className="bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg">
                 <button
                   onClick={() => setPanelOpen((x) => !x)}
@@ -617,12 +657,12 @@ export default function MapViewPage() {
             </button>
           </>
         )}
-        {(q.isLoading || (!mapRef.current && !mapError)) && (
+        {(q.isLoading || cfg.isLoading || (!mapRef.current && !mapError)) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/60">
             <Loader2 className="w-6 h-6 animate-spin text-brand-600" />
           </div>
         )}
-        {(mapError || q.isError) && (
+        {(mapError || q.isError || cfg.isError) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/90 p-6 text-center text-sm text-red-600">
             {mapError ?? 'Data peta gagal dimuat. Coba muat ulang halaman.'}
           </div>
@@ -684,6 +724,7 @@ interface GeocodeStatus {
   aktif: boolean;
   intervalMenit: number;
   perBatch: number;
+  provider?: string;
   proses: {
     running: boolean;
     startedAt: string | null;
@@ -712,7 +753,7 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
         <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
           {p.running ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" /> : null}
-          Pemetaan alamat jemaat: {n(selesai)} / {n(s.total)} ({pct}%)
+          Pemetaan alamat jemaat{s.provider ? ` (${s.provider})` : ''}: {n(selesai)} / {n(s.total)} ({pct}%)
         </span>
         {s.rincian ? (
           <span className="basis-full text-[11px] font-normal text-neutral-500 -mt-1">
@@ -751,7 +792,7 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
           <span className="text-red-600">Pemetaan dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).</span>
         ) : p.running ? (
           <span className="text-sky-700">
-            Sedang memproses {n(p.batchDone)} / {n(p.batchSize)} alamat (maks. 1 permintaan/detik, hingga 4 variasi per alamat)…
+            Sedang memproses {n(p.batchDone)} / {n(p.batchSize)} alamat via {s.provider ?? 'layanan peta'}…
           </span>
         ) : s.menunggu > 0 ? (
           <span>

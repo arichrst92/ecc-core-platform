@@ -529,10 +529,12 @@ export function jarakLabelElement(nama: string, jarak: string, color: string): H
   const el = document.createElement('div');
   el.className = 'ecc-pin-wrap';
   const depan = nama.trim().split(/\s+/)[0] ?? nama;
+  // Layar HP: balon jarak ringkas (angka saja) supaya tidak menutupi peta.
+  const kecil = typeof window !== 'undefined' && window.innerWidth < 640;
   el.innerHTML = `<div class="ecc-pin" style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))">
-    <div style="background:#fff;border:2px solid ${color};border-radius:10px;padding:3px 8px;text-align:center;line-height:1.15;white-space:nowrap">
-      <div style="font-size:13px;font-weight:800;color:#171717">${esc(jarak)}</div>
-      <div style="font-size:10px;color:#737373;max-width:110px;overflow:hidden;text-overflow:ellipsis">${esc(depan)} → homecell</div>
+    <div style="background:#fff;border:2px solid ${color};border-radius:10px;padding:${kecil ? '1px 5px' : '3px 8px'};text-align:center;line-height:1.15;white-space:nowrap">
+      <div style="font-size:${kecil ? 11 : 13}px;font-weight:800;color:#171717">${esc(jarak)}</div>
+      ${kecil ? '' : `<div style="font-size:10px;color:#737373;max-width:110px;overflow:hidden;text-overflow:ellipsis">${esc(depan)} → homecell</div>`}
     </div>
     <div style="width:0;height:0;margin-top:-1px;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${color}"></div>
   </div>`;

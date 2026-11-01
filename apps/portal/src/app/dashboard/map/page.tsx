@@ -356,7 +356,12 @@ export default function MapViewPage() {
     const g = GRef.current;
     const info = infoRef.current;
     if (!g || !info) return;
-    info.setOptions({ content: html, position: pos, pixelOffset: new g.maps.Size(0, -pinHeight) });
+    info.setOptions({
+      content: html,
+      position: pos,
+      pixelOffset: new g.maps.Size(0, -pinHeight),
+      maxWidth: Math.min(320, window.innerWidth - 56), // muat di layar HP
+    });
     info.open({ map: mapRef.current });
   }
 
@@ -863,7 +868,7 @@ export default function MapViewPage() {
               {panelOpen && <div className="space-y-2 [&>*]:mt-0 [&>*]:shadow-lg">{statusEl}</div>}
             </div>
             {/* Legenda mengambang (kiri bawah) */}
-            <div className="absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm max-w-[calc(100vw-24px)]">
+            <div className={`${cekHcId ? 'hidden sm:flex' : 'flex'} absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg px-3 py-2 flex-wrap items-center gap-x-4 gap-y-1 text-sm max-w-[calc(100vw-24px)]`}>
               {legendEl}
             </div>
             {/* Keluar layar penuh (kanan atas) */}
@@ -944,22 +949,30 @@ function MemberPanel({
   const rata = jarak.length ? jarak.reduce((a, b) => a + b, 0) / jarak.length : null;
   const maks = jarak.length ? Math.max(...jarak) : null;
   const nAnggota = (data?.anggota ?? []).filter((m) => m.isMember).length;
+  // Di HP panel jadi lembar kecil di bawah & tertutup dulu supaya peta tetap terlihat.
+  const [buka, setBuka] = useState(() => typeof window === 'undefined' || window.innerWidth >= 640);
   return (
     <div
-      className={`absolute right-3 z-[1001] w-[min(340px,calc(100%-24px))] max-h-[min(70%,560px)] flex flex-col bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg text-xs ${fullscreen ? 'top-16' : 'top-3'}`}
+      className={`absolute z-[1001] flex flex-col bg-white/95 backdrop-blur border border-neutral-200 shadow-lg text-xs
+        left-2 right-2 bottom-2 rounded-xl ${buka ? 'max-h-[45%]' : ''}
+        sm:left-auto sm:bottom-auto sm:right-3 sm:w-[340px] sm:max-h-[min(70%,560px)] ${fullscreen ? 'sm:top-16' : 'sm:top-3'}`}
     >
       <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-neutral-100">
-        <div className="min-w-0">
+        <button onClick={() => setBuka((x) => !x)} className="min-w-0 flex-1 text-left">
           <div className="font-semibold text-sm text-neutral-900 flex items-center gap-1.5">
-            <Users className="w-4 h-4 text-violet-600" /> Lokasi member
+            <Users className="w-4 h-4 text-violet-600 shrink-0" /> Lokasi member
+            {buka ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
           </div>
-          <div className="text-neutral-500 truncate">{data?.homecell.nama ?? 'Memuat…'}</div>
-        </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-neutral-100 text-neutral-500" title="Tutup">
+          <div className="text-neutral-500 truncate">
+            {data?.homecell.nama ?? 'Memuat…'}
+            {!buka && data ? ` · ${nAnggota} anggota · rata-rata ${formatJarak(rata)}` : ''}
+          </div>
+        </button>
+        <button onClick={onClose} className="p-1 rounded hover:bg-neutral-100 text-neutral-500 shrink-0" title="Tutup">
           <X className="w-4 h-4" />
         </button>
       </div>
-      {loading ? (
+      {!buka ? null : loading ? (
         <div className="p-4 text-center text-neutral-500"><Loader2 className="w-4 h-4 animate-spin inline" /> Memuat anggota…</div>
       ) : error ? (
         <div className="p-3 text-red-600">{error}</div>

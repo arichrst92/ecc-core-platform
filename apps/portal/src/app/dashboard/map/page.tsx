@@ -372,8 +372,9 @@ export default function MapViewPage() {
       layers.jemaat.addMarkers(ms);
     }
 
-    // Arahkan peta ke semua pin bila saringan berubah (bukan saat data dimuat ulang saja).
-    const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showArea}|${showHomecell}|${showJemaat}|${q.dataUpdatedAt > 0}|${jemaatQ.dataUpdatedAt > 0}`;
+    // Arahkan peta ke semua pin hanya saat pertama dimuat atau saat cabang/kategori/pencarian
+    // berubah. Centang/hapus centang lapisan TIDAK mengubah posisi & zoom peta.
+    const key = `${cabangId}|${kategori}|${needle}|${q.dataUpdatedAt > 0}`;
     if (nBounds && fittedKey.current !== key) {
       fittedKey.current = key;
       if (nBounds === 1) {

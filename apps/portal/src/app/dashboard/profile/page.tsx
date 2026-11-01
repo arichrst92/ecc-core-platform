@@ -77,22 +77,22 @@ export default function ProfilePage() {
   return (
     <div className="w-full">
       {/* Profile header card — mirror jemaat detail pattern */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6 flex items-start gap-5">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 text-center sm:text-left">
         {user.fotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`${apiBase}${user.fotoUrl}`}
             alt={user.namaLengkap}
-            className="w-24 h-24 rounded-full object-cover border-2 border-neutral-200 shrink-0"
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-neutral-200 shrink-0"
           />
         ) : (
-          <div className="w-24 h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
             <UserIcon className="w-10 h-10" />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-neutral-900">{user.namaLengkap}</h1>
-          <div className="text-sm text-neutral-500 mt-1 flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0 w-full">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 break-words">{user.namaLengkap}</h1>
+          <div className="text-sm text-neutral-500 mt-1 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
             {user.isFulltimer && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-brand-50 text-brand-700 font-medium">
                 <BadgeCheck className="w-3 h-3" />
@@ -105,7 +105,7 @@ export default function ProfilePage() {
               </span>
             )}
           </div>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-left">
             {user.noHp && (
               <Info icon={Phone} label="No HP">
                 {user.noHp}
@@ -120,7 +120,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Actions kanan header */}
-        <div className="flex flex-col gap-2 shrink-0">
+        <div className="flex flex-row sm:flex-col gap-2 shrink-0 w-full sm:w-auto">
           <input
             ref={fileRef}
             type="file"
@@ -131,14 +131,14 @@ export default function ProfilePage() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploadAvatarMut.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
+            className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
           >
             <Upload className="w-3.5 h-3.5" />
             {uploadAvatarMut.isPending ? 'Mengunggah...' : 'Ganti Avatar'}
           </button>
           <button
             onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium"
+            className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium"
           >
             <LogOut className="w-3.5 h-3.5" />
             Sign Out
@@ -147,24 +147,24 @@ export default function ProfilePage() {
       </div>
 
       {/* Upload hint */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <UploadHint kind="profile" />
       </div>
 
       {/* Grid 2 columns: Login Info + Sesi Keamanan */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Login Info card */}
         <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral-100">
             <Smartphone className="w-4 h-4 text-blue-600" />
             <h2 className="font-semibold text-neutral-900">Metode Login</h2>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-green-50 text-green-700 flex items-center justify-center shrink-0">
                 <Phone className="w-5 h-5" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-neutral-900 text-sm">OTP WhatsApp (Primer)</div>
                 <p className="text-xs text-neutral-500 mt-0.5">
                   Portal admin web pakai OTP WhatsApp sebagai metode login utama.
@@ -177,9 +177,9 @@ export default function ProfilePage() {
               <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
                 <Mail className="w-5 h-5" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-neutral-900 text-sm">Magic Link Email (Backup)</div>
-                <p className="text-xs text-neutral-500 mt-0.5">
+                <p className="text-xs text-neutral-500 mt-0.5 break-words">
                   Kalau OTP WhatsApp tidak sampai, gunakan magic link via email
                   {user.email ? ` (${user.email})` : ''}. Link berlaku 15 menit.
                 </p>
@@ -191,11 +191,11 @@ export default function ProfilePage() {
 
         {/* Sesi Keamanan card */}
         <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral-100">
             <ShieldCheck className="w-4 h-4 text-red-600" />
             <h2 className="font-semibold text-neutral-900">Sesi & Keamanan</h2>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div>
               <div className="text-sm font-medium text-neutral-900">Sign Out (Session Ini)</div>
               <p className="text-xs text-neutral-500 mt-0.5 mb-3">
@@ -204,7 +204,7 @@ export default function ProfilePage() {
               </p>
               <button
                 onClick={handleSignOut}
-                className="w-full sm:w-auto px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg inline-flex items-center gap-2"
+                className="w-full sm:w-auto justify-center px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg inline-flex items-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -221,7 +221,7 @@ export default function ProfilePage() {
               </p>
               <button
                 onClick={handleLogoutAllSessions}
-                className="w-full sm:w-auto px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium rounded-lg inline-flex items-center gap-2"
+                className="w-full sm:w-auto justify-center px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium rounded-lg inline-flex items-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 Logout dari Semua Sesi
@@ -253,7 +253,7 @@ function Info({
       <Icon className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
       <div className="min-w-0">
         <div className="text-xs text-neutral-500">{label}</div>
-        <div className="text-neutral-900 truncate">{children}</div>
+        <div className="text-neutral-900 break-all sm:truncate">{children}</div>
       </div>
     </div>
   );

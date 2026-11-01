@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
+  ArrowRight,
+  Info,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -14,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
+import { summarizeAudit } from '@/lib/audit-summary';
 
 type ActionKey = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'ENROLL_FACE' | 'RESET_FACE' | 'UPLOAD_PHOTO';
 
@@ -362,6 +365,13 @@ function DetailDrawer({ entry, onClose }: { entry: AuditEntry | null; onClose: (
         </div>
 
         <div className="p-6 space-y-5">
+          <SummaryCard entry={entry} />
+
+          <details className="group rounded-xl border border-neutral-200">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 rounded-xl">
+              Detail teknis (untuk tim IT)
+            </summary>
+            <div className="px-4 pb-4 pt-1 space-y-5">
           <Field label="Action"><ActionBadge action={entry.action} /></Field>
           <Field label="Resource">
             <code className="text-sm">{entry.resource}</code>
@@ -389,9 +399,65 @@ function DetailDrawer({ entry, onClose }: { entry: AuditEntry | null; onClose: (
               <JsonView value={entry.after} />
             </Field>
           )}
+            </div>
+          </details>
         </div>
       </aside>
     </>
+  );
+}
+
+function SummaryCard({ entry }: { entry: AuditEntry }) {
+  const sum = summarizeAudit(entry);
+  const isDiff = sum.changes.some((c) => c.from && c.to);
+  return (
+    <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-700 mb-2">
+        <Info className="w-3.5 h-3.5" />
+        Ringkasan
+      </div>
+      <p className="text-[15px] leading-relaxed text-neutral-900">{sum.sentence}</p>
+      <p className="mt-1 text-xs text-neutral-500">{formatDateTime(entry.createdAt)}</p>
+      {sum.notes.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm text-neutral-700 list-disc pl-5">
+          {sum.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+      {sum.changes.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-neutral-600 mb-1.5">{sum.changesTitle}</div>
+          <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-neutral-100">
+                {sum.changes.map((c, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2 align-top text-neutral-500 whitespace-nowrap w-[35%]">{c.label}</td>
+                    <td className="px-3 py-2 text-neutral-900">
+                      {isDiff ? (
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <span className="text-neutral-500 line-through decoration-neutral-300">{c.from}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                          <span className="font-medium">{c.to}</span>
+                        </span>
+                      ) : (
+                        <span className="break-words">{c.to || c.from}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {sum.hiddenCount > 0 && (
+        <p className="mt-2 text-xs text-neutral-500">
+          + {sum.hiddenCount} isian teknis lainnya (lihat Detail teknis).
+        </p>
+      )}
+    </div>
   );
 }
 

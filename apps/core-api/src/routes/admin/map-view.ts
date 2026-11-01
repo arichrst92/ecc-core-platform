@@ -243,12 +243,26 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
 /** Hitungan status pemetaan alamat jemaat (semua / per cabang). */
 async function geocodeCounts(cabangId?: string) {
   const jemaatWhere: Prisma.JemaatWhereInput = { isActive: true, isTamu: false, ...(cabangId ? { cabangId } : {}) };
-  const [total, byStatus] = await Promise.all([
-    prisma.jemaat.count({ where: { ...jemaatWhere, AND: [{ alamat: { not: null } }, { alamat: { not: '' } }] } }),
-    prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } }),
-  ]);
-  const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
-  const diproses = byStatus.reduce((n, b) => n + b._count._all, 0);
+  // Rincian seluruh data jemaat → jelas kenapa yang dipetakan lebih sedikit
+  // dari total terdaftar (tamu, nonaktif, tanpa alamat tidak ikut dipetakan).
+  const cab = cabangId ?? null;
+  const [rincian] = await prisma.$queryRaw<
+    { semua: bigint; tamu: bigint; nonaktif: bigint; tanpa_alamat: bigint; beralamat: bigint }[]
+  >`
+    SELECT
+      COUNT(*)                                                                      AS semua,
+      COUNT(*) FILTER (WHERE is_tamu)                                               AS tamu,
+      COUNT(*) FILTER (WHERE NOT is_tamu AND NOT is_active)                         AS nonaktif,
+      COUNT(*) FILTER (WHERE NOT is_tamu AND is_active AND COALESCE(TRIM(alamat), '') = '')  AS tanpa_alamat,
+      COUNT(*) FILTER (WHERE NOT is_tamu AND is_active AND COALESCE(TRIM(alamat), '') <> '') AS beralamat
+    FROM jemaat
+    WHERE (${cab}::uuid IS NULL OR cabang_id = ${cab}::uuid)
+  `;
+  const byStatus = await prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } });
+  const n = (v: bigint | undefined) => Number(v ?? 0);
+  const total = n(rincian?.beralamat);
+  const count = (st: string) => byStatus.find((b) => b.status === st)?._count._all ?? 0;
+  const diproses = byStatus.reduce((acc, b) => acc + b._count._all, 0);
   return {
     total,
     ok: count('OK'),
@@ -257,6 +271,13 @@ async function geocodeCounts(cabangId?: string) {
     // Cabang jemaat belum punya link Google Maps → belum bisa dipetakan.
     menungguCabang: count('NO_CABANG'),
     menunggu: Math.max(0, total - diproses),
+    rincian: {
+      semua: n(rincian?.semua),
+      tamu: n(rincian?.tamu),
+      nonaktif: n(rincian?.nonaktif),
+      tanpaAlamat: n(rincian?.tanpa_alamat),
+      beralamat: total,
+    },
   };
 }
 

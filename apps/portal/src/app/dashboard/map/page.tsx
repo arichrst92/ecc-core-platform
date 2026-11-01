@@ -668,6 +668,7 @@ interface GeocodeStatus {
   terlaluJauh: number;
   menungguCabang: number;
   menunggu: number;
+  rincian?: { semua: number; tamu: number; nonaktif: number; tanpaAlamat: number; beralamat: number };
   aktif: boolean;
   intervalMenit: number;
   perBatch: number;
@@ -701,6 +702,13 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
           {p.running ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" /> : null}
           Pemetaan alamat jemaat: {n(selesai)} / {n(s.total)} ({pct}%)
         </span>
+        {s.rincian ? (
+          <span className="basis-full text-[11px] font-normal text-neutral-500 -mt-1">
+            Dari {n(s.rincian.semua)} data jemaat: <b className="text-neutral-700">{n(s.rincian.beralamat)}</b> jemaat aktif punya
+            alamat (yang dipetakan) · {n(s.rincian.tanpaAlamat)} jemaat aktif belum mengisi alamat · {n(s.rincian.tamu)} tamu ·{' '}
+            {n(s.rincian.nonaktif)} nonaktif
+          </span>
+        ) : null}
         <span className="inline-flex items-center gap-2">
           {msg ? <span className="text-neutral-500">{msg}</span> : null}
           {s.aktif && s.menunggu > 0 && !p.running ? (
@@ -731,7 +739,7 @@ function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => voi
           <span className="text-red-600">Pemetaan dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).</span>
         ) : p.running ? (
           <span className="text-sky-700">
-            Sedang memproses {n(p.batchDone)} / {n(p.batchSize)} alamat (1 alamat/detik)…
+            Sedang memproses {n(p.batchDone)} / {n(p.batchSize)} alamat (maks. 1 permintaan/detik, hingga 4 variasi per alamat)…
           </span>
         ) : s.menunggu > 0 ? (
           <span>

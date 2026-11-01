@@ -29,7 +29,9 @@ const GAP_MS = 1100;
 const BATCH = 250;
 const MAX_FROM_CABANG_KM = Number(process.env.GEOCODE_MAX_KM ?? 50);
 /** Naikkan versi bila aturan berubah → semua alamat diproses ulang bertahap. */
-export const GEOCODE_VERSION = 'nominatim-v2';
+export const GEOCODE_VERSION = 'nominatim-v3';
+/** Versi lama yang hasil OK-nya masih dipakai (hanya yang gagal diproses ulang). */
+const OK_STILL_VALID = ['nominatim-v2'];
 
 export const alamatHash = (alamat: string) => createHash('md5').update(alamat, 'utf8').digest('hex');
 
@@ -68,12 +70,70 @@ export async function geocodeNominatim(alamat: string, near: { lat: number; lng:
   }
 }
 
-type Pending = { id: string; alamat: string; clat: number | null; clng: number | null };
+type Pending = { id: string; alamat: string; clat: number | null; clng: number | null; cnama: string };
+
+// ------------------------------------------------------------------ variasi kueri
+
+/** "ECC Bandung" → "Bandung" (kota untuk alamat yang tidak menyebut kota). */
+export function kotaDariCabang(nama: string): string {
+  return nama.replace(/^\s*(ecc|gereja)\s+/i, '').trim();
+}
+
+/** Buang bagian yang tidak dikenal peta: no rumah, blok, kavling, RT/RW, gang, "Indonesia". */
+export function normalizeAlamat(alamat: string): string {
+  return cleanAlamat(alamat)
+    .replace(/\bjln?\.?\s+/gi, 'Jalan ')
+    .replace(/\bjl\.?(?=[A-Za-z])/gi, 'Jalan ')
+    .replace(/\bkomp\.\s*/gi, 'Kompleks ')
+    .replace(/\brt\.?\s*\d+\s*\/?\s*rw\.?\s*\d+/gi, '')
+    .replace(/\b(rt|rw)\.?\s*\d+/gi, '')
+    .replace(/\bblok\s*[\w./-]+(\s*(no|nomor)\.?\s*[\w/-]+)?/gi, '')
+    .replace(/\b(no|nomor|kav(ling)?)\.?\s*[\w/-]+/gi, '')
+    .replace(/\bgg\.?\s*[^,]+/gi, '')
+    .replace(/\b(kec|kel|kab)\.\s*/gi, '')
+    .replace(/\bindonesia\b/gi, '')
+    .replace(/\s+\.(?=\s|,|$)/g, '')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/(,\s*)+/g, ', ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[,\s]+|[,\s]+$/g, '')
+    .trim();
+}
+
+/**
+ * Variasi pencarian dari paling tepat ke paling umum (maks 4, berhenti di yang
+ * pertama ketemu): alamat asli → alamat dirapikan + kota cabang → nama
+ * jalan/perumahan + kota → bagian wilayah (kelurahan, kecamatan, kota).
+ */
+export function buildQueries(alamat: string, kota: string): string[] {
+  const raw = cleanAlamat(alamat);
+  const norm = normalizeAlamat(alamat);
+  const withKota = (s: string) => (kota && !s.toLowerCase().includes(kota.toLowerCase()) ? `${s}, ${kota}` : s);
+  const parts = norm.split(',').map((p) => p.trim()).filter(Boolean);
+  // Nama jalan / perumahan tanpa awalan kompleks/perumahan/apartemen.
+  const first = (parts[0] ?? '').replace(/^(kompleks|komplek|perumahan|perum|apartemen|apt)\.?\s+/i, '').trim();
+  // Wilayah (kelurahan/kecamatan/kota) tanpa bagian pertama; harus memuat
+  // minimal satu nama wilayah kecil — bukan cuma kota/provinsi (terlalu umum).
+  const umum = (p: string) =>
+    p.toLowerCase() === kota.toLowerCase() ||
+    /^(kota|kab(upaten)?)\.?\s/i.test(p) ||
+    /^(provinsi\s+)?(jawa|sumatera|sumatra|kalimantan|sulawesi|bali|papua|nusa tenggara|dki|di yogyakarta|banten|riau|aceh|lampung|bengkulu|jambi|gorontalo|maluku)/i.test(p);
+  const sisa = parts.slice(1).slice(-3);
+  const wilayah = sisa.some((p) => !umum(p)) ? sisa.join(', ') : '';
+  const out = [raw, withKota(norm), first ? withKota(first) : '', wilayah ? withKota(wilayah) : ''];
+  const seen = new Set<string>();
+  return out.filter((q) => {
+    const k = q.toLowerCase();
+    if (q.length < 6 || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
 
 /** Jemaat aktif (bukan tamu) beralamat yang belum diproses / alamatnya berubah. */
 async function pending(limit: number): Promise<Pending[]> {
   return prisma.$queryRaw<Pending[]>`
-    SELECT j.id, j.alamat, c.latitude AS clat, c.longitude AS clng
+    SELECT j.id, j.alamat, c.latitude AS clat, c.longitude AS clng, c.nama AS cnama
     FROM jemaat j
     JOIN cabang_gereja c ON c.id = j.cabang_id
     LEFT JOIN jemaat_geocode g ON g.jemaat_id = j.id
@@ -82,7 +142,7 @@ async function pending(limit: number): Promise<Pending[]> {
       AND (
         g.jemaat_id IS NULL
         OR g.alamat_hash <> md5(j.alamat)
-        OR g.provider <> ${GEOCODE_VERSION}
+        OR (g.provider NOT LIKE ${GEOCODE_VERSION + '%'} AND NOT (g.status = 'OK' AND g.provider = ANY(${OK_STILL_VALID})))
         OR (g.status = 'NO_CABANG' AND c.latitude IS NOT NULL)
       )
     ORDER BY j.created_at DESC
@@ -120,15 +180,22 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
     geocodeState.batchSize = rows.length;
     for (const r of rows) {
       const near = r.clat != null && r.clng != null ? { lat: r.clat, lng: r.clng } : null;
-      const q = cleanAlamat(r.alamat);
+      const queries = buildQueries(r.alamat, kotaDariCabang(r.cnama ?? ''));
       let hit: Hit = null;
+      let tahap = 0;
       let status: 'OK' | 'NOT_FOUND' | 'TOO_FAR' | 'NO_CABANG';
       if (!near) {
         // Tanpa titik cabang, kedekatan tidak bisa dijamin → tunggu cabang diberi link.
         status = 'NO_CABANG';
       } else {
         try {
-          hit = q.length >= 6 ? await geocodeNominatim(q, near) : null;
+          // Coba variasi satu per satu (jeda 1,1 detik antar permintaan).
+          for (let i = 0; i < queries.length && !hit; i++) {
+            if (i > 0) await sleep(GAP_MS);
+            hit = await geocodeNominatim(queries[i]!, near);
+            if (hit && distanceKm(near, hit) > MAX_FROM_CABANG_KM) hit = null; // di luar wilayah → coba variasi lain
+            tahap = i + 1;
+          }
         } catch (err) {
           logger.warn({ err }, 'geocode-jemaat: layanan menolak, batch dihentikan');
           geocodeState.lastError = err instanceof Error ? err.message : String(err);
@@ -142,7 +209,8 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
         status,
         latitude: status === 'OK' ? hit!.lat : null,
         longitude: status === 'OK' ? hit!.lng : null,
-        provider: GEOCODE_VERSION,
+        // Tahap variasi yang berhasil (1 = alamat asli, 4 = tingkat wilayah) — untuk evaluasi ketepatan.
+        provider: status === 'OK' ? `${GEOCODE_VERSION}/${tahap}` : GEOCODE_VERSION,
       };
       await prisma.jemaatGeocode.upsert({ where: { jemaatId: r.id }, create: { jemaatId: r.id, ...data }, update: data });
       processed++;

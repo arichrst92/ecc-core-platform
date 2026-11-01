@@ -133,6 +133,7 @@ export interface MapViewData {
 export const PIN_STYLE = {
   cabang: { color: '#EA580C', label: 'Cabang gereja' },
   area: { color: '#0D9488', label: 'Homecell area' },
+  jemaat: { color: '#0284C7', label: 'Jemaat' },
   homecell: { color: '#7C3AED', label: 'Homecell' },
   nonaktif: { color: '#9CA3AF', label: 'Nonaktif' },
 } as const;
@@ -345,5 +346,78 @@ export function areaPopup(a: MapArea, homecellNames: string[]): string {
     ${list ? `<div style="font-size:12px;color:#404040;margin-top:8px"><div style="color:#737373;margin-bottom:2px">Homecell di peta</div><ul style="margin:0;padding-left:16px;line-height:1.5">${list}${more}</ul></div>` : ''}
     ${belum > 0 ? `<div style="font-size:11px;color:#B45309;margin-top:6px">${belum} homecell belum punya titik lokasi</div>` : ''}
     <div style="margin-top:10px"><a href="/dashboard/homecell-area/${esc(a.id)}" style="display:block;text-align:center;padding:6px 8px;border-radius:8px;background:${color};color:#fff;font-size:12px;font-weight:600;text-decoration:none">Lihat detail area</a></div>
+  </div>`;
+}
+
+// ------------------------------------------------------------------ jemaat
+
+export interface MapJemaat {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  fotoUrl: string | null;
+  jenisKelamin: 'L' | 'P' | null;
+  noHp: string | null;
+  alamat: string | null;
+  latitude: number;
+  longitude: number;
+  cabang: { id: string; nama: string };
+  homecell: { id: string; nama: string }[];
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
+export const fotoSrc = (u: string | null) => (!u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE}${u}`);
+
+function initials(nama: string) {
+  const p = nama.trim().split(/\s+/).filter(Boolean);
+  return ((p[0]?.[0] ?? '') + (p.length > 1 ? p[p.length - 1]![0] : '')).toUpperCase() || '?';
+}
+
+function avatarHtml(j: MapJemaat, size: number) {
+  const src = fotoSrc(j.fotoUrl);
+  const bg = j.jenisKelamin === 'P' ? '#DB2777' : j.jenisKelamin === 'L' ? '#2563EB' : '#64748B';
+  const fallback = `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.38)}px">${esc(initials(j.namaLengkap))}</div>`;
+  if (!src) return fallback;
+  // Foto gagal dimuat → tampilkan inisial.
+  return `<img src="${esc(src)}" alt="" loading="lazy" width="${size}" height="${size}"
+    style="width:${size}px;height:${size}px;border-radius:999px;object-fit:cover;display:block;background:#e5e7eb"
+    onerror="this.outerHTML=this.dataset.fb" data-fb="${esc(fallback)}"/>`;
+}
+
+/** Pin jemaat: foto profil bulat dengan bingkai biru + ujung penunjuk. */
+export function makeJemaatIcon(L: Leaflet, j: MapJemaat) {
+  const c = PIN_STYLE.jemaat.color;
+  const html = `<div class="ecc-pin" style="width:44px;height:54px">
+    <div style="box-sizing:border-box;width:44px;height:44px;border-radius:999px;background:${c};padding:3px;box-shadow:0 2px 4px rgba(0,0,0,.35)">
+      <div style="box-sizing:border-box;width:38px;height:38px;border-radius:999px;overflow:hidden;border:2px solid #fff">${avatarHtml(j, 34)}</div>
+    </div>
+    <div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid ${c}"></div>
+  </div>`;
+  return L.divIcon({ html, className: 'ecc-pin-wrap', iconSize: [44, 54], iconAnchor: [22, 54], popupAnchor: [0, -50] });
+}
+
+export function jemaatPopup(j: MapJemaat): string {
+  const c = PIN_STYLE.jemaat.color;
+  const wa = j.noHp ? j.noHp.replace(/\D/g, '') : null;
+  const hc = j.homecell.length ? j.homecell.map((h) => esc(h.nama)).join(', ') : '<span style="color:#a3a3a3">Belum ikut homecell</span>';
+  const maps = j.alamat
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.alamat)}`
+    : `https://www.google.com/maps/search/?api=1&query=${j.latitude},${j.longitude}`;
+  return `<div style="min-width:240px;max-width:290px;font-family:inherit">
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="flex-shrink:0;border-radius:999px;border:3px solid ${c}">${avatarHtml(j, 56)}</div>
+      <div style="min-width:0">
+        ${badge('Jemaat', '#E0F2FE', '#0369A1')}
+        <div style="font-size:15px;font-weight:700;color:#171717;margin-top:3px;line-height:1.25">${esc(j.namaLengkap)}</div>
+        <div style="font-size:12px;color:#737373">${j.kode ? `${esc(j.kode)} · ` : ''}${esc(j.cabang.nama)}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      ${row('Homecell', hc)}
+      ${j.noHp ? row('No HP', `${esc(j.noHp)}${wa ? ` · <a href="https://wa.me/${wa}" target="_blank" rel="noopener noreferrer" style="color:#16A34A;font-weight:600">WhatsApp</a>` : ''}`) : ''}
+      ${j.alamat ? row('Alamat', esc(j.alamat)) : ''}
+    </div>
+    <div style="font-size:11px;color:#a3a3a3;margin-top:6px">Lokasi pin = perkiraan dari alamat.</div>
+    ${buttons(`/dashboard/jemaat/${j.id}`, maps, c)}
   </div>`;
 }

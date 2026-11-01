@@ -185,3 +185,50 @@ mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
     },
   });
 });
+
+/**
+ * Pin jemaat (internal ECC) — perkiraan titik rumah dari alamat + foto profil.
+ * Butuh akses menu Map View DAN menu Jemaat (baca).
+ *   GET /admin/map-view/jemaat?cabangId=
+ */
+mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
+  const { cabangId } = z.object({ cabangId: z.string().uuid().optional() }).parse(req.query);
+  const rows = await prisma.jemaatGeocode.findMany({
+    where: {
+      status: 'OK',
+      latitude: { not: null },
+      longitude: { not: null },
+      jemaat: { isActive: true, isTamu: false, ...(cabangId ? { cabangId } : {}) },
+    },
+    select: {
+      latitude: true,
+      longitude: true,
+      jemaat: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          kode: true,
+          fotoUrl: true,
+          jenisKelamin: true,
+          noHp: true,
+          alamat: true,
+          cabang: { select: { id: true, nama: true } },
+          homecellMembership: {
+            where: { isActive: true, homecell: { isActive: true } },
+            select: { homecell: { select: { id: true, nama: true } } },
+            take: 3,
+          },
+        },
+      },
+    },
+  });
+  res.json({
+    success: true,
+    data: rows.map(({ latitude, longitude, jemaat: { homecellMembership, ...j } }) => ({
+      ...j,
+      latitude: latitude!,
+      longitude: longitude!,
+      homecell: homecellMembership.map((m) => m.homecell),
+    })),
+  });
+});

@@ -15,12 +15,15 @@ import {
   areaPopup,
   cabangPopup,
   homecellPopup,
+  jemaatPopup,
   loadHeat,
   loadLeaflet,
   makeAreaLayer,
   makeIcon,
+  makeJemaatIcon,
   pinHtml,
   type Leaflet,
+  type MapJemaat,
   type MapViewData,
   type SebaranJemaat,
 } from '@/lib/map-view';
@@ -35,6 +38,8 @@ export default function MapViewPage() {
   const [showArea, setShowArea] = useState(true);
   // Sebaran jemaat (perkiraan dari alamat, tanpa nama) — default mati.
   const [showSebaran, setShowSebaran] = useState(false);
+  // Pin jemaat + foto profil (perkiraan lokasi dari alamat) — default mati.
+  const [showJemaat, setShowJemaat] = useState(false);
   const heatRef = useRef<any>(null);
   const [cabangId, setCabangId] = useState('');
   const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
@@ -46,7 +51,7 @@ export default function MapViewPage() {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const LRef = useRef<Leaflet>(null);
-  const layerRef = useRef<{ cabang: any; homecell: any; area: any } | null>(null);
+  const layerRef = useRef<{ cabang: any; homecell: any; area: any; jemaat: any } | null>(null);
   const markerIndex = useRef<Map<string, any>>(new Map());
   const fittedKey = useRef<string>('');
 
@@ -66,6 +71,16 @@ export default function MapViewPage() {
       ).data.data,
     enabled: showSebaran,
     staleTime: 5 * 60_000,
+  });
+
+  const jemaatQ = useQuery({
+    queryKey: ['map-view', 'jemaat', cabangId],
+    queryFn: async () =>
+      (await apiClient.get<{ data: MapJemaat[] }>('/admin/map-view/jemaat', { params: cabangId ? { cabangId } : {} })).data
+        .data,
+    enabled: showJemaat,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 
   const cabangOptions = useMemo(() => {
@@ -95,6 +110,16 @@ export default function MapViewPage() {
             `${h.nama} ${h.area.nama} ${h.picJemaat?.namaLengkap ?? ''} ${h.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
     [q.data, cabangId, kategori, needle],
+  );
+
+  const jemaatList = useMemo(
+    () =>
+      (jemaatQ.data ?? []).filter(
+        (j) =>
+          (!cabangId || j.cabang.id === cabangId) &&
+          (!needle || `${j.namaLengkap} ${j.kode ?? ''} ${j.alamat ?? ''}`.toLowerCase().includes(needle)),
+      ),
+    [jemaatQ.data, cabangId, needle],
   );
 
   // Area + titik homecell-nya (semua homecell area tsb, tidak terpengaruh saringan kategori).
@@ -150,6 +175,8 @@ export default function MapViewPage() {
           area: L.featureGroup().addTo(map),
           cabang: L.markerClusterGroup(clusterOpts(PIN_STYLE.cabang.color)).addTo(map),
           homecell: L.markerClusterGroup(clusterOpts(PIN_STYLE.homecell.color)).addTo(map),
+          // Jemaat serumah/berdekatan → angka; zoom maksimal → pin dibuka melingkar.
+          jemaat: L.markerClusterGroup({ ...clusterOpts(PIN_STYLE.jemaat.color), maxClusterRadius: 50 }).addTo(map),
         };
         mapRef.current = map;
         // Ukuran kontainer bisa berubah setelah layout selesai.
@@ -180,6 +207,7 @@ export default function MapViewPage() {
     layers.cabang.clearLayers();
     layers.homecell.clearLayers();
     layers.area.clearLayers();
+    layers.jemaat.clearLayers();
     markerIndex.current.clear();
     const bounds: [number, number][] = [];
 
@@ -220,14 +248,27 @@ export default function MapViewPage() {
       }
     }
 
+    if (showJemaat) {
+      for (const j of jemaatList) {
+        const m = L.marker([j.latitude, j.longitude], { icon: makeJemaatIcon(L, j), title: j.namaLengkap }).bindPopup(
+          jemaatPopup(j),
+          { maxWidth: 310, className: 'ecc-popup' },
+        );
+        layers.jemaat.addLayer(m);
+        markerIndex.current.set(`j:${j.id}`, m);
+        // Jemaat tidak ikut menentukan zoom awal kecuali satu-satunya lapisan.
+        if (!showCabang && !showHomecell && !showArea) bounds.push([j.latitude, j.longitude]);
+      }
+    }
+
     // Arahkan peta ke semua pin bila saringan berubah (bukan saat data dimuat ulang saja).
-    const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showArea}|${showHomecell}|${q.dataUpdatedAt > 0}`;
+    const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showArea}|${showHomecell}|${showJemaat}|${q.dataUpdatedAt > 0}|${jemaatQ.dataUpdatedAt > 0}`;
     if (bounds.length && fittedKey.current !== key) {
       fittedKey.current = key;
       if (bounds.length === 1) map.setView(bounds[0], 15);
       else map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [tick, cabangList, homecellList, areaList, showCabang, showArea, showHomecell, cabangId, kategori, needle, q.dataUpdatedAt]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt]);
 
   // Lapisan peta kepadatan (sebaran jemaat).
   useEffect(() => {
@@ -268,7 +309,7 @@ export default function MapViewPage() {
       m.openPopup(b ? b.getCenter() : undefined);
       return;
     }
-    const group = key.startsWith('c:') ? layers.cabang : layers.homecell;
+    const group = key.startsWith('c:') ? layers.cabang : key.startsWith('j:') ? layers.jemaat : layers.homecell;
     group.zoomToShowLayer(m, () => m.openPopup());
   }
 
@@ -283,6 +324,7 @@ export default function MapViewPage() {
         ...(showHomecell
           ? homecellList.map((h) => ({ key: `h:${h.id}`, nama: h.nama, sub: `Homecell · ${h.area.cabang.nama}` }))
           : []),
+        ...(showJemaat ? jemaatList.map((j) => ({ key: `j:${j.id}`, nama: j.namaLengkap, sub: `Jemaat · ${j.cabang.nama}` })) : []),
       ].slice(0, 8)
     : [];
 
@@ -312,6 +354,7 @@ export default function MapViewPage() {
           <Legend kind="cabang" />
           <AreaLegend />
           <Legend kind="homecell" />
+          <JemaatLegend />
           <Legend kind="nonaktif" />
         </div>
       </div>
@@ -338,6 +381,12 @@ export default function MapViewPage() {
             onChange={setShowHomecell}
             color={PIN_STYLE.homecell.color}
             label={`Homecell (${homecellList.length})`}
+          />
+          <Toggle
+            checked={showJemaat}
+            onChange={setShowJemaat}
+            color={PIN_STYLE.jemaat.color}
+            label={`Jemaat${jemaatQ.data ? ` (${jemaatList.length})` : ''}`}
           />
           <Toggle
             checked={showSebaran}
@@ -375,7 +424,7 @@ export default function MapViewPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari cabang / area / homecell / pemimpin…"
+            placeholder="Cari cabang / area / homecell / jemaat…"
             className="w-full pl-9 pr-8 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
           {search ? (
@@ -399,6 +448,16 @@ export default function MapViewPage() {
           )}
         </div>
       </div>
+
+      {showJemaat && (jemaatQ.isLoading || jemaatQ.isError) && (
+        <div
+          className={`-mt-2 text-xs rounded-xl px-3 py-2 border ${jemaatQ.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-neutral-200 text-neutral-600'}`}
+        >
+          {jemaatQ.isError
+            ? 'Pin jemaat butuh akses menu Jemaat. Hubungi admin untuk Role Access.'
+            : 'Memuat pin jemaat…'}
+        </div>
+      )}
 
       {showSebaran && (
         <div className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-600 bg-white border border-neutral-200 rounded-xl px-3 py-2">
@@ -483,6 +542,16 @@ function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'nonaktif' }) {
     <span className="inline-flex items-center gap-1.5 text-neutral-700">
       <span className="inline-block scale-[0.6] origin-left -mr-3" style={{ height: 30 }} dangerouslySetInnerHTML={{ __html: html }} />
       {PIN_STYLE[kind].label}
+    </span>
+  );
+}
+
+function JemaatLegend() {
+  const c = PIN_STYLE.jemaat.color;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-neutral-700">
+      <span className="w-5 h-5 rounded-full border-[3px]" style={{ borderColor: c, background: '#e0f2fe' }} />
+      {PIN_STYLE.jemaat.label}
     </span>
   );
 }

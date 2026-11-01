@@ -1389,7 +1389,7 @@ authRouter.post(
       },
     });
 
-    // Onboarding pertama kali (mis. daftar via email) → role sesuai Onboarding Config.
+    // Login pertama (data dari impor/admin/keluarga) → role sesuai Onboarding Config, hanya bila belum punya role.
     const rolesGranted = wasOnboarded
       ? 0
       : await grantOnboardingRoles(existing.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');

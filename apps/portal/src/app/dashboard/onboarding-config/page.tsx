@@ -41,7 +41,7 @@ const SECTIONS: { jenis: Jenis; title: string; desc: string }[] = [
   {
     jenis: 'JEMAAT_TETAP',
     title: 'Memilih “Jemaat Tetap”',
-    desc: 'Pilihan di layar daftar app. Juga dipakai untuk pendaftaran lewat email yang tidak memilih.',
+    desc: 'Pilihan di layar daftar app. Juga dipakai saat login pertama jemaat yang datanya sudah ada tapi belum punya role.',
   },
   {
     jenis: 'NEW_COMER',

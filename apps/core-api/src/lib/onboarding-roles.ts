@@ -45,10 +45,14 @@ export async function onboardingRolesCreate(
 }
 
 /**
- * Berikan role onboarding ke jemaat yang sudah ada (mis. daftar via email lalu
- * menyelesaikan onboarding). Sub role yang sudah dimiliki tidak digandakan.
+ * Wizard onboarding (login pertama jemaat yang datanya sudah ada — impor,
+ * dibuat admin, atau didaftarkan keluarga). Role onboarding hanya diberikan
+ * bila jemaat BELUM punya role aktif sama sekali, supaya role yang sudah diatur
+ * admin/impor tidak tertimpa atau bertambah tanpa sengaja.
  */
 export async function grantOnboardingRoles(jemaatId: string, jenis: 'JEMAAT_TETAP' | 'NEW_COMER'): Promise<number> {
+  const punyaRole = await prisma.jemaatRole.count({ where: { jemaatId, isActive: true } });
+  if (punyaRole > 0) return 0;
   const roles = await onboardingRolesFor(jenis);
   if (!roles.length) return 0;
   const existing = await prisma.jemaatRole.findMany({

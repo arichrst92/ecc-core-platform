@@ -379,6 +379,7 @@ model Role {
   eventGrants       Event[]                @relation("EventGrantRole")
   journeySteps      SpiritualJourneyStep[] @relation("JourneyRole")
   prayerPetugasRoles PrayerPetugasRole[]
+  onboardingRules   OnboardingRoleRule[]
 
   @@map("role")
 }
@@ -402,6 +403,7 @@ model SubRole {
   eventGrants       Event[]                @relation("EventGrantSubRole")
   journeySteps      SpiritualJourneyStep[] @relation("JourneySubRole")
   prayerPetugasRoles PrayerPetugasRole[]
+  onboardingRules   OnboardingRoleRule[]
 
   @@unique([roleId, nama])
   @@index([roleId])
@@ -420,6 +422,7 @@ model SubRoleStatus {
   subRole     SubRole      @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
   jemaatRoles JemaatRole[]
   eventRequirements EventRoleRequirement[]
+  onboardingRules   OnboardingRoleRule[]
   eventGrants       Event[]                @relation("EventGrantSubRoleStatus")
   journeySteps      SpiritualJourneyStep[] @relation("JourneySubRoleStatus")
 
@@ -429,6 +432,27 @@ model SubRoleStatus {
 }
 
 // Junction many-to-many: jemaat ↔ role (dengan riwayat)
+// Onboarding Config (Portal → App Settings): role yang otomatis diberikan saat
+// jemaat selesai mendaftar / onboarding di app. jenis = pilihan di layar daftar
+// (JEMAAT_TETAP / NEW_COMER) atau SEMUA (berlaku untuk keduanya).
+model OnboardingRoleRule {
+  id              String   @id @default(uuid()) @db.Uuid
+  jenis           String   @db.VarChar(20)
+  roleId          String   @map("role_id") @db.Uuid
+  subRoleId       String   @map("sub_role_id") @db.Uuid
+  subRoleStatusId String?  @map("sub_role_status_id") @db.Uuid
+  urutan          Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  role          Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  subRole       SubRole        @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
+  subRoleStatus SubRoleStatus? @relation(fields: [subRoleStatusId], references: [id], onDelete: SetNull)
+
+  @@index([jenis])
+  @@map("onboarding_role_rule")
+}
+
 model JemaatRole {
   id              String    @id @default(uuid()) @db.Uuid
   jemaatId        String    @map("jemaat_id") @db.Uuid

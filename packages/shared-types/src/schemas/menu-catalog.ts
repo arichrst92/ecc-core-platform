@@ -104,6 +104,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'legal', label: 'Legal Docs', href: '/dashboard/legal', group: 'App Settings' },
   { key: 'app-version', label: 'App Versions', href: '/dashboard/app-version', group: 'App Settings' },
   { key: 'maintenance-mode', label: 'Maintenance Mode', href: '/dashboard/maintenance-mode', group: 'App Settings' },
+  { key: 'onboarding-config', label: 'Onboarding Config', href: '/dashboard/onboarding-config', group: 'App Settings' },
 ];
 
 export const MENU_KEYS = MENU_CATALOG.map((m) => m.key) as readonly string[];

@@ -307,6 +307,8 @@ export const completeOnboardingSchema = z
     alamat: z.string().trim().max(500).optional(),
     cabangId: uuidSchema.optional(),
     email: z.string().trim().email().max(255).optional(),
+    // Pilihan jenis jemaat (opsional) → role sesuai Onboarding Config. Default JEMAAT_TETAP.
+    jenisJemaat: jenisJemaatSchema.optional(),
   })
   .openapi('CompleteOnboardingInput');
 export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;

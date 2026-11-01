@@ -51,6 +51,7 @@ import {
   magicLinkLimiter,
   onboardingLimiter,
 } from '../middleware/rate-limit.js';
+import { grantOnboardingRoles, onboardingRolesCreate } from '../lib/onboarding-roles.js';
 import { audit } from '../lib/audit.js';
 import { generateUniqueKode } from '../lib/kode-reservasi.js';
 import { saveProfilePhoto } from '../lib/storage.js';
@@ -321,8 +322,7 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
  * Side effect:
  *   - Create Jemaat baru (auto-active, auto-generated kode).
  *   - Create User row.
- *   - Auto-assign role default "Jemaat" + subRole "Jemaat Tetap" — kalau seed
- *     role tersedia.
+ *   - Auto-assign role sesuai Onboarding Config (Portal → App Settings).
  *   - Issue accessToken + refreshToken (langsung login).
  *
  * Anti-abuse: registerLimiter (3/jam/IP). Note: tetap perlu OTP verified, jadi
@@ -370,28 +370,10 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
   );
 
-  // 5. Resolve role default "Jemaat" + sub-role per `jenisJemaat` pilihan
-  // user di mobile signup screen (per request M23.2 2026-05-24):
-  //   - JEMAAT_TETAP → sub-role "Jemaat Tetap"
-  //   - NEW_COMER    → sub-role "New Comer"
-  //
-  // Default JEMAAT_TETAP untuk backwards-compat (mobile lama tidak kirim
-  // field jenisJemaat, zod default akan apply). Best-effort lookup —
-  // kalau sub-role tidak ada di seed, skip role assignment supaya signup
-  // tetap jalan (sub-role bisa di-assign admin manual nanti).
-  const targetSubRoleName = input.jenisJemaat === 'NEW_COMER' ? 'New Comer' : 'Jemaat Tetap';
-  const defaultRole = await prisma.role.findFirst({
-    where: { nama: 'Jemaat', isActive: true },
-    include: {
-      subRoles: {
-        where: {
-          // Case-insensitive — defensive jika seed pakai casing berbeda.
-          nama: { equals: targetSubRoleName, mode: 'insensitive' },
-          isActive: true,
-        },
-      },
-    },
-  });
+  // 5. Role otomatis sesuai pilihan jenis jemaat di layar daftar — diatur di
+  // Portal → App Settings → Onboarding Config (dulu hardcode Jemaat → Jemaat
+  // Tetap / New Comer). Tidak ada aturan → tanpa role (admin assign manual).
+  const onboardingRoles = await onboardingRolesCreate(input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
 
   // 6. Create Jemaat — atau upgrade record tamu (riwayat event/ibadah tetap).
   const jemaatData = {
@@ -410,15 +392,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
       // Register lengkap = onboarded (skip wizard first login).
       onboardedAt: new Date(),
       isActive: true,
-      jemaatRoles: defaultRole?.subRoles[0]
-        ? {
-            create: {
-              roleId: defaultRole.id,
-              subRoleId: defaultRole.subRoles[0].id,
-              isActive: true,
-            },
-          }
-        : undefined,
+      jemaatRoles: onboardingRoles ? { create: onboardingRoles } : undefined,
   };
   const created = upgradeTamu
     ? await prisma.jemaat.update({
@@ -1415,12 +1389,17 @@ authRouter.post(
       },
     });
 
+    // Onboarding pertama kali (mis. daftar via email) → role sesuai Onboarding Config.
+    const rolesGranted = wasOnboarded
+      ? 0
+      : await grantOnboardingRoles(existing.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
+
     audit(req, {
       action: 'UPDATE',
       resource: 'jemaat',
       resourceId: existing.id,
       resourceLabel: `Onboarding complete: ${existing.namaLengkap}`,
-      metadata: { firstTime: !wasOnboarded, fieldsSet: Object.keys(updateData) },
+      metadata: { firstTime: !wasOnboarded, fieldsSet: Object.keys(updateData), rolesGranted },
     });
 
     res.json({

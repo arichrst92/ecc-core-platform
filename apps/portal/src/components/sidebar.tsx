@@ -50,6 +50,7 @@ import {
   ShieldAlert,
   CloudUpload,
   ClipboardList,
+  UserCheck,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -153,6 +154,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/legal', label: 'Legal Docs', icon: FileText, menuKey: 'legal' },
       { href: '/dashboard/app-version', label: 'App Versions', icon: Smartphone, menuKey: 'app-version' },
       { href: '/dashboard/maintenance-mode', label: 'Maintenance Mode', icon: Power, menuKey: 'maintenance-mode' },
+      { href: '/dashboard/onboarding-config', label: 'Onboarding Config', icon: UserCheck, menuKey: 'onboarding-config' },
     ],
   },
   {

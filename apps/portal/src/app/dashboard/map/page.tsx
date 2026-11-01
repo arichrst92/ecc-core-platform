@@ -18,7 +18,6 @@ import {
   jemaatPinElement,
   jemaatPopup,
   sebarTitikSama,
-  convexHull,
   formatJarak,
   fotoSrc,
   jarakLabelElement,
@@ -451,7 +450,7 @@ export default function MapViewPage() {
     );
   }, [tick, showSebaran, sebaran.data]);
 
-  // Gambar garis homecell → anggota/PIC, poligon cakupan, label jarak.
+  // Garis lurus tebal homecell → anggota/PIC + balon jarak di tengah garis.
   useEffect(() => {
     const g = GRef.current;
     const map = mapRef.current;
@@ -464,7 +463,6 @@ export default function MapViewPage() {
     const ada = d.anggota.filter((m) => m.latitude != null && m.longitude != null);
     const bounds = new g.maps.LatLngBounds();
     bounds.extend(hc);
-    const pts: [number, number][] = [[hc.lat, hc.lng]];
     // Titik yang sama (satu rumah) disebar sedikit supaya semua pin terlihat.
     const sebar = sebarTitikSama(
       ada.map((m) => ({ ...m, latitude: m.latitude!, longitude: m.longitude!, homecell: [] })),
@@ -472,42 +470,31 @@ export default function MapViewPage() {
     for (const m of ada) {
       const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude!, lng: m.longitude! };
       bounds.extend(pos);
-      pts.push([pos.lat, pos.lng]);
-    }
-    if (pts.length >= 3) {
-      const hull = convexHull(pts);
-      memberOverlay.current.push(
-        new g.maps.Polygon({
-          map,
-          paths: hull.map(([lat, lng]) => ({ lat, lng })),
-          strokeColor: PIN_STYLE.homecell.color,
-          strokeOpacity: 0.8,
-          strokeWeight: 2,
-          fillColor: PIN_STYLE.homecell.color,
-          fillOpacity: 0.08,
-          clickable: false,
-          zIndex: 5,
-        }),
-      );
     }
     for (const m of ada) {
       const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude!, lng: m.longitude! };
       const color = m.isPic ? PIC_COLOR : MEMBER_COLOR;
-      memberOverlay.current.push(
-        new g.maps.Polyline({
-          map,
-          path: [hc, pos],
-          geodesic: true,
-          strokeOpacity: 0,
-          icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: color, strokeWeight: 2.5, scale: 3 }, offset: '0', repeat: '12px' }],
-          clickable: false,
-          zIndex: 6,
-        }),
-      );
-      const mid = { lat: (hc.lat + pos.lat) / 2, lng: (hc.lng + pos.lng) / 2 };
-      const label = new g.maps.marker.AdvancedMarkerElement({ map, position: mid, content: jarakLabelElement(formatJarak(m.jarakKm), color), zIndex: 1500 });
-      memberOverlay.current.push(label);
       const html = memberPopup(m, d.homecell);
+      // Garis lurus tebal: lapisan putih di bawah supaya tetap jelas di atas peta/satelit.
+      const garisBawah = new g.maps.Polyline({ map, path: [hc, pos], geodesic: true, strokeColor: '#FFFFFF', strokeOpacity: 1, strokeWeight: 9, clickable: false, zIndex: 6 });
+      const garis = new g.maps.Polyline({ map, path: [hc, pos], geodesic: true, strokeColor: color, strokeOpacity: 1, strokeWeight: 5, zIndex: 7 });
+      garis.addListener('click', (e: any) => openInfo(html, e.latLng));
+      garis.addListener('mouseover', () => garis.setOptions({ strokeWeight: 7 }));
+      garis.addListener('mouseout', () => garis.setOptions({ strokeWeight: 5 }));
+      memberOverlay.current.push(garisBawah, garis);
+      // Balon jarak di tengah garis (klik → detail anggota).
+      const mid = { lat: (hc.lat + pos.lat) / 2, lng: (hc.lng + pos.lng) / 2 };
+      const balon = new g.maps.marker.AdvancedMarkerElement({
+        map,
+        position: mid,
+        content: jarakLabelElement(m.namaLengkap, formatJarak(m.jarakKm), color),
+        zIndex: m.isPic ? 1600 : 1500,
+      });
+      if ('gmpClickable' in balon) {
+        (balon as any).gmpClickable = true;
+        balon.addEventListener('gmp-click', () => openInfo(html, mid));
+      }
+      memberOverlay.current.push(balon);
       memberIndex.current.set(m.id, { pos, html });
       const mk = makeMarker(pos, jemaatPinElement(m, color), m.namaLengkap, html, 52, m.isPic ? 2100 : 2000);
       mk.map = map;

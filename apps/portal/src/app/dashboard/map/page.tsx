@@ -79,9 +79,10 @@ export default function MapViewPage() {
     };
   }, []);
   useEffect(() => {
-    // Ukuran peta berubah → Leaflet perlu menghitung ulang.
-    const t = setTimeout(() => mapRef.current?.invalidateSize(), 120);
-    return () => clearTimeout(t);
+    // Ukuran peta berubah → Leaflet perlu menghitung ulang. Fullscreen browser
+    // butuh beberapa ratus ms untuk berubah ukuran, jadi dicek beberapa kali.
+    const ts = [60, 250, 600].map((ms) => setTimeout(() => mapRef.current?.invalidateSize(), ms));
+    return () => ts.forEach(clearTimeout);
   }, [fullscreen]);
 
   const mapEl = useRef<HTMLDivElement>(null);
@@ -248,6 +249,12 @@ export default function MapViewPage() {
           jemaat: L.markerClusterGroup({ ...clusterOpts(PIN_STYLE.jemaat.color), maxClusterRadius: 50 }).addTo(map),
         };
         mapRef.current = map;
+        // Ukuran kontainer berubah kapan pun (layar penuh, rotasi HP, sidebar) → peta digambar ulang.
+        if (typeof ResizeObserver !== 'undefined' && mapEl.current) {
+          const ro = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+          ro.observe(mapEl.current);
+          map.on('unload', () => ro.disconnect());
+        }
         // Ukuran kontainer bisa berubah setelah layout selesai.
         setTimeout(() => map.invalidateSize(), 50);
         setMapError(null);
@@ -572,7 +579,12 @@ export default function MapViewPage() {
             : 'relative bg-white border border-neutral-200 rounded-xl overflow-hidden'
         }
       >
-        <div ref={mapEl} className={`w-full z-0 ${fullscreen ? 'h-full' : 'h-[calc(100vh-320px)] min-h-[460px]'}`} />
+        <div
+          ref={mapEl}
+          className={`w-full z-0 ${fullscreen ? '' : 'h-[calc(100vh-320px)] min-h-[460px]'}`}
+          // Tinggi eksplisit di layar penuh (persentase bisa 0 saat transisi fullscreen browser).
+          style={fullscreen ? { height: '100dvh', minHeight: '100vh' } : undefined}
+        />
         {fullscreen && (
           <>
             {/* Panel saringan mengambang (kiri atas) */}

@@ -257,6 +257,14 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
           hit = await geocodeOne(queries[i]!, negara);
           tahap = i + 1;
         }
+        // Cadangan: alamat di luar negara cabang (mis. jemaat cabang Sydney yang
+        // alamatnya di Indonesia) → cari alamat apa adanya, tanpa kota cabang & tanpa
+        // batas negara. Hasil yang terlalu kasar tetap ditolak.
+        if (!hit && negara && r.alamat.trim().length >= 6) {
+          await sleep(GAP_MS);
+          hit = await geocodeOne(r.alamat.trim(), null);
+          tahap = 9;
+        }
       } catch (err) {
         logger.warn({ err }, 'geocode-jemaat: layanan menolak, batch dihentikan');
         geocodeState.lastError = err instanceof Error ? err.message : String(err);

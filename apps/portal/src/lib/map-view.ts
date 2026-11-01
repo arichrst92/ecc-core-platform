@@ -12,6 +12,7 @@ const ASSETS = {
   leafletJs: `${CDN}/leaflet/1.9.4/leaflet.min.js`,
   clusterCss: `${CDN}/leaflet.markercluster/1.5.3/MarkerCluster.min.css`,
   clusterJs: `${CDN}/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js`,
+  heatJs: `${CDN}/leaflet.heat/0.2.0/leaflet-heat.js`,
 };
 
 function addCss(href: string) {
@@ -57,6 +58,19 @@ export function loadLeaflet(): Promise<Leaflet> {
     });
   }
   return loading;
+}
+
+/** Plugin peta kepadatan — dimuat hanya saat lapisan Sebaran Jemaat dinyalakan. */
+export async function loadHeat(): Promise<Leaflet> {
+  const L = await loadLeaflet();
+  if (!L.heatLayer) await addScript(ASSETS.heatJs);
+  return L;
+}
+
+export interface SebaranJemaat {
+  /** [lat, lng, jumlah jemaat] per sel ±100 m — tanpa nama. */
+  cells: [number, number, number][];
+  status: { total: number; ok: number; tidakDitemukan: number; terlaluJauh: number; menunggu: number };
 }
 
 // ------------------------------------------------------------------ data

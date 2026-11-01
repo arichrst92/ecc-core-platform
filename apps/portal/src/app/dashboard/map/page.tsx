@@ -15,12 +15,14 @@ import {
   areaPopup,
   cabangPopup,
   homecellPopup,
+  loadHeat,
   loadLeaflet,
   makeAreaLayer,
   makeIcon,
   pinHtml,
   type Leaflet,
   type MapViewData,
+  type SebaranJemaat,
 } from '@/lib/map-view';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -31,6 +33,9 @@ export default function MapViewPage() {
   const [showCabang, setShowCabang] = useState(true);
   const [showHomecell, setShowHomecell] = useState(true);
   const [showArea, setShowArea] = useState(true);
+  // Sebaran jemaat (perkiraan dari alamat, tanpa nama) — default mati.
+  const [showSebaran, setShowSebaran] = useState(false);
+  const heatRef = useRef<any>(null);
   const [cabangId, setCabangId] = useState('');
   const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
   const [search, setSearch] = useState('');
@@ -49,6 +54,18 @@ export default function MapViewPage() {
     queryKey: ['map-view'],
     queryFn: async () => (await apiClient.get<{ data: MapViewData }>('/admin/map-view')).data.data,
     staleTime: 60_000,
+  });
+
+  const sebaran = useQuery({
+    queryKey: ['map-view', 'sebaran-jemaat', cabangId],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: SebaranJemaat }>('/admin/map-view/sebaran-jemaat', {
+          params: cabangId ? { cabangId } : {},
+        })
+      ).data.data,
+    enabled: showSebaran,
+    staleTime: 5 * 60_000,
   });
 
   const cabangOptions = useMemo(() => {
@@ -212,6 +229,35 @@ export default function MapViewPage() {
     }
   }, [tick, cabangList, homecellList, areaList, showCabang, showArea, showHomecell, cabangId, kategori, needle, q.dataUpdatedAt]);
 
+  // Lapisan peta kepadatan (sebaran jemaat).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (heatRef.current) {
+      map.removeLayer(heatRef.current);
+      heatRef.current = null;
+    }
+    if (!showSebaran || !sebaran.data) return;
+    let cancelled = false;
+    loadHeat()
+      .then((L) => {
+        if (cancelled || !mapRef.current) return;
+        const max = Math.max(3, ...sebaran.data!.cells.map((c) => c[2]));
+        heatRef.current = L.heatLayer(sebaran.data!.cells, {
+          radius: 22,
+          blur: 18,
+          maxZoom: 14,
+          max,
+          minOpacity: 0.35,
+          gradient: { 0.2: '#3B82F6', 0.45: '#22C55E', 0.7: '#EAB308', 1: '#DC2626' },
+        }).addTo(mapRef.current);
+      })
+      .catch(() => setMapError('Lapisan sebaran jemaat gagal dimuat. Periksa koneksi internet.'));
+    return () => {
+      cancelled = true;
+    };
+  }, [tick, showSebaran, sebaran.data]);
+
   function focus(key: string) {
     const m = markerIndex.current.get(key);
     const layers = layerRef.current;
@@ -293,6 +339,13 @@ export default function MapViewPage() {
             color={PIN_STYLE.homecell.color}
             label={`Homecell (${homecellList.length})`}
           />
+          <Toggle
+            checked={showSebaran}
+            onChange={setShowSebaran}
+            color="#DC2626"
+            label="Sebaran Jemaat"
+            square
+          />
         </div>
         <select
           value={cabangId}
@@ -346,6 +399,34 @@ export default function MapViewPage() {
           )}
         </div>
       </div>
+
+      {showSebaran && (
+        <div className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-600 bg-white border border-neutral-200 rounded-xl px-3 py-2">
+          <span className="inline-flex items-center gap-1.5 font-medium text-neutral-800">
+            <span className="w-16 h-2 rounded-full" style={{ background: 'linear-gradient(90deg,#3B82F6,#22C55E,#EAB308,#DC2626)' }} />
+            Sebaran jemaat (sedikit → padat)
+          </span>
+          {sebaran.isLoading ? (
+            <span>Memuat…</span>
+          ) : sebaran.data ? (
+            <>
+              <span>
+                {sebaran.data.status.ok.toLocaleString('id-ID')} dari {sebaran.data.status.total.toLocaleString('id-ID')} alamat
+                berhasil dipetakan
+              </span>
+              {sebaran.data.status.menunggu > 0 && (
+                <span className="text-amber-700">{sebaran.data.status.menunggu.toLocaleString('id-ID')} menunggu diproses (bertahap otomatis)</span>
+              )}
+              {sebaran.data.status.tidakDitemukan + sebaran.data.status.terlaluJauh > 0 && (
+                <span>
+                  {(sebaran.data.status.tidakDitemukan + sebaran.data.status.terlaluJauh).toLocaleString('id-ID')} alamat tidak dikenali
+                </span>
+              )}
+            </>
+          ) : null}
+          <span className="text-neutral-400">Perkiraan dari alamat, digabung per ±100 m, tanpa nama.</span>
+        </div>
+      )}
 
       {/* Peta */}
       <div className="relative bg-white border border-neutral-200 rounded-xl overflow-hidden">

@@ -137,3 +137,51 @@ mapViewRouter.get('/', async (req, res) => {
     },
   });
 });
+
+/**
+ * Sebaran jemaat — perkiraan titik rumah (dari alamat) digabung per sel ±100 m
+ * (koordinat dibulatkan 3 desimal) TANPA nama/ID. Untuk lapisan peta kepadatan.
+ *   GET /admin/map-view/sebaran-jemaat?cabangId=
+ *   → { cells: [lat, lng, jumlah][], status: { total, ok, tidakDitemukan, terlaluJauh, menunggu } }
+ */
+mapViewRouter.get('/sebaran-jemaat', async (req, res) => {
+  const { cabangId } = z.object({ cabangId: z.string().uuid().optional() }).parse(req.query);
+  const jemaatWhere: Prisma.JemaatWhereInput = {
+    isActive: true,
+    isTamu: false,
+    ...(cabangId ? { cabangId } : {}),
+  };
+  const [rows, total, byStatus] = await Promise.all([
+    prisma.jemaatGeocode.findMany({
+      where: { status: 'OK', jemaat: jemaatWhere },
+      select: { latitude: true, longitude: true },
+    }),
+    prisma.jemaat.count({ where: { ...jemaatWhere, AND: [{ alamat: { not: null } }, { alamat: { not: '' } }] } }),
+    prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } }),
+  ]);
+  const cells = new Map<string, [number, number, number]>();
+  for (const r of rows) {
+    if (r.latitude == null || r.longitude == null) continue;
+    const lat = Math.round(r.latitude * 1000) / 1000;
+    const lng = Math.round(r.longitude * 1000) / 1000;
+    const k = `${lat},${lng}`;
+    const c = cells.get(k);
+    if (c) c[2]++;
+    else cells.set(k, [lat, lng, 1]);
+  }
+  const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
+  const diproses = byStatus.reduce((n, b) => n + b._count._all, 0);
+  res.json({
+    success: true,
+    data: {
+      cells: [...cells.values()],
+      status: {
+        total,
+        ok: count('OK'),
+        tidakDitemukan: count('NOT_FOUND'),
+        terlaluJauh: count('TOO_FAR'),
+        menunggu: Math.max(0, total - diproses),
+      },
+    },
+  });
+});

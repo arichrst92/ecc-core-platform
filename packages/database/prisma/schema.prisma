@@ -233,6 +233,7 @@ model Jemaat {
   relasiTujuan                 JemaatRelasi[]                @relation("RelasiTujuan")
   user                         User?
   privacy                      JemaatPrivacy?
+  geocode                      JemaatGeocode?
   jemaatPelayanan              JemaatPelayanan[]
   ibadahPelayananPetugas       IbadahPelayananPetugas[]
   reservasi                    Reservasi[]
@@ -3268,6 +3269,25 @@ model JemaatTamu {
 // { [field]: Audience[] } — field: noHp, email, tanggalLahir, ulangTahun,
 // alamat, pekerjaan, pernikahan, keluarga; audience: KELUARGA, HOMECELL,
 // AREA, GROUP, PELAYANAN, CABANG, SEMUA. Tidak ada baris = pakai default.
+// Perkiraan titik rumah jemaat dari ALAMAT (geocoding otomatis, 2.4.5).
+// Hanya untuk peta sebaran di Portal → Map View (tanpa nama, dibulatkan).
+// Tidak dipakai untuk petunjuk arah & tidak dikirim ke aplikasi.
+model JemaatGeocode {
+  jemaatId   String   @id @map("jemaat_id") @db.Uuid
+  // md5(alamat) saat diproses — alamat berubah → diproses ulang.
+  alamatHash String   @map("alamat_hash") @db.VarChar(32)
+  status     String   @db.VarChar(16) // OK | NOT_FOUND | TOO_FAR
+  latitude   Float?
+  longitude  Float?
+  provider   String   @default("nominatim") @db.VarChar(20)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  jemaat Jemaat @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("jemaat_geocode")
+}
+
 model JemaatPrivacy {
   jemaatId            String   @id @map("jemaat_id") @db.Uuid
   settings            Json     @default("{}")

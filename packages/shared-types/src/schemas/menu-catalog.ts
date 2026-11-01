@@ -27,6 +27,8 @@ export const MENU_CATALOG: MenuItem[] = [
   // 'dashboard' tetap di-list di RBAC supaya konsisten, walau biasanya
   // semua role yg boleh masuk portal punya akses ke dashboard.
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', group: null },
+  // Peta pin cabang gereja & homecell (di samping Elsa).
+  { key: 'map-view', label: 'Map View', href: '/dashboard/map', group: null },
 
   // Gereja
   { key: 'sinode', label: 'Gereja', href: '/dashboard/sinode', group: 'Gereja' },

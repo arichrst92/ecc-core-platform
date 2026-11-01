@@ -13,6 +13,7 @@ import { homecellAreaRouter } from './homecell-area.js';
 import { homecellRouter } from './homecell.js';
 import { eventRouter } from './event.js';
 import { apiKeyRouter } from './api-key.js';
+import { mapViewRouter } from './map-view.js';
 import { auditLogRouter } from './audit-log.js';
 import { meRouter } from './me.js';
 import { branchChangeRouter } from './branch-change.js';
@@ -131,3 +132,5 @@ adminRouter.use('/planning', planningRouter);
 adminRouter.use('/branch-change-request', branchChangeRouter);
 adminRouter.use('/sinode-api-key', apiKeyRouter);
 adminRouter.use('/audit-log', auditLogRouter);
+// Map View — pin cabang & homecell di peta (menu map-view)
+adminRouter.use('/map-view', mapViewRouter);

@@ -62,6 +62,7 @@ import {
   Gift,
   LayoutTemplate,
   Sparkles,
+  MapPinned,
   UserPlus,
   MessageSquareText,
   BarChart3,
@@ -93,6 +94,7 @@ interface NavGroup {
 // Standalone dock items (kiri + kanan)
 const STANDALONE_LEFT: NavItem[] = [
   { href: '/dashboard', label: 'Elsa (Els Agentic)', icon: Sparkles },
+  { href: '/dashboard/map', label: 'Map View', icon: MapPinned, menuKey: 'map-view' },
   { href: '/dashboard/user-guide', label: 'User Guide', icon: BookOpenCheck },
 ];
 
@@ -291,7 +293,7 @@ export function BottomDock() {
         <div className="w-px h-14 md:h-16 self-center bg-neutral-200 mx-1 shrink-0" />
 
         {/* Standalone left (Elsa + User Guide) */}
-        {STANDALONE_LEFT.map((item) => (
+        {STANDALONE_LEFT.filter((item) => !item.menuKey || hasMenuAccess(user?.menuAccess ?? {}, item.menuKey, 'read')).map((item) => (
           <DockItem
             key={item.href}
             href={item.href}

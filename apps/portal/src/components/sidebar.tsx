@@ -39,6 +39,7 @@ import {
   Gift,
   LayoutTemplate,
   Sparkles,
+  MapPinned,
   ChevronDown,
   MessageCircle,
   UserPlus,
@@ -74,6 +75,7 @@ interface NavGroup {
 
 const top: NavItem[] = [
   { href: '/dashboard', label: 'Elsa (Els Agentic)', icon: Sparkles },
+  { href: '/dashboard/map', label: 'Map View', icon: MapPinned, menuKey: 'map-view' },
   // User Guide — top-level (di bawah Dashboard, di luar grup). Tanpa menuKey
   // supaya selalu visible untuk semua user yang sudah login portal — semua
   // butuh akses panduan.

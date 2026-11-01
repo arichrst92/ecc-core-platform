@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Map View — peta pin cabang gereja & homecell.
- * Pin bisa diklik → balon informasi di atas pin. Pin dibedakan per fungsi:
+ * Map View — peta cabang gereja, homecell area & homecell.
+ * Pin/poligon bisa diklik → balon informasi. Pin dibedakan per fungsi:
  * cabang = pin oranye ikon gereja, homecell = pin ungu ikon rumah, nonaktif = abu.
+ * Homecell area = poligon yang menghubungkan titik homecell di area tsb.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -11,9 +12,11 @@ import { AlertTriangle, Loader2, MapPinned, Search, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   PIN_STYLE,
+  areaPopup,
   cabangPopup,
   homecellPopup,
   loadLeaflet,
+  makeAreaLayer,
   makeIcon,
   pinHtml,
   type Leaflet,
@@ -27,6 +30,7 @@ const INDONESIA_CENTER: [number, number] = [-2.5, 118];
 export default function MapViewPage() {
   const [showCabang, setShowCabang] = useState(true);
   const [showHomecell, setShowHomecell] = useState(true);
+  const [showArea, setShowArea] = useState(true);
   const [cabangId, setCabangId] = useState('');
   const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
   const [search, setSearch] = useState('');
@@ -37,7 +41,7 @@ export default function MapViewPage() {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const LRef = useRef<Leaflet>(null);
-  const layerRef = useRef<{ cabang: any; homecell: any } | null>(null);
+  const layerRef = useRef<{ cabang: any; homecell: any; area: any } | null>(null);
   const markerIndex = useRef<Map<string, any>>(new Map());
   const fittedKey = useRef<string>('');
 
@@ -76,6 +80,29 @@ export default function MapViewPage() {
     [q.data, cabangId, kategori, needle],
   );
 
+  // Area + titik homecell-nya (semua homecell area tsb, tidak terpengaruh saringan kategori).
+  const areaList = useMemo(() => {
+    const pts = new Map<string, { points: [number, number][]; names: string[] }>();
+    for (const h of q.data?.homecell ?? []) {
+      const e = pts.get(h.area.id) ?? { points: [], names: [] };
+      e.points.push([h.latitude, h.longitude]);
+      e.names.push(h.nama);
+      pts.set(h.area.id, e);
+    }
+    return (q.data?.area ?? [])
+      .filter(
+        (a) =>
+          (!cabangId || a.cabang.id === cabangId) &&
+          (!needle || `${a.nama} ${a.cabang.nama} ${a.picJemaat?.namaLengkap ?? ''}`.toLowerCase().includes(needle)),
+      )
+      .map((a) => ({ area: a, ...(pts.get(a.id) ?? { points: [], names: [] }) }))
+      .filter((x) => x.points.length > 0);
+  }, [q.data, cabangId, needle]);
+  const areaTanpaTitik = useMemo(
+    () => (q.data?.area ?? []).filter((a) => (!cabangId || a.cabang.id === cabangId) && a.denganTitik === 0),
+    [q.data, cabangId],
+  );
+
   // 1) Siapkan peta sekali.
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +129,8 @@ export default function MapViewPage() {
           },
         });
         layerRef.current = {
+          // Poligon area di bawah pin (ditambahkan lebih dulu).
+          area: L.featureGroup().addTo(map),
           cabang: L.markerClusterGroup(clusterOpts(PIN_STYLE.cabang.color)).addTo(map),
           homecell: L.markerClusterGroup(clusterOpts(PIN_STYLE.homecell.color)).addTo(map),
         };
@@ -133,8 +162,22 @@ export default function MapViewPage() {
     if (!L || !map || !layers) return;
     layers.cabang.clearLayers();
     layers.homecell.clearLayers();
+    layers.area.clearLayers();
     markerIndex.current.clear();
     const bounds: [number, number][] = [];
+
+    if (showArea) {
+      for (const { area, points, names } of areaList) {
+        const shape = makeAreaLayer(L, area, points)
+          .bindPopup(areaPopup(area, names), { maxWidth: 300, className: 'ecc-popup' })
+          .bindTooltip(area.nama, { sticky: true, direction: 'top', className: 'ecc-area-tip' });
+        shape.on('mouseover', () => shape.setStyle?.({ fillOpacity: 0.28 }));
+        shape.on('mouseout', () => shape.setStyle?.({ fillOpacity: 0.14 }));
+        layers.area.addLayer(shape);
+        markerIndex.current.set(`a:${area.id}`, shape);
+        for (const p of points) bounds.push(p);
+      }
+    }
 
     if (showCabang) {
       for (const c of cabangList) {
@@ -161,18 +204,24 @@ export default function MapViewPage() {
     }
 
     // Arahkan peta ke semua pin bila saringan berubah (bukan saat data dimuat ulang saja).
-    const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showHomecell}|${q.dataUpdatedAt > 0}`;
+    const key = `${cabangId}|${kategori}|${needle}|${showCabang}|${showArea}|${showHomecell}|${q.dataUpdatedAt > 0}`;
     if (bounds.length && fittedKey.current !== key) {
       fittedKey.current = key;
       if (bounds.length === 1) map.setView(bounds[0], 15);
       else map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [tick, cabangList, homecellList, showCabang, showHomecell, cabangId, kategori, needle, q.dataUpdatedAt]);
+  }, [tick, cabangList, homecellList, areaList, showCabang, showArea, showHomecell, cabangId, kategori, needle, q.dataUpdatedAt]);
 
   function focus(key: string) {
     const m = markerIndex.current.get(key);
     const layers = layerRef.current;
     if (!m || !layers) return;
+    if (key.startsWith('a:')) {
+      const b = m.getBounds?.();
+      if (b) mapRef.current?.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+      m.openPopup(b ? b.getCenter() : undefined);
+      return;
+    }
     const group = key.startsWith('c:') ? layers.cabang : layers.homecell;
     group.zoomToShowLayer(m, () => m.openPopup());
   }
@@ -184,6 +233,7 @@ export default function MapViewPage() {
   const results = needle
     ? [
         ...(showCabang ? cabangList.map((c) => ({ key: `c:${c.id}`, nama: c.nama, sub: 'Cabang gereja' })) : []),
+        ...(showArea ? areaList.map(({ area }) => ({ key: `a:${area.id}`, nama: area.nama, sub: `Homecell area · ${area.cabang.nama}` })) : []),
         ...(showHomecell
           ? homecellList.map((h) => ({ key: `h:${h.id}`, nama: h.nama, sub: `Homecell · ${h.area.cabang.nama}` }))
           : []),
@@ -199,6 +249,7 @@ export default function MapViewPage() {
         .ecc-cluster{background:transparent;border:0}
         .ecc-popup .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
         .ecc-popup .leaflet-popup-content{margin:12px 14px}
+        .ecc-area-tip{font-weight:600;font-size:12px;border-radius:8px;padding:2px 8px}
       `}</style>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -207,10 +258,13 @@ export default function MapViewPage() {
             <MapPinned className="w-6 h-6" />
             Map View
           </h1>
-          <p className="text-neutral-500 mt-1">Lokasi cabang gereja dan homecell. Klik pin untuk melihat informasinya.</p>
+          <p className="text-neutral-500 mt-1">
+            Lokasi cabang gereja, wilayah homecell area, dan homecell. Klik pin atau area untuk melihat informasinya.
+          </p>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <Legend kind="cabang" />
+          <AreaLegend />
           <Legend kind="homecell" />
           <Legend kind="nonaktif" />
         </div>
@@ -218,18 +272,28 @@ export default function MapViewPage() {
 
       {/* Saringan */}
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-3">
-        <Toggle
-          checked={showCabang}
-          onChange={setShowCabang}
-          color={PIN_STYLE.cabang.color}
-          label={`Cabang (${cabangList.length})`}
-        />
-        <Toggle
-          checked={showHomecell}
-          onChange={setShowHomecell}
-          color={PIN_STYLE.homecell.color}
-          label={`Homecell (${homecellList.length})`}
-        />
+        <div className="flex flex-wrap items-center gap-1 pr-2 mr-1 border-r border-neutral-200">
+          <span className="text-xs font-medium text-neutral-500 mr-1">Tampilkan:</span>
+          <Toggle
+            checked={showCabang}
+            onChange={setShowCabang}
+            color={PIN_STYLE.cabang.color}
+            label={`Cabang Gereja (${cabangList.length})`}
+          />
+          <Toggle
+            checked={showArea}
+            onChange={setShowArea}
+            color={PIN_STYLE.area.color}
+            label={`Homecell Area (${areaList.length})`}
+            square
+          />
+          <Toggle
+            checked={showHomecell}
+            onChange={setShowHomecell}
+            color={PIN_STYLE.homecell.color}
+            label={`Homecell (${homecellList.length})`}
+          />
+        </div>
         <select
           value={cabangId}
           onChange={(e) => setCabangId(e.target.value)}
@@ -258,7 +322,7 @@ export default function MapViewPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama cabang / homecell / pemimpin…"
+            placeholder="Cari cabang / area / homecell / pemimpin…"
             className="w-full pl-9 pr-8 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
           {search ? (
@@ -299,11 +363,12 @@ export default function MapViewPage() {
       </div>
 
       {/* Yang belum punya titik */}
-      {(missingCabang.length > 0 || missingHomecell.length > 0) && (
+      {(missingCabang.length > 0 || missingHomecell.length > 0 || areaTanpaTitik.length > 0) && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm">
           <button onClick={() => setShowMissing((x) => !x)} className="flex items-center gap-2 text-amber-800 font-medium">
             <AlertTriangle className="w-4 h-4" />
-            Belum tampil di peta karena belum punya link Google Maps: {missingCabang.length} cabang, {missingHomecell.length} homecell
+            Belum tampil di peta karena belum punya link Google Maps: {missingCabang.length} cabang, {areaTanpaTitik.length} area,{' '}
+            {missingHomecell.length} homecell
             <span className="text-xs underline">{showMissing ? 'sembunyikan' : 'lihat daftar'}</span>
           </button>
           {showMissing && (
@@ -311,6 +376,11 @@ export default function MapViewPage() {
               {missingCabang.map((c) => (
                 <a key={c.id} href={`/dashboard/cabang`} className="hover:underline">
                   Cabang · {c.nama}
+                </a>
+              ))}
+              {areaTanpaTitik.map((a) => (
+                <a key={a.id} href={`/dashboard/homecell-area/${a.id}`} className="hover:underline">
+                  Area · {a.nama} <span className="text-amber-700">(belum ada homecell bertitik)</span>
                 </a>
               ))}
               {missingHomecell.map((h) => (
@@ -336,11 +406,38 @@ function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'nonaktif' }) {
   );
 }
 
-function Toggle({ checked, onChange, color, label }: { checked: boolean; onChange: (v: boolean) => void; color: string; label: string }) {
+function AreaLegend() {
+  const c = PIN_STYLE.area.color;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-neutral-700">
+      <svg width="22" height="18" viewBox="0 0 22 18">
+        <polygon points="2,14 7,2 19,4 20,15" fill={c} fillOpacity="0.18" stroke={c} strokeWidth="2" strokeLinejoin="round" />
+      </svg>
+      {PIN_STYLE.area.label}
+    </span>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  color,
+  label,
+  square,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  color: string;
+  label: string;
+  square?: boolean;
+}) {
   return (
     <label className="inline-flex items-center gap-2 text-sm cursor-pointer select-none px-2 py-1 rounded-lg hover:bg-neutral-50">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4" style={{ accentColor: color }} />
-      <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+      <span
+        className={`w-2.5 h-2.5 ${square ? 'rounded-[3px]' : 'rounded-full'}`}
+        style={square ? { background: `${color}33`, border: `2px solid ${color}` } : { background: color }}
+      />
       {label}
     </label>
   );

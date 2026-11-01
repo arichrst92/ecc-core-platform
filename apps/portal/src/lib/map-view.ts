@@ -95,8 +95,21 @@ export interface MapHomecell {
   area: { id: string; nama: string; cabang: { id: string; nama: string } };
 }
 
+export interface MapArea {
+  id: string;
+  nama: string;
+  deskripsi: string | null;
+  isActive: boolean;
+  cabang: { id: string; nama: string };
+  picJemaat: { namaLengkap: string; noHp: string | null } | null;
+  homecellCount: number;
+  memberCount: number;
+  denganTitik: number;
+}
+
 export interface MapViewData {
   cabang: MapCabang[];
+  area: MapArea[];
   homecell: MapHomecell[];
   tanpaTitik: { cabang: { id: string; nama: string }[]; homecell: { id: string; nama: string; cabang: string }[] };
 }
@@ -105,6 +118,7 @@ export interface MapViewData {
 
 export const PIN_STYLE = {
   cabang: { color: '#EA580C', label: 'Cabang gereja' },
+  area: { color: '#0D9488', label: 'Homecell area' },
   homecell: { color: '#7C3AED', label: 'Homecell' },
   nonaktif: { color: '#9CA3AF', label: 'Nonaktif' },
 } as const;
@@ -238,5 +252,84 @@ export function homecellPopup(h: MapHomecell): string {
     ${row('Anggota', `${h.memberCount.toLocaleString('id-ID')} orang`)}
     ${h.alamat ? row('Alamat', esc(h.alamat)) : ''}
     ${buttons(`/dashboard/homecell/${h.id}`, gmapsHref(h.mapsUrl, h.latitude, h.longitude), color)}
+  </div>`;
+}
+
+// ------------------------------------------------------------------ poligon area
+
+/** Warna per area (stabil dari id) — supaya area bertetangga mudah dibedakan. */
+const AREA_PALETTE = ['#0D9488', '#2563EB', '#DB2777', '#CA8A04', '#7C3AED', '#16A34A', '#DC2626', '#0891B2', '#9333EA', '#EA580C'];
+export function areaColor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AREA_PALETTE[h % AREA_PALETTE.length]!;
+}
+
+type Pt = [number, number]; // [lat, lng]
+
+/** Convex hull (monotone chain) — keliling terluar titik homecell. */
+export function convexHull(points: Pt[]): Pt[] {
+  const uniq = Array.from(new Map(points.map((p) => [`${p[0]},${p[1]}`, p])).values());
+  if (uniq.length < 3) return uniq;
+  const pts = uniq.map(([lat, lng]) => ({ x: lng, y: lat })).sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: { x: number; y: number }[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: { x: number; y: number }[] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  return hull.map((p) => [p.y, p.x]);
+}
+
+/**
+ * Bentuk area di peta dari titik homecell-nya:
+ *  ≥3 titik (tidak segaris) → poligon keliling terluar,
+ *  2 titik / segaris → garis penghubung, 1 titik → lingkaran kecil.
+ */
+export function makeAreaLayer(L: Leaflet, area: MapArea, points: Pt[]) {
+  const color = area.isActive ? areaColor(area.id) : PIN_STYLE.nonaktif.color;
+  const style = {
+    color,
+    weight: 2.5,
+    opacity: 0.9,
+    fillColor: color,
+    fillOpacity: 0.14,
+    dashArray: area.isActive ? undefined : '6 6',
+  };
+  const hull = convexHull(points);
+  if (hull.length >= 3) return L.polygon(hull, style);
+  if (hull.length === 2) return L.polyline(hull, { ...style, weight: 5, dashArray: '8 6' });
+  return L.circle(hull[0], { ...style, radius: 350 });
+}
+
+export function areaPopup(a: MapArea, homecellNames: string[]): string {
+  const color = a.isActive ? areaColor(a.id) : PIN_STYLE.nonaktif.color;
+  const wa = a.picJemaat?.noHp ? a.picJemaat.noHp.replace(/\D/g, '') : null;
+  const pic = a.picJemaat
+    ? `${esc(a.picJemaat.namaLengkap)}${wa ? ` · <a href="https://wa.me/${wa}" target="_blank" rel="noopener noreferrer" style="color:#16A34A;font-weight:600">WhatsApp</a>` : ''}`
+    : '<span style="color:#a3a3a3">Belum ada</span>';
+  const list = homecellNames.slice(0, 8).map((n) => `<li>${esc(n)}</li>`).join('');
+  const more = homecellNames.length > 8 ? `<li style="color:#737373">+${homecellNames.length - 8} lainnya</li>` : '';
+  const belum = a.homecellCount - a.denganTitik;
+  return `<div style="min-width:230px;max-width:280px;font-family:inherit">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="display:inline-block;padding:1px 8px;border-radius:999px;background:${color}22;color:${color};font-size:11px;font-weight:600">Homecell area</span>
+      ${a.isActive ? '' : badge('Nonaktif', '#F5F5F5', '#525252')}
+    </div>
+    <div style="font-size:15px;font-weight:700;color:#171717;margin:6px 0 2px">${esc(a.nama)}</div>
+    <div style="font-size:12px;color:#737373;margin-bottom:6px">${esc(a.cabang.nama)}</div>
+    ${row('PIC area', pic)}
+    <div style="display:flex;gap:6px;margin-top:8px">${stat(a.homecellCount, 'Homecell')}${stat(a.memberCount, 'Anggota')}</div>
+    ${list ? `<div style="font-size:12px;color:#404040;margin-top:8px"><div style="color:#737373;margin-bottom:2px">Homecell di peta</div><ul style="margin:0;padding-left:16px;line-height:1.5">${list}${more}</ul></div>` : ''}
+    ${belum > 0 ? `<div style="font-size:11px;color:#B45309;margin-top:6px">${belum} homecell belum punya titik lokasi</div>` : ''}
+    <div style="margin-top:10px"><a href="/dashboard/homecell-area/${esc(a.id)}" style="display:block;text-align:center;padding:6px 8px;border-radius:8px;background:${color};color:#fff;font-size:12px;font-weight:600;text-decoration:none">Lihat detail area</a></div>
   </div>`;
 }

@@ -1,7 +1,9 @@
 /**
  * Map View (Portal) — titik cabang gereja & homecell di peta.
  *
- *   GET /admin/map-view?cabangId=  → { cabang[], homecell[], tanpaTitik: { cabang, homecell } }
+ *   GET /admin/map-view?cabangId=  → { cabang[], area[], homecell[], tanpaTitik: { cabang, homecell } }
+ *
+ * Poligon Homecell Area dibentuk di Portal dari titik homecell di area tsb.
  *
  * Akses: menu "map-view" (Role Access). Alamat & PIC homecell hanya untuk
  * pengguna Portal yang punya akses menu ini.
@@ -32,7 +34,12 @@ mapViewRouter.get('/', async (req, res) => {
     ...(q.cabangId ? { area: { cabangId: q.cabangId, ...(aktifSaja ? { isActive: true } : {}) } } : {}),
   };
 
-  const [cabangRows, homecellRows] = await Promise.all([
+  const areaWhere: Prisma.HomecellAreaWhereInput = {
+    ...(q.cabangId ? { cabangId: q.cabangId } : {}),
+    ...(aktifSaja ? { isActive: true, cabang: { isActive: true } } : {}),
+  };
+
+  const [cabangRows, homecellRows, areaRows] = await Promise.all([
     prisma.cabangGereja.findMany({
       where: cabangWhere,
       orderBy: { nama: 'asc' },
@@ -76,12 +83,35 @@ mapViewRouter.get('/', async (req, res) => {
         _count: { select: { members: { where: { isActive: true } } } },
       },
     }),
+    prisma.homecellArea.findMany({
+      where: areaWhere,
+      orderBy: { nama: 'asc' },
+      select: {
+        id: true,
+        nama: true,
+        deskripsi: true,
+        isActive: true,
+        cabang: { select: { id: true, nama: true } },
+        picJemaat: { select: { namaLengkap: true, noHp: true } },
+      },
+    }),
   ]);
 
   const homecellPerCabang = new Map<string, number>();
   for (const h of homecellRows) homecellPerCabang.set(h.area.cabang.id, (homecellPerCabang.get(h.area.cabang.id) ?? 0) + 1);
 
   const hasPoint = (r: { latitude: number | null; longitude: number | null }) => r.latitude != null && r.longitude != null;
+
+  // Ringkasan per area dari homecell yang ikut dimuat (aktif sesuai saringan).
+  const areaStat = new Map<string, { homecellCount: number; memberCount: number; denganTitik: number }>();
+  for (const h of homecellRows) {
+    const st = areaStat.get(h.area.id) ?? { homecellCount: 0, memberCount: 0, denganTitik: 0 };
+    st.homecellCount++;
+    st.memberCount += h._count.members;
+    if (h.latitude != null && h.longitude != null) st.denganTitik++;
+    areaStat.set(h.area.id, st);
+  }
+  const area = areaRows.map((a) => ({ ...a, ...(areaStat.get(a.id) ?? { homecellCount: 0, memberCount: 0, denganTitik: 0 }) }));
 
   const cabang = cabangRows.filter(hasPoint).map(({ _count, ...c }) => ({
     ...c,
@@ -95,6 +125,7 @@ mapViewRouter.get('/', async (req, res) => {
     success: true,
     data: {
       cabang,
+      area,
       homecell,
       // Belum punya titik → tidak tampil di peta (ditampilkan sebagai catatan).
       tanpaTitik: {

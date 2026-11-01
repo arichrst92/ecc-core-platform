@@ -24,7 +24,6 @@ import {
   ArrowDown,
   ArrowUp,
   GripVertical,
-  MessageSquareOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -149,6 +148,23 @@ export default function IbadahPage() {
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
   });
 
+  // Rating & ulasan on/off langsung dari daftar (optimistis).
+  const reviewMut = useMutation({
+    mutationFn: async ({ id, on }: { id: string; on: boolean }) => apiClient.patch(`/admin/ibadah/${id}`, { allowReview: on }),
+    onMutate: async ({ id, on }) => {
+      await qc.cancelQueries({ queryKey: ['ibadah', 'all'] });
+      const prev = qc.getQueryData<IbadahItem[]>(['ibadah', 'all']);
+      qc.setQueryData<IbadahItem[]>(['ibadah', 'all'], (old) => (old ?? []).map((it) => (it.id === id ? { ...it, allowReview: on } : it)));
+      return { prev };
+    },
+    onError: (err: any, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['ibadah', 'all'], ctx.prev);
+      toast.error(err.response?.data?.error?.message ?? 'Gagal mengubah rating');
+    },
+    onSuccess: (_r, v) => toast.success(v.on ? 'Rating & ulasan diaktifkan' : 'Rating & ulasan dimatikan'),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['ibadah'] }),
+  });
+
   // Simpan urutan baru satu cabang (optimistis: tampilan langsung berubah).
   const reorderMut = useMutation({
     mutationFn: async ({ cabangId, ids }: { cabangId: string; ids: string[] }) =>
@@ -263,6 +279,7 @@ export default function IbadahPage() {
               items={list}
               onEdit={setEditing}
               onDelete={setDeleting}
+              onToggleReview={(i, on) => reviewMut.mutate({ id: i.id, on })}
               onReorder={(ids) => {
                 const cabangId = list[0]?.cabang?.id;
                 if (cabangId) reorderMut.mutate({ cabangId, ids });
@@ -319,12 +336,14 @@ function CabangSection({
   onEdit,
   onDelete,
   onReorder,
+  onToggleReview,
 }: {
   cabang: string;
   items: IbadahItem[];
   onEdit: (i: IbadahItem) => void;
   onDelete: (i: IbadahItem) => void;
   onReorder: (ids: string[]) => void;
+  onToggleReview: (i: IbadahItem, on: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -373,6 +392,9 @@ function CabangSection({
                 <th className="px-4 py-2 text-right font-medium" style={{ width: '80px' }}>Seat</th>
                 <th className="px-4 py-2 text-left font-medium" style={{ width: '150px' }}>Self Check-in</th>
                 <th className="px-4 py-2 text-center font-medium" style={{ width: '110px' }}>Pelayan</th>
+                <th className="px-4 py-2 text-center font-medium" style={{ width: '80px' }} title="Rating & ulasan jemaat dari tiket di app">
+                  Rating
+                </th>
                 <th className="px-4 py-2 text-center font-medium" style={{ width: '80px' }}>Status</th>
                 <th className="px-4 py-2 text-right font-medium" style={{ width: '90px' }}></th>
               </tr>
@@ -438,14 +460,6 @@ function CabangSection({
                         <Eye className="w-3.5 h-3.5 shrink-0" />
                         {i.nama}
                       </Link>
-                      {i.allowReview === false ? (
-                        <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-neutral-100 text-neutral-500"
-                          title="Rating & ulasan dimatikan — tidak muncul di app"
-                        >
-                          <MessageSquareOff className="w-3 h-3" /> Ulasan off
-                        </span>
-                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
@@ -496,6 +510,23 @@ function CabangSection({
                         {i.pelayananCount ?? 0}
                       </span>
                     </Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <label
+                      className="inline-flex items-center gap-1.5 cursor-pointer select-none"
+                      title={i.allowReview === false ? 'Rating & ulasan tidak muncul di app' : 'Jemaat bisa memberi rating & ulasan'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={i.allowReview !== false}
+                        onChange={(e) => onToggleReview(i, e.target.checked)}
+                        className="w-4 h-4 accent-brand-500 cursor-pointer"
+                        aria-label={`Rating & ulasan ${i.nama}`}
+                      />
+                      <span className={`text-xs ${i.allowReview === false ? 'text-neutral-400' : 'text-neutral-700'}`}>
+                        {i.allowReview === false ? 'Tidak' : 'Ya'}
+                      </span>
+                    </label>
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {i.isActive ? (

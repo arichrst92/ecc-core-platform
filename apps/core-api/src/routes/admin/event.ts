@@ -33,6 +33,7 @@ import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo.js';
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import {
   saveContentHero,
   deleteContentHero,
@@ -374,10 +375,21 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
     });
   }
 
+  // App mobile: lokasi / jam yang dikosongkan admin dikirim sebagai "-" supaya
+  // detail event menampilkan "-" (berlaku juga untuk app versi lama). Portal
+  // tetap menerima nilai asli (null) agar form edit tidak ikut terisi "-".
+  const mobileDisplay = isMobileClient(req)
+    ? {
+        lokasi: item.lokasi && item.lokasi.trim() ? item.lokasi : '-',
+        ...(item.jamMulai ? {} : { jamMulai: '-', jamSelesai: null }),
+      }
+    : {};
+
   res.json({
     success: true,
     data: {
       ...item,
+      ...mobileDisplay,
       pesertaCount: item._count.partisipasi,
       myParticipation,
       familyParticipationsCount,

@@ -399,6 +399,14 @@ export default function MapViewPage() {
       }
       return;
     }
+    // Satu area/homecell dipilih → pin dipasang langsung (tanpa kluster) supaya
+    // setiap homecell & anggota terlihat sebagai pin, bukan angka kluster.
+    const satuPerSatu = !!areaEfektif;
+    const pasang = (layer: any, ms: any[]) => {
+      if (!satuPerSatu) return layer.addMarkers(ms);
+      ms.forEach((m) => (m.map = map));
+      layers.area.push(...ms); // ikut dibersihkan saat digambar ulang
+    };
     const bounds = new g.maps.LatLngBounds();
     let nBounds = 0;
     const add = (p: { lat: number; lng: number }) => {
@@ -431,7 +439,7 @@ export default function MapViewPage() {
         add(pos);
         return makeMarker(pos, pinElement('cabang', c.isActive), c.nama, html, 48, 900);
       });
-      layers.cabang.addMarkers(ms);
+      pasang(layers.cabang, ms);
     }
     if (showHomecell) {
       const ms = homecellList.map((h) => {
@@ -441,7 +449,7 @@ export default function MapViewPage() {
         add(pos);
         return makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, 40);
       });
-      layers.homecell.addMarkers(ms);
+      pasang(layers.homecell, ms);
     }
     if (showJemaat) {
       // Titik yang sama (mis. satu keluarga) disebar melingkar supaya semua pin terlihat.
@@ -455,7 +463,7 @@ export default function MapViewPage() {
         if (!showCabang && !showHomecell && !showArea) add(pos);
         return makeMarker(pos, jemaatPinElement(j), j.namaLengkap, html, 52);
       });
-      layers.jemaat.addMarkers(ms);
+      pasang(layers.jemaat, ms);
     }
 
     // Arahkan peta ke semua pin hanya saat pertama dimuat atau saat cabang/kategori/pencarian
@@ -473,7 +481,7 @@ export default function MapViewPage() {
         });
       }
     }
-  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, areaEfektif, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
 
   // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
   // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).

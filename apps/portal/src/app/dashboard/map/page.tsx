@@ -56,6 +56,9 @@ export default function MapViewPage() {
   const heatRef = useRef<any[]>([]);
   const [cabangId, setCabangId] = useState('');
   const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
+  // Lihat satu area / satu homecell saja.
+  const [areaId, setAreaId] = useState('');
+  const [homecellId, setHomecellId] = useState('');
   const [search, setSearch] = useState('');
   const [mapError, setMapError] = useState<string | null>(null);
   const [showMissing, setShowMissing] = useState(false);
@@ -200,25 +203,55 @@ export default function MapViewPage() {
   }, [q.data]);
 
   const needle = search.trim().toLowerCase();
+  const areaOptions = useMemo(
+    () =>
+      (q.data?.area ?? [])
+        .filter((a) => !cabangId || a.cabang.id === cabangId)
+        .sort((a, b) => a.nama.localeCompare(b.nama, 'id')),
+    [q.data, cabangId],
+  );
+  const homecellOptions = useMemo(
+    () =>
+      (q.data?.homecell ?? [])
+        .filter(
+          (h) =>
+            (!cabangId || h.area.cabang.id === cabangId) &&
+            (!areaId || h.area.id === areaId) &&
+            (!kategori || (kategori === 'UMUM' ? !h.kategori : h.kategori === kategori)),
+        )
+        .sort((a, b) => a.nama.localeCompare(b.nama, 'id')),
+    [q.data, cabangId, areaId, kategori],
+  );
+  // Area efektif: dipilih langsung, atau area dari homecell yang dipilih.
+  const homecellPilih = homecellId ? (q.data?.homecell ?? []).find((h) => h.id === homecellId) ?? null : null;
+  const areaEfektif = homecellPilih?.area.id ?? areaId;
+  const cabangDariArea = areaEfektif ? (q.data?.area ?? []).find((a) => a.id === areaEfektif)?.cabang.id ?? null : null;
+  const homecellDiArea = useMemo(
+    () => new Set((q.data?.homecell ?? []).filter((h) => h.area.id === areaEfektif).map((h) => h.id)),
+    [q.data, areaEfektif],
+  );
   const cabangList = useMemo(
     () =>
       (q.data?.cabang ?? []).filter(
         (c) =>
           (!cabangId || c.id === cabangId) &&
+          (!cabangDariArea || c.id === cabangDariArea) &&
           (!needle || `${c.nama} ${c.kode} ${c.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
-    [q.data, cabangId, needle],
+    [q.data, cabangId, cabangDariArea, needle],
   );
   const homecellList = useMemo(
     () =>
       (q.data?.homecell ?? []).filter(
         (h) =>
           (!cabangId || h.area.cabang.id === cabangId) &&
+          (!areaId || h.area.id === areaId) &&
+          (!homecellId || h.id === homecellId) &&
           (!kategori || (kategori === 'UMUM' ? !h.kategori : h.kategori === kategori)) &&
           (!needle ||
             `${h.nama} ${h.area.nama} ${h.picJemaat?.namaLengkap ?? ''} ${h.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
-    [q.data, cabangId, kategori, needle],
+    [q.data, cabangId, areaId, homecellId, kategori, needle],
   );
 
   const jemaatList = useMemo(
@@ -226,9 +259,12 @@ export default function MapViewPage() {
       (jemaatQ.data ?? []).filter(
         (j) =>
           (!cabangId || j.cabang.id === cabangId) &&
+          // Area/homecell dipilih → hanya anggota homecell tersebut.
+          (!homecellId || j.homecell.some((h) => h.id === homecellId)) &&
+          (homecellId || !areaId || j.homecell.some((h) => homecellDiArea.has(h.id))) &&
           (!needle || `${j.namaLengkap} ${j.kode ?? ''} ${j.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
-    [jemaatQ.data, cabangId, needle],
+    [jemaatQ.data, cabangId, areaId, homecellId, homecellDiArea, needle],
   );
 
   // Area + titik homecell-nya (semua homecell area tsb, tidak terpengaruh saringan kategori).
@@ -244,11 +280,12 @@ export default function MapViewPage() {
       .filter(
         (a) =>
           (!cabangId || a.cabang.id === cabangId) &&
+          (!areaEfektif || a.id === areaEfektif) &&
           (!needle || `${a.nama} ${a.cabang.nama} ${a.picJemaat?.namaLengkap ?? ''}`.toLowerCase().includes(needle)),
       )
       .map((a) => ({ area: a, ...(pts.get(a.id) ?? { points: [], names: [] }) }))
       .filter((x) => x.points.length > 0);
-  }, [q.data, cabangId, needle]);
+  }, [q.data, cabangId, areaEfektif, needle]);
   const areaTanpaTitik = useMemo(
     () => (q.data?.area ?? []).filter((a) => (!cabangId || a.cabang.id === cabangId) && a.denganTitik === 0),
     [q.data, cabangId],
@@ -423,7 +460,7 @@ export default function MapViewPage() {
 
     // Arahkan peta ke semua pin hanya saat pertama dimuat atau saat cabang/kategori/pencarian
     // berubah. Centang/hapus centang lapisan TIDAK mengubah posisi & zoom peta.
-    const key = `${cabangId}|${kategori}|${needle}|${q.dataUpdatedAt > 0}`;
+    const key = `${cabangId}|${areaId}|${homecellId}|${kategori}|${needle}|${q.dataUpdatedAt > 0}`;
     if (nBounds && fittedKey.current !== key) {
       fittedKey.current = key;
       if (nBounds === 1) {
@@ -436,7 +473,7 @@ export default function MapViewPage() {
         });
       }
     }
-  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
 
   // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
   // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).
@@ -601,7 +638,11 @@ export default function MapViewPage() {
         </div>
         <select
           value={cabangId}
-          onChange={(e) => setCabangId(e.target.value)}
+          onChange={(e) => {
+            setCabangId(e.target.value);
+            setAreaId('');
+            setHomecellId('');
+          }}
           className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="">Semua cabang</option>
@@ -613,7 +654,10 @@ export default function MapViewPage() {
         </select>
         <select
           value={kategori}
-          onChange={(e) => setKategori(e.target.value as typeof kategori)}
+          onChange={(e) => {
+            setKategori(e.target.value as typeof kategori);
+            setHomecellId('');
+          }}
           disabled={!showHomecell}
           className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
         >
@@ -622,6 +666,46 @@ export default function MapViewPage() {
           <option value="COUPLE">Couple</option>
           <option value="UMUM">Umum</option>
         </select>
+        <select
+          value={areaId}
+          onChange={(e) => {
+            setAreaId(e.target.value);
+            setHomecellId('');
+          }}
+          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 max-w-[220px]"
+        >
+          <option value="">Semua area</option>
+          {areaOptions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.nama}
+              {cabangId ? '' : ` · ${a.cabang.nama}`}
+            </option>
+          ))}
+        </select>
+        <select
+          value={homecellId}
+          onChange={(e) => setHomecellId(e.target.value)}
+          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 max-w-[220px]"
+        >
+          <option value="">Semua homecell{areaId ? ' di area ini' : ''}</option>
+          {homecellOptions.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.nama}
+              {areaId ? '' : ` · ${h.area.nama}`}
+            </option>
+          ))}
+        </select>
+        {areaId || homecellId ? (
+          <button
+            onClick={() => {
+              setAreaId('');
+              setHomecellId('');
+            }}
+            className="text-xs text-sky-700 font-medium hover:underline"
+          >
+            Tampilkan semua
+          </button>
+        ) : null}
         <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input

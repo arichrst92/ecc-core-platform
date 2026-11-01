@@ -1425,8 +1425,9 @@ meRouter.get('/reservasi', async (req, res) => {
           requiresCheckout: true,
           latitude: true,
           longitude: true,
+          mapsUrl: true,
           selfCheckinRadiusM: true,
-          cabang: { select: { id: true, nama: true, timezone: true, latitude: true, longitude: true } },
+          cabang: { select: { id: true, nama: true, timezone: true, latitude: true, longitude: true, mapsUrl: true } },
           kategoriIbadah: { select: { nama: true } },
         },
       },
@@ -1440,12 +1441,14 @@ meRouter.get('/reservasi', async (req, res) => {
     success: true,
     data: visible.map((r) => {
       const tz = tzOr(r.ibadah.cabang.timezone);
-      const { latitude, longitude, selfCheckinRadiusM, ...ibadahRest } = r.ibadah;
-      const { latitude: _cl, longitude: _cg, ...cabangRest } = r.ibadah.cabang;
+      const { latitude, longitude, selfCheckinRadiusM, mapsUrl, ...ibadahRest } = r.ibadah;
+      const { latitude: _cl, longitude: _cg, mapsUrl: cabangMapsUrl, ...cabangRest } = r.ibadah.cabang;
+      // Petunjuk arah: link Google Maps ibadah → (bila ibadah tanpa titik sendiri) link cabang.
+      const directionsUrl = mapsUrl ?? (latitude == null ? cabangMapsUrl : null) ?? null;
       return {
         ...r,
         // point: titik venue (ibadah, atau cabang) — untuk tombol Petunjuk arah di tiket.
-        ibadah: { ...ibadahRest, cabang: cabangRest, timezone: tz, point: venuePoint({ latitude, longitude }, r.ibadah.cabang) },
+        ibadah: { ...ibadahRest, cabang: cabangRest, timezone: tz, mapsUrl: directionsUrl, point: venuePoint({ latitude, longitude }, r.ibadah.cabang) },
         relation: relationFor(r, jemaatId, people),
         // Tiket: jendela self check-in tanggal ini + kebutuhan lokasi (radius).
         selfCheckin: {

@@ -8,6 +8,7 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { NotFound, BadRequest } from '../../lib/errors.js';
+import { MAPS_URL_ERROR, mapsUrlToFields } from '../../lib/geo.js';
 import { audit } from '../../lib/audit.js';
 import { saveCabangRekeningQris, deleteCabangRekeningQris } from '../../lib/storage.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -125,7 +126,9 @@ cabangRouter.get('/:id', async (req, res) => {
 
 cabangRouter.post('/', async (req, res) => {
   const input = createCabangSchema.parse(req.body);
-  const created = await prisma.cabangGereja.create({ data: input });
+  const loc = await mapsUrlToFields(input.mapsUrl);
+  if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+  const created = await prisma.cabangGereja.create({ data: { ...input, ...(loc ?? {}) } });
   audit(req, { action: 'CREATE', resource: 'cabang_gereja', resourceId: created.id, resourceLabel: created.nama, after: created });
   res.status(201).json({ success: true, data: created });
 });
@@ -134,7 +137,10 @@ cabangRouter.patch('/:id', async (req, res) => {
   const input = updateCabangSchema.parse(req.body);
   const before = await prisma.cabangGereja.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Cabang tidak ditemukan');
-  const updated = await prisma.cabangGereja.update({ where: { id: req.params.id }, data: input });
+  // Link Google Maps → latitude/longitude (link kosong = hapus titik).
+  const loc = await mapsUrlToFields(input.mapsUrl);
+  if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+  const updated = await prisma.cabangGereja.update({ where: { id: req.params.id }, data: { ...input, ...(loc ?? {}) } });
   audit(req, { action: 'UPDATE', resource: 'cabang_gereja', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
   res.json({ success: true, data: updated });
 });

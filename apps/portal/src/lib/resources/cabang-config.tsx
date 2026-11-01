@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Users, Home, BarChart3 } from 'lucide-react';
+import { Users, Home, BarChart3, MapPin } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -13,6 +13,7 @@ interface Cabang extends Record<string, unknown> {
   kontak: string | null;
   latitude: number | null;
   longitude: number | null;
+  mapsUrl: string | null;
   timezone: string;
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
@@ -21,6 +22,9 @@ interface Cabang extends Record<string, unknown> {
   homecellAreaCount?: number;
   homecellCount?: number;
 }
+
+/** Link hasil migrasi dari koordinat lama (bukan link tempat asli dari Google Maps). */
+const LEGACY_COORD_LINK = /maps\/search\/\?api=1&query=-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
 
 /** Zona waktu IANA yang umum dipakai cabang ECC. */
 const TIMEZONE_OPTIONS = [
@@ -105,6 +109,33 @@ export const cabangResource: ResourceConfig<Cabang> = {
       ),
     },
     { key: 'kontak', label: 'Kontak', width: '140px' },
+    {
+      key: 'mapsUrl',
+      label: 'Lokasi',
+      width: '110px',
+      render: (_v, row) =>
+        row.mapsUrl && LEGACY_COORD_LINK.test(row.mapsUrl) ? (
+          <span
+            className="text-xs text-amber-700"
+            title="Masih link dari koordinat lama. Ganti dengan link Bagikan dari Google Maps supaya Petunjuk arah menuju titik tempat."
+          >
+            Perlu link Google Maps
+          </span>
+        ) : row.mapsUrl ? (
+          <a
+            href={row.mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-brand-600 hover:underline"
+            title={row.latitude != null && row.longitude != null ? `Titik: ${row.latitude}, ${row.longitude}` : undefined}
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            Buka peta
+          </a>
+        ) : (
+          <span className="text-xs text-neutral-400">Belum diisi</span>
+        ),
+    },
     { key: 'timezone', label: 'Zona Waktu', width: '150px' },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],
@@ -128,18 +159,12 @@ export const cabangResource: ResourceConfig<Cabang> = {
     { name: 'alamat', label: 'Alamat', type: 'textarea' },
     { name: 'kontak', label: 'Kontak', type: 'text', placeholder: 'No HP / email' },
     {
-      name: 'latitude',
-      label: 'Latitude (opsional)',
-      type: 'decimal',
-      placeholder: '-6,2088 atau -6.2088',
-      helperText: 'Opsional. Koordinat WGS84 untuk Globe dashboard. Range -90..90. Boleh pakai koma atau titik.',
-    },
-    {
-      name: 'longitude',
-      label: 'Longitude (opsional)',
-      type: 'decimal',
-      placeholder: '106,8456 atau 106.8456',
-      helperText: 'Opsional. Koordinat WGS84. Range -180..180. Boleh pakai koma atau titik.',
+      name: 'mapsUrl',
+      label: 'Titik lokasi (link Google Maps)',
+      type: 'text',
+      placeholder: 'https://maps.app.goo.gl/… atau -6.2088, 106.8456',
+      helperText:
+        'Tempel link "Bagikan" dari Google Maps. Dipakai untuk tombol Petunjuk arah, radius self check-in (ibadah/event tanpa titik sendiri), dan Globe dasbor. Kosongkan untuk menghapus titik.',
     },
     {
       name: 'timezone',

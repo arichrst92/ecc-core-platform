@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { MapPin, ExternalLink, Church, Smartphone } from 'lucide-react';
+import { MapPin, ExternalLink, Church, Smartphone, Navigation } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 
 export const metadata: Metadata = {
@@ -14,6 +14,7 @@ interface Cabang {
   alamat: string | null;
   latitude: number | null;
   longitude: number | null;
+  mapsUrl?: string | null;
   isActive: boolean;
 }
 
@@ -60,6 +61,18 @@ export default async function CabangPage() {
                           <span>{c.alamat}</span>
                         </p>
                       )}
+                      {/* Petunjuk arah → titik Google Maps asli (bukan koordinat mentah). */}
+                      {c.mapsUrl && /^https?:\/\//i.test(c.mapsUrl) ? (
+                        <a
+                          href={c.mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700"
+                        >
+                          <Navigation className="w-4 h-4" />
+                          Petunjuk arah
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 </div>

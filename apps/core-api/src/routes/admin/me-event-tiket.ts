@@ -68,7 +68,7 @@ meEventTiketRouter.get('/', async (req, res) => {
           isActive: true,
           butuhKehadiran: true,
           allowSelfCheckin: true,
-          cabang: { select: { nama: true, timezone: true, latitude: true, longitude: true } },
+          cabang: { select: { nama: true, timezone: true, latitude: true, longitude: true, mapsUrl: true } },
         },
       },
     },
@@ -112,7 +112,8 @@ meEventTiketRouter.get('/', async (req, res) => {
           jamMulai: ev.jamMulai,
           jamSelesai: ev.jamSelesai,
           lokasi: ev.lokasi,
-          mapsUrl: ev.mapsUrl,
+          // Petunjuk arah: link event → (bila event tanpa titik sendiri) link cabang.
+          mapsUrl: ev.mapsUrl ?? (ev.latitude == null ? ev.cabang?.mapsUrl : null) ?? null,
           latitude: ev.latitude ?? ev.cabang?.latitude ?? null,
           longitude: ev.longitude ?? ev.cabang?.longitude ?? null,
           tipeBayar: ev.tipeBayar,

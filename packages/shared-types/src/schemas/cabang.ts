@@ -57,6 +57,8 @@ export const createCabangSchema = z
     kontak: emptyToUndefined(z.string().trim().max(100)),
     latitude: latitudeSchema,
     longitude: longitudeSchema,
+    /** Link Google Maps / "lat, lng". Bila diisi, latitude & longitude diambil dari sini. */
+    mapsUrl: emptyToUndefined(z.string().trim().max(2000)),
     timezone: timezoneSchema.optional().openapi({ example: 'Asia/Jakarta' }),
   })
   .openapi('CreateCabangInput');
@@ -71,6 +73,8 @@ export const updateCabangSchema = z
     kontak: emptyToUndefined(z.string().trim().max(100)),
     latitude: latitudeSchema,
     longitude: longitudeSchema,
+    /** null / '' = hapus titik lokasi cabang. */
+    mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
     timezone: timezoneSchema.optional(),
     isActive: z.boolean().optional(),
   })

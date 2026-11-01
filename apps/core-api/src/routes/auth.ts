@@ -980,6 +980,8 @@ authRouter.get('/cabang', cabangListLimiter, async (req, res) => {
       // Koordinat untuk future map view di mobile (opsional, nullable).
       latitude: true,
       longitude: true,
+      // Link Google Maps cabang — tujuan tombol "Petunjuk arah" (website & app).
+      mapsUrl: true,
       // Zona waktu IANA cabang — mobile mengonversi jam jadwal ke zona HP.
       timezone: true,
       isActive: true,

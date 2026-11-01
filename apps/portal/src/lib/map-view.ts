@@ -293,8 +293,28 @@ export function convexHull(points: Pt[]): Pt[] {
 }
 
 /**
+ * Poligon yang melewati SEMUA titik (bukan hanya keliling terluar): titik diurutkan
+ * menurut sudut dari titik tengahnya → setiap homecell menjadi sudut poligon dan
+ * garisnya tidak saling bersilangan.
+ */
+export function polygonSemuaTitik(points: Pt[]): Pt[] {
+  const uniq = Array.from(new Map(points.map((p) => [`${p[0]},${p[1]}`, p])).values());
+  if (uniq.length < 3) return uniq;
+  const cLat = uniq.reduce((a, p) => a + p[0], 0) / uniq.length;
+  const cLng = uniq.reduce((a, p) => a + p[1], 0) / uniq.length;
+  const k = Math.cos((cLat * Math.PI) / 180); // skala bujur supaya sudut tidak terdistorsi
+  const info = uniq.map((p) => {
+    const x = (p[1] - cLng) * k;
+    const y = p[0] - cLat;
+    return { p, a: Math.atan2(y, x), d: x * x + y * y };
+  });
+  info.sort((u, v) => u.a - v.a || u.d - v.d);
+  return info.map((i) => i.p);
+}
+
+/**
  * Bentuk area di peta dari titik homecell-nya:
- *  ≥3 titik (tidak segaris) → poligon keliling terluar,
+ *  ≥3 titik (tidak segaris) → poligon yang menghubungkan semua titik homecell,
  *  2 titik / segaris → garis penghubung, 1 titik → lingkaran kecil.
  */
 export function makeAreaShape(g: GMaps, map: any, area: MapArea, points: Pt[]) {
@@ -309,8 +329,14 @@ export function makeAreaShape(g: GMaps, map: any, area: MapArea, points: Pt[]) {
     clickable: true,
   };
   const hull = convexHull(points);
-  const path = hull.map(([lat, lng]) => ({ lat, lng }));
-  if (hull.length >= 3) return new g.maps.Polygon({ ...style, paths: path });
+  if (hull.length >= 3) {
+    const semua = polygonSemuaTitik(points).map(([lat, lng]) => ({ lat, lng }));
+    return new g.maps.Polygon({ ...style, paths: semua });
+  }
+  // Segaris: garis melewati semua titik, diurutkan sepanjang garis.
+  const path = [...points]
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
+    .map(([lat, lng]) => ({ lat, lng }));
   if (hull.length === 2) return new g.maps.Polyline({ ...style, path, strokeWeight: 5 });
   return new g.maps.Circle({ ...style, center: path[0], radius: 350 });
 }

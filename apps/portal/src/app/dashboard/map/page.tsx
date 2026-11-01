@@ -7,8 +7,8 @@
  * Homecell area = poligon yang menghubungkan titik homecell di area tsb.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, MapPinned, Search, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, Loader2, MapPinned, Play, Search, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import {
   PIN_STYLE,
@@ -72,6 +72,39 @@ export default function MapViewPage() {
     enabled: showSebaran,
     staleTime: 5 * 60_000,
   });
+
+  const qc = useQueryClient();
+  const geo = useQuery({
+    queryKey: ['map-view', 'geocode-status', cabangId],
+    queryFn: async () =>
+      (await apiClient.get<{ data: GeocodeStatus }>('/admin/map-view/geocode-status', { params: cabangId ? { cabangId } : {} }))
+        .data.data,
+    enabled: showJemaat || showSebaran,
+    // Cepat saat sedang berjalan, santai saat menunggu jadwal.
+    refetchInterval: (query) => (query.state.data?.proses.running ? 5_000 : 30_000),
+  });
+  // Titik baru berhasil → muat ulang pin & sebaran.
+  const lastOk = useRef<number | null>(null);
+  useEffect(() => {
+    const ok = geo.data?.ok;
+    if (ok == null) return;
+    if (lastOk.current != null && ok !== lastOk.current) {
+      void qc.invalidateQueries({ queryKey: ['map-view', 'jemaat'] });
+      void qc.invalidateQueries({ queryKey: ['map-view', 'sebaran-jemaat'] });
+    }
+    lastOk.current = ok;
+  }, [geo.data?.ok, qc]);
+  const [runMsg, setRunMsg] = useState<string | null>(null);
+  async function runNow() {
+    setRunMsg(null);
+    try {
+      const r = await apiClient.post<{ data: { started: boolean; alreadyRunning?: boolean } }>('/admin/map-view/geocode-run');
+      setRunMsg(r.data.data.alreadyRunning ? 'Proses sedang berjalan.' : 'Proses dimulai.');
+      void geo.refetch();
+    } catch (e: any) {
+      setRunMsg(e?.response?.status === 403 ? 'Butuh akses ubah menu Jemaat.' : e?.response?.data?.error?.message ?? 'Gagal memulai proses.');
+    }
+  }
 
   const jemaatQ = useQuery({
     queryKey: ['map-view', 'jemaat', cabangId],
@@ -449,6 +482,8 @@ export default function MapViewPage() {
         </div>
       </div>
 
+      {(showJemaat || showSebaran) && geo.data && <GeocodeProgress s={geo.data} onRun={runNow} msg={runMsg} />}
+
       {showJemaat && (jemaatQ.isLoading || jemaatQ.isError) && (
         <div
           className={`-mt-2 text-xs rounded-xl px-3 py-2 border ${jemaatQ.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-neutral-200 text-neutral-600'}`}
@@ -465,24 +500,7 @@ export default function MapViewPage() {
             <span className="w-16 h-2 rounded-full" style={{ background: 'linear-gradient(90deg,#3B82F6,#22C55E,#EAB308,#DC2626)' }} />
             Sebaran jemaat (sedikit → padat)
           </span>
-          {sebaran.isLoading ? (
-            <span>Memuat…</span>
-          ) : sebaran.data ? (
-            <>
-              <span>
-                {sebaran.data.status.ok.toLocaleString('id-ID')} dari {sebaran.data.status.total.toLocaleString('id-ID')} alamat
-                berhasil dipetakan
-              </span>
-              {sebaran.data.status.menunggu > 0 && (
-                <span className="text-amber-700">{sebaran.data.status.menunggu.toLocaleString('id-ID')} menunggu diproses (bertahap otomatis)</span>
-              )}
-              {sebaran.data.status.tidakDitemukan + sebaran.data.status.terlaluJauh > 0 && (
-                <span>
-                  {(sebaran.data.status.tidakDitemukan + sebaran.data.status.terlaluJauh).toLocaleString('id-ID')} alamat tidak dikenali
-                </span>
-              )}
-            </>
-          ) : null}
+          {sebaran.isLoading ? <span>Memuat…</span> : null}
           <span className="text-neutral-400">Perkiraan dari alamat, digabung per ±100 m, tanpa nama.</span>
         </div>
       )}
@@ -543,6 +561,84 @@ function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'nonaktif' }) {
       <span className="inline-block scale-[0.6] origin-left -mr-3" style={{ height: 30 }} dangerouslySetInnerHTML={{ __html: html }} />
       {PIN_STYLE[kind].label}
     </span>
+  );
+}
+
+interface GeocodeStatus {
+  total: number;
+  ok: number;
+  tidakDitemukan: number;
+  terlaluJauh: number;
+  menunggu: number;
+  aktif: boolean;
+  intervalMenit: number;
+  perBatch: number;
+  proses: {
+    running: boolean;
+    startedAt: string | null;
+    batchSize: number;
+    batchDone: number;
+    lastRunAt: string | null;
+    lastResult: { processed: number; ok: number; notFound: number; stopped?: string } | null;
+    lastError: string | null;
+  };
+}
+
+function GeocodeProgress({ s, onRun, msg }: { s: GeocodeStatus; onRun: () => void; msg: string | null }) {
+  const n = (x: number) => x.toLocaleString('id-ID');
+  const gagal = s.tidakDitemukan + s.terlaluJauh;
+  const selesai = s.ok + gagal;
+  const pct = s.total ? Math.round((selesai / s.total) * 100) : 100;
+  const w = (x: number) => `${s.total ? (x / s.total) * 100 : 0}%`;
+  const sisaBatch = Math.ceil(s.menunggu / s.perBatch);
+  const etaMenit = sisaBatch * s.intervalMenit;
+  const eta = etaMenit >= 60 ? `±${Math.ceil(etaMenit / 60)} jam` : `±${Math.max(etaMenit, 5)} menit`;
+  const p = s.proses;
+  const jam = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—');
+  return (
+    <div className="-mt-2 bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-xs text-neutral-600">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          {p.running ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" /> : null}
+          Pemetaan alamat jemaat: {n(selesai)} / {n(s.total)} ({pct}%)
+        </span>
+        <span className="inline-flex items-center gap-2">
+          {msg ? <span className="text-neutral-500">{msg}</span> : null}
+          {s.aktif && s.menunggu > 0 && !p.running ? (
+            <button
+              onClick={onRun}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-medium"
+            >
+              <Play className="w-3 h-3" /> Proses sekarang
+            </button>
+          ) : null}
+        </span>
+      </div>
+      <div className="h-2.5 w-full rounded-full bg-neutral-100 overflow-hidden flex">
+        <div className="h-full bg-emerald-500 transition-all" style={{ width: w(s.ok) }} />
+        <div className="h-full bg-amber-400 transition-all" style={{ width: w(gagal) }} />
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />{n(s.ok)} berhasil (tampil di peta)</span>
+        <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />{n(gagal)} alamat tidak dikenali</span>
+        <span><span className="inline-block w-2 h-2 rounded-full bg-neutral-300 mr-1" />{n(s.menunggu)} menunggu</span>
+        {!s.aktif ? (
+          <span className="text-red-600">Pemetaan dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).</span>
+        ) : p.running ? (
+          <span className="text-sky-700">
+            Sedang memproses {n(p.batchDone)} / {n(p.batchSize)} alamat (1 alamat/detik)…
+          </span>
+        ) : s.menunggu > 0 ? (
+          <span>
+            Berjalan otomatis {n(s.perBatch)} alamat tiap {s.intervalMenit} menit · perkiraan selesai {eta}
+            {p.lastRunAt ? ` · terakhir ${jam(p.lastRunAt)}` : ' · belum pernah berjalan sejak server menyala'}
+          </span>
+        ) : (
+          <span className="text-emerald-700">Semua alamat sudah diproses.</span>
+        )}
+        {p.lastError ? <span className="text-red-600">Kendala terakhir: {p.lastError}</span> : null}
+      </div>
+    </div>
   );
 }
 

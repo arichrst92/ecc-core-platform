@@ -82,16 +82,32 @@ async function pending(limit: number): Promise<Pending[]> {
 
 let running = false;
 
+/** Status proses (di memori proses server) — untuk progress bar di Map View. */
+export const geocodeState: {
+  running: boolean;
+  startedAt: string | null;
+  batchSize: number;
+  batchDone: number;
+  lastRunAt: string | null;
+  lastResult: { processed: number; ok: number; notFound: number; stopped?: string } | null;
+  lastError: string | null;
+} = { running: false, startedAt: null, batchSize: 0, batchDone: 0, lastRunAt: null, lastResult: null, lastError: null };
+
+export const geocodeEnabled = () => process.env.GEOCODE_JEMAAT_ENABLED !== '0';
+
 /** Proses satu batch (dipanggil job berkala). Aman dipanggil berulang — hanya satu yang jalan. */
 export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: number; notFound: number; stopped?: string }> {
-  if (process.env.GEOCODE_JEMAAT_ENABLED === '0') return { processed: 0, ok: 0, notFound: 0, stopped: 'disabled' };
+  if (!geocodeEnabled()) return { processed: 0, ok: 0, notFound: 0, stopped: 'disabled' };
   if (running) return { processed: 0, ok: 0, notFound: 0, stopped: 'already-running' };
   running = true;
   let processed = 0;
   let ok = 0;
   let notFound = 0;
+  let result: { processed: number; ok: number; notFound: number; stopped?: string } | null = null;
+  Object.assign(geocodeState, { running: true, startedAt: new Date().toISOString(), batchSize: 0, batchDone: 0, lastError: null });
   try {
     const rows = await pending(BATCH);
+    geocodeState.batchSize = rows.length;
     for (const r of rows) {
       const near = r.clat != null && r.clng != null ? { lat: r.clat, lng: r.clng } : null;
       const q = cleanAlamat(r.alamat);
@@ -100,7 +116,9 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
         hit = q.length >= 6 ? await geocodeNominatim(q, near) : null;
       } catch (err) {
         logger.warn({ err }, 'geocode-jemaat: layanan menolak, batch dihentikan');
-        return { processed, ok, notFound, stopped: 'rate-limited' };
+        geocodeState.lastError = err instanceof Error ? err.message : String(err);
+        result = { processed, ok, notFound, stopped: 'rate-limited' };
+        return result;
       }
       let status: 'OK' | 'NOT_FOUND' | 'TOO_FAR' = hit ? 'OK' : 'NOT_FOUND';
       if (hit && near && distanceKm(near, hit) > MAX_FROM_CABANG_KM) status = 'TOO_FAR';
@@ -113,12 +131,18 @@ export async function geocodeJemaatBatch(): Promise<{ processed: number; ok: num
       };
       await prisma.jemaatGeocode.upsert({ where: { jemaatId: r.id }, create: { jemaatId: r.id, ...data }, update: data });
       processed++;
+      geocodeState.batchDone = processed;
       if (status === 'OK') ok++;
       else notFound++;
       await sleep(GAP_MS);
     }
-    return { processed, ok, notFound };
+    result = { processed, ok, notFound };
+    return result;
+  } catch (err) {
+    geocodeState.lastError = err instanceof Error ? err.message : String(err);
+    throw err;
   } finally {
     running = false;
+    Object.assign(geocodeState, { running: false, lastRunAt: new Date().toISOString(), lastResult: result ?? { processed, ok, notFound } });
   }
 }

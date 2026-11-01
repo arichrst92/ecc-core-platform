@@ -140,6 +140,7 @@ export const RESOURCE_LABEL: Record<string, string> = {
   refresh_token: 'sesi masuk',
   report_link: 'tautan laporan',
   service_review: 'ulasan ibadah/event',
+  jemaat_geocode: 'pemetaan alamat jemaat',
   group_announcement: 'pengumuman grup',
   group_poll: 'polling grup',
   group_poll_vote: 'suara polling grup',
@@ -362,6 +363,7 @@ const VALUE: Record<string, string> = {
   'worship-karaoke-delete': 'menghapus audio karaoke',
   'worship-sync-delete': 'menghapus lirik sinkron',
   'elsa-cancel': 'membatalkan sinkronisasi Elsa',
+  'geocode-run': 'menjalankan pemetaan alamat secara manual',
   manual: 'manual',
   // status umum
   RESERVE: 'Terdaftar (reservasi)',

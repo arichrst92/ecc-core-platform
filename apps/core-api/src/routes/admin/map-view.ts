@@ -12,6 +12,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
+import { geocodeEnabled, geocodeJemaatBatch, geocodeState } from '../../lib/jemaat-geocode.js';
+import { audit } from '../../lib/audit.js';
+import { logger } from '../../lib/logger.js';
 
 export const mapViewRouter = Router();
 mapViewRouter.use(requireMenu('map-view'));
@@ -231,4 +234,59 @@ mapViewRouter.get('/jemaat', requireMenu('jemaat'), async (req, res) => {
       homecell: homecellMembership.map((m) => m.homecell),
     })),
   });
+});
+
+/** Hitungan status pemetaan alamat jemaat (semua / per cabang). */
+async function geocodeCounts(cabangId?: string) {
+  const jemaatWhere: Prisma.JemaatWhereInput = { isActive: true, isTamu: false, ...(cabangId ? { cabangId } : {}) };
+  const [total, byStatus] = await Promise.all([
+    prisma.jemaat.count({ where: { ...jemaatWhere, AND: [{ alamat: { not: null } }, { alamat: { not: '' } }] } }),
+    prisma.jemaatGeocode.groupBy({ by: ['status'], where: { jemaat: jemaatWhere }, _count: { _all: true } }),
+  ]);
+  const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
+  const diproses = byStatus.reduce((n, b) => n + b._count._all, 0);
+  return {
+    total,
+    ok: count('OK'),
+    tidakDitemukan: count('NOT_FOUND'),
+    terlaluJauh: count('TOO_FAR'),
+    menunggu: Math.max(0, total - diproses),
+  };
+}
+
+/**
+ * Progres pemetaan alamat jemaat → progress bar di Map View.
+ *   GET /admin/map-view/geocode-status?cabangId=
+ */
+mapViewRouter.get('/geocode-status', async (req, res) => {
+  const { cabangId } = z.object({ cabangId: z.string().uuid().optional() }).parse(req.query);
+  res.json({
+    success: true,
+    data: {
+      ...(await geocodeCounts(cabangId)),
+      aktif: geocodeEnabled(),
+      proses: { ...geocodeState },
+      // Batch otomatis tiap 15 menit, maks 250 alamat (1 alamat/detik).
+      intervalMenit: 15,
+      perBatch: 250,
+    },
+  });
+});
+
+/**
+ * Jalankan satu batch sekarang (tanpa menunggu jadwal 15 menit).
+ *   POST /admin/map-view/geocode-run   — butuh akses ubah menu Jemaat
+ */
+mapViewRouter.post('/geocode-run', requireMenu('jemaat', 'write'), async (req, res) => {
+  if (!geocodeEnabled()) {
+    res.status(409).json({ success: false, error: { code: 'GEOCODE_DISABLED', message: 'Pemetaan alamat dimatikan di server (GEOCODE_JEMAAT_ENABLED=0).' } });
+    return;
+  }
+  if (geocodeState.running) {
+    res.json({ success: true, data: { started: false, alreadyRunning: true } });
+    return;
+  }
+  void geocodeJemaatBatch().catch((err) => logger.warn({ err }, 'geocode-run manual gagal'));
+  audit(req, { action: 'UPDATE', resource: 'jemaat_geocode', resourceLabel: 'Jalankan pemetaan alamat jemaat (manual)', metadata: { kind: 'geocode-run' } });
+  res.status(202).json({ success: true, data: { started: true } });
 });

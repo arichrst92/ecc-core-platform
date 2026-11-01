@@ -457,6 +457,9 @@ export function startScheduledJobs() {
   // Peta sebaran jemaat (Map View): perkiraan titik dari alamat, bertahap
   // ≤250 alamat per 15 menit, 1 permintaan/detik (aturan Nominatim).
   const geocodeJob = wrap('geocode-jemaat', geocodeJemaatBatch);
+  // Batch pertama segera setelah server siap (tidak menunggu 15 menit).
+  const g0 = setTimeout(() => void geocodeJob(), STARTUP_DELAY_MS + 30_000);
+  g0.unref?.();
   const h12 = setInterval(() => void geocodeJob(), 15 * 60_000);
   for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12]) {
     h.unref?.();

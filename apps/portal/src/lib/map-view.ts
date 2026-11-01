@@ -389,7 +389,8 @@ export function jemaatPinElement(j: MapJemaat): HTMLElement {
   return el;
 }
 
-export function jemaatPopup(j: MapJemaat): string {
+/** Jemaat lain di titik yang sama (mis. satu keluarga) ikut ditampilkan di balon. */
+export function jemaatPopup(j: MapJemaat, serumah: MapJemaat[] = []): string {
   const c = PIN_STYLE.jemaat.color;
   const wa = j.noHp ? j.noHp.replace(/\D/g, '') : null;
   const hc = j.homecell.length ? j.homecell.map((h) => esc(h.nama)).join(', ') : '<span style="color:#a3a3a3">Belum ikut homecell</span>';
@@ -410,8 +411,45 @@ export function jemaatPopup(j: MapJemaat): string {
       ${row('Homecell', hc)}
       ${j.noHp ? row('No HP', `${esc(j.noHp)}${wa ? ` · <a href="https://wa.me/${wa}" target="_blank" rel="noopener noreferrer" style="color:#16A34A;font-weight:600">WhatsApp</a>` : ''}`) : ''}
       ${j.alamat ? row('Alamat', esc(j.alamat)) : ''}
+      ${serumah.length ? row(`Satu titik (${serumah.length})`, serumah.map((o) => `<a href="/dashboard/jemaat/${o.id}" target="_blank" rel="noopener noreferrer" style="color:#0369A1">${esc(o.namaLengkap)}</a>`).join(', ')) : ''}
     </div>
     <div style="font-size:11px;color:#a3a3a3;margin-top:6px">Lokasi pin = perkiraan dari alamat.</div>
     ${buttons(`/dashboard/jemaat/${j.id}`, maps, c)}
   </div>`;
+}
+
+/**
+ * Jemaat dengan titik yang sama (mis. satu keluarga di satu alamat) disebar
+ * melingkar beberapa meter di sekitar titik aslinya supaya setiap pin terlihat.
+ * Mengembalikan posisi tampil per jemaat + daftar jemaat lain di titik yang sama.
+ */
+export function sebarTitikSama(list: MapJemaat[]): Map<string, { pos: { lat: number; lng: number }; serumah: MapJemaat[] }> {
+  const grup = new Map<string, MapJemaat[]>();
+  for (const j of list) {
+    const k = `${j.latitude.toFixed(5)},${j.longitude.toFixed(5)}`; // ±1 m dianggap sama
+    const g = grup.get(k);
+    if (g) g.push(j);
+    else grup.set(k, [j]);
+  }
+  const out = new Map<string, { pos: { lat: number; lng: number }; serumah: MapJemaat[] }>();
+  for (const g of grup.values()) {
+    if (g.length === 1) {
+      out.set(g[0]!.id, { pos: { lat: g[0]!.latitude, lng: g[0]!.longitude }, serumah: [] });
+      continue;
+    }
+    g.sort((a, b) => a.namaLengkap.localeCompare(b.namaLengkap));
+    // Jari-jari (meter) bertambah dengan jumlah orang agar pin tidak saling menutupi saat diperbesar.
+    const rM = Math.max(8, g.length * 2.5);
+    const { latitude: lat0, longitude: lng0 } = g[0]!;
+    const dLat = rM / 111_320;
+    const dLng = rM / (111_320 * Math.max(0.2, Math.cos((lat0 * Math.PI) / 180)));
+    g.forEach((j, i) => {
+      const a = (2 * Math.PI * i) / g.length - Math.PI / 2;
+      out.set(j.id, {
+        pos: { lat: lat0 + dLat * Math.sin(a), lng: lng0 + dLng * Math.cos(a) },
+        serumah: g.filter((o) => o.id !== j.id),
+      });
+    });
+  }
+  return out;
 }

@@ -17,6 +17,7 @@ import {
   homecellPopup,
   jemaatPinElement,
   jemaatPopup,
+  sebarTitikSama,
   loadGoogleMaps,
   makeAreaShape,
   pinElement,
@@ -361,9 +362,12 @@ export default function MapViewPage() {
       layers.homecell.addMarkers(ms);
     }
     if (showJemaat) {
+      // Titik yang sama (mis. satu keluarga) disebar melingkar supaya semua pin terlihat.
+      const sebar = sebarTitikSama(jemaatList);
       const ms = jemaatList.map((j) => {
-        const pos = { lat: j.latitude, lng: j.longitude };
-        const html = jemaatPopup(j);
+        const s = sebar.get(j.id);
+        const pos = s?.pos ?? { lat: j.latitude, lng: j.longitude };
+        const html = jemaatPopup(j, s?.serumah ?? []);
         markerIndex.current.set(`j:${j.id}`, { pos, html });
         // Jemaat tidak ikut menentukan zoom awal kecuali satu-satunya lapisan.
         if (!showCabang && !showHomecell && !showArea) add(pos);

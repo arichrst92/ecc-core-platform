@@ -69,6 +69,14 @@ BEGIN
   -- Relasi keluarga ke diri sendiri (dulu antara dua data ganda) dibuang.
   DELETE FROM jemaat_relasi WHERE jemaat_id = keep AND jemaat_terkait_id = keep;
 
+  -- Role ganda (role + sub role sama, sama-sama aktif) → sisakan yang paling lama.
+  DELETE FROM jemaat_role x
+  USING jemaat_role y
+  WHERE x.jemaat_id = keep AND y.jemaat_id = keep
+    AND x.role_id = y.role_id AND x.sub_role_id = y.sub_role_id
+    AND x.is_active = y.is_active
+    AND (x.created_at, x.id) > (y.created_at, y.id);
+
   DELETE FROM jemaat WHERE id = hapus;
 END;
 $$;
@@ -80,7 +88,8 @@ SELECT pg_temp.gabung_jemaat('5e8522f8-ba54-40c4-90a7-cc74a46d31d4', '86186c3a-1
 SELECT pg_temp.gabung_jemaat('e3470e53-a38c-460d-83ab-0eb8e13e5b0e', '6e3c43a1-6c35-4dd2-9a84-e4098d687c0e', '2003-08-06', '+6281320729445'); -- Marvin Marvelous
 SELECT pg_temp.gabung_jemaat('c4946bfb-7856-4849-b70b-308817c31fcd', '8f05ffc1-f51b-4a6d-9f92-3466c3df8239', '2020-08-27', NULL);              -- Shanette Maddelyn
 SELECT pg_temp.gabung_jemaat('8327e8ee-193f-40a9-93c1-14de82e018d9', 'bedce92a-8984-44ef-9df5-26595e755f67', '2013-11-13', '+6281901002571'); -- Jane Natalie
-SELECT pg_temp.gabung_jemaat('8ab5c411-4392-4395-aed0-6baad0cbf91f', 'c9645edc-57b6-4a3d-a5fa-a29866211a34', '1999-10-14', '+6289623220036'); -- Catharine Christianty Lunggawa
+-- Catharine Christianty Lunggawa TIDAK digabung: kedua data punya akun login sendiri
+-- (kemungkinan dua orang berbeda) — dicek manual bersama pengerja.
 
 -- Bambang Lunggawa: laki-laki → "Ayah" Catharine (bukan "Ibu").
 UPDATE jemaat SET jenis_kelamin = 'L', updated_at = NOW() WHERE nama_lengkap = 'Bambang Lunggawa';
@@ -91,6 +100,7 @@ WHERE b.nama_lengkap = 'Bambang Lunggawa' AND r.jemaat_terkait_id = b.id
 
 -- Hasil
 SELECT j.nama_lengkap, j.kode, j.tanggal_lahir, j.no_hp,
+       (SELECT string_agg(ro.nama, ', ') FROM jemaat_role jr JOIN role ro ON ro.id = jr.role_id WHERE jr.jemaat_id = j.id AND jr.is_active) AS role_aktif,
        string_agg(o.nama_lengkap || ' (' || t.nama || ')', ', ' ORDER BY t.nama) AS orang_tua
 FROM jemaat j
 LEFT JOIN jemaat_relasi r ON r.jemaat_id = j.id
@@ -98,7 +108,7 @@ LEFT JOIN tipe_relasi_keluarga t ON t.id = r.tipe_relasi_id AND t.nama IN ('Ayah
 LEFT JOIN jemaat o ON o.id = r.jemaat_terkait_id AND t.id IS NOT NULL
 WHERE j.id IN ('f98d7b88-003a-4f43-9bb4-2c26746e6369', '7ed9d974-d495-49c3-984f-3ab8e3a720a2', '5e8522f8-ba54-40c4-90a7-cc74a46d31d4',
                'e3470e53-a38c-460d-83ab-0eb8e13e5b0e', 'c4946bfb-7856-4849-b70b-308817c31fcd', '8327e8ee-193f-40a9-93c1-14de82e018d9',
-               '8ab5c411-4392-4395-aed0-6baad0cbf91f')
+               '8ab5c411-4392-4395-aed0-6baad0cbf91f', 'c9645edc-57b6-4a3d-a5fa-a29866211a34')
 GROUP BY j.id ORDER BY j.nama_lengkap;
 
 \if :apply

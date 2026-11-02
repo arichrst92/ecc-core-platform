@@ -822,6 +822,7 @@ model Pelayanan {
   eventPelayanan  EventPelayanan[]
   schedules       PelayananSchedule[]
   joinRequests    PelayananJoinRequest[]
+  prayerPetugas   PrayerPetugasPelayanan[]
 
   @@map("pelayanan")
 }
@@ -844,6 +845,7 @@ model PelayananRole {
   eventPelayananPetugas  EventPelayananPetugas[]
   scheduleAssignments    PelayananScheduleAssignment[]
   joinRequests           PelayananJoinRequest[]
+  prayerPetugas          PrayerPetugasPelayanan[]
 
   @@unique([pelayananId, nama])
   @@index([pelayananId])
@@ -3441,6 +3443,21 @@ model PrayerPetugasRole {
 
   @@unique([roleId, subRoleId])
   @@map("prayer_petugas_role")
+}
+
+// Ministry (pelayanan) yang anggotanya boleh di-assign sebagai petugas doa.
+// pelayananRoleId NULL = semua anggota aktif ministry tsb.
+model PrayerPetugasPelayanan {
+  id              String   @id @default(uuid()) @db.Uuid
+  pelayananId     String   @map("pelayanan_id") @db.Uuid
+  pelayananRoleId String?  @map("pelayanan_role_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  pelayanan     Pelayanan      @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  pelayananRole PelayananRole? @relation(fields: [pelayananRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([pelayananId, pelayananRoleId])
+  @@map("prayer_petugas_pelayanan")
 }
 
 // ============================================================

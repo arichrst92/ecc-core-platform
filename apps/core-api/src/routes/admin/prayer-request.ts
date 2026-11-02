@@ -24,7 +24,7 @@ import {
   displayStatus,
   notifyAssigned,
   notifyPrayed,
-  petugasRoleWhere,
+  petugasJemaatWhere,
   prayerPersonSelect,
   statusWhere,
 } from '../../lib/prayer.js';
@@ -118,7 +118,7 @@ prayerRequestRouter.get('/', requireMenu(MENU), async (req, res) => {
   });
 });
 
-// ── Konfigurasi role petugas ──────────────────────────────
+// ── Konfigurasi petugas: role & ministry ─────────────────
 async function loadConfig() {
   const rows = await prisma.prayerPetugasRole.findMany({
     orderBy: { createdAt: 'asc' },
@@ -138,13 +138,48 @@ async function loadConfig() {
     subRoleNama: r.subRole?.nama ?? null,
   }));
 }
+async function loadMinistryConfig() {
+  const rows = await prisma.prayerPetugasPelayanan.findMany({
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      pelayananId: true,
+      pelayananRoleId: true,
+      pelayanan: { select: { nama: true } },
+      pelayananRole: { select: { nama: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    pelayananId: r.pelayananId,
+    pelayananRoleId: r.pelayananRoleId,
+    pelayananNama: r.pelayanan.nama,
+    pelayananRoleNama: r.pelayananRole?.nama ?? null,
+  }));
+}
 
+// data = role (bentuk lama, tetap kompatibel); meta.ministries = ministry.
 prayerRequestRouter.get('/config', requireMenu(MENU), async (_req, res) => {
-  res.json({ success: true, data: await loadConfig() });
+  const [roles, ministries] = await Promise.all([loadConfig(), loadMinistryConfig()]);
+  res.json({ success: true, data: roles, meta: { ministries } });
+});
+
+/** Pilihan ministry + peran untuk konfigurasi. */
+prayerRequestRouter.get('/ministry-options', requireMenu(MENU), async (_req, res) => {
+  const rows = await prisma.pelayanan.findMany({
+    where: { isActive: true },
+    orderBy: { nama: 'asc' },
+    select: {
+      id: true,
+      nama: true,
+      roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true } },
+    },
+  });
+  res.json({ success: true, data: rows });
 });
 
 prayerRequestRouter.put('/config', requireMenu(MENU, 'write'), async (req, res) => {
-  const { items } = prayerPetugasRolesSchema.parse(req.body ?? {});
+  const { items, ministries } = prayerPetugasRolesSchema.parse(req.body ?? {});
   // Dedup + validasi subRole milik role.
   const uniq = new Map<string, { roleId: string; subRoleId: string | null }>();
   for (const it of items) uniq.set(`${it.roleId}:${it.subRoleId ?? ''}`, { roleId: it.roleId, subRoleId: it.subRoleId ?? null });
@@ -156,29 +191,47 @@ prayerRequestRouter.put('/config', requireMenu(MENU, 'write'), async (req, res) 
       if (v.subRoleId && byId.get(v.subRoleId) !== v.roleId) throw BadRequest('Sub role tidak sesuai dengan role.');
     }
   }
-  const before = await loadConfig();
+  // Ministry (opsional — Portal lama tidak mengirim → ministry tidak diubah).
+  const uniqM = new Map<string, { pelayananId: string; pelayananRoleId: string | null }>();
+  for (const m of ministries ?? [])
+    uniqM.set(`${m.pelayananId}:${m.pelayananRoleId ?? ''}`, { pelayananId: m.pelayananId, pelayananRoleId: m.pelayananRoleId ?? null });
+  const prIds = [...uniqM.values()].map((v) => v.pelayananRoleId).filter((v): v is string => !!v);
+  if (prIds.length) {
+    const prs = await prisma.pelayananRole.findMany({ where: { id: { in: prIds } }, select: { id: true, pelayananId: true } });
+    const byId = new Map(prs.map((p) => [p.id, p.pelayananId]));
+    for (const v of uniqM.values()) {
+      if (v.pelayananRoleId && byId.get(v.pelayananRoleId) !== v.pelayananId) throw BadRequest('Peran tidak sesuai dengan ministry.');
+    }
+  }
+  const before = { roles: await loadConfig(), ministries: await loadMinistryConfig() };
   await prisma.$transaction([
     prisma.prayerPetugasRole.deleteMany({}),
     prisma.prayerPetugasRole.createMany({ data: [...uniq.values()] }),
+    ...(ministries
+      ? [
+          prisma.prayerPetugasPelayanan.deleteMany({}),
+          prisma.prayerPetugasPelayanan.createMany({ data: [...uniqM.values()] }),
+        ]
+      : []),
   ]);
-  const after = await loadConfig();
+  const after = { roles: await loadConfig(), ministries: await loadMinistryConfig() };
   audit(req, {
     action: 'UPDATE',
     resource: 'prayer-request-config',
-    resourceLabel: 'Role petugas doa',
+    resourceLabel: 'Petugas doa (role & ministry)',
     before,
     after,
   });
-  res.json({ success: true, data: after });
+  res.json({ success: true, data: after.roles, meta: { ministries: after.ministries } });
 });
 
 prayerRequestRouter.get('/petugas-options', requireMenu(MENU), async (req, res) => {
-  const roleWhere = await petugasRoleWhere();
-  if (!roleWhere) {
+  const pw = await petugasJemaatWhere();
+  if (!pw) {
     res.json({ success: true, data: [], meta: { configured: false } });
     return;
   }
-  const where: Prisma.JemaatWhereInput = { isActive: true, jemaatRoles: { some: roleWhere } };
+  const where: Prisma.JemaatWhereInput = { isActive: true, AND: [pw.where] };
   const search = str(req, 'search');
   if (search) where.namaLengkap = { contains: search, mode: 'insensitive' };
   const cabangId = str(req, 'cabangId');
@@ -191,8 +244,12 @@ prayerRequestRouter.get('/petugas-options', requireMenu(MENU), async (req, res) 
       ...prayerPersonSelect,
       cabang: { select: { id: true, nama: true } },
       jemaatRoles: {
-        where: roleWhere,
+        where: pw.roleWhere ?? { id: { in: [] } },
         select: { role: { select: { nama: true } }, subRole: { select: { nama: true } } },
+      },
+      jemaatPelayanan: {
+        where: pw.pelayananWhere ?? { id: { in: [] } },
+        select: { pelayanan: { select: { nama: true } }, pelayananRole: { select: { nama: true } } },
       },
     },
   });
@@ -205,9 +262,12 @@ prayerRequestRouter.get('/petugas-options', requireMenu(MENU), async (req, res) 
   const loadMap = new Map(load.map((l) => [l.petugasId, l._count._all]));
   res.json({
     success: true,
-    data: rows.map(({ jemaatRoles, ...r }) => ({
+    data: rows.map(({ jemaatRoles, jemaatPelayanan, ...r }) => ({
       ...r,
-      roles: jemaatRoles.map((jr) => (jr.subRole ? `${jr.role.nama} · ${jr.subRole.nama}` : jr.role.nama)),
+      roles: [
+        ...jemaatRoles.map((jr) => (jr.subRole ? `${jr.role.nama} · ${jr.subRole.nama}` : jr.role.nama)),
+        ...jemaatPelayanan.map((jp) => `Ministry ${jp.pelayanan.nama} · ${jp.pelayananRole.nama}`),
+      ],
       pending: loadMap.get(r.id) ?? 0,
     })),
     meta: { configured: true },
@@ -234,11 +294,9 @@ prayerRequestRouter.patch('/:id/assign', requireMenu(MENU, 'write'), async (req,
   const row = await loadOne(req.params.id);
   const { petugasId } = assignPrayerSchema.parse(req.body ?? {});
   if (petugasId) {
-    const roleWhere = await petugasRoleWhere();
-    const ok =
-      roleWhere &&
-      (await prisma.jemaat.count({ where: { id: petugasId, isActive: true, jemaatRoles: { some: roleWhere } } })) > 0;
-    if (!ok) throw BadRequest('Jemaat ini bukan petugas doa. Atur role petugas di Konfigurasi.');
+    const pw = await petugasJemaatWhere();
+    const ok = pw && (await prisma.jemaat.count({ where: { id: petugasId, isActive: true, AND: [pw.where] } })) > 0;
+    if (!ok) throw BadRequest('Jemaat ini bukan petugas doa. Atur role/ministry petugas di Konfigurasi.');
   }
   const changed = petugasId !== row.petugasId;
   const updated = await prisma.prayerRequest.update({

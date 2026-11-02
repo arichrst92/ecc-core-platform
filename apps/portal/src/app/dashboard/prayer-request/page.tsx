@@ -465,7 +465,7 @@ function PrayerDetail({ id, onDeleted }: { id: string; onDeleted: () => void }) 
           </div>
           {!configured ? (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              Role petugas doa belum diatur. Klik <b>Konfigurasi Petugas</b> di atas.
+              Role atau ministry petugas doa belum diatur. Klik <b>Konfigurasi Petugas</b> di atas.
             </p>
           ) : (
             <>
@@ -567,6 +567,17 @@ interface ConfigItem {
   roleNama?: string;
   subRoleNama?: string | null;
 }
+interface MinistryItem {
+  pelayananId: string;
+  pelayananRoleId: string | null;
+  pelayananNama?: string;
+  pelayananRoleNama?: string | null;
+}
+interface MinistryOpt {
+  id: string;
+  nama: string;
+  roles: { id: string; nama: string }[];
+}
 
 function ConfigModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -576,14 +587,44 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
   });
   const cfgQ = useQuery({
     queryKey: ['prayer-request', 'config'],
-    queryFn: async () => (await apiClient.get<{ data: ConfigItem[] }>('/admin/prayer-request/config')).data.data,
+    queryFn: async () =>
+      (await apiClient.get<{ data: ConfigItem[]; meta?: { ministries?: MinistryItem[] } }>('/admin/prayer-request/config')).data,
+  });
+  const minOptQ = useQuery({
+    queryKey: ['prayer-request', 'ministry-options'],
+    queryFn: async () => (await apiClient.get<{ data: MinistryOpt[] }>('/admin/prayer-request/ministry-options')).data.data,
   });
   const [items, setItems] = useState<ConfigItem[] | null>(null);
+  const [mins, setMins] = useState<MinistryItem[] | null>(null);
   const [roleId, setRoleId] = useState('');
   const [subRoleId, setSubRoleId] = useState('');
+  const [pelayananId, setPelayananId] = useState('');
+  const [pelayananRoleId, setPelayananRoleId] = useState('');
   useEffect(() => {
-    if (cfgQ.data && items === null) setItems(cfgQ.data);
+    if (cfgQ.data && items === null) {
+      setItems(cfgQ.data.data);
+      setMins(cfgQ.data.meta?.ministries ?? []);
+    }
   }, [cfgQ.data, items]);
+  const minOpts = minOptQ.data ?? [];
+  const minMap = useMemo(() => new Map(minOpts.map((m) => [m.id, m])), [minOpts]);
+  const minLabel = (it: MinistryItem) => {
+    const m = minMap.get(it.pelayananId);
+    const mn = m?.nama ?? it.pelayananNama ?? '—';
+    if (!it.pelayananRoleId) return `${mn} (semua anggota)`;
+    const rn = m?.roles.find((x) => x.id === it.pelayananRoleId)?.nama ?? it.pelayananRoleNama ?? '—';
+    return `${mn} · ${rn}`;
+  };
+  const addMin = () => {
+    if (!pelayananId) return;
+    const it = { pelayananId, pelayananRoleId: pelayananRoleId || null };
+    setMins((cur) =>
+      (cur ?? []).some((c) => c.pelayananId === it.pelayananId && c.pelayananRoleId === it.pelayananRoleId)
+        ? cur
+        : [...(cur ?? []), it],
+    );
+    setPelayananRoleId('');
+  };
 
   const roles = rolesQ.data ?? [];
   const roleMap = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
@@ -599,9 +640,10 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
     mutationFn: async () =>
       apiClient.put('/admin/prayer-request/config', {
         items: (items ?? []).map((i) => ({ roleId: i.roleId, subRoleId: i.subRoleId })),
+        ministries: (mins ?? []).map((m) => ({ pelayananId: m.pelayananId, pelayananRoleId: m.pelayananRoleId })),
       }),
     onSuccess: () => {
-      toast.success('Role petugas doa disimpan');
+      toast.success('Petugas doa disimpan');
       qc.invalidateQueries({ queryKey: ['prayer-request'] });
       onClose();
     },
@@ -626,14 +668,15 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
             <div>
               <h2 className="font-semibold text-neutral-900">Konfigurasi Petugas Doa</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Jemaat dengan role aktif berikut bisa ditugaskan mendoakan prayer request.
+                Jemaat dengan role aktif atau anggota ministry berikut bisa ditugaskan mendoakan prayer request.
               </p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-5 space-y-3">
+          <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Role</div>
             {items === null ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
@@ -687,6 +730,65 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
               <button
                 onClick={add}
                 disabled={!roleId}
+                className="h-9 px-3 text-sm font-medium border border-brand-500 text-brand-600 rounded-lg hover:bg-brand-50 disabled:opacity-40"
+              >
+                Tambah
+              </button>
+            </div>
+
+            {/* Ministry */}
+            <div className="pt-3 mt-1 border-t border-neutral-100 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              Ministry
+            </div>
+            {mins === null ? null : mins.length === 0 ? (
+              <p className="text-sm text-neutral-400 text-center py-3">Belum ada ministry petugas.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-lg">
+                {mins.map((it) => (
+                  <li key={`${it.pelayananId}:${it.pelayananRoleId ?? ''}`} className="flex items-center gap-2 px-3 py-2">
+                    <span className="text-sm text-neutral-800 flex-1">{minLabel(it)}</span>
+                    <button
+                      onClick={() => setMins((cur) => (cur ?? []).filter((c) => c !== it))}
+                      className="p-1 rounded text-neutral-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-2 flex-wrap">
+              <select
+                value={pelayananId}
+                onChange={(e) => {
+                  setPelayananId(e.target.value);
+                  setPelayananRoleId('');
+                }}
+                className={`${ctrl} flex-1 min-w-[140px]`}
+              >
+                <option value="">Pilih ministry…</option>
+                {minOpts.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nama}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={pelayananRoleId}
+                onChange={(e) => setPelayananRoleId(e.target.value)}
+                disabled={!pelayananId}
+                className={`${ctrl} flex-1 min-w-[140px]`}
+              >
+                <option value="">Semua anggota</option>
+                {(minMap.get(pelayananId)?.roles ?? []).map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nama}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addMin}
+                disabled={!pelayananId}
                 className="h-9 px-3 text-sm font-medium border border-brand-500 text-brand-600 rounded-lg hover:bg-brand-50 disabled:opacity-40"
               >
                 Tambah

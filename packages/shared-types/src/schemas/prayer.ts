@@ -89,6 +89,11 @@ export const prayerPetugasRolesSchema = z.object({
   items: z
     .array(z.object({ roleId: z.string().uuid(), subRoleId: z.string().uuid().nullable().optional() }))
     .max(50),
+  /** Ministry (pelayanan); pelayananRoleId null = semua anggota aktif ministry. Opsional (Portal lama). */
+  ministries: z
+    .array(z.object({ pelayananId: z.string().uuid(), pelayananRoleId: z.string().uuid().nullable().optional() }))
+    .max(50)
+    .optional(),
 });
 
 // ── Resolusi ────────────────────────────────────────────────

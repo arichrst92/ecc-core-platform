@@ -31,7 +31,7 @@ export function statusWhere(s: string | undefined): Prisma.PrayerRequestWhereInp
   return {};
 }
 
-/** JemaatRole where untuk role petugas yang dikonfigurasi. null = belum dikonfigurasi. */
+/** JemaatRole where untuk role petugas yang dikonfigurasi. null = belum ada role. */
 export async function petugasRoleWhere(): Promise<Prisma.JemaatRoleWhereInput | null> {
   const cfg = await prisma.prayerPetugasRole.findMany({ select: { roleId: true, subRoleId: true } });
   if (cfg.length === 0) return null;
@@ -41,10 +41,39 @@ export async function petugasRoleWhere(): Promise<Prisma.JemaatRoleWhereInput | 
   };
 }
 
+/** JemaatPelayanan where untuk ministry petugas yang dikonfigurasi. null = belum ada ministry. */
+export async function petugasPelayananWhere(): Promise<Prisma.JemaatPelayananWhereInput | null> {
+  const cfg = await prisma.prayerPetugasPelayanan.findMany({ select: { pelayananId: true, pelayananRoleId: true } });
+  if (cfg.length === 0) return null;
+  return {
+    isActive: true,
+    OR: cfg.map((c) =>
+      c.pelayananRoleId ? { pelayananId: c.pelayananId, pelayananRoleId: c.pelayananRoleId } : { pelayananId: c.pelayananId },
+    ),
+  };
+}
+
+/**
+ * Jemaat where untuk petugas doa: punya role ATAU ikut ministry yang
+ * dikonfigurasi. null = belum dikonfigurasi sama sekali.
+ */
+export async function petugasJemaatWhere(): Promise<{
+  where: Prisma.JemaatWhereInput;
+  roleWhere: Prisma.JemaatRoleWhereInput | null;
+  pelayananWhere: Prisma.JemaatPelayananWhereInput | null;
+} | null> {
+  const [roleWhere, pelayananWhere] = await Promise.all([petugasRoleWhere(), petugasPelayananWhere()]);
+  if (!roleWhere && !pelayananWhere) return null;
+  const or: Prisma.JemaatWhereInput[] = [];
+  if (roleWhere) or.push({ jemaatRoles: { some: roleWhere } });
+  if (pelayananWhere) or.push({ jemaatPelayanan: { some: pelayananWhere } });
+  return { where: { OR: or }, roleWhere, pelayananWhere };
+}
+
 export async function isPetugasDoa(jemaatId: string): Promise<boolean> {
-  const w = await petugasRoleWhere();
+  const w = await petugasJemaatWhere();
   if (!w) return false;
-  const n = await prisma.jemaatRole.count({ where: { ...w, jemaatId } });
+  const n = await prisma.jemaat.count({ where: { id: jemaatId, ...w.where } });
   return n > 0;
 }
 

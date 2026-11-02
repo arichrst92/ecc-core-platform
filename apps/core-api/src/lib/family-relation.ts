@@ -240,6 +240,9 @@ export async function upsertJemaatRelasi(
         tipeRelasiId: tipeB.id,
       },
     });
+    // Lengkapi keluarga inti: pasangan ↔ anak (mis. suami menambah istri &
+    // anak → istri juga otomatis terhubung sebagai ibu dari anak-anak itu).
+    await lengkapiKeluargaInti(tx, selfId, targetId, tipeA.nama);
     return { a, self, target, tipeA, tipeB };
   });
 
@@ -278,4 +281,92 @@ export async function upsertJemaatRelasi(
   })();
 
   return result.a;
+}
+
+// ------------------------------------------------------------------ keluarga inti
+
+const ANAK = ['Anak Laki-Laki', 'Anak Perempuan'];
+const PASANGAN = ['Suami', 'Istri'];
+
+/** Relasi keluar dari `id` dengan tipe tertentu → [{ id terkait, nama tipe }]. */
+async function relasiDari(tx: Prisma.TransactionClient, id: string, tipe: string[]) {
+  const rows = await tx.jemaatRelasi.findMany({
+    where: { jemaatId: id, tipeRelasi: { nama: { in: tipe } } },
+    select: { jemaatTerkaitId: true, tipeRelasi: { select: { nama: true } } },
+  });
+  return rows.map((r) => ({ id: r.jemaatTerkaitId, tipe: r.tipeRelasi.nama }));
+}
+
+/**
+ * Pastikan relasi orang tua ↔ anak ada (dua arah). Tidak menimpa relasi lain
+ * yang sudah dibuat manual antara keduanya. `parentIsFemale` dipakai bila jenis
+ * kelamin orang tua belum diisi (diambil dari tipe Suami/Istri).
+ */
+async function pastikanOrtuAnak(
+  tx: Prisma.TransactionClient,
+  parentId: string,
+  childId: string,
+  parentIsFemale: boolean | null,
+) {
+  if (parentId === childId) return;
+  const ada = await tx.jemaatRelasi.findFirst({
+    where: {
+      OR: [
+        { jemaatId: parentId, jemaatTerkaitId: childId },
+        { jemaatId: childId, jemaatTerkaitId: parentId },
+      ],
+    },
+    select: { id: true },
+  });
+  if (ada) return;
+  const [parent, child] = await Promise.all([
+    tx.jemaat.findUnique({ where: { id: parentId }, select: { jenisKelamin: true } }),
+    tx.jemaat.findUnique({ where: { id: childId }, select: { jenisKelamin: true } }),
+  ]);
+  if (!parent || !child) return;
+  const ortuP = parent.jenisKelamin ? parent.jenisKelamin === 'P' : parentIsFemale === true;
+  const [tAnak, tOrtu] = await Promise.all([
+    tx.tipeRelasiKeluarga.findUnique({ where: { nama: child.jenisKelamin === 'P' ? 'Anak Perempuan' : 'Anak Laki-Laki' }, select: { id: true } }),
+    tx.tipeRelasiKeluarga.findUnique({ where: { nama: ortuP ? 'Ibu' : 'Ayah' }, select: { id: true } }),
+  ]);
+  if (!tAnak || !tOrtu) return;
+  await tx.jemaatRelasi.createMany({
+    data: [
+      { jemaatId: parentId, jemaatTerkaitId: childId, tipeRelasiId: tAnak.id },
+      { jemaatId: childId, jemaatTerkaitId: parentId, tipeRelasiId: tOrtu.id },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+/**
+ * Setelah relasi self → target dibuat dengan tipe `tipeNama` (cara self
+ * memandang target), sambungkan pasangan dengan anak:
+ *  - target = anak self      → pasangan self juga orang tua target
+ *  - target = ayah/ibu self  → pasangan target juga orang tua self
+ *  - target = pasangan self  → anak self jadi anak target, anak target jadi anak self
+ */
+export async function lengkapiKeluargaInti(
+  tx: Prisma.TransactionClient,
+  selfId: string,
+  targetId: string,
+  tipeNama: string,
+) {
+  if (ANAK.includes(tipeNama)) {
+    for (const p of await relasiDari(tx, selfId, PASANGAN)) {
+      await pastikanOrtuAnak(tx, p.id, targetId, p.tipe === 'Istri');
+    }
+  } else if (tipeNama === 'Ayah' || tipeNama === 'Ibu') {
+    for (const p of await relasiDari(tx, targetId, PASANGAN)) {
+      await pastikanOrtuAnak(tx, p.id, selfId, p.tipe === 'Istri');
+    }
+  } else if (PASANGAN.includes(tipeNama)) {
+    const targetIsFemale = tipeNama === 'Istri';
+    for (const c of await relasiDari(tx, selfId, ANAK)) {
+      await pastikanOrtuAnak(tx, targetId, c.id, targetIsFemale);
+    }
+    for (const c of await relasiDari(tx, targetId, ANAK)) {
+      await pastikanOrtuAnak(tx, selfId, c.id, !targetIsFemale);
+    }
+  }
 }

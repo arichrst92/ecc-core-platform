@@ -1,8 +1,9 @@
 -- Cari data jemaat ganda: nama sama (abaikan huruf besar/kecil & spasi),
 -- minimal satu datanya terhubung ke ayah/ibu. Hanya MEMBACA, tidak mengubah data.
 --
---   KUAT    = ada dua data dengan nama sama yang orang tuanya sama, atau orang
---             tuanya suami-istri → hampir pasti orang yang sama (gabungkan).
+--   KUAT    = ada dua data dengan nama sama yang orang tuanya sama / orang
+--             tuanya suami-istri, ATAU tanggal lahirnya sama → hampir pasti
+--             orang yang sama (gabungkan).
 --   PERIKSA = nama sama, tapi orang tua tidak terkait → bisa orang berbeda.
 --
 -- Jalankan: psql "$DB_URL" -f scripts/cari-anak-dobel.sql
@@ -35,6 +36,14 @@ kuat AS (
   JOIN ortu o2 ON o2.anak = n2.id
   WHERE o1.ortu = o2.ortu
      OR EXISTS (SELECT 1 FROM pasangan p WHERE p.a = o1.ortu AND p.b = o2.ortu)
+  UNION
+  -- Nama sama + tanggal lahir sama (mis. satu data hasil impor tanpa orang tua).
+  SELECT DISTINCT n1.n
+  FROM nm n1
+  JOIN nm n2 ON n2.n = n1.n AND n1.id < n2.id
+  JOIN jemaat j1 ON j1.id = n1.id
+  JOIN jemaat j2 ON j2.id = n2.id
+  WHERE j1.tanggal_lahir IS NOT NULL AND j1.tanggal_lahir = j2.tanggal_lahir
 )
 SELECT
   CASE WHEN k.n IS NOT NULL THEN 'KUAT' ELSE 'PERIKSA' END AS tingkat,

@@ -175,7 +175,7 @@ export function KontenPage({ tipe, title, icon: Icon, description }: KontenPageP
           Belum ada {tipe === 'news' ? 'news' : 'renungan'}.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-3">
           {items.map((item) => (
             <KontenCard
               key={item.id}
@@ -257,22 +257,25 @@ function KontenCard({
   onTogglePublish: () => void;
 }) {
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden flex flex-col">
-      {item.heroImageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`${apiBase}${item.heroImageUrl}`}
-          alt={item.judul}
-          className="w-full h-40 object-cover bg-neutral-100"
-        />
-      ) : (
-        <div className="w-full h-40 bg-neutral-100 flex items-center justify-center text-neutral-300">
-          <ImageIcon className="w-8 h-8" />
-        </div>
-      )}
-      <div className="p-4 flex-1 flex flex-col">
+    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden flex flex-row">
+      {/* Gambar di kiri, rasio 3:2 */}
+      <div className="shrink-0 w-28 sm:w-44 lg:w-56 p-2 sm:p-3 pr-0 sm:pr-0">
+        {item.heroImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${apiBase}${item.heroImageUrl}`}
+            alt={item.judul}
+            className="w-full aspect-[3/2] object-cover rounded-lg bg-neutral-100"
+          />
+        ) : (
+          <div className="w-full aspect-[3/2] rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-300">
+            <ImageIcon className="w-7 h-7" />
+          </div>
+        )}
+      </div>
+      <div className="p-3 sm:p-4 flex-1 min-w-0 flex flex-col">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-neutral-900 flex-1">{item.judul}</h3>
+          <h3 className="font-semibold text-neutral-900 flex-1 min-w-0 line-clamp-2">{item.judul}</h3>
           <span
             className={`shrink-0 inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${
               item.isPublished ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-600'
@@ -306,8 +309,8 @@ function KontenCard({
             ))}
           </div>
         )}
-        <div className="mt-auto pt-3 flex items-center justify-between border-t border-neutral-100 mt-3">
-          <div className="text-xs text-neutral-500">
+        <div className="mt-auto pt-2 flex items-center justify-between gap-2 border-t border-neutral-100 mt-3">
+          <div className="text-xs text-neutral-500 min-w-0 truncate">
             {item.author?.jemaat?.namaLengkap ?? 'Unknown'} ·{' '}
             <span className="font-mono">/{item.slug}</span>
           </div>

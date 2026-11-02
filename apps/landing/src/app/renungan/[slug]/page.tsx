@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Calendar, BookOpen } from 'lucide-react';
-import { apiGet } from '@/lib/api';
+import { apiGet, absoluteUrl } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
 
 interface RenunganDetail {
@@ -12,6 +12,7 @@ interface RenunganDetail {
   ringkasan: string | null;
   konten: string | null;
   ayatAlkitab: string | null;
+  heroImageUrl: string | null;
   tanggal: string | null;
   viewCount: number;
 }
@@ -32,7 +33,9 @@ export async function generateMetadata({
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eccchurch.global').replace(/\/$/, '');
   const url = `${siteUrl}/renungan/${params.slug}`;
-  const ogImage = `${siteUrl}/logo-ecc.webp`; // Fallback logo untuk renungan (no hero)
+  // Pratinjau link: hero image renungan (3:2); logo ECC hanya bila belum ada gambar.
+  const hero = absoluteUrl(item.heroImageUrl);
+  const ogImage = hero ?? `${siteUrl}/logo-ecc.webp`;
   const description = item.ringkasan ?? item.ayatAlkitab ?? undefined;
 
   return {
@@ -45,7 +48,7 @@ export async function generateMetadata({
       url,
       siteName: 'Elshaddai Creative Community',
       locale: 'id_ID',
-      images: [{ url: ogImage, width: 1200, height: 630, alt: item.judul }],
+      images: [hero ? { url: hero, width: 1200, height: 800, alt: item.judul } : { url: ogImage, alt: item.judul }],
     },
     twitter: {
       card: 'summary_large_image',

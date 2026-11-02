@@ -44,7 +44,7 @@ export async function generateMetadata({
       siteName: 'Elshaddai Creative Community',
       locale: 'id_ID',
       ...(ogImage
-        ? { images: [{ url: ogImage, width: 1200, height: 630, alt: news.judul }] }
+        ? { images: [{ url: ogImage, width: 1200, height: 800, alt: news.judul }] }
         : {}),
     },
     twitter: {

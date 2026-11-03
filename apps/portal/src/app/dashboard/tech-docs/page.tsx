@@ -134,7 +134,7 @@ pnpm dev`,
       {
         kind: 'p',
         text:
-          'Prisma 5.22 dgn PostgreSQL 16. Schema di packages/database/prisma/schema.prisma — 40+ model. Multi-tenant via Sinode → CabangGereja hierarchy. Semua data (jemaat, ibadah, event, etc) scoped per cabang.',
+          'Prisma 5.22 dgn PostgreSQL 16. Schema di packages/database/prisma/schema.prisma — 100+ model. Multi-tenant via Sinode → CabangGereja hierarchy. Semua data (jemaat, ibadah, event, etc) scoped per cabang.',
       },
       {
         kind: 'list',
@@ -147,12 +147,21 @@ pnpm dev`,
           'Event + EventParticipation: event satu-kali dgn quota, bayar, checkin QR.',
           'Homecell + HomecellSchedule + HomecellAttendance: cell group + jadwal pertemuan + absensi.',
           'HadiahKatalog + JemaatPointBalance + PointTransaction + HadiahRedeem: CKids gamification (kids earn point via kehadiran, redeem hadiah).',
-          'Notification (Modul 30): in-app notification feed dgn 19 InAppNotifType (termasuk MINISTRY_JOIN_REQUESTED/APPROVED/REJECTED).',
+          'Notification (Modul 30): in-app notification feed dgn 33 InAppNotifType (kids, family, group/homecell, ministry, doa, feedback, ulang tahun, dll). Routing di app divalidasi (notifRouting.ts) — actionUrl harus rute yang ada di app.',
           'WaNotificationConfig: on/off + template per tipe notif WhatsApp, dikelola di Developer Tools → WhatsApp Notif Config.',
           'PelayananJoinRequest: permintaan bergabung ke ministry (PENDING/APPROVED/REJECTED/CANCELLED). Terpisah dari JemaatPelayanan supaya membership selalu aktif. Unique partial index: 1 PENDING per (jemaat, ministry).',
           'WebActionToken: token sekali pakai (10 menit) → session web (30 menit) untuk daftar + upload bukti event NOMINAL_BEBAS di web. Disimpan sebagai SHA-256 hash.',
           'ITMinisterTeam + BacklogSprint/Epic/Story/Task/Comment: IT Minister Team (RBAC planning) + Ticketing Tools app.',
           'Integration (Modul 29 rollback): third-party API keys runtime editable.',
+          'Tamu: Jemaat dgn isTamu=true + tamuKategori (NEW_COMER / VISITOR / null) + tamuStatus/follow-up. JemaatTamu ("Tamu saya"), HomecellTamu + HomecellTamuAttendance, HomecellGuestRequest (mode tamu, tanpa akun). Visit bisa ke tamu (POST /admin/me/visits/guest).',
+          'PrayerRequest + PrayerPetugasRole + PrayerPetugasPelayanan: permohonan doa; petugas = jemaat dgn role ATAU anggota ministry yang dikonfigurasi (lib/prayer.ts petugasJemaatWhere).',
+          'ServiceReview: rating 1–5 + komentar per reservasi/partisipasi. Ibadah.allowReview / Event.allowReview = false → window review reason DISABLED.',
+          'Ibadah.urutan: urutan tampil di app (/admin/ibadah/reorder). Ibadah.mingguKe untuk jadwal bulanan minggu ke-N. Jam jadwal = jam dinding zona CabangGereja.timezone.',
+          'Lokasi: CabangGereja / Ibadah / Homecell punya mapsUrl (link Google Maps) → latitude/longitude di-resolve server (lib/geo.ts resolveMapsLocation), dibulatkan 7 desimal (roundCoord).',
+          'JemaatGeocode: hasil pemetaan alamat jemaat untuk Map View (status OK/NOT_FOUND/TERLALU_UMUM, presisi RUMAH/JALAN/KAWASAN, placeId Google, alamatHash = md5 alamat).',
+          'OnboardingRoleRule: role otomatis saat onboarding (jenis JEMAAT_TETAP / NEW_COMER / SEMUA / TANPA_ROLE). Grant via advisory lock per jemaat (lib/onboarding-roles.ts) — anti dobel.',
+          'CatatanSaya (catatan khotbah) & Bible365Note: PRIBADI — hanya endpoint /admin/me/*, tidak diekspos ke Portal maupun Elsa.',
+          'Lainnya: Feedback + FeedbackReply, SpiritualJourneyStep, JemaatSertifikat, Group/Homecell Announcement + Poll + JoinRequest, Worship* (ECC Worship), Bible365*, ApiMetric + PageViewDaily (analitik anonim), UserConsent, ComplianceDocument, ProcessingActivity, BackupEmailConfig.',
         ],
       },
       {
@@ -223,6 +232,23 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
   Group ||--o{ GroupMember : has
 
   HadiahKatalog ||--o{ HadiahRedeem : "redeemed as"`,
+      },
+      {
+        kind: 'mermaid',
+        caption: 'ERD — Tamu, Doa, Ulasan, Peta (Okt–Nov 2026)',
+        content: `erDiagram
+  Jemaat ||--o{ JemaatTamu : "mengundang (inviter)"
+  Jemaat ||--o{ HomecellTamu : "tamu homecell"
+  Homecell ||--o{ HomecellGuestRequest : "permintaan tamu"
+  Jemaat ||--o{ PrayerRequest : "mengirim"
+  Jemaat ||--o{ PrayerRequest : "petugas"
+  Role ||--o{ PrayerPetugasRole : "petugas doa"
+  Pelayanan ||--o{ PrayerPetugasPelayanan : "petugas doa"
+  Reservasi ||--o| ServiceReview : "ulasan ibadah"
+  EventParticipation ||--o| ServiceReview : "ulasan event"
+  Jemaat ||--o| JemaatGeocode : "titik peta"
+  Role ||--o{ OnboardingRoleRule : "role onboarding"
+  Jemaat ||--o{ CatatanSaya : "catatan pribadi"`,
       },
       {
         kind: 'mermaid',
@@ -372,7 +398,7 @@ await createNotificationBatch(guardians, {...});`,
     id: 'elsa',
     title: 'Elsa (Els Agentic) — AI Agent',
     icon: Sparkles,
-    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 30 entities.',
+    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 52 entities.',
     blocks: [
       {
         kind: 'p',
@@ -382,7 +408,7 @@ await createNotificationBatch(guardians, {...});`,
       {
         kind: 'p',
         text:
-          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 30 entity di DB Prisma via ENTITY_MAP (whitelist + field exclude + relation whitelist per entity). Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
+          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 52 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
       },
       {
         kind: 'table',
@@ -397,6 +423,11 @@ await createNotificationBatch(guardians, {...});`,
           ['Upstream rate', 'Anthropic tier 1: 50 RPM Haiku'],
           ['Max iterations', '8 (prevent infinite tool loop)'],
         ],
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'Privasi: catatan_saya, bible365_note, resolusi, user_consent TIDAK didaftarkan. prayer_request tanpa isi/kesaksian/catatanPetugas & tanpa include pengirim; service_review tanpa jemaatId & include; homecell_guest_request tanpa tokenHash. excludeFields hanya menghapus dari output — relation include tetap mengembalikan semua field relasi, jadi jangan whitelist relasi yang membuka data pribadi.',
       },
       {
         kind: 'p',
@@ -462,6 +493,11 @@ pm2 status`,
       },
       {
         kind: 'callout',
+        variant: 'success',
+        text: 'Cara cepat: push ke main → GitHub Actions menjalankan scripts/deploy.sh di VPS (install, migrate deploy, generate, build, pm2 reload). Manual: ssh root@187.77.118.85 → sudo su - deploy → cd /var/www/ecc-core-platform → git pull origin main → ./scripts/deploy.sh. Setelah ubah .env: pm2 restart all --update-env.',
+      },
+      {
+        kind: 'callout',
         variant: 'warning',
         text: 'Deploy gotcha: (1) workspace dist harus di-rebuild kalau shared-types berubah, (2) tsconfig.tsbuildinfo kadang corrupt → shared-types cuma compile 1 file → error "Cannot find module @ecc/shared-types"; selalu hapus dist + tsbuildinfo sebelum build, (3) jangan pakai tsc global di VPS — pakai pnpm --filter, (4) env loading pakai dotenv-cli via -e ../../.env, (5) NEXT_PUBLIC_* baked di build time, (6) absolute paths upload harus /var/www/..., (7) pnpm-lock.yaml lokal di VPS bisa bentrok saat git pull → git checkout -- pnpm-lock.yaml.',
       },
@@ -489,6 +525,18 @@ pm2 status`,
           ['OTP', 'OTP_MAX_ATTEMPTS', 'Max wrong attempts before lock (3)'],
           ['Elsa', 'ANTHROPIC_API_KEY', 'Anthropic Claude API key'],
           ['Elsa', 'ELSA_MODEL', 'Model name (default claude-haiku-4-5)'],
+          ['Peta', 'GOOGLE_MAPS_BROWSER_KEY', 'Kunci Maps JavaScript API untuk Portal Map View (batasi HTTP referrer domain Portal). Dibaca Portal via GET /admin/map-view/config'],
+          ['Peta', 'GOOGLE_MAPS_MAP_ID', 'Map ID Google (wajib untuk Advanced Marker; fallback DEMO_MAP_ID)'],
+          ['Peta', 'GOOGLE_GEOCODING_API_KEY', 'Kunci Geocoding API (server; batasi IP VPS IPv4 + IPv6 /64). Kosong → fallback OpenStreetMap Nominatim'],
+          ['Peta', 'GEOCODE_JEMAAT_ENABLED', '0 = matikan pemetaan alamat jemaat (default aktif)'],
+          ['Peta', 'NOMINATIM_URL / NOMINATIM_EMAIL', 'Endpoint & email kontak Nominatim (fallback)'],
+          ['Keamanan', 'DATA_ENCRYPTION_KEY', 'Kunci AES-256 enkripsi Credential & backup — JANGAN diganti/hilang (data tidak bisa dibuka)'],
+          ['Keamanan', 'BACKUP_LINK_SECRET / REPORT_LINK_SECRET', 'Signing link unduh backup bulanan & laporan'],
+          ['Retensi', 'DATA_RETENTION_ENABLED + *_RETENTION_DAYS', 'Penghapusan otomatis (akun nonaktif, tamu, bukti transfer, audit, metrik, dll)'],
+          ['Monitor', 'MONITOR_ACCESS_CODE / MONITOR_TOKEN_SECRET', 'Kode akses layar /monitor tanpa login'],
+          ['Ulasan', 'REVIEW_WINDOW_DAYS', 'Lama jendela ulasan setelah acara (default 14)'],
+          ['WA', 'REMINDER_SEND_HOUR_START/END, WA_DISPATCH_MAX_ATTEMPTS', 'Jam kirim pengingat & retry dispatch WA'],
+          ['Worship', 'WORSHIP_DIR / WORSHIP_MEDIA_SECRET / WHISPER_BIN / FFMPEG_BIN', 'Media & sinkron lirik ECC Worship'],
           ['Ports', 'PORT', 'core-api port (4100)'],
           ['URLs', 'PORTAL_URL', 'Portal base URL (untuk email link)'],
           ['CORS', 'CORS_ALLOWED_ORIGINS', 'Comma-separated allowed origins'],
@@ -565,12 +613,86 @@ pm2 status`,
           'Ibadah: /admin/reservasi/checkin, /checkout, /pickup (admin scanner) + walk-in flow (kode alternate).',
           'Notification: /admin/me/notifications polling 30s (badge + list + mark-read).',
           'Ministry Phase 2: POST /admin/ministry/:id/join simple direct-ACTIVE flow.',
+          'Header X-Client: mobile → isMobileClient(req). Dipakai untuk perilaku khusus app, mis. detail event mengirim "-" untuk lokasi/jam kosong; Portal tetap menerima null.',
+          'Versi 2.4.5 (Nov 2026): kategori tamu, batalkan self check-in (/admin/me/reservasi/:id/cancel-checkin), self check-in +30 menit (CLOSE_AFTER_MIN di lib/self-checkin.ts), Catatan saya (/admin/me/catatan), visit dengan tamu, petunjuk arah ke mapsUrl, ulasan mengikuti allowReview.',
+          'Kompatibilitas: perubahan server harus aman untuk app lama (2.4.4) — tambah field opsional, jangan ubah bentuk response yang sudah dipakai.',
         ],
       },
       {
         kind: 'callout',
         variant: 'info',
         text: 'BE↔Mobile koordinasi lewat file docs di mobile repo. Pattern: mobile team kirim backend-request-*.md ke folder docs → BE tim reply dgn BE Response section di doc yg sama → mark status RESOLVED. Backup: langsung message di ECC repo issue.',
+      },
+    ],
+  },
+  {
+    id: 'map-view',
+    title: 'Map View & Pemetaan Alamat',
+    icon: Globe,
+    summary: 'Google Maps JS di Portal, geocoding alamat jemaat, Cek Lokasi Member.',
+    blocks: [
+      {
+        kind: 'p',
+        text:
+          'Portal /dashboard/map memuat Google Maps JavaScript API (libraries=marker, AdvancedMarkerElement + MarkerClusterer dari unpkg). Kunci & Map ID diambil dari server (GET /admin/map-view/config) supaya bisa diganti tanpa build ulang Portal. Menu: map-view (RBAC); pin jemaat butuh juga menu jemaat.',
+      },
+      {
+        kind: 'table',
+        headers: ['Endpoint (/admin/map-view)', 'Isi'],
+        rows: [
+          ['GET /', 'Cabang, Homecell Area, homecell bertitik + yang belum punya titik'],
+          ['GET /jemaat', 'Pin jemaat (foto, homecell, placeId, presisi) — hanya titik yang alamatHash-nya masih cocok'],
+          ['GET /sebaran-jemaat', 'Sel kepadatan ±100 m (tanpa nama)'],
+          ['GET /geocode-status · POST /geocode-run', 'Progres pemetaan (hanya hasil versi sekarang) · jalankan batch'],
+          ['GET /alamat-perlu-dicek', 'Jemaat dgn status NOT_FOUND / TERLALU_UMUM'],
+          ['GET /homecell/:id/member', 'Anggota + PIC + jarak garis lurus ke homecell (Cek Lokasi Member)'],
+          ['GET /config', 'GOOGLE_MAPS_BROWSER_KEY + GOOGLE_MAPS_MAP_ID'],
+        ],
+      },
+      {
+        kind: 'list',
+        items: [
+          'Job geocoding (lib/jemaat-geocode.ts) tiap 15 menit: Google 1.000 alamat/batch (jeda 120 ms), fallback Nominatim 250/batch (1 req/detik).',
+          'Query: alamat + kota cabang (dari nama cabang tanpa "ECC "), lalu versi yang dirapikan; negara pencarian dari CabangGereja.timezone (Asia/Jakarta→ID, Australia/*→AU, Asia/Kuala_Lumpur→MY, …); cadangan tanpa batas negara bila tidak ketemu.',
+          'Hasil setingkat kota/kecamatan/provinsi/pulau ditolak → status TERLALU_UMUM (mencegah pin menumpuk di tengah kota).',
+          'Pemrosesan ulang otomatis bila: alamat berubah (alamatHash), versi GEOCODE_VERSION naik, atau hasil Google > 30 hari. Naikkan GEOCODE_VERSION untuk memetakan ulang semua.',
+          'Pin jemaat di titik yang sama disebar melingkar di Portal (sebarTitikSama) — data asli tidak diubah.',
+        ],
+      },
+      {
+        kind: 'callout',
+        variant: 'warning',
+        text: 'Kunci Google: Maps JS (browser) dibatasi Websites; Geocoding (server) dibatasi IP addresses — daftarkan IPv4 187.77.118.85 DAN IPv6 2a02:4780:59:9774::/64 (server bisa keluar lewat IPv6). REQUEST_DENIED di "Kendala terakhir" = pembatasan kunci salah.',
+      },
+    ],
+  },
+  {
+    id: 'data-scripts',
+    title: 'Skrip Pemeliharaan Data (scripts/*.sql)',
+    icon: Database,
+    summary: 'Skrip SQL sekali jalan untuk perbaikan data produksi.',
+    blocks: [
+      {
+        kind: 'table',
+        headers: ['Skrip', 'Fungsi'],
+        rows: [
+          ['scripts/backfill-keluarga-inti.sql', 'Hubungkan pasangan dgn anak-anak pasangannya (Ayah/Ibu ↔ Anak). -v apply=0 pratinjau, apply=1 simpan'],
+          ['scripts/cari-anak-dobel.sql', 'Cari data jemaat ganda (nama sama + orang tua terkait / tanggal lahir sama) — read-only'],
+          ['scripts/gabung-jemaat-dobel.sql', 'Gabungkan pasangan data ganda: pindahkan semua FK ke data yang dipertahankan, buang baris bentrok, hapus data ganda; berhenti bila keduanya punya akun login'],
+        ],
+      },
+      {
+        kind: 'code',
+        lang: 'bash',
+        content: `cd /var/www/ecc-core-platform
+DB_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2- | tr -d '"' | sed 's/?schema=.*//')
+psql "$DB_URL" -P pager=off -v apply=0 -f scripts/<skrip>.sql   # uji (ROLLBACK)
+psql "$DB_URL" -P pager=off -v apply=1 -f scripts/<skrip>.sql   # simpan (COMMIT)`,
+      },
+      {
+        kind: 'callout',
+        variant: 'info',
+        text: 'Relasi keluarga baru otomatis melengkapi keluarga inti (lib/family-relation.ts lengkapiKeluargaInti): tambah anak → pasangan jadi ayah/ibu; tambah pasangan → anak-anak saling terhubung; tambah ayah/ibu → pasangan orang tua ikut terhubung.',
       },
     ],
   },

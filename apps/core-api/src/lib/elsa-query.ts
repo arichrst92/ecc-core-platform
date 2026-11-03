@@ -48,12 +48,13 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     prismaKey: 'cabangGereja',
     description: 'Cabang gereja lokal di bawah sinode. Punya alamat, kontak, koordinat.',
     allowedInclude: ['sinode', 'rekening', 'jemaats'],
-    keyFields: ['id', 'nama', 'kode', 'kota', 'sinodeId', 'isActive'],
+    keyFields: ['id', 'nama', 'kode', 'kota', 'sinodeId', 'timezone', 'mapsUrl', 'latitude', 'longitude', 'isActive'],
   },
   // ===== People =====
   jemaat: {
     prismaKey: 'jemaat',
-    description: 'Master data jemaat (church member). Full profile: nama, no HP, cabang, tanggal lahir.',
+    description:
+      'Master data jemaat (church member). Full profile: nama, no HP, cabang, tanggal lahir, alamat. Tamu (belum jemaat) = isTamu true; tamuKategori NEW_COMER | VISITOR | null (belum ditentukan); tamuStatus = status follow-up tamu.',
     excludeFields: [],
     allowedInclude: [
       'cabang',
@@ -63,7 +64,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
       'relasiAsal',
       'homecellMembership',
     ],
-    keyFields: ['id', 'namaLengkap', 'noHp', 'kode', 'cabangId', 'jenisKelamin', 'tanggalLahir', 'isActive'],
+    keyFields: ['id', 'namaLengkap', 'noHp', 'kode', 'cabangId', 'jenisKelamin', 'tanggalLahir', 'alamat', 'isTamu', 'tamuKategori', 'tamuStatus', 'isActive'],
   },
   role: {
     prismaKey: 'role',
@@ -100,7 +101,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     prismaKey: 'ibadah',
     description: 'Jadwal ibadah (weekly/biweekly/monthly/once) per cabang.',
     allowedInclude: ['cabang', 'kategoriIbadah', 'reservasi', 'pelayananLinks'],
-    keyFields: ['id', 'nama', 'cabangId', 'kategoriIbadahId', 'tipeJadwal', 'hari', 'jamMulai', 'isKidsIbadah', 'requiresCheckout', 'isActive'],
+    keyFields: ['id', 'nama', 'cabangId', 'kategoriIbadahId', 'tipeJadwal', 'hari', 'jamMulai', 'jamSelesai', 'urutan', 'allowReview', 'mapsUrl', 'isKidsIbadah', 'requiresCheckout', 'isActive'],
   },
   pelayanan: {
     prismaKey: 'pelayanan',
@@ -137,7 +138,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     prismaKey: 'homecell',
     description: 'Homecell (kelompok kecil per area) + PIC.',
     allowedInclude: ['area', 'picJemaat', 'members', 'schedules'],
-    keyFields: ['id', 'nama', 'areaId', 'picJemaatId', 'hari', 'jam', 'isActive'],
+    keyFields: ['id', 'nama', 'areaId', 'picJemaatId', 'hari', 'jam', 'kategori', 'usiaMin', 'usiaMax', 'mapsUrl', 'latitude', 'longitude', 'isActive'],
   },
   homecell_member: {
     prismaKey: 'homecellMember',
@@ -162,7 +163,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     prismaKey: 'event',
     description: 'Event satu-kali (KKR, Retret, dll) dgn registrasi + pembayaran + checkin.',
     allowedInclude: ['cabang', 'sinode', 'author', 'partisipasi'],
-    keyFields: ['id', 'judul', 'slug', 'tanggalMulai', 'tanggalSelesai', 'cabangId', 'sinodeId', 'tipeBayar', 'quotaPeserta', 'isPublished'],
+    keyFields: ['id', 'judul', 'slug', 'tanggalMulai', 'tanggalSelesai', 'cabangId', 'sinodeId', 'tipeBayar', 'quotaPeserta', 'allowReview', 'isPublished'],
   },
   event_participation: {
     prismaKey: 'eventParticipation',
@@ -226,6 +227,146 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     description: 'History redeem hadiah di gift stall CKids.',
     allowedInclude: ['jemaat', 'hadiah', 'cabang', 'processedBy'],
     keyFields: ['id', 'jemaatId', 'hadiahId', 'cabangId', 'pointDeducted', 'processedAt'],
+  },
+  // ===== Tamu & follow-up =====
+  jemaat_tamu: {
+    prismaKey: 'jemaatTamu',
+    description: 'Daftar "Tamu saya": jemaat (inviter) yang mengundang/mencatat tamu (tamu = jemaat dgn isTamu true). Kategori & status tamu ada di entity jemaat (tamuKategori, tamuStatus).',
+    allowedInclude: ['inviter', 'tamu'],
+    keyFields: ['id', 'inviterId', 'tamuId', 'createdAt'],
+  },
+  homecell_tamu: {
+    prismaKey: 'homecellTamu',
+    description: 'Tamu yang dicatat di homecell oleh pemimpin/PIC.',
+    allowedInclude: ['homecell', 'tamu', 'addedBy'],
+    keyFields: ['id', 'homecellId', 'tamuId', 'addedById', 'createdAt'],
+  },
+  homecell_tamu_attendance: {
+    prismaKey: 'homecellTamuAttendance',
+    description: 'Kehadiran tamu di pertemuan homecell (per jadwal).',
+    allowedInclude: ['schedule', 'tamu', 'markedBy'],
+    keyFields: ['id', 'scheduleId', 'tamuId', 'createdAt'],
+  },
+  homecell_guest_request: {
+    prismaKey: 'homecellGuestRequest',
+    description: 'Permintaan bergabung homecell dari tamu (mode tamu app, tanpa akun). kategori = pilihan tamu (BELUM/NEW_COMER/VISITOR). Status PENDING/APPROVED/REJECTED.',
+    excludeFields: ['tokenHash'],
+    allowedInclude: ['homecell', 'tamu', 'reviewedBy'],
+    keyFields: ['id', 'homecellId', 'nama', 'noHp', 'jenisKelamin', 'usia', 'kategori', 'status', 'createdAt'],
+  },
+  homecell_join_request: {
+    prismaKey: 'homecellJoinRequest',
+    description: 'Permintaan jemaat bergabung ke homecell. Status PENDING/APPROVED/REJECTED.',
+    allowedInclude: ['homecell', 'jemaat', 'reviewedBy'],
+    keyFields: ['id', 'homecellId', 'jemaatId', 'status', 'reviewedAt', 'createdAt'],
+  },
+  group_join_request: {
+    prismaKey: 'groupJoinRequest',
+    description: 'Permintaan jemaat bergabung ke group. Status PENDING/APPROVED/REJECTED.',
+    allowedInclude: ['group', 'jemaat', 'reviewedBy'],
+    keyFields: ['id', 'groupId', 'jemaatId', 'via', 'status', 'createdAt'],
+  },
+  // ===== Papan homecell & group =====
+  homecell_announcement: {
+    prismaKey: 'homecellAnnouncement',
+    description: 'Pengumuman di papan homecell.',
+    allowedInclude: ['homecell', 'createdBy'],
+    keyFields: ['id', 'homecellId', 'judul', 'isPinned', 'createdAt'],
+  },
+  homecell_poll: {
+    prismaKey: 'homecellPoll',
+    description: 'Polling di homecell (+ options & votes).',
+    allowedInclude: ['homecell', 'createdBy', 'options'],
+    keyFields: ['id', 'homecellId', 'pertanyaan', 'isClosed', 'closesAt', 'createdAt'],
+  },
+  group_announcement: {
+    prismaKey: 'groupAnnouncement',
+    description: 'Pengumuman di papan group.',
+    allowedInclude: ['group', 'createdBy'],
+    keyFields: ['id', 'groupId', 'judul', 'isPinned', 'createdAt'],
+  },
+  group_poll: {
+    prismaKey: 'groupPoll',
+    description: 'Polling di group (+ options & votes).',
+    allowedInclude: ['group', 'createdBy', 'options'],
+    keyFields: ['id', 'groupId', 'pertanyaan', 'isClosed', 'closesAt', 'createdAt'],
+  },
+  // ===== Pelayanan jemaat =====
+  prayer_request: {
+    prismaKey: 'prayerRequest',
+    description:
+      'Permohonan doa dari jemaat. status BARU/DITUGASKAN/SUDAH_DIDOAKAN; terjawab = terjawabAt terisi. kategori HEALTH/FAMILY/WORK/FINANCE/STUDY/RELATIONSHIP/RESTORATION/THANKSGIVING/OTHER. Isi doa & kesaksian TIDAK tersedia (pribadi) — lihat di Portal → Prayer Request. Abaikan yang deletedAt terisi.',
+    excludeFields: ['isi', 'kesaksian', 'catatanPetugas', 'untukNama'],
+    allowedInclude: ['cabang', 'petugas'],
+    keyFields: ['id', 'jemaatId', 'cabangId', 'kategori', 'untuk', 'isAnonim', 'status', 'petugasId', 'assignedAt', 'didoakanAt', 'terjawabAt', 'deletedAt', 'createdAt'],
+  },
+  prayer_petugas_role: {
+    prismaKey: 'prayerPetugasRole',
+    description: 'Konfigurasi petugas doa berdasarkan role/sub role (subRoleId null = semua sub role).',
+    allowedInclude: ['role', 'subRole'],
+    keyFields: ['id', 'roleId', 'subRoleId'],
+  },
+  prayer_petugas_pelayanan: {
+    prismaKey: 'prayerPetugasPelayanan',
+    description: 'Konfigurasi petugas doa berdasarkan ministry (pelayananRoleId null = semua anggota aktif ministry).',
+    allowedInclude: ['pelayanan', 'pelayananRole'],
+    keyFields: ['id', 'pelayananId', 'pelayananRoleId'],
+  },
+  service_review: {
+    prismaKey: 'serviceReview',
+    description:
+      'Ulasan (rating 1–5 + komentar) jemaat untuk ibadah (kind IBADAH, ibadahId + tanggal) atau event (kind EVENT, eventId). Ulasan anonim: jangan sebut nama pengulas.',
+    excludeFields: ['jemaatId', 'reservasiId', 'participationId'],
+    allowedInclude: [],
+    keyFields: ['id', 'kind', 'ibadahId', 'tanggal', 'eventId', 'cabangId', 'rating', 'komentar', 'isAnonim', 'createdAt'],
+  },
+  feedback: {
+    prismaKey: 'feedback',
+    description: 'Masukan / laporan dari jemaat lewat app (tipe & kategori) + status penanganan.',
+    excludeFields: ['appInfo'],
+    allowedInclude: ['jemaat', 'cabang', 'replies'],
+    keyFields: ['id', 'jemaatId', 'cabangId', 'tipe', 'kategori', 'status', 'lastActivityAt', 'createdAt'],
+  },
+  spiritual_journey_step: {
+    prismaKey: 'spiritualJourneyStep',
+    description: 'Tahapan Spiritual Journey (urutan) — tiap tahap terkait role/sub role yang menandai jemaat sudah melewatinya.',
+    allowedInclude: ['role', 'subRole', 'subRoleStatus'],
+    keyFields: ['id', 'judul', 'urutan', 'roleId', 'subRoleId', 'isActive'],
+  },
+  jemaat_sertifikat: {
+    prismaKey: 'jemaatSertifikat',
+    description: 'Sertifikat milik jemaat (mis. baptis, kelas) yang diunggah.',
+    excludeFields: ['fileUrl'],
+    allowedInclude: ['jemaat'],
+    keyFields: ['id', 'jemaatId', 'nama', 'tanggal', 'createdAt'],
+  },
+  onboarding_role_rule: {
+    prismaKey: 'onboardingRoleRule',
+    description: 'Onboarding Config: role yang otomatis diberikan saat jemaat menyelesaikan onboarding (jenis JEMAAT_TETAP / NEW_COMER / SEMUA, atau TANPA_ROLE untuk jemaat sudah onboarding tanpa role).',
+    allowedInclude: ['role', 'subRole', 'subRoleStatus'],
+    keyFields: ['id', 'jenis', 'roleId', 'subRoleId', 'urutan'],
+  },
+  jemaat_geocode: {
+    prismaKey: 'jemaatGeocode',
+    description:
+      'Pemetaan alamat jemaat ke peta (Map View). status OK / NOT_FOUND (alamat tidak dikenali) / TERLALU_UMUM (hanya nama kota). presisi RUMAH/JALAN/KAWASAN. Lokasi = perkiraan dari alamat.',
+    excludeFields: ['alamatHash', 'placeId'],
+    allowedInclude: ['jemaat'],
+    keyFields: ['jemaatId', 'status', 'presisi', 'latitude', 'longitude', 'provider', 'updatedAt'],
+  },
+  // ===== ECC Worship =====
+  worship_album: {
+    prismaKey: 'worshipAlbum',
+    description: 'Album ECC Worship (tipe, tahun, terbit/tidak).',
+    allowedInclude: ['songs'],
+    keyFields: ['id', 'tipe', 'judul', 'tahun', 'isPublished'],
+  },
+  worship_song: {
+    prismaKey: 'worshipSong',
+    description: 'Lagu ECC Worship + jumlah putar vokal/karaoke.',
+    excludeFields: ['lirikSinkron', 'audioFile', 'karaokeFile'],
+    allowedInclude: ['album'],
+    keyFields: ['id', 'albumId', 'judul', 'ciptaan', 'tahun', 'durasi', 'playsVokal', 'playsKaraoke', 'isPublished'],
   },
   // ===== System =====
   notification: {

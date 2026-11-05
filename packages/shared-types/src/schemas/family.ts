@@ -80,6 +80,20 @@ export const linkFamilyByPhoneSchema = z
   .openapi('LinkFamilyByPhoneInput');
 export type LinkFamilyByPhoneInput = z.infer<typeof linkFamilyByPhoneSchema>;
 
+/** Link existing jemaat hasil pencarian (nama / email / no HP) — 2.4.6. */
+export const linkFamilyByIdSchema = z
+  .object({
+    jemaatId: uuidSchema,
+    role: familyRoleSchema.optional(),
+    tipeRelasiId: uuidSchema.optional(),
+  })
+  .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
+    message: 'Kirim role atau tipeRelasiId',
+    path: ['role'],
+  })
+  .openapi('LinkFamilyByIdInput');
+export type LinkFamilyByIdInput = z.infer<typeof linkFamilyByIdSchema>;
+
 /**
  * Register jemaat baru sebagai anggota keluarga. Endpoint ini tidak butuh
  * OTP — user current sudah authenticated dan "menjamin" jemaat baru.

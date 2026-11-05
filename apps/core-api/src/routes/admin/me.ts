@@ -17,6 +17,8 @@
  *   - GET    /admin/me/family                   → list family network
  *   - POST   /admin/me/family/link-by-kode      → link via scan QR kode
  *   - POST   /admin/me/family/link-by-phone     → link via no HP
+ *   - GET    /admin/me/family/search?q=         → cari jemaat (nama sebagian / email & no HP persis)
+ *   - POST   /admin/me/family/link-by-id        → link hasil pencarian
  *   - POST   /admin/me/family/register-new      → register jemaat baru + auto-link
  *   - PATCH  /admin/me/family/:jemaatId         → update role relasi
  *   - DELETE /admin/me/family/:jemaatId         → unlink
@@ -25,12 +27,15 @@
  *   - POST   /admin/me/branch-change-request    → submit request pindah cabang
  */
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma, Prisma } from '@ecc/database';
 import {
   selfEditJemaatSchema,
   editDependentJemaatSchema,
   linkFamilyByKodeSchema,
   linkFamilyByPhoneSchema,
+  linkFamilyByIdSchema,
+  normalizePhoneNumber,
   registerFamilyNewSchema,
   updateFamilyRelationSchema,
   createBranchChangeRequestSchema,
@@ -41,7 +46,7 @@ import {
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
-import { otpRequestLimiter, authVerifyLimiter } from '../../middleware/rate-limit.js';
+import { otpRequestLimiter, authVerifyLimiter, familySearchLimiter } from '../../middleware/rate-limit.js';
 import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
@@ -930,6 +935,79 @@ meRouter.post('/family/link-by-phone', async (req, res) => {
     metadata: { kind: 'family-link-phone', via: 'phone', tipe: link.tipeRelasi.nama },
   });
   res.status(201).json({ success: true, data: { ...link, target } });
+});
+
+/**
+ * Cari jemaat untuk ditambahkan sebagai keluarga.
+ *  - Ada "@"            → email, harus persis (tidak peka huruf besar/kecil).
+ *  - Nomor (≥ 8 digit)  → no HP, harus persis (dinormalisasi ke +62…).
+ *  - Selain itu         → nama, cocok sebagian (min. 3 huruf).
+ * Hasil hanya nama, foto, kode, cabang — kontak tidak pernah dikirim.
+ */
+meRouter.get('/family/search', familySearchLimiter, async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const q = z.object({ q: z.string().trim().max(120) }).parse(req.query).q;
+  const digits = q.replace(/[\s\-().+]/g, '');
+  let mode: 'email' | 'phone' | 'nama';
+  let where: Prisma.JemaatWhereInput;
+  if (q.includes('@')) {
+    mode = 'email';
+    where = { email: { equals: q.toLowerCase(), mode: 'insensitive' } };
+  } else if (/^\d{8,}$/.test(digits)) {
+    mode = 'phone';
+    const e164 = normalizePhoneNumber(q);
+    if (!e164) {
+      res.json({ success: true, data: { mode, items: [] } });
+      return;
+    }
+    where = { noHp: e164 };
+  } else {
+    mode = 'nama';
+    if (q.length < 3) throw BadRequest('Ketik minimal 3 huruf nama.');
+    where = { namaLengkap: { contains: q, mode: 'insensitive' } };
+  }
+  const [rows, linked] = await Promise.all([
+    prisma.jemaat.findMany({
+      where: { ...where, isActive: true, isTamu: false, id: { not: jemaatId } },
+      orderBy: { namaLengkap: 'asc' },
+      take: 20,
+      select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, jenisKelamin: true, cabang: { select: { nama: true } } },
+    }),
+    prisma.jemaatRelasi.findMany({ where: { jemaatId }, select: { jemaatTerkaitId: true } }),
+  ]);
+  const sudah = new Set(linked.map((l) => l.jemaatTerkaitId));
+  res.json({
+    success: true,
+    data: {
+      mode,
+      items: rows.map(({ cabang, ...j }) => ({ ...j, cabang: cabang.nama, alreadyLinked: sudah.has(j.id) })),
+    },
+  });
+});
+
+meRouter.post('/family/link-by-id', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const input = linkFamilyByIdSchema.parse(req.body);
+  const target = await prisma.jemaat.findUnique({
+    where: { id: input.jemaatId },
+    select: { id: true, namaLengkap: true, kode: true, isActive: true, isTamu: true },
+  });
+  if (!target || target.isTamu) throw NotFound('Jemaat tidak ditemukan.');
+  if (!target.isActive) {
+    throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
+  }
+  if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
+
+  const link = await upsertJemaatRelasi(jemaatId, target.id, input);
+  audit(req, {
+    action: 'CREATE',
+    resource: 'jemaat_relasi',
+    resourceId: link.id,
+    resourceLabel: `${link.tipeRelasi.nama} ↔ ${target.namaLengkap}`,
+    metadata: { kind: 'family-link-search', via: 'search', tipe: link.tipeRelasi.nama },
+  });
+  const { isTamu: _t, isActive: _a, ...t } = target;
+  res.status(201).json({ success: true, data: { ...link, target: t } });
 });
 
 meRouter.post('/family/register-new', async (req, res) => {

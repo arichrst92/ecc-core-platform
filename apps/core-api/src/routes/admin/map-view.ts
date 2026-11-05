@@ -16,6 +16,7 @@ import { GEOCODE_VERSION, alamatHash, geocodeEnabled, geocodeJemaatBatch, geocod
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 import { distanceKm } from '../../lib/geo.js';
+import { cariPotensialMember, usiaDari } from '../../lib/potensial-member.js';
 
 export const mapViewRouter = Router();
 mapViewRouter.use(requireMenu('map-view'));
@@ -97,6 +98,7 @@ mapViewRouter.get('/', async (req, res) => {
         isActive: true,
         cabang: { select: { id: true, nama: true } },
         picJemaat: { select: { namaLengkap: true, noHp: true } },
+        pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true } } } },
       },
     }),
   ]);
@@ -115,7 +117,11 @@ mapViewRouter.get('/', async (req, res) => {
     if (h.latitude != null && h.longitude != null) st.denganTitik++;
     areaStat.set(h.area.id, st);
   }
-  const area = areaRows.map((a) => ({ ...a, ...(areaStat.get(a.id) ?? { homecellCount: 0, memberCount: 0, denganTitik: 0 }) }));
+  const area = areaRows.map(({ pastors, ...a }) => ({
+    ...a,
+    pastors: pastors.map((p) => p.jemaat),
+    ...(areaStat.get(a.id) ?? { homecellCount: 0, memberCount: 0, denganTitik: 0 }),
+  }));
 
   const cabang = cabangRows.filter(hasPoint).map(({ _count, ...c }) => ({
     ...c,
@@ -278,6 +284,24 @@ mapViewRouter.get('/alamat-perlu-dicek', requireMenu('jemaat'), async (req, res)
     data: rows
       .filter(alamatMasihSama) // alamat sudah diperbaiki → menunggu dipetakan ulang, tidak perlu dicek
       .map(({ status, jemaat: { cabang, ...j } }) => ({ ...j, cabang: cabang.nama, status })),
+  });
+});
+
+/**
+ * Cari Potensial Member — jemaat yang belum ikut homecell dan perkiraan rumahnya
+ * dalam radius X km dari titik homecell. Butuh akses menu Jemaat (data pribadi).
+ *   GET /admin/map-view/homecell/:id/potensial-member?radiusKm=3
+ */
+mapViewRouter.get('/homecell/:id/potensial-member', requireMenu('jemaat'), async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const { radiusKm } = z.object({ radiusKm: z.coerce.number().positive().default(3) }).parse(req.query);
+  const r = await cariPotensialMember(id, radiusKm);
+  res.json({
+    success: true,
+    data: {
+      ...r,
+      data: r.data.map(({ tanggalLahir, ...j }) => ({ ...j, usia: usiaDari(tanggalLahir) })),
+    },
   });
 });
 

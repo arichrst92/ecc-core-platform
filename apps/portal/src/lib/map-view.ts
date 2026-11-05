@@ -108,6 +108,8 @@ export interface MapArea {
   isActive: boolean;
   cabang: { id: string; nama: string };
   picJemaat: { namaLengkap: string; noHp: string | null } | null;
+  /** Pastor zona (boleh kosong / lebih dari satu). */
+  pastors?: { id: string; namaLengkap: string }[];
   homecellCount: number;
   memberCount: number;
   denganTitik: number;
@@ -253,7 +255,10 @@ export function homecellPopup(h: MapHomecell): string {
     ${row('Pemimpin', pic)}
     ${row('Anggota', `${h.memberCount.toLocaleString('id-ID')} orang`)}
     ${h.alamat ? row('Alamat', esc(h.alamat)) : ''}
-    <button type="button" data-cek-member="${esc(h.id)}" style="width:100%;margin-top:10px;padding:7px 8px;border-radius:8px;border:1px solid ${color};background:#F5F3FF;color:${color};font-size:12px;font-weight:700;cursor:pointer">Cek Lokasi Member</button>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button type="button" data-cek-member="${esc(h.id)}" style="flex:1;padding:7px 6px;border-radius:8px;border:1px solid ${color};background:#F5F3FF;color:${color};font-size:12px;font-weight:700;cursor:pointer">Cek Lokasi Member</button>
+      <button type="button" data-potensial="${esc(h.id)}" style="flex:1;padding:7px 6px;border-radius:8px;border:1px solid ${POTENSIAL_COLOR};background:#ECFDF5;color:${POTENSIAL_COLOR};font-size:12px;font-weight:700;cursor:pointer">Cari Potensial Member</button>
+    </div>
     ${buttons(`/dashboard/homecell/${h.id}`, gmapsHref(h.mapsUrl, h.latitude, h.longitude), color)}
   </div>`;
 }
@@ -358,10 +363,11 @@ export function areaPopup(a: MapArea, homecellNames: string[]): string {
     <div style="font-size:15px;font-weight:700;color:#171717;margin:6px 0 2px">${esc(a.nama)}</div>
     <div style="font-size:12px;color:#737373;margin-bottom:6px">${esc(a.cabang.nama)}</div>
     ${row('PIC zona', pic)}
+    ${row('Pastor', a.pastors?.length ? esc(a.pastors.map((p) => p.namaLengkap).join(', ')) : '<span style="color:#a3a3a3">Belum ada</span>')}
     <div style="display:flex;gap:6px;margin-top:8px">${stat(a.homecellCount, 'Homecell')}${stat(a.memberCount, 'Anggota')}</div>
     ${list ? `<div style="font-size:12px;color:#404040;margin-top:8px"><div style="color:#737373;margin-bottom:2px">Homecell di peta</div><ul style="margin:0;padding-left:16px;line-height:1.5">${list}${more}</ul></div>` : ''}
     ${belum > 0 ? `<div style="font-size:11px;color:#B45309;margin-top:6px">${belum} homecell belum punya titik lokasi</div>` : ''}
-    <div style="margin-top:10px"><a href="/dashboard/homecell-area/${esc(a.id)}" style="display:block;text-align:center;padding:6px 8px;border-radius:8px;background:${color};color:#fff;font-size:12px;font-weight:600;text-decoration:none">Lihat detail area</a></div>
+    <div style="margin-top:10px"><a href="/dashboard/homecell-area/${esc(a.id)}" style="display:block;text-align:center;padding:6px 8px;border-radius:8px;background:${color};color:#fff;font-size:12px;font-weight:600;text-decoration:none">Lihat detail zona</a></div>
   </div>`;
 }
 
@@ -570,5 +576,55 @@ export function memberPopup(m: HomecellMemberLokasi, hc: HomecellMemberData['hom
         ? buttons(`/dashboard/jemaat/${m.id}`, rute, c).replace('>Google Maps<', '>Rute ke homecell<')
         : buttons(`/dashboard/jemaat/${m.id}`, `https://www.google.com/maps/search/?api=1&query=${m.latitude},${m.longitude}`, c)
     }
+  </div>`;
+}
+
+// ------------------------------------------------------------------ potensial member homecell
+
+/** Warna pin & lingkaran radius "Cari Potensial Member". */
+export const POTENSIAL_COLOR = '#059669';
+
+export interface PotensialMember {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  fotoUrl: string | null;
+  jenisKelamin: 'L' | 'P' | null;
+  noHp: string | null;
+  alamat: string | null;
+  usia: number | null;
+  cabang: { id: string; nama: string };
+  latitude: number;
+  longitude: number;
+  jarakKm: number;
+}
+export interface PotensialMemberData {
+  homecell: { id: string; nama: string; latitude: number; longitude: number; cabangId: string };
+  radiusKm: number;
+  total: number;
+  data: PotensialMember[];
+}
+
+export function potensialPopup(m: PotensialMember, hc: PotensialMemberData['homecell']): string {
+  const c = POTENSIAL_COLOR;
+  const wa = m.noHp ? m.noHp.replace(/\D/g, '') : null;
+  const rute = `https://www.google.com/maps/dir/?api=1&origin=${m.latitude},${m.longitude}&destination=${hc.latitude},${hc.longitude}`;
+  return `<div style="min-width:230px;max-width:280px;font-family:inherit">
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="flex-shrink:0;border-radius:999px;border:3px solid ${c}">${avatarHtml(m, 52)}</div>
+      <div style="min-width:0">
+        ${badge('Belum homecell', '#D1FAE5', '#047857')}
+        <div style="font-size:15px;font-weight:700;color:#171717;margin-top:3px;line-height:1.25">${esc(m.namaLengkap)}</div>
+        <div style="font-size:12px;color:#737373">${m.kode ? `${esc(m.kode)} · ` : ''}${esc(m.cabang.nama)}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      ${row('Jarak ke homecell', `<b>${esc(formatJarak(m.jarakKm))}</b> <span style="color:#a3a3a3">(garis lurus)</span>`)}
+      ${m.usia != null ? row('Usia', `${m.usia} tahun`) : ''}
+      ${m.noHp ? row('No HP', `${esc(m.noHp)}${wa ? ` · <a href="https://wa.me/${wa}" target="_blank" rel="noopener noreferrer" style="color:#16A34A;font-weight:600">WhatsApp</a>` : ''}`) : ''}
+      ${m.alamat ? row('Alamat', esc(m.alamat)) : ''}
+    </div>
+    <div style="font-size:11px;color:#a3a3a3;margin-top:6px">Lokasi = perkiraan dari alamat.</div>
+    ${buttons(`/dashboard/jemaat/${m.id}`, rute, c).replace('>Google Maps<', '>Rute ke homecell<')}
   </div>`;
 }

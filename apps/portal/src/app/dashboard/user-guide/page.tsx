@@ -624,11 +624,11 @@ const SECTIONS: Section[] = [
     id: 'map-view',
     title: 'Map View — Peta Cabang, Homecell & Jemaat',
     icon: MapPin,
-    summary: 'Peta interaktif Google Maps: cabang, Zona, homecell, sebaran & pin jemaat, Cek Lokasi Member.',
+    summary: 'Peta interaktif Google Maps: cabang, Zona, homecell, sebaran & pin jemaat, Cek Lokasi Member, Cari Potensial Member.',
     content: [
       {
         kind: 'paragraph',
-        text: 'Map View (di samping Dashboard/Elsa) menampilkan semua lokasi di Google Maps. Klik pin atau area untuk membuka balon informasi berisi detail dan tombol ke halaman terkait.',
+        text: 'Map View (di samping Dashboard/Elsa) menampilkan semua lokasi di Google Maps. Klik pin atau zona untuk membuka balon informasi berisi detail dan tombol ke halaman terkait.',
       },
       {
         kind: 'bullet',
@@ -645,8 +645,10 @@ const SECTIONS: Section[] = [
         kind: 'bullet',
         title: 'Saringan',
         items: [
-          'Cabang, kategori homecell (Single / Couple / Umum), Area, dan Homecell — untuk melihat satu area atau satu homecell saja.',
-          'Pencarian nama cabang / area / homecell / jemaat → klik hasil untuk memperbesar ke lokasinya.',
+          'Cabang, kategori homecell (Single / Couple / Umum), Zona, dan Homecell — untuk melihat satu zona atau satu homecell saja.',
+          'Jemaat: semua / sudah homecell / belum homecell (aktif bila lapisan Jemaat dicentang).',
+          'Pastor zona — hanya menampilkan zona (dan homecell di dalamnya) yang dilayani pastor terpilih.',
+          'Pencarian nama cabang / zona (termasuk nama pastor) / homecell / jemaat → klik hasil untuk memperbesar ke lokasinya.',
           'Mencentang/menghapus centang lapisan tidak mengubah posisi & zoom peta.',
           'Layar penuh: saringan & legenda tetap mengambang di atas peta.',
         ],
@@ -659,6 +661,17 @@ const SECTIONS: Section[] = [
           'Peta hanya menampilkan homecell itu, anggota & PIC-nya, dengan garis lurus tebal dari homecell ke tiap rumah dan balon jarak di tengah garis.',
           'Panel di kanan (di HP: lembar di bawah, ketuk untuk membuka) berisi daftar anggota urut terdekat, rata-rata & jarak terjauh, serta anggota yang belum punya lokasi beserta alasannya.',
           'Klik balon/garis/nama → detail anggota, WhatsApp, dan "Rute ke homecell". Tutup dengan ×.',
+        ],
+      },
+      {
+        kind: 'steps',
+        title: 'Cari Potensial Member homecell',
+        items: [
+          'Klik pin homecell → tombol "Cari Potensial Member" (homecell harus punya titik lokasi).',
+          'Atur radius dengan tombol − / + atau ketik angka (0,5–50 km). Lingkaran hijau menunjukkan radiusnya.',
+          'Pin hijau = jemaat aktif yang belum ikut homecell mana pun (bukan anggota & bukan PIC homecell) dan rumahnya — perkiraan dari alamat — dalam radius. Panel berisi daftar urut terdekat (jenis kelamin, usia, cabang).',
+          'Klik nama/pin → detail, WhatsApp, dan "Rute ke homecell". Maksimal 300 orang terdekat ditampilkan. Butuh akses menu Jemaat.',
+          'Di app (2.4.6) pemimpin homecell, PIC & pastor zona punya tombol "Potensial member" di detail homecell (no HP mengikuti pengaturan privasi jemaat).',
         ],
       },
       {

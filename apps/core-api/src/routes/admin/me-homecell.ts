@@ -32,6 +32,7 @@ import { memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.j
 import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
 import { apiBase } from '../../lib/worship.js';
 import { privacyGate } from '../../lib/privacy.js';
+import { cariPotensialMember, usiaDari } from '../../lib/potensial-member.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
@@ -831,6 +832,38 @@ meHomecellRouter.delete('/:id/tamu/:tamuId', async (req, res) => {
   if (r.count === 0) throw NotFound('Tamu tidak ditemukan di homecell ini');
   audit(req, { action: 'DELETE', resource: 'homecell_tamu', resourceId: String(req.params.tamuId), resourceLabel: 'Hapus tamu dari homecell' });
   res.json({ success: true, data: { id: req.params.tamuId } });
+});
+
+/**
+ * Cari potensial member (app) — jemaat belum homecell dalam radius X km dari
+ * titik homecell. Untuk pemimpin homecell / PIC & pastor zona. Alamat & titik
+ * rumah tidak dikirim; no HP & usia mengikuti pengaturan privasi jemaat.
+ *   GET /admin/me/homecell/:id/potensial-member?radiusKm=3
+ */
+meHomecellRouter.get('/:id/potensial-member', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const { radiusKm } = z.object({ radiusKm: z.coerce.number().positive().default(3) }).parse(req.query);
+  const r = await cariPotensialMember(req.params.id, radiusKm);
+  const gate = await privacyGate(me(req).jemaatId, r.data.map((j) => j.id));
+  res.json({
+    success: true,
+    data: {
+      homecell: { id: r.homecell.id, nama: r.homecell.nama },
+      radiusKm: r.radiusKm,
+      total: r.total,
+      data: r.data.map((j) => ({
+        id: j.id,
+        namaLengkap: j.namaLengkap,
+        fotoUrl: j.fotoUrl,
+        jenisKelamin: j.jenisKelamin,
+        cabang: j.cabang,
+        jarakKm: j.jarakKm,
+        noHp: gate.can(j.id, 'noHp') ? j.noHp : null,
+        usia: gate.can(j.id, 'tanggalLahir') ? usiaDari(j.tanggalLahir) : null,
+      })),
+    },
+  });
 });
 
 /** Pemimpin homecell ATAU PIC / pastor zona homecell tsb (atau fulltimer). */

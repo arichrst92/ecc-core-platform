@@ -256,3 +256,10 @@ export const webActionLimiter = makeLimiter('web-action', {
     return req.ip ?? 'unknown';
   },
 });
+
+/** Cari jemaat untuk ditambahkan sebagai keluarga (app) — per user, cegah penelusuran massal. */
+export const familySearchLimiter = makeLimiter('family-search', {
+  windowMs: 10 * 60 * 1000,
+  limit: 60,
+  keyGenerator: (req) => userOrIp(req),
+});

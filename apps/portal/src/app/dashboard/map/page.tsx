@@ -25,7 +25,10 @@ import {
   LOKASI_LABEL,
   MEMBER_COLOR,
   PIC_COLOR,
+  POTENSIAL_COLOR,
+  potensialPopup,
   type HomecellMemberData,
+  type PotensialMemberData,
   loadGoogleMaps,
   makeAreaShape,
   pinElement,
@@ -59,6 +62,10 @@ export default function MapViewPage() {
   // Lihat satu area / satu homecell saja.
   const [areaId, setAreaId] = useState('');
   const [homecellId, setHomecellId] = useState('');
+  // Saringan pin jemaat: sudah / belum ikut homecell.
+  const [jemaatHc, setJemaatHc] = useState<'' | 'SUDAH' | 'BELUM'>('');
+  // Saringan zona berdasarkan pastor zona.
+  const [pastorId, setPastorId] = useState('');
   const [search, setSearch] = useState('');
   const [mapError, setMapError] = useState<string | null>(null);
   const [showMissing, setShowMissing] = useState(false);
@@ -180,15 +187,47 @@ export default function MapViewPage() {
     enabled: !!cekHcId,
     retry: false,
   });
+  // Cari Potensial Member: jemaat belum homecell dalam radius X km dari homecell.
+  const [potHcId, setPotHcId] = useState<string | null>(null);
+  const [radiusKm, setRadiusKm] = useState(3);
+  const [radiusDebounced, setRadiusDebounced] = useState(3);
+  useEffect(() => {
+    const t = setTimeout(() => setRadiusDebounced(radiusKm), 400);
+    return () => clearTimeout(t);
+  }, [radiusKm]);
+  const potQ = useQuery({
+    queryKey: ['map-view', 'potensial-member', potHcId, radiusDebounced],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: PotensialMemberData }>(`/admin/map-view/homecell/${potHcId}/potensial-member`, {
+          params: { radiusKm: radiusDebounced },
+        })
+      ).data.data,
+    enabled: !!potHcId,
+    retry: false,
+    placeholderData: (prev) => (prev && prev.homecell.id === potHcId ? prev : undefined),
+  });
+  const potOverlay = useRef<any[]>([]);
+  const potIndex = useRef<Map<string, { pos: { lat: number; lng: number }; html: string }>>(new Map());
+  /** Homecell yang sedang difokuskan (Cek Lokasi Member / Cari Potensial Member). */
+  const fokusHcId = cekHcId ?? potHcId;
   const memberOverlay = useRef<any[]>([]);
   const memberIndex = useRef<Map<string, { pos: { lat: number; lng: number }; html: string }>>(new Map());
   useEffect(() => {
     // Tombol di balon homecell berupa HTML biasa → tangkap kliknya lewat delegasi.
     const onClick = (e: MouseEvent) => {
-      const el = (e.target as HTMLElement | null)?.closest?.('[data-cek-member]') as HTMLElement | null;
-      if (!el) return;
+      const t = e.target as HTMLElement | null;
+      const cek = t?.closest?.('[data-cek-member]') as HTMLElement | null;
+      const pot = t?.closest?.('[data-potensial]') as HTMLElement | null;
+      if (!cek && !pot) return;
       e.preventDefault();
-      setCekHcId(el.dataset.cekMember ?? null);
+      if (cek) {
+        setPotHcId(null);
+        setCekHcId(cek.dataset.cekMember ?? null);
+      } else {
+        setCekHcId(null);
+        setPotHcId(pot!.dataset.potensial ?? null);
+      }
       infoRef.current?.close();
     };
     document.addEventListener('click', onClick);
@@ -203,12 +242,28 @@ export default function MapViewPage() {
   }, [q.data]);
 
   const needle = search.trim().toLowerCase();
+  const pastorOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of q.data?.area ?? []) {
+      if (cabangId && a.cabang.id !== cabangId) continue;
+      for (const p of a.pastors ?? []) m.set(p.id, p.namaLengkap);
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'id'));
+  }, [q.data, cabangId]);
+  // Zona yang dilayani pastor terpilih (null = tanpa saringan pastor).
+  const areaPastor = useMemo(
+    () =>
+      pastorId
+        ? new Set((q.data?.area ?? []).filter((a) => (a.pastors ?? []).some((p) => p.id === pastorId)).map((a) => a.id))
+        : null,
+    [q.data, pastorId],
+  );
   const areaOptions = useMemo(
     () =>
       (q.data?.area ?? [])
-        .filter((a) => !cabangId || a.cabang.id === cabangId)
+        .filter((a) => (!cabangId || a.cabang.id === cabangId) && (!areaPastor || areaPastor.has(a.id)))
         .sort((a, b) => a.nama.localeCompare(b.nama, 'id')),
-    [q.data, cabangId],
+    [q.data, cabangId, areaPastor],
   );
   const homecellOptions = useMemo(
     () =>
@@ -217,10 +272,11 @@ export default function MapViewPage() {
           (h) =>
             (!cabangId || h.area.cabang.id === cabangId) &&
             (!areaId || h.area.id === areaId) &&
+            (!areaPastor || areaPastor.has(h.area.id)) &&
             (!kategori || (kategori === 'UMUM' ? !h.kategori : h.kategori === kategori)),
         )
         .sort((a, b) => a.nama.localeCompare(b.nama, 'id')),
-    [q.data, cabangId, areaId, kategori],
+    [q.data, cabangId, areaId, areaPastor, kategori],
   );
   // Area efektif: dipilih langsung, atau area dari homecell yang dipilih.
   const homecellPilih = homecellId ? (q.data?.homecell ?? []).find((h) => h.id === homecellId) ?? null : null;
@@ -246,12 +302,13 @@ export default function MapViewPage() {
         (h) =>
           (!cabangId || h.area.cabang.id === cabangId) &&
           (!areaId || h.area.id === areaId) &&
+          (!areaPastor || areaPastor.has(h.area.id)) &&
           (!homecellId || h.id === homecellId) &&
           (!kategori || (kategori === 'UMUM' ? !h.kategori : h.kategori === kategori)) &&
           (!needle ||
             `${h.nama} ${h.area.nama} ${h.picJemaat?.namaLengkap ?? ''} ${h.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
-    [q.data, cabangId, areaId, homecellId, kategori, needle],
+    [q.data, cabangId, areaId, areaPastor, homecellId, kategori, needle],
   );
 
   const jemaatList = useMemo(
@@ -262,9 +319,10 @@ export default function MapViewPage() {
           // Area/homecell dipilih → hanya anggota homecell tersebut.
           (!homecellId || j.homecell.some((h) => h.id === homecellId)) &&
           (homecellId || !areaId || j.homecell.some((h) => homecellDiArea.has(h.id))) &&
+          (!jemaatHc || (jemaatHc === 'SUDAH' ? j.homecell.length > 0 : j.homecell.length === 0)) &&
           (!needle || `${j.namaLengkap} ${j.kode ?? ''} ${j.alamat ?? ''}`.toLowerCase().includes(needle)),
       ),
-    [jemaatQ.data, cabangId, areaId, homecellId, homecellDiArea, needle],
+    [jemaatQ.data, cabangId, areaId, homecellId, homecellDiArea, jemaatHc, needle],
   );
 
   // Area + titik homecell-nya (semua homecell area tsb, tidak terpengaruh saringan kategori).
@@ -281,11 +339,15 @@ export default function MapViewPage() {
         (a) =>
           (!cabangId || a.cabang.id === cabangId) &&
           (!areaEfektif || a.id === areaEfektif) &&
-          (!needle || `${a.nama} ${a.cabang.nama} ${a.picJemaat?.namaLengkap ?? ''}`.toLowerCase().includes(needle)),
+          (!areaPastor || areaPastor.has(a.id)) &&
+          (!needle ||
+            `${a.nama} ${a.cabang.nama} ${a.picJemaat?.namaLengkap ?? ''} ${(a.pastors ?? []).map((p) => p.namaLengkap).join(' ')}`
+              .toLowerCase()
+              .includes(needle)),
       )
       .map((a) => ({ area: a, ...(pts.get(a.id) ?? { points: [], names: [] }) }))
       .filter((x) => x.points.length > 0);
-  }, [q.data, cabangId, areaEfektif, needle]);
+  }, [q.data, cabangId, areaEfektif, areaPastor, needle]);
   const areaTanpaTitik = useMemo(
     () => (q.data?.area ?? []).filter((a) => (!cabangId || a.cabang.id === cabangId) && a.denganTitik === 0),
     [q.data, cabangId],
@@ -391,9 +453,9 @@ export default function MapViewPage() {
     layers.area.forEach((o) => (o.setMap ? o.setMap(null) : (o.map = null)));
     layers.area = [];
     markerIndex.current.clear();
-    // Cek Lokasi Member aktif → hanya homecell yang dicek (+ anggotanya, digambar terpisah).
-    if (cekHcId) {
-      const h = (q.data?.homecell ?? []).find((x) => x.id === cekHcId);
+    // Cek Lokasi / Potensial Member aktif → hanya homecell itu (+ orangnya, digambar terpisah).
+    if (fokusHcId) {
+      const h = (q.data?.homecell ?? []).find((x) => x.id === fokusHcId);
       if (h) {
         const pos = { lat: h.latitude, lng: h.longitude };
         const html = homecellPopup(h);
@@ -473,7 +535,7 @@ export default function MapViewPage() {
 
     // Arahkan peta ke semua pin hanya saat pertama dimuat atau saat cabang/kategori/pencarian
     // berubah. Centang/hapus centang lapisan TIDAK mengubah posisi & zoom peta.
-    const key = `${cabangId}|${areaId}|${homecellId}|${kategori}|${needle}|${q.dataUpdatedAt > 0}`;
+    const key = `${cabangId}|${areaId}|${homecellId}|${kategori}|${pastorId}|${jemaatHc}|${needle}|${q.dataUpdatedAt > 0}`;
     if (nBounds && fittedKey.current !== key) {
       fittedKey.current = key;
       if (nBounds === 1) {
@@ -486,7 +548,7 @@ export default function MapViewPage() {
         });
       }
     }
-  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, areaEfektif, kategori, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, cekHcId, q.data]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, areaEfektif, kategori, pastorId, jemaatHc, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, fokusHcId, q.data]);
 
   // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
   // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).
@@ -495,7 +557,7 @@ export default function MapViewPage() {
     const map = mapRef.current;
     heatRef.current.forEach((c) => c.setMap(null));
     heatRef.current = [];
-    if (!g || !map || !showSebaran || !sebaran.data || cekHcId) return; // disembunyikan saat Cek Lokasi Member
+    if (!g || !map || !showSebaran || !sebaran.data || fokusHcId) return; // disembunyikan saat Cek Lokasi / Potensial Member
     const cells = sebaran.data.cells;
     const max = Math.max(3, ...cells.map((c) => c[2]));
     heatRef.current = cells.map(
@@ -511,7 +573,7 @@ export default function MapViewPage() {
           zIndex: 1,
         }),
     );
-  }, [tick, showSebaran, sebaran.data, cekHcId]);
+  }, [tick, showSebaran, sebaran.data, fokusHcId]);
 
   // Garis lurus tebal homecell → anggota/PIC + balon jarak di tengah garis.
   useEffect(() => {
@@ -570,6 +632,58 @@ export default function MapViewPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, cekHcId, memberQ.data]);
+
+  // Potensial member: lingkaran radius + pin jemaat belum homecell di dalamnya.
+  const potFittedKey = useRef('');
+  useEffect(() => {
+    const g = GRef.current;
+    const map = mapRef.current;
+    potOverlay.current.forEach((o) => (o.setMap ? o.setMap(null) : (o.map = null)));
+    potOverlay.current = [];
+    potIndex.current.clear();
+    const d = potQ.data;
+    if (!g || !map || !potHcId || !d || d.homecell.id !== potHcId) return;
+    const hc = { lat: d.homecell.latitude, lng: d.homecell.longitude };
+    const circle = new g.maps.Circle({
+      map,
+      center: hc,
+      radius: d.radiusKm * 1000,
+      strokeColor: POTENSIAL_COLOR,
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+      fillColor: POTENSIAL_COLOR,
+      fillOpacity: 0.08,
+      clickable: false,
+      zIndex: 2,
+    });
+    potOverlay.current.push(circle);
+    const sebar = sebarTitikSama(d.data.map((m) => ({ ...m, homecell: [] }) as unknown as MapJemaat));
+    for (const m of d.data) {
+      const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude, lng: m.longitude };
+      const html = potensialPopup(m, d.homecell);
+      potIndex.current.set(m.id, { pos, html });
+      const mk = makeMarker(pos, jemaatPinElement(m, POTENSIAL_COLOR), m.namaLengkap, html, 52, 2000);
+      mk.map = map;
+      potOverlay.current.push(mk);
+    }
+    // Zoom ke lingkaran saat homecell / radius berubah.
+    const key = `${potHcId}|${d.radiusKm}`;
+    if (potFittedKey.current !== key) {
+      potFittedKey.current = key;
+      const b = circle.getBounds();
+      if (b) map.fitBounds(b, 40);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, potHcId, potQ.data]);
+
+  function focusPotensial(id: string) {
+    const it = potIndex.current.get(id);
+    const map = mapRef.current;
+    if (!it || !map) return;
+    map.panTo(it.pos);
+    if (map.getZoom() < 15) map.setZoom(15);
+    openInfo(it.html, it.pos, 52);
+  }
 
   function focusMember(id: string) {
     const it = memberIndex.current.get(id);
@@ -680,6 +794,17 @@ export default function MapViewPage() {
           <option value="UMUM">Umum</option>
         </select>
         <select
+          value={jemaatHc}
+          onChange={(e) => setJemaatHc(e.target.value as typeof jemaatHc)}
+          disabled={!showJemaat}
+          title={showJemaat ? 'Saring pin jemaat' : 'Centang "Jemaat" untuk memakai saringan ini'}
+          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+        >
+          <option value="">Jemaat: semua</option>
+          <option value="SUDAH">Jemaat sudah homecell</option>
+          <option value="BELUM">Jemaat belum homecell</option>
+        </select>
+        <select
           value={areaId}
           onChange={(e) => {
             setAreaId(e.target.value);
@@ -687,11 +812,28 @@ export default function MapViewPage() {
           }}
           className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 max-w-[220px]"
         >
-          <option value="">Semua zona</option>
+          <option value="">Semua zona{pastorId ? ' pastor ini' : ''}</option>
           {areaOptions.map((a) => (
             <option key={a.id} value={a.id}>
               {a.nama}
               {cabangId ? '' : ` · ${a.cabang.nama}`}
+            </option>
+          ))}
+        </select>
+        <select
+          value={pastorId}
+          onChange={(e) => {
+            setPastorId(e.target.value);
+            setAreaId('');
+            setHomecellId('');
+          }}
+          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 max-w-[220px]"
+          title="Tampilkan hanya zona yang dilayani pastor ini"
+        >
+          <option value="">Semua pastor zona</option>
+          {pastorOptions.map(([id, nama]) => (
+            <option key={id} value={id}>
+              Pastor: {nama}
             </option>
           ))}
         </select>
@@ -708,11 +850,12 @@ export default function MapViewPage() {
             </option>
           ))}
         </select>
-        {areaId || homecellId ? (
+        {areaId || homecellId || pastorId ? (
           <button
             onClick={() => {
               setAreaId('');
               setHomecellId('');
+              setPastorId('');
             }}
             className="text-xs text-sky-700 font-medium hover:underline"
           >
@@ -849,6 +992,25 @@ export default function MapViewPage() {
             onFocus={focusMember}
           />
         )}
+        {potHcId && (
+          <PotensialPanel
+            data={potQ.data && potQ.data.homecell.id === potHcId ? potQ.data : undefined}
+            loading={potQ.isFetching}
+            error={
+              potQ.isError
+                ? (potQ.error as any)?.response?.status === 403
+                  ? 'Butuh akses menu Jemaat.'
+                  : ((potQ.error as any)?.response?.data?.error?.message ?? 'Gagal memuat potensial member.')
+                : null
+            }
+            namaHomecell={(q.data?.homecell ?? []).find((h) => h.id === potHcId)?.nama ?? ''}
+            radiusKm={radiusKm}
+            onRadius={setRadiusKm}
+            fullscreen={fullscreen}
+            onClose={() => setPotHcId(null)}
+            onFocus={focusPotensial}
+          />
+        )}
         {fullscreen && (
           <>
             {/* Panel saringan mengambang (kiri atas) */}
@@ -868,7 +1030,7 @@ export default function MapViewPage() {
               {panelOpen && <div className="space-y-2 [&>*]:mt-0 [&>*]:shadow-lg">{statusEl}</div>}
             </div>
             {/* Legenda mengambang (kiri bawah) */}
-            <div className={`${cekHcId ? 'hidden sm:flex' : 'flex'} absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg px-3 py-2 flex-wrap items-center gap-x-4 gap-y-1 text-sm max-w-[calc(100vw-24px)]`}>
+            <div className={`${fokusHcId ? 'hidden sm:flex' : 'flex'} absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur border border-neutral-200 rounded-xl shadow-lg px-3 py-2 flex-wrap items-center gap-x-4 gap-y-1 text-sm max-w-[calc(100vw-24px)]`}>
               {legendEl}
             </div>
             {/* Keluar layar penuh (kanan atas) */}
@@ -898,7 +1060,7 @@ export default function MapViewPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm">
           <button onClick={() => setShowMissing((x) => !x)} className="flex items-center gap-2 text-amber-800 font-medium">
             <AlertTriangle className="w-4 h-4" />
-            Belum tampil di peta karena belum punya link Google Maps: {missingCabang.length} cabang, {areaTanpaTitik.length} area,{' '}
+            Belum tampil di peta karena belum punya link Google Maps: {missingCabang.length} cabang, {areaTanpaTitik.length} zona,{' '}
             {missingHomecell.length} homecell
             <span className="text-xs underline">{showMissing ? 'sembunyikan' : 'lihat daftar'}</span>
           </button>
@@ -911,7 +1073,7 @@ export default function MapViewPage() {
               ))}
               {areaTanpaTitik.map((a) => (
                 <a key={a.id} href={`/dashboard/homecell-area/${a.id}`} className="hover:underline">
-                  Area · {a.nama} <span className="text-amber-700">(belum ada homecell bertitik)</span>
+                  Zona · {a.nama} <span className="text-amber-700">(belum ada homecell bertitik)</span>
                 </a>
               ))}
               {missingHomecell.map((h) => (
@@ -1033,6 +1195,131 @@ function MemberPanel({
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+const RADIUS_MIN = 0.5;
+const RADIUS_MAX = 50;
+
+/** Panel Cari Potensial Member: radius (km) + daftar jemaat belum homecell, urut jarak. */
+function PotensialPanel({
+  data,
+  loading,
+  error,
+  namaHomecell,
+  radiusKm,
+  onRadius,
+  fullscreen,
+  onClose,
+  onFocus,
+}: {
+  data: PotensialMemberData | undefined;
+  loading: boolean;
+  error: string | null;
+  namaHomecell: string;
+  radiusKm: number;
+  onRadius: (v: number) => void;
+  fullscreen: boolean;
+  onClose: () => void;
+  onFocus: (id: string) => void;
+}) {
+  const [buka, setBuka] = useState(() => typeof window === 'undefined' || window.innerWidth >= 640);
+  const [teks, setTeks] = useState(String(radiusKm));
+  useEffect(() => setTeks(String(radiusKm)), [radiusKm]);
+  const set = (v: number) => {
+    if (!Number.isFinite(v)) return;
+    onRadius(Math.round(Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, v)) * 10) / 10);
+  };
+  const step = (d: number) => set(radiusKm + d * (radiusKm < 2 ? 0.5 : 1));
+  return (
+    <div
+      className={`absolute z-[1001] flex flex-col bg-white/95 backdrop-blur border border-neutral-200 shadow-lg text-xs
+        left-2 right-2 bottom-2 rounded-xl ${buka ? 'max-h-[50%]' : ''}
+        sm:left-auto sm:bottom-auto sm:right-3 sm:w-[340px] sm:max-h-[min(70%,560px)] ${fullscreen ? 'sm:top-16' : 'sm:top-3'}`}
+    >
+      <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-neutral-100">
+        <button onClick={() => setBuka((x) => !x)} className="min-w-0 flex-1 text-left">
+          <div className="font-semibold text-sm text-neutral-900 flex items-center gap-1.5">
+            <Users className="w-4 h-4 shrink-0" style={{ color: POTENSIAL_COLOR }} /> Potensial member
+            {buka ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
+          </div>
+          <div className="text-neutral-500 truncate">
+            {namaHomecell || 'Homecell'}
+            {data ? ` · ${data.total} orang dalam ${formatJarak(data.radiusKm)}` : ''}
+          </div>
+        </button>
+        <button onClick={onClose} className="p-1 rounded hover:bg-neutral-100 text-neutral-500 shrink-0" title="Tutup">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {buka && (
+        <div className="px-3 py-2 border-b border-neutral-100 flex items-center gap-2">
+          <span className="text-neutral-600 font-medium">Radius</span>
+          <div className="flex items-center border border-neutral-300 rounded-lg overflow-hidden">
+            <button onClick={() => step(-1)} disabled={radiusKm <= RADIUS_MIN} className="px-2 py-1 hover:bg-neutral-100 disabled:opacity-40 font-bold" aria-label="Kurangi radius">
+              −
+            </button>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={RADIUS_MIN}
+              max={RADIUS_MAX}
+              step={0.5}
+              value={teks}
+              onChange={(e) => {
+                setTeks(e.target.value);
+                const v = Number(e.target.value.replace(',', '.'));
+                if (e.target.value !== '' && v >= RADIUS_MIN && v <= RADIUS_MAX) set(v);
+              }}
+              onBlur={() => set(Number(teks.replace(',', '.')) || radiusKm)}
+              className="w-14 text-center py-1 outline-none text-sm font-semibold"
+            />
+            <button onClick={() => step(1)} disabled={radiusKm >= RADIUS_MAX} className="px-2 py-1 hover:bg-neutral-100 disabled:opacity-40 font-bold" aria-label="Tambah radius">
+              +
+            </button>
+          </div>
+          <span className="text-neutral-600">km</span>
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400 ml-auto" /> : null}
+        </div>
+      )}
+      {!buka ? null : error ? (
+        <div className="p-3 text-red-600">{error}</div>
+      ) : !data ? (
+        <div className="p-4 text-center text-neutral-500"><Loader2 className="w-4 h-4 animate-spin inline" /> Mencari…</div>
+      ) : (
+        <>
+          <div className="px-3 pt-2 text-neutral-500">
+            Jemaat aktif yang belum ikut homecell, rumahnya (perkiraan dari alamat) dalam radius ini. Jarak garis lurus.
+          </div>
+          <div className="overflow-y-auto px-1.5 py-1.5">
+            {data.data.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => onFocus(m.id)}
+                className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg hover:bg-neutral-50 text-left"
+              >
+                <Avatar nama={m.namaLengkap} foto={m.fotoUrl} color={POTENSIAL_COLOR} />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium text-neutral-800 truncate">{m.namaLengkap}</span>
+                  <span className="block text-neutral-400 truncate">
+                    {[m.jenisKelamin === 'L' ? 'Pria' : m.jenisKelamin === 'P' ? 'Wanita' : null, m.usia != null ? `${m.usia} th` : null, m.cabang.nama]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
+                <span className="font-semibold text-neutral-800 whitespace-nowrap">{formatJarak(m.jarakKm)}</span>
+              </button>
+            ))}
+            {data.total > data.data.length ? (
+              <div className="px-2 py-1.5 text-neutral-500">Menampilkan {data.data.length} terdekat dari {data.total}. Perkecil radius.</div>
+            ) : null}
+            {!data.data.length ? (
+              <div className="p-3 text-center text-neutral-500">Tidak ada jemaat belum homecell dalam radius ini. Coba perbesar radius.</div>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }

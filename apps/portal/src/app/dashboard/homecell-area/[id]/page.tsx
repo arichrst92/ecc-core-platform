@@ -29,6 +29,7 @@ import { apiClient } from '@/lib/api-client';
 import { PERIODE_OPTIONS, type PeriodePreset } from '@/components/homecell/homecell-filter-bar';
 import { ATTENDANCE_TIER_CLASS } from '@/lib/resources/homecell-config';
 import { AREA_TIER_LEGEND } from '@/lib/resources/homecell-area-config';
+import { JemaatLink, JemaatLinks } from '@/components/jemaat/jemaat-link';
 
 interface Demografi {
   pria: number;
@@ -45,6 +46,7 @@ interface HcStat {
   usiaMin: number | null;
   usiaMax: number | null;
   pic: string | null;
+  picId?: string | null;
   memberCount: number;
   avgAge: number | null;
   meetingCount: number;
@@ -199,8 +201,8 @@ export default function HomecellAreaDetailPage() {
           </h1>
           {d ? (
             <div className="text-sm text-neutral-500 mt-0.5">
-              {d.area.cabang.nama} · PIC: {d.area.picJemaat?.namaLengkap ?? '—'}
-              {' · '}Pastor: {d.area.pastors?.length ? d.area.pastors.map((p) => p.namaLengkap).join(', ') : '—'}
+              {d.area.cabang.nama} · PIC: <JemaatLink jemaat={d.area.picJemaat} />
+              {' · '}Pastor: <JemaatLinks list={d.area.pastors} />
               {!d.area.isActive ? <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-neutral-100">Nonaktif</span> : null}
             </div>
           ) : null}
@@ -381,7 +383,9 @@ export default function HomecellAreaDetailPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-neutral-600">{h.pic ?? '—'}</td>
+                    <td className="px-4 py-2 text-neutral-600">
+                      <JemaatLink jemaat={h.picId && h.pic ? { id: h.picId, namaLengkap: h.pic } : null} />
+                    </td>
                     <td className="px-4 py-2 text-right">{h.memberCount}</td>
                     <td className="px-4 py-2">
                       <span className="text-sky-700">{h.demografi.pria}</span>

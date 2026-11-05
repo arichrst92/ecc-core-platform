@@ -403,8 +403,10 @@ homecellRouter.get('/:id', async (req, res) => {
           nama: true,
           // pic Area juga di-include supaya mobile bisa check area-PIC authorization
           picJemaatId: true,
+          // Nama PIC zona (link di Portal).
+          picJemaat: { select: { id: true, namaLengkap: true } },
           // Pastor zona — mobile memperlakukan pastor seperti PIC zona.
-          pastors: { select: { jemaatId: true } },
+          pastors: { orderBy: { createdAt: 'asc' }, select: { jemaatId: true, jemaat: { select: { id: true, namaLengkap: true } } } },
           cabang: { select: { id: true, nama: true, kode: true } },
         },
       },
@@ -447,7 +449,10 @@ homecellRouter.get('/:id', async (req, res) => {
   // Flatten _count + lastSchedule untuk response yang clean.
   const { _count, schedules, members, area: areaRaw, ...restBase } = item;
   const { pastors: areaPastors, ...areaRest } = areaRaw;
-  const rest = { ...restBase, area: { ...areaRest, pastorIds: areaPastors.map((p) => p.jemaatId) } };
+  const rest = {
+    ...restBase,
+    area: { ...areaRest, pastorIds: areaPastors.map((p) => p.jemaatId), pastors: areaPastors.map((p) => p.jemaat) },
+  };
   // Kehadiran terakhir tiap anggota di homecell ini (+ berapa hari lalu).
   const lastMap = await getLastAttendanceMap(item.id);
   const lastSchedule = schedules[0]

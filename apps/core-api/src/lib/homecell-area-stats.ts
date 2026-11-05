@@ -78,6 +78,8 @@ export interface HomecellStat {
   usiaMin: number | null;
   usiaMax: number | null;
   pic: string | null;
+  /** Jemaat id PIC homecell (link di Portal). */
+  picId: string | null;
   memberCount: number;
   avgAge: number | null;
   meetingCount: number;
@@ -134,7 +136,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       kategori: true,
       usiaMin: true,
       usiaMax: true,
-      picJemaat: { select: { namaLengkap: true } },
+      picJemaat: { select: { id: true, namaLengkap: true } },
       members: { where: { isActive: true }, select: { jemaat: { select: { tanggalLahir: true, jenisKelamin: true } } } },
       schedules: {
         where: { tanggal: { lte: upper, ...(period ? { gte: period.from } : {}) } },
@@ -197,6 +199,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       usiaMin: h.usiaMin,
       usiaMax: h.usiaMax,
       pic: h.picJemaat?.namaLengkap ?? null,
+      picId: h.picJemaat?.id ?? null,
       memberCount: h.members.length,
       avgAge: ages.length ? Math.round(ages.reduce((x, y) => x + y, 0) / ages.length) : null,
       meetingCount: h.schedules.length,

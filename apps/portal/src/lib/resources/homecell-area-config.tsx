@@ -4,6 +4,7 @@ import { homecellAttendanceTier } from '@ecc/shared-types';
 import { ATTENDANCE_TIER_CLASS } from './homecell-config';
 import { createHomecellAreaSchema, updateHomecellAreaSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
+import { JemaatLink, JemaatLinks } from '@/components/jemaat/jemaat-link';
 import { statusBadge, nestedField } from './render-helpers';
 
 interface HomecellArea extends Record<string, unknown> {
@@ -105,18 +106,14 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       label: 'PIC (Zone Leader)',
       width: '200px',
       render: (_v, row) =>
-        row.picJemaat ? row.picJemaat.namaLengkap : <span className="text-neutral-400">—</span>,
+        <JemaatLink jemaat={row.picJemaat} />,
     },
     {
       key: 'pastors',
       label: 'Pastor',
       width: '200px',
       render: (_v, row) =>
-        row.pastors && row.pastors.length ? (
-          <span className="text-neutral-700">{row.pastors.map((p) => p.namaLengkap).join(', ')}</span>
-        ) : (
-          <span className="text-neutral-400">—</span>
-        ),
+        <JemaatLinks list={row.pastors} />,
     },
     {
       key: 'homecellCount',

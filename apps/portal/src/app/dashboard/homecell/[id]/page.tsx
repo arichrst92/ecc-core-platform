@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { JemaatLink, JemaatLinks } from '@/components/jemaat/jemaat-link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -41,6 +42,8 @@ interface Homecell {
     id: string;
     nama: string;
     cabang?: { id: string; nama: string; kode: string };
+    picJemaat?: { id: string; namaLengkap: string } | null;
+    pastors?: { id: string; namaLengkap: string }[];
   };
   picJemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null } | null;
   members: {
@@ -159,10 +162,7 @@ export default function HomecellDetailPage() {
               {h.area.cabang?.nama}
             </Link>{' '}
             ·{' '}
-            <Link
-              href={`/dashboard/homecell?areaId=${h.area.id}`}
-              className="hover:underline"
-            >
+            <Link href={`/dashboard/homecell-area/${h.area.id}`} className="hover:underline">
               Zona: {h.area.nama}
             </Link>
             {h.kategori ? (
@@ -211,6 +211,16 @@ export default function HomecellDetailPage() {
         ) : (
           <div className="text-sm text-neutral-400 italic">Belum ada PIC</div>
         )}
+        <div className="mt-4 pt-3 border-t border-neutral-100 grid sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-xs text-neutral-500 mb-0.5">PIC Zona (Zone Leader)</div>
+            <JemaatLink jemaat={h.area.picJemaat} empty="Belum ada" />
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500 mb-0.5">Pastor Zona</div>
+            <JemaatLinks list={h.area.pastors} empty="Belum ada" />
+          </div>
+        </div>
       </div>
 
       {h.deskripsi && (

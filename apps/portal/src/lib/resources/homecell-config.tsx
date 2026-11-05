@@ -8,6 +8,7 @@ import {
   updateHomecellSchema,
 } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
+import { JemaatLink } from '@/components/jemaat/jemaat-link';
 import { statusBadge, nestedField } from './render-helpers';
 
 interface Homecell extends Record<string, unknown> {
@@ -114,7 +115,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
       label: 'PIC (Leader)',
       width: '170px',
       render: (_v, row) =>
-        row.picJemaat ? row.picJemaat.namaLengkap : <span className="text-neutral-400">—</span>,
+        <JemaatLink jemaat={row.picJemaat} />,
     },
     {
       key: 'memberCount',

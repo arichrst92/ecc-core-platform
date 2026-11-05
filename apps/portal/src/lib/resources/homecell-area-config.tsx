@@ -15,6 +15,7 @@ interface HomecellArea extends Record<string, unknown> {
   isActive: boolean;
   cabang?: { id: string; nama: string; kode: string };
   picJemaat?: { id: string; namaLengkap: string; fotoUrl: string | null } | null;
+  pastors?: { id: string; namaLengkap: string; fotoUrl: string | null }[];
   homecellCount?: number;
   homecellAktif?: number;
   memberCount?: number;
@@ -65,7 +66,7 @@ export function DemografiMini({ d }: { d: HomecellArea['demografi'] }) {
   );
 }
 
-/** Keterangan warna kehadiran (dipakai di halaman Homecell Area). */
+/** Keterangan warna kehadiran (dipakai di halaman Zona). */
 export const AREA_TIER_LEGEND = (
   <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500 mt-2">
     <span className="font-medium">Indikator kehadiran:</span>
@@ -79,15 +80,15 @@ export const AREA_TIER_LEGEND = (
 
 export const homecellAreaResource: ResourceConfig<HomecellArea> = {
   name: 'homecell-area',
-  label: 'Homecell Area',
-  labelPlural: 'zone / area homecell',
+  label: 'Zona',
+  labelPlural: 'zona homecell',
   endpoint: '/admin/homecell-area',
   displayField: 'nama',
   defaultSort: { field: 'nama', order: 'asc' },
   columns: [
     {
       key: 'nama',
-      label: 'Nama Area',
+      label: 'Nama Zona',
       render: (_v, row) => (
         <Link
           href={`/dashboard/homecell-area/${row.id}`}
@@ -105,6 +106,17 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       width: '200px',
       render: (_v, row) =>
         row.picJemaat ? row.picJemaat.namaLengkap : <span className="text-neutral-400">—</span>,
+    },
+    {
+      key: 'pastors',
+      label: 'Pastor',
+      width: '200px',
+      render: (_v, row) =>
+        row.pastors && row.pastors.length ? (
+          <span className="text-neutral-700">{row.pastors.map((p) => p.namaLengkap).join(', ')}</span>
+        ) : (
+          <span className="text-neutral-400">—</span>
+        ),
     },
     {
       key: 'homecellCount',
@@ -185,10 +197,10 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
     },
     {
       name: 'nama',
-      label: 'Nama Area',
+      label: 'Nama Zona',
       type: 'text',
       required: true,
-      placeholder: 'Zone Utara, Zone Selatan, dll',
+      placeholder: 'Zona Utara, Zona Selatan, dll',
     },
     {
       name: 'picJemaatId',
@@ -200,6 +212,14 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
         labelKey: 'namaLengkap',
       },
       helperText: 'Opsional. Hanya jemaat dengan Pelayanan Penggembalaan + role Zone Leader yang tampil. Pilih "Tanpa PIC" untuk mengosongkan.',
+    },
+    {
+      name: 'pastorIds',
+      label: 'Pastor',
+      type: 'jemaat-multi',
+      multiSource: 'pastors',
+      placeholder: 'Cari nama pastor…',
+      helperText: 'Opsional, bisa lebih dari satu. Ketik minimal 2 huruf nama lalu pilih. Pastor dapat melihat zona ini di aplikasi.',
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },

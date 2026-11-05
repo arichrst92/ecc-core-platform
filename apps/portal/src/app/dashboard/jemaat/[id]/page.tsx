@@ -2151,7 +2151,7 @@ function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecell
                   href={`/dashboard/homecell-area?search=${encodeURIComponent(h.homecell.area.nama)}`}
                   className="text-xs text-neutral-500 hover:text-brand-600 hover:underline block"
                 >
-                  Area: {h.homecell.area.nama}
+                  Zona: {h.homecell.area.nama}
                 </Link>
               )}
               <div className="text-[11px] text-neutral-500 mt-1 flex flex-wrap gap-x-3">

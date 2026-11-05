@@ -603,7 +603,7 @@ export default function MapViewPage() {
   const results = needle
     ? [
         ...(showCabang ? cabangList.map((c) => ({ key: `c:${c.id}`, nama: c.nama, sub: 'Cabang gereja' })) : []),
-        ...(showArea ? areaList.map(({ area }) => ({ key: `a:${area.id}`, nama: area.nama, sub: `Homecell area · ${area.cabang.nama}` })) : []),
+        ...(showArea ? areaList.map(({ area }) => ({ key: `a:${area.id}`, nama: area.nama, sub: `Zona · ${area.cabang.nama}` })) : []),
         ...(showHomecell
           ? homecellList.map((h) => ({ key: `h:${h.id}`, nama: h.nama, sub: `Homecell · ${h.area.cabang.nama}` }))
           : []),
@@ -626,7 +626,7 @@ export default function MapViewPage() {
             checked={showArea}
             onChange={setShowArea}
             color={PIN_STYLE.area.color}
-            label={`Homecell Area (${areaList.length})`}
+            label={`Zona (${areaList.length})`}
             square
           />
           <Toggle
@@ -687,7 +687,7 @@ export default function MapViewPage() {
           }}
           className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 max-w-[220px]"
         >
-          <option value="">Semua area</option>
+          <option value="">Semua zona</option>
           {areaOptions.map((a) => (
             <option key={a.id} value={a.id}>
               {a.nama}
@@ -724,7 +724,7 @@ export default function MapViewPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari cabang / area / homecell / jemaat…"
+            placeholder="Cari cabang / zona / homecell / jemaat…"
             className="w-full pl-9 pr-8 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
           {search ? (
@@ -805,7 +805,7 @@ export default function MapViewPage() {
             Map View
           </h1>
           <p className="text-neutral-500 mt-1">
-            Lokasi cabang gereja, wilayah homecell area, dan homecell. Klik pin atau area untuk melihat informasinya.
+            Lokasi cabang gereja, zona, dan homecell. Klik pin atau zona untuk melihat informasinya.
           </p>
         </div>
         <div className="flex items-center gap-4 text-sm flex-wrap">

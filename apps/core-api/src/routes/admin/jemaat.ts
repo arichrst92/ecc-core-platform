@@ -549,7 +549,7 @@ jemaatRouter.get('/export', async (req, res) => {
     'Tanggal Pernikahan',
     'Cabang',
     'Role',
-    'Homecell Area',
+    'Zona',
     'Homecell',
     'Ministry',
     'Spiritual Journey',
@@ -670,7 +670,7 @@ ${
 <tr>
   <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
   <th>Pekerjaan</th><th>Pernikahan</th>
-  <th>Cabang</th><th>Homecell Area</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
+  <th>Cabang</th><th>Zona</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
 </tr>
 </thead>
 <tbody>${tableBody}</tbody>

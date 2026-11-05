@@ -16,6 +16,7 @@ import {
 } from '@/components/jemaat/filter-bar';
 import { apiClient } from '@/lib/api-client';
 import { todayYmd } from '@/lib/dates';
+import { usePersistentState } from '@/lib/use-persistent-state';
 
 function JemaatPageInner() {
   const sp = useSearchParams();
@@ -25,10 +26,12 @@ function JemaatPageInner() {
 
   const [relasiTarget, setRelasiTarget] = useState<{ id: string; namaLengkap: string } | null>(null);
   // Deep link dari detail cabang: ?journeyStage=N
-  const [filter, setFilter] = useState<JemaatFilterState>(() => ({
-    ...defaultJemaatFilter,
-    journeyStage: sp.get('journeyStage') ?? '',
-  }));
+  // Filter disimpan per tab → tetap terisi saat kembali dari detail jemaat.
+  const [filter, setFilter] = usePersistentState<JemaatFilterState>(
+    'jemaat:filter',
+    () => ({ ...defaultJemaatFilter, journeyStage: sp.get('journeyStage') ?? '' }),
+    { skipRestore: sp.has('journeyStage') },
+  );
   const config = useMemo(() => buildJemaatResource(setRelasiTarget), []);
 
   const cabangQ = useQuery({

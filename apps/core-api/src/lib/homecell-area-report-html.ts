@@ -92,6 +92,8 @@ export interface AreaReportRow {
   deskripsi: string | null;
   cabang: string;
   pic: string | null;
+  /** Nama pastor zona (boleh kosong). */
+  pastors?: string[];
   stat: AreaStat;
 }
 
@@ -224,11 +226,11 @@ export function renderHomecellAreaReportHtml(
               )}</td><td class="r">${h.tamuVisits ? `${n(h.tamuVisits)}×` : '<span class="muted">—</span>'}</td><td>${h.lastMeetingAt ? fmtTgl(h.lastMeetingAt) : '<span class="muted">—</span>'}</td></tr>`;
             })
             .join('')}</tbody></table>`
-        : `<p class="muted">${L('Belum ada homecell aktif di area ini.', 'No active homecells in this area.')}</p>`;
+        : `<p class="muted">${L('Belum ada homecell aktif di zona ini.', 'No active homecells in this zone.')}</p>`;
       return `<div class="area">
   <div class="area-h">
     <span class="area-ic">${ic('mapPinned', 15)}</span>
-    <div><div class="area-t">${esc(r.nama)}</div><div class="area-s">${esc(r.cabang)} · PIC: ${esc(r.pic ?? '—')}</div></div>
+    <div><div class="area-t">${esc(r.nama)}</div><div class="area-s">${esc(r.cabang)} · PIC: ${esc(r.pic ?? '—')}${r.pastors && r.pastors.length ? ` · Pastor: ${esc(r.pastors.join(', '))}` : ''}</div></div>
     <div class="area-p"><div class="v" style="color:${t ? TIER[t].fg : '#94a3b8'}">${s.attendancePercent != null ? `${s.attendancePercent}%` : '—'}</div><div class="l">${L('Kehadiran', 'Attendance')}</div></div>
   </div>
   <div class="area-b">
@@ -248,21 +250,21 @@ export function renderHomecellAreaReportHtml(
     .join('');
 
   return `<!doctype html>
-<html lang="${opts.lang === 'en' ? 'en' : 'id'}"><head><meta charset="utf-8"><title>${L('Laporan Homecell Area', 'Homecell Area Report')} — ${esc(opts.periodLabel)}</title>
+<html lang="${opts.lang === 'en' ? 'en' : 'id'}"><head><meta charset="utf-8"><title>${L('Laporan Zona', 'Zone Report')} — ${esc(opts.periodLabel)}</title>
 <style>
 ${REPORT_CSS}${EXTRA_CSS}</style></head><body>
-${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : `<div class="noprint"><strong>Print Preview — ${L('Laporan Homecell Area', 'Homecell Area Report')}</strong> · ${L('Tekan <kbd>Ctrl/Cmd + P</kbd> lalu pilih “Save as PDF” (aktifkan “Background graphics”).', 'Press <kbd>Ctrl/Cmd + P</kbd> and choose “Save as PDF” (enable “Background graphics”).')}<button onclick="window.print()">Print / Save as PDF</button></div>`}
+${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : `<div class="noprint"><strong>Print Preview — ${L('Laporan Zona', 'Zone Report')}</strong> · ${L('Tekan <kbd>Ctrl/Cmd + P</kbd> lalu pilih “Save as PDF” (aktifkan “Background graphics”).', 'Press <kbd>Ctrl/Cmd + P</kbd> and choose “Save as PDF” (enable “Background graphics”).')}<button onclick="window.print()">Print / Save as PDF</button></div>`}
 <div class="page">
   <div class="hero">
-    <div class="eyebrow">${L('Laporan Penggembalaan', 'Pastoral Report')} · Homecell Area</div>
+    <div class="eyebrow">${L('Laporan Penggembalaan', 'Pastoral Report')} · Zona</div>
     <h1>${esc(opts.filterLabel)}</h1>
-    <div class="meta">${n(rows.length)} ${L('area', 'areas')} · ${n(tot.hc)} ${L('homecell aktif', 'active homecells')} · ${n(tot.mem)} ${L('anggota', 'members')} · ${L('dibuat', 'generated')} ${esc(generated)}</div>
+    <div class="meta">${n(rows.length)} ${L('zona', 'zones')} · ${n(tot.hc)} ${L('homecell aktif', 'active homecells')} · ${n(tot.mem)} ${L('anggota', 'members')} · ${L('dibuat', 'generated')} ${esc(generated)}</div>
     <div class="period">${ic('calendarCheck', 10, '#c2410c')} ${esc(opts.periodLabel)}</div>
   </div>
 
   <h2 class="sec">${L('Ringkasan', 'Summary')}</h2>
   <div class="kpis six">
-    ${kpiBox('mapPinned', '#f97316', 'Homecell Area', n(rows.length), L('area dalam laporan', 'areas in this report'))}
+    ${kpiBox('mapPinned', '#f97316', 'Zona', n(rows.length), L('zona dalam laporan', 'zones in this report'))}
     ${kpiBox('home', '#8b5cf6', L('Homecell aktif', 'Active homecells'), n(tot.hc), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
     ${kpiBox('users', '#0ea5e9', L('Anggota aktif', 'Active members'), n(tot.mem), L('anggota homecell aktif', 'active homecell members'))}
     ${kpiBox('cake', '#f59e0b', L('Usia rata-rata', 'Average age'), avgAge != null ? `${avgAge} ${yrs()}` : '—', L(`dari ${n(tot.ageKnown)} anggota dengan tanggal lahir`, `from ${n(tot.ageKnown)} members with a birth date`))}
@@ -270,8 +272,8 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     ${kpiBox('trendingUp', tAll ? TIER[tAll].bar : '#94a3b8', L('Kehadiran rata-rata', 'Average attendance'), avgPct != null ? `<span style="color:${tAll ? TIER[tAll].fg : '#0f172a'}">${avgPct}%</span>` : '—', L('hadir ÷ (anggota × pertemuan)', 'present ÷ (members × meetings)'))}
   </div>
 
-  <div class="card"><div class="card-h"><span class="card-ic" style="background:#22c55e">${ic('trendingUp', 12)}</span><div><div class="card-t">${L('Performa kehadiran per area', 'Attendance by area')}</div><div class="card-s">${L('Diurutkan dari tertinggi', 'Highest first')}</div></div></div>
-    ${perfRows || `<p class="muted">${L('Tidak ada area.', 'No areas.')}</p>`}
+  <div class="card"><div class="card-h"><span class="card-ic" style="background:#22c55e">${ic('trendingUp', 12)}</span><div><div class="card-t">${L('Performa kehadiran per zona', 'Attendance by zone')}</div><div class="card-s">${L('Diurutkan dari tertinggi', 'Highest first')}</div></div></div>
+    ${perfRows || `<p class="muted">${L('Tidak ada zona.', 'No zones.')}</p>`}
     ${legend}
   </div>
 
@@ -288,8 +290,8 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     )}
   </div>
 
-  <h2 class="sec">${L('Detail per area', 'Area details')}</h2>
-  ${areaCards || `<p class="muted">${L('Tidak ada area yang sesuai filter.', 'No areas match the filter.')}</p>`}
+  <h2 class="sec">${L('Detail per zona', 'Zone details')}</h2>
+  ${areaCards || `<p class="muted">${L('Tidak ada zona yang sesuai filter.', 'No zones match the filter.')}</p>`}
 
   <div class="foot">
     <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Kehadiran = total hadir anggota ÷ (anggota aktif × jumlah pertemuan) · tamu dicatat terpisah', 'Attendance = members present ÷ (active members × meetings) · guests recorded separately')}</div>

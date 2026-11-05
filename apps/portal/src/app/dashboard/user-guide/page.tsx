@@ -98,12 +98,12 @@ const SECTIONS: Section[] = [
         title: 'Struktur navigasi sidebar',
         items: [
           'Dashboard (Elsa) — AI chat untuk tanya data ECC (jemaat, ibadah, event, homecell, tamu, doa, ulasan, dll)',
-          'Map View — peta cabang, Homecell Area, homecell, dan sebaran jemaat',
+          'Map View — peta cabang, Zona, homecell, dan sebaran jemaat',
           'User Guide — panduan ini',
           'Gereja — Gereja, Cabang Gereja',
           'Service — Ibadah, Kategori Ibadah, Pelayanan, Permintaan Volunteer, Kehadiran, Laporan Ibadah',
           'People — Jemaat, Role Jemaat, Relasi Jemaat, Kritik & Saran, Tamu, Prayer Request, Bible 365',
-          'Community — Homecell Area, Homecell, Group',
+          'Community — Zona, Homecell, Group',
           'Movement — Event, Laporan Event, Visit, Spiritual Journey, Local Market',
           'Broadcast — News, Renungan, ECC Worship',
           'CKids — Katalog Hadiah, Gift Stall',
@@ -132,18 +132,18 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Elsa punya akses ke 52 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
+        text: 'Elsa punya akses ke 53 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
       },
       {
         kind: 'bullet',
-        title: '52 entity yang bisa di-query',
+        title: '53 entity yang bisa di-query',
         items: [
           'Gereja: sinode, cabang (termasuk zona waktu & link Google Maps)',
           'People: jemaat (termasuk tamu & kategori tamu), role, jemaat_role, tipe_relasi, jemaat_relasi, jemaat_sertifikat, feedback (Kritik & Saran)',
           'Tamu: jemaat_tamu (Tamu saya), homecell_tamu, homecell_tamu_attendance, homecell_guest_request',
           'Service: kategori_ibadah, ibadah (urutan, rating on/off), pelayanan, pelayanan_role, jemaat_pelayanan, reservasi, service_review (ulasan)',
           'Doa: prayer_request (tanpa isi doa), prayer_petugas_role, prayer_petugas_pelayanan',
-          'Community: homecell_area, homecell, homecell_member, homecell_schedule, homecell_attendance, homecell_join_request, homecell_announcement, homecell_poll',
+          'Community: homecell_area (zona), homecell_area_pastor (pastor zona), homecell, homecell_member, homecell_schedule, homecell_attendance, homecell_join_request, homecell_announcement, homecell_poll',
           'Group: group, group_member, group_join_request, group_announcement, group_poll',
           'Movement: event, event_participation, visit, local_business, spiritual_journey_step',
           'Broadcast: konten (news + renungan), worship_album, worship_song',
@@ -408,7 +408,7 @@ const SECTIONS: Section[] = [
         kind: 'bullet',
         title: 'Fitur halaman Jemaat',
         items: [
-          'Filter: cabang, homecell, homecell area, ministry, status, jenis kelamin, role, umur. Search berdasarkan nama, email, atau no HP.',
+          'Filter: cabang, homecell, zona, ministry, status, jenis kelamin, role, umur. Search berdasarkan nama, email, atau no HP.',
           'Export Excel (CSV) dan PDF mengikuti filter yang aktif.',
           'Cek Duplikat: temukan jemaat dengan no HP / email / nama + tanggal lahir yang sama.',
           'Detail jemaat: QR card, tombol kontak WhatsApp/Email, riwayat homecell, event, ibadah, group, visit, local market, indikator keaktifan 3 bulan, dan Export PDF profil.',
@@ -447,15 +447,15 @@ const SECTIONS: Section[] = [
     icon: HomeIcon,
     summary: 'Struktur penggembalaan: area → homecell → anggota.',
     content: [
-      { kind: 'menu-card', href: '/dashboard/homecell-area', label: 'Homecell Area', description: 'Zone level atas per cabang (mis. Jakarta Pusat, Bandung Utara). PIC = Zone Leader dari Pelayanan Penggembalaan.' },
+      { kind: 'menu-card', href: '/dashboard/homecell-area', label: 'Zona', description: 'Zona = level atas homecell per cabang (mis. Jakarta Pusat, Bandung Utara). PIC = Zone Leader dari Pelayanan Penggembalaan. Pastor zona boleh kosong / lebih dari satu (cari berdasarkan nama); pastor melihat semua zonanya di app.' },
       { kind: 'menu-card', href: '/dashboard/homecell', label: 'Homecell', description: 'Cellgroup individual di bawah area. PIC = Homecell Leader. Punya anggota + jadwal pertemuan.' },
       {
         kind: 'steps',
         title: 'Setup struktur homecell baru',
         items: [
           'Pastikan jemaat yang akan jadi PIC sudah join Pelayanan Penggembalaan dengan role yang sesuai.',
-          'Buat Area dulu (Homecell Area → Tambah). Pilih cabang + PIC Zone Leader.',
-          'Lalu buat Homecell di Homecell → Tambah → pilih area + PIC Homecell Leader.',
+          'Buat Zona dulu (Zona → Tambah). Pilih cabang + PIC Zone Leader, dan (opsional) satu atau beberapa Pastor — ketik nama lalu pilih.',
+          'Lalu buat Homecell di Homecell → Tambah → pilih zona + PIC Homecell Leader.',
           'Set jadwal pertemuan (hari + jam), alamat lokasi.',
         ],
       },
@@ -624,7 +624,7 @@ const SECTIONS: Section[] = [
     id: 'map-view',
     title: 'Map View — Peta Cabang, Homecell & Jemaat',
     icon: MapPin,
-    summary: 'Peta interaktif Google Maps: cabang, Homecell Area, homecell, sebaran & pin jemaat, Cek Lokasi Member.',
+    summary: 'Peta interaktif Google Maps: cabang, Zona, homecell, sebaran & pin jemaat, Cek Lokasi Member.',
     content: [
       {
         kind: 'paragraph',
@@ -635,7 +635,7 @@ const SECTIONS: Section[] = [
         title: 'Lapisan yang bisa dicentang',
         items: [
           'Cabang Gereja — pin oranye.',
-          'Homecell Area — poligon berwarna yang menghubungkan semua titik homecell di area itu.',
+          'Zona — poligon berwarna yang menghubungkan semua titik homecell di zona itu.',
           'Homecell — pin ungu (abu-abu bila nonaktif).',
           'Jemaat — pin foto profil, perkiraan lokasi rumah dari alamat (butuh akses menu Jemaat). Satu keluarga di titik yang sama disebar melingkar supaya semua terlihat.',
           'Sebaran jemaat — peta kepadatan tanpa nama.',

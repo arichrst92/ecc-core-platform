@@ -2,6 +2,7 @@
 
 import { jamZone } from '@/lib/tz-label';
 import { useMemo, useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -74,10 +75,10 @@ export default function IbadahPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<IbadahItem | null>(null);
   const [deleting, setDeleting] = useState<IbadahItem | null>(null);
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [view, setView] = usePersistentState<'list' | 'calendar'>('ibadah:view', 'list');
   // Filter cabang — kalau di-set ke specific cabangId, list dan calendar
   // cuma show cabang itu. Default 'all' = tampilkan semua cabang.
-  const [cabangFilter, setCabangFilter] = useState<string>('all');
+  const [cabangFilter, setCabangFilter] = usePersistentState<string>('ibadah:cabang', 'all');
 
   const listQ = useQuery({
     queryKey: ['ibadah', 'all'],

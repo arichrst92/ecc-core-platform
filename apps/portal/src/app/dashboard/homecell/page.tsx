@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { ATTENDANCE_TIER_CLASS, homecellResource } from '@/lib/resources/homecell-config';
 import { apiClient } from '@/lib/api-client';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import {
   HomecellFilterBar,
   defaultHomecellFilter,
@@ -16,11 +17,12 @@ import {
 function HomecellInner() {
   const sp = useSearchParams();
   // Link dari halaman cabang / area (?cabangId= / ?areaId=) jadi nilai awal filter.
-  const [filter, setFilter] = useState<HomecellFilterState>({
-    ...defaultHomecellFilter,
-    cabangId: sp.get('cabangId') ?? '',
-    areaId: sp.get('areaId') ?? '',
-  });
+  // Filter disimpan per tab → tetap terisi saat kembali dari detail homecell.
+  const [filter, setFilter] = usePersistentState<HomecellFilterState>(
+    'homecell:filter',
+    () => ({ ...defaultHomecellFilter, cabangId: sp.get('cabangId') ?? '', areaId: sp.get('areaId') ?? '' }),
+    { skipRestore: sp.has('cabangId') || sp.has('areaId') },
+  );
   const extraParams = toHomecellQueryParams(filter);
 
   async function exportPdf() {

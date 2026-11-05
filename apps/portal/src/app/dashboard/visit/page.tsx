@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -111,11 +112,11 @@ const listOf = <T,>(r: unknown): T[] => {
 export default function VisitPage() {
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
-  const [page, setPage] = useState(1);
-  const [nama, setNama] = useState('');
-  const [q, setQ] = useState('');
-  const [f, setF] = useState<VisitFilters>(EMPTY_FILTERS);
-  const [period, setPeriod] = useState<PeriodState>({ periode: '', from: '', to: '' });
+  const [page, setPage] = usePersistentState('visit:page', 1);
+  const [nama, setNama] = usePersistentState('visit:nama', '');
+  const [q, setQ] = usePersistentState('visit:q', '');
+  const [f, setF] = usePersistentState<VisitFilters>('visit:f', EMPTY_FILTERS);
+  const [period, setPeriod] = usePersistentState<PeriodState>('visit:period', { periode: '', from: '', to: '' });
   const [detailItem, setDetailItem] = useState<VisitItem | null>(null);
   const [deleting, setDeleting] = useState<VisitItem | null>(null);
 
@@ -259,7 +260,7 @@ export default function VisitPage() {
             ))}
           </select>
         </Field>
-        <Field label="Homecell area">
+        <Field label="Zona">
           <select
             value={f.homecellAreaId}
             onChange={(e) => patch({ homecellAreaId: e.target.value, homecellId: '' })}

@@ -163,7 +163,7 @@ export default function HomecellDetailPage() {
               href={`/dashboard/homecell?areaId=${h.area.id}`}
               className="hover:underline"
             >
-              Area: {h.area.nama}
+              Zona: {h.area.nama}
             </Link>
             {h.kategori ? (
               <span

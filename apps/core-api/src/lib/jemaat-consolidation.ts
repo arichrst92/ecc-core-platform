@@ -144,7 +144,7 @@ const HEADER_ALIASES: Record<ScalarKey, string[]> = {
   email: ['email', 'e-mail'],
   alamat: ['alamat', 'address'],
   cabang: ['cabang'],
-  area: ['homecell area'],
+  area: ['zona', 'homecell area'],
   zoneLeader: ['zone leader', 'nama zone leader'],
   homecell: ['homecell', 'nama homecell'],
   homeLeader: ['home leader', 'nama home leader'],

@@ -8,6 +8,7 @@ import { ReviewReportCard, type ReviewItem, type ReviewSummary } from '@/compone
 
 type ReviewReport = { overall: ReviewSummary; perItem: (ReviewSummary & { key: string; label: string })[]; comments: ReviewItem[] };
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Armchair, Baby, BarChart3, Loader2, Star, Target, TrendingDown, TrendingUp, UserPlus, Church } from 'lucide-react';
@@ -279,17 +280,17 @@ const KATEGORI_TAMU: Record<string, { label: string; cls: string }> = {
 };
 
 export default function LaporanIbadahPage() {
-  const [cabangId, setCabangId] = useState('');
-  const [ibadahId, setIbadahId] = useState('');
-  const [kategoriId, setKategoriId] = useState('');
+  const [cabangId, setCabangId] = usePersistentState('laporan-ibadah:cabangId', '');
+  const [ibadahId, setIbadahId] = usePersistentState('laporan-ibadah:ibadahId', '');
+  const [kategoriId, setKategoriId] = usePersistentState('laporan-ibadah:kategoriId', '');
   const kategoriQ = useQuery({
     queryKey: ['kategori-ibadah', 'options'],
     queryFn: async () =>
       ((await apiClient.get('/admin/ibadah/kategori', { params: { limit: 200 } })).data as { data: { id: string; nama: string }[] }).data,
     staleTime: 5 * 60_000,
   });
-  const [period, setPeriod] = useState<PeriodState>({ periode: 'last_30d', from: '', to: '' });
-  const [hideEmpty, setHideEmpty] = useState(false);
+  const [period, setPeriod] = usePersistentState<PeriodState>('laporan-ibadah:period', { periode: 'last_30d', from: '', to: '' });
+  const [hideEmpty, setHideEmpty] = usePersistentState('laporan-ibadah:hideEmpty', false);
   const cabangQ = useCabangOptions();
   const ibadahQ = useQuery({
     queryKey: ['ibadah', 'options', cabangId],

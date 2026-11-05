@@ -366,7 +366,7 @@ export default function CabangDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <KpiCard
           icon={MapPin}
-          label="Homecell Area"
+          label="Zona"
           value={stats.kpi.homecellArea}
           sublabel="zona pengelompokan"
           color="bg-teal-500"
@@ -520,7 +520,7 @@ export default function CabangDetailPage() {
               <thead className="border-b border-neutral-200 text-neutral-500">
                 <tr>
                   <th className="text-left py-2 px-2 font-medium">Homecell</th>
-                  <th className="text-left py-2 px-2 font-medium w-28">Area</th>
+                  <th className="text-left py-2 px-2 font-medium w-28">Zona</th>
                   <th className="text-right py-2 px-2 font-medium w-20">Member</th>
                   <th className="text-right py-2 px-2 font-medium w-24">Baru</th>
                   <th className="text-right py-2 px-2 font-medium w-24">Pertemuan</th>

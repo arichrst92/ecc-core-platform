@@ -52,7 +52,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'bible365', label: 'Bible 365', href: '/dashboard/bible365', group: 'People' },
 
   // Community
-  { key: 'homecell-area', label: 'Homecell Area', href: '/dashboard/homecell-area', group: 'Community' },
+  { key: 'homecell-area', label: 'Zona', href: '/dashboard/homecell-area', group: 'Community' },
   { key: 'homecell', label: 'Homecell', href: '/dashboard/homecell', group: 'Community' },
   { key: 'group', label: 'Group', href: '/dashboard/group', group: 'Community' },
 

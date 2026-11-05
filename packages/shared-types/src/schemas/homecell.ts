@@ -18,6 +18,8 @@ export const createHomecellAreaSchema = z
     nama: z.string().trim().min(2).max(100),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
     picJemaatId: emptyToUndefined(uuidSchema),
+    /** Pastor zona (boleh kosong, bisa lebih dari satu). */
+    pastorIds: z.array(uuidSchema).max(20).optional(),
     isActive: z.boolean().default(true),
   })
   .openapi('CreateHomecellAreaInput');
@@ -29,6 +31,8 @@ export const updateHomecellAreaSchema = z
     nama: z.string().trim().min(2).max(100).optional(),
     deskripsi: emptyToUndefined(z.string().trim().max(1000)),
     picJemaatId: picUpdateField,
+    /** Ganti seluruh daftar pastor zona ([] = kosongkan). Tidak dikirim = tidak diubah. */
+    pastorIds: z.array(uuidSchema).max(20).optional(),
     isActive: z.boolean().optional(),
   })
   .openapi('UpdateHomecellAreaInput');

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Plus, Search } from 'lucide-react';
 import { DataTable } from './data-table';
 import { VirtualDataTable } from './virtual-data-table';
@@ -9,6 +10,7 @@ import { ConfirmDelete } from './confirm-delete';
 import { useList, useInfiniteList, useCreate, useUpdate, useDelete } from '@/lib/use-crud';
 import type { ResourceConfig } from '@/lib/crud-types';
 import { useDebounce } from '@/lib/use-debounce';
+import { usePersistentState } from '@/lib/use-persistent-state';
 
 interface Props<T extends { id: string }> {
   config: ResourceConfig<T>;
@@ -32,8 +34,11 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
 }: Props<T>) {
   const isVirtual = !!config.virtualScroll;
 
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  // Halaman & kata kunci disimpan per tab → tetap terisi saat kembali dari detail.
+  const pathname = usePathname();
+  const stateKey = `crud:${pathname}:${config.name}`;
+  const [page, setPage] = usePersistentState(`${stateKey}:page`, 1);
+  const [search, setSearch] = usePersistentState(`${stateKey}:search`, '');
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<T | null>(null);
   const [deleting, setDeleting] = useState<T | null>(null);
@@ -42,6 +47,16 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
   const cleanExtra = Object.fromEntries(
     Object.entries(extraParams ?? {}).filter(([, v]) => v !== undefined && v !== ''),
   ) as Record<string, string>;
+
+  // Filter luar (extraParams) berubah → kembali ke halaman 1. Bukan saat mount
+  // (supaya halaman yang tersimpan tidak tertimpa saat kembali dari detail).
+  const extraKey = JSON.stringify(cleanExtra);
+  const prevExtra = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevExtra.current !== null && prevExtra.current !== extraKey) setPage(1);
+    prevExtra.current = extraKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraKey]);
 
   // Paginated mode — disabled saat virtual scroll aktif
   const list = useList<T>(

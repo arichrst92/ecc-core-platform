@@ -18,7 +18,7 @@ const MODEL_LABEL: Record<string, string> = {
   IbadahPelayanan: 'Tautan Pelayanan',
   IbadahPelayananPetugas: 'Petugas Ibadah',
   IbadahOccurrenceStatus: 'Status Occurrence Ibadah',
-  HomecellArea: 'Homecell Area',
+  HomecellArea: 'Zona',
   Homecell: 'Homecell',
   HomecellMember: 'Anggota Homecell',
   Event: 'Event',

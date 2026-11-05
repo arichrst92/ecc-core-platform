@@ -17,6 +17,19 @@ import { fmtTgl } from '../../lib/print-report.js';
 
 export const homecellAreaRouter = Router();
 
+/** Ganti seluruh daftar pastor zona (urutan input dipertahankan). */
+async function setAreaPastors(areaId: string, pastorIds: string[]) {
+  const ids = [...new Set(pastorIds)];
+  if (ids.length) {
+    const n = await prisma.jemaat.count({ where: { id: { in: ids } } });
+    if (n !== ids.length) throw BadRequest('Pastor tidak ditemukan.');
+  }
+  await prisma.$transaction([
+    prisma.homecellAreaPastor.deleteMany({ where: { areaId, jemaatId: { notIn: ids } } }),
+    prisma.homecellAreaPastor.createMany({ data: ids.map((jemaatId) => ({ areaId, jemaatId })), skipDuplicates: true }),
+  ]);
+}
+
 // ===== List =====
 homecellAreaRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
@@ -24,7 +37,13 @@ homecellAreaRouter.get('/', async (req, res) => {
   const sinodeId = typeof req.query.sinodeId === 'string' ? req.query.sinodeId : undefined;
 
   const where: Prisma.HomecellAreaWhereInput = {};
-  if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
+  // Cari nama zona, nama PIC, atau nama pastor.
+  if (q.search)
+    where.OR = [
+      { nama: { contains: q.search, mode: 'insensitive' } },
+      { picJemaat: { namaLengkap: { contains: q.search, mode: 'insensitive' } } },
+      { pastors: { some: { jemaat: { namaLengkap: { contains: q.search, mode: 'insensitive' } } } } },
+    ];
   if (cabangId) where.cabangId = cabangId;
   if (sinodeId) where.cabang = { sinodeId };
 
@@ -37,6 +56,7 @@ homecellAreaRouter.get('/', async (req, res) => {
       include: {
         cabang: { select: { id: true, nama: true, kode: true } },
         picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+        pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } } } },
         _count: { select: { homecells: true } },
       },
     }),
@@ -51,6 +71,7 @@ homecellAreaRouter.get('/', async (req, res) => {
     const s = stats.get(r.id);
     return {
       ...r,
+      pastors: r.pastors.map((p) => p.jemaat),
       homecellCount: r._count.homecells,
       homecellAktif: s?.homecellCount ?? 0,
       memberCount: s?.memberCount ?? 0,
@@ -104,6 +125,7 @@ homecellAreaRouter.get('/export', async (req, res) => {
       deskripsi: true,
       cabang: { select: { nama: true } },
       picJemaat: { select: { namaLengkap: true } },
+      pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { namaLengkap: true } } } },
     },
   });
   const stats = await computeAreaStats(areas.map((a) => a.id), period);
@@ -113,7 +135,7 @@ homecellAreaRouter.get('/export', async (req, res) => {
     ? `${PERIOD_LABEL[str('periode') ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
     : 'Semua waktu (sampai hari ini)';
   const filterLabel =
-    areaId && areas[0] ? `Homecell Area — ${areas[0].nama}` : cabang ? `Homecell Area — ${cabang.nama}` : 'Homecell Area — Semua Cabang';
+    areaId && areas[0] ? `Zona — ${areas[0].nama}` : cabang ? `Zona — ${cabang.nama}` : 'Zona — Semua Cabang';
   const ua = (req.get('user-agent') ?? '').toLowerCase();
   const html = renderHomecellAreaReportHtml(
     areas.map((a) => ({
@@ -122,6 +144,7 @@ homecellAreaRouter.get('/export', async (req, res) => {
       deskripsi: a.deskripsi,
       cabang: a.cabang.nama,
       pic: a.picJemaat?.namaLengkap ?? null,
+      pastors: a.pastors.map((p) => p.jemaat.namaLengkap),
       stat: stats.get(a.id)!,
     })),
     { isMobileUa: /mobi|android|iphone|ipad|ipod/.test(ua), filterLabel: search ? `${filterLabel} · "${search}"` : filterLabel, periodLabel },
@@ -142,16 +165,17 @@ homecellAreaRouter.get('/:id/stats', async (req, res) => {
       isActive: true,
       cabang: { select: { id: true, nama: true } },
       picJemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true } } } },
     },
   });
-  if (!area) throw NotFound('Homecell Area tidak ditemukan');
+  if (!area) throw NotFound('Zona tidak ditemukan');
   const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
   const period = resolvePeriod(str('periode'), str('from'), str('to'));
   const stats = await computeAreaStats([area.id], period);
   res.json({
     success: true,
     data: {
-      area,
+      area: { ...area, pastors: area.pastors.map((p) => p.jemaat) },
       period: period ? { from: ymd(period.from), to: ymd(period.to) } : null,
       stat: stats.get(area.id),
       ageGroups: DEMO_AGE_GROUPS.map((g) => g.label),
@@ -175,7 +199,7 @@ homecellAreaRouter.get('/:id/homecells', async (req, res) => {
     where: { id: req.params.id },
     select: { id: true },
   });
-  if (!area) throw NotFound('Homecell Area tidak ditemukan');
+  if (!area) throw NotFound('Zona tidak ditemukan');
 
   const data = await prisma.homecell.findMany({
     where: { areaId: area.id, isActive: true },
@@ -232,6 +256,7 @@ homecellAreaRouter.get('/:id', async (req, res) => {
     include: {
       cabang: { select: { id: true, nama: true, kode: true, sinodeId: true } },
       picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
+      pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } } } },
       homecells: {
         orderBy: { nama: 'asc' },
         include: {
@@ -241,13 +266,13 @@ homecellAreaRouter.get('/:id', async (req, res) => {
       },
     },
   });
-  if (!item) throw NotFound('Homecell Area tidak ditemukan');
+  if (!item) throw NotFound('Zona tidak ditemukan');
   // Privasi no HP PIC area — hanya untuk app mobile; portal tidak berubah.
   if (item.picJemaat && isMobileClient(req)) {
     const gate = await privacyGate(req.user!.jemaatId, [item.picJemaat.id]);
     if (!gate.can(item.picJemaat.id, 'noHp')) item.picJemaat.noHp = null;
   }
-  res.json({ success: true, data: item });
+  res.json({ success: true, data: { ...item, pastors: item.pastors.map((p) => p.jemaat) } });
 });
 
 // ===== Create =====
@@ -257,7 +282,9 @@ homecellAreaRouter.post('/', async (req, res) => {
   if (input.picJemaatId) {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.ZONE_LEADER);
   }
-  const created = await prisma.homecellArea.create({ data: input });
+  const { pastorIds, ...data } = input;
+  const created = await prisma.homecellArea.create({ data });
+  if (pastorIds?.length) await setAreaPastors(created.id, pastorIds);
   audit(req, {
     action: 'CREATE',
     resource: 'homecell_area',
@@ -275,8 +302,10 @@ homecellAreaRouter.patch('/:id', async (req, res) => {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.ZONE_LEADER);
   }
   const before = await prisma.homecellArea.findUnique({ where: { id: req.params.id } });
-  if (!before) throw NotFound('Homecell Area tidak ditemukan');
-  const updated = await prisma.homecellArea.update({ where: { id: req.params.id }, data: input });
+  if (!before) throw NotFound('Zona tidak ditemukan');
+  const { pastorIds, ...data } = input;
+  const updated = await prisma.homecellArea.update({ where: { id: req.params.id }, data });
+  if (pastorIds) await setAreaPastors(updated.id, pastorIds);
   audit(req, {
     action: 'UPDATE',
     resource: 'homecell_area',
@@ -294,7 +323,7 @@ homecellAreaRouter.delete('/:id', async (req, res) => {
     where: { id: req.params.id },
     include: { _count: { select: { homecells: true } } },
   });
-  if (!before) throw NotFound('Homecell Area tidak ditemukan');
+  if (!before) throw NotFound('Zona tidak ditemukan');
   if (before._count.homecells > 0) {
     throw BadRequest(`Area masih punya ${before._count.homecells} homecell — hapus dulu`);
   }

@@ -163,7 +163,7 @@ export function buildJemaatResource(
       },
       {
         key: 'homecellArea',
-        label: 'Homecell Area',
+        label: 'Zona',
         width: '140px',
         render: (_v, row) => {
           const areas = Array.from(

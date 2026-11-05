@@ -240,6 +240,7 @@ model Jemaat {
   // Modul 27 — jemaat yg pernah pick-up anak (parent/wali)
   reservasiPickedUp            Reservasi[]                   @relation("ReservasiPickedUpBy")
   areaPic                      HomecellArea[]                @relation("AreaPic")
+  areaPastor                   HomecellAreaPastor[]
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
   sertifikat                   JemaatSertifikat[]
@@ -1067,11 +1068,28 @@ model HomecellArea {
   cabang    CabangGereja @relation(fields: [cabangId], references: [id], onDelete: Restrict)
   picJemaat Jemaat?      @relation("AreaPic", fields: [picJemaatId], references: [id], onDelete: SetNull)
   homecells Homecell[]
+  pastors   HomecellAreaPastor[]
 
   @@unique([cabangId, nama])
   @@index([cabangId])
   @@index([picJemaatId])
   @@map("homecell_area")
+}
+
+// Pastor zona (homecell area) — bisa lebih dari satu per zona; satu pastor bisa
+// memegang banyak zona. Pastor melihat zona-zonanya di app (halaman Zona).
+model HomecellAreaPastor {
+  id        String   @id @default(uuid()) @db.Uuid
+  areaId    String   @map("area_id") @db.Uuid
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  area   HomecellArea @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  jemaat Jemaat       @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([areaId, jemaatId])
+  @@index([jemaatId])
+  @@map("homecell_area_pastor")
 }
 
 enum HomecellKategori {

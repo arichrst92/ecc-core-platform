@@ -118,9 +118,9 @@ export function HomecellFilterBar({
             ))}
           </select>
         </Field>
-        <Field label="Homecell Area">
+        <Field label="Zona">
           <select value={value.areaId} onChange={(e) => patch({ areaId: e.target.value })} className={selectCls}>
-            <option value="">Semua Area</option>
+            <option value="">Semua Zona</option>
             {(areaQ.data ?? []).map((a: { id: string; nama: string }) => (
               <option key={a.id} value={a.id}>
                 {a.nama}

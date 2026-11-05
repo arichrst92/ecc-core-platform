@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -84,9 +85,10 @@ export default function EventPage() {
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft'>('all');
-  const [filterTipe, setFilterTipe] = useState<'all' | EventListItem['tipeBayar']>('all');
+  // Filter disimpan per tab → tetap terisi saat kembali dari detail event.
+  const [search, setSearch] = usePersistentState('event:search', '');
+  const [filterStatus, setFilterStatus] = usePersistentState<'all' | 'published' | 'draft'>('event:status', 'all');
+  const [filterTipe, setFilterTipe] = usePersistentState<'all' | EventListItem['tipeBayar']>('event:tipe', 'all');
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<EventListItem | null>(null);
   const [deleting, setDeleting] = useState<EventListItem | null>(null);

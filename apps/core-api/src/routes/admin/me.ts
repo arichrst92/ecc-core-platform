@@ -682,9 +682,9 @@ meRouter.patch('/homecell-area/:id', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const input = meUpdateHomecellAreaSchema.parse(req.body ?? {});
   const before = await prisma.homecellArea.findUnique({ where: { id: req.params.id } });
-  if (!before) throw NotFound('Homecell Area tidak ditemukan');
+  if (!before) throw NotFound('Zona tidak ditemukan');
   if (!req.user?.isFulltimer && before.picJemaatId !== jemaatId) {
-    throw Forbidden('Hanya PIC area ini yang dapat mengubahnya.');
+    throw Forbidden('Hanya PIC zona ini yang dapat mengubahnya.');
   }
   try {
     const updated = await prisma.homecellArea.update({
@@ -712,15 +712,24 @@ meRouter.patch('/homecell-area/:id', async (req, res) => {
 
 meRouter.get('/homecell-area-managed', async (req, res) => {
   const jemaatId = assertJemaatId(req);
+  // Zona yang user-nya PIC atau pastor (pastor bisa memegang banyak zona).
   const data = await prisma.homecellArea.findMany({
-    where: { picJemaatId: jemaatId, isActive: true },
+    where: { isActive: true, OR: [{ picJemaatId: jemaatId }, { pastors: { some: { jemaatId } } }] },
     include: {
       cabang: { select: { id: true, nama: true } },
       _count: { select: { homecells: true } },
     },
     orderBy: { nama: 'asc' },
   });
-  res.json({ success: true, data: data.map((r) => ({ ...r, homecellCount: r._count.homecells })) });
+  res.json({
+    success: true,
+    data: data.map((r) => ({
+      ...r,
+      homecellCount: r._count.homecells,
+      // 2.4.6: app membedakan PIC (boleh ubah zona) dan pastor (lihat saja).
+      myRole: r.picJemaatId === jemaatId ? 'PIC' : 'PASTOR',
+    })),
+  });
 });
 
 // ============================================================

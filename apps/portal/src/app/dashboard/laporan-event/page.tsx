@@ -8,6 +8,7 @@ import { ReviewReportCard, type ReviewItem, type ReviewSummary } from '@/compone
 
 type ReviewReport = { overall: ReviewSummary; perItem: (ReviewSummary & { key: string; label: string })[]; comments: ReviewItem[] };
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Loader2, UserPlus } from 'lucide-react';
@@ -88,8 +89,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function LaporanEventPage() {
-  const [cabangId, setCabangId] = useState('');
-  const [period, setPeriod] = useState<PeriodState>({ periode: 'last_30d', from: '', to: '' });
+  const [cabangId, setCabangId] = usePersistentState('laporan-event:cabangId', '');
+  const [period, setPeriod] = usePersistentState<PeriodState>('laporan-event:period', { periode: 'last_30d', from: '', to: '' });
   const cabangQ = useCabangOptions();
   const params = { cabangId: cabangId || undefined, ...periodParams(period) };
   const q = useQuery({

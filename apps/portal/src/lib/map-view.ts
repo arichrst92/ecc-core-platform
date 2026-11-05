@@ -124,7 +124,7 @@ export interface MapViewData {
 
 export const PIN_STYLE = {
   cabang: { color: '#EA580C', label: 'Cabang gereja' },
-  area: { color: '#0D9488', label: 'Homecell area' },
+  area: { color: '#0D9488', label: 'Zona' },
   jemaat: { color: '#0284C7', label: 'Jemaat' },
   homecell: { color: '#7C3AED', label: 'Homecell' },
   nonaktif: { color: '#9CA3AF', label: 'Nonaktif' },
@@ -352,12 +352,12 @@ export function areaPopup(a: MapArea, homecellNames: string[]): string {
   const belum = a.homecellCount - a.denganTitik;
   return `<div style="min-width:230px;max-width:280px;font-family:inherit">
     <div style="display:flex;align-items:center;gap:6px">
-      <span style="display:inline-block;padding:1px 8px;border-radius:999px;background:${color}22;color:${color};font-size:11px;font-weight:600">Homecell area</span>
+      <span style="display:inline-block;padding:1px 8px;border-radius:999px;background:${color}22;color:${color};font-size:11px;font-weight:600">Zona</span>
       ${a.isActive ? '' : badge('Nonaktif', '#F5F5F5', '#525252')}
     </div>
     <div style="font-size:15px;font-weight:700;color:#171717;margin:6px 0 2px">${esc(a.nama)}</div>
     <div style="font-size:12px;color:#737373;margin-bottom:6px">${esc(a.cabang.nama)}</div>
-    ${row('PIC area', pic)}
+    ${row('PIC zona', pic)}
     <div style="display:flex;gap:6px;margin-top:8px">${stat(a.homecellCount, 'Homecell')}${stat(a.memberCount, 'Anggota')}</div>
     ${list ? `<div style="font-size:12px;color:#404040;margin-top:8px"><div style="color:#737373;margin-bottom:2px">Homecell di peta</div><ul style="margin:0;padding-left:16px;line-height:1.5">${list}${more}</ul></div>` : ''}
     ${belum > 0 ? `<div style="font-size:11px;color:#B45309;margin-top:6px">${belum} homecell belum punya titik lokasi</div>` : ''}

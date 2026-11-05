@@ -7,6 +7,7 @@
  * API: /admin/tamu
  */
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Contact, Loader2, MessageCircle, Plus, Search, StickyNote, UserCheck, X } from 'lucide-react';
@@ -87,15 +88,15 @@ const waLink = (hp: string) => `https://wa.me/${hp.replace(/\D/g, '')}`;
 
 export default function TamuPage() {
   const qc = useQueryClient();
-  const [status, setStatus] = useState<Status | ''>('');
-  const [cabangId, setCabangId] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [status, setStatus] = usePersistentState<Status | ''>('tamu:status', '');
+  const [cabangId, setCabangId] = usePersistentState('tamu:cabangId', '');
+  const [search, setSearch] = usePersistentState('tamu:search', '');
+  const [page, setPage] = usePersistentState('tamu:page', 1);
   const [noteFor, setNoteFor] = useState<Tamu | null>(null);
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
-  const [followupBy, setFollowupBy] = useState('');
-  const [sumber, setSumber] = useState('');
-  const [kategori, setKategori] = useState<Kategori | ''>('');
+  const [followupBy, setFollowupBy] = usePersistentState('tamu:followupBy', '');
+  const [sumber, setSumber] = usePersistentState('tamu:sumber', '');
+  const [kategori, setKategori] = usePersistentState<Kategori | ''>('tamu:kategori', '');
   const [adding, setAdding] = useState(false);
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
@@ -496,7 +497,7 @@ function NoteModal({
             onChange={(e) => setV(e.target.value)}
             rows={5}
             className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder="mis. Sudah ditelepon 18 Okt, tertarik ikut homecell area Selatan"
+            placeholder="mis. Sudah ditelepon 18 Okt, tertarik ikut zona Selatan"
           />
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-neutral-300">

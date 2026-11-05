@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -77,12 +78,12 @@ const TIPE_COLOR: Record<TipeBisnis, string> = {
 export default function LocalBusinessPage() {
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [filterCabangId, setFilterCabangId] = useState('');
-  const [filterTipe, setFilterTipe] = useState<TipeBisnis | ''>('');
-  const [filterIndustri, setFilterIndustri] = useState('');
-  const [filterAktif, setFilterAktif] = useState<'true' | 'false' | ''>('');
+  const [page, setPage] = usePersistentState('local-business:page', 1);
+  const [search, setSearch] = usePersistentState('local-business:search', '');
+  const [filterCabangId, setFilterCabangId] = usePersistentState('local-business:filterCabangId', '');
+  const [filterTipe, setFilterTipe] = usePersistentState<TipeBisnis | ''>('local-business:filterTipe', '');
+  const [filterIndustri, setFilterIndustri] = usePersistentState('local-business:filterIndustri', '');
+  const [filterAktif, setFilterAktif] = usePersistentState<'true' | 'false' | ''>('local-business:filterAktif', '');
   const [detailItem, setDetailItem] = useState<BusinessItem | null>(null);
   const [deleting, setDeleting] = useState<BusinessItem | null>(null);
 

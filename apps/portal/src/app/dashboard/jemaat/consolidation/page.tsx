@@ -565,7 +565,7 @@ export default function JemaatConsolidationPage() {
                 ber-nama sama dengan Zone/Home Leader di sheet, dan otomatis ditambahkan ke pelayanan Penggembalaan.
               </p>
               <LeaderTable
-                title="Homecell Area"
+                title="Zona"
                 items={data.areas.map((a) => ({ key: a.nama, label: a.nama, sub: null, plan: a }))}
                 value={areaPic}
                 onChange={(k, v) => setAreaPic((p) => ({ ...p, [k]: v }))}

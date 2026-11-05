@@ -141,7 +141,7 @@ const GROUPS: NavGroup[] = [
     label: 'Community',
     icon: HomeIcon,
     items: [
-      { href: '/dashboard/homecell-area', label: 'Homecell Area', icon: MapPin, menuKey: 'homecell-area' },
+      { href: '/dashboard/homecell-area', label: 'Zona', icon: MapPin, menuKey: 'homecell-area' },
       { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell' },
       { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group' },
     ],

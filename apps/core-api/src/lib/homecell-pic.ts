@@ -51,6 +51,7 @@ export async function assertPenggembalaanRole(jemaatId: string, roleNama: string
  *   - Admin Fulltimer (req.user.isFulltimer = true)
  *   - PIC homecell (homecell.picJemaatId === userJemaatId)
  *   - PIC area parent (area.picJemaatId === userJemaatId)
+ *   - Pastor zona parent (homecell_area_pastor)
  *
  * Throws ApiError 403 'FORBIDDEN' kalau bukan ketiganya.
  *
@@ -71,7 +72,7 @@ export async function assertCanManageHomecell(
     select: {
       id: true,
       picJemaatId: true,
-      area: { select: { picJemaatId: true } },
+      area: { select: { picJemaatId: true, pastors: { where: { jemaatId: userJemaatId }, select: { id: true } } } },
     },
   });
   if (!homecell) {
@@ -84,10 +85,13 @@ export async function assertCanManageHomecell(
   // PIC area parent
   if (homecell.area?.picJemaatId === userJemaatId) return;
 
+  // Pastor zona parent
+  if (homecell.area && homecell.area.pastors.length > 0) return;
+
   throw new ApiError(
     403,
     'FORBIDDEN',
-    'Hanya PIC homecell, PIC area, atau admin yang boleh akses.',
+    'Hanya PIC homecell, PIC/pastor zona, atau admin yang boleh akses.',
   );
 }
 

@@ -42,7 +42,7 @@ const LABELS: Record<string, string> = {
   '/homecell/[id]/schedule/new': 'Homecell — buat jadwal',
   '/homecell/guest': 'Cari homecell (tamu)',
   '/homecell/requests': 'Homecell — permintaan bergabung',
-  '/area': 'Homecell Area',
+  '/area': 'Zona',
   '/group': 'Group',
   '/group/[id]': 'Group — detail',
   '/ministry': 'Pelayanan',

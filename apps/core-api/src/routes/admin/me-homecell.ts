@@ -707,11 +707,19 @@ meHomecellRouter.post('/report-link', async (req, res) => {
   const u = me(req);
   const input = reportLinkSchema.parse(req.body ?? {});
   if (input.kind === 'homecell') {
-    await assertLeaderOrAreaPic(req, input.id);
+    // Pastor zona boleh membuka laporan homecell di zonanya.
+    const pastorOk = await prisma.homecell.count({
+      where: { id: input.id, area: { pastors: { some: { jemaatId: u.jemaatId } } } },
+    });
+    if (!pastorOk) await assertLeaderOrAreaPic(req, input.id);
   } else if (!u.isFulltimer) {
-    const area = await prisma.homecellArea.findUnique({ where: { id: input.id }, select: { picJemaatId: true } });
-    if (!area) throw NotFound('Homecell Area tidak ditemukan');
-    if (area.picJemaatId !== u.jemaatId) throw Forbidden('Hanya PIC area ini yang dapat membuka laporannya.');
+    const area = await prisma.homecellArea.findUnique({
+      where: { id: input.id },
+      select: { picJemaatId: true, pastors: { where: { jemaatId: u.jemaatId }, select: { id: true } } },
+    });
+    if (!area) throw NotFound('Zona tidak ditemukan');
+    if (area.picJemaatId !== u.jemaatId && area.pastors.length === 0)
+      throw Forbidden('Hanya PIC atau pastor zona ini yang dapat membuka laporannya.');
   }
   const token = createReportToken({ k: input.kind, id: input.id, p: input.periode, f: input.from, t: input.to, l: input.lang });
   const target =
@@ -825,17 +833,17 @@ meHomecellRouter.delete('/:id/tamu/:tamuId', async (req, res) => {
   res.json({ success: true, data: { id: req.params.tamuId } });
 });
 
-/** Pemimpin homecell ATAU PIC area homecell tsb (atau fulltimer). */
+/** Pemimpin homecell ATAU PIC / pastor zona homecell tsb (atau fulltimer). */
 async function assertLeaderOrAreaPic(req: Request, homecellId: string) {
   const u = me(req);
   if (u.isFulltimer) return;
   const hc = await prisma.homecell.findUnique({
     where: { id: homecellId },
-    select: { picJemaatId: true, area: { select: { picJemaatId: true } } },
+    select: { picJemaatId: true, area: { select: { picJemaatId: true, pastors: { where: { jemaatId: u.jemaatId }, select: { id: true } } } } },
   });
   if (!hc) throw NotFound('Homecell tidak ditemukan');
-  if (hc.picJemaatId !== u.jemaatId && hc.area.picJemaatId !== u.jemaatId) {
-    throw Forbidden('Hanya pemimpin homecell / PIC area yang dapat mengubah homecell ini.');
+  if (hc.picJemaatId !== u.jemaatId && hc.area.picJemaatId !== u.jemaatId && hc.area.pastors.length === 0) {
+    throw Forbidden('Hanya pemimpin homecell / PIC atau pastor zona yang dapat mengubah homecell ini.');
   }
 }
 

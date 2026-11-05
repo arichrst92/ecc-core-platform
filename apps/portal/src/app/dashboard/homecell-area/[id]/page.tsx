@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Detail Homecell Area — isi sama dengan Export PDF: ringkasan, performa
+ * Detail Zona — isi sama dengan Export PDF: ringkasan, performa
  * kehadiran per homecell, demografi (gender & usia), komposisi kategori,
  * perlu perhatian, dan tabel homecell.
  * API: GET /admin/homecell-area/:id/stats?periode=&from=&to=
@@ -63,6 +63,7 @@ interface StatsResp {
     isActive: boolean;
     cabang: { id: string; nama: string };
     picJemaat: { id: string; namaLengkap: string; noHp: string | null } | null;
+    pastors?: { id: string; namaLengkap: string }[];
   };
   period: { from: string; to: string } | null;
   ageGroups: string[];
@@ -199,6 +200,7 @@ export default function HomecellAreaDetailPage() {
           {d ? (
             <div className="text-sm text-neutral-500 mt-0.5">
               {d.area.cabang.nama} · PIC: {d.area.picJemaat?.namaLengkap ?? '—'}
+              {' · '}Pastor: {d.area.pastors?.length ? d.area.pastors.map((p) => p.namaLengkap).join(', ') : '—'}
               {!d.area.isActive ? <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-neutral-100">Nonaktif</span> : null}
             </div>
           ) : null}
@@ -232,7 +234,7 @@ export default function HomecellAreaDetailPage() {
           <Loader2 className="w-4 h-4 animate-spin" /> Memuat…
         </div>
       ) : q.isError || !d || !s || !demo ? (
-        <div className="py-16 text-center text-sm text-red-600">Gagal memuat data area.</div>
+        <div className="py-16 text-center text-sm text-red-600">Gagal memuat data zona.</div>
       ) : (
         <>
           {d.period ? (
@@ -346,7 +348,7 @@ export default function HomecellAreaDetailPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
-            <div className="px-4 py-3 text-sm font-semibold text-neutral-900 border-b border-neutral-100">Homecell di area ini</div>
+            <div className="px-4 py-3 text-sm font-semibold text-neutral-900 border-b border-neutral-100">Homecell di zona ini</div>
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-500 text-xs">
                 <tr>

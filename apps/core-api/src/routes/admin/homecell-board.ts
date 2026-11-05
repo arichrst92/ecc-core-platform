@@ -19,10 +19,16 @@ export const homecellBoardRouter = buildBoardRouter({
     const homecellId = (req.params as { homecellId: string }).homecellId;
     const hc = await prisma.homecell.findUnique({
       where: { id: homecellId },
-      select: { id: true, nama: true, isActive: true, picJemaatId: true, area: { select: { picJemaatId: true } } },
+      select: {
+        id: true,
+        nama: true,
+        isActive: true,
+        picJemaatId: true,
+        area: { select: { picJemaatId: true, pastors: { where: { jemaatId }, select: { id: true } } } },
+      },
     });
     if (!hc || !hc.isActive) throw NotFound('Homecell tidak ditemukan.');
-    const isPic = hc.picJemaatId === jemaatId || hc.area?.picJemaatId === jemaatId;
+    const isPic = hc.picJemaatId === jemaatId || hc.area?.picJemaatId === jemaatId || (hc.area?.pastors.length ?? 0) > 0;
     const m = isPic
       ? null
       : await prisma.homecellMember.findUnique({

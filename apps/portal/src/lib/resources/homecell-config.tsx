@@ -107,7 +107,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
         );
       },
     },
-    { key: 'area', label: 'Area', render: nestedField('area.nama'), width: '160px' },
+    { key: 'area', label: 'Zona', render: nestedField('area.nama'), width: '160px' },
     { key: 'cabang', label: 'Cabang', render: nestedField('area.cabang.nama'), width: '140px' },
     {
       key: 'picJemaat',
@@ -176,7 +176,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
   fields: [
     {
       name: 'areaId',
-      label: 'Homecell Area',
+      label: 'Zona',
       type: 'relation',
       required: true,
       relation: { endpoint: '/admin/homecell-area', labelKey: 'nama' },

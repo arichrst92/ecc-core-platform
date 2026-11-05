@@ -6,7 +6,7 @@
  *
  * Selalu boleh lihat semua data (tidak bisa dimatikan):
  *   - diri sendiri
- *   - PIC homecell / PIC area dari homecell jemaat itu (kebutuhan pastoral)
+ *   - PIC homecell / PIC atau pastor zona dari homecell jemaat itu (kebutuhan pastoral)
  *   - orang tua atas anaknya, wali atas tanggungannya, pengundang atas tamunya
  * Admin portal memakai endpoint admin sendiri, tidak terkena aturan ini.
  */
@@ -113,7 +113,10 @@ export async function privacyGate(viewerId: string, targetIdsIn: Iterable<string
       select: { homecellId: true, homecell: { select: { areaId: true } } },
     }),
     prisma.homecell.findMany({ where: { picJemaatId: viewerId, isActive: true }, select: { id: true, areaId: true } }),
-    prisma.homecellArea.findMany({ where: { picJemaatId: viewerId, isActive: true }, select: { id: true } }),
+    prisma.homecellArea.findMany({
+      where: { isActive: true, OR: [{ picJemaatId: viewerId }, { pastors: { some: { jemaatId: viewerId } } }] },
+      select: { id: true },
+    }),
     prisma.homecellMember.findMany({
       where: { jemaatId: { in: targetIds }, isActive: true },
       select: { jemaatId: true, homecellId: true, homecell: { select: { areaId: true, picJemaatId: true } } },

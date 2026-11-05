@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -83,11 +84,11 @@ const STATUS_ICON: Record<ReservasiStatus, typeof Clock> = {
 
 export default function KehadiranPage() {
   const qc = useQueryClient();
-  const [page, setPage] = useState(1);
-  const [filterStatus, setFilterStatus] = useState<ReservasiStatus | ''>('');
-  const [filterIbadahId, setFilterIbadahId] = useState('');
-  const [filterTanggal, setFilterTanggal] = useState('');
-  const [search, setSearch] = useState('');
+  const [page, setPage] = usePersistentState('kehadiran:page', 1);
+  const [filterStatus, setFilterStatus] = usePersistentState<ReservasiStatus | ''>('kehadiran:filterStatus', '');
+  const [filterIbadahId, setFilterIbadahId] = usePersistentState('kehadiran:filterIbadahId', '');
+  const [filterTanggal, setFilterTanggal] = usePersistentState('kehadiran:filterTanggal', '');
+  const [search, setSearch] = usePersistentState('kehadiran:search', '');
   const [createOpen, setCreateOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [checkoutScanOpen, setCheckoutScanOpen] = useState(false);

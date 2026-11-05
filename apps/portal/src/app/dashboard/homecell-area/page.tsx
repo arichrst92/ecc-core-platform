@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * Homecell Area — daftar area + statistik (anggota, usia rata-rata, kehadiran)
+ * Zona — daftar zona + statistik (anggota, usia rata-rata, kehadiran)
  * dengan filter cabang & periode, dan Export PDF laporan.
  */
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { CrudPage } from '@/components/crud/crud-page';
 import { homecellAreaResource, AREA_TIER_LEGEND } from '@/lib/resources/homecell-area-config';
 import { apiClient } from '@/lib/api-client';
+import { usePersistentState } from '@/lib/use-persistent-state';
 import { useCabangOptions } from '@/components/report/report-ui';
 import { PERIODE_OPTIONS, type PeriodePreset } from '@/components/homecell/homecell-filter-bar';
 
@@ -19,10 +20,11 @@ const selectCls =
 function HomecellAreaInner() {
   const sp = useSearchParams();
   const cabangQ = useCabangOptions();
-  const [cabangId, setCabangId] = useState(sp.get('cabangId') ?? '');
-  const [periode, setPeriode] = useState<PeriodePreset>('last_30d');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // Filter disimpan per tab → tetap terisi saat kembali dari detail zona.
+  const [cabangId, setCabangId] = usePersistentState('zona:cabangId', sp.get('cabangId') ?? '', { skipRestore: sp.has('cabangId') });
+  const [periode, setPeriode] = usePersistentState<PeriodePreset>('zona:periode', 'last_30d');
+  const [from, setFrom] = usePersistentState('zona:from', '');
+  const [to, setTo] = usePersistentState('zona:to', '');
   const custom = periode === 'custom';
   const extraParams: Record<string, string | undefined> = {
     cabangId: cabangId || undefined,
@@ -56,7 +58,7 @@ function HomecellAreaInner() {
         <button
           onClick={exportPdf}
           className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200"
-          title="Laporan Homecell Area (sesuai filter). Ctrl/Cmd+P untuk simpan PDF."
+          title="Laporan Zona (sesuai filter). Ctrl/Cmd+P untuk simpan PDF."
         >
           <FileText className="w-4 h-4" />
           Export PDF

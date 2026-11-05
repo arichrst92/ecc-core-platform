@@ -245,14 +245,14 @@ export function JemaatFilterBar({ value, onChange }: Props) {
         </Field>
 
         {/* Homecell Area */}
-        <Field label="Homecell Area">
+        <Field label="Zona">
           <select
             value={value.homecellAreaId}
             onChange={(e) => patch({ homecellAreaId: e.target.value, homecellId: '' })}
             className={selectCls}
             disabled={homecellAreaQ.isLoading}
           >
-            <option value="">{homecellAreaQ.isLoading ? 'Memuat...' : 'Semua Area'}</option>
+            <option value="">{homecellAreaQ.isLoading ? 'Memuat...' : 'Semua Zona'}</option>
             {(homecellAreaQ.data ?? []).map((a: { id: string; nama: string }) => (
               <option key={a.id} value={a.id}>
                 {a.nama}

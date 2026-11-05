@@ -130,9 +130,15 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
   // ===== Community =====
   homecell_area: {
     prismaKey: 'homecellArea',
-    description: 'Area homecell (kelompok homecell per wilayah).',
-    allowedInclude: ['homecells'],
-    keyFields: ['id', 'nama', 'isActive'],
+    description: 'Zona (dulu "Homecell Area") — kelompok homecell per wilayah. Punya PIC (Zone Leader) dan pastor (bisa lebih dari satu).',
+    allowedInclude: ['homecells', 'cabang', 'picJemaat', 'pastors'],
+    keyFields: ['id', 'nama', 'cabangId', 'picJemaatId', 'isActive'],
+  },
+  homecell_area_pastor: {
+    prismaKey: 'homecellAreaPastor',
+    description: 'Pastor zona: siapa pastor di zona mana (banyak pastor per zona, satu pastor banyak zona).',
+    allowedInclude: ['area', 'jemaat'],
+    keyFields: ['id', 'areaId', 'jemaatId'],
   },
   homecell: {
     prismaKey: 'homecell',

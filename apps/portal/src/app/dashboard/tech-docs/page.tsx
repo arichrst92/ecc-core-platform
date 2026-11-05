@@ -226,6 +226,7 @@ pnpm --filter @ecc/database db:seed-test-onboarding  # 3 jemaat test`,
   Event ||--o{ EventParticipation : "has attendees"
 
   HomecellArea ||--o{ Homecell : contains
+  HomecellArea ||--o{ HomecellAreaPastor : "pastor zona"
   Homecell ||--o{ HomecellSchedule : schedules
   HomecellSchedule ||--o{ HomecellAttendance : records
 
@@ -398,7 +399,7 @@ await createNotificationBatch(guardians, {...});`,
     id: 'elsa',
     title: 'Elsa (Els Agentic) — AI Agent',
     icon: Sparkles,
-    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 52 entities.',
+    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 53 entities.',
     blocks: [
       {
         kind: 'p',
@@ -408,7 +409,7 @@ await createNotificationBatch(guardians, {...});`,
       {
         kind: 'p',
         text:
-          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 52 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
+          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 53 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
       },
       {
         kind: 'table',
@@ -640,7 +641,7 @@ pm2 status`,
         kind: 'table',
         headers: ['Endpoint (/admin/map-view)', 'Isi'],
         rows: [
-          ['GET /', 'Cabang, Homecell Area, homecell bertitik + yang belum punya titik'],
+          ['GET /', 'Cabang, Zona, homecell bertitik + yang belum punya titik'],
           ['GET /jemaat', 'Pin jemaat (foto, homecell, placeId, presisi) — hanya titik yang alamatHash-nya masih cocok'],
           ['GET /sebaran-jemaat', 'Sel kepadatan ±100 m (tanpa nama)'],
           ['GET /geocode-status · POST /geocode-run', 'Progres pemetaan (hanya hasil versi sekarang) · jalankan batch'],

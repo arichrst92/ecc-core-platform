@@ -41,13 +41,13 @@ reportPublicRouter.get('/:token', async (req, res) => {
   } else {
     const area = await prisma.homecellArea.findUnique({
       where: { id: p.id },
-      select: { id: true, nama: true, deskripsi: true, cabang: { select: { nama: true } }, picJemaat: { select: { namaLengkap: true } } },
+      select: { id: true, nama: true, deskripsi: true, cabang: { select: { nama: true } }, picJemaat: { select: { namaLengkap: true } }, pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { namaLengkap: true } } } } },
     });
-    if (!area) throw NotFound('Homecell Area tidak ditemukan');
+    if (!area) throw NotFound('Zona tidak ditemukan');
     const stats = await computeAreaStats([area.id], period);
     html = renderHomecellAreaReportHtml(
-      [{ id: area.id, nama: area.nama, deskripsi: area.deskripsi, cabang: area.cabang.nama, pic: area.picJemaat?.namaLengkap ?? null, stat: stats.get(area.id)! }],
-      { isMobileUa, filterLabel: `Homecell Area — ${area.nama}`, periodLabel, lang },
+      [{ id: area.id, nama: area.nama, deskripsi: area.deskripsi, cabang: area.cabang.nama, pic: area.picJemaat?.namaLengkap ?? null, pastors: area.pastors.map((p) => p.jemaat.namaLengkap), stat: stats.get(area.id)! }],
+      { isMobileUa, filterLabel: `Zona — ${area.nama}`, periodLabel, lang },
     );
   }
   // Halaman cetak: izinkan style/script inline (tombol & auto-print) + gambar https (logo IDEA).

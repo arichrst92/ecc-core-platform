@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
-import { Upload, Trash2, Loader2, ImageOff } from 'lucide-react';
+import { Upload, Trash2, Loader2, ImageOff, X, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { FieldConfig } from '@/lib/crud-types';
 import { useRelationOptions } from '@/lib/use-crud';
@@ -55,6 +55,8 @@ export function FieldRenderer({ field }: Props) {
           </select>
         ) : field.type === 'relation' ? (
           <RelationSelect field={field} />
+        ) : field.type === 'jemaat-multi' ? (
+          <JemaatMultiPicker field={field} />
         ) : field.type === 'image' ? (
           <ImageUploader field={field} />
         ) : field.type === 'switch' ? (
@@ -303,6 +305,121 @@ function ImageUploader({ field }: { field: FieldConfig }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface JemaatLite {
+  id: string;
+  namaLengkap: string;
+}
+
+/**
+ * Pilih beberapa jemaat (mis. pastor zona) dengan cari nama. Boleh kosong.
+ * Nilai form = array id; label chip diambil dari data row (`multiSource`) atau hasil cari.
+ */
+function JemaatMultiPicker({ field }: { field: FieldConfig }) {
+  const { setValue, watch, getValues } = useFormContext();
+  const ids = (watch(field.name) as string[] | undefined) ?? [];
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<JemaatLite[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  // Label awal dari data yang sedang diedit.
+  useEffect(() => {
+    const src = field.multiSource ? (getValues(field.multiSource) as JemaatLite[] | undefined) : undefined;
+    if (Array.isArray(src)) setNames((m) => ({ ...m, ...Object.fromEntries(src.map((j) => [j.id, j.namaLengkap])) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits([]);
+      return;
+    }
+    let alive = true;
+    setBusy(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiClient.get<{ data: JemaatLite[] }>('/admin/jemaat', {
+          params: { search: term, limit: 8, isActive: 'true' },
+        });
+        if (alive) setHits(res.data.data ?? []);
+      } catch {
+        if (alive) setHits([]);
+      } finally {
+        if (alive) setBusy(false);
+      }
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+
+  const add = (j: JemaatLite) => {
+    if (!ids.includes(j.id)) setValue(field.name, [...ids, j.id], { shouldDirty: true });
+    setNames((m) => ({ ...m, [j.id]: j.namaLengkap }));
+    setQ('');
+    setHits([]);
+  };
+  const remove = (id: string) =>
+    setValue(
+      field.name,
+      ids.filter((x) => x !== id),
+      { shouldDirty: true },
+    );
+
+  return (
+    <div className="mt-1" onClick={(e) => e.preventDefault()}>
+      {ids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {ids.map((id) => (
+            <span key={id} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-medium">
+              {names[id] ?? 'Jemaat'}
+              <button type="button" onClick={() => remove(id)} className="p-0.5 rounded-full hover:bg-brand-100" aria-label="Hapus">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          placeholder={field.placeholder ?? 'Cari nama jemaat…'}
+          className="w-full pl-9 pr-9 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+        />
+        {busy && <Loader2 className="w-4 h-4 animate-spin text-neutral-400 absolute right-3 top-1/2 -translate-y-1/2" />}
+      </div>
+      {q.trim().length >= 2 && !busy && (
+        <div className="mt-1 border border-neutral-200 rounded-lg bg-white shadow-sm max-h-56 overflow-y-auto">
+          {hits.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-neutral-500">Tidak ada jemaat dengan nama tersebut.</div>
+          ) : (
+            hits.map((j) => {
+              const picked = ids.includes(j.id);
+              return (
+                <button
+                  key={j.id}
+                  type="button"
+                  disabled={picked}
+                  onClick={() => add(j)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 disabled:text-neutral-400"
+                >
+                  {j.namaLengkap}
+                  {picked ? ' · sudah dipilih' : ''}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }

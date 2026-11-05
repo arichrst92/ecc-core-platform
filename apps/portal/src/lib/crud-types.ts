@@ -33,7 +33,10 @@ export type FieldType =
   // Butuh `imageUpload.uploadEndpoint` (interpolate :id kalau edit),
   // upload multipart POST → response `{ data: { fotoUrl } }`.
   // Untuk create mode: field disabled dgn helper text (harus create dulu baru upload).
-  | 'image';
+  | 'image'
+  // 'jemaat-multi' = pilih beberapa jemaat dgn cari nama. Nilai form: string[] (id).
+  // Label awal diambil dari `multiSource` di data row (array { id, namaLengkap }).
+  | 'jemaat-multi';
 
 export interface SelectOption {
   value: string;
@@ -87,6 +90,8 @@ export interface FieldConfig {
   hidden?: boolean;
   /** Conditional render: function yang return true jika field harus tampil */
   showIf?: (values: Record<string, unknown>) => boolean;
+  /** Untuk type=jemaat-multi: key array objek jemaat di row (mis. "pastors"). */
+  multiSource?: string;
   /** Default value saat create */
   defaultValue?: unknown;
 }

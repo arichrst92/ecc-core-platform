@@ -43,6 +43,7 @@ import { jemaatResolusiRouter } from './jemaat-resolusi.js';
 import { worshipAdminRouter } from './worship.js';
 import { reportRouter } from './report.js';
 import { spiritualJourneyRouter } from './spiritual-journey.js';
+import { spiritualJourneyRequestRouter } from './spiritual-journey-request.js';
 import { tamuRouter } from './tamu.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
@@ -90,6 +91,7 @@ adminRouter.use('/analytics', analyticsRouter);
 adminRouter.use('/worship', worshipAdminRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).
 adminRouter.use('/report', reportRouter);
+adminRouter.use('/spiritual-journey-request', spiritualJourneyRequestRouter);
 adminRouter.use('/spiritual-journey', spiritualJourneyRouter);
 adminRouter.use('/tamu', tamuRouter);
 adminRouter.use('/role', roleRouter);

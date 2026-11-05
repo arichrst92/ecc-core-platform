@@ -132,11 +132,11 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Elsa punya akses ke 53 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
+        text: 'Elsa punya akses ke 54 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
       },
       {
         kind: 'bullet',
-        title: '53 entity yang bisa di-query',
+        title: '54 entity yang bisa di-query',
         items: [
           'Gereja: sinode, cabang (termasuk zona waktu & link Google Maps)',
           'People: jemaat (termasuk tamu & kategori tamu), role, jemaat_role, tipe_relasi, jemaat_relasi, jemaat_sertifikat, feedback (Kritik & Saran)',
@@ -145,7 +145,7 @@ const SECTIONS: Section[] = [
           'Doa: prayer_request (tanpa isi doa), prayer_petugas_role, prayer_petugas_pelayanan',
           'Community: homecell_area (zona), homecell_area_pastor (pastor zona), homecell, homecell_member, homecell_schedule, homecell_attendance, homecell_join_request, homecell_announcement, homecell_poll',
           'Group: group, group_member, group_join_request, group_announcement, group_poll',
-          'Movement: event, event_participation, visit, local_business, spiritual_journey_step',
+          'Movement: event, event_participation, visit, local_business, spiritual_journey_step, spiritual_journey_request',
           'Broadcast: konten (news + renungan), worship_album, worship_song',
           'Peta: jemaat_geocode (hasil pemetaan alamat jemaat)',
           'CKids: hadiah_katalog, jemaat_point_balance, point_transaction, hadiah_redeem',
@@ -484,6 +484,17 @@ const SECTIONS: Section[] = [
       { kind: 'menu-card', href: '/dashboard/event', label: 'Event', description: 'Event satu-kali (KKR, Retret, dll) dengan registrasi, pembayaran (opsional), dan check-in.' },
       { kind: 'menu-card', href: '/dashboard/visit', label: 'Visit', description: 'Pertemuan peer-to-peer antar jemaat via scan QR. Read-only di portal — aktivitas inti di mobile.' },
       { kind: 'menu-card', href: '/dashboard/local-business', label: 'Local Market', description: 'Direktori UMKM jemaat. Read-only di portal — owner CRUD via mobile.' },
+      {
+        kind: 'steps',
+        title: 'Request update Spiritual Journey dari app',
+        items: [
+          'Jemaat (app 2.4.6) membuka Spiritual Journey → "Ajukan update tahap", memilih tahap terakhir yang sudah dicapai, dan menulis catatan (mis. tanggal & tempat baptis). Satu request menunggu per jemaat; bisa dibatalkan selama belum diproses.',
+          'Admin: Spiritual Journey → tombol "Request dari App" (angka merah = menunggu). Filter status & cari nama; klik baris untuk detail.',
+          'Detail menampilkan tahap yang tercatat saat ini, catatan jemaat, dan daftar tahap yang AKAN diberikan: tahap diminta + semua tahap sebelumnya yang belum tercatat. Tahap yang tidak menentukan sub role butuh pilihan sub role.',
+          'Setujui → Role / Sub role / Status tiap tahap diberikan (role yang sudah ada dengan sub role sama hanya diperbarui status-nya), jemaat mendapat notifikasi. Tolak → isi alasan, dikirim ke jemaat.',
+          'Akses: menu Spiritual Journey (baca untuk melihat, tulis untuk memproses).',
+        ],
+      },
       {
         kind: 'steps',
         title: 'Buat event baru',

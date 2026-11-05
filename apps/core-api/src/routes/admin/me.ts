@@ -13,6 +13,7 @@
  *   - GET    /admin/me/scanner-ibadah           → ibadah yang user-nya scanner (M7)
  *   - GET    /admin/me/homecell-managed         → homecell user-nya PIC (M9)
  *   - GET    /admin/me/homecell-area-managed    → area user-nya PIC (M9)
+ *   - GET    /admin/me/zona-saya                → zona homecell yang saya ikuti (2.4.6)
  *
  *   - GET    /admin/me/family                   → list family network
  *   - POST   /admin/me/family/link-by-kode      → link via scan QR kode
@@ -733,6 +734,65 @@ meRouter.get('/homecell-area-managed', async (req, res) => {
       homecellCount: r._count.homecells,
       // 2.4.6: app membedakan PIC (boleh ubah zona) dan pastor (lihat saja).
       myRole: r.picJemaatId === jemaatId ? 'PIC' : 'PASTOR',
+    })),
+  });
+});
+
+/**
+ * Zona saya (2.4.6) — zona dari homecell yang saya ikuti (anggota aktif / PIC
+ * homecell), untuk SEMUA jemaat. Hanya lihat: nama, cabang, PIC, pastor, dan
+ * daftar homecell aktif di zona itu.
+ *   GET /admin/me/zona-saya
+ */
+meRouter.get('/zona-saya', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const [memberOf, ledHc] = await Promise.all([
+    prisma.homecellMember.findMany({
+      where: { jemaatId, isActive: true, homecell: { isActive: true } },
+      select: { homecellId: true, homecell: { select: { areaId: true } } },
+    }),
+    prisma.homecell.findMany({ where: { picJemaatId: jemaatId, isActive: true }, select: { id: true, areaId: true } }),
+  ]);
+  const myHc = new Set([...memberOf.map((m) => m.homecellId), ...ledHc.map((h) => h.id)]);
+  const areaIds = [...new Set([...memberOf.map((m) => m.homecell.areaId), ...ledHc.map((h) => h.areaId)])];
+  if (!areaIds.length) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const areas = await prisma.homecellArea.findMany({
+    where: { id: { in: areaIds }, isActive: true },
+    orderBy: { nama: 'asc' },
+    select: {
+      id: true,
+      nama: true,
+      deskripsi: true,
+      cabang: { select: { id: true, nama: true } },
+      picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+      pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } } } },
+      homecells: {
+        where: { isActive: true },
+        orderBy: { nama: 'asc' },
+        select: {
+          id: true,
+          nama: true,
+          hari: true,
+          jam: true,
+          kategori: true,
+          usiaMin: true,
+          usiaMax: true,
+          picJemaat: { select: { id: true, namaLengkap: true } },
+          _count: { select: { members: { where: { isActive: true } } } },
+        },
+      },
+    },
+  });
+  res.json({
+    success: true,
+    data: areas.map(({ pastors, homecells, ...a }) => ({
+      ...a,
+      pastors: pastors.map((p) => p.jemaat),
+      homecellCount: homecells.length,
+      homecells: homecells.map(({ _count, ...h }) => ({ ...h, memberCount: _count.members, isMine: myHc.has(h.id) })),
     })),
   });
 });

@@ -15,6 +15,7 @@ import {
   Camera,
   Check,
   Footprints,
+  Inbox,
   Loader2,
   Pencil,
   Plus,
@@ -69,6 +70,14 @@ export default function SpiritualJourneyPage() {
     queryFn: async () => (await apiClient.get<{ data: Step[] }>('/admin/spiritual-journey')).data.data,
   });
   const steps = q.data ?? [];
+  // 2.4.6 — request update tahap dari app yang menunggu persetujuan.
+  const reqSummary = useQuery({
+    queryKey: ['spiritual-journey-request', 'summary'],
+    queryFn: async () =>
+      (await apiClient.get<{ data: { pending: number } }>('/admin/spiritual-journey-request/summary')).data.data,
+    refetchInterval: 60_000,
+  });
+  const pendingReq = reqSummary.data?.pending ?? 0;
 
   const reorder = useMutation({
     mutationFn: async (ids: string[]) => apiClient.post('/admin/spiritual-journey/reorder', { ids }),
@@ -106,12 +115,25 @@ export default function SpiritualJourneyPage() {
             disyaratkan. Jemaat melihat progres & cara mendapatkannya di aplikasi mobile.
           </p>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg"
-        >
-          <Plus className="w-4 h-4" /> Tambah Tahap
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/dashboard/spiritual-journey/request"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-sm font-semibold rounded-lg"
+          >
+            <Inbox className="w-4 h-4" /> Request dari App
+            {pendingReq > 0 ? (
+              <span className="min-w-[20px] px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[11px] leading-none text-center">
+                {pendingReq > 99 ? '99+' : pendingReq}
+              </span>
+            ) : null}
+          </Link>
+          <button
+            onClick={() => setEditing('new')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg"
+          >
+            <Plus className="w-4 h-4" /> Tambah Tahap
+          </button>
+        </div>
       </div>
 
       {q.isLoading ? (

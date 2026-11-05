@@ -47,7 +47,9 @@ export type InAppNotifType =
   | 'HOMECELL_POLL_CREATED'
   | 'FEEDBACK_REPLIED'
   | 'PRAYER_ASSIGNED'
-  | 'PRAYER_PRAYED';
+  | 'PRAYER_PRAYED'
+  | 'SPIRITUAL_JOURNEY_APPROVED'
+  | 'SPIRITUAL_JOURNEY_REJECTED';
 
 interface CreateNotifArgs {
   jemaatId: string;

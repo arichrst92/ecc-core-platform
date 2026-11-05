@@ -339,6 +339,12 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     allowedInclude: ['role', 'subRole', 'subRoleStatus'],
     keyFields: ['id', 'judul', 'urutan', 'roleId', 'subRoleId', 'isActive'],
   },
+  spiritual_journey_request: {
+    prismaKey: 'spiritualJourneyRequest',
+    description: 'Request update tahap Spiritual Journey dari app (jemaat pilih tahap + catatan; status PENDING/APPROVED/REJECTED/CANCELLED, disetujui admin di Portal).',
+    allowedInclude: ['jemaat', 'step', 'reviewedBy'],
+    keyFields: ['id', 'jemaatId', 'stepId', 'status', 'catatan', 'alasanTolak', 'reviewedAt', 'createdAt'],
+  },
   jemaat_sertifikat: {
     prismaKey: 'jemaatSertifikat',
     description: 'Sertifikat milik jemaat (mis. baptis, kelas) yang diunggah.',

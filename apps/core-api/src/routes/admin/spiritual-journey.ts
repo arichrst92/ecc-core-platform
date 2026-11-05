@@ -26,7 +26,7 @@ export const spiritualJourneyRouter = Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
+export async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
   if (!req.user) throw Unauthorized();
   if (req.user.isFulltimer) return;
   const m = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess['spiritual-journey'];

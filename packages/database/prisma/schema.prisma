@@ -241,6 +241,8 @@ model Jemaat {
   reservasiPickedUp            Reservasi[]                   @relation("ReservasiPickedUpBy")
   areaPic                      HomecellArea[]                @relation("AreaPic")
   areaPastor                   HomecellAreaPastor[]
+  spiritualJourneyRequests     SpiritualJourneyRequest[]     @relation("SjRequestJemaat")
+  spiritualJourneyReviews      SpiritualJourneyRequest[]     @relation("SjRequestReviewer")
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
   sertifikat                   JemaatSertifikat[]
@@ -2060,6 +2062,8 @@ enum InAppNotifType {
   FEEDBACK_REPLIED
   PRAYER_ASSIGNED
   PRAYER_PRAYED
+  SPIRITUAL_JOURNEY_APPROVED
+  SPIRITUAL_JOURNEY_REJECTED
 
   @@map("in_app_notif_type")
 }
@@ -3377,9 +3381,43 @@ model SpiritualJourneyStep {
   role          Role           @relation("JourneyRole", fields: [roleId], references: [id], onDelete: Restrict)
   subRole       SubRole?       @relation("JourneySubRole", fields: [subRoleId], references: [id], onDelete: SetNull)
   subRoleStatus SubRoleStatus? @relation("JourneySubRoleStatus", fields: [subRoleStatusId], references: [id], onDelete: SetNull)
+  requests      SpiritualJourneyRequest[]
 
   @@index([urutan])
   @@map("spiritual_journey_step")
+}
+
+enum SpiritualJourneyRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("spiritual_journey_request_status")
+}
+
+// Request update Spiritual Journey dari app (2.4.6): jemaat memilih tahap yang
+// sudah dicapai + catatan; admin menyetujui → tahap itu & semua tahap
+// sebelumnya yang belum tercapai diberikan (JemaatRole sesuai syarat tahap).
+model SpiritualJourneyRequest {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  jemaatId           String                        @map("jemaat_id") @db.Uuid
+  stepId             String                        @map("step_id") @db.Uuid
+  catatan            String?                       @db.Text
+  status             SpiritualJourneyRequestStatus @default(PENDING)
+  alasanTolak        String?                       @map("alasan_tolak") @db.Text
+  reviewedByJemaatId String?                       @map("reviewed_by_jemaat_id") @db.Uuid
+  reviewedAt         DateTime?                     @map("reviewed_at")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+
+  jemaat     Jemaat                @relation("SjRequestJemaat", fields: [jemaatId], references: [id], onDelete: Cascade)
+  step       SpiritualJourneyStep  @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  reviewedBy Jemaat?               @relation("SjRequestReviewer", fields: [reviewedByJemaatId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([jemaatId])
+  @@map("spiritual_journey_request")
 }
 
 // ============================================================

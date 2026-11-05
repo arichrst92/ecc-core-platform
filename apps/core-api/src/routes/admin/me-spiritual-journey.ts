@@ -4,10 +4,18 @@
  * Tahap aktif berurutan + tanda sudah/belum tercapai (dari role aktif saya),
  * tahap berikutnya, dan event mendatang (cabang saya / global) yang memberi
  * status tahap tersebut sebagai "cara mendapatkan".
+ *
+ * 2.4.6 — request update tahap (disetujui admin di Portal):
+ *   POST   /admin/me/spiritual-journey/request      { stepId, catatan }
+ *   DELETE /admin/me/spiritual-journey/request/:id  → batalkan (masih menunggu)
+ * GET / juga mengirim `request` = request terakhir (menunggu / hasil terakhir).
  */
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
-import { Unauthorized } from '../../lib/errors.js';
+import { z } from 'zod';
+import { BadRequest, Conflict, NotFound, Unauthorized } from '../../lib/errors.js';
+import { audit } from '../../lib/audit.js';
+import { meetsStep } from '../../lib/spiritual-journey.js';
 import { eventGrantsStep, journeyProgress } from '../../lib/spiritual-journey.js';
 import { stepInclude } from './spiritual-journey.js';
 
@@ -17,7 +25,7 @@ meSpiritualJourneyRouter.get('/', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const jemaatId = req.user.jemaatId;
   const now = new Date();
-  const [steps, roles, me] = await Promise.all([
+  const [steps, roles, me, lastRequest] = await Promise.all([
     prisma.spiritualJourneyStep.findMany({
       where: { isActive: true },
       orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
@@ -28,6 +36,11 @@ meSpiritualJourneyRouter.get('/', async (req, res) => {
       select: { roleId: true, subRoleId: true, subRoleStatusId: true },
     }),
     prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true } }),
+    prisma.spiritualJourneyRequest.findFirst({
+      where: { jemaatId, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, catatan: true, alasanTolak: true, createdAt: true, reviewedAt: true, step: { select: { id: true, judul: true } } },
+    }),
   ]);
   const events = steps.length
     ? await prisma.event.findMany({
@@ -68,6 +81,7 @@ meSpiritualJourneyRouter.get('/', async (req, res) => {
       total: steps.length,
       achievedCount: p.achievedCount,
       nextIndex: p.nextIndex,
+      request: lastRequest,
       steps: p.steps.map((s, i) => ({
         id: s.id,
         urutan: i + 1,
@@ -88,4 +102,51 @@ meSpiritualJourneyRouter.get('/', async (req, res) => {
       })),
     },
   });
+});
+
+const requestSchema = z.object({
+  stepId: z.string().uuid('Pilih tahap.'),
+  catatan: z.string().trim().min(3, 'Ceritakan singkat (min. 3 karakter).').max(1000),
+});
+
+meSpiritualJourneyRouter.post('/request', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const jemaatId = req.user.jemaatId;
+  const input = requestSchema.parse(req.body ?? {});
+  const [steps, roles, pending] = await Promise.all([
+    prisma.spiritualJourneyStep.findMany({
+      where: { isActive: true },
+      orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, judul: true, roleId: true, subRoleId: true, subRoleStatusId: true },
+    }),
+    prisma.jemaatRole.findMany({ where: { jemaatId, isActive: true }, select: { roleId: true, subRoleId: true, subRoleStatusId: true } }),
+    prisma.spiritualJourneyRequest.findFirst({ where: { jemaatId, status: 'PENDING' }, select: { id: true } }),
+  ]);
+  if (pending) throw Conflict('Masih ada request yang menunggu persetujuan. Batalkan dulu bila ingin mengganti.');
+  const idx = steps.findIndex((s) => s.id === input.stepId);
+  if (idx < 0) throw NotFound('Tahap tidak ditemukan.');
+  if (steps.slice(0, idx + 1).every((s) => meetsStep(s, roles))) {
+    throw BadRequest('Tahap ini (dan tahap sebelumnya) sudah tercatat di Spiritual Journey Anda.');
+  }
+  const created = await prisma.spiritualJourneyRequest.create({
+    data: { jemaatId, stepId: input.stepId, catatan: input.catatan },
+    select: { id: true, status: true, catatan: true, alasanTolak: true, createdAt: true, reviewedAt: true, step: { select: { id: true, judul: true } } },
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'spiritual_journey_request',
+    resourceId: created.id,
+    resourceLabel: `Request tahap "${created.step.judul}"`,
+  });
+  res.status(201).json({ success: true, data: created });
+});
+
+meSpiritualJourneyRouter.delete('/request/:id', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const upd = await prisma.spiritualJourneyRequest.updateMany({
+    where: { id: z.string().uuid().parse(req.params.id), jemaatId: req.user.jemaatId, status: 'PENDING' },
+    data: { status: 'CANCELLED' },
+  });
+  if (!upd.count) throw NotFound('Request tidak ditemukan atau sudah diproses.');
+  res.json({ success: true, data: { id: req.params.id, status: 'CANCELLED' } });
 });

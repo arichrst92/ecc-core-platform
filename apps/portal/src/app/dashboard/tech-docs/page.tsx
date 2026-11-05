@@ -399,7 +399,7 @@ await createNotificationBatch(guardians, {...});`,
     id: 'elsa',
     title: 'Elsa (Els Agentic) — AI Agent',
     icon: Sparkles,
-    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 53 entities.',
+    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 54 entities.',
     blocks: [
       {
         kind: 'p',
@@ -409,7 +409,7 @@ await createNotificationBatch(guardians, {...});`,
       {
         kind: 'p',
         text:
-          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 53 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
+          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 54 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
       },
       {
         kind: 'table',
@@ -616,6 +616,7 @@ pm2 status`,
           'Ministry Phase 2: POST /admin/ministry/:id/join simple direct-ACTIVE flow.',
           'Header X-Client: mobile → isMobileClient(req). Dipakai untuk perilaku khusus app, mis. detail event mengirim "-" untuk lokasi/jam kosong; Portal tetap menerima null.',
           'Versi 2.4.5 (Nov 2026): kategori tamu, batalkan self check-in (/admin/me/reservasi/:id/cancel-checkin), self check-in +30 menit (CLOSE_AFTER_MIN di lib/self-checkin.ts), Catatan saya (/admin/me/catatan), visit dengan tamu, petunjuk arah ke mapsUrl, ulasan mengikuti allowReview.',
+          'Versi 2.4.6: Zona & pastor zona (homecell_area_pastor, /admin/me/homecell-area-managed + myRole, /admin/me/zona-saya untuk semua jemaat), potensial member (/admin/me/homecell/:id/potensial-member), cari keluarga (/admin/me/family/search — nama sebagian, email/HP persis, limiter family-search 60/10 menit — + /family/link-by-id), request Spiritual Journey (POST/DELETE /admin/me/spiritual-journey/request; admin /admin/spiritual-journey-request, lib/spiritual-journey-request.ts: tahap diminta + semua tahap sebelumnya diberikan), bookmark multi ayat (lokal di HP).',
           'Kompatibilitas: perubahan server harus aman untuk app lama (2.4.4) — tambah field opsional, jangan ubah bentuk response yang sudah dipakai.',
         ],
       },

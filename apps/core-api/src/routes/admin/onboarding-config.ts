@@ -6,6 +6,9 @@
  *   PUT /admin/onboarding-config  { rules: [{ jenis, roleId, subRoleId, subRoleStatusId? }] }  (ganti semua)
  *   GET /admin/onboarding-config/tanpa-role         → jumlah jemaat sudah onboard tapi role kosong
  *   POST /admin/onboarding-config/tanpa-role/apply  → beri role sesuai aturan TANPA_ROLE
+ *   PUT  /admin/onboarding-config/promosi          { minHadir } → New Comer → Jemaat Tetap setelah hadir N× (0 = nonaktif)
+ *   GET  /admin/onboarding-config/promosi/preview  → jumlah + contoh yang memenuhi syarat sekarang
+ *   POST /admin/onboarding-config/promosi/apply    → jalankan sekarang (otomatis juga tiap 30 menit)
  */
 import { Router } from 'express';
 import { z } from 'zod';
@@ -13,7 +16,14 @@ import { prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { ONBOARDING_JENIS, applyTanpaRole, tanpaRoleWhere } from '../../lib/onboarding-roles.js';
+import {
+  ONBOARDING_JENIS,
+  applyNewComerPromotion,
+  applyTanpaRole,
+  getNewComerMinHadir,
+  newComerEligible,
+  tanpaRoleWhere,
+} from '../../lib/onboarding-roles.js';
 
 export const onboardingConfigRouter = Router();
 onboardingConfigRouter.use(requireMenu('onboarding-config'));
@@ -44,7 +54,68 @@ onboardingConfigRouter.get('/', async (_req, res) => {
       },
     }),
   ]);
-  res.json({ success: true, data: { rules, roles } });
+  res.json({ success: true, data: { rules, roles, promosi: { minHadir: await getNewComerMinHadir() } } });
+});
+
+onboardingConfigRouter.put('/promosi', requireMenu('onboarding-config', 'write'), async (req, res) => {
+  const { minHadir } = z
+    .object({ minHadir: z.coerce.number().int().min(0, 'Minimal 0').max(500, 'Maksimal 500').nullable() })
+    .parse(req.body ?? {});
+  const before = await getNewComerMinHadir();
+  const value = minHadir && minHadir > 0 ? minHadir : null;
+  await prisma.appConfig.upsert({
+    where: { id: 'global' },
+    create: { id: 'global', newComerMinHadir: value, updatedByUserId: req.user?.sub ?? null },
+    update: { newComerMinHadir: value, updatedByUserId: req.user?.sub ?? null },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'onboarding_config',
+    resourceLabel: value ? `New Comer → Jemaat Tetap setelah hadir ${value}×` : 'Promosi New Comer dinonaktifkan',
+    before: { minHadir: before },
+    after: { minHadir: value },
+  });
+  res.json({ success: true, data: { minHadir: value } });
+});
+
+onboardingConfigRouter.get('/promosi/preview', async (_req, res) => {
+  const minHadir = await getNewComerMinHadir();
+  if (!minHadir) {
+    res.json({ success: true, data: { minHadir: null, count: 0, sample: [] } });
+    return;
+  }
+  const list = await newComerEligible(minHadir);
+  const top = list.slice(0, 10);
+  const jemaat = await prisma.jemaat.findMany({
+    where: { id: { in: top.map((t) => t.jemaatId) } },
+    select: { id: true, namaLengkap: true, kode: true, cabang: { select: { nama: true } } },
+  });
+  res.json({
+    success: true,
+    data: {
+      minHadir,
+      count: list.length,
+      sample: top.map((t) => ({ ...jemaat.find((j) => j.id === t.jemaatId), hadir: t.hadir })).filter((x) => x.id),
+    },
+  });
+});
+
+onboardingConfigRouter.post('/promosi/apply', requireMenu('onboarding-config', 'write'), async (req, res) => {
+  const result = await applyNewComerPromotion();
+  if (result.alreadyRunning) {
+    res.status(409).json({ success: false, error: { code: 'ALREADY_RUNNING', message: 'Proses sedang berjalan. Tunggu sebentar lalu muat ulang.' } });
+    return;
+  }
+  if (result.skipped === 'nonaktif') throw BadRequest('Isi jumlah kehadiran minimal lalu simpan dulu.');
+  if (result.skipped === 'aturan-new-comer-kosong') throw BadRequest('Belum ada aturan role "New Comer".');
+  if (result.skipped === 'aturan-jemaat-tetap-kosong') throw BadRequest('Belum ada aturan role "Jemaat Tetap" — role New Comer tidak akan diganti.');
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'onboarding_config',
+    resourceLabel: `New Comer → Jemaat Tetap: ${result.dipromosikan} jemaat`,
+    metadata: { kind: 'new-comer-promotion', ...result },
+  });
+  res.json({ success: true, data: result });
 });
 
 const putSchema = z.object({

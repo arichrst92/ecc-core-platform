@@ -125,3 +125,152 @@ export async function applyTanpaRole(): Promise<{ jemaat: number; roles: number;
     applying = false;
   }
 }
+
+// ------------------------------------------------------------------ New Comer → Jemaat Tetap
+
+/**
+ * Promosi otomatis: jemaat yang memegang role NEW_COMER (aturan jenis NEW_COMER,
+ * bukan SEMUA) dan sudah hadir ibadah ≥ N kali (reservasi status JOIN) dipindah
+ * ke role JEMAAT_TETAP (+ SEMUA). N diatur di Portal (app_config.new_comer_min_hadir;
+ * kosong / 0 = nonaktif).
+ *
+ * Per jemaat, di dalam kunci (pg_advisory_xact_lock, sama dgn grantRoles):
+ *   1. Role Jemaat Tetap yang sub role-nya SUDAH dimiliki → status-nya diperbarui
+ *      (tidak dibuat baris baru); baris aktif ganda dgn sub role sama dinonaktifkan.
+ *   2. Yang belum dimiliki → dibuat.
+ *   3. Role New Comer yang sub role-nya tidak dipakai Jemaat Tetap → dinonaktifkan
+ *      (isActive=false, tanggalSelesai=hari ini). Riwayat tetap ada.
+ */
+export async function getNewComerMinHadir(): Promise<number | null> {
+  const row = await prisma.appConfig.findUnique({ where: { id: 'global' }, select: { newComerMinHadir: true } });
+  const n = row?.newComerMinHadir ?? null;
+  return n && n > 0 ? n : null;
+}
+
+async function newComerRules() {
+  return prisma.onboardingRoleRule.findMany({
+    where: { jenis: 'NEW_COMER' },
+    select: { roleId: true, subRoleId: true, subRoleStatusId: true },
+  });
+}
+
+/** Filter JemaatRole aktif yang cocok dengan salah satu aturan New Comer. */
+function newComerRoleWhere(rules: { roleId: string; subRoleId: string; subRoleStatusId: string | null }[]): Prisma.JemaatRoleWhereInput {
+  return {
+    isActive: true,
+    OR: rules.map((r) => ({ roleId: r.roleId, subRoleId: r.subRoleId, ...(r.subRoleStatusId ? { subRoleStatusId: r.subRoleStatusId } : {}) })),
+  };
+}
+
+/** Jemaat New Comer yang sudah memenuhi syarat hadir (urut kehadiran terbanyak). */
+export async function newComerEligible(minHadir: number): Promise<{ jemaatId: string; hadir: number }[]> {
+  const rules = await newComerRules();
+  if (!rules.length) return [];
+  const ids = (
+    await prisma.jemaat.findMany({
+      where: { isActive: true, isTamu: false, jemaatRoles: { some: newComerRoleWhere(rules) } },
+      select: { id: true },
+    })
+  ).map((j) => j.id);
+  const out: { jemaatId: string; hadir: number }[] = [];
+  for (let i = 0; i < ids.length; i += 5000) {
+    const chunk = ids.slice(i, i + 5000);
+    const rows = await prisma.reservasi.groupBy({
+      by: ['jemaatId'],
+      where: { jemaatId: { in: chunk }, status: 'JOIN' },
+      _count: { _all: true },
+      having: { jemaatId: { _count: { gte: minHadir } } },
+    });
+    for (const r of rows) out.push({ jemaatId: r.jemaatId, hadir: r._count._all });
+  }
+  return out.sort((a, b) => b.hadir - a.hadir);
+}
+
+/** Promosikan satu jemaat. Mengembalikan true bila ada perubahan. */
+async function promoteOne(
+  jemaatId: string,
+  ncRules: { roleId: string; subRoleId: string; subRoleStatusId: string | null }[],
+  jtRoles: RoleSpec[],
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'jemaat-role:' + jemaatId}))`;
+    const active = await tx.jemaatRole.findMany({
+      where: { jemaatId, isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, roleId: true, subRoleId: true, subRoleStatusId: true },
+    });
+    const isNc = (r: (typeof active)[number]) =>
+      ncRules.some((n) => n.roleId === r.roleId && n.subRoleId === r.subRoleId && (!n.subRoleStatusId || n.subRoleStatusId === r.subRoleStatusId));
+    // Dicek ulang di dalam kunci (bisa sudah dipromosikan proses lain / diubah admin).
+    if (!active.some(isNc)) return false;
+    const today = new Date();
+    const jtSub = new Set(jtRoles.map((r) => r.subRoleId));
+    const nonaktif: string[] = [];
+    for (const spec of jtRoles) {
+      const same = active.filter((a) => a.subRoleId === spec.subRoleId);
+      if (same.length) {
+        const keep = same[0]!;
+        // Status ikut aturan Jemaat Tetap. Status kosong di aturan hanya menghapus
+        // status bila baris itu role New Comer (role lain dibiarkan).
+        if (keep.subRoleStatusId !== spec.subRoleStatusId && (spec.subRoleStatusId || isNc(keep))) {
+          await tx.jemaatRole.update({ where: { id: keep.id }, data: { subRoleStatusId: spec.subRoleStatusId } });
+        }
+        // Hindari dobel: baris aktif lain dgn sub role yang sama dinonaktifkan.
+        nonaktif.push(...same.slice(1).map((x) => x.id));
+      } else {
+        await tx.jemaatRole.create({
+          data: {
+            jemaatId,
+            roleId: spec.roleId,
+            subRoleId: spec.subRoleId,
+            subRoleStatusId: spec.subRoleStatusId,
+            isActive: true,
+            catatan: 'Otomatis: New Comer → Jemaat Tetap (syarat hadir ibadah terpenuhi)',
+          },
+        });
+      }
+    }
+    for (const a of active) if (isNc(a) && !jtSub.has(a.subRoleId)) nonaktif.push(a.id);
+    if (nonaktif.length) {
+      await tx.jemaatRole.updateMany({
+        where: { id: { in: [...new Set(nonaktif)] } },
+        data: { isActive: false, tanggalSelesai: today },
+      });
+    }
+    return true;
+  });
+}
+
+let promoting = false;
+
+/** Jalankan promosi untuk semua yang memenuhi syarat (job berkala & tombol Portal). */
+export async function applyNewComerPromotion(): Promise<{
+  dipromosikan: number;
+  gagal: number;
+  kandidat: number;
+  skipped?: string;
+  alreadyRunning?: boolean;
+}> {
+  if (promoting) return { dipromosikan: 0, gagal: 0, kandidat: 0, alreadyRunning: true };
+  promoting = true;
+  try {
+    const minHadir = await getNewComerMinHadir();
+    if (!minHadir) return { dipromosikan: 0, gagal: 0, kandidat: 0, skipped: 'nonaktif' };
+    const [ncRules, jtRoles] = await Promise.all([newComerRules(), onboardingRolesFor('JEMAAT_TETAP')]);
+    if (!ncRules.length) return { dipromosikan: 0, gagal: 0, kandidat: 0, skipped: 'aturan-new-comer-kosong' };
+    if (!jtRoles.length) return { dipromosikan: 0, gagal: 0, kandidat: 0, skipped: 'aturan-jemaat-tetap-kosong' };
+    const list = await newComerEligible(minHadir);
+    let dipromosikan = 0;
+    let gagal = 0;
+    for (const { jemaatId } of list) {
+      try {
+        if (await promoteOne(jemaatId, ncRules, jtRoles)) dipromosikan++;
+      } catch {
+        gagal++;
+      }
+    }
+    return { dipromosikan, gagal, kandidat: list.length };
+  } finally {
+    promoting = false;
+  }
+}

@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Info, Loader2, Play, Plus, Save, Trash2, UserCheck, UserX } from 'lucide-react';
+import { ArrowRight, Info, Loader2, Play, Plus, Save, Trash2, UserCheck, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
@@ -63,7 +63,7 @@ export default function OnboardingConfigPage() {
   const q = useQuery({
     queryKey: ['onboarding-config'],
     queryFn: async () =>
-      (await apiClient.get<{ data: { rules: RuleRow[]; roles: RoleCatalog[] } }>('/admin/onboarding-config')).data.data,
+      (await apiClient.get<{ data: { rules: RuleRow[]; roles: RoleCatalog[]; promosi?: { minHadir: number | null } } }>('/admin/onboarding-config')).data.data,
   });
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const tanpaRole = useQuery({
@@ -310,8 +310,149 @@ export default function OnboardingConfigPage() {
               </div>
             );
           })}
+          <PromosiCard
+            dirty={dirty}
+            adaNewComer={drafts.some((d) => d.jenis === 'NEW_COMER')}
+            adaJemaatTetap={drafts.some((d) => d.jenis === 'JEMAAT_TETAP' || d.jenis === 'SEMUA')}
+            savedMin={q.data?.promosi?.minHadir ?? null}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * New Comer → Jemaat Tetap setelah hadir ibadah N kali. Role New Comer diganti
+ * role Jemaat Tetap (tanpa dobel). Jalan otomatis tiap 30 menit + tombol manual.
+ */
+function PromosiCard({
+  dirty,
+  adaNewComer,
+  adaJemaatTetap,
+  savedMin,
+}: {
+  dirty: boolean;
+  adaNewComer: boolean;
+  adaJemaatTetap: boolean;
+  savedMin: number | null;
+}) {
+  const qc = useQueryClient();
+  const [val, setVal] = useState(savedMin ? String(savedMin) : '');
+  useEffect(() => setVal(savedMin ? String(savedMin) : ''), [savedMin]);
+  const preview = useQuery({
+    queryKey: ['onboarding-config', 'promosi-preview', savedMin],
+    enabled: !!savedMin,
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: { minHadir: number | null; count: number; sample: { id: string; namaLengkap: string; kode: string | null; cabang: { nama: string }; hadir: number }[] };
+        }>('/admin/onboarding-config/promosi/preview')
+      ).data.data,
+  });
+  const n = val.trim() === '' ? 0 : Number(val);
+  const valid = Number.isInteger(n) && n >= 0 && n <= 500;
+  const changed = (savedMin ?? 0) !== (valid ? n : -1);
+  const saveMin = useMutation({
+    mutationFn: async () => apiClient.put('/admin/onboarding-config/promosi', { minHadir: n || null }),
+    onSuccess: () => {
+      toast.success(n ? `Tersimpan: naik ke Jemaat Tetap setelah hadir ${n}×` : 'Promosi otomatis dinonaktifkan');
+      void qc.invalidateQueries({ queryKey: ['onboarding-config'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menyimpan'),
+  });
+  const run = useMutation({
+    mutationFn: async () =>
+      (await apiClient.post<{ data: { dipromosikan: number; gagal: number; kandidat: number } }>('/admin/onboarding-config/promosi/apply')).data.data,
+    onSuccess: (r) => {
+      toast.success(`${r.dipromosikan.toLocaleString('id-ID')} jemaat naik menjadi Jemaat Tetap`);
+      if (r.gagal > 0) toast.error(`${r.gagal.toLocaleString('id-ID')} jemaat gagal diproses — coba lagi.`);
+      void qc.invalidateQueries({ queryKey: ['onboarding-config', 'promosi-preview'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menjalankan'),
+  });
+
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="px-4 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-100">
+        <div className="font-semibold text-neutral-900 inline-flex items-center gap-2">
+          New Comer <ArrowRight className="w-4 h-4" /> Jemaat Tetap
+        </div>
+        <div className="text-xs text-neutral-500">
+          Jemaat yang memegang role “Memilih New Comer” dan sudah hadir ibadah (check-in) sebanyak jumlah ini otomatis dipindah ke
+          role “Memilih Jemaat Tetap”. Role New Comer dinonaktifkan (riwayat tetap ada); sub role yang sama tidak digandakan, cukup
+          status-nya diperbarui. Berjalan otomatis tiap 30 menit.
+        </div>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-neutral-700">Naik setelah hadir ibadah</span>
+          <input
+            type="number"
+            min={0}
+            max={500}
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            placeholder="0"
+            className="w-24 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
+          />
+          <span className="text-neutral-700">kali</span>
+          <span className="text-xs text-neutral-400">(kosong / 0 = nonaktif)</span>
+          <button
+            onClick={() => saveMin.mutate()}
+            disabled={!valid || !changed || saveMin.isPending}
+            className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+          >
+            {saveMin.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Simpan
+          </button>
+        </div>
+        {!adaNewComer || !adaJemaatTetap ? (
+          <div className="text-xs text-amber-700">
+            {!adaNewComer ? 'Belum ada aturan role “Memilih New Comer”. ' : ''}
+            {!adaJemaatTetap ? 'Belum ada aturan role “Memilih Jemaat Tetap” — promosi tidak dijalankan.' : ''}
+          </div>
+        ) : null}
+        {savedMin ? (
+          preview.isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
+          ) : preview.data ? (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2.5 space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-emerald-900">
+                  <b>{preview.data.count.toLocaleString('id-ID')}</b> New Comer sudah hadir ≥ {savedMin}× dan siap naik.
+                </div>
+                <button
+                  onClick={() => {
+                    if (confirm(`Pindahkan ${preview.data!.count.toLocaleString('id-ID')} New Comer ke role Jemaat Tetap sekarang?`)) run.mutate();
+                  }}
+                  disabled={run.isPending || dirty || preview.data.count === 0}
+                  title={dirty ? 'Simpan perubahan aturan dulu' : undefined}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                >
+                  {run.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                  Terapkan sekarang
+                </button>
+              </div>
+              {preview.data.sample.length ? (
+                <div className="text-xs text-emerald-800">
+                  Contoh:{' '}
+                  {preview.data.sample.map((j, i) => (
+                    <span key={j.id}>
+                      {i > 0 ? ', ' : ''}
+                      <a href={`/dashboard/jemaat/${j.id}`} className="underline">
+                        {j.namaLengkap}
+                      </a>{' '}
+                      ({j.hadir}×)
+                    </span>
+                  ))}
+                  {preview.data.count > preview.data.sample.length ? ', …' : ''}
+                </div>
+              ) : null}
+            </div>
+          ) : null
+        ) : null}
+      </div>
     </div>
   );
 }

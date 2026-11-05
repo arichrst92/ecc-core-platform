@@ -13,7 +13,7 @@ import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.j
 import { resolvePeriod, ymd } from '../../lib/last-attendance.js';
 import { DEMO_AGE_GROUPS, computeAreaStats } from '../../lib/homecell-area-stats.js';
 import { renderHomecellAreaReportHtml } from '../../lib/homecell-area-report-html.js';
-import { fmtTgl } from '../../lib/print-report.js';
+import { fmtTgl, sendCsv } from '../../lib/print-report.js';
 
 export const homecellAreaRouter = Router();
 
@@ -46,6 +46,9 @@ homecellAreaRouter.get('/', async (req, res) => {
     ];
   if (cabangId) where.cabangId = cabangId;
   if (sinodeId) where.cabang = { sinodeId };
+  // Filter pastor zona.
+  const pastorId = typeof req.query.pastorId === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.pastorId) ? req.query.pastorId : undefined;
+  if (pastorId) where.pastors = { some: { jemaatId: pastorId } };
 
   const [rows, total] = await Promise.all([
     prisma.homecellArea.findMany({
@@ -92,8 +95,25 @@ homecellAreaRouter.get('/', async (req, res) => {
   });
 });
 
-// ===== Export laporan (PDF via print view) =====
-// GET /admin/homecell-area/export?format=pdf&cabangId=&periode=&from=&to=&search=
+// ===== Daftar pastor zona (opsi filter Portal) =====
+// GET /admin/homecell-area/pastors?cabangId=
+homecellAreaRouter.get('/pastors', async (req, res) => {
+  const cabangId = typeof req.query.cabangId === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.cabangId) ? req.query.cabangId : undefined;
+  const rows = await prisma.homecellAreaPastor.findMany({
+    where: cabangId ? { area: { cabangId } } : {},
+    select: { jemaat: { select: { id: true, namaLengkap: true } }, areaId: true },
+  });
+  const m = new Map<string, { id: string; namaLengkap: string; zonaCount: number }>();
+  for (const r of rows) {
+    const e = m.get(r.jemaat.id) ?? { ...r.jemaat, zonaCount: 0 };
+    e.zonaCount++;
+    m.set(r.jemaat.id, e);
+  }
+  res.json({ success: true, data: [...m.values()].sort((a, b) => a.namaLengkap.localeCompare(b.namaLengkap, 'id')) });
+});
+
+// ===== Export laporan (PDF via print view / CSV) =====
+// GET /admin/homecell-area/export?format=pdf|csv&cabangId=&pastorId=&periode=&from=&to=&search=
 const PERIOD_LABEL: Record<string, string> = {
   last_7d: '7 hari terakhir',
   this_week: 'Minggu ini',
@@ -105,16 +125,24 @@ const PERIOD_LABEL: Record<string, string> = {
 };
 homecellAreaRouter.get('/export', async (req, res) => {
   const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
-  if (!['pdf', 'html', 'print'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf.');
+  if (!['pdf', 'html', 'print', 'csv'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf atau csv.');
   const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
   const cabangId = str('cabangId');
   const areaId = str('areaId');
   const search = str('search');
+  const pastorId = str('pastorId');
   const period = resolvePeriod(str('periode'), str('from'), str('to'));
 
   const where: Prisma.HomecellAreaWhereInput = areaId ? { id: areaId } : { isActive: true };
   if (cabangId) where.cabangId = cabangId;
-  if (search) where.nama = { contains: search, mode: 'insensitive' };
+  if (pastorId && /^[0-9a-f-]{36}$/i.test(pastorId)) where.pastors = { some: { jemaatId: pastorId } };
+  // Sama dengan daftar Portal: nama zona, PIC, atau pastor.
+  if (search)
+    where.OR = [
+      { nama: { contains: search, mode: 'insensitive' } },
+      { picJemaat: { namaLengkap: { contains: search, mode: 'insensitive' } } },
+      { pastors: { some: { jemaat: { namaLengkap: { contains: search, mode: 'insensitive' } } } } },
+    ];
   const areas = await prisma.homecellArea.findMany({
     where,
     orderBy: [{ cabang: { nama: 'asc' } }, { nama: 'asc' }],
@@ -130,12 +158,72 @@ homecellAreaRouter.get('/export', async (req, res) => {
   });
   const stats = await computeAreaStats(areas.map((a) => a.id), period);
   const cabang = cabangId ? await prisma.cabangGereja.findUnique({ where: { id: cabangId }, select: { nama: true } }) : null;
+  const pastor = pastorId && /^[0-9a-f-]{36}$/i.test(pastorId)
+    ? await prisma.jemaat.findUnique({ where: { id: pastorId }, select: { namaLengkap: true } })
+    : null;
 
   const periodLabel = period
     ? `${PERIOD_LABEL[str('periode') ?? ''] ?? 'Periode'} · ${fmtTgl(ymd(period.from))} – ${fmtTgl(ymd(period.to))}`
     : 'Semua waktu (sampai hari ini)';
   const filterLabel =
-    areaId && areas[0] ? `Zona — ${areas[0].nama}` : cabang ? `Zona — ${cabang.nama}` : 'Zona — Semua Cabang';
+    (areaId && areas[0] ? `Zona — ${areas[0].nama}` : cabang ? `Zona — ${cabang.nama}` : 'Zona — Semua Cabang') +
+    (pastor ? ` · Pastor ${pastor.namaLengkap}` : '');
+
+  if (format === 'csv') {
+    const groups = DEMO_AGE_GROUPS.map((g) => `Usia ${g.label}`);
+    const lines: unknown[][] = [
+      ['Laporan Zona', filterLabel + (search ? ` · "${search}"` : '')],
+      ['Periode kehadiran', periodLabel],
+      [],
+      [
+        'Zona',
+        'Cabang',
+        'PIC (Zone Leader)',
+        'Pastor',
+        'Homecell aktif',
+        'Single',
+        'Couple',
+        'Umum',
+        'Anggota aktif',
+        'Usia rata-rata',
+        'Pertemuan',
+        'Kehadiran (%)',
+        'Homecell tanpa pertemuan',
+        'Kunjungan tamu',
+        'Tamu unik',
+        'Pria',
+        'Wanita',
+        ...groups,
+        'Deskripsi',
+      ],
+    ];
+    for (const a of areas) {
+      const st = stats.get(a.id)!;
+      lines.push([
+        a.nama,
+        a.cabang.nama,
+        a.picJemaat?.namaLengkap ?? '',
+        a.pastors.map((p) => p.jemaat.namaLengkap).join(', '),
+        st.homecellCount,
+        st.kategori.SINGLE,
+        st.kategori.COUPLE,
+        st.kategori.UMUM,
+        st.memberCount,
+        st.avgAge ?? '',
+        st.meetingCount,
+        st.attendancePercent ?? '',
+        st.homecellNoMeeting,
+        st.tamuVisits,
+        st.tamuUnique,
+        st.demografi.pria,
+        st.demografi.wanita,
+        ...st.demografi.groups,
+        a.deskripsi ?? '',
+      ]);
+    }
+    sendCsv(res, `laporan-zona-${ymd(new Date())}.csv`, lines);
+    return;
+  }
   const ua = (req.get('user-agent') ?? '').toLowerCase();
   const html = renderHomecellAreaReportHtml(
     areas.map((a) => ({

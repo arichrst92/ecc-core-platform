@@ -20,6 +20,7 @@ import { backupEmailTick } from './backup-email.js';
 import { prisma } from '@ecc/database';
 import { sendWaOnce, withJobLock } from './wa-dispatch.js';
 import { geocodeJemaatBatch } from './jemaat-geocode.js';
+import { applyNewComerPromotion } from './onboarding-roles.js';
 import { getConfig, renderTemplate } from './wa-notif.js';
 import { waAllowedForJemaat } from './comm-prefs.js';
 import { logger } from './logger.js';
@@ -461,7 +462,10 @@ export function startScheduledJobs() {
   const g0 = setTimeout(() => void geocodeJob(), STARTUP_DELAY_MS + 30_000);
   g0.unref?.();
   const h12 = setInterval(() => void geocodeJob(), 15 * 60_000);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12]) {
+  // Onboarding: New Comer → Jemaat Tetap setelah hadir ibadah N× (Portal → Onboarding Config).
+  const promosiJob = wrap('new-comer-promotion', applyNewComerPromotion);
+  const h13 = setInterval(() => void promosiJob(), 30 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13]) {
     h.unref?.();
     intervalHandles.push(h);
   }

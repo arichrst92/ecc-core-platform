@@ -2176,6 +2176,9 @@ model AppConfig {
   // Toggle untuk disable error reporting kalau ada incident (mis. infinite
   // loop error report). Mobile cek field ini sebelum push ke /diagnostics/error.
   errorReportingEnabled      Boolean  @default(true) @map("error_reporting_enabled")
+  // Onboarding: New Comer naik menjadi Jemaat Tetap setelah hadir ibadah
+  // sebanyak ini (reservasi status JOIN). NULL / 0 = nonaktif.
+  newComerMinHadir           Int?     @map("new_comer_min_hadir")
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")

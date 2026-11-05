@@ -447,7 +447,7 @@ const SECTIONS: Section[] = [
     icon: HomeIcon,
     summary: 'Struktur penggembalaan: area → homecell → anggota.',
     content: [
-      { kind: 'menu-card', href: '/dashboard/homecell-area', label: 'Zona', description: 'Zona = level atas homecell per cabang (mis. Jakarta Pusat, Bandung Utara). PIC = Zone Leader dari Pelayanan Penggembalaan. Pastor zona boleh kosong / lebih dari satu (cari berdasarkan nama); pastor melihat semua zonanya di app.' },
+      { kind: 'menu-card', href: '/dashboard/homecell-area', label: 'Zona', description: 'Zona = level atas homecell per cabang (mis. Jakarta Pusat, Bandung Utara). PIC = Zone Leader dari Pelayanan Penggembalaan. Pastor zona boleh kosong / lebih dari satu (cari berdasarkan nama); pastor melihat semua zonanya di app. Daftar Zona bisa disaring per Cabang, Pastor, dan periode — Export PDF & Export CSV mengikuti saringan (termasuk kata kunci pencarian).' },
       { kind: 'menu-card', href: '/dashboard/homecell', label: 'Homecell', description: 'Cellgroup individual di bawah area. PIC = Homecell Leader. Punya anggota + jadwal pertemuan.' },
       {
         kind: 'steps',
@@ -781,6 +781,8 @@ const SECTIONS: Section[] = [
           'Atur role yang diberikan otomatis saat jemaat menyelesaikan onboarding di app (Jemaat Tetap / New Comer).',
           'Bagian "Jemaat sudah onboarding tapi belum punya role": atur role-nya lalu klik Terapkan untuk memberi role ke jemaat yang belum punya.',
           'Role tidak pernah dobel dan kegagalan pemberian role tidak memblokir pendaftaran.',
+          'Kartu "New Comer → Jemaat Tetap": isi berapa kali hadir ibadah (check-in, status Hadir) lalu Simpan. Jemaat yang memegang role "Memilih New Comer" dan sudah hadir sebanyak itu otomatis dipindah ke role "Memilih Jemaat Tetap" tiap 30 menit, atau langsung lewat "Terapkan sekarang" (jumlah & contoh nama ditampilkan).',
+          'Saat dipindah: role New Comer dinonaktifkan (riwayat tetap ada); bila sub role Jemaat Tetap sama dengan sub role yang sudah dimiliki, hanya status-nya yang diganti — tidak ada role dobel. Kosong / 0 = nonaktif. Butuh aturan "Memilih Jemaat Tetap" yang terisi.',
         ],
       },
       {

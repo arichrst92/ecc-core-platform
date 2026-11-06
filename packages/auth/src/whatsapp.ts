@@ -160,3 +160,65 @@ export function normalizeNoHp(input: string): string {
 function fonnteCountryCode(target: string): string {
   return target.startsWith('62') ? '62' : '0';
 }
+
+// ===== Status perangkat & validasi nomor (diagnosa "terkirim tapi tidak sampai") =====
+// Catatan: respons /send `status: true` artinya pesan MASUK ANTREAN Fonnte, bukan
+// sudah sampai. Pengiriman sebenarnya dilakukan oleh HP pengirim yang tersambung.
+
+export interface FonnteDevice {
+  /** Nomor pengirim (tanpa "+"). */
+  device: string | null;
+  connected: boolean;
+  name: string | null;
+  quota: string | null;
+  expired: string | null;
+  packageName: string | null;
+}
+
+/** POST https://api.fonnte.com/device — status perangkat pengirim. */
+export async function getFonnteDevice(): Promise<FonnteDevice> {
+  if (!FONNTE_TOKEN) throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
+  const res = await fetch('https://api.fonnte.com/device', {
+    method: 'POST',
+    headers: { Authorization: FONNTE_TOKEN },
+    signal: AbortSignal.timeout(8000),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if ((data.status ?? data.Status) === false) {
+    throw new Error(`Fonnte error: ${String(data.reason ?? 'unknown')}`);
+  }
+  const str = (v: unknown) => (v === undefined || v === null || v === '' ? null : String(v));
+  return {
+    device: str(data.device),
+    connected: String(data.device_status ?? '').toLowerCase() === 'connect',
+    name: str(data.name),
+    quota: str(data.quota),
+    expired: str(data.expired),
+    packageName: str(data.package),
+  };
+}
+
+/**
+ * POST https://api.fonnte.com/validate — apakah nomor terdaftar di WhatsApp.
+ * true / false, atau null bila tidak bisa dicek (perangkat terputus, API gagal).
+ */
+export async function isWhatsAppRegistered(noHpE164: string): Promise<boolean | null> {
+  if (!FONNTE_TOKEN) return null;
+  const target = noHpE164.replace(/^\+/, '');
+  try {
+    const body = new URLSearchParams({ target, countryCode: fonnteCountryCode(target) });
+    const res = await fetch('https://api.fonnte.com/validate', {
+      method: 'POST',
+      headers: { Authorization: FONNTE_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = (await res.json()) as { status?: boolean; registered?: unknown[]; not_registered?: unknown[] };
+    if (!data.status) return null;
+    if ((data.not_registered ?? []).map(String).includes(target)) return false;
+    if ((data.registered ?? []).map(String).includes(target)) return true;
+    return null;
+  } catch {
+    return null;
+  }
+}

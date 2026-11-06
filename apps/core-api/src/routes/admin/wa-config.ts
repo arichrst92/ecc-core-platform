@@ -13,7 +13,7 @@ import {
   renderTemplate,
   type WaNotifType,
 } from '../../lib/wa-notif.js';
-import { sendWhatsAppText } from '@ecc/auth';
+import { getFonnteDevice, isWhatsAppRegistered, sendWhatsAppText } from '@ecc/auth';
 import { describeInvalidPhone, normalizePhoneNumber } from '@ecc/shared-types';
 
 export const waConfigRouter = Router();
@@ -23,6 +23,19 @@ waConfigRouter.get('/', async (_req, res) => {
     orderBy: [{ category: 'asc' }, { label: 'asc' }],
   });
   res.json({ success: true, data: rows });
+});
+
+/**
+ * GET /admin/wa-config/device — status perangkat WhatsApp pengirim (Fonnte):
+ * nomor, tersambung/terputus, kuota, masa aktif. Didaftarkan sebelum /:type.
+ */
+waConfigRouter.get('/device', async (_req, res) => {
+  try {
+    const d = await getFonnteDevice();
+    res.json({ success: true, data: { ...d, device: d.device ? `+${d.device.replace(/^\+/, '')}` : null } });
+  } catch (err) {
+    res.json({ success: true, data: { error: (err as Error).message } });
+  }
 });
 
 waConfigRouter.get('/:type', async (req, res) => {
@@ -123,6 +136,43 @@ waConfigRouter.post('/:type/test', async (req, res) => {
   };
   const placeholders = { ...defaults, ...(body.placeholders ?? {}) };
   const message = renderTemplate(row.template, placeholders);
+
+  // Diagnosa sebelum kirim: Fonnte menjawab "terkirim" begitu pesan masuk antrean,
+  // padahal pesan bisa tidak sampai (HP pengirim terputus, nomor tujuan tidak
+  // ber-WhatsApp, atau tujuan = nomor pengirim sendiri).
+  const peringatan: string[] = [];
+  let device: Awaited<ReturnType<typeof getFonnteDevice>> | null = null;
+  try {
+    device = await getFonnteDevice();
+  } catch {
+    device = null;
+  }
+  if (device && !device.connected) {
+    return res.status(503).json({
+      success: false,
+      error: {
+        code: 'WA_DEVICE_DISCONNECTED',
+        message: `Perangkat WhatsApp pengirim${device.device ? ` (+${device.device})` : ''} sedang TERPUTUS di Fonnte. Sambungkan ulang (scan QR di dashboard Fonnte), lalu coba lagi.`,
+      },
+    });
+  }
+  const tujuan = noHp.replace(/^\+/, '');
+  if (device?.device && device.device.replace(/^\+/, '') === tujuan) {
+    peringatan.push(
+      'Nomor tujuan sama dengan nomor pengirim. Pesan masuk ke chat "Anda / Message yourself" di WhatsApp tanpa notifikasi — tes dengan nomor lain.',
+    );
+  }
+  const terdaftar = await isWhatsAppRegistered(noHp);
+  if (terdaftar === false) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'WA_NOT_REGISTERED', message: `Nomor ${noHp} tidak terdaftar di WhatsApp.` },
+    });
+  }
+  if (device?.quota !== null && device?.quota !== undefined && Number(device.quota) <= 0) {
+    peringatan.push('Kuota pesan Fonnte habis — pesan bisa tertahan sampai kuota diisi ulang.');
+  }
+
   try {
     const result = await sendWhatsAppText(noHp, message);
     audit(req, {
@@ -132,7 +182,17 @@ waConfigRouter.post('/:type/test', async (req, res) => {
       resourceLabel: `TEST send ${row.label} → ${noHp}`,
       metadata: { kind: 'wa-config-test', noHp, messageId: result.messageId },
     });
-    res.json({ success: true, data: { sent: true, noHp, preview: message, messageId: result.messageId } });
+    res.json({
+      success: true,
+      data: {
+        sent: true,
+        noHp,
+        preview: message,
+        messageId: result.messageId,
+        pengirim: device?.device ? `+${device.device.replace(/^\+/, '')}` : null,
+        peringatan,
+      },
+    });
   } catch (err) {
     audit(req, {
       action: 'UPDATE',

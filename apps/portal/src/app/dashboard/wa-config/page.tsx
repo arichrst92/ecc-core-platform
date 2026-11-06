@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronRight,
   Info,
+  RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -76,6 +78,8 @@ export default function WaConfigPage() {
         </div>
       </div>
 
+      <DeviceStatus />
+
       {q.isLoading && <p className="text-sm text-neutral-500">Memuat…</p>}
 
       <div className="space-y-6">
@@ -134,9 +138,16 @@ function ConfigCard({ config }: { config: WaConfig }) {
       return apiClient.post(`/admin/wa-config/${config.type}/test`, body);
     },
     onSuccess: (res: any) => {
-      toast.success(`Test terkirim ke ${res.data.data.noHp}`);
+      const d = res.data.data as { noHp: string; pengirim?: string | null; peringatan?: string[] };
+      // "Terkirim" dari Fonnte = masuk antrean; pengiriman dilakukan HP pengirim.
+      toast.success(`Masuk antrean Fonnte → ${d.noHp}${d.pengirim ? ` (dari ${d.pengirim})` : ''}`, { duration: 5000 });
+      for (const w of d.peringatan ?? []) toast(w, { icon: '⚠️', duration: 9000 });
+      void qc.invalidateQueries({ queryKey: ['wa-config', 'device'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal test'),
+    onError: (e: any) => {
+      toast.error(e.response?.data?.error?.message ?? 'Gagal test', { duration: 8000 });
+      void qc.invalidateQueries({ queryKey: ['wa-config', 'device'] });
+    },
   });
 
   return (
@@ -245,6 +256,86 @@ function ConfigCard({ config }: { config: WaConfig }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface FonnteDevice {
+  device?: string | null;
+  connected?: boolean;
+  name?: string | null;
+  quota?: string | null;
+  expired?: string | null;
+  packageName?: string | null;
+  error?: string;
+}
+
+/** Status perangkat WhatsApp pengirim (Fonnte). "Terkirim" di tes = masuk antrean; sampai/tidaknya bergantung pada perangkat ini. */
+function DeviceStatus() {
+  const q = useQuery({
+    queryKey: ['wa-config', 'device'],
+    queryFn: async () => (await apiClient.get<{ data: FonnteDevice }>('/admin/wa-config/device')).data.data,
+    refetchInterval: 60_000,
+  });
+  const d = q.data;
+  const ok = !!d && !d.error && d.connected;
+  return (
+    <div
+      className={`rounded-xl border p-4 mb-6 ${
+        q.isLoading ? 'border-neutral-200 bg-white' : ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <Smartphone className={`w-5 h-5 shrink-0 mt-0.5 ${ok ? 'text-emerald-600' : 'text-red-600'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-neutral-900">Perangkat pengirim (Fonnte)</p>
+            {q.isLoading ? (
+              <span className="text-xs text-neutral-500">Memeriksa…</span>
+            ) : d?.error ? (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Tidak bisa dicek</span>
+            ) : (
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  d?.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                }`}
+              >
+                {d?.connected ? 'Tersambung' : 'TERPUTUS'}
+              </span>
+            )}
+          </div>
+          {d && !d.error ? (
+            <p className="text-xs text-neutral-600 mt-1 break-words">
+              {d.device ?? '—'}
+              {d.name ? ` · ${d.name}` : ''}
+              {d.packageName ? ` · paket ${d.packageName}` : ''}
+              {d.quota != null ? ` · kuota ${d.quota}` : ''}
+              {d.expired ? ` · aktif s/d ${d.expired}` : ''}
+            </p>
+          ) : d?.error ? (
+            <p className="text-xs text-red-700 mt-1 break-words">{d.error}</p>
+          ) : null}
+          {!q.isLoading && !ok ? (
+            <p className="text-xs text-red-700 mt-1">
+              Selama terputus, OTP & notifikasi WhatsApp tidak terkirim. Buka dashboard Fonnte → Device → Connect, lalu scan QR
+              dengan HP nomor pengirim. Pastikan HP itu tetap menyala & online.
+            </p>
+          ) : null}
+          <p className="text-[11px] text-neutral-500 mt-2">
+            Tes yang berhasil berarti pesan <strong>masuk antrean</strong> Fonnte. Jika tidak muncul di HP: cek menu Report/Message di
+            dashboard Fonnte, jangan tes ke nomor pengirim sendiri, dan pastikan HP pengirim online.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => q.refetch()}
+          className="p-1.5 rounded-lg hover:bg-white/70 text-neutral-500"
+          aria-label="Cek ulang"
+          title="Cek ulang"
+        >
+          <RefreshCw className={`w-4 h-4 ${q.isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
     </div>
   );
 }

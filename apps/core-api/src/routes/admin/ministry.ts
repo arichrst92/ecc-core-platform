@@ -24,6 +24,7 @@ import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../l
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import {
   canManageMinistry,
   checkCanRequestJoin,
@@ -988,4 +989,357 @@ ministryRouter.delete('/:id/schedule/:scheduleId', async (req, res) => {
   });
 
   res.status(204).end();
+});
+
+// ============================================================
+//  Atur jadwal petugas pelayanan (2.4.6) — oleh pemegang OTORITAS APPROVAL,
+//  untuk ibadah / event di cabang otoritasnya. Menulis ke petugas resmi
+//  (IbadahPelayananPetugas / EventPelayananPetugas) → tampil di detail ibadah,
+//  Portal, dan "Jadwal Pelayanan Saya". Hak scan kehadiran TIDAK diatur dari app
+//  (petugas baru = false, nilai lama dipertahankan).
+//
+//   GET /admin/ministry/:id/jadwal?cabangId=&weeks=8
+//   PUT /admin/ministry/:id/jadwal/ibadah/:ibadahId
+//        { tanggal: 'YYYY-MM-DD', scope: 'TANGGAL'|'DEFAULT'|'RESET', petugas: [{ jemaatId, pelayananRoleId }] }
+//   PUT /admin/ministry/:id/jadwal/event/:eventId { petugas: [{ jemaatId, pelayananRoleId }] }
+// ============================================================
+
+const ymdUtc = (d: Date) => d.toISOString().slice(0, 10);
+const UUIDV = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Cabang tempat requester boleh mengatur jadwal pelayanan ini. */
+async function jadwalCabangIds(req: Request, pelayananId: string): Promise<'ALL' | string[]> {
+  const scope = await approvalScope(req);
+  if (scope === 'ALL') return 'ALL';
+  const set = scope.get(pelayananId);
+  if (!set || !set.size) throw Forbidden('Hanya anggota dengan otoritas yang dapat mengatur jadwal pelayanan.');
+  return [...set];
+}
+
+function assertCabangAllowed(allowed: 'ALL' | string[], cabangId: string | null) {
+  if (allowed === 'ALL') return;
+  if (!cabangId || !allowed.includes(cabangId)) throw Forbidden('Anda tidak punya otoritas di cabang ini.');
+}
+
+const petugasSelect = {
+  id: true,
+  jemaatId: true,
+  tanggalIbadah: true,
+  canScanAttendance: true,
+  pelayananRole: { select: { id: true, nama: true, level: true } },
+  jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+} as const;
+
+ministryRouter.get('/:id/jadwal', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  if (!UUIDV.test(req.params.id)) throw NotFound('Ministry tidak ditemukan');
+  const allowed = await jadwalCabangIds(req, req.params.id);
+  const q = z
+    .object({ cabangId: z.string().uuid().optional(), weeks: z.coerce.number().int().min(1).max(12).default(8) })
+    .parse(req.query);
+  const pel = await prisma.pelayanan.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      nama: true,
+      roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } },
+    },
+  });
+  if (!pel) throw NotFound('Ministry tidak ditemukan');
+
+  const cabangList = await prisma.cabangGereja.findMany({
+    where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
+    orderBy: { nama: 'asc' },
+    select: { id: true, nama: true },
+  });
+  const cabangId = q.cabangId ?? cabangList[0]?.id;
+  if (!cabangId) {
+    res.json({ success: true, data: { pelayanan: pel, cabang: cabangList, cabangId: null, ibadah: [], events: [], members: [] } });
+    return;
+  }
+  assertCabangAllowed(allowed, cabangId);
+
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const to = new Date(from.getTime() + q.weeks * 7 * 86_400_000);
+
+  const [links, cancelledRows, eventRows, members] = await Promise.all([
+    prisma.ibadahPelayanan.findMany({
+      where: { pelayananId: pel.id, ibadah: { cabangId, isActive: true } },
+      select: {
+        id: true,
+        ibadah: {
+          select: { id: true, nama: true, jamMulai: true, jamSelesai: true, tipeJadwal: true, tanggalMulai: true, hari: true, mingguKe: true },
+        },
+        petugas: { select: petugasSelect },
+      },
+    }),
+    prisma.ibadahOccurrenceStatus.findMany({
+      where: { ibadah: { cabangId }, status: 'CANCELLED', tanggalIbadah: { gte: from, lte: to } },
+      select: { ibadahId: true, tanggalIbadah: true },
+    }),
+    prisma.event.findMany({
+      where: {
+        isActive: true,
+        cabangId,
+        OR: [{ tanggalSelesai: { gte: from } }, { tanggalSelesai: null, tanggalMulai: { gte: from } }],
+        tanggalMulai: { lte: to },
+      },
+      orderBy: { tanggalMulai: 'asc' },
+      take: 50,
+      select: {
+        id: true,
+        judul: true,
+        tanggalMulai: true,
+        tanggalSelesai: true,
+        jamMulai: true,
+        pelayanan: {
+          where: { pelayananId: pel.id },
+          select: {
+            petugas: {
+              select: {
+                id: true,
+                jemaatId: true,
+                pelayananRole: { select: { id: true, nama: true, level: true } },
+                jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.jemaatPelayanan.findMany({
+      where: { pelayananId: pel.id, isActive: true, jemaat: { isActive: true } },
+      orderBy: { jemaat: { namaLengkap: 'asc' } },
+      select: {
+        pelayananRole: { select: { id: true, nama: true, level: true } },
+        jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, cabang: { select: { id: true, nama: true } } } },
+      },
+    }),
+  ]);
+  const cancelled = new Set(cancelledRows.map((c) => `${c.ibadahId}:${ymdUtc(c.tanggalIbadah)}`));
+  const strip = (r: { id: string; jemaat: { id: string; namaLengkap: string; fotoUrl: string | null }; pelayananRole: { id: string; nama: string; level: number } }) => ({
+    id: r.id,
+    jemaat: r.jemaat,
+    role: r.pelayananRole,
+  });
+
+  const ibadah: unknown[] = [];
+  for (const l of links) {
+    for (const d of generateOccurrences(l.ibadah, from, to)) {
+      const tanggal = ymdUtc(d);
+      if (cancelled.has(`${l.ibadah.id}:${tanggal}`)) continue;
+      const overrides = l.petugas.filter((p) => p.tanggalIbadah && ymdUtc(p.tanggalIbadah) === tanggal);
+      const defaults = l.petugas.filter((p) => p.tanggalIbadah === null);
+      ibadah.push({
+        key: `${l.ibadah.id}:${tanggal}`,
+        ibadahId: l.ibadah.id,
+        nama: l.ibadah.nama,
+        jamMulai: l.ibadah.jamMulai,
+        jamSelesai: l.ibadah.jamSelesai,
+        tanggal,
+        // TANGGAL = susunan khusus tanggal ini; DEFAULT = ikut susunan tiap minggu.
+        source: overrides.length ? 'TANGGAL' : 'DEFAULT',
+        petugas: (overrides.length ? overrides : defaults).map(strip),
+        defaultPetugas: defaults.map(strip),
+      });
+    }
+  }
+  ibadah.sort((a: any, b: any) => (a.tanggal + a.jamMulai).localeCompare(b.tanggal + b.jamMulai));
+
+  res.json({
+    success: true,
+    data: {
+      pelayanan: pel,
+      cabang: cabangList,
+      cabangId,
+      ibadah,
+      events: eventRows.map((e) => ({
+        eventId: e.id,
+        judul: e.judul,
+        tanggalMulai: e.tanggalMulai,
+        tanggalSelesai: e.tanggalSelesai,
+        jamMulai: e.jamMulai,
+        petugas: (e.pelayanan[0]?.petugas ?? []).map(strip),
+      })),
+      // Anggota aktif pelayanan (semua cabang; app menampilkan cabang ini lebih dulu).
+      members: members.map((m) => ({ jemaat: m.jemaat, role: m.pelayananRole })),
+    },
+  });
+});
+
+const petugasInput = z.array(z.object({ jemaatId: z.string().uuid(), pelayananRoleId: z.string().uuid() })).max(60);
+
+/** Validasi petugas: anggota aktif pelayanan + role milik pelayanan. Dedup per jemaat. */
+async function validatePetugas(pelayananId: string, list: z.infer<typeof petugasInput>) {
+  const seen = new Set<string>();
+  const uniq = list.filter((p) => (seen.has(p.jemaatId) ? false : (seen.add(p.jemaatId), true)));
+  if (!uniq.length) return uniq;
+  const [members, roles] = await Promise.all([
+    prisma.jemaatPelayanan.findMany({
+      where: { pelayananId, isActive: true, jemaatId: { in: uniq.map((p) => p.jemaatId) } },
+      select: { jemaatId: true },
+    }),
+    prisma.pelayananRole.findMany({ where: { pelayananId, isActive: true }, select: { id: true } }),
+  ]);
+  const memberSet = new Set(members.map((m) => m.jemaatId));
+  const roleSet = new Set(roles.map((r) => r.id));
+  for (const p of uniq) {
+    if (!memberSet.has(p.jemaatId)) throw BadRequest('Petugas harus anggota aktif pelayanan ini.');
+    if (!roleSet.has(p.pelayananRoleId)) throw BadRequest('Peran tidak ditemukan di pelayanan ini.');
+  }
+  return uniq;
+}
+
+/** Kirim notifikasi ke yang baru dijadwalkan / dikeluarkan dari jadwal. */
+function notifyDutyChanges(
+  before: string[],
+  after: string[],
+  self: string,
+  ctx: { ministry: string; label: string; ministryId: string },
+) {
+  const b = new Set(before);
+  const a = new Set(after);
+  for (const id of a) {
+    if (b.has(id) || id === self) continue;
+    void createNotification({
+      jemaatId: id,
+      type: 'MINISTRY_DUTY_ASSIGNED',
+      title: `Jadwal pelayanan ${ctx.ministry}`,
+      body: `Anda dijadwalkan melayani: ${ctx.label}. Lihat di Jadwal Pelayanan Saya.`,
+      actionUrl: '/profile/my-service',
+      metadata: { ministryId: ctx.ministryId },
+    });
+  }
+  for (const id of b) {
+    if (a.has(id) || id === self) continue;
+    void createNotification({
+      jemaatId: id,
+      type: 'MINISTRY_DUTY_REMOVED',
+      title: `Perubahan jadwal ${ctx.ministry}`,
+      body: `Anda tidak lagi dijadwalkan: ${ctx.label}.`,
+      actionUrl: '/profile/my-service',
+      metadata: { ministryId: ctx.ministryId },
+    });
+  }
+}
+
+const fmtTanggalId = (ymd: string) =>
+  new Date(`${ymd}T00:00:00Z`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.ibadahId)) throw NotFound('Data tidak ditemukan');
+  const allowed = await jadwalCabangIds(req, req.params.id);
+  const body = z
+    .object({
+      tanggal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      scope: z.enum(['TANGGAL', 'DEFAULT', 'RESET']),
+      petugas: petugasInput.default([]),
+    })
+    .parse(req.body ?? {});
+  const link = await prisma.ibadahPelayanan.findFirst({
+    where: { ibadahId: req.params.ibadahId, pelayananId: req.params.id },
+    select: {
+      id: true,
+      pelayanan: { select: { nama: true } },
+      ibadah: { select: { nama: true, jamMulai: true, cabangId: true } },
+      petugas: { select: { jemaatId: true, tanggalIbadah: true, canScanAttendance: true } },
+    },
+  });
+  if (!link) throw NotFound('Pelayanan ini belum terhubung ke ibadah tersebut.');
+  assertCabangAllowed(allowed, link.ibadah.cabangId);
+  const tgl = new Date(`${body.tanggal}T00:00:00Z`);
+  const defaults = link.petugas.filter((p) => p.tanggalIbadah === null);
+  const overrides = link.petugas.filter((p) => p.tanggalIbadah && ymdUtc(p.tanggalIbadah) === body.tanggal);
+  const effectiveBefore = (overrides.length ? overrides : defaults).map((p) => p.jemaatId);
+  // Pertahankan hak scan yang sudah diberikan admin di Portal.
+  const scanOf = new Set(link.petugas.filter((p) => p.canScanAttendance).map((p) => p.jemaatId));
+  const list = body.scope === 'RESET' ? [] : await validatePetugas(req.params.id, body.petugas);
+
+  await prisma.$transaction(async (tx) => {
+    if (body.scope === 'DEFAULT') {
+      await tx.ibadahPelayananPetugas.deleteMany({ where: { ibadahPelayananId: link.id, tanggalIbadah: null } });
+      // Tanggal ini ikut susunan default yang baru.
+      await tx.ibadahPelayananPetugas.deleteMany({ where: { ibadahPelayananId: link.id, tanggalIbadah: tgl } });
+    } else {
+      await tx.ibadahPelayananPetugas.deleteMany({ where: { ibadahPelayananId: link.id, tanggalIbadah: tgl } });
+    }
+    if (list.length) {
+      await tx.ibadahPelayananPetugas.createMany({
+        data: list.map((p) => ({
+          ibadahPelayananId: link.id,
+          jemaatId: p.jemaatId,
+          pelayananRoleId: p.pelayananRoleId,
+          tanggalIbadah: body.scope === 'DEFAULT' ? null : tgl,
+          canScanAttendance: scanOf.has(p.jemaatId),
+        })),
+      });
+    }
+  });
+
+  const effectiveAfter =
+    body.scope === 'RESET' ? defaults.map((p) => p.jemaatId) : list.map((p) => p.jemaatId);
+  const label =
+    body.scope === 'DEFAULT'
+      ? `${link.ibadah.nama} (${link.ibadah.jamMulai}) — setiap jadwal`
+      : `${link.ibadah.nama}, ${fmtTanggalId(body.tanggal)} ${link.ibadah.jamMulai}`;
+  notifyDutyChanges(
+    body.scope === 'DEFAULT' ? defaults.map((p) => p.jemaatId) : effectiveBefore,
+    effectiveAfter,
+    req.user.jemaatId,
+    { ministry: link.pelayanan.nama, label, ministryId: req.params.id },
+  );
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'ibadah_pelayanan_petugas',
+    resourceId: link.id,
+    resourceLabel: `Jadwal ${link.pelayanan.nama} · ${label} (${body.scope === 'RESET' ? 'kembali ke default' : `${list.length} petugas`})`,
+    metadata: { scope: body.scope, tanggal: body.tanggal, petugas: list, via: 'app' },
+  });
+  res.json({ success: true, data: { ok: true } });
+});
+
+ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.eventId)) throw NotFound('Data tidak ditemukan');
+  const allowed = await jadwalCabangIds(req, req.params.id);
+  const body = z.object({ petugas: petugasInput.default([]) }).parse(req.body ?? {});
+  const [event, pel] = await Promise.all([
+    prisma.event.findUnique({ where: { id: req.params.eventId }, select: { id: true, judul: true, cabangId: true, tanggalMulai: true } }),
+    prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { nama: true } }),
+  ]);
+  if (!event || !pel) throw NotFound('Data tidak ditemukan');
+  assertCabangAllowed(allowed, event.cabangId);
+  const list = await validatePetugas(req.params.id, body.petugas);
+
+  const link = await prisma.eventPelayanan.upsert({
+    where: { eventId_pelayananId: { eventId: event.id, pelayananId: req.params.id } },
+    create: { eventId: event.id, pelayananId: req.params.id },
+    update: {},
+    select: { id: true, petugas: { select: { jemaatId: true, canScanAttendance: true } } },
+  });
+  const before = link.petugas.map((p) => p.jemaatId);
+  const scanOf = new Set(link.petugas.filter((p) => p.canScanAttendance).map((p) => p.jemaatId));
+  await prisma.$transaction([
+    prisma.eventPelayananPetugas.deleteMany({ where: { eventPelayananId: link.id } }),
+    prisma.eventPelayananPetugas.createMany({
+      data: list.map((p) => ({
+        eventPelayananId: link.id,
+        jemaatId: p.jemaatId,
+        pelayananRoleId: p.pelayananRoleId,
+        canScanAttendance: scanOf.has(p.jemaatId),
+      })),
+    }),
+  ]);
+  const label = `${event.judul}, ${fmtTanggalId(ymdUtc(event.tanggalMulai))}`;
+  notifyDutyChanges(before, list.map((p) => p.jemaatId), req.user.jemaatId, { ministry: pel.nama, label, ministryId: req.params.id });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'event_pelayanan_petugas',
+    resourceId: link.id,
+    resourceLabel: `Jadwal ${pel.nama} · ${label} (${list.length} petugas)`,
+    metadata: { petugas: list, via: 'app' },
+  });
+  res.json({ success: true, data: { ok: true } });
 });

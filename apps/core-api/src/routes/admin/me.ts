@@ -253,12 +253,31 @@ meRouter.get('/', async (req, res) => {
   });
 });
 
+/**
+ * Aturan isian baru (audit 2026-11) hanya berlaku untuk nilai yang DIUBAH.
+ * App mengirim ulang seluruh form; nilai lama (data lama / hasil sync Shiftsoft)
+ * yang belum memenuhi aturan tidak boleh memblokir edit field lain → field
+ * yang sama persis dengan nilai tersimpan dibuang sebelum validasi.
+ */
+function buangNilaiTetap(body: unknown, before: Record<string, unknown>): Record<string, unknown> {
+  if (!body || typeof body !== 'object') return {};
+  const out: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  const teks = (v: unknown) => (typeof v === 'string' ? v.trim() : v instanceof Date ? v.toISOString().slice(0, 10) : v ?? null);
+  for (const k of ['namaLengkap', 'alamat', 'namaKantor', 'tanggalLahir', 'tanggalPernikahan']) {
+    if (!(k in out)) continue;
+    const a = teks(out[k]);
+    const b = teks(before[k]);
+    const aa = typeof a === 'string' && /^\d{4}-\d{2}-\d{2}/.test(a) ? a.slice(0, 10) : a;
+    if (aa === b || (aa === '' && b === null)) delete out[k];
+  }
+  return out;
+}
+
 meRouter.patch('/', async (req, res) => {
   const jemaatId = assertJemaatId(req);
-  const input = selfEditJemaatSchema.parse(req.body);
-
   const before = await prisma.jemaat.findUnique({ where: { id: jemaatId } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
+  const input = selfEditJemaatSchema.parse(buangNilaiTetap(req.body, before as unknown as Record<string, unknown>));
 
   // Audit input 2026-11: pilihan pekerjaan & pernikahan harus dari daftar
   // (nilai lama yang sudah tersimpan tetap diterima), dan tanggal pernikahan
@@ -1247,8 +1266,8 @@ meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const targetId = req.params.jemaatId;
   if (!targetId) throw BadRequest('Path param :jemaatId wajib.');
-  const input = editDependentJemaatSchema.parse(req.body);
   const before = await assertDependentGuardian(jemaatId, targetId);
+  const input = editDependentJemaatSchema.parse(buangNilaiTetap(req.body, before as unknown as Record<string, unknown>));
 
   // Uniqueness check untuk noHp + email (kalau di-set ke value non-null) —
   // tolak kalau sudah dipakai jemaat lain yang aktif.

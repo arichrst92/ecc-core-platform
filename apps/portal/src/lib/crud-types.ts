@@ -36,7 +36,10 @@ export type FieldType =
   | 'image'
   // 'jemaat-multi' = pilih beberapa jemaat dgn cari nama. Nilai form: string[] (id).
   // Label awal diambil dari `multiSource` di data row (array { id, namaLengkap }).
-  | 'jemaat-multi';
+  | 'jemaat-multi'
+  // 'jemaat-single' = pilih satu jemaat dgn cari nama / no HP / email / kode.
+  // Nilai form: id (string) atau null. Label awal dari `multiSource` (objek { id, namaLengkap }).
+  | 'jemaat-single';
 
 export interface SelectOption {
   value: string;

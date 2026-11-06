@@ -159,9 +159,9 @@ export const groupResource: ResourceConfig<Group> = {
     {
       name: 'picJemaatId',
       label: 'PIC (Leader)',
-      type: 'relation',
-      relation: { endpoint: '/admin/jemaat', labelKey: 'namaLengkap' },
-      helperText: 'Kalau kosong, default = creator (yg bikin group).',
+      type: 'jemaat-single',
+      multiSource: 'picJemaat',
+      helperText: 'Ketik minimal 2 huruf nama / no HP / email / kode lalu pilih. Kalau kosong, default = pembuat group.',
     },
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
     { name: 'alamat', label: 'Lokasi / Tempat', type: 'text', placeholder: 'Jl. Sudirman No. 12' },

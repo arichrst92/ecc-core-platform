@@ -54,6 +54,13 @@ export function normalizeFormValues(fields: FieldConfig[], values: Record<string
         } else out[f.name] = String(v);
         break;
       }
+      case 'jemaat-single': {
+        if (v == null || v === '') {
+          const src = f.multiSource ? (values[f.multiSource] as { id?: string } | null | undefined) : undefined;
+          out[f.name] = src?.id ?? '';
+        }
+        break;
+      }
       case 'jemaat-multi': {
         if (!Array.isArray(v)) {
           const src = f.multiSource ? (values[f.multiSource] as Array<{ id: string }> | undefined) : undefined;

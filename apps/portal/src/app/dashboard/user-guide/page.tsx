@@ -493,6 +493,7 @@ const SECTIONS: Section[] = [
           'Detail menampilkan tahap yang tercatat saat ini, catatan jemaat, dan daftar tahap yang AKAN diberikan: tahap diminta + semua tahap sebelumnya yang belum tercatat. Tahap yang tidak menentukan sub role butuh pilihan sub role.',
           'Setujui → Role / Sub role / Status tiap tahap diberikan (role yang sudah ada dengan sub role sama hanya diperbarui status-nya), jemaat mendapat notifikasi. Tolak → isi alasan, dikirim ke jemaat.',
           'Akses: menu Spiritual Journey (baca untuk melihat, tulis untuk memproses).',
+          'Hapus jemaat dari tahap: di Spiritual Journey klik jumlah jemaat di sebuah tahap → ikon tempat sampah di baris jemaat → konfirmasi. Tahap dengan syarat status: status-nya dikosongkan (role tetap aktif); tahap tanpa status: role yang cocok dinonaktifkan (riwayat tetap ada). Butuh akses hapus menu Spiritual Journey; tercatat di Audit Log.',
         ],
       },
       {

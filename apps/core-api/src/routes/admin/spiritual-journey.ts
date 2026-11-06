@@ -10,6 +10,7 @@
  *   GET    /:id/jemaat     → jemaat yang sudah mencapai tahap (?search=&page=)
  *   GET    /:id/candidates → cari jemaat (kode/QR, nama, no HP, email) + flag sudah mencapai
  *   POST   /:id/jemaat     → tambahkan jemaat ke tahap ini (beri JemaatRole sesuai syarat)
+ *   DELETE /:id/jemaat/:jemaatId → hapus jemaat dari tahap ini (lihat catatan di handler)
  *
  * Akses: fulltimer, atau menu "spiritual-journey" (read / write / delete).
  */
@@ -273,4 +274,47 @@ spiritualJourneyRouter.post('/:id/jemaat', async (req, res) => {
     metadata: { kind: 'spiritual-journey-add', stepId: step.id },
   });
   res.status(201).json({ success: true, data: { id: created.id, jemaat: { id: jemaat.id, namaLengkap: jemaat.namaLengkap } } });
+});
+
+/**
+ * Hapus jemaat dari tahap. Role yang membuat jemaat memenuhi tahap ini diubah:
+ *   - Tahap menentukan STATUS → status-nya dikosongkan (role & sub role tetap
+ *     aktif, supaya tahap lain yang hanya butuh role/sub role tidak ikut hilang).
+ *   - Tahap tanpa status → JemaatRole yang cocok dinonaktifkan (isActive=false,
+ *     tanggalSelesai=hari ini; riwayat tetap ada).
+ * Butuh akses hapus menu Spiritual Journey.
+ */
+spiritualJourneyRouter.delete('/:id/jemaat/:jemaatId', async (req, res) => {
+  await assertAccess(req, 'delete');
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.jemaatId)) throw NotFound('Data tidak ditemukan');
+  const step = await prisma.spiritualJourneyStep.findUnique({ where: { id: req.params.id } });
+  if (!step) throw NotFound('Tahap tidak ditemukan');
+  const jemaat = await prisma.jemaat.findUnique({ where: { id: req.params.jemaatId }, select: { id: true, namaLengkap: true } });
+  if (!jemaat) throw NotFound('Jemaat tidak ditemukan');
+  const where = {
+    jemaatId: jemaat.id,
+    isActive: true,
+    roleId: step.roleId,
+    ...(step.subRoleId ? { subRoleId: step.subRoleId } : {}),
+    ...(step.subRoleStatusId ? { subRoleStatusId: step.subRoleStatusId } : {}),
+  };
+  const rows = await prisma.jemaatRole.findMany({ where, include: { role: true, subRole: true, subRoleStatus: true } });
+  if (!rows.length) throw NotFound(`${jemaat.namaLengkap} tidak berada di tahap "${step.judul}".`);
+  const ids = rows.map((r) => r.id);
+  const mode = step.subRoleStatusId ? 'HAPUS_STATUS' : 'NONAKTIF';
+  await prisma.jemaatRole.updateMany({
+    where: { id: { in: ids } },
+    data: mode === 'HAPUS_STATUS' ? { subRoleStatusId: null } : { isActive: false, tanggalSelesai: new Date() },
+  });
+  const label = (r: (typeof rows)[number]) =>
+    `${r.role.nama}:${r.subRole.nama}${r.subRoleStatus ? `:${r.subRoleStatus.nama}` : ''}`;
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat_role',
+    resourceId: ids[0],
+    resourceLabel: `${jemaat.namaLengkap} dihapus dari tahap "${step.judul}" (${rows.map(label).join(', ')})`,
+    before: rows,
+    metadata: { kind: 'spiritual-journey-remove', stepId: step.id, mode, jemaatRoleIds: ids },
+  });
+  res.json({ success: true, data: { jemaatId: jemaat.id, updated: ids.length, mode } });
 });

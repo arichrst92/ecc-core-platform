@@ -468,6 +468,21 @@ function AchieversModal({ step, onClose }: { step: Step; onClose: () => void }) 
       ).data,
     placeholderData: (p) => p,
   });
+  const qc = useQueryClient();
+  const [removing, setRemoving] = useState<{ id: string; namaLengkap: string } | null>(null);
+  const remove = useMutation({
+    mutationFn: async (jemaatId: string) => apiClient.delete(`/admin/spiritual-journey/${step.id}/jemaat/${jemaatId}`),
+    onSuccess: () => {
+      toast.success(`${removing?.namaLengkap ?? 'Jemaat'} dihapus dari tahap "${step.judul}"`);
+      setRemoving(null);
+      void qc.invalidateQueries({ queryKey: KEY });
+      void qc.invalidateQueries({ queryKey: ['spiritual-journey', step.id, 'jemaat'] });
+    },
+    onError: (e) => toast.error(errMsg(e, 'Gagal menghapus')),
+  });
+  const efek = step.subRoleStatusId
+    ? `Status "${step.subRoleStatus?.nama ?? ''}" pada role ${step.role.nama}${step.subRole ? ` › ${step.subRole.nama}` : ''} dikosongkan (role tetap aktif).`
+    : `Role ${step.role.nama}${step.subRole ? ` › ${step.subRole.nama}` : ''} jemaat ini dinonaktifkan (riwayat tetap tersimpan).`;
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
@@ -505,13 +520,22 @@ function AchieversModal({ step, onClose }: { step: Step; onClose: () => void }) 
               <div className="p-8 text-center text-sm text-neutral-400">Belum ada jemaat.</div>
             ) : (
               q.data!.data.map((j) => (
-                <Link key={j.id} href={`/dashboard/jemaat/${j.id}`} className="flex items-center justify-between px-5 py-2.5 hover:bg-neutral-50">
-                  <span className="text-sm font-medium text-neutral-900">{j.namaLengkap}</span>
-                  <span className="text-xs text-neutral-500">
-                    {j.kode ? `${j.kode} · ` : ''}
-                    {j.cabang.nama}
-                  </span>
-                </Link>
+                <div key={j.id} className="flex items-center gap-2 px-5 py-2.5 hover:bg-neutral-50">
+                  <Link href={`/dashboard/jemaat/${j.id}`} className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-neutral-900 truncate">{j.namaLengkap}</span>
+                    <span className="text-xs text-neutral-500 shrink-0">
+                      {j.kode ? `${j.kode} · ` : ''}
+                      {j.cabang.nama}
+                    </span>
+                  </Link>
+                  <button
+                    onClick={() => setRemoving({ id: j.id, namaLengkap: j.namaLengkap })}
+                    className="p-1.5 rounded hover:bg-red-50 text-neutral-400 hover:text-red-600 shrink-0"
+                    title="Hapus dari tahap ini"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -536,6 +560,37 @@ function AchieversModal({ step, onClose }: { step: Step; onClose: () => void }) 
           )}
         </div>
       </div>
+      {removing ? (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-[60]" onClick={remove.isPending ? undefined : () => setRemoving(null)} />
+          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 pointer-events-auto">
+              <h3 className="font-semibold text-neutral-900">Hapus dari tahap?</h3>
+              <p className="text-sm text-neutral-600 mt-1">
+                <b>{removing.namaLengkap}</b> akan dihapus dari tahap <b>{step.judul}</b>.
+              </p>
+              <p className="text-xs text-neutral-500 mt-2">{efek} Tahap lain yang memakai role yang sama bisa ikut berubah.</p>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setRemoving(null)}
+                  disabled={remove.isPending}
+                  className="px-3 py-1.5 rounded-lg text-sm hover:bg-neutral-100"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => remove.mutate(removing.id)}
+                  disabled={remove.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                >
+                  {remove.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

@@ -60,7 +60,7 @@ auditLogRouter.get('/', async (req, res) => {
         user: {
           select: {
             id: true,
-            jemaat: { select: { namaLengkap: true, noHp: true, fotoUrl: true } },
+            jemaat: { select: { id: true, namaLengkap: true, noHp: true, fotoUrl: true } },
           },
         },
       },
@@ -73,12 +73,14 @@ auditLogRouter.get('/', async (req, res) => {
     ...row,
     userDisplay: row.user?.jemaat
       ? {
+          // Aktor bisa diklik di Portal → detail jemaat.
+          jemaatId: row.user.jemaat.id,
           namaLengkap: row.user.jemaat.namaLengkap,
           noHp: row.user.jemaat.noHp,
           fotoUrl: row.user.jemaat.fotoUrl,
         }
       : row.userName
-        ? { namaLengkap: row.userName, noHp: null, fotoUrl: null }
+        ? { jemaatId: null, namaLengkap: row.userName, noHp: null, fotoUrl: null }
         : null,
     user: undefined,
   }));

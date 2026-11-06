@@ -243,6 +243,17 @@ export function buildJemaatResource(
       },
       { key: 'noHp', label: 'No HP', width: '130px' },
       {
+        key: 'email',
+        label: 'Email',
+        width: '200px',
+        render: (v) =>
+          v ? (
+            <span className="text-neutral-700 break-all">{String(v)}</span>
+          ) : (
+            <span className="text-neutral-400">—</span>
+          ),
+      },
+      {
         key: 'tanggalLahir',
         label: 'Usia',
         width: '60px',

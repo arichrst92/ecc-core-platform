@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -36,7 +37,7 @@ interface AuditEntry {
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
-  userDisplay: { namaLengkap: string; noHp: string | null; fotoUrl: string | null } | null;
+  userDisplay: { jemaatId?: string | null; namaLengkap: string; noHp: string | null; fotoUrl: string | null } | null;
 }
 
 interface Filters {
@@ -271,7 +272,18 @@ function UserCell({ user }: { user: AuditEntry['userDisplay'] }) {
           <UserIcon className="w-3 h-3" />
         </div>
       )}
-      <span className="truncate text-sm">{user.namaLengkap}</span>
+      {user.jemaatId ? (
+        <Link
+          href={`/dashboard/jemaat/${user.jemaatId}`}
+          onClick={(e) => e.stopPropagation()}
+          className="truncate text-sm text-brand-600 hover:underline"
+          title="Lihat detail jemaat"
+        >
+          {user.namaLengkap}
+        </Link>
+      ) : (
+        <span className="truncate text-sm">{user.namaLengkap}</span>
+      )}
     </div>
   );
 }

@@ -610,6 +610,7 @@ jemaatRouter.get('/export', async (req, res) => {
   <td>${escapeHtml(String(row.jenisKelamin))}</td>
   <td>${escapeHtml(String(row.usia))}</td>
   <td>${escapeHtml(row.noHp)}</td>
+  <td class="email">${escapeHtml(row.email)}</td>
   <td>${escapeHtml([row.pekerjaan, row.namaKantor].filter(Boolean).join(' · '))}</td>
   <td>${escapeHtml(row.statusPernikahan)}</td>
   <td>${escapeHtml(row.cabang)}</td>
@@ -631,6 +632,7 @@ jemaatRouter.get('/export', async (req, res) => {
   .meta { font-size: 11px; color: #64748b; margin-bottom: 12px; }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: top; }
+  td.email { word-break: break-all; max-width: 150px; }
   thead { background: #f1f5f9; font-weight: 600; }
   tbody tr:nth-child(even) { background: #fafafa; }
   .footer { font-size: 10px; color: #94a3b8; margin-top: 10px; text-align: right; }
@@ -668,7 +670,7 @@ ${
 <table>
 <thead>
 <tr>
-  <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th>
+  <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th><th>Email</th>
   <th>Pekerjaan</th><th>Pernikahan</th>
   <th>Cabang</th><th>Zona</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
 </tr>

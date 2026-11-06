@@ -12,7 +12,8 @@ import {
   updatePetugasSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { NotFound, BadRequest } from '../../lib/errors.js';
+import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
+import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { audit } from '../../lib/audit.js';
 
 export const pelayananRouter = Router();
@@ -33,7 +34,8 @@ pelayananRouter.get('/', async (req, res) => {
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
       include: {
         roles: { orderBy: { level: 'desc' } },
-        _count: { select: { jemaatPelayanan: true, ibadahPelayanan: true } },
+        // Hanya anggota AKTIF yang dihitung (riwayat nonaktif tidak).
+        _count: { select: { jemaatPelayanan: { where: { isActive: true, jemaat: { isActive: true } } }, ibadahPelayanan: true } },
       },
     }),
     prisma.pelayanan.count({ where }),
@@ -67,6 +69,95 @@ pelayananRouter.get('/:id', async (req, res, next) => {
   });
   if (!item) throw NotFound('Pelayanan tidak ditemukan');
   res.json({ success: true, data: item });
+});
+
+// ===== Anggota pelayanan (Portal → Pelayanan → detail) =====
+// GET /admin/pelayanan/:id/members?search=&cabangId= → anggota aktif + cabang (dikelompokkan di Portal)
+pelayananRouter.get('/:id/members', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.id)) return next();
+  const pel = await prisma.pelayanan.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, nama: true, deskripsi: true, isActive: true, roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } } },
+  });
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan');
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const cabangId = typeof req.query.cabangId === 'string' && UUID_PARAM.test(req.query.cabangId) ? req.query.cabangId : undefined;
+  const rows = await prisma.jemaatPelayanan.findMany({
+    where: {
+      pelayananId: pel.id,
+      isActive: true,
+      jemaat: {
+        isActive: true,
+        ...(cabangId ? { cabangId } : {}),
+        ...(search ? { OR: memberSearchOr(search) } : {}),
+      },
+    },
+    orderBy: [{ jemaat: { namaLengkap: 'asc' } }],
+    select: {
+      id: true,
+      tanggalMulai: true,
+      catatan: true,
+      pelayananRole: { select: { id: true, nama: true, level: true } },
+      jemaat: {
+        select: {
+          id: true,
+          namaLengkap: true,
+          kode: true,
+          fotoUrl: true,
+          noHp: true,
+          jenisKelamin: true,
+          cabang: { select: { id: true, nama: true } },
+        },
+      },
+    },
+  });
+  res.json({ success: true, data: { pelayanan: pel, members: rows } });
+});
+
+/** Pencarian jemaat: nama, kode (QR), atau no HP (format lokal / +62). */
+function memberSearchOr(search: string) {
+  const kode = search.toUpperCase();
+  return [
+    { namaLengkap: { contains: search, mode: 'insensitive' as const } },
+    { kode },
+    { kode: { startsWith: kode } },
+    { noHp: { contains: search } },
+    ...phoneSearchTerms(search).map((t) => ({ noHp: { contains: t } })),
+  ];
+}
+
+// GET /admin/pelayanan/:id/candidates?search= → cari jemaat untuk ditambahkan (+ flag sudah anggota)
+pelayananRouter.get('/:id/candidates', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.id)) return next();
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  if (search.length < 2) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const rows = await prisma.jemaat.findMany({
+    where: { isActive: true, isTamu: false, OR: memberSearchOr(search) },
+    orderBy: { namaLengkap: 'asc' },
+    take: 15,
+    select: {
+      id: true,
+      namaLengkap: true,
+      kode: true,
+      noHp: true,
+      fotoUrl: true,
+      cabang: { select: { id: true, nama: true } },
+      jemaatPelayanan: {
+        where: { pelayananId: req.params.id, isActive: true },
+        select: { pelayananRole: { select: { nama: true } } },
+        take: 1,
+      },
+    },
+  });
+  const kode = search.toUpperCase();
+  rows.sort((a, b) => Number(b.kode === kode) - Number(a.kode === kode));
+  res.json({
+    success: true,
+    data: rows.map(({ jemaatPelayanan, ...j }) => ({ ...j, memberRole: jemaatPelayanan[0]?.pelayananRole.nama ?? null })),
+  });
 });
 
 pelayananRouter.post('/', async (req, res) => {
@@ -214,6 +305,12 @@ pelayananRouter.post('/assign', async (req, res) => {
   if (!role || role.pelayananId !== input.pelayananId) {
     throw BadRequest('Role tidak terkait dengan pelayanan yang dipilih');
   }
+  // Satu keanggotaan aktif per jemaat per pelayanan (ganti role lewat PATCH).
+  const existing = await prisma.jemaatPelayanan.findFirst({
+    where: { jemaatId: input.jemaatId, pelayananId: input.pelayananId, isActive: true },
+    select: { pelayananRole: { select: { nama: true } } },
+  });
+  if (existing) throw Conflict(`Jemaat ini sudah menjadi anggota pelayanan ini (role ${existing.pelayananRole.nama}).`);
   const data = {
     ...input,
     tanggalMulai: input.tanggalMulai ? new Date(input.tanggalMulai) : new Date(),

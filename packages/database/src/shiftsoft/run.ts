@@ -33,6 +33,7 @@ import { TENANTS, getTenant, type TenantConfig } from './config.js';
 import { ShiftsoftClient } from './shiftsoft-client.js';
 import { mapLegacyUserToJemaat } from './mappers/jemaat.js';
 import { shouldExclude } from './exclude-patterns.js';
+import { PROTECT_SELECT, protectMode, protectedUpdateData } from './protect.js';
 
 // ============================================================
 // CLI arg parser (minimal — no external deps)
@@ -97,6 +98,10 @@ interface TenantReport {
   updated: number;
   skippedNoName: number;
   skippedSystem: number;
+  /** Jemaat nonaktif di ECC → tidak disentuh sync. */
+  protectedSkipped: number;
+  /** Jemaat sudah onboard / diubah admin / "Bukan junk" → hanya field kosong diisi. */
+  protectedPartial: number;
   errors: number;
   /**
    * Recovery counter: record yang collision di noHp/email, di-retry
@@ -124,6 +129,8 @@ async function migrateTenant(
     updated: 0,
     skippedNoName: 0,
     skippedSystem: 0,
+    protectedSkipped: 0,
+    protectedPartial: 0,
     errors: 0,
     collisionsNulled: 0,
     warnings: [],
@@ -212,12 +219,20 @@ async function migrateTenant(
     const attemptUpsert = async () => {
       const existing = await prisma.jemaat.findUnique({
         where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
-        select: { id: true },
+        select: PROTECT_SELECT,
       });
+      // Proteksi: nonaktif → lewati; sudah onboard / diubah admin / "Bukan junk" → isi yang kosong saja.
+      const mode = existing ? protectMode(existing) : 'FULL';
+      if (existing && mode === 'SKIP') {
+        report.protectedSkipped++;
+        return;
+      }
+      const safeUpdate = existing ? protectedUpdateData(existing as Record<string, unknown>, updateData, mode) : updateData;
+      if (existing && mode === 'FILL_BLANKS') report.protectedPartial++;
       await prisma.jemaat.upsert({
         where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
         create: created,
-        update: updateData,
+        update: safeUpdate,
       });
       if (existing) report.updated++;
       else report.created++;
@@ -305,6 +320,7 @@ async function migrateTenant(
     `[${tenant.slug}] ${mode} done: processed=${report.processed}/${report.fetched}, ` +
       `created=${report.created}, updated=${report.updated}, collisions_nulled=${report.collisionsNulled}, ` +
       `skipped_no_name=${report.skippedNoName}, skipped_system=${report.skippedSystem}, ` +
+      `protected_skip=${report.protectedSkipped}, protected_partial=${report.protectedPartial}, ` +
       `errors=${report.errors}, warnings=${report.warnings.length}, took=${(report.durationMs / 1000).toFixed(1)}s`,
   );
   return report;

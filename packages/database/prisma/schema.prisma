@@ -224,6 +224,13 @@ model Jemaat {
   deactivationReason    String?   @map("deactivation_reason") @db.Text
   // Data pribadi sudah dihapus/disamarkan permanen (retensi 3 th atau permintaan).
   dataPurgedAt          DateTime? @map("data_purged_at")
+  // Potensial junk data (Portal → Jemaat): admin menandai "Bukan junk" →
+  // tidak ditandai lagi. Juga dilewati sync Shiftsoft.
+  junkDismissedAt       DateTime? @map("junk_dismissed_at")
+  junkDismissedById     String?   @map("junk_dismissed_by_id") @db.Uuid
+  // Terakhir diubah admin lewat Portal — sync Shiftsoft tidak menimpa data
+  // pribadi jemaat yang sudah disentuh admin / sudah onboarding di app.
+  portalEditedAt        DateTime? @map("portal_edited_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 

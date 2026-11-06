@@ -150,7 +150,9 @@ export default function PelayananPage() {
                 <div className="flex items-center gap-2 min-w-0">
                   <ChevronRight className="w-4 h-4 text-brand-600 shrink-0" />
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-neutral-900 truncate">{p.nama}</h3>
+                    <Link href={`/dashboard/pelayanan/${p.id}`} className="font-semibold text-neutral-900 hover:text-brand-600 hover:underline truncate block">
+                      {p.nama}
+                    </Link>
                     {p.deskripsi && (
                       <div className="text-xs text-neutral-500 truncate">{p.deskripsi}</div>
                     )}
@@ -158,10 +160,14 @@ export default function PelayananPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {p._count && (
-                    <span className="flex items-center gap-1 text-xs text-neutral-500" title="Jemaat di pelayanan ini">
+                    <Link
+                      href={`/dashboard/pelayanan/${p.id}`}
+                      className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline px-2 py-1 rounded-lg hover:bg-brand-50"
+                      title="Lihat & kelola anggota pelayanan ini"
+                    >
                       <UsersIcon className="w-3 h-3" />
-                      {p._count.jemaatPelayanan}
-                    </span>
+                      {p._count.jemaatPelayanan} anggota
+                    </Link>
                   )}
                   <button
                     onClick={() => setDeleting({ kind: 'pelayanan', id: p.id, label: p.nama })}

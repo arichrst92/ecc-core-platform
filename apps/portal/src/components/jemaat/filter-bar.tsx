@@ -28,6 +28,12 @@ export interface JemaatFilterState {
   statusPernikahan: string;
   /** '' = semua, '0' = belum mulai, 'N' = tahap saat ini N */
   journeyStage: string;
+  /** '' = semua, SHIFTSOFT / KELUARGA / APP_PORTAL */
+  sumber: string;
+  /** '' = semua, '1' = hanya potensial junk */
+  junk: string;
+  /** Kode alasan junk tertentu ('' = semua alasan). */
+  junkAlasan: string;
   sortBy: 'namaLengkap' | 'tanggalLahir' | 'tanggalBergabung' | 'cabang';
   sortOrder: 'asc' | 'desc';
 }
@@ -46,6 +52,9 @@ export const defaultJemaatFilter: JemaatFilterState = {
   statusPekerjaan: '',
   statusPernikahan: '',
   journeyStage: '',
+  sumber: '',
+  junk: '',
+  junkAlasan: '',
   sortBy: 'namaLengkap',
   sortOrder: 'asc',
 };
@@ -69,6 +78,9 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     statusPekerjaan: s.statusPekerjaan || undefined,
     statusPernikahan: s.statusPernikahan || undefined,
     journeyStage: s.journeyStage || undefined,
+    sumber: s.sumber || undefined,
+    junk: s.junk || undefined,
+    junkAlasan: s.junk && s.junkAlasan ? s.junkAlasan : undefined,
     sortBy: s.sortBy,
     sortOrder: s.sortOrder,
   };
@@ -88,7 +100,9 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     !!s.pelayananId ||
     !!s.statusPekerjaan ||
     !!s.statusPernikahan ||
-    !!s.journeyStage
+    !!s.journeyStage ||
+    !!s.sumber ||
+    !!s.junk
   );
 }
 
@@ -103,6 +117,17 @@ interface Props {
 }
 
 export function JemaatFilterBar({ value, onChange }: Props) {
+  // Ringkasan potensial junk (jumlah per alasan) untuk opsi filter.
+  const junkQ = useQuery({
+    queryKey: ['jemaat', 'junk-summary'],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { total: number; perAlasan: Record<string, number>; label: Record<string, string> } }>(
+          '/admin/jemaat/junk-summary',
+        )
+      ).data.data,
+    staleTime: 5 * 60_000,
+  });
   const rolesQ = useQuery({
     queryKey: ['role', 'options'],
     queryFn: async () => {
@@ -349,6 +374,39 @@ export function JemaatFilterBar({ value, onChange }: Props) {
         </Field>
 
         {/* Status */}
+        <Field label="Sumber data">
+          <select value={value.sumber ?? ''} onChange={(e) => patch({ sumber: e.target.value })} className={selectCls}>
+            <option value="">Semua sumber</option>
+            <option value="APP_PORTAL">App / Portal</option>
+            <option value="SHIFTSOFT">Shiftsoft (impor)</option>
+            <option value="KELUARGA">Didaftarkan keluarga</option>
+          </select>
+        </Field>
+
+        <Field label="Potensial junk">
+          <select
+            value={value.junk ? value.junkAlasan || 'ALL' : ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              patch({ junk: v ? '1' : '', junkAlasan: v && v !== 'ALL' ? v : '' });
+            }}
+            className={selectCls}
+            disabled={junkQ.isLoading}
+          >
+            <option value="">Semua data</option>
+            <option value="ALL">
+              Hanya potensial junk{junkQ.data ? ` (${junkQ.data.total.toLocaleString('id-ID')})` : ''}
+            </option>
+            {Object.entries(junkQ.data?.perAlasan ?? {})
+              .sort((a, b) => b[1] - a[1])
+              .map(([k, n]) => (
+                <option key={k} value={k}>
+                  — {junkQ.data?.label[k] ?? k} ({n.toLocaleString('id-ID')})
+                </option>
+              ))}
+          </select>
+        </Field>
+
         <Field label="Status">
           <select
             value={value.status}

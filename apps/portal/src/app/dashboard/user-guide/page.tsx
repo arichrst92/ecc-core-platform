@@ -265,7 +265,7 @@ const SECTIONS: Section[] = [
     content: [
       { kind: 'menu-card', href: '/dashboard/ibadah', label: 'Ibadah', description: 'Jadwal ibadah recurring (mingguan/bulanan) atau one-time event. Toggle List/Kalender view.' },
       { kind: 'menu-card', href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', description: 'Master kategori (mis. Ibadah Umum, Pemuda, KKR, Doa).' },
-      { kind: 'menu-card', href: '/dashboard/pelayanan', label: 'Pelayanan', description: 'Tim ministry (Worship, Multimedia, Usher, dll) + role per pelayanan.' },
+      { kind: 'menu-card', href: '/dashboard/pelayanan', label: 'Pelayanan', description: 'Tim ministry (Worship, Multimedia, Usher, dll) + role per pelayanan. Klik nama pelayanan / "N anggota" → daftar anggota per cabang gereja: cari & saring (cabang, role), ubah role, keluarkan (riwayat tetap ada), dan Tambah Anggota dengan cari nama, kode jemaat, atau no HP. Satu jemaat hanya satu keanggotaan aktif per pelayanan.' },
       { kind: 'menu-card', href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', description: 'Jemaat yang mengajukan bergabung ke ministry dari Els App. Leader/Fulltimer menyetujui (sambil menentukan peran) atau menolak.' },
       { kind: 'menu-card', href: '/dashboard/kehadiran', label: 'Kehadiran', description: 'Reservasi + check-in jemaat per ibadah per tanggal.' },
       {
@@ -409,7 +409,10 @@ const SECTIONS: Section[] = [
         title: 'Fitur halaman Jemaat',
         items: [
           'Filter: cabang, homecell, zona, ministry, status, jenis kelamin, role, umur. Search berdasarkan nama, email, atau no HP.',
-          'Export Excel (CSV) dan PDF mengikuti filter yang aktif.',
+          'Export Excel (CSV) dan PDF mengikuti filter yang aktif. Kolom Email tampil di daftar, PDF, dan CSV; CSV juga berisi Sumber Data & Potensial Junk.',
+          'Sumber data: badge "Shiftsoft" (hasil impor/sync) atau "Keluarga" (didaftarkan anggota keluarga) di bawah nama; filter "Sumber data".',
+          'Potensial junk: badge kuning "Perlu dicek" — klik untuk melihat alasan (nama janggal / data uji coba, pola akun sistem Shiftsoft, no HP / email tidak valid, tanggal tidak wajar, data kosong, tidak aktif > 6 bulan, onboarding tidak selesai > 30 hari, data Shiftsoft tanpa aktivitas sejak diimpor). Tidak ada yang dihapus otomatis: pilih "Bukan junk" bila datanya benar, atau nonaktifkan dari detail jemaat. Filter "Potensial junk" bisa per alasan. Yang didaftarkan keluarga tidak dinilai dari data kosong / tidak aktif.',
+          'Sync Shiftsoft tidak lagi menimpa jemaat yang sudah onboarding di app, pernah diubah admin di Portal, atau ditandai "Bukan junk" (hanya mengisi kolom yang masih kosong); jemaat nonaktif dilewati.',
           'Cek Duplikat: temukan jemaat dengan no HP / email / nama + tanggal lahir yang sama.',
           'Detail jemaat: QR card, tombol kontak WhatsApp/Email, riwayat homecell, event, ibadah, group, visit, local market, indikator keaktifan 3 bulan, dan Export PDF profil.',
         ],

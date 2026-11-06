@@ -621,6 +621,8 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
   const results = {
     imported: 0,
     skipped: 0,
+    protectedSkipped: 0,
+    protectedPartial: 0,
     errors: [] as Array<{ legacyId: number; namaLengkap: string; message: string }>,
   };
 
@@ -636,6 +638,18 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
   ): Promise<'imported' | 'skipped' | 'error'> {
     const mapped = shiftsoft.mapLegacyUserToJemaat(u, cabangId);
     if (!mapped) return 'skipped';
+    // Proteksi: jemaat nonaktif dilewati; yang sudah onboard / diubah admin /
+    // "Bukan junk" hanya diisi field yang masih kosong.
+    const existing = await prisma.jemaat.findUnique({
+      where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
+      select: shiftsoft.PROTECT_SELECT,
+    });
+    const mode = existing ? shiftsoft.protectMode(existing) : 'FULL';
+    if (mode === 'SKIP') {
+      results.protectedSkipped++;
+      return 'skipped';
+    }
+    if (mode === 'FILL_BLANKS') results.protectedPartial++;
     let data = { ...mapped.create };
     if (override.nullNoHp) data.noHp = null;
     if (override.nullEmail) data.email = null;
@@ -645,7 +659,7 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
         await prisma.jemaat.upsert({
           where: { legacyShiftsoftId: mapped.legacyShiftsoftId },
           create: data,
-          update: data,
+          update: existing ? shiftsoft.protectedUpdateData(existing as Record<string, unknown>, data, mode) : data,
         });
         return 'imported';
       } catch (e: any) {
@@ -717,6 +731,8 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
       result: {
         imported: results.imported,
         skipped: results.skipped,
+        protectedSkipped: results.protectedSkipped,
+        protectedPartial: results.protectedPartial,
         errorCount: results.errors.length,
         firstErrors: results.errors.slice(0, 5),
       } as any,
@@ -729,7 +745,7 @@ shiftsoftSyncRouter.post('/commit-jemaat', async (req, res) => {
   audit(req, {
     action: 'CREATE',
     resource: 'shiftsoft_sync_commit',
-    resourceLabel: `Commit ${snap.tenantSlug} — imported ${results.imported}, skipped ${results.skipped}, errors ${results.errors.length}`,
+    resourceLabel: `Commit ${snap.tenantSlug} — imported ${results.imported}, skipped ${results.skipped} (dilindungi: ${results.protectedSkipped} nonaktif, ${results.protectedPartial} hanya isi kosong), errors ${results.errors.length}`,
     metadata: results,
   });
 

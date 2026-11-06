@@ -3,6 +3,7 @@ import { Heart, User as UserIcon } from 'lucide-react';
 import { createJemaatSchema, updateJemaatSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField, calcAge } from './render-helpers';
+import { JunkBadge, type JunkReason } from '@/components/jemaat/junk-badge';
 
 const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -119,8 +120,9 @@ export function buildJemaatResource(
       {
         key: 'namaLengkap',
         label: 'Nama Lengkap',
-        width: '210px',
+        width: '230px',
         render: (_v, row) => (
+          <div className="min-w-0">
           <Link
             href={`/dashboard/jemaat/${row.id}`}
             className="inline-flex items-center gap-2 text-brand-600 hover:underline font-medium min-w-0"
@@ -129,6 +131,8 @@ export function buildJemaatResource(
             <JemaatAvatar nama={row.namaLengkap} fotoUrl={row.fotoUrl} />
             <span className="truncate">{row.namaLengkap}</span>
           </Link>
+          <JunkBadge id={String(row.id)} junk={row.junk as JunkReason[] | undefined} sumber={row.sumber as string | undefined} />
+          </div>
         ),
       },
       { key: 'cabang', label: 'Cabang', render: nestedField('cabang.nama'), width: '140px' },

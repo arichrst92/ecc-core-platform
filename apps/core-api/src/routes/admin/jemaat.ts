@@ -10,6 +10,7 @@ import {
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
+import { JUNK_LABEL, invalidateJunkCache, junkMap, junkSummary } from '../../lib/junk-data.js';
 import { audit } from '../../lib/audit.js';
 import {
   parseCsv,
@@ -115,6 +116,7 @@ jemaatRouter.get('/', async (req, res) => {
   applyProfileFilters(req, where);
   const journeySteps = await loadJourneySteps();
   applyJourneyFilter(req, where, journeySteps);
+  const junk = await applySumberJunkFilter(req, where);
 
   // Filter usia: tanggalLahir antara (now - umurMax) .. (now - umurMin)
   // Mis. umurMin=20 umurMax=30 → tanggalLahir between (today-30y) and (today-20y).
@@ -206,6 +208,9 @@ jemaatRouter.get('/', async (req, res) => {
     data: data.map((d) => ({
       ...d,
       spiritualJourney: journeySteps.length ? stageOf(journeySteps, d.jemaatRoles) : null,
+      // Potensial junk data: kode + label alasan (kosong = tidak ditandai).
+      junk: (junk.get(d.id) ?? []).map((k) => ({ kode: k, label: JUNK_LABEL[k] ?? k })),
+      sumber: d.legacyShiftsoftId != null ? 'SHIFTSOFT' : d.primaryGuardianId || d.registeredViaJemaatId ? 'KELUARGA' : 'APP_PORTAL',
     })),
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
   });
@@ -216,6 +221,28 @@ jemaatRouter.get('/', async (req, res) => {
 //  Per request 2026-10-03. Reuse where-clause builder dari list endpoint
 //  supaya filter konsisten (cabang, homecell, pelayanan, usia, dst).
 // ============================================================
+
+/**
+ * Filter ?sumber=SHIFTSOFT|KELUARGA|APP_PORTAL dan ?junk=1 (potensial junk data).
+ * Mengembalikan peta alasan junk (dipakai untuk kolom / CSV).
+ */
+async function applySumberJunkFilter(req: any, where: any): Promise<Map<string, string[]>> {
+  const and: any[] = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+  const sumber = getQueryString(req, 'sumber');
+  if (sumber === 'SHIFTSOFT') and.push({ legacyShiftsoftId: { not: null } });
+  else if (sumber === 'KELUARGA')
+    and.push({ legacyShiftsoftId: null, OR: [{ primaryGuardianId: { not: null } }, { registeredViaJemaatId: { not: null } }] });
+  else if (sumber === 'APP_PORTAL') and.push({ legacyShiftsoftId: null, primaryGuardianId: null, registeredViaJemaatId: null });
+  const map = await junkMap();
+  const junk = getQueryString(req, 'junk');
+  const alasan = getQueryString(req, 'junkAlasan');
+  if (junk === '1') {
+    const ids = [...map.entries()].filter(([, rs]) => !alasan || rs.includes(alasan)).map(([id]) => id);
+    and.push({ id: { in: ids.length ? ids : ['00000000-0000-0000-0000-000000000000'] } });
+  }
+  if (and.length) where.AND = and;
+  return map;
+}
 
 /** Filter jenis: default hanya anggota; `jenis=tamu` → tamu; `jenis=semua` → keduanya. */
 function applyJenisFilter(req: any, where: any) {
@@ -482,6 +509,7 @@ jemaatRouter.get('/export', async (req, res) => {
   const where = buildJemaatWhereFromQuery(req);
   const journeySteps = await loadJourneySteps();
   applyJourneyFilter(req, where, journeySteps);
+  const junk = await applySumberJunkFilter(req, where);
   const rows = await fetchJemaatForExport(where);
 
   const dataRows = rows.map((r: any) => {
@@ -528,6 +556,8 @@ jemaatRouter.get('/export', async (req, res) => {
       tanggalBergabung: r.tanggalBergabung
         ? new Date(r.tanggalBergabung).toISOString().slice(0, 10)
         : '',
+      sumber: r.legacyShiftsoftId != null ? 'Shiftsoft' : r.primaryGuardianId || r.registeredViaJemaatId ? 'Didaftarkan keluarga' : 'App / Portal',
+      potensialJunk: (junk.get(r.id) ?? []).map((k: string) => JUNK_LABEL[k] ?? k).join('; '),
       lastLogin: r.user?.lastLoginAt
         ? new Date(r.user.lastLoginAt).toISOString().slice(0, 19).replace('T', ' ')
         : 'Belum pernah login',
@@ -556,6 +586,8 @@ jemaatRouter.get('/export', async (req, res) => {
     'Status',
     'Tanggal Bergabung',
     'Last Login',
+    'Sumber Data',
+    'Potensial Junk',
   ];
   const KEYS: (keyof (typeof dataRows)[number])[] = [
     'kode',
@@ -579,6 +611,8 @@ jemaatRouter.get('/export', async (req, res) => {
     'status',
     'tanggalBergabung',
     'lastLogin',
+    'sumber',
+    'potensialJunk',
   ];
   const timestamp = new Date().toISOString().slice(0, 10);
 
@@ -793,6 +827,23 @@ jemaatRouter.get('/by-kode/:kode', async (req, res) => {
   });
   if (!item) throw NotFound('Kode jemaat tidak ditemukan');
   res.json({ success: true, data: item });
+});
+
+// ===== Potensial junk data =====
+// GET /admin/jemaat/junk-summary → { total, perAlasan: { KODE: n }, label }
+jemaatRouter.get('/junk-summary', async (_req, res) => {
+  res.json({ success: true, data: { ...(await junkSummary()), label: JUNK_LABEL } });
+});
+
+// POST /admin/jemaat/:id/bukan-junk → tidak ditandai lagi (dan dilewati sync Shiftsoft)
+jemaatRouter.post('/:id/bukan-junk', async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const j = await prisma.jemaat.findUnique({ where: { id }, select: { id: true, namaLengkap: true } });
+  if (!j) throw NotFound('Jemaat tidak ditemukan');
+  await prisma.jemaat.update({ where: { id }, data: { junkDismissedAt: new Date(), junkDismissedById: req.user?.jemaatId ?? null } });
+  invalidateJunkCache();
+  audit(req, { action: 'UPDATE', resource: 'jemaat', resourceId: id, resourceLabel: `${j.namaLengkap} ditandai "Bukan junk"`, metadata: { kind: 'junk-dismiss' } });
+  res.json({ success: true, data: { id } });
 });
 
 jemaatRouter.get('/:id', async (req, res) => {
@@ -1715,7 +1766,9 @@ jemaatRouter.patch('/:id', async (req, res) => {
   };
   const before = await prisma.jemaat.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
-  const updated = await prisma.jemaat.update({ where: { id: req.params.id }, data });
+  // portalEditedAt → sync Shiftsoft tidak lagi menimpa data pribadi jemaat ini.
+  const updated = await prisma.jemaat.update({ where: { id: req.params.id }, data: { ...data, portalEditedAt: new Date() } });
+  invalidateJunkCache();
   audit(req, { action: 'UPDATE', resource: 'jemaat', resourceId: updated.id, resourceLabel: updated.namaLengkap, before, after: updated });
   res.json({ success: true, data: updated });
 });

@@ -134,13 +134,15 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
                 <div
                   key={vRow.key}
                   data-index={vRow.index}
+                  // Tinggi baris diukur (mis. kolom nama dengan badge tambahan).
+                  ref={rowVirtualizer.measureElement}
                   className={clsx(
                     'absolute top-0 left-0 w-full grid border-b border-neutral-100 text-sm',
                     !isLoaderRow && 'hover:bg-neutral-50',
                   )}
                   style={{
                     transform: `translateY(${vRow.start}px)`,
-                    height: `${vRow.size}px`,
+                    minHeight: `${rowHeight}px`,
                     gridTemplateColumns: gridTemplate,
                   }}
                 >

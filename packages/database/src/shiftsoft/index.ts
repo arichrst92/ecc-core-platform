@@ -30,6 +30,8 @@ export {
   cleanString,
 } from './normalize.js';
 export { mapLegacyUserToJemaat } from './mappers/jemaat.js';
+export { PROTECT_SELECT, protectMode, protectedUpdateData } from './protect.js';
+export type { ProtectMode } from './protect.js';
 export type { MappedJemaat } from './mappers/jemaat.js';
 export type {
   LegacyUser,

@@ -229,17 +229,17 @@ export default async function EventPembayaranPage(
         {/* Payment info */}
         {!isFree && event.bankNomor && (
           <div className="bg-white border border-orange-100 rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
-              <h2 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
+              <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Landmark className="w-5 h-5" /> Info Pembayaran
               </h2>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="border border-neutral-200 rounded-xl p-4">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div>
+            <div className="p-3 sm:p-6 space-y-4">
+              <div className="min-w-0 border border-neutral-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-neutral-500">{event.bankNama}</p>
-                    <p className="text-xl font-bold text-neutral-900 tracking-wide">
+                    <p className="text-lg sm:text-xl font-bold text-neutral-900 tracking-wide break-all">
                       {event.bankNomor}
                     </p>
                     {event.bankAtasNama && (

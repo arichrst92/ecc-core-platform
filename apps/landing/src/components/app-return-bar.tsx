@@ -97,7 +97,7 @@ export function AppReturnFooter() {
   useEffect(() => setShow(!!readMode()), []);
   if (!show) return null;
   return (
-    <div className="max-w-3xl mx-auto px-6 pb-10">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-10">
       <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 text-center">
         <p className="text-sm text-neutral-600 mb-3">Sudah selesai memberi? Terima kasih, Tuhan memberkati.</p>
         <AppReturnButton />

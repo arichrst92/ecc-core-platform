@@ -74,11 +74,11 @@ export default async function PersembahanCabangPage(
   const rekening = resp?.rekening ?? [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50">
       <AppReturnBar />
       {/* Header */}
       <section className="border-b border-orange-100 bg-white/60 backdrop-blur">
-        <div className="max-w-3xl mx-auto px-6 py-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <Link
             href="/persembahan"
             className="inline-flex items-center gap-1 text-xs text-orange-700 hover:text-orange-800 mb-4"
@@ -86,17 +86,17 @@ export default async function PersembahanCabangPage(
             <ChevronLeft className="w-4 h-4" /> Ganti cabang
           </Link>
 
-          <div className="flex items-center gap-3 mb-2">
-            <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} />
-            <div>
+          <div className="flex items-start gap-3 mb-2">
+            <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} className="shrink-0" />
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
                 Persembahan · {cabang.kode}
               </p>
-              <h1 className="text-2xl md:text-3xl font-bold text-neutral-900">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-neutral-900 break-words">
                 {cabang.nama}
               </h1>
               {cabang.alamat && (
-                <p className="text-xs text-neutral-500 mt-0.5">{cabang.alamat}</p>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed break-words">{cabang.alamat}</p>
               )}
             </div>
           </div>
@@ -108,7 +108,7 @@ export default async function PersembahanCabangPage(
       </section>
 
       {/* Rekening list */}
-      <section className="max-w-3xl mx-auto px-6 py-10">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {rekening.length === 0 ? (
           <div className="text-center py-16 bg-white border border-orange-100 rounded-2xl">
             <Info className="w-10 h-10 text-orange-400 mx-auto mb-3" />
@@ -119,27 +119,27 @@ export default async function PersembahanCabangPage(
           </div>
         ) : (
           <div className="bg-white border border-orange-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center gap-3">
-              <Church className="w-5 h-5" />
-              <h2 className="font-bold text-lg">{cabang.nama}</h2>
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center gap-3">
+              <Church className="w-5 h-5 shrink-0" />
+              <h2 className="font-bold text-base sm:text-lg min-w-0 break-words">{cabang.nama}</h2>
             </div>
 
-            <div className="p-6 grid gap-4">
+            <div className="p-3 sm:p-6 grid grid-cols-1 gap-3 sm:gap-4">
               {rekening.map((r) => (
                 <div
                   key={r.id}
-                  className="border border-neutral-200 rounded-xl p-4 hover:border-orange-300 transition"
+                  className="min-w-0 border border-neutral-200 rounded-xl p-4 hover:border-orange-300 transition"
                 >
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div>
-                      <span className="inline-block px-2 py-0.5 mb-2 bg-orange-100 text-orange-700 text-[11px] font-semibold rounded-full uppercase tracking-wide">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-block max-w-full px-2 py-0.5 mb-2 bg-orange-100 text-orange-700 text-[11px] font-semibold rounded-full uppercase tracking-wide break-words">
                         {r.purpose}
                       </span>
                       <p className="text-sm text-neutral-500">{r.bankNama}</p>
-                      <p className="text-xl font-bold text-neutral-900 tracking-wide">
+                      <p className="text-lg sm:text-xl font-bold text-neutral-900 tracking-wide break-all">
                         {r.bankNomor}
                       </p>
-                      <p className="text-sm text-neutral-700 mt-1">
+                      <p className="text-sm text-neutral-700 mt-1 break-words">
                         a.n. {r.bankAtasNama}
                       </p>
                       {r.catatan && (
@@ -158,7 +158,7 @@ export default async function PersembahanCabangPage(
                         alt={`QRIS ${r.purpose} — ${cabang.nama}`}
                         downloadName={`qris-${cabang.kode}-${r.purpose}`.toLowerCase().replace(/\s+/g, '-')}
                       />
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-neutral-700 mb-1 flex items-center gap-1">
                           <QrCode className="w-3.5 h-3.5" /> QRIS
                         </p>
@@ -177,7 +177,7 @@ export default async function PersembahanCabangPage(
         )}
 
         {/* Panduan */}
-        <div className="mt-10 bg-white border border-orange-100 rounded-2xl p-6">
+        <div className="mt-8 sm:mt-10 bg-white border border-orange-100 rounded-2xl p-4 sm:p-6">
           <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
             <Landmark className="w-4 h-4 text-orange-600" />
             Panduan Persembahan

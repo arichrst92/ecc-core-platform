@@ -121,6 +121,12 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     allowedInclude: ['jemaat', 'pelayanan', 'pelayananRole'],
     keyFields: ['id', 'jemaatId', 'pelayananId', 'pelayananRoleId', 'tanggalMulai', 'isActive'],
   },
+  pelayanan_pendaftaran: {
+    prismaKey: 'pelayananPendaftaran',
+    description: 'Status pendaftaran pelayanan per cabang (isOpen, catatan, tutupOtomatis). Tanpa baris = menerima pendaftaran.',
+    allowedInclude: ['pelayanan', 'cabang'],
+    keyFields: ['id', 'pelayananId', 'cabangId', 'isOpen', 'catatan', 'tutupOtomatis', 'updatedAt'],
+  },
   pelayanan_approver: {
     prismaKey: 'pelayananApprover',
     description: 'Otoritas approval request bergabung pelayanan: anggota mana yang boleh menyetujui request dari cabang mana.',

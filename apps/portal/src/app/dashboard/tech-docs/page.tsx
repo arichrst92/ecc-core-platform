@@ -399,7 +399,7 @@ await createNotificationBatch(guardians, {...});`,
     id: 'elsa',
     title: 'Elsa (Els Agentic) — AI Agent',
     icon: Sparkles,
-    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 55 entities.',
+    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 56 entities.',
     blocks: [
       {
         kind: 'p',
@@ -409,7 +409,7 @@ await createNotificationBatch(guardians, {...});`,
       {
         kind: 'p',
         text:
-          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 55 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
+          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 56 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
       },
       {
         kind: 'table',
@@ -619,6 +619,7 @@ pm2 status`,
           'Versi 2.4.6: Zona & pastor zona (homecell_area_pastor, /admin/me/homecell-area-managed + myRole, /admin/me/zona-saya untuk semua jemaat), potensial member (/admin/me/homecell/:id/potensial-member), cari keluarga (/admin/me/family/search — nama sebagian, email/HP persis, limiter family-search 60/10 menit — + /family/link-by-id), request Spiritual Journey (POST/DELETE /admin/me/spiritual-journey/request; admin /admin/spiritual-journey-request, lib/spiritual-journey-request.ts: tahap diminta + semua tahap sebelumnya diberikan), bookmark multi ayat (lokal di HP).',
           'Promosi New Comer → Jemaat Tetap: app_config.new_comer_min_hadir (Portal → Onboarding Config, PUT /admin/onboarding-config/promosi). Job new-comer-promotion tiap 30 menit + POST /promosi/apply; lib/onboarding-roles.ts applyNewComerPromotion — hitung reservasi status JOIN, pg_advisory_xact_lock per jemaat, update status bila sub role sama, nonaktifkan role New Comer, tanpa role dobel.',
           'Jadwal petugas dari app: GET /admin/ministry/:id/jadwal?cabangId= (occurrence 8 minggu + event cabang + anggota), PUT /:id/jadwal/ibadah/:ibadahId {tanggal, scope TANGGAL|DEFAULT|RESET, petugas[]} → IbadahPelayananPetugas (override per tanggal / default), PUT /:id/jadwal/event/:eventId → EventPelayananPetugas (+ EventPelayanan otomatis). Hak = otoritas approval per cabang; canScanAttendance dipertahankan; notifikasi MINISTRY_DUTY_ASSIGNED/REMOVED.',
+          'Pendaftaran pelayanan: tabel pelayanan_pendaftaran (pelayanan, cabang, isOpen, catatan, tutupOtomatis); lib/pelayanan-pendaftaran.ts resolveStatus MENERIMA|BUKA|TUTUP; GET/PUT /admin/ministry/:id/pendaftaran[/:cabangId] (otoritas cabang; Fulltimer di Portal); POST /:id/join → 409 PENDAFTARAN_TUTUP berdasar cabang pemohon; list/detail kirim pendaftaran + isOpen per cabang saya.',
           'Ikon & warna pelayanan: pelayanan.ikon/warna (PELAYANAN_IKON & PELAYANAN_WARNA di shared-types; daftar sama di app src/components/ministry/MinistryIcon.tsx & Portal components/pelayanan/pelayanan-icon.tsx). Ikut di /admin/ministry (list: avatars, myPosisi; detail: coordinators per cabang + noHp sesuai privasi), /admin/me (ministries), /admin/me/ministry-schedule (ministryIkon/Warna), /admin/ibadah/:id (petugas.pelayananIkon/Warna), /admin/jemaat-public/:id.',
           'Otoritas approval ministry: tabel pelayanan_approver (pelayanan, jemaat, cabang); PUT /admin/pelayanan/:id/approver/:jemaatId {cabangIds}. routes/admin/ministry.ts approvalScope(): Fulltimer = semua hanya di Portal (X-Client ≠ mobile); di app semua orang termasuk Fulltimer hanya cabang pemberian otoritas (harus anggota aktif) — dipakai di list/detail/approve/reject + notifikasi MINISTRY_JOIN_REQUESTED. Level role tidak lagi menentukan hak approve.',
           'Pelayanan: GET /admin/pelayanan/:id/members, GET /:id/candidates?search= (nama/kode/HP), POST /assign menolak keanggotaan aktif ganda, keluar = PATCH /assign/:id {isActive:false}.',

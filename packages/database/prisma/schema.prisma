@@ -84,6 +84,7 @@ model CabangGereja {
   feedbacks      Feedback[]
   prayerRequests PrayerRequest[]
   pelayananApprovers PelayananApprover[]
+  pelayananPendaftaran PelayananPendaftaran[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -840,6 +841,7 @@ model Pelayanan {
   joinRequests    PelayananJoinRequest[]
   prayerPetugas   PrayerPetugasPelayanan[]
   approvers       PelayananApprover[]
+  pendaftaran     PelayananPendaftaran[]
 
   @@map("pelayanan")
 }
@@ -887,6 +889,30 @@ model PelayananApprover {
   @@index([jemaatId])
   @@index([pelayananId, cabangId])
   @@map("pelayanan_approver")
+}
+
+// Status pendaftaran (request bergabung) pelayanan per cabang — diatur pemegang
+// otoritas cabang (app) / admin (Portal). Tanpa baris = menerima pendaftaran
+// (perilaku lama). isOpen=true eksplisit = "Buka pendaftaran" (badge di app).
+model PelayananPendaftaran {
+  id            String    @id @default(uuid()) @db.Uuid
+  pelayananId   String    @map("pelayanan_id") @db.Uuid
+  cabangId      String    @map("cabang_id") @db.Uuid
+  isOpen        Boolean   @map("is_open")
+  // Catatan untuk calon pendaftar, mis. "Dibutuhkan 2 operator kamera".
+  catatan       String?   @db.Text
+  // Tutup otomatis setelah tanggal ini (inklusif). NULL = tanpa batas.
+  tutupOtomatis DateTime? @map("tutup_otomatis") @db.Date
+  updatedById   String?   @map("updated_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  pelayanan Pelayanan    @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  cabang    CabangGereja @relation(fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@unique([pelayananId, cabangId])
+  @@index([cabangId])
+  @@map("pelayanan_pendaftaran")
 }
 
 // Junction Jemaat <-> Pelayanan dengan role + riwayat

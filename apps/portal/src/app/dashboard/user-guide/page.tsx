@@ -132,16 +132,16 @@ const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Elsa punya akses ke 55 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
+        text: 'Elsa punya akses ke 56 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
       },
       {
         kind: 'bullet',
-        title: '55 entity yang bisa di-query',
+        title: '56 entity yang bisa di-query',
         items: [
           'Gereja: sinode, cabang (termasuk zona waktu & link Google Maps)',
           'People: jemaat (termasuk tamu & kategori tamu), role, jemaat_role, tipe_relasi, jemaat_relasi, jemaat_sertifikat, feedback (Kritik & Saran)',
           'Tamu: jemaat_tamu (Tamu saya), homecell_tamu, homecell_tamu_attendance, homecell_guest_request',
-          'Service: kategori_ibadah, ibadah (urutan, rating on/off), pelayanan, pelayanan_role, jemaat_pelayanan, pelayanan_approver, reservasi, service_review (ulasan)',
+          'Service: kategori_ibadah, ibadah (urutan, rating on/off), pelayanan, pelayanan_role, jemaat_pelayanan, pelayanan_approver, pelayanan_pendaftaran, reservasi, service_review (ulasan)',
           'Doa: prayer_request (tanpa isi doa), prayer_petugas_role, prayer_petugas_pelayanan',
           'Community: homecell_area (zona), homecell_area_pastor (pastor zona), homecell, homecell_member, homecell_schedule, homecell_attendance, homecell_join_request, homecell_announcement, homecell_poll',
           'Group: group, group_member, group_join_request, group_announcement, group_poll',
@@ -265,7 +265,7 @@ const SECTIONS: Section[] = [
     content: [
       { kind: 'menu-card', href: '/dashboard/ibadah', label: 'Ibadah', description: 'Jadwal ibadah recurring (mingguan/bulanan) atau one-time event. Toggle List/Kalender view.' },
       { kind: 'menu-card', href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', description: 'Master kategori (mis. Ibadah Umum, Pemuda, KKR, Doa).' },
-      { kind: 'menu-card', href: '/dashboard/pelayanan', label: 'Pelayanan', description: 'Tim ministry (Worship, Multimedia, Usher, dll) + role per pelayanan. Ikon pensil di kartu → ubah nama, deskripsi (baris pertama = tagline di app), ikon (38 pilihan) & warna aksen; tampil di app (daftar/detail pelayanan, jadwal, profil, petugas ibadah) dan Portal (detail ibadah/event, jemaat, permintaan volunteer). Klik nama pelayanan / "N anggota" → daftar anggota per cabang gereja: cari & saring (cabang, role), ubah role, keluarkan (riwayat tetap ada), dan Tambah Anggota dengan cari nama, kode jemaat, atau no HP. Satu jemaat hanya satu keanggotaan aktif per pelayanan. Ikon perisai di baris anggota → Otoritas approval: centang cabang; anggota itu boleh menyetujui/menolak request bergabung dari jemaat cabang tsb (app & Portal). Hanya pemegang otoritas yang bisa approve & mengatur jadwal di app (admin Fulltimer bebas hanya di Portal); notifikasi request dikirim ke pemegang otoritas cabang pemohon. Otoritas dicabut otomatis saat anggota dikeluarkan. Pemegang otoritas juga bisa mengatur jadwal petugas ibadah (yang memakai pelayanan itu) & event cabangnya dari app (Ministry → Atur jadwal pelayanan): per tanggal atau susunan tetap; hasilnya sama dengan petugas yang diatur di Portal.' },
+      { kind: 'menu-card', href: '/dashboard/pelayanan', label: 'Pelayanan', description: 'Tim ministry (Worship, Multimedia, Usher, dll) + role per pelayanan. Di halaman anggota pelayanan ada panel Pendaftaran per cabang: Buka pendaftaran (catatan + tutup otomatis) / Tutup pendaftaran; tanpa baris = menerima (default); ditutup → tombol Gabung di app hilang & request baru ditolak untuk jemaat cabang tsb; koordinator juga bisa mengaturnya di app. Ikon pensil di kartu → ubah nama, deskripsi (baris pertama = tagline di app), ikon (38 pilihan) & warna aksen; tampil di app (daftar/detail pelayanan, jadwal, profil, petugas ibadah) dan Portal (detail ibadah/event, jemaat, permintaan volunteer). Klik nama pelayanan / "N anggota" → daftar anggota per cabang gereja: cari & saring (cabang, role), ubah role, keluarkan (riwayat tetap ada), dan Tambah Anggota dengan cari nama, kode jemaat, atau no HP. Satu jemaat hanya satu keanggotaan aktif per pelayanan. Ikon perisai di baris anggota → Otoritas approval: centang cabang; anggota itu boleh menyetujui/menolak request bergabung dari jemaat cabang tsb (app & Portal). Hanya pemegang otoritas yang bisa approve & mengatur jadwal di app (admin Fulltimer bebas hanya di Portal); notifikasi request dikirim ke pemegang otoritas cabang pemohon. Otoritas dicabut otomatis saat anggota dikeluarkan. Pemegang otoritas juga bisa mengatur jadwal petugas ibadah (yang memakai pelayanan itu) & event cabangnya dari app (Ministry → Atur jadwal pelayanan): per tanggal atau susunan tetap; hasilnya sama dengan petugas yang diatur di Portal.' },
       { kind: 'menu-card', href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', description: 'Jemaat yang mengajukan bergabung ke ministry dari Els App. Leader/Fulltimer menyetujui (sambil menentukan peran) atau menolak.' },
       { kind: 'menu-card', href: '/dashboard/kehadiran', label: 'Kehadiran', description: 'Reservasi + check-in jemaat per ibadah per tanggal.' },
       {

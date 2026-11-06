@@ -160,6 +160,8 @@ export default function PelayananDetailPage() {
         </button>
       </div>
 
+      {pel ? <PendaftaranPanel pelayananId={pel.id} /> : null}
+
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -504,5 +506,136 @@ function ApprovalModal({
         </div>
       </div>
     </>
+  );
+}
+
+interface PendaftaranRow {
+  cabangId: string;
+  cabangNama: string;
+  status: 'MENERIMA' | 'BUKA' | 'TUTUP';
+  catatan: string | null;
+  tutupOtomatis: string | null;
+}
+
+const STATUS_PEND: Record<PendaftaranRow['status'], { label: string; cls: string }> = {
+  BUKA: { label: 'Buka pendaftaran', cls: 'bg-emerald-100 text-emerald-800' },
+  MENERIMA: { label: 'Menerima (default)', cls: 'bg-neutral-100 text-neutral-600' },
+  TUTUP: { label: 'Tutup', cls: 'bg-red-100 text-red-700' },
+};
+
+/**
+ * Buka / tutup pendaftaran per cabang (badge "Buka pendaftaran" di app; ditutup
+ * → tombol Gabung hilang & request baru ditolak untuk jemaat cabang tsb).
+ */
+function PendaftaranPanel({ pelayananId }: { pelayananId: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState<PendaftaranRow | null>(null);
+  const [catatan, setCatatan] = useState('');
+  const [tutup, setTutup] = useState('');
+  const q = useQuery({
+    queryKey: ['pelayanan', pelayananId, 'pendaftaran'],
+    queryFn: async () => (await apiClient.get<{ data: PendaftaranRow[] }>(`/admin/ministry/${pelayananId}/pendaftaran`)).data.data,
+    retry: false,
+  });
+  const save = useMutation({
+    mutationFn: async (v: { cabangId: string; isOpen: boolean; catatan?: string | null; tutupOtomatis?: string | null }) =>
+      apiClient.put(`/admin/ministry/${pelayananId}/pendaftaran/${v.cabangId}`, v),
+    onSuccess: (_d, v) => {
+      toast.success(v.isOpen ? 'Pendaftaran dibuka' : 'Pendaftaran ditutup');
+      setEdit(null);
+      void qc.invalidateQueries({ queryKey: ['pelayanan', pelayananId, 'pendaftaran'] });
+    },
+    onError: (e) => toast.error(errMsg(e, 'Gagal menyimpan')),
+  });
+  if (q.isError || !q.data) return null;
+  const rows = q.data;
+  const nBuka = rows.filter((r) => r.status === 'BUKA').length;
+  const nTutup = rows.filter((r) => r.status === 'TUTUP').length;
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl">
+      <button onClick={() => setOpen((x) => !x)} className="w-full flex items-center justify-between px-4 py-3">
+        <span className="font-semibold text-neutral-900">
+          Pendaftaran per cabang
+          <span className="ml-2 text-xs font-normal text-neutral-500">
+            {nBuka} buka · {nTutup} tutup · {rows.length - nBuka - nTutup} default
+          </span>
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
+      </button>
+      {open ? (
+        <div className="border-t border-neutral-100 divide-y divide-neutral-100">
+          {rows.map((r) => (
+            <div key={r.cabangId} className="px-4 py-2.5 flex flex-wrap items-center gap-2">
+              <span className="font-medium text-neutral-900 w-40">{r.cabangNama}</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_PEND[r.status].cls}`}>{STATUS_PEND[r.status].label}</span>
+              <span className="text-xs text-neutral-500 flex-1 min-w-[120px] truncate">
+                {r.catatan ?? ''}
+                {r.tutupOtomatis ? ` · tutup otomatis ${r.tutupOtomatis}` : ''}
+              </span>
+              <button
+                onClick={() => {
+                  setEdit(r);
+                  setCatatan(r.catatan ?? '');
+                  setTutup(r.tutupOtomatis ?? '');
+                }}
+                className="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Buka pendaftaran
+              </button>
+              <button
+                onClick={() => save.mutate({ cabangId: r.cabangId, isOpen: false })}
+                disabled={save.isPending || r.status === 'TUTUP'}
+                className="px-3 py-1 rounded-lg text-xs font-semibold border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-40"
+              >
+                Tutup pendaftaran
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {edit ? (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEdit(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 pointer-events-auto space-y-3">
+              <h3 className="font-semibold text-neutral-900">Buka pendaftaran · {edit.cabangNama}</h3>
+              <label className="block text-sm">
+                <span className="text-neutral-700">Catatan untuk calon pendaftar (opsional)</span>
+                <textarea
+                  value={catatan}
+                  onChange={(e) => setCatatan(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="mis. Dibutuhkan 2 operator kamera"
+                  className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-neutral-700">Tutup otomatis setelah (opsional)</span>
+                <input
+                  type="date"
+                  value={tutup}
+                  onChange={(e) => setTutup(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEdit(null)} className="px-3 py-1.5 rounded-lg text-sm hover:bg-neutral-100">
+                  Batal
+                </button>
+                <button
+                  onClick={() => save.mutate({ cabangId: edit.cabangId, isOpen: true, catatan: catatan.trim() || null, tutupOtomatis: tutup || null })}
+                  disabled={save.isPending}
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+                >
+                  Buka pendaftaran
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }

@@ -27,6 +27,7 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { isMobileClient } from '../../lib/client-kind.js';
 import { privacyGate } from '../../lib/privacy.js';
+import { infoOrDefault, pendaftaranForCabang, resolveStatus } from '../../lib/pelayanan-pendaftaran.js';
 import {
   canManageMinistry,
   checkCanRequestJoin,
@@ -166,6 +167,11 @@ ministryRouter.get('/', async (req, res) => {
       })
     : [];
   const mineById = new Map(mine.map((x) => [x.pelayananId, x.pelayananRole]));
+  // Status pendaftaran untuk cabang saya (patokan = cabang jemaat yang mendaftar).
+  const myCabangId = req.user
+    ? (await prisma.jemaat.findUnique({ where: { id: req.user.jemaatId }, select: { cabangId: true } }))?.cabangId ?? null
+    : null;
+  const pendMap = await pendaftaranForCabang(items.map((m) => m.id), myCabangId);
 
   const data = items.map((m) => ({
     id: m.id,
@@ -174,12 +180,12 @@ ministryRouter.get('/', async (req, res) => {
     ikon: m.ikon,
     warna: m.warna,
     myPosisi: mineById.get(m.id)?.nama ?? null,
+    pendaftaran: infoOrDefault(pendMap, m.id, myCabangId, m.isActive),
     avatars: m.jemaatPelayanan.map((jp) => ({ id: jp.jemaat.id, namaLengkap: jp.jemaat.namaLengkap, fotoUrl: jp.jemaat.fotoUrl })),
     memberCount: m._count.jemaatPelayanan,
     pendingRequestCount: pendingByMinistry.get(m.id) ?? 0,
-    // Anggap selalu open untuk MVP. Kalau ke depan ada flag isOpen di schema,
-    // tinggal tukar source.
-    isOpen: m.isActive,
+    // Menerima pendaftaran dari cabang saya (app lama memakai field ini untuk tombol Gabung).
+    isOpen: infoOrDefault(pendMap, m.id, myCabangId, m.isActive)?.status !== 'TUTUP' && m.isActive,
     leader: m.jemaatPelayanan[0]
       ? {
           jemaat: m.jemaatPelayanan[0].jemaat,
@@ -337,6 +343,12 @@ ministryRouter.get('/:id', async (req, res) => {
     : 0;
   // Cabang tempat requester punya otoritas approval (null = semua / Fulltimer).
   const approvalCabangIds = scope === 'ALL' ? null : [...(scope.get(item.id) ?? [])];
+  const meCab = jemaatId
+    ? await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true, cabang: { select: { nama: true } } } })
+    : null;
+  const myCabangId = meCab?.cabangId ?? null;
+  const myPendRaw = infoOrDefault(await pendaftaranForCabang([item.id], myCabangId), item.id, myCabangId, item.isActive);
+  const myPend = myPendRaw ? { ...myPendRaw, cabangNama: meCab?.cabang.nama ?? null } : null;
 
   // Koordinator (pemegang otoritas approval) per cabang — boleh dilihat semua
   // jemaat; no HP mengikuti pengaturan privasi masing-masing.
@@ -370,7 +382,9 @@ ministryRouter.get('/:id', async (req, res) => {
       deskripsi: item.deskripsi,
       ikon: item.ikon,
       warna: item.warna,
-      isOpen: item.isActive,
+      // Menerima pendaftaran dari cabang saya (app lama: tombol Gabung).
+      isOpen: item.isActive && myPend?.status !== 'TUTUP',
+      pendaftaran: myPend,
       memberCount: item._count.jemaatPelayanan,
       roles: item.roles,
       leader: item.jemaatPelayanan[0]
@@ -434,6 +448,19 @@ ministryRouter.post('/:id/join', async (req, res) => {
   });
   if (!ministry) throw NotFound('Ministry tidak ditemukan');
   if (!ministry.isActive) throw BadRequest('Ministry ini tidak buka untuk join');
+  // Pendaftaran per cabang pemohon.
+  {
+    const pem = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true, cabang: { select: { nama: true } } } });
+    const row = pem
+      ? await prisma.pelayananPendaftaran.findUnique({
+          where: { pelayananId_cabangId: { pelayananId: ministry.id, cabangId: pem.cabangId } },
+          select: { isOpen: true, tutupOtomatis: true },
+        })
+      : null;
+    if (resolveStatus(row) === 'TUTUP') {
+      throw new ApiError(409, 'PENDAFTARAN_TUTUP', `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} sedang ditutup.`);
+    }
+  }
   if (ministry.roles.length === 0) {
     throw BadRequest('Ministry belum punya role yang bisa di-assign');
   }
@@ -1387,6 +1414,82 @@ ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
     resourceId: link.id,
     resourceLabel: `Jadwal ${pel.nama} · ${label} (${list.length} petugas)`,
     metadata: { petugas: list, via: 'app' },
+  });
+  res.json({ success: true, data: { ok: true } });
+});
+
+// ============================================================
+//  Buka / tutup pendaftaran per cabang (2.4.6) — pemegang otoritas cabang
+//  (app) atau admin Fulltimer (Portal).
+//   GET /admin/ministry/:id/pendaftaran            → status cabang yang boleh dikelola
+//   PUT /admin/ministry/:id/pendaftaran/:cabangId  { isOpen, catatan?, tutupOtomatis?: 'YYYY-MM-DD'|null }
+// ============================================================
+
+ministryRouter.get('/:id/pendaftaran', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  if (!UUIDV.test(req.params.id)) throw NotFound('Ministry tidak ditemukan');
+  const allowed = await jadwalCabangIds(req, req.params.id);
+  const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { isActive: true } });
+  if (!pel) throw NotFound('Ministry tidak ditemukan');
+  const [cabang, rows] = await Promise.all([
+    prisma.cabangGereja.findMany({
+      where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
+      orderBy: { nama: 'asc' },
+      select: { id: true, nama: true },
+    }),
+    prisma.pelayananPendaftaran.findMany({ where: { pelayananId: req.params.id } }),
+  ]);
+  const byCabang = new Map(rows.map((r) => [r.cabangId, r]));
+  res.json({
+    success: true,
+    data: cabang.map((c) => {
+      const r = byCabang.get(c.id);
+      return {
+        cabangId: c.id,
+        cabangNama: c.nama,
+        status: resolveStatus(r ?? null, pel.isActive),
+        catatan: r?.catatan ?? null,
+        tutupOtomatis: r?.tutupOtomatis ? ymdUtc(r.tutupOtomatis) : null,
+        updatedAt: r?.updatedAt ?? null,
+      };
+    }),
+  });
+});
+
+ministryRouter.put('/:id/pendaftaran/:cabangId', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.cabangId)) throw NotFound('Data tidak ditemukan');
+  const allowed = await jadwalCabangIds(req, req.params.id);
+  assertCabangAllowed(allowed, req.params.cabangId);
+  const body = z
+    .object({
+      isOpen: z.boolean(),
+      catatan: z.string().trim().max(500).nullish(),
+      tutupOtomatis: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+    })
+    .parse(req.body ?? {});
+  const [pel, cab] = await Promise.all([
+    prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { nama: true } }),
+    prisma.cabangGereja.findUnique({ where: { id: req.params.cabangId }, select: { nama: true } }),
+  ]);
+  if (!pel || !cab) throw NotFound('Data tidak ditemukan');
+  const data = {
+    isOpen: body.isOpen,
+    catatan: body.isOpen ? body.catatan || null : null,
+    tutupOtomatis: body.isOpen && body.tutupOtomatis ? new Date(`${body.tutupOtomatis}T00:00:00Z`) : null,
+    updatedById: req.user.jemaatId,
+  };
+  await prisma.pelayananPendaftaran.upsert({
+    where: { pelayananId_cabangId: { pelayananId: req.params.id, cabangId: req.params.cabangId } },
+    create: { pelayananId: req.params.id, cabangId: req.params.cabangId, ...data },
+    update: data,
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_pendaftaran',
+    resourceId: req.params.id,
+    resourceLabel: `${body.isOpen ? 'Buka' : 'Tutup'} pendaftaran ${pel.nama} @ ${cab.nama}`,
+    metadata: { cabangId: req.params.cabangId, ...body },
   });
   res.json({ success: true, data: { ok: true } });
 });

@@ -107,7 +107,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
     prismaKey: 'pelayanan',
     description: 'Master ministry / pelayanan (Worship Team, Multimedia, Usher, dll).',
     allowedInclude: ['roles', 'jemaatPelayanan'],
-    keyFields: ['id', 'nama', 'deskripsi', 'isActive'],
+    keyFields: ['id', 'nama', 'deskripsi', 'ikon', 'warna', 'isActive'],
   },
   pelayanan_role: {
     prismaKey: 'pelayananRole',

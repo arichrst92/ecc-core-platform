@@ -178,7 +178,7 @@ meRouter.get('/', async (req, res) => {
       jemaatPelayanan: {
         where: { isActive: true },
         include: {
-          pelayanan: { select: { id: true, nama: true, deskripsi: true } },
+          pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } },
           pelayananRole: { select: { id: true, nama: true, level: true } },
         },
         orderBy: { tanggalMulai: 'desc' },
@@ -218,7 +218,7 @@ meRouter.get('/', async (req, res) => {
         jemaatPelayanan: {
           where: { isActive: true },
           include: {
-            pelayanan: { select: { id: true, nama: true, deskripsi: true } },
+            pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } },
             pelayananRole: { select: { id: true, nama: true, level: true } },
           },
           orderBy: { tanggalMulai: 'desc' },
@@ -234,6 +234,8 @@ meRouter.get('/', async (req, res) => {
     pelayananId: jp.pelayananId,
     nama: jp.pelayanan.nama,
     deskripsi: jp.pelayanan.deskripsi,
+    ikon: jp.pelayanan.ikon,
+    warna: jp.pelayanan.warna,
     posisi: jp.pelayananRole.nama,
     posisiLevel: jp.pelayananRole.level,
     tanggalMulai: jp.tanggalMulai,
@@ -1934,7 +1936,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
       pelayananRole: { select: { id: true, nama: true, level: true } },
       schedule: {
         include: {
-          pelayanan: { select: { id: true, nama: true } },
+          pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
           ibadah: {
             select: {
               id: true,
@@ -1969,6 +1971,8 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     timezone: r.schedule.ibadah?.cabang?.timezone ?? null,
     ministryId: r.schedule.pelayanan.id,
     ministryNama: r.schedule.pelayanan.nama,
+    ministryIkon: r.schedule.pelayanan.ikon,
+    ministryWarna: r.schedule.pelayanan.warna,
     posisi: r.pelayananRole.nama,
     posisiLevel: r.pelayananRole.level,
     notes: r.notes,
@@ -1987,7 +1991,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
   const links = await prisma.ibadahPelayanan.findMany({
     where: { petugas: { some: { jemaatId } } },
     select: {
-      pelayanan: { select: { id: true, nama: true } },
+      pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
       ibadah: {
         select: {
           id: true,
@@ -2074,7 +2078,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
       pelayananRole: { select: { nama: true, level: true } },
       eventPelayanan: {
         include: {
-          pelayanan: { select: { id: true, nama: true } },
+          pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
           event: {
             select: {
               id: true,
@@ -2104,6 +2108,8 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     cabang: r.eventPelayanan.event.cabang,
     ministryId: r.eventPelayanan.pelayanan.id,
     ministryNama: r.eventPelayanan.pelayanan.nama,
+    ministryIkon: r.eventPelayanan.pelayanan.ikon,
+    ministryWarna: r.eventPelayanan.pelayanan.warna,
     posisi: r.pelayananRole.nama,
     posisiLevel: r.pelayananRole.level,
     canScanAttendance: r.canScanAttendance,

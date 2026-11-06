@@ -217,7 +217,7 @@ ibadahRouter.get('/:id', async (req, res) => {
       // bisa support per-occurrence override via ?tanggal=.
       ibadahPelayanan: {
         include: {
-          pelayanan: { select: { id: true, nama: true } },
+          pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
           petugas: {
             include: {
               jemaat: {
@@ -251,6 +251,8 @@ ibadahRouter.get('/:id', async (req, res) => {
   type PetugasOut = {
     id: string;
     pelayananNama: string;
+    pelayananIkon: string | null;
+    pelayananWarna: string | null;
     role: string;
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
   };
@@ -277,6 +279,8 @@ ibadahRouter.get('/:id', async (req, res) => {
       petugas.push({
         id: p.id,
         pelayananNama: link.pelayanan.nama,
+        pelayananIkon: link.pelayanan.ikon,
+        pelayananWarna: link.pelayanan.warna,
         role: p.pelayananRole.nama,
         jemaat: {
           id: p.jemaat.id,

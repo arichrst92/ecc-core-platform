@@ -38,6 +38,7 @@ import {
   FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
@@ -109,7 +110,7 @@ interface PelayananAssignment {
   tanggalMulai: string;
   tanggalSelesai: string | null;
   catatan: string | null;
-  pelayanan: { id: string; nama: string };
+  pelayanan: { id: string; nama: string; ikon?: string | null; warna?: string | null };
   pelayananRole: { id: string; nama: string; level: number };
 }
 
@@ -743,6 +744,7 @@ function AssignmentRow({
     <div className="flex items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
+          <PelayananIcon ikon={a.pelayanan.ikon} warna={a.pelayanan.warna} size={22} />
           <span className="font-medium text-neutral-900">{a.pelayanan.nama}</span>
           <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${levelColor}`}>
             {a.pelayananRole.nama}

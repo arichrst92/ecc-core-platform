@@ -133,7 +133,7 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
       jemaatPelayanan: {
         where: { isActive: true },
         include: {
-          pelayanan: { select: { id: true, nama: true } },
+          pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
           pelayananRole: { select: { nama: true, level: true } },
         },
       },
@@ -217,6 +217,8 @@ jemaatPublicRouter.get('/:id', async (req, res) => {
       id: jp.id,
       pelayananId: jp.pelayananId,
       nama: jp.pelayanan.nama,
+      ikon: jp.pelayanan.ikon,
+      warna: jp.pelayanan.warna,
       posisi: jp.pelayananRole.nama,
       posisiLevel: jp.pelayananRole.level,
     })),

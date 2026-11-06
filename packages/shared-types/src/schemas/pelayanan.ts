@@ -3,10 +3,37 @@ import { z } from 'zod';
 import { uuidSchema, emptyToUndefined } from './common.js';
 
 // ===== Pelayanan (master) =====
+// ===== Ikon & warna pelayanan (Portal pilih, app & Portal tampilkan) =====
+// Nama ikon Lucide (kebab-case) — HARUS sama dengan daftar di app mobile
+// (src/components/ministry/MinistryIcon.tsx) & Portal (components/pelayanan/pelayanan-icon.tsx).
+export const PELAYANAN_IKON = [
+  'heart-handshake', 'camera', 'video', 'clapperboard', 'monitor', 'radio', 'music', 'mic', 'guitar', 'drum',
+  'piano', 'headphones', 'speaker', 'lightbulb', 'palette', 'brush', 'pen-tool', 'flower-2', 'hand-helping',
+  'hand-heart', 'users', 'baby', 'smile', 'heart', 'book-open', 'graduation-cap', 'church', 'flame', 'sparkles',
+  'sun', 'star', 'coffee', 'utensils', 'car', 'shield', 'clipboard-list', 'megaphone', 'globe',
+] as const;
+export type PelayananIkon = (typeof PELAYANAN_IKON)[number];
+
+/** Warna aksen pelayanan: solid (ikon/aksen), bg (latar lembut), fg (teks di atas bg). */
+export const PELAYANAN_WARNA = {
+  orange: { label: 'Oranye ECC', solid: '#F97316', bg: '#FFEDD5', fg: '#C2410C' },
+  amber: { label: 'Kuning', solid: '#F59E0B', bg: '#FEF3C7', fg: '#B45309' },
+  rose: { label: 'Merah', solid: '#F43F5E', bg: '#FFE4E6', fg: '#BE123C' },
+  pink: { label: 'Merah muda', solid: '#EC4899', bg: '#FCE7F3', fg: '#BE185D' },
+  violet: { label: 'Ungu', solid: '#8B5CF6', bg: '#EDE9FE', fg: '#6D28D9' },
+  sky: { label: 'Biru', solid: '#0EA5E9', bg: '#E0F2FE', fg: '#0369A1' },
+  teal: { label: 'Tosca', solid: '#14B8A6', bg: '#CCFBF1', fg: '#0F766E' },
+  green: { label: 'Hijau', solid: '#22C55E', bg: '#DCFCE7', fg: '#15803D' },
+} as const;
+export type PelayananWarna = keyof typeof PELAYANAN_WARNA;
+const warnaKeys = Object.keys(PELAYANAN_WARNA) as [PelayananWarna, ...PelayananWarna[]];
+
 export const createPelayananSchema = z
   .object({
     nama: z.string().trim().min(2).max(100),
     deskripsi: emptyToUndefined(z.string().trim()),
+    ikon: z.enum(PELAYANAN_IKON).nullish(),
+    warna: z.enum(warnaKeys).nullish(),
   })
   .openapi('CreatePelayananInput');
 export type CreatePelayananInput = z.infer<typeof createPelayananSchema>;
@@ -15,6 +42,8 @@ export const updatePelayananSchema = z
   .object({
     nama: z.string().trim().min(2).max(100).optional(),
     deskripsi: emptyToUndefined(z.string().trim()),
+    ikon: z.enum(PELAYANAN_IKON).nullish(),
+    warna: z.enum(warnaKeys).nullish(),
     isActive: z.boolean().optional(),
   })
   .openapi('UpdatePelayananInput');

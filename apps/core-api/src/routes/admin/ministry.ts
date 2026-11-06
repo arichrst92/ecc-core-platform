@@ -26,6 +26,7 @@ import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { isMobileClient } from '../../lib/client-kind.js';
+import { privacyGate } from '../../lib/privacy.js';
 import {
   canManageMinistry,
   checkCanRequestJoin,
@@ -125,11 +126,11 @@ ministryRouter.get('/', async (req, res) => {
         select: { id: true, nama: true, level: true },
       },
       _count: { select: { jemaatPelayanan: { where: memberWhere } } },
-      // Untuk leader proxy: ambil 1 row aktif dengan role level tertinggi.
+      // Leader proxy (baris pertama) + 4 foto anggota untuk kartu (2.4.6).
       jemaatPelayanan: {
         where: memberWhere,
         orderBy: [{ pelayananRole: { level: 'desc' } }, { tanggalMulai: 'asc' }],
-        take: 1,
+        take: 4,
         select: {
           jemaat: {
             select: { id: true, namaLengkap: true, fotoUrl: true },
@@ -157,10 +158,23 @@ ministryRouter.get('/', async (req, res) => {
     for (const g of grouped) pendingByMinistry.set(g.pelayananId, g._count._all);
   }
 
+  // Keanggotaan saya (kartu "Pelayanan saya").
+  const mine = req.user
+    ? await prisma.jemaatPelayanan.findMany({
+        where: { jemaatId: req.user.jemaatId, isActive: true },
+        select: { pelayananId: true, pelayananRole: { select: { nama: true, level: true } } },
+      })
+    : [];
+  const mineById = new Map(mine.map((x) => [x.pelayananId, x.pelayananRole]));
+
   const data = items.map((m) => ({
     id: m.id,
     nama: m.nama,
     deskripsi: m.deskripsi,
+    ikon: m.ikon,
+    warna: m.warna,
+    myPosisi: mineById.get(m.id)?.nama ?? null,
+    avatars: m.jemaatPelayanan.map((jp) => ({ id: jp.jemaat.id, namaLengkap: jp.jemaat.namaLengkap, fotoUrl: jp.jemaat.fotoUrl })),
     memberCount: m._count.jemaatPelayanan,
     pendingRequestCount: pendingByMinistry.get(m.id) ?? 0,
     // Anggap selalu open untuk MVP. Kalau ke depan ada flag isOpen di schema,
@@ -233,7 +247,7 @@ ministryRouter.get('/join-requests', async (req, res) => {
       id: true,
       createdAt: true,
       motivasi: true,
-      pelayanan: { select: { id: true, nama: true } },
+      pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
       requestedRole: { select: { id: true, nama: true, level: true } },
       jemaat: {
         select: {
@@ -324,12 +338,38 @@ ministryRouter.get('/:id', async (req, res) => {
   // Cabang tempat requester punya otoritas approval (null = semua / Fulltimer).
   const approvalCabangIds = scope === 'ALL' ? null : [...(scope.get(item.id) ?? [])];
 
+  // Koordinator (pemegang otoritas approval) per cabang — boleh dilihat semua
+  // jemaat; no HP mengikuti pengaturan privasi masing-masing.
+  const approverRows = await prisma.pelayananApprover.findMany({
+    where: {
+      pelayananId: item.id,
+      jemaat: { isActive: true, jemaatPelayanan: { some: { pelayananId: item.id, isActive: true } } },
+    },
+    select: {
+      cabangId: true,
+      jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
+    },
+  });
+  const coordMap = new Map<string, { jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null }; cabangIds: string[] }>();
+  for (const a of approverRows) {
+    const e = coordMap.get(a.jemaat.id) ?? { jemaat: a.jemaat, cabangIds: [] };
+    e.cabangIds.push(a.cabangId);
+    coordMap.set(a.jemaat.id, e);
+  }
+  const gate = jemaatId ? await privacyGate(jemaatId, [...coordMap.keys()]) : null;
+  const coordinators = [...coordMap.values()].map((c) => ({
+    jemaat: { ...c.jemaat, noHp: gate?.can(c.jemaat.id, 'noHp') ? c.jemaat.noHp : null },
+    cabangIds: c.cabangIds,
+  }));
+
   res.json({
     success: true,
     data: {
       id: item.id,
       nama: item.nama,
       deskripsi: item.deskripsi,
+      ikon: item.ikon,
+      warna: item.warna,
       isOpen: item.isActive,
       memberCount: item._count.jemaatPelayanan,
       roles: item.roles,
@@ -343,8 +383,10 @@ ministryRouter.get('/:id', async (req, res) => {
         id: jp.id,
         jemaat: jp.jemaat,
         posisi: jp.pelayananRole.nama,
+        posisiLevel: jp.pelayananRole.level,
         sinceDate: jp.tanggalMulai,
       })),
+      coordinators,
       myMembership: myMembership
         ? {
             id: myMembership.id,
@@ -1045,6 +1087,8 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     select: {
       id: true,
       nama: true,
+      ikon: true,
+      warna: true,
       roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } },
     },
   });

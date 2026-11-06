@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Trash2,
-  ChevronRight,
   Loader2,
   HandHeart,
   Users as UsersIcon,
@@ -17,6 +16,8 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { PELAYANAN_ICON_MAP, PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
+import { PELAYANAN_IKON, PELAYANAN_WARNA } from '@ecc/shared-types';
 
 interface PelayananRole {
   id: string;
@@ -29,6 +30,8 @@ interface Pelayanan {
   id: string;
   nama: string;
   deskripsi: string | null;
+  ikon?: string | null;
+  warna?: string | null;
   isActive: boolean;
   roles: PelayananRole[];
   _count?: { jemaatPelayanan: number; ibadahPelayanan: number };
@@ -71,6 +74,7 @@ export default function PelayananPage() {
   const qc = useQueryClient();
   const [deleting, setDeleting] = useState<DeletingTarget>(null);
   const [editingRole, setEditingRole] = useState<PelayananRole | null>(null);
+  const [editingPel, setEditingPel] = useState<Pelayanan | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['pelayanan', 'tree'],
@@ -147,8 +151,8 @@ export default function PelayananPage() {
           {data?.map((p) => (
             <div key={p.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 bg-brand-50/50 border-b border-neutral-100">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ChevronRight className="w-4 h-4 text-brand-600 shrink-0" />
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <PelayananIcon ikon={p.ikon} warna={p.warna} size={34} />
                   <div className="min-w-0">
                     <Link href={`/dashboard/pelayanan/${p.id}`} className="font-semibold text-neutral-900 hover:text-brand-600 hover:underline truncate block">
                       {p.nama}
@@ -169,6 +173,13 @@ export default function PelayananPage() {
                       {p._count.jemaatPelayanan} anggota
                     </Link>
                   )}
+                  <button
+                    onClick={() => setEditingPel(p)}
+                    className="p-1.5 hover:bg-brand-50 rounded text-neutral-500 hover:text-brand-700"
+                    title="Ubah nama, deskripsi, ikon & warna"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => setDeleting({ kind: 'pelayanan', id: p.id, label: p.nama })}
                     className="p-1.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600"
@@ -203,6 +214,17 @@ export default function PelayananPage() {
             </div>
           )}
         </div>
+      )}
+
+      {editingPel && (
+        <EditPelayananModal
+          pelayanan={editingPel}
+          onClose={() => setEditingPel(null)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['pelayanan'] });
+            setEditingPel(null);
+          }}
+        />
       )}
 
       {editingRole && (
@@ -442,5 +464,118 @@ function AddRoleInline({
         <Plus className="w-3.5 h-3.5" />
       </button>
     </div>
+  );
+}
+
+/** Ubah pelayanan: nama, deskripsi (baris pertama = tagline di app), ikon & warna aksen. */
+function EditPelayananModal({
+  pelayanan,
+  onClose,
+  onSuccess,
+}: {
+  pelayanan: Pelayanan;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [nama, setNama] = useState(pelayanan.nama);
+  const [deskripsi, setDeskripsi] = useState(pelayanan.deskripsi ?? '');
+  const [ikon, setIkon] = useState<string>(pelayanan.ikon ?? 'heart-handshake');
+  const [warna, setWarna] = useState<string>(pelayanan.warna ?? 'orange');
+  const save = useMutation({
+    mutationFn: async () =>
+      apiClient.patch(`/admin/pelayanan/${pelayanan.id}`, { nama: nama.trim(), deskripsi: deskripsi.trim(), ikon, warna }),
+    onSuccess: () => {
+      toast.success('Pelayanan diperbarui');
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menyimpan'),
+  });
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col pointer-events-auto">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2">
+              <PelayananIcon ikon={ikon} warna={warna} size={28} /> Ubah Pelayanan
+            </h2>
+            <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4 overflow-y-auto">
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Nama</span>
+              <input
+                value={nama}
+                onChange={(e) => setNama(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-700">Deskripsi</span>
+              <textarea
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
+                rows={3}
+                placeholder="Baris pertama tampil sebagai tagline di app, mis. Melayani lewat kamera, layar & suara"
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </label>
+            <div>
+              <div className="text-sm font-medium text-neutral-700 mb-1.5">Ikon</div>
+              <div className="grid grid-cols-8 gap-1.5">
+                {PELAYANAN_IKON.map((k) => {
+                  const Icon = PELAYANAN_ICON_MAP[k]!;
+                  const on = ikon === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setIkon(k)}
+                      title={k}
+                      className={`aspect-square rounded-lg border flex items-center justify-center ${on ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-neutral-700 mb-1.5">Warna aksen</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(PELAYANAN_WARNA).map(([k, w]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setWarna(k)}
+                    title={w.label}
+                    className={`w-9 h-9 rounded-full border-2 flex items-center justify-center ${warna === k ? 'border-neutral-900' : 'border-transparent'}`}
+                    style={{ background: w.bg }}
+                  >
+                    <span className="w-5 h-5 rounded-full" style={{ background: w.solid }} />
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-neutral-500 mt-1.5">Ikon & warna tampil di app (daftar, detail, jadwal, profil) dan di Portal.</div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100">
+            <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg hover:bg-neutral-100">
+              Batal
+            </button>
+            <button
+              onClick={() => save.mutate()}
+              disabled={save.isPending || nama.trim().length < 2}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-50"
+            >
+              {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

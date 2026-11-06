@@ -27,7 +27,7 @@ export interface DutyLink {
     isActive: boolean;
     cabang?: { timezone: string } | null;
   };
-  pelayanan: { id: string; nama: string };
+  pelayanan: { id: string; nama: string; ikon?: string | null; warna?: string | null };
   rows: DutyRow[];
 }
 
@@ -43,6 +43,8 @@ export interface IbadahDuty {
   timezone: string | null;
   ministryId: string;
   ministryNama: string;
+  ministryIkon: string | null;
+  ministryWarna: string | null;
   posisi: string;
   posisiLevel: number;
   notes: string | null;
@@ -80,6 +82,8 @@ export function resolveIbadahDuties(
         timezone: link.ibadah.cabang?.timezone ?? null,
         ministryId: link.pelayanan.id,
         ministryNama: link.pelayanan.nama,
+        ministryIkon: link.pelayanan.ikon ?? null,
+        ministryWarna: link.pelayanan.warna ?? null,
         posisi: mine.role.nama,
         posisiLevel: mine.role.level,
         notes: mine.catatan,

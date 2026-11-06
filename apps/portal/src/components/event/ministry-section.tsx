@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 
@@ -26,6 +27,8 @@ interface PelayananLite {
   id: string;
   nama: string;
   deskripsi: string | null;
+  ikon?: string | null;
+  warna?: string | null;
 }
 
 interface Volunteer {
@@ -286,7 +289,7 @@ function PelayananCard({
           ) : (
             <ChevronRight className="w-4 h-4 text-neutral-400" />
           )}
-          <HandHeart className="w-4 h-4 text-brand-500 shrink-0" />
+          <PelayananIcon ikon={link.pelayanan.ikon} warna={link.pelayanan.warna} size={22} />
           <span className="font-medium text-neutral-900 truncate">{link.pelayanan.nama}</span>
           {link.petugas.length > 0 && (
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500">

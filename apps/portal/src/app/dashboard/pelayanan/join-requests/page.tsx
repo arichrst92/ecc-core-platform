@@ -22,6 +22,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
+import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 
 interface Role {
@@ -41,7 +42,7 @@ interface JoinRequest {
   id: string;
   createdAt: string;
   motivasi: string | null;
-  pelayanan: { id: string; nama: string };
+  pelayanan: { id: string; nama: string; ikon?: string | null; warna?: string | null };
   requestedRole: Role | null;
   jemaat: {
     id: string;
@@ -332,7 +333,8 @@ function RequestCard({
             </div>
             <div className="text-xs mt-2 flex items-center gap-2 flex-wrap">
               {showMinistry && (
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                  <PelayananIcon ikon={req.pelayanan.ikon} warna={req.pelayanan.warna} size={16} />
                   {req.pelayanan.nama}
                 </span>
               )}

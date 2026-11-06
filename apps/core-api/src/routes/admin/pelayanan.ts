@@ -78,7 +78,7 @@ pelayananRouter.get('/:id/members', async (req, res, next) => {
   if (!UUID_PARAM.test(req.params.id)) return next();
   const pel = await prisma.pelayanan.findUnique({
     where: { id: req.params.id },
-    select: { id: true, nama: true, deskripsi: true, isActive: true, roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } } },
+    select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true, isActive: true, roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } } },
   });
   if (!pel) throw NotFound('Pelayanan tidak ditemukan');
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
@@ -345,7 +345,7 @@ pelayananRouter.get('/assign/jemaat/:jemaatId', async (req, res) => {
     where: { jemaatId: req.params.jemaatId },
     orderBy: [{ isActive: 'desc' }, { tanggalMulai: 'desc' }],
     include: {
-      pelayanan: { select: { id: true, nama: true } },
+      pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
       pelayananRole: { select: { id: true, nama: true, level: true } },
     },
   });
@@ -445,7 +445,7 @@ pelayananRouter.delete('/assign/:id', async (req, res) => {
 pelayananRouter.get('/ibadah-link/ibadah/:ibadahId', async (req, res) => {
   const data = await prisma.ibadahPelayanan.findMany({
     where: { ibadahId: req.params.ibadahId },
-    include: { pelayanan: { select: { id: true, nama: true, deskripsi: true } } },
+    include: { pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } } },
     orderBy: { pelayanan: { nama: 'asc' } },
   });
   res.json({ success: true, data });

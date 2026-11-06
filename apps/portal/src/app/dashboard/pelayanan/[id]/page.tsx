@@ -9,8 +9,9 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Building2, ChevronDown, ChevronUp, HandHeart, Loader2, Search, ShieldCheck, UserMinus, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronDown, ChevronUp, Loader2, Search, ShieldCheck, UserMinus, UserPlus, X } from 'lucide-react';
 import { useCabangOptions } from '@/components/report/report-ui';
+import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media-url';
@@ -40,7 +41,7 @@ interface Member {
   };
 }
 interface MembersResp {
-  pelayanan: { id: string; nama: string; deskripsi: string | null; isActive: boolean; roles: Role[] };
+  pelayanan: { id: string; nama: string; deskripsi: string | null; ikon?: string | null; warna?: string | null; isActive: boolean; roles: Role[] };
   members: Member[];
 }
 interface Candidate {
@@ -142,7 +143,7 @@ export default function PelayananDetailPage() {
         </button>
         <div className="flex-1 min-w-[200px]">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <HandHeart className="w-6 h-6 text-brand-500" /> {pel?.nama ?? '…'}
+            <PelayananIcon ikon={pel?.ikon} warna={pel?.warna} size={32} /> {pel?.nama ?? '…'}
           </h1>
           <p className="text-sm text-neutral-500 mt-0.5">
             {pel?.deskripsi ? `${pel.deskripsi} · ` : ''}

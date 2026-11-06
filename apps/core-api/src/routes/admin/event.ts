@@ -2469,7 +2469,7 @@ eventRouter.get('/:id/pelayanan', async (req, res) => {
     where: { eventId: event.id },
     orderBy: { pelayanan: { nama: 'asc' } },
     include: {
-      pelayanan: { select: { id: true, nama: true, deskripsi: true } },
+      pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } },
       petugas: {
         orderBy: [
           { canScanAttendance: 'desc' },

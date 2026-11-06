@@ -226,7 +226,7 @@ export const selfEditJemaatSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.statusPernikahan === 'Single' && v.tanggalPernikahan) {
-      ctx.addIssue({ code: 'custom', path: ['tanggalPernikahan'], message: 'Status Single tidak memiliki tanggal pernikahan.' });
+      ctx.addIssue({ code: 'custom', path: ['tanggalPernikahan'], message: 'Tanggal pernikahan hanya untuk status Menikah, Janda, Duda, atau Cerai.' });
     }
     if (v.tanggalLahir && v.tanggalPernikahan && v.tanggalPernikahan <= v.tanggalLahir) {
       ctx.addIssue({ code: 'custom', path: ['tanggalPernikahan'], message: 'Tanggal pernikahan harus setelah tanggal lahir.' });

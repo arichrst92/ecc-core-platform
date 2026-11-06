@@ -200,7 +200,7 @@ prayerRequestRouter.put('/config', requireMenu(MENU, 'write'), async (req, res) 
     const prs = await prisma.pelayananRole.findMany({ where: { id: { in: prIds } }, select: { id: true, pelayananId: true } });
     const byId = new Map(prs.map((p) => [p.id, p.pelayananId]));
     for (const v of uniqM.values()) {
-      if (v.pelayananRoleId && byId.get(v.pelayananRoleId) !== v.pelayananId) throw BadRequest('Peran tidak sesuai dengan ministry.');
+      if (v.pelayananRoleId && byId.get(v.pelayananRoleId) !== v.pelayananId) throw BadRequest('Peran tidak sesuai dengan pelayanan yang dipilih.');
     }
   }
   const before = { roles: await loadConfig(), ministries: await loadMinistryConfig() };

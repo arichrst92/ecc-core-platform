@@ -295,12 +295,12 @@ meRouter.patch('/', async (req, res) => {
     const tglLahir =
       input.tanggalLahir !== undefined ? input.tanggalLahir : before.tanggalLahir?.toISOString().slice(0, 10) ?? null;
     if (tglNikah && (!status || status === 'Single')) {
-      if (input.tanggalPernikahan) throw BadRequest('Status Single / belum diisi tidak memiliki tanggal pernikahan.');
+      if (input.tanggalPernikahan) throw BadRequest('Tanggal pernikahan hanya untuk status Menikah, Janda, Duda, atau Cerai.');
       // Status diubah ke Single → tanggal pernikahan lama dikosongkan.
       input.tanggalPernikahan = null;
     }
     if (tglNikah && tglLahir && input.tanggalPernikahan !== null && selisihTahun(tglLahir, tglNikah) < 15) {
-      throw BadRequest('Tanggal pernikahan tidak wajar terhadap tanggal lahir (usia saat menikah < 15 tahun).');
+      throw BadRequest('Tanggal pernikahan tidak wajar terhadap tanggal lahir.');
     }
   }
 

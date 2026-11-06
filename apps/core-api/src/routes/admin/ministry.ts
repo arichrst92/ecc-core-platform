@@ -310,7 +310,7 @@ ministryRouter.get('/:id', async (req, res) => {
       },
     },
   });
-  if (!item) throw NotFound('Ministry tidak ditemukan');
+  if (!item) throw NotFound('Pelayanan tidak ditemukan.');
 
   // Auth-aware: tandai myMembership kalau current user adalah member.
   const jemaatId = req.user?.jemaatId;
@@ -446,7 +446,7 @@ ministryRouter.post('/:id/join', async (req, res) => {
       },
     },
   });
-  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+  if (!ministry) throw NotFound('Pelayanan tidak ditemukan.');
   if (!ministry.isActive) throw BadRequest('Ministry ini tidak buka untuk join');
   // Pendaftaran per cabang pemohon.
   {
@@ -458,7 +458,7 @@ ministryRouter.post('/:id/join', async (req, res) => {
         })
       : null;
     if (resolveStatus(row) === 'TUTUP') {
-      throw new ApiError(409, 'PENDAFTARAN_TUTUP', `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} sedang ditutup.`);
+      throw new ApiError(403, 'PENDAFTARAN_TUTUP', `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} sedang ditutup.`);
     }
   }
   if (ministry.roles.length === 0) {
@@ -793,7 +793,7 @@ ministryRouter.get('/:id/schedule', async (req, res) => {
     where: { id: pelayananId },
     select: { id: true, nama: true, isActive: true },
   });
-  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+  if (!ministry) throw NotFound('Pelayanan tidak ditemukan.');
 
   const rows = await prisma.pelayananSchedule.findMany({
     where: {
@@ -867,7 +867,7 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
     where: { id: pelayananId },
     select: { id: true, nama: true },
   });
-  if (!ministry) throw NotFound('Ministry tidak ditemukan');
+  if (!ministry) throw NotFound('Pelayanan tidak ditemukan.');
 
   if (ibadahId) {
     const ib = await prisma.ibadah.findUnique({ where: { id: ibadahId }, select: { id: true } });
@@ -1104,7 +1104,7 @@ const petugasSelect = {
 
 ministryRouter.get('/:id/jadwal', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  if (!UUIDV.test(req.params.id)) throw NotFound('Ministry tidak ditemukan');
+  if (!UUIDV.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan.');
   const allowed = await jadwalCabangIds(req, req.params.id);
   const q = z
     .object({ cabangId: z.string().uuid().optional(), weeks: z.coerce.number().int().min(1).max(12).default(8) })
@@ -1119,7 +1119,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
       roles: { where: { isActive: true }, orderBy: { level: 'desc' }, select: { id: true, nama: true, level: true } },
     },
   });
-  if (!pel) throw NotFound('Ministry tidak ditemukan');
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan.');
 
   const cabangList = await prisma.cabangGereja.findMany({
     where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
@@ -1303,7 +1303,7 @@ const fmtTanggalId = (ymd: string) =>
 
 ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.ibadahId)) throw NotFound('Data tidak ditemukan');
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.ibadahId)) throw NotFound('Ibadah atau pelayanan tidak ditemukan.');
   const allowed = await jadwalCabangIds(req, req.params.id);
   const body = z
     .object({
@@ -1376,14 +1376,14 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
 
 ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.eventId)) throw NotFound('Data tidak ditemukan');
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.eventId)) throw NotFound('Event atau pelayanan tidak ditemukan.');
   const allowed = await jadwalCabangIds(req, req.params.id);
   const body = z.object({ petugas: petugasInput.default([]) }).parse(req.body ?? {});
   const [event, pel] = await Promise.all([
     prisma.event.findUnique({ where: { id: req.params.eventId }, select: { id: true, judul: true, cabangId: true, tanggalMulai: true } }),
     prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { nama: true } }),
   ]);
-  if (!event || !pel) throw NotFound('Data tidak ditemukan');
+  if (!event || !pel) throw NotFound('Event atau pelayanan tidak ditemukan.');
   assertCabangAllowed(allowed, event.cabangId);
   const list = await validatePetugas(req.params.id, body.petugas);
 
@@ -1427,10 +1427,10 @@ ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
 
 ministryRouter.get('/:id/pendaftaran', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  if (!UUIDV.test(req.params.id)) throw NotFound('Ministry tidak ditemukan');
+  if (!UUIDV.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan.');
   const allowed = await jadwalCabangIds(req, req.params.id);
   const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { isActive: true } });
-  if (!pel) throw NotFound('Ministry tidak ditemukan');
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan.');
   const [cabang, rows] = await Promise.all([
     prisma.cabangGereja.findMany({
       where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
@@ -1458,7 +1458,7 @@ ministryRouter.get('/:id/pendaftaran', async (req, res) => {
 
 ministryRouter.put('/:id/pendaftaran/:cabangId', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.cabangId)) throw NotFound('Data tidak ditemukan');
+  if (!UUIDV.test(req.params.id) || !UUIDV.test(req.params.cabangId)) throw NotFound('Pelayanan atau cabang tidak ditemukan.');
   const allowed = await jadwalCabangIds(req, req.params.id);
   assertCabangAllowed(allowed, req.params.cabangId);
   const body = z
@@ -1472,7 +1472,7 @@ ministryRouter.put('/:id/pendaftaran/:cabangId', async (req, res) => {
     prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { nama: true } }),
     prisma.cabangGereja.findUnique({ where: { id: req.params.cabangId }, select: { nama: true } }),
   ]);
-  if (!pel || !cab) throw NotFound('Data tidak ditemukan');
+  if (!pel || !cab) throw NotFound('Pelayanan atau cabang tidak ditemukan.');
   const data = {
     isOpen: body.isOpen,
     catatan: body.isOpen ? body.catatan || null : null,

@@ -286,7 +286,7 @@ spiritualJourneyRouter.post('/:id/jemaat', async (req, res) => {
  */
 spiritualJourneyRouter.delete('/:id/jemaat/:jemaatId', async (req, res) => {
   await assertAccess(req, 'delete');
-  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.jemaatId)) throw NotFound('Data tidak ditemukan');
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.jemaatId)) throw NotFound('Jemaat atau tahap tidak ditemukan.');
   const step = await prisma.spiritualJourneyStep.findUnique({ where: { id: req.params.id } });
   if (!step) throw NotFound('Tahap tidak ditemukan');
   const jemaat = await prisma.jemaat.findUnique({ where: { id: req.params.jemaatId }, select: { id: true, namaLengkap: true } });

@@ -1,7 +1,8 @@
 import type { ErrorRequestHandler } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, type ZodIssue } from 'zod';
 import { Prisma } from '@ecc/database';
 import { ApiError } from '../lib/errors.js';
+import { MSG } from '@ecc/shared-types';
 import { logger } from '../lib/logger.js';
 
 // Map resource (Prisma model) → label ramah untuk pesan error. Default ke
@@ -38,6 +39,88 @@ function labelFor(modelName: string | undefined): string {
   return MODEL_LABEL[modelName] ?? modelName;
 }
 
+// ===== Pesan validasi Zod yang ramah (audit pesan error 2.4.6) =====
+// Label field berbahasa Indonesia untuk prefix pesan; field lain → camelCase
+// dipecah jadi kata ("tanggalMulai" → "Tanggal mulai").
+const FIELD_LABEL: Record<string, string> = {
+  namaLengkap: 'Nama lengkap',
+  nama: 'Nama',
+  alamat: 'Alamat',
+  namaKantor: 'Nama kantor',
+  statusPekerjaan: 'Pekerjaan',
+  statusPernikahan: 'Status pernikahan',
+  tanggalLahir: 'Tanggal lahir',
+  tanggalPernikahan: 'Tanggal pernikahan',
+  jenisKelamin: 'Jenis kelamin',
+  judul: 'Judul',
+  lokasi: 'Lokasi',
+  deskripsi: 'Deskripsi',
+  industri: 'Industri',
+  isi: 'Isi pesan',
+  catatan: 'Catatan',
+  motivasi: 'Motivasi',
+  alasan: 'Alasan',
+  email: 'Email',
+  noHp: 'No HP',
+  usia: 'Usia',
+  cabangId: 'Cabang',
+  nominal: 'Nominal',
+  url: 'Alamat web',
+};
+
+function labelField(path: (string | number)[]): string | null {
+  const key = [...path].reverse().find((p): p is string => typeof p === 'string');
+  if (!key) return null;
+  if (FIELD_LABEL[key]) return FIELD_LABEL[key]!;
+  const words = key.replace(/Id$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Pesan default Zod (bahasa Inggris) → kalimat Indonesia tanpa label. */
+function terjemahDefault(i: ZodIssue): string | null {
+  if (!/^(Required|Invalid|Expected|String must|Number must|Array must|Too (small|big)|Unrecognized)/.test(i.message)) return null;
+  switch (i.code) {
+    case 'invalid_type':
+      return i.received === 'undefined' || i.received === 'null' ? 'wajib diisi.' : 'formatnya tidak valid.';
+    case 'too_small':
+      if (i.type === 'string') return Number(i.minimum) <= 1 ? 'wajib diisi.' : `minimal ${i.minimum} karakter.`;
+      if (i.type === 'array') return `minimal ${i.minimum} pilihan.`;
+      return `minimal ${i.minimum}.`;
+    case 'too_big':
+      if (i.type === 'string') return `maksimal ${i.maximum} karakter.`;
+      if (i.type === 'array') return `maksimal ${i.maximum} pilihan.`;
+      return `maksimal ${i.maximum}.`;
+    case 'invalid_string':
+      if (i.validation === 'email') return 'formatnya tidak valid (contoh: nama@email.com).';
+      if (i.validation === 'date' || i.validation === 'datetime') return 'bukan tanggal yang valid.';
+      if (i.validation === 'url') return 'harus berupa alamat web yang valid.';
+      return 'formatnya tidak valid.';
+    case 'invalid_enum_value':
+      return 'pilihannya tidak tersedia.';
+    case 'invalid_date':
+      return 'bukan tanggal yang valid.';
+    default:
+      return 'tidak valid.';
+  }
+}
+
+function pesanZod(i: ZodIssue): string {
+  const label = labelField(i.path);
+  const terjemah = terjemahDefault(i);
+  if (terjemah) return `${label ?? 'Isian'} ${terjemah}`;
+  if (!label) return i.message;
+  // Pesan generik dari input-rules → kalimat yang menyebut field-nya (sama dengan app 2.4.6).
+  if (i.message === MSG.teks) return `${label} harus berisi huruf/angka yang bermakna, bukan hanya simbol.`;
+  if (i.message === MSG.huruf) return `${label} harus berisi huruf, bukan hanya angka/simbol.`;
+  const min = /^Minimal (\d+) karakter$/.exec(i.message);
+  if (min) return `${label} minimal ${min[1]} karakter.`;
+  const m = i.message.toLowerCase();
+  const kataPertama = label.toLowerCase().split(' ')[0]!;
+  // Pesan sudah menyebut field-nya ("Nama hanya boleh…", "Tanggal lahir tidak…").
+  if (m.startsWith(kataPertama) || m.includes(label.toLowerCase())) return i.message;
+  return `${label}: ${i.message}`;
+}
+
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // Zod validation
   if (err instanceof ZodError) {
@@ -45,11 +128,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     // mobile, ckids) langsung bisa tampilkan alasan yang jelas, mis.
     // "No HP tidak valid. Pakai 08… untuk Indonesia, atau sertakan kode negara".
     const first = err.issues[0];
-    const message = first?.message
-      ? first.code === 'custom' || first.path.length === 0
-        ? first.message
-        : `${first.path.join('.')}: ${first.message}`
-      : 'Input tidak valid';
+    const message = first ? pesanZod(first) : 'Input tidak valid';
     res.status(400).json({
       success: false,
       error: {

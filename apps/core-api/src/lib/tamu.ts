@@ -7,6 +7,7 @@
 import { prisma } from '@ecc/database';
 import { noHpSchema } from '@ecc/shared-types';
 import { z } from 'zod';
+import { namaOrangSchema } from '@ecc/shared-types';
 import { ApiError } from './errors.js';
 import { generateUniqueKode } from './kode-reservasi.js';
 
@@ -39,7 +40,7 @@ export function mergeKategori(current: string | null | undefined, incoming: stri
 }
 
 export const tamuInputSchema = z.object({
-  nama: z.string().trim().min(2, 'Nama tamu minimal 2 karakter').max(255),
+  nama: namaOrangSchema(),
   noHp: noHpSchema,
   kategori: tamuKategoriInput,
 });

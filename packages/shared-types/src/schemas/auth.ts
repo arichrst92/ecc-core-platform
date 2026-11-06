@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { consentAcceptSchema } from './consent.js';
 import { noHpSchema, uuidSchema } from './common.js';
 
@@ -156,7 +157,7 @@ export type JenisJemaat = z.infer<typeof jenisJemaatSchema>;
 export const registerJemaatSchema = z
   .object({
     noHp: noHpSchema,
-    namaLengkap: z.string().trim().min(2).max(255),
+    namaLengkap: namaOrangSchema(),
     jenisKelamin: z.enum(['L', 'P']),
     cabangId: uuidSchema,
     // Email — opsional, disarankan untuk recovery via magic link (module 24).
@@ -172,12 +173,10 @@ export const registerJemaatSchema = z
         description: 'Opsional — untuk recovery via magic link',
       }),
     // Optional — user bisa lengkapi nanti via PATCH /admin/me.
-    tanggalLahir: z
-      .string()
-      .date()
+    tanggalLahir: tanggalLahirSchema
       .optional()
       .openapi({ example: '1992-05-15', description: 'ISO date, opsional' }),
-    alamat: z.string().trim().max(500).optional(),
+    alamat: teksSchema(500, 3).optional(),
     homecellId: uuidSchema.optional(),
     // OPSIONAL: foto profile bisa di-upload setelah register via /admin/me/foto.
     fotoBase64: z
@@ -212,17 +211,26 @@ export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;
 // audit log capture pindah supaya ops bisa trace.
 export const selfEditJemaatSchema = z
   .object({
-    namaLengkap: z.string().trim().min(2).max(255).optional(),
-    email: z.string().trim().email().nullable().optional(),
-    tanggalLahir: z.string().date().nullable().optional(),
+    namaLengkap: namaOrangSchema().optional(),
+    email: z.string().trim().toLowerCase().email().nullable().optional(),
+    tanggalLahir: tanggalLahirSchema.nullable().optional(),
     jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
-    alamat: z.string().trim().max(500).nullable().optional(),
+    alamat: teksSchema(500, 3).nullable().optional(),
     cabangId: uuidSchema.optional(),
-    // Pekerjaan & pernikahan (2026-10-18) — null = kosongkan.
+    // Pekerjaan & pernikahan (2026-10-18) — null = kosongkan. Nilai pilihan
+    // divalidasi di route (PEKERJAAN_OPTIONS / PERNIKAHAN_OPTIONS + nilai lama).
     statusPekerjaan: z.string().trim().max(100).nullable().optional(),
-    namaKantor: z.string().trim().max(255).nullable().optional(),
+    namaKantor: teksHurufSchema(255).nullable().optional(),
     statusPernikahan: z.string().trim().max(50).nullable().optional(),
-    tanggalPernikahan: z.string().date().nullable().optional(),
+    tanggalPernikahan: tanggalLampauSchema.nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.statusPernikahan === 'Single' && v.tanggalPernikahan) {
+      ctx.addIssue({ code: 'custom', path: ['tanggalPernikahan'], message: 'Status Single tidak memiliki tanggal pernikahan.' });
+    }
+    if (v.tanggalLahir && v.tanggalPernikahan && v.tanggalPernikahan <= v.tanggalLahir) {
+      ctx.addIssue({ code: 'custom', path: ['tanggalPernikahan'], message: 'Tanggal pernikahan harus setelah tanggal lahir.' });
+    }
   })
   .openapi('SelfEditJemaatInput');
 export type SelfEditJemaatInput = z.infer<typeof selfEditJemaatSchema>;
@@ -243,10 +251,10 @@ export const changePhoneVerifySchema = z.object({
 // Cabang/kode/primaryGuardianId/role tetap admin-only.
 export const editDependentJemaatSchema = z
   .object({
-    namaLengkap: z.string().trim().min(2).max(255).optional(),
-    tanggalLahir: z.string().date().nullable().optional(),
+    namaLengkap: namaOrangSchema().optional(),
+    tanggalLahir: tanggalLahirSchema.nullable().optional(),
     jenisKelamin: z.enum(['L', 'P']).nullable().optional(),
-    alamat: z.string().trim().max(500).nullable().optional(),
+    alamat: teksSchema(500, 3).nullable().optional(),
     // noHp & email: pakai noHpSchema (E.164 international) + email standard.
     // Nullable supaya guardian bisa clear field dengan kirim null/"".
     // Empty string '' di-coerce ke null via preprocess.
@@ -301,10 +309,10 @@ export type VerifyMagicLinkInput = z.infer<typeof verifyMagicLinkSchema>;
  */
 export const completeOnboardingSchema = z
   .object({
-    namaLengkap: z.string().trim().min(2).max(255).optional(),
+    namaLengkap: namaOrangSchema().optional(),
     jenisKelamin: z.enum(['L', 'P']).optional(),
-    tanggalLahir: z.string().date().optional(),
-    alamat: z.string().trim().max(500).optional(),
+    tanggalLahir: tanggalLahirSchema.optional(),
+    alamat: teksSchema(500, 3).optional(),
     cabangId: uuidSchema.optional(),
     email: z.string().trim().email().max(255).optional(),
     // Pilihan jenis jemaat (opsional) → role sesuai Onboarding Config. Default JEMAAT_TETAP.

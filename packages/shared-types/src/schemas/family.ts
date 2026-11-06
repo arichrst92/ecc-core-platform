@@ -9,6 +9,7 @@
  * iteration berikutnya (kolom isVerified sudah ada di schema).
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { noHpSchema, uuidSchema, emptyToUndefined } from './common.js';
 
 /**
@@ -107,14 +108,14 @@ export type LinkFamilyByIdInput = z.infer<typeof linkFamilyByIdSchema>;
  */
 export const registerFamilyNewSchema = z
   .object({
-    namaLengkap: z.string().trim().min(2).max(255),
+    namaLengkap: namaOrangSchema(),
     role: familyRoleSchema.optional(),
     tipeRelasiId: uuidSchema.optional(),
     cabangId: uuidSchema.optional(),
     noHp: emptyToUndefined(noHpSchema),
-    tanggalLahir: emptyToUndefined(z.string().date()),
+    tanggalLahir: emptyToUndefined(tanggalLahirSchema),
     jenisKelamin: emptyToUndefined(z.enum(['L', 'P'])),
-    alamat: emptyToUndefined(z.string().trim()),
+    alamat: emptyToUndefined(teksSchema(500, 3)),
   })
   .refine((d) => d.role !== undefined || d.tipeRelasiId !== undefined, {
     message: 'Kirim role atau tipeRelasiId',

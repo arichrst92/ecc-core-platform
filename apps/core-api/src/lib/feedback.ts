@@ -1,12 +1,13 @@
 /** Kritik & Saran — konstanta & schema bersama (me + admin). */
 import { z } from 'zod';
+import { teksSchema } from '@ecc/shared-types';
 
 export const FEEDBACK_KATEGORI = ['APLIKASI', 'IBADAH', 'PELAYANAN', 'EVENT', 'HOMECELL', 'LAINNYA'] as const;
 
 export const createFeedbackSchema = z.object({
   tipe: z.enum(['KRITIK', 'SARAN']),
   kategori: z.enum(FEEDBACK_KATEGORI),
-  isi: z.string().trim().min(10, 'Tulis minimal 10 karakter').max(3000),
+  isi: teksSchema(3000, 10, 6),
   appInfo: z.string().trim().max(200).optional(),
 });
 

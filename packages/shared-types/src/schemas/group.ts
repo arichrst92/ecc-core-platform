@@ -9,6 +9,7 @@
  *   POST   /admin/group/:id/members/:jemaatId → (no body)
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { uuidSchema, emptyToUndefined } from './common.js';
 import { hariMingguSchema } from './ibadah.js';
 
@@ -34,7 +35,7 @@ const jamSchema = z
 export const createGroupSchema = z.object({
   cabangId: uuidSchema,
   parentId: emptyToUndefined(uuidSchema),
-  nama: z.string().trim().min(2).max(200),
+  nama: teksHurufSchema(200),
   deskripsi: emptyToUndefined(z.string().trim().max(5000)),
   jenis: groupJenisSchema.default('LAINNYA'),
   alamat: emptyToUndefined(z.string().trim().max(500)),
@@ -53,7 +54,7 @@ export type CreateGroupInput = z.infer<typeof createGroupSchema>;
  */
 export const updateGroupSchema = z.object({
   parentId: emptyToUndefined(uuidSchema).nullable(),
-  nama: z.string().trim().min(2).max(200).optional(),
+  nama: teksHurufSchema(200).optional(),
   deskripsi: emptyToUndefined(z.string().trim().max(5000)).nullable(),
   jenis: groupJenisSchema.optional(),
   alamat: emptyToUndefined(z.string().trim().max(500)).nullable(),

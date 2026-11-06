@@ -13,6 +13,7 @@
  * Portal admin: read-only list + delete (moderation).
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { uuidSchema, emptyToUndefined, paginationQuerySchema } from './common.js';
 
 // ===== Mobile: create visit (scan QR) =====
@@ -39,18 +40,18 @@ export type CreateVisitInput = z.infer<typeof createVisitSchema>;
 // Tamu dicari / dibuat dari no HP (sama seperti "Tamu saya"). Kalau no HP
 // milik anggota terdaftar, pertemuan dicatat dengan anggota itu.
 export const createGuestVisitSchema = z.object({
-  nama: z.string().trim().min(2, 'Nama minimal 2 karakter').max(255),
+  nama: namaOrangSchema(),
   noHp: z.string().trim().min(8).max(20),
   kategori: z.enum(['VISITOR', 'NEW_COMER', 'BELUM']).optional(),
-  judul: z.string().trim().min(2, 'Judul minimal 2 karakter').max(255),
-  lokasi: emptyToUndefined(z.string().trim().max(500)),
+  judul: teksSchema(255),
+  lokasi: emptyToUndefined(teksSchema(500)),
 });
 export type CreateGuestVisitInput = z.infer<typeof createGuestVisitSchema>;
 
 // ===== Mobile: edit judul (initiator-only) atau lokasi =====
 export const updateVisitMetaSchema = z.object({
-  judul: emptyToUndefined(z.string().trim().min(2).max(255)),
-  lokasi: emptyToUndefined(z.string().trim().max(500)),
+  judul: emptyToUndefined(teksSchema(255)),
+  lokasi: emptyToUndefined(teksSchema(500)),
 });
 export type UpdateVisitMetaInput = z.infer<typeof updateVisitMetaSchema>;
 

@@ -3,6 +3,7 @@
  * Kategori disimpan sebagai kode; label id/en di-resolve di client (i18n).
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 
 export const PRAYER_KATEGORI = [
   'HEALTH',
@@ -62,7 +63,7 @@ const prayerBase = z.object({
   untuk: z.enum(PRAYER_TARGET).default('DIRI_SENDIRI'),
   untukNama: optText(150),
   untukJemaatId: z.string().uuid().optional().nullable(),
-  isi: z.string().trim().min(5, 'Tulis minimal 5 karakter').max(3000),
+  isi: teksSchema(3000, 5, 4),
   isAnonim: z.boolean().default(false),
 });
 
@@ -123,7 +124,7 @@ export const resolusiTahunSchema = z.coerce.number().int().min(2000).max(2100);
 
 export const createResolusiSchema = z.object({
   tahun: resolusiTahunSchema,
-  judul: z.string().trim().min(1, 'Judul wajib diisi').max(200),
+  judul: teksSchema(200),
   catatan: optText(2000),
   kategori: z.enum(RESOLUSI_KATEGORI),
   isDone: z.boolean().optional(),
@@ -131,7 +132,7 @@ export const createResolusiSchema = z.object({
 export type CreateResolusiInput = z.infer<typeof createResolusiSchema>;
 
 export const updateResolusiSchema = z.object({
-  judul: z.string().trim().min(1).max(200).optional(),
+  judul: teksSchema(200).optional(),
   catatan: optText(2000),
   kategori: z.enum(RESOLUSI_KATEGORI).optional(),
   isDone: z.boolean().optional(),

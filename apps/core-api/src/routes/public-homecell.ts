@@ -20,6 +20,7 @@ import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import { noHpSchema } from '@ecc/shared-types';
 import { z } from 'zod';
+import { namaOrangSchema } from '@ecc/shared-types';
 import { ApiError, BadRequest, NotFound } from '../lib/errors.js';
 import { distanceKm, type LatLng } from '../lib/geo.js';
 import { getLastMeetingMap, lastMeetingOf } from '../lib/homecell-last-attendance.js';
@@ -135,7 +136,7 @@ publicHomecellRouter.get('/nearest', publicBrowseLimiter, async (req, res) => {
 // ------------------------------------------------------------------ minta bergabung
 
 const guestRequestSchema = z.object({
-  nama: z.string().trim().min(2, 'Nama minimal 2 karakter').max(255),
+  nama: namaOrangSchema(),
   noHp: noHpSchema,
   jenisKelamin: z.enum(['L', 'P']).optional(),
   usia: z.coerce.number().int().min(5).max(110).optional(),

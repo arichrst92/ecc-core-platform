@@ -44,6 +44,9 @@ import {
   changePhoneRequestSchema,
   changePhoneVerifySchema,
   meUpdateHomecellAreaSchema,
+  PEKERJAAN_OPTIONS,
+  PERNIKAHAN_OPTIONS,
+  selisihTahun,
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
@@ -257,6 +260,31 @@ meRouter.patch('/', async (req, res) => {
   const before = await prisma.jemaat.findUnique({ where: { id: jemaatId } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
 
+  // Audit input 2026-11: pilihan pekerjaan & pernikahan harus dari daftar
+  // (nilai lama yang sudah tersimpan tetap diterima), dan tanggal pernikahan
+  // konsisten dengan status & tanggal lahir.
+  if (input.statusPekerjaan && input.statusPekerjaan !== before.statusPekerjaan && !(PEKERJAAN_OPTIONS as readonly string[]).includes(input.statusPekerjaan)) {
+    throw BadRequest('Pilih pekerjaan dari daftar yang tersedia.');
+  }
+  if (input.statusPernikahan && input.statusPernikahan !== before.statusPernikahan && !(PERNIKAHAN_OPTIONS as readonly string[]).includes(input.statusPernikahan)) {
+    throw BadRequest('Pilih status pernikahan dari daftar yang tersedia.');
+  }
+  {
+    const status = input.statusPernikahan !== undefined ? input.statusPernikahan : before.statusPernikahan;
+    const tglNikah =
+      input.tanggalPernikahan !== undefined ? input.tanggalPernikahan : before.tanggalPernikahan?.toISOString().slice(0, 10) ?? null;
+    const tglLahir =
+      input.tanggalLahir !== undefined ? input.tanggalLahir : before.tanggalLahir?.toISOString().slice(0, 10) ?? null;
+    if (tglNikah && (!status || status === 'Single')) {
+      if (input.tanggalPernikahan) throw BadRequest('Status Single / belum diisi tidak memiliki tanggal pernikahan.');
+      // Status diubah ke Single → tanggal pernikahan lama dikosongkan.
+      input.tanggalPernikahan = null;
+    }
+    if (tglNikah && tglLahir && input.tanggalPernikahan !== null && selisihTahun(tglLahir, tglNikah) < 15) {
+      throw BadRequest('Tanggal pernikahan tidak wajar terhadap tanggal lahir (usia saat menikah < 15 tahun).');
+    }
+  }
+
   // Patch 2026-05-22: cabangId boleh di-update langsung (direct-branch-change).
   // Validate cabang exists + active. Pindahkan ke cabang yang sama = no-op (skip).
   let cabangIdToUpdate: string | undefined;
@@ -279,7 +307,12 @@ meRouter.patch('/', async (req, res) => {
     cabang: cabangIdToUpdate ? { connect: { id: cabangIdToUpdate } } : undefined,
     // Pekerjaan & pernikahan: null / '' = kosongkan, undefined = tidak diubah.
     statusPekerjaan: input.statusPekerjaan === undefined ? undefined : input.statusPekerjaan || null,
-    namaKantor: input.namaKantor === undefined ? undefined : input.namaKantor || null,
+    // Pekerjaan tanpa kantor (belum bekerja, IRT, pensiunan) → nama kantor dikosongkan.
+    namaKantor: ['Belum Bekerja', 'Ibu Rumah Tangga', 'Pensiunan'].includes(input.statusPekerjaan ?? '')
+      ? null
+      : input.namaKantor === undefined
+        ? undefined
+        : input.namaKantor || null,
     statusPernikahan: input.statusPernikahan === undefined ? undefined : input.statusPernikahan || null,
     tanggalPernikahan:
       input.tanggalPernikahan === undefined ? undefined : input.tanggalPernikahan ? new Date(input.tanggalPernikahan) : null,

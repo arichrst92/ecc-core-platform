@@ -12,6 +12,7 @@
  *   DELETE /admin/me/businesses/:id/profile-pdf (clear PDF)
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { uuidSchema, emptyToUndefined, paginationQuerySchema } from './common.js';
 
 export const tipeBisnisSchema = z.enum(['B2C', 'B2B', 'B2B2C']);
@@ -35,12 +36,12 @@ export const socialLinksSchema = z.array(socialLinkSchema).max(10);
 
 // ===== Create =====
 export const createLocalBusinessSchema = z.object({
-  nama: z.string().trim().min(2).max(255).openapi({ example: 'Warung Budi' }),
-  deskripsi: emptyToUndefined(z.string().trim().max(2000)),
-  industri: emptyToUndefined(z.string().trim().max(100)),
+  nama: teksHurufSchema(255).openapi({ example: 'Warung Budi' }),
+  deskripsi: emptyToUndefined(teksSchema(2000)),
+  industri: emptyToUndefined(teksHurufSchema(100)),
   tipeBisnis: tipeBisnisSchema,
   isOnline: z.boolean().default(false),
-  lokasi: emptyToUndefined(z.string().trim().max(500)),
+  lokasi: emptyToUndefined(teksSchema(500)),
   websiteUrl: emptyToUndefined(z.string().trim().url().max(500)),
   whatsappUrl: emptyToUndefined(z.string().trim().url().max(500)).openapi({
     description: "URL wa.me/<nomor> atau api.whatsapp.com/send?phone=<nomor>",
@@ -53,12 +54,12 @@ export type CreateLocalBusinessInput = z.infer<typeof createLocalBusinessSchema>
 // All fields optional; owner kirim hanya yg berubah. socialLinks kalau dikirim
 // REPLACE entire array (bukan merge) — UI mobile rebuild list lalu PATCH.
 export const updateLocalBusinessSchema = z.object({
-  nama: z.string().trim().min(2).max(255).optional(),
-  deskripsi: emptyToUndefined(z.string().trim().max(2000)),
-  industri: emptyToUndefined(z.string().trim().max(100)),
+  nama: teksHurufSchema(255).optional(),
+  deskripsi: emptyToUndefined(teksSchema(2000)),
+  industri: emptyToUndefined(teksHurufSchema(100)),
   tipeBisnis: tipeBisnisSchema.optional(),
   isOnline: z.boolean().optional(),
-  lokasi: emptyToUndefined(z.string().trim().max(500)),
+  lokasi: emptyToUndefined(teksSchema(500)),
   websiteUrl: emptyToUndefined(z.string().trim().url().max(500)),
   whatsappUrl: emptyToUndefined(z.string().trim().url().max(500)),
   socialLinks: socialLinksSchema.optional(),

@@ -13,6 +13,7 @@ import { z } from 'zod';
 extendZodWithOpenApi(z);
 
 export * from './schemas/common.js';
+export * from './schemas/input-rules.js';
 export * from './schemas/auth.js';
 export * from './schemas/sinode.js';
 export * from './schemas/cabang.js';

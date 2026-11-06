@@ -5,6 +5,7 @@
  * Per request mobile docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
  */
 import { z } from 'zod';
+import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tanggalLampauSchema } from './input-rules.js';
 import { uuidSchema } from './common.js';
 
 // Maksimum hari mundur untuk create jadwal — prevent backdate spam.
@@ -19,7 +20,7 @@ export const createHomecellScheduleSchema = z
     // "HH:MM" — opsional (app lama tidak mengirim). Jam selesai harus > jam mulai.
     jamMulai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
     jamSelesai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
-    lokasi: z.string().trim().min(1, 'Lokasi wajib').max(500),
+    lokasi: teksSchema(500),
     catatan: z
       .string()
       .trim()

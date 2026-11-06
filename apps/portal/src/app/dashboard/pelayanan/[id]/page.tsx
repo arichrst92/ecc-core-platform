@@ -461,7 +461,7 @@ function ApprovalModal({
           </div>
           <div className="px-5 py-3 text-sm text-neutral-600 border-b border-neutral-100">
             <b>{member.jemaat.namaLengkap}</b> boleh menyetujui / menolak request bergabung <b>{pelayananNama}</b> dari jemaat
-            di cabang yang dicentang (di app & Portal). Admin Fulltimer tetap bisa semua.
+            di cabang yang dicentang, termasuk mengatur jadwal pelayanan di app. Di app, Fulltimer pun hanya bisa sesuai otoritasnya.
           </div>
           <div className="overflow-y-auto px-5 py-2">
             {cabangQ.isLoading ? (

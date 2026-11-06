@@ -25,6 +25,7 @@ import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import {
   canManageMinistry,
   checkCanRequestJoin,
@@ -37,7 +38,7 @@ export const ministryRouter = Router();
  * Otoritas approval request bergabung (2026-11) — diberikan admin di Portal
  * (Pelayanan → anggota → Otoritas approval) per CABANG. Hanya anggota aktif
  * yang diberi otoritas yang boleh menyetujui/menolak request dari jemaat di
- * cabang tsb. Fulltimer (admin) tetap boleh semua.
+ * cabang tsb (dan mengatur jadwal). Fulltimer boleh semua — hanya di Portal.
  *
  * Map pelayananId → Set cabangId; 'ALL' untuk Fulltimer.
  */
@@ -45,7 +46,9 @@ type ApprovalScope = 'ALL' | Map<string, Set<string>>;
 
 async function approvalScope(req: Request): Promise<ApprovalScope> {
   if (!req.user) return new Map();
-  if (req.user.isFulltimer) return 'ALL';
+  // Fulltimer bebas mengelola semua HANYA di Portal. Di app, Fulltimer pun
+  // mengikuti otoritas yang diberikan (cabang & pelayanan tertentu).
+  if (req.user.isFulltimer && !isMobileClient(req)) return 'ALL';
   const rows = await prisma.pelayananApprover.findMany({
     where: {
       jemaatId: req.user.jemaatId,

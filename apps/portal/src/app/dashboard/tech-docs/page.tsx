@@ -399,7 +399,7 @@ await createNotificationBatch(guardians, {...});`,
     id: 'elsa',
     title: 'Elsa (Els Agentic) — AI Agent',
     icon: Sparkles,
-    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 54 entities.',
+    summary: 'AI chat agent Anthropic Claude dgn dynamic entity query 55 entities.',
     blocks: [
       {
         kind: 'p',
@@ -409,7 +409,7 @@ await createNotificationBatch(guardians, {...});`,
       {
         kind: 'p',
         text:
-          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 54 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
+          '5 dynamic tools: list_entities, describe_entity, query_entity, count_entity, groupby_entity. Elsa bisa akses 55 entity di DB Prisma via ENTITY_MAP di lib/elsa-query.ts (whitelist + field exclude + relation whitelist per entity). Fitur baru WAJIB didaftarkan di ENTITY_MAP (+ keyFields field barunya) dan, bila perlu, catatan di system prompt routes/admin/elsa.ts. Guardrails: read-only, max 50 records, timeout 30s, rate limit 2000/30min per user+IP.',
       },
       {
         kind: 'table',
@@ -618,6 +618,7 @@ pm2 status`,
           'Versi 2.4.5 (Nov 2026): kategori tamu, batalkan self check-in (/admin/me/reservasi/:id/cancel-checkin), self check-in +30 menit (CLOSE_AFTER_MIN di lib/self-checkin.ts), Catatan saya (/admin/me/catatan), visit dengan tamu, petunjuk arah ke mapsUrl, ulasan mengikuti allowReview.',
           'Versi 2.4.6: Zona & pastor zona (homecell_area_pastor, /admin/me/homecell-area-managed + myRole, /admin/me/zona-saya untuk semua jemaat), potensial member (/admin/me/homecell/:id/potensial-member), cari keluarga (/admin/me/family/search — nama sebagian, email/HP persis, limiter family-search 60/10 menit — + /family/link-by-id), request Spiritual Journey (POST/DELETE /admin/me/spiritual-journey/request; admin /admin/spiritual-journey-request, lib/spiritual-journey-request.ts: tahap diminta + semua tahap sebelumnya diberikan), bookmark multi ayat (lokal di HP).',
           'Promosi New Comer → Jemaat Tetap: app_config.new_comer_min_hadir (Portal → Onboarding Config, PUT /admin/onboarding-config/promosi). Job new-comer-promotion tiap 30 menit + POST /promosi/apply; lib/onboarding-roles.ts applyNewComerPromotion — hitung reservasi status JOIN, pg_advisory_xact_lock per jemaat, update status bila sub role sama, nonaktifkan role New Comer, tanpa role dobel.',
+          'Otoritas approval ministry: tabel pelayanan_approver (pelayanan, jemaat, cabang); PUT /admin/pelayanan/:id/approver/:jemaatId {cabangIds}. routes/admin/ministry.ts approvalScope(): Fulltimer = semua, selain itu hanya cabang pemberian otoritas (harus anggota aktif) — dipakai di list/detail/approve/reject + notifikasi MINISTRY_JOIN_REQUESTED. Level role tidak lagi menentukan hak approve.',
           'Pelayanan: GET /admin/pelayanan/:id/members, GET /:id/candidates?search= (nama/kode/HP), POST /assign menolak keanggotaan aktif ganda, keluar = PATCH /assign/:id {isActive:false}.',
           'Potensial junk: lib/junk-data.ts (raw SQL + aturan JS, cache 10 menit), GET /admin/jemaat?junk=1&junkAlasan=&sumber=, GET /admin/jemaat/junk-summary, POST /admin/jemaat/:id/bukan-junk (jemaat.junk_dismissed_at). Sync Shiftsoft: packages/database/src/shiftsoft/protect.ts — nonaktif dilewati; onboarded / portal_edited_at / junk_dismissed_at → hanya isi kolom kosong.',
           'Zona: GET /admin/homecell-area?pastorId=, GET /admin/homecell-area/pastors (opsi filter), GET /admin/homecell-area/export?format=pdf|csv&pastorId=&search=.',

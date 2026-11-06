@@ -83,6 +83,7 @@ model CabangGereja {
 
   feedbacks      Feedback[]
   prayerRequests PrayerRequest[]
+  pelayananApprovers PelayananApprover[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -249,6 +250,7 @@ model Jemaat {
   areaPic                      HomecellArea[]                @relation("AreaPic")
   areaPastor                   HomecellAreaPastor[]
   spiritualJourneyRequests     SpiritualJourneyRequest[]     @relation("SjRequestJemaat")
+  pelayananApprovals           PelayananApprover[]
   spiritualJourneyReviews      SpiritualJourneyRequest[]     @relation("SjRequestReviewer")
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
@@ -833,6 +835,7 @@ model Pelayanan {
   schedules       PelayananSchedule[]
   joinRequests    PelayananJoinRequest[]
   prayerPetugas   PrayerPetugasPelayanan[]
+  approvers       PelayananApprover[]
 
   @@map("pelayanan")
 }
@@ -860,6 +863,26 @@ model PelayananRole {
   @@unique([pelayananId, nama])
   @@index([pelayananId])
   @@map("pelayanan_role")
+}
+
+// Otoritas approval request bergabung pelayanan (2026-11): anggota pelayanan
+// yang boleh menyetujui/menolak request dari jemaat di cabang tertentu.
+// Satu baris = (pelayanan, jemaat, cabang). Fulltimer tetap boleh semua.
+model PelayananApprover {
+  id          String   @id @default(uuid()) @db.Uuid
+  pelayananId String   @map("pelayanan_id") @db.Uuid
+  jemaatId    String   @map("jemaat_id") @db.Uuid
+  cabangId    String   @map("cabang_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  pelayanan Pelayanan    @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  jemaat    Jemaat       @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+  cabang    CabangGereja @relation(fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@unique([pelayananId, jemaatId, cabangId])
+  @@index([jemaatId])
+  @@index([pelayananId, cabangId])
+  @@map("pelayanan_approver")
 }
 
 // Junction Jemaat <-> Pelayanan dengan role + riwayat

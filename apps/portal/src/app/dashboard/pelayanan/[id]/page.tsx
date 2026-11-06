@@ -9,7 +9,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Building2, ChevronDown, ChevronUp, HandHeart, Loader2, Search, UserMinus, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronDown, ChevronUp, HandHeart, Loader2, Search, ShieldCheck, UserMinus, UserPlus, X } from 'lucide-react';
+import { useCabangOptions } from '@/components/report/report-ui';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media-url';
@@ -26,6 +27,8 @@ interface Member {
   tanggalMulai: string;
   catatan: string | null;
   pelayananRole: Role;
+  /** Cabang tempat anggota ini punya otoritas approval request bergabung. */
+  approvalCabang?: { id: string; nama: string }[];
   jemaat: {
     id: string;
     namaLengkap: string;
@@ -74,6 +77,7 @@ export default function PelayananDetailPage() {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
+  const [authFor, setAuthFor] = useState<Member | null>(null);
   const dq = useDebounce(search, 300);
   const KEY = ['pelayanan', id, 'members'];
 
@@ -218,6 +222,11 @@ export default function PelayananDetailPage() {
                           <Link href={`/dashboard/jemaat/${m.jemaat.id}`} className="font-medium text-brand-600 hover:underline truncate block">
                             {m.jemaat.namaLengkap}
                           </Link>
+                          {m.approvalCabang?.length ? (
+                            <div className="text-[11px] text-emerald-700 inline-flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" /> Approval: {m.approvalCabang.map((c) => c.nama).join(', ')}
+                            </div>
+                          ) : null}
                           <div className="text-xs text-neutral-500 truncate">
                             {[m.jemaat.kode, m.jemaat.noHp, `sejak ${new Date(m.tanggalMulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`]
                               .filter(Boolean)
@@ -241,6 +250,13 @@ export default function PelayananDetailPage() {
                           ))}
                         </select>
                         <button
+                          onClick={() => setAuthFor(m)}
+                          className={`p-1.5 rounded hover:bg-emerald-50 ${m.approvalCabang?.length ? 'text-emerald-600' : 'text-neutral-400'} hover:text-emerald-700`}
+                          title="Otoritas approval request bergabung"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => setRemoving(m)}
                           className="p-1.5 rounded hover:bg-red-50 text-neutral-400 hover:text-red-600"
                           title="Keluarkan dari pelayanan"
@@ -256,6 +272,10 @@ export default function PelayananDetailPage() {
           })}
         </div>
       )}
+
+      {authFor && pel ? (
+        <ApprovalModal pelayananId={pel.id} pelayananNama={pel.nama} member={authFor} onClose={() => setAuthFor(null)} />
+      ) : null}
 
       {adding && pel ? (
         <AddMemberModal pelayananId={pel.id} pelayananNama={pel.nama} roles={pel.roles} onClose={() => setAdding(false)} />
@@ -388,6 +408,97 @@ function AddMemberModal({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Otoritas approval: anggota boleh menyetujui request bergabung dari jemaat di cabang terpilih. */
+function ApprovalModal({
+  pelayananId,
+  pelayananNama,
+  member,
+  onClose,
+}: {
+  pelayananId: string;
+  pelayananNama: string;
+  member: Member;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const cabangQ = useCabangOptions();
+  const [picked, setPicked] = useState<Set<string>>(() => new Set((member.approvalCabang ?? []).map((c) => c.id)));
+  const save = useMutation({
+    mutationFn: async () => apiClient.put(`/admin/pelayanan/${pelayananId}/approver/${member.jemaat.id}`, { cabangIds: [...picked] }),
+    onSuccess: () => {
+      toast.success(picked.size ? 'Otoritas approval disimpan' : 'Otoritas approval dicabut');
+      void qc.invalidateQueries({ queryKey: ['pelayanan', pelayananId] });
+      onClose();
+    },
+    onError: (e) => toast.error(errMsg(e, 'Gagal menyimpan')),
+  });
+  const toggle = (id: string) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={save.isPending ? undefined : onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col pointer-events-auto">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+            <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" /> Otoritas approval
+            </h2>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="px-5 py-3 text-sm text-neutral-600 border-b border-neutral-100">
+            <b>{member.jemaat.namaLengkap}</b> boleh menyetujui / menolak request bergabung <b>{pelayananNama}</b> dari jemaat
+            di cabang yang dicentang (di app & Portal). Admin Fulltimer tetap bisa semua.
+          </div>
+          <div className="overflow-y-auto px-5 py-2">
+            {cabangQ.isLoading ? (
+              <div className="py-6 flex justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+              </div>
+            ) : (
+              (cabangQ.data ?? []).map((c) => (
+                <label key={c.id} className="flex items-center gap-2 py-1.5 text-sm cursor-pointer">
+                  <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} className="w-4 h-4 accent-emerald-600" />
+                  {c.nama}
+                  {c.id === member.jemaat.cabang.id ? <span className="text-xs text-neutral-400">(cabang anggota)</span> : null}
+                </label>
+              ))
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-neutral-100">
+            <button
+              onClick={() => setPicked(new Set())}
+              disabled={!picked.size || save.isPending}
+              className="text-xs text-red-600 hover:underline disabled:opacity-40"
+            >
+              Cabut semua
+            </button>
+            <div className="flex gap-2">
+              <button onClick={onClose} disabled={save.isPending} className="px-3 py-1.5 rounded-lg text-sm hover:bg-neutral-100">
+                Batal
+              </button>
+              <button
+                onClick={() => save.mutate()}
+                disabled={save.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+              >
+                {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                Simpan
+              </button>
+            </div>
           </div>
         </div>
       </div>

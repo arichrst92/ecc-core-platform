@@ -27,35 +27,67 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import {
   canManageMinistry,
   checkCanRequestJoin,
-  LEADER_MIN_LEVEL,
   pickMyJoinRequest,
 } from '../../lib/ministry-access.js';
 
 export const ministryRouter = Router();
 
 /**
- * Ministry yang boleh di-manage requester (approve/reject join request).
- * 'ALL' untuk Fulltimer; selain itu set pelayananId di mana requester punya
- * membership aktif dengan role level >= LEADER_MIN_LEVEL.
+ * Otoritas approval request bergabung (2026-11) — diberikan admin di Portal
+ * (Pelayanan → anggota → Otoritas approval) per CABANG. Hanya anggota aktif
+ * yang diberi otoritas yang boleh menyetujui/menolak request dari jemaat di
+ * cabang tsb. Fulltimer (admin) tetap boleh semua.
+ *
+ * Map pelayananId → Set cabangId; 'ALL' untuk Fulltimer.
  */
-async function managedMinistryIds(req: Request): Promise<'ALL' | Set<string>> {
-  if (!req.user) return new Set();
+type ApprovalScope = 'ALL' | Map<string, Set<string>>;
+
+async function approvalScope(req: Request): Promise<ApprovalScope> {
+  if (!req.user) return new Map();
   if (req.user.isFulltimer) return 'ALL';
-  const rows = await prisma.jemaatPelayanan.findMany({
+  const rows = await prisma.pelayananApprover.findMany({
     where: {
       jemaatId: req.user.jemaatId,
-      isActive: true,
-      pelayananRole: { level: { gte: LEADER_MIN_LEVEL } },
+      // Otoritas hanya berlaku selama masih anggota aktif pelayanan tsb.
+      pelayanan: { jemaatPelayanan: { some: { jemaatId: req.user.jemaatId, isActive: true } } },
     },
-    select: { pelayananId: true },
+    select: { pelayananId: true, cabangId: true },
   });
-  return new Set(rows.map((r) => r.pelayananId));
+  const m = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const set = m.get(r.pelayananId) ?? new Set<string>();
+    set.add(r.cabangId);
+    m.set(r.pelayananId, set);
+  }
+  return m;
 }
 
-async function assertCanManage(req: Request, pelayananId: string): Promise<void> {
-  const managed = await managedMinistryIds(req);
-  if (!canManageMinistry(managed, pelayananId)) {
-    throw Forbidden('Hanya leader ministry yang dapat mengelola permintaan bergabung.');
+/** Set pelayananId yang punya otoritas (untuk helper lama canManageMinistry). */
+function managedIdsOf(scope: ApprovalScope): 'ALL' | Set<string> {
+  return scope === 'ALL' ? 'ALL' : new Set(scope.keys());
+}
+
+/** Filter Prisma request join sesuai otoritas (pelayanan + cabang pemohon). */
+function scopeRequestWhere(scope: ApprovalScope, pelayananId?: string) {
+  if (scope === 'ALL') return pelayananId ? { pelayananId } : {};
+  const entries = [...scope.entries()].filter(([pid]) => !pelayananId || pid === pelayananId);
+  if (!entries.length) return { id: '00000000-0000-0000-0000-000000000000' };
+  return { OR: entries.map(([pid, cab]) => ({ pelayananId: pid, jemaat: { cabangId: { in: [...cab] } } })) };
+}
+
+async function assertCanManage(req: Request, pelayananId: string): Promise<ApprovalScope> {
+  const scope = await approvalScope(req);
+  if (!canManageMinistry(managedIdsOf(scope), pelayananId)) {
+    throw Forbidden('Hanya anggota yang diberi otoritas approval yang dapat mengelola permintaan bergabung.');
+  }
+  return scope;
+}
+
+/** Pastikan pemohon berada di cabang yang menjadi otoritas requester. */
+function assertCabangInScope(scope: ApprovalScope, pelayananId: string, cabangId: string) {
+  if (scope === 'ALL') return;
+  if (!scope.get(pelayananId)?.has(cabangId)) {
+    throw Forbidden('Anda tidak punya otoritas approval untuk cabang pemohon ini.');
   }
 }
 
@@ -106,14 +138,15 @@ ministryRouter.get('/', async (req, res) => {
   });
 
   // Badge pending request — hanya untuk ministry yg bisa di-manage requester.
-  const managed = await managedMinistryIds(req);
+  const scope = await approvalScope(req);
+  const managed = managedIdsOf(scope);
   const pendingByMinistry = new Map<string, number>();
   if (managed === 'ALL' || managed.size > 0) {
     const grouped = await prisma.pelayananJoinRequest.groupBy({
       by: ['pelayananId'],
       where: {
         status: 'PENDING',
-        ...(managed === 'ALL' ? {} : { pelayananId: { in: [...managed] } }),
+        ...scopeRequestWhere(scope),
       },
       _count: { _all: true },
     });
@@ -151,7 +184,8 @@ ministryRouter.get('/', async (req, res) => {
  */
 ministryRouter.get('/join-requests', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  const managed = await managedMinistryIds(req);
+  const scope = await approvalScope(req);
+  const managed = managedIdsOf(scope);
   const filterId = typeof req.query.pelayananId === 'string' ? req.query.pelayananId : undefined;
 
   if (managed !== 'ALL' && managed.size === 0) {
@@ -161,7 +195,7 @@ ministryRouter.get('/join-requests', async (req, res) => {
     throw Forbidden('Hanya leader ministry yang dapat mengelola permintaan bergabung.');
   }
 
-  const scopeWhere = managed === 'ALL' ? {} : { pelayananId: { in: [...managed] } };
+  const scopeWhere = scopeRequestWhere(scope);
 
   // Ringkasan per ministry (untuk chip filter) — selalu seluruh scope.
   const grouped = await prisma.pelayananJoinRequest.groupBy({
@@ -188,7 +222,7 @@ ministryRouter.get('/join-requests', async (req, res) => {
   const requests = await prisma.pelayananJoinRequest.findMany({
     where: {
       status: 'PENDING',
-      ...(filterId ? { pelayananId: filterId } : scopeWhere),
+      ...(filterId ? scopeRequestWhere(scope, filterId) : scopeWhere),
     },
     orderBy: { createdAt: 'asc' },
     select: {
@@ -276,12 +310,15 @@ ministryRouter.get('/:id', async (req, res) => {
       })
     : null;
   const myJoinRequest = pickMyJoinRequest(latestRequest, Boolean(myMembership));
-  const canManageRequests = canManageMinistry(await managedMinistryIds(req), item.id);
+  const scope = await approvalScope(req);
+  const canManageRequests = canManageMinistry(managedIdsOf(scope), item.id);
   const pendingRequestCount = canManageRequests
     ? await prisma.pelayananJoinRequest.count({
-        where: { pelayananId: item.id, status: 'PENDING' },
+        where: { status: 'PENDING', ...scopeRequestWhere(scope, item.id) },
       })
     : 0;
+  // Cabang tempat requester punya otoritas approval (null = semua / Fulltimer).
+  const approvalCabangIds = scope === 'ALL' ? null : [...(scope.get(item.id) ?? [])];
 
   res.json({
     success: true,
@@ -314,6 +351,7 @@ ministryRouter.get('/:id', async (req, res) => {
       myJoinRequest,
       canManageRequests,
       pendingRequestCount,
+      approvalCabangIds,
     },
   });
 });
@@ -404,16 +442,17 @@ ministryRouter.post('/:id/join', async (req, res) => {
     metadata: { pelayananId: ministry.id, roleId: targetRole.id, motivasi },
   });
 
-  // Notif ke leader ministry
-  const leaders = await prisma.jemaatPelayanan.findMany({
+  // Notif ke pemegang otoritas approval untuk cabang pemohon (anggota aktif).
+  const pemohon = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true } });
+  const leaders = await prisma.pelayananApprover.findMany({
     where: {
       pelayananId: ministry.id,
-      isActive: true,
-      pelayananRole: { level: { gte: LEADER_MIN_LEVEL } },
+      cabangId: pemohon?.cabangId ?? '00000000-0000-0000-0000-000000000000',
       jemaatId: { not: jemaatId },
+      jemaat: { isActive: true, jemaatPelayanan: { some: { pelayananId: ministry.id, isActive: true } } },
     },
     select: { jemaat: { select: { id: true, namaLengkap: true, noHp: true } } },
-    take: 10,
+    take: 20,
   });
   for (const l of leaders) {
     void createNotification({
@@ -469,9 +508,9 @@ ministryRouter.delete('/:id/join-request', async (req, res) => {
 
 /** GET /admin/ministry/:id/join-requests — list PENDING (leader / Fulltimer). */
 ministryRouter.get('/:id/join-requests', async (req, res) => {
-  await assertCanManage(req, req.params.id);
+  const scope = await assertCanManage(req, req.params.id);
   const rows = await prisma.pelayananJoinRequest.findMany({
-    where: { pelayananId: req.params.id, status: 'PENDING' },
+    where: { status: 'PENDING', ...scopeRequestWhere(scope, req.params.id) },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
@@ -506,7 +545,7 @@ const rejectSchema = z.object({
 /** POST /admin/ministry/:id/join-requests/:reqId/approve { roleId } */
 ministryRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  await assertCanManage(req, req.params.id);
+  const scope = await assertCanManage(req, req.params.id);
   const { roleId } = approveSchema.parse(req.body);
 
   const role = await prisma.pelayananRole.findFirst({
@@ -518,11 +557,12 @@ ministryRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
   const request = await prisma.pelayananJoinRequest.findFirst({
     where: { id: req.params.reqId, pelayananId: req.params.id },
     include: {
-      jemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true, cabangId: true } },
       pelayanan: { select: { id: true, nama: true } },
     },
   });
   if (!request) throw NotFound('Permintaan tidak ditemukan.');
+  assertCabangInScope(scope, request.pelayananId, request.jemaat.cabangId);
 
   const reviewerId = req.user.jemaatId;
   const membership = await prisma.$transaction(async (tx) => {
@@ -601,17 +641,18 @@ ministryRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
 /** POST /admin/ministry/:id/join-requests/:reqId/reject { reason? } */
 ministryRouter.post('/:id/join-requests/:reqId/reject', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  await assertCanManage(req, req.params.id);
+  const scope = await assertCanManage(req, req.params.id);
   const { reason } = rejectSchema.parse(req.body ?? {});
 
   const request = await prisma.pelayananJoinRequest.findFirst({
     where: { id: req.params.reqId, pelayananId: req.params.id },
     include: {
-      jemaat: { select: { id: true, namaLengkap: true, noHp: true } },
+      jemaat: { select: { id: true, namaLengkap: true, noHp: true, cabangId: true } },
       pelayanan: { select: { id: true, nama: true } },
     },
   });
   if (!request) throw NotFound('Permintaan tidak ditemukan.');
+  assertCabangInScope(scope, request.pelayananId, request.jemaat.cabangId);
 
   const claimed = await prisma.pelayananJoinRequest.updateMany({
     where: { id: request.id, status: 'PENDING' },

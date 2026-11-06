@@ -14,6 +14,7 @@ import {
 } from '@ecc/shared-types';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
+import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 
 export const pelayananRouter = Router();
@@ -111,7 +112,60 @@ pelayananRouter.get('/:id/members', async (req, res, next) => {
       },
     },
   });
-  res.json({ success: true, data: { pelayanan: pel, members: rows } });
+  // Otoritas approval per anggota (cabang yang boleh disetujui).
+  const approvers = await prisma.pelayananApprover.findMany({
+    where: { pelayananId: pel.id, jemaatId: { in: rows.map((r) => r.jemaat.id) } },
+    select: { jemaatId: true, cabang: { select: { id: true, nama: true } } },
+    orderBy: { cabang: { nama: 'asc' } },
+  });
+  const byJemaat = new Map<string, { id: string; nama: string }[]>();
+  for (const a of approvers) byJemaat.set(a.jemaatId, [...(byJemaat.get(a.jemaatId) ?? []), a.cabang]);
+  res.json({
+    success: true,
+    data: { pelayanan: pel, members: rows.map((m) => ({ ...m, approvalCabang: byJemaat.get(m.jemaat.id) ?? [] })) },
+  });
+});
+
+// PUT /admin/pelayanan/:id/approver/:jemaatId { cabangIds: string[] } → ganti otoritas approval
+// request bergabung untuk anggota ini ([] = cabut). Anggota harus aktif.
+pelayananRouter.put('/:id/approver/:jemaatId', async (req, res, next) => {
+  if (!UUID_PARAM.test(req.params.id) || !UUID_PARAM.test(req.params.jemaatId)) return next();
+  const { cabangIds } = z.object({ cabangIds: z.array(z.string().uuid()).max(50) }).parse(req.body ?? {});
+  const member = await prisma.jemaatPelayanan.findFirst({
+    where: { pelayananId: req.params.id, jemaatId: req.params.jemaatId, isActive: true },
+    select: { jemaat: { select: { namaLengkap: true } }, pelayanan: { select: { nama: true } } },
+  });
+  if (!member) throw BadRequest('Otoritas hanya bisa diberikan ke anggota aktif pelayanan ini.');
+  const ids = [...new Set(cabangIds)];
+  if (ids.length) {
+    const n = await prisma.cabangGereja.count({ where: { id: { in: ids } } });
+    if (n !== ids.length) throw BadRequest('Cabang tidak ditemukan.');
+  }
+  const before = await prisma.pelayananApprover.findMany({
+    where: { pelayananId: req.params.id, jemaatId: req.params.jemaatId },
+    select: { cabang: { select: { nama: true } } },
+  });
+  await prisma.$transaction([
+    prisma.pelayananApprover.deleteMany({ where: { pelayananId: req.params.id, jemaatId: req.params.jemaatId, cabangId: { notIn: ids } } }),
+    prisma.pelayananApprover.createMany({
+      data: ids.map((cabangId) => ({ pelayananId: req.params.id, jemaatId: req.params.jemaatId, cabangId })),
+      skipDuplicates: true,
+    }),
+  ]);
+  const after = await prisma.pelayananApprover.findMany({
+    where: { pelayananId: req.params.id, jemaatId: req.params.jemaatId },
+    select: { cabang: { select: { id: true, nama: true } } },
+    orderBy: { cabang: { nama: 'asc' } },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'pelayanan_approver',
+    resourceId: req.params.jemaatId,
+    resourceLabel: `Otoritas approval ${member.pelayanan.nama}: ${member.jemaat.namaLengkap} → ${after.map((a) => a.cabang.nama).join(', ') || '(dicabut)'}`,
+    before: { cabang: before.map((b) => b.cabang.nama) },
+    after: { cabang: after.map((a) => a.cabang.nama) },
+  });
+  res.json({ success: true, data: { cabang: after.map((a) => a.cabang) } });
 });
 
 /** Pencarian jemaat: nama, kode (QR), atau no HP (format lokal / +62). */
@@ -349,6 +403,10 @@ pelayananRouter.patch('/assign/:id', async (req, res) => {
     tanggalSelesai: input.tanggalSelesai ? new Date(input.tanggalSelesai) : undefined,
   };
   const updated = await prisma.jemaatPelayanan.update({ where: { id: req.params.id }, data });
+  // Keluar dari pelayanan → otoritas approval-nya ikut dicabut.
+  if (input.isActive === false) {
+    await prisma.pelayananApprover.deleteMany({ where: { pelayananId: updated.pelayananId, jemaatId: updated.jemaatId } });
+  }
   const label = `${before.jemaat.namaLengkap} as ${before.pelayanan.nama}`;
   audit(req, {
     action: 'UPDATE',

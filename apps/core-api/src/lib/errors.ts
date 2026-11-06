@@ -33,3 +33,7 @@ export const TooManyRequests = (message = 'Terlalu banyak permintaan') =>
 
 export const InternalError = (message = 'Terjadi kesalahan internal') =>
   new ApiError(500, 'INTERNAL_ERROR', message);
+
+/** Layanan pihak ketiga (mis. WhatsApp/Fonnte) sedang gagal — bukan kesalahan user. */
+export const ServiceUnavailable = (message: string, code = 'SERVICE_UNAVAILABLE') =>
+  new ApiError(503, code, message);

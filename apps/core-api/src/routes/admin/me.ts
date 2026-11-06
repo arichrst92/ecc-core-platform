@@ -51,7 +51,8 @@ import {
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
 import { otpRequestLimiter, authVerifyLimiter, familySearchLimiter } from '../../middleware/rate-limit.js';
-import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { BadRequest, Conflict, Forbidden, NotFound, ServiceUnavailable, Unauthorized } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 import { audit } from '../../lib/audit.js';
 import { saveProfilePhoto } from '../../lib/storage.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
@@ -400,7 +401,7 @@ meRouter.post('/phone/request-otp', otpRequestLimiter, async (req, res) => {
     throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum meminta kode baru.`);
   }
   const otp = generateOtp();
-  await prisma.otpVerification.create({
+  const otpRow = await prisma.otpVerification.create({
     data: {
       noHp,
       kodeHash: await hashOtp(otp),
@@ -410,7 +411,16 @@ meRouter.post('/phone/request-otp', otpRequestLimiter, async (req, res) => {
       userAgent: req.get('user-agent'),
     },
   });
-  await sendOtpViaWhatsApp(noHp, otp);
+  try {
+    await sendOtpViaWhatsApp(noHp, otp);
+  } catch (e) {
+    logger.error({ err: e, noHp }, '[me] gagal kirim OTP ganti no HP via WhatsApp');
+    await prisma.otpVerification.delete({ where: { id: otpRow.id } }).catch(() => undefined);
+    throw ServiceUnavailable(
+      'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.',
+      'WHATSAPP_UNAVAILABLE',
+    );
+  }
   audit(req, {
     action: 'UPDATE',
     resource: 'jemaat',

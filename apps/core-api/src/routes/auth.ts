@@ -38,7 +38,7 @@ import {
   consumeLivenessNonce,
   LivenessNonceError,
 } from '../lib/liveness-nonce.js';
-import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
+import { ApiError, BadRequest, Conflict, Forbidden, NotFound, ServiceUnavailable, Unauthorized } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { resolveJemaatAccess } from '../lib/menu-access.js';
@@ -164,7 +164,7 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   const otp = generateOtp();
   const kodeHash = await hashOtp(otp);
 
-  await prisma.otpVerification.create({
+  const otpRow = await prisma.otpVerification.create({
     data: {
       noHp,
       kodeHash,
@@ -175,7 +175,21 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     },
   });
 
-  await sendOtpViaWhatsApp(noHp, otp);
+  try {
+    await sendOtpViaWhatsApp(noHp, otp);
+  } catch (e) {
+    // Gagal kirim (mis. perangkat WhatsApp Fonnte terputus): hapus OTP yang tidak
+    // pernah terkirim supaya user tidak tertahan cooldown "Mohon tunggu 60 detik",
+    // dan beri pesan yang jelas (bukan 500).
+    logger.error({ err: e, noHp, purpose }, '[auth-otp] gagal kirim OTP via WhatsApp');
+    await prisma.otpVerification.delete({ where: { id: otpRow.id } }).catch(() => undefined);
+    throw ServiceUnavailable(
+      purpose === 'LOGIN'
+        ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, atau masuk dengan email.'
+        : 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.',
+      'WHATSAPP_UNAVAILABLE',
+    );
+  }
 
   res.json({ success: true, message: 'OTP telah dikirim via WhatsApp' });
 });

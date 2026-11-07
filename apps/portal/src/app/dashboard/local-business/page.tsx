@@ -50,6 +50,8 @@ interface BusinessItem {
   lokasi: string | null;
   websiteUrl: string | null;
   whatsappUrl: string | null;
+  waAdmin?: string | null;
+  email?: string | null;
   companyProfileUrl: string | null;
   socialLinks: SocialLink[] | null;
   isActive: boolean;
@@ -158,11 +160,13 @@ export default function LocalBusinessPage() {
             Local Market
           </h1>
           <p className="text-neutral-500 mt-1">
-            Direktori bisnis jemaat (UMKM). Owner CRUD lewat mobile app —
+            Direktori bisnis jemaat (UMKM). Owner CRUD lewat mobile app (termasuk katalog) —
             portal admin hanya menampilkan list + delete moderasi.
           </p>
         </div>
       </div>
+
+      <KatalogConfig />
 
       {/* Filters */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
@@ -533,10 +537,12 @@ function DetailModal({
 
             {/* Links */}
             <div className="space-y-1.5">
+              {b.waAdmin && <LinkRow icon={MessageCircle} label="WhatsApp admin" url={`https://wa.me/${b.waAdmin.replace(/\D/g, '')}`} />}
+              {b.email && <LinkRow icon={ExternalLink} label="Email" url={`mailto:${b.email}`} />}
               {b.websiteUrl && (
                 <LinkRow icon={Globe} label="Website" url={b.websiteUrl} />
               )}
-              {b.whatsappUrl && (
+              {b.whatsappUrl && !b.waAdmin && (
                 <LinkRow icon={MessageCircle} label="WhatsApp" url={b.whatsappUrl} />
               )}
               {b.companyProfileUrl && (
@@ -550,6 +556,8 @@ function DetailModal({
                 <LinkRow key={i} icon={ExternalLink} label={s.platform} url={s.url} />
               ))}
             </div>
+
+            <KatalogList businessId={b.id} apiBase={apiBase} />
           </div>
 
           <div className="flex justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
@@ -593,5 +601,125 @@ function LinkRow({
       <span className="font-medium shrink-0">{label}:</span>
       <span className="truncate">{url}</span>
     </a>
+  );
+}
+
+// ===================== Katalog (2.4.7) =====================
+interface KatalogItem {
+  id: string;
+  jenis: 'PRODUK' | 'JASA';
+  nama: string;
+  deskripsi: string | null;
+  hargaTipe: 'TETAP' | 'MULAI_DARI' | 'NEGO';
+  harga: number | null;
+  mataUang: string;
+  satuan: string | null;
+  fotoUrls: string[];
+  isActive: boolean;
+  isHiddenByAdmin: boolean;
+}
+
+function hargaText(it: KatalogItem) {
+  if (it.hargaTipe === 'NEGO' || it.harga == null) return 'By agreement';
+  const n = it.harga.toLocaleString(it.mataUang === 'IDR' ? 'id-ID' : 'en-US', { maximumFractionDigits: 2 });
+  return `${it.hargaTipe === 'MULAI_DARI' ? 'Mulai ' : ''}${it.mataUang} ${n}${it.satuan ? `/${it.satuan}` : ''}`;
+}
+
+/** Batas jumlah item katalog per usaha — berlaku untuk semua usaha. */
+function KatalogConfig() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['local-business', 'config'],
+    queryFn: async () => (await apiClient.get<{ data: { maxItems: number } }>('/admin/local-business/config')).data.data,
+  });
+  const [val, setVal] = useState('');
+  const save = useMutation({
+    mutationFn: async (n: number) => apiClient.put('/admin/local-business/config', { maxItems: n }),
+    onSuccess: () => {
+      toast.success('Batas katalog disimpan');
+      setVal('');
+      void qc.invalidateQueries({ queryKey: ['local-business', 'config'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menyimpan'),
+  });
+  const n = Number(val);
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
+      <div className="flex-1 min-w-[220px]">
+        <div className="text-sm font-semibold text-neutral-900">Batas item katalog per usaha</div>
+        <div className="text-xs text-neutral-500">Berlaku untuk semua usaha. Sekarang: {q.data?.maxItems ?? '…'} item.</div>
+      </div>
+      <input
+        type="number"
+        min={1}
+        max={500}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder={String(q.data?.maxItems ?? 50)}
+        className="w-28 border border-neutral-300 rounded-lg px-3 py-2 text-sm"
+      />
+      <button
+        disabled={!val || !(n >= 1 && n <= 500) || save.isPending}
+        onClick={() => save.mutate(Math.round(n))}
+        className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 text-white disabled:opacity-50"
+      >
+        Simpan
+      </button>
+    </div>
+  );
+}
+
+/** Katalog usaha di detail (moderasi: sembunyikan / tampilkan item). */
+function KatalogList({ businessId, apiBase }: { businessId: string; apiBase: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['local-business', businessId, 'items'],
+    queryFn: async () => (await apiClient.get<{ data: KatalogItem[] }>(`/admin/local-business/${businessId}/items`)).data.data,
+  });
+  const toggle = useMutation({
+    mutationFn: async (v: { id: string; hide: boolean }) => apiClient.patch(`/admin/local-business/items/${v.id}`, { isHiddenByAdmin: v.hide }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['local-business', businessId, 'items'] }),
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal'),
+  });
+  const items = q.data ?? [];
+  return (
+    <div>
+      <div className="text-sm font-semibold text-neutral-900 mb-2">Katalog ({items.length})</div>
+      {q.isLoading ? (
+        <div className="text-xs text-neutral-500">Memuat…</div>
+      ) : items.length === 0 ? (
+        <div className="text-xs text-neutral-500">Belum ada item.</div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {items.map((it) => (
+            <div key={it.id} className={`border border-neutral-200 rounded-lg overflow-hidden ${it.isHiddenByAdmin || !it.isActive ? 'opacity-60' : ''}`}>
+              <div className="bg-neutral-100" style={{ aspectRatio: '3 / 2' }}>
+                {it.fotoUrls[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`${apiBase}${it.fotoUrls[0]}`} alt={it.nama} className="w-full h-full object-cover" />
+                ) : null}
+              </div>
+              <div className="p-2">
+                <div className="text-[10px] font-semibold text-neutral-500 uppercase">{it.jenis === 'JASA' ? 'Jasa' : 'Produk'}</div>
+                <div className="text-sm font-medium text-neutral-900 truncate">{it.nama}</div>
+                <div className="text-xs text-brand-700 font-semibold">{hargaText(it)}</div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[10px] text-neutral-500">
+                    {it.isHiddenByAdmin ? 'Disembunyikan admin' : !it.isActive ? 'Disembunyikan pemilik' : 'Tampil'}
+                  </span>
+                  <button
+                    onClick={() => toggle.mutate({ id: it.id, hide: !it.isHiddenByAdmin })}
+                    disabled={toggle.isPending}
+                    className="text-[11px] font-semibold text-brand-700 hover:underline"
+                  >
+                    {it.isHiddenByAdmin ? 'Tampilkan' : 'Sembunyikan'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

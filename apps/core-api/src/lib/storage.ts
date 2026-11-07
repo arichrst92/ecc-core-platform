@@ -312,6 +312,32 @@ export async function saveBusinessHero(businessId: string, buffer: Buffer): Prom
   return `${PUBLIC_UPLOADS_PREFIX}/content/local-business/hero/${filename}?v=${v}`;
 }
 
+/**
+ * Foto item katalog Local Market (2.4.7) — diseragamkan rasio 3:2
+ * (crop tengah, 1200×800, webp). Nama file unik per unggahan.
+ */
+export async function saveLocalItemPhoto(itemId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'content', 'local-business', 'items');
+  await ensureDir(dir);
+  const filename = `${itemId}-${Date.now()}.webp`;
+  await sharp(assertRasterImage(buffer))
+    .rotate()
+    .resize({ width: 1200, height: 800, fit: 'cover', position: 'centre', withoutEnlargement: false })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return `${PUBLIC_UPLOADS_PREFIX}/content/local-business/items/${filename}`;
+}
+
+export async function deleteLocalItemPhoto(url: string): Promise<void> {
+  const m = /\/content\/local-business\/items\/([A-Za-z0-9._-]+\.webp)/.exec(url);
+  if (!m) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, 'content', 'local-business', 'items', m[1]!));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
 export async function deleteBusinessHero(businessId: string): Promise<void> {
   const absPath = path.join(UPLOADS_DIR, 'content', 'local-business', 'hero', `${businessId}.webp`);
   try {

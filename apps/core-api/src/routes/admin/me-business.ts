@@ -25,7 +25,13 @@ import {
   createLocalBusinessSchema,
   updateLocalBusinessSchema,
   browseLocalMarketQuerySchema,
+  createLocalItemSchema,
+  updateLocalItemSchema,
+  socialUsernamesToLinks,
+  type SocialUsernames,
 } from '@ecc/shared-types';
+import { z } from 'zod';
+import { serializeItem, publicItemsOf, localMarketMaxItems } from '../../lib/local-market.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -37,7 +43,12 @@ import {
   deleteBusinessLogo,
   saveBusinessProfilePdf,
   deleteBusinessProfilePdf,
+  saveLocalItemPhoto,
+  deleteLocalItemPhoto,
 } from '../../lib/storage.js';
+
+/** WA admin (E.164) → link wa.me (dipakai app lama & web sebagai whatsappUrl). */
+const waLink = (n: string | null | undefined) => (n ? `https://wa.me/${n.replace(/\D/g, '')}` : null);
 
 export const meBusinessRouter = Router();
 export const meLocalMarketRouter = Router();
@@ -94,8 +105,11 @@ meBusinessRouter.post('/', async (req, res) => {
       isOnline: input.isOnline,
       lokasi: input.lokasi,
       websiteUrl: input.websiteUrl,
-      whatsappUrl: input.whatsappUrl,
-      socialLinks: input.socialLinks ?? [],
+      whatsappUrl: input.waAdmin ? waLink(input.waAdmin) : input.whatsappUrl,
+      socialLinks: input.socialUsernames ? socialUsernamesToLinks(input.socialUsernames as SocialUsernames) : input.socialLinks ?? [],
+      waAdmin: input.waAdmin ?? null,
+      email: input.email ?? null,
+      socialUsernames: input.socialUsernames ?? undefined,
     },
     include: { owner: { select: ownerLite } },
   });
@@ -138,6 +152,16 @@ meBusinessRouter.patch('/:id', async (req, res) => {
   if (input.whatsappUrl !== undefined) data.whatsappUrl = input.whatsappUrl;
   if (input.socialLinks !== undefined) data.socialLinks = input.socialLinks;
   if (input.isActive !== undefined) data.isActive = input.isActive;
+  // 2.4.7 — kontak admin & username sosmed (URL sosmed + link WA disinkronkan untuk app lama).
+  if (input.waAdmin !== undefined) {
+    data.waAdmin = input.waAdmin;
+    data.whatsappUrl = waLink(input.waAdmin);
+  }
+  if (input.email !== undefined) data.email = input.email;
+  if (input.socialUsernames !== undefined) {
+    data.socialUsernames = input.socialUsernames;
+    data.socialLinks = socialUsernamesToLinks(input.socialUsernames as SocialUsernames);
+  }
 
   if (Object.keys(data).length === 0) {
     throw BadRequest('Tidak ada field yang diubah.');
@@ -177,6 +201,8 @@ meBusinessRouter.delete('/:id', async (req, res) => {
   if (biz.companyProfileUrl) {
     await deleteBusinessProfilePdf(biz.id).catch(() => undefined);
   }
+  const items = await prisma.localBusinessItem.findMany({ where: { businessId: biz.id }, select: { fotoUrls: true } });
+  for (const it of items) for (const u of (it.fotoUrls as string[]) ?? []) await deleteLocalItemPhoto(u).catch(() => undefined);
   await prisma.localBusiness.delete({ where: { id: biz.id } });
   audit(req, {
     action: 'DELETE',
@@ -404,5 +430,122 @@ meLocalMarketRouter.get('/:id', async (req, res) => {
   if (hidden && !isOwner) {
     throw NotFound('Bisnis tidak ditemukan'); // sembunyikan keberadaannya
   }
-  res.json({ success: true, data: biz });
+  res.json({ success: true, data: { ...biz, items: await publicItemsOf(biz.id) } });
+});
+
+// ============================================================
+//  KATALOG (2.4.7) — /admin/me/businesses/:id/items…
+// ============================================================
+const ITEM_FOTO_MAX = 4;
+
+async function findMyItemOrThrow(bizId: string, itemId: string, jemaatId: string) {
+  await findMyBusinessOrThrow(bizId, jemaatId);
+  const item = await prisma.localBusinessItem.findFirst({ where: { id: itemId, businessId: bizId } });
+  if (!item) throw NotFound('Item tidak ditemukan');
+  return item;
+}
+
+meBusinessRouter.get('/:id/items', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  const [rows, max] = await Promise.all([
+    prisma.localBusinessItem.findMany({ where: { businessId: biz.id }, orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }] }),
+    localMarketMaxItems(),
+  ]);
+  res.json({ success: true, data: { items: rows.map(serializeItem), max } });
+});
+
+meBusinessRouter.post('/:id/items', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  const input = createLocalItemSchema.parse(req.body ?? {});
+  const [count, max, last] = await Promise.all([
+    prisma.localBusinessItem.count({ where: { businessId: biz.id } }),
+    localMarketMaxItems(),
+    prisma.localBusinessItem.findFirst({ where: { businessId: biz.id }, orderBy: { urutan: 'desc' }, select: { urutan: true } }),
+  ]);
+  if (count >= max) throw BadRequest(`Katalog sudah mencapai batas ${max} item.`);
+  const created = await prisma.localBusinessItem.create({
+    data: {
+      businessId: biz.id,
+      jenis: input.jenis,
+      nama: input.nama,
+      deskripsi: input.deskripsi ?? null,
+      hargaTipe: input.hargaTipe,
+      harga: input.hargaTipe === 'NEGO' ? null : input.harga ?? null,
+      mataUang: input.mataUang,
+      satuan: input.hargaTipe === 'NEGO' ? null : input.satuan ?? null,
+      isActive: input.isActive ?? true,
+      urutan: (last?.urutan ?? 0) + 1,
+    },
+  });
+  audit(req, { action: 'CREATE', resource: 'local_business_item', resourceId: created.id, resourceLabel: `${biz.nama} — ${created.nama}` });
+  res.status(201).json({ success: true, data: serializeItem(created) });
+});
+
+meBusinessRouter.patch('/:id/items/:itemId', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const before = await findMyItemOrThrow(req.params.id, req.params.itemId, jemaatId);
+  const input = updateLocalItemSchema.parse(req.body ?? {});
+  const tipe = input.hargaTipe ?? before.hargaTipe;
+  const harga = input.harga !== undefined ? input.harga : before.harga == null ? null : Number(before.harga);
+  if (tipe !== 'NEGO' && !(harga != null && harga > 0)) throw BadRequest('Isi harga, atau pilih "By agreement".');
+  const updated = await prisma.localBusinessItem.update({
+    where: { id: before.id },
+    data: {
+      ...(input.jenis !== undefined ? { jenis: input.jenis } : {}),
+      ...(input.nama !== undefined ? { nama: input.nama } : {}),
+      ...(input.deskripsi !== undefined ? { deskripsi: input.deskripsi } : {}),
+      hargaTipe: tipe,
+      harga: tipe === 'NEGO' ? null : harga,
+      ...(input.mataUang !== undefined ? { mataUang: input.mataUang } : {}),
+      ...(tipe === 'NEGO' ? { satuan: null } : input.satuan !== undefined ? { satuan: input.satuan } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+    },
+  });
+  audit(req, { action: 'UPDATE', resource: 'local_business_item', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
+  res.json({ success: true, data: serializeItem(updated) });
+});
+
+meBusinessRouter.delete('/:id/items/:itemId', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const item = await findMyItemOrThrow(req.params.id, req.params.itemId, jemaatId);
+  await prisma.localBusinessItem.delete({ where: { id: item.id } });
+  for (const u of (item.fotoUrls as string[]) ?? []) await deleteLocalItemPhoto(u).catch(() => undefined);
+  audit(req, { action: 'DELETE', resource: 'local_business_item', resourceId: item.id, resourceLabel: item.nama, before: item });
+  res.json({ success: true, data: { id: item.id } });
+});
+
+// Urutan katalog: { ids: [itemId…] } (urutan baru dari atas).
+meBusinessRouter.put('/:id/items-order', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  const { ids } = z.object({ ids: z.array(z.string().uuid()).max(500) }).parse(req.body ?? {});
+  await prisma.$transaction(
+    ids.map((id, i) => prisma.localBusinessItem.updateMany({ where: { id, businessId: biz.id }, data: { urutan: i + 1 } })),
+  );
+  res.json({ success: true, data: { ok: true } });
+});
+
+// Foto item: tambah (maks. 4, dipotong 3:2) & hapus per URL.
+meBusinessRouter.post('/:id/items/:itemId/foto', flexImageUpload(), async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const { id = '', itemId = '' } = req.params as { id?: string; itemId?: string };
+  const item = await findMyItemOrThrow(id, itemId, jemaatId);
+  if (!req.file) throw BadRequest('File foto wajib (multipart).');
+  const urls = ((item.fotoUrls as string[]) ?? []).slice();
+  if (urls.length >= ITEM_FOTO_MAX) throw BadRequest(`Maksimal ${ITEM_FOTO_MAX} foto per item.`);
+  urls.push(await saveLocalItemPhoto(item.id, req.file.buffer));
+  const updated = await prisma.localBusinessItem.update({ where: { id: item.id }, data: { fotoUrls: urls } });
+  res.json({ success: true, data: serializeItem(updated) });
+});
+
+meBusinessRouter.delete('/:id/items/:itemId/foto', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const item = await findMyItemOrThrow(req.params.id, req.params.itemId, jemaatId);
+  const { url } = z.object({ url: z.string().min(1).max(500) }).parse(req.query);
+  const urls = ((item.fotoUrls as string[]) ?? []).filter((u) => u !== url);
+  const updated = await prisma.localBusinessItem.update({ where: { id: item.id }, data: { fotoUrls: urls } });
+  await deleteLocalItemPhoto(url).catch(() => undefined);
+  res.json({ success: true, data: serializeItem(updated) });
 });

@@ -1918,6 +1918,12 @@ model LocalBusiness {
   // Social media links — array of { platform: string, url: string }.
   // Stored as Json untuk fleksibilitas count dynamic. Validate di Zod layer.
   socialLinks       Json?      @map("social_links")
+  // 2.4.7 — kontak admin usaha (dipakai tombol WA & email di detail + katalog).
+  waAdmin           String?    @map("wa_admin") @db.VarChar(20)
+  email             String?    @db.VarChar(255)
+  // 2.4.7 — username sosmed { instagram, facebook, tiktok, youtube, x, linkedin, threads }.
+  // socialLinks tetap diisi (URL) dari username ini untuk app lama & web.
+  socialUsernames   Json?      @map("social_usernames")
   // Owner toggle: false = hide dari public browse. Owner tetap bisa lihat &
   // edit. Tidak menghapus row (gunakan DELETE endpoint untuk benar2 hilang).
   isActive          Boolean    @default(true) @map("is_active")
@@ -1925,6 +1931,7 @@ model LocalBusiness {
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
   owner Jemaat @relation("LocalBusinessOwner", fields: [ownerJemaatId], references: [id], onDelete: Cascade)
+  items LocalBusinessItem[]
 
   @@index([ownerJemaatId])
   @@index([nama])
@@ -2253,6 +2260,8 @@ model AppConfig {
   // Onboarding: New Comer naik menjadi Jemaat Tetap setelah hadir ibadah
   // sebanyak ini (reservasi status JOIN). NULL / 0 = nonaktif.
   newComerMinHadir           Int?     @map("new_comer_min_hadir")
+  // Local Market (2.4.7): batas jumlah item katalog per usaha.
+  localMarketMaxItems        Int      @default(50) @map("local_market_max_items")
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")
@@ -4154,4 +4163,47 @@ enum FamilyLinkRequestStatus {
   CANCELLED
 
   @@map("family_link_request_status")
+}
+
+/// Katalog produk / jasa Local Market (2.4.7).
+model LocalBusinessItem {
+  id         String           @id @default(uuid()) @db.Uuid
+  businessId String           @map("business_id") @db.Uuid
+  jenis      LocalItemJenis   @default(PRODUK)
+  nama       String           @db.VarChar(150)
+  deskripsi  String?          @db.Text
+  hargaTipe  LocalHargaTipe   @default(TETAP) @map("harga_tipe")
+  /// Kosong bila hargaTipe = NEGO (by agreement).
+  harga      Decimal?         @db.Decimal(14, 2)
+  mataUang   String           @default("IDR") @map("mata_uang") @db.VarChar(3)
+  /// Satuan opsional, mis. "pcs", "jam".
+  satuan     String?          @db.VarChar(30)
+  /// URL foto (maks. 4), semua dipotong ke rasio 3:2.
+  fotoUrls   Json             @default("[]") @map("foto_urls")
+  isActive   Boolean          @default(true) @map("is_active")
+  /// Disembunyikan admin Portal (moderasi).
+  isHiddenByAdmin Boolean     @default(false) @map("is_hidden_by_admin")
+  urutan     Int              @default(0)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  business LocalBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, urutan])
+  @@map("local_business_item")
+}
+
+enum LocalItemJenis {
+  PRODUK
+  JASA
+
+  @@map("local_item_jenis")
+}
+
+enum LocalHargaTipe {
+  TETAP
+  MULAI_DARI
+  NEGO
+
+  @@map("local_harga_tipe")
 }

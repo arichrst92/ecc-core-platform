@@ -25,6 +25,7 @@ import {
   publicMinistryQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../lib/errors.js';
+import { hargaLabel, publicItemsOf, serializeItem } from '../lib/local-market.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
 import { generateOccurrences } from '../lib/ibadah-occurrences.js';
 
@@ -443,6 +444,9 @@ publicUnauthRouter.get('/local-market/:id', publicBrowseLimiter, async (req, res
       socialLinks: true,
       websiteUrl: true,
       whatsappUrl: true,
+      waAdmin: true,
+      email: true,
+      socialUsernames: true,
       isOnline: true,
       lokasi: true,
       createdAt: true,
@@ -456,7 +460,24 @@ publicUnauthRouter.get('/local-market/:id', publicBrowseLimiter, async (req, res
   });
   if (!row) throw NotFound('Bisnis tidak ditemukan atau nonaktif.');
 
-  res.json({ success: true, data: row });
+  res.json({ success: true, data: { ...row, items: await publicItemsOf(row.id) } });
+});
+
+// GET /public/local-market/:id/item/:itemId — satu item katalog (web + OG image).
+publicUnauthRouter.get('/local-market/:id/item/:itemId', publicBrowseLimiter, async (req, res) => {
+  const { id = '', itemId = '' } = req.params as { id?: string; itemId?: string };
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^[0-9a-f-]{36}$/i.test(itemId)) throw BadRequest('ID tidak valid.');
+  const item = await prisma.localBusinessItem.findFirst({
+    where: { id: itemId, businessId: id, isActive: true, isHiddenByAdmin: false, business: { isActive: true } },
+    include: {
+      business: {
+        select: { id: true, nama: true, logoUrl: true, heroImageUrl: true, waAdmin: true, email: true, industri: true, owner: { select: { cabang: { select: { nama: true } } } } },
+      },
+    },
+  });
+  if (!item) throw NotFound('Item tidak ditemukan atau nonaktif.');
+  const { business, ...rest } = item;
+  res.json({ success: true, data: { ...serializeItem(rest as typeof item), hargaLabel: hargaLabel(serializeItem(rest as typeof item)), business } });
 });
 
 // GET /public/cabang/:id/rekening

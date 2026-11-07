@@ -11,15 +11,60 @@
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { adminLocalBusinessQuerySchema } from '@ecc/shared-types';
+import { z } from 'zod';
 import { NotFound } from '../../lib/errors.js';
+import { requireMenu } from '../../middleware/require-menu.js';
+import { localMarketMaxItems, serializeItem } from '../../lib/local-market.js';
 import { audit } from '../../lib/audit.js';
 import {
   deleteBusinessHero,
   deleteBusinessLogo,
   deleteBusinessProfilePdf,
+  deleteLocalItemPhoto,
 } from '../../lib/storage.js';
 
 export const localBusinessRouter = Router();
+// Portal saja: wajib menu "Local Market" (sebelumnya terbuka untuk semua yang login).
+localBusinessRouter.use(requireMenu('local-business'));
+
+// ===== Pengaturan katalog (2.4.7): batas item per usaha (global) =====
+localBusinessRouter.get('/config', async (_req, res) => {
+  res.json({ success: true, data: { maxItems: await localMarketMaxItems() } });
+});
+
+localBusinessRouter.put('/config', requireMenu('local-business', 'write'), async (req, res) => {
+  const { maxItems } = z.object({ maxItems: z.coerce.number().int().min(1).max(500) }).parse(req.body ?? {});
+  await prisma.appConfig.upsert({
+    where: { id: 'global' },
+    create: { id: 'global', localMarketMaxItems: maxItems },
+    update: { localMarketMaxItems: maxItems },
+  });
+  audit(req, { action: 'UPDATE', resource: 'app_config', resourceId: 'global', resourceLabel: `Local Market: batas ${maxItems} item per usaha` });
+  res.json({ success: true, data: { maxItems } });
+});
+
+// ===== Katalog per usaha (lihat + sembunyikan / tampilkan) =====
+localBusinessRouter.get('/:id/items', async (req, res) => {
+  const rows = await prisma.localBusinessItem.findMany({
+    where: { businessId: req.params.id },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+  });
+  res.json({ success: true, data: rows.map(serializeItem) });
+});
+
+localBusinessRouter.patch('/items/:itemId', requireMenu('local-business', 'write'), async (req, res) => {
+  const { isHiddenByAdmin } = z.object({ isHiddenByAdmin: z.boolean() }).parse(req.body ?? {});
+  const before = await prisma.localBusinessItem.findUnique({ where: { id: req.params.itemId } });
+  if (!before) throw NotFound('Item tidak ditemukan');
+  const updated = await prisma.localBusinessItem.update({ where: { id: before.id }, data: { isHiddenByAdmin } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'local_business_item',
+    resourceId: updated.id,
+    resourceLabel: `[moderation] ${updated.nama} ${isHiddenByAdmin ? 'disembunyikan' : 'ditampilkan'}`,
+  });
+  res.json({ success: true, data: serializeItem(updated) });
+});
 
 const ownerLite = {
   id: true,
@@ -86,7 +131,7 @@ localBusinessRouter.get('/:id', async (req, res) => {
 // ============================================================
 //  DELETE (moderation)
 // ============================================================
-localBusinessRouter.delete('/:id', async (req, res) => {
+localBusinessRouter.delete('/:id', requireMenu('local-business', 'delete'), async (req, res) => {
   const before = await prisma.localBusiness.findUnique({
     where: { id: req.params.id },
     include: { owner: { select: { namaLengkap: true } } },
@@ -102,6 +147,8 @@ localBusinessRouter.delete('/:id', async (req, res) => {
   if (before.companyProfileUrl) {
     await deleteBusinessProfilePdf(before.id).catch(() => undefined);
   }
+  const items = await prisma.localBusinessItem.findMany({ where: { businessId: before.id }, select: { fotoUrls: true } });
+  for (const it of items) for (const u of (it.fotoUrls as string[]) ?? []) await deleteLocalItemPhoto(u).catch(() => undefined);
   await prisma.localBusiness.delete({ where: { id: before.id } });
   audit(req, {
     action: 'DELETE',

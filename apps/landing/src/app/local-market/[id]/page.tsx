@@ -14,8 +14,10 @@ import {
   ExternalLink,
   Calendar,
   Link2,
+  Mail,
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
+import { hargaText, type KatalogItem } from '@/lib/katalog';
 
 interface SocialLink {
   platform: string;
@@ -34,6 +36,9 @@ interface LocalBusinessDetail {
   socialLinks: SocialLink[] | null;
   websiteUrl: string | null;
   whatsappUrl: string | null;
+  waAdmin?: string | null;
+  email?: string | null;
+  items?: KatalogItem[];
   isOnline: boolean;
   lokasi: string | null;
   createdAt: string;
@@ -176,7 +181,38 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
         )}
 
         {/* Kontak */}
-        {(b.websiteUrl || b.whatsappUrl) && (
+        {/* Katalog (2.4.7) */}
+        {(b.items ?? []).length > 0 && (
+          <section className="mb-8">
+            <h2 className="font-bold text-neutral-900 mb-3">Katalog</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(b.items ?? []).map((it) => (
+                <Link
+                  key={it.id}
+                  href={`/local-market/${b.id}/item/${it.id}`}
+                  className="block border border-neutral-200 rounded-xl overflow-hidden hover:border-brand-300 transition"
+                >
+                  <div className="relative bg-neutral-100" style={{ aspectRatio: '3 / 2' }}>
+                    {it.fotoUrls[0] ? (
+                      <Image src={absoluteUrl(it.fotoUrls[0]) ?? ''} alt={it.nama} fill className="object-cover" sizes="(max-width: 640px) 50vw, 256px" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-brand-300">
+                        <Store className="w-8 h-8" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <div className="text-[10px] font-semibold uppercase text-neutral-500">{it.jenis === 'JASA' ? 'Jasa' : 'Produk'}</div>
+                    <div className="text-sm font-semibold text-neutral-900 line-clamp-2">{it.nama}</div>
+                    <div className={`text-sm font-semibold mt-0.5 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {(b.websiteUrl || b.whatsappUrl || b.waAdmin || b.email) && (
           <section className="mb-8">
             <h2 className="font-bold text-neutral-900 mb-3">Kontak</h2>
             <div className="grid sm:grid-cols-2 gap-2">
@@ -201,9 +237,23 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                   <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                 </a>
               )}
-              {b.whatsappUrl && (
+              {b.email && (
                 <a
-                  href={b.whatsappUrl}
+                  href={`mailto:${b.email}`}
+                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Email</div>
+                    <div className="text-sm text-neutral-900 truncate">{b.email}</div>
+                  </div>
+                </a>
+              )}
+              {(b.waAdmin || b.whatsappUrl) && (
+                <a
+                  href={b.waAdmin ? `https://wa.me/${b.waAdmin.replace(/\D/g, '')}` : b.whatsappUrl!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition group"
@@ -213,7 +263,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">
-                      WhatsApp
+                      WhatsApp admin
                     </div>
                     <div className="text-sm text-neutral-900">Chat sekarang</div>
                   </div>

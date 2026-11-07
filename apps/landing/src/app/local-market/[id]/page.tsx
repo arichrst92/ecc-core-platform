@@ -17,6 +17,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
+import { MarketDisclaimer } from '@/components/market-disclaimer';
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
@@ -342,6 +343,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
             <p className="text-sm text-neutral-700 whitespace-pre-line">{b.lokasi}</p>
           </section>
         )}
+        <MarketDisclaimer className="mt-8" />
       </div>
     </article>
   );

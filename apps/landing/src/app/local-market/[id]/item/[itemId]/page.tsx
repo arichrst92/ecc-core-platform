@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
+import { MarketDisclaimer } from '@/components/market-disclaimer';
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
@@ -121,6 +122,7 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
             <Smartphone className="w-4 h-4" /> Buka di Els App
           </a>
         </div>
+        <MarketDisclaimer className="mt-8" />
       </div>
     </article>
   );

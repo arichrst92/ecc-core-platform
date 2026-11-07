@@ -9,6 +9,7 @@ import {
   Church,
   ArrowRight,
 } from 'lucide-react';
+import { MarketDisclaimer } from '@/components/market-disclaimer';
 import { apiGet, absoluteUrl } from '@/lib/api';
 
 export const metadata: Metadata = {
@@ -73,6 +74,7 @@ export default async function LocalMarketPage() {
           <p className="text-neutral-600">
             Dukung bisnis jemaat — dikelompokkan per cabang gereja.
           </p>
+          <MarketDisclaimer className="mt-4 text-left inline-flex" />
         </div>
       </section>
 

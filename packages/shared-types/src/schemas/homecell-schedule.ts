@@ -46,6 +46,29 @@ export const createHomecellScheduleSchema = z
   });
 export type CreateHomecellScheduleInput = z.infer<typeof createHomecellScheduleSchema>;
 
+/**
+ * Ubah jadwal pertemuan (2.4.7) — field yang dikirim saja yang diubah.
+ * Batas "maks. 30 hari lalu" hanya dicek di route bila tanggal benar-benar diganti.
+ */
+export const updateHomecellScheduleSchema = z
+  .object({
+    tanggal: z.string().date().optional(),
+    jamMulai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
+    jamSelesai: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam HH:MM').nullish(),
+    lokasi: teksSchema(500).optional(),
+    catatan: z
+      .string()
+      .trim()
+      .max(1000)
+      .nullish()
+      .transform((v) => (v ? v : v === undefined ? undefined : null)),
+  })
+  .refine((d) => !d.jamMulai || !d.jamSelesai || d.jamSelesai > d.jamMulai, {
+    message: 'Jam selesai harus setelah jam mulai.',
+    path: ['jamSelesai'],
+  });
+export type UpdateHomecellScheduleInput = z.infer<typeof updateHomecellScheduleSchema>;
+
 export const listHomecellSchedulesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   from: z.string().date().optional(),

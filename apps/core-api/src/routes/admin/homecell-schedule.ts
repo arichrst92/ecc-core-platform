@@ -22,9 +22,10 @@
  * Lihat docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
  */
 import { Router } from 'express';
-import { prisma } from '@ecc/database';
+import { prisma, type Prisma } from '@ecc/database';
 import {
   createHomecellScheduleSchema,
+  updateHomecellScheduleSchema,
   listHomecellSchedulesQuerySchema,
   scanHomecellAttendanceSchema,
   bulkScanHomecellAttendanceSchema,
@@ -115,6 +116,55 @@ homecellScheduleRouter.post('/', async (req, res) => {
       _count: undefined,
     },
   });
+});
+
+// ============================================================
+// PATCH /admin/homecell/:homecellId/schedule/:scheduleId — ubah jadwal (2.4.7)
+// PIC homecell / PIC & pastor zona / asisten / admin. Boleh walau kehadiran
+// sudah tercatat (kehadiran menempel ke pertemuan yang sama). Tanpa notifikasi.
+// ============================================================
+homecellScheduleRouter.patch('/:scheduleId', async (req, res) => {
+  const { homecellId = '', scheduleId = '' } = req.params as { homecellId?: string; scheduleId?: string };
+  if (!homecellId) throw BadRequest('homecellId required di path.');
+  const requester = await getRequester(req);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
+  const input = updateHomecellScheduleSchema.parse(req.body ?? {});
+
+  const before = await prisma.homecellSchedule.findFirst({ where: { id: scheduleId, homecellId } });
+  if (!before) throw NotFound('Jadwal tidak ditemukan.');
+
+  const data: Prisma.HomecellScheduleUpdateInput = {};
+  if (input.tanggal !== undefined && input.tanggal !== before.tanggal.toISOString().slice(0, 10)) {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    cutoff.setUTCHours(0, 0, 0, 0);
+    if (new Date(input.tanggal).getTime() < cutoff.getTime()) {
+      throw BadRequest('Tanggal tidak boleh lebih dari 30 hari yang lalu.');
+    }
+    data.tanggal = new Date(input.tanggal);
+  }
+  if (input.jamMulai !== undefined) data.jamMulai = input.jamMulai;
+  if (input.jamSelesai !== undefined) data.jamSelesai = input.jamSelesai;
+  const mulai = input.jamMulai !== undefined ? input.jamMulai : before.jamMulai;
+  const selesai = input.jamSelesai !== undefined ? input.jamSelesai : before.jamSelesai;
+  if (mulai && selesai && selesai <= mulai) throw BadRequest('Jam selesai harus setelah jam mulai.');
+  if (input.lokasi !== undefined) data.lokasi = input.lokasi;
+  if (input.catatan !== undefined) data.catatan = input.catatan;
+
+  const updated = await prisma.homecellSchedule.update({
+    where: { id: scheduleId },
+    data,
+    include: { _count: { select: { attendances: true } } },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_schedule',
+    resourceId: updated.id,
+    resourceLabel: `${updated.tanggal.toISOString().slice(0, 10)} — ${updated.lokasi}`,
+    before,
+    after: updated,
+  });
+  const { _count, ...rest } = updated;
+  res.json({ success: true, data: { ...rest, attendanceCount: _count.attendances } });
 });
 
 // ============================================================

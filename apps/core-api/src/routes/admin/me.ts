@@ -1035,6 +1035,22 @@ async function respondFamilyLink(
   input: { role?: FamilyRole; tipeRelasiId?: string },
   via: FamilyVia,
 ) {
+  // Sementara (sampai Els App 2.4.7 rilis & menu persetujuan tersedia di semua HP):
+  // persetujuan dimatikan → langsung terhubung seperti sebelumnya. Aktifkan dengan
+  // env FAMILY_APPROVAL_ENABLED=true lalu restart core-api.
+  if (process.env.FAMILY_APPROVAL_ENABLED !== 'true') {
+    const link = await upsertJemaatRelasi(jemaatId, targetId, input);
+    const t = await prisma.jemaat.findUnique({ where: { id: targetId }, select: { id: true, namaLengkap: true, kode: true } });
+    audit(req, {
+      action: 'CREATE',
+      resource: 'jemaat_relasi',
+      resourceId: link.id,
+      resourceLabel: `${link.tipeRelasi.nama} ↔ ${t?.namaLengkap ?? targetId}`,
+      metadata: { kind: `family-link-${via.toLowerCase()}`, via: via.toLowerCase(), tipe: link.tipeRelasi.nama },
+    });
+    res.status(201).json({ success: true, data: { ...link, target: t, status: 'LINKED' } });
+    return;
+  }
   const r = await createFamilyLinkRequest(jemaatId, targetId, input, via);
   const target = { id: r.target.id, namaLengkap: r.target.namaLengkap, kode: r.target.kode };
   if (r.status === 'LINKED') {

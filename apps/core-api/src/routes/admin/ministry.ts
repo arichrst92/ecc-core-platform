@@ -19,6 +19,7 @@
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
+import { requireMenuP } from '../../middleware/require-menu.js';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
@@ -847,6 +848,7 @@ ministryRouter.get('/:id/schedule', async (req, res) => {
 // POST /admin/ministry/:id/schedule
 // Body: { tanggal, ibadahId?, catatan?, assignments: [{ jemaatId, pelayananRoleId, notes? }] }
 ministryRouter.post('/:id/schedule', async (req, res) => {
+  await requireMenuP(req, 'pelayanan', 'write');
   const pelayananId = req.params.id;
   const body = req.body ?? {};
   const tanggal = typeof body.tanggal === 'string' ? new Date(body.tanggal) : null;
@@ -961,6 +963,7 @@ ministryRouter.post('/:id/schedule', async (req, res) => {
 // Body: { tanggal?, ibadahId?, catatan?, assignments? }
 // Kalau assignments dikirim → REPLACE (delete all + create fresh). Kalau tidak → keep.
 ministryRouter.patch('/:id/schedule/:scheduleId', async (req, res) => {
+  await requireMenuP(req, 'pelayanan', 'write');
   const pelayananId = req.params.id;
   const scheduleId = req.params.scheduleId;
   const body = req.body ?? {};
@@ -1038,6 +1041,7 @@ ministryRouter.patch('/:id/schedule/:scheduleId', async (req, res) => {
 
 // DELETE /admin/ministry/:id/schedule/:scheduleId
 ministryRouter.delete('/:id/schedule/:scheduleId', async (req, res) => {
+  await requireMenuP(req, 'pelayanan', 'delete');
   const pelayananId = req.params.id;
   const scheduleId = req.params.scheduleId;
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { OPEN_GATE, privacyGate } from '../../lib/privacy.js';
 import { isMobileClient } from '../../lib/client-kind.js';
 import { prisma, type Prisma } from '@ecc/database';
+import { requireMenuP } from '../../middleware/require-menu.js';
 import {
   createHomecellAreaSchema,
   updateHomecellAreaSchema,
@@ -124,6 +125,7 @@ const PERIOD_LABEL: Record<string, string> = {
   custom: 'Rentang tanggal',
 };
 homecellAreaRouter.get('/export', async (req, res) => {
+  await requireMenuP(req, 'homecell-area', 'read');
   const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
   if (!['pdf', 'html', 'print', 'csv'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf atau csv.');
   const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
@@ -365,6 +367,7 @@ homecellAreaRouter.get('/:id', async (req, res) => {
 
 // ===== Create =====
 homecellAreaRouter.post('/', async (req, res) => {
+  await requireMenuP(req, 'homecell-area', 'write');
   const input = createHomecellAreaSchema.parse(req.body);
   // Validasi PIC: harus Zone Leader
   if (input.picJemaatId) {
@@ -385,6 +388,7 @@ homecellAreaRouter.post('/', async (req, res) => {
 
 // ===== Update =====
 homecellAreaRouter.patch('/:id', async (req, res) => {
+  await requireMenuP(req, 'homecell-area', 'write');
   const input = updateHomecellAreaSchema.parse(req.body);
   if (input.picJemaatId) {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.ZONE_LEADER);
@@ -407,6 +411,7 @@ homecellAreaRouter.patch('/:id', async (req, res) => {
 
 // ===== Delete =====
 homecellAreaRouter.delete('/:id', async (req, res) => {
+  await requireMenuP(req, 'homecell-area', 'delete');
   const before = await prisma.homecellArea.findUnique({
     where: { id: req.params.id },
     include: { _count: { select: { homecells: true } } },

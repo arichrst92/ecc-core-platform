@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
+import { requireAnyMenuP } from '../../middleware/require-menu.js';
 import {
   createPelayananSchema,
   updatePelayananSchema,
@@ -75,6 +76,7 @@ pelayananRouter.get('/:id', async (req, res, next) => {
 // ===== Anggota pelayanan (Portal → Pelayanan → detail) =====
 // GET /admin/pelayanan/:id/members?search=&cabangId= → anggota aktif + cabang (dikelompokkan di Portal)
 pelayananRouter.get('/:id/members', async (req, res, next) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'read');
   if (!UUID_PARAM.test(req.params.id)) return next();
   const pel = await prisma.pelayanan.findUnique({
     where: { id: req.params.id },
@@ -129,6 +131,7 @@ pelayananRouter.get('/:id/members', async (req, res, next) => {
 // PUT /admin/pelayanan/:id/approver/:jemaatId { cabangIds: string[] } → ganti otoritas approval
 // request bergabung untuk anggota ini ([] = cabut). Anggota harus aktif.
 pelayananRouter.put('/:id/approver/:jemaatId', async (req, res, next) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
   if (!UUID_PARAM.test(req.params.id) || !UUID_PARAM.test(req.params.jemaatId)) return next();
   const { cabangIds } = z.object({ cabangIds: z.array(z.string().uuid()).max(50) }).parse(req.body ?? {});
   const member = await prisma.jemaatPelayanan.findFirst({
@@ -182,6 +185,7 @@ function memberSearchOr(search: string) {
 
 // GET /admin/pelayanan/:id/candidates?search= → cari jemaat untuk ditambahkan (+ flag sudah anggota)
 pelayananRouter.get('/:id/candidates', async (req, res, next) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'read');
   if (!UUID_PARAM.test(req.params.id)) return next();
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
   if (search.length < 2) {
@@ -215,6 +219,7 @@ pelayananRouter.get('/:id/candidates', async (req, res, next) => {
 });
 
 pelayananRouter.post('/', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
   const input = createPelayananSchema.parse(req.body);
   const created = await prisma.pelayanan.create({ data: input });
   audit(req, {
@@ -228,6 +233,7 @@ pelayananRouter.post('/', async (req, res) => {
 });
 
 pelayananRouter.patch('/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
   const input = updatePelayananSchema.parse(req.body);
   const before = await prisma.pelayanan.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Pelayanan tidak ditemukan');
@@ -244,6 +250,7 @@ pelayananRouter.patch('/:id', async (req, res) => {
 });
 
 pelayananRouter.delete('/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'delete');
   const before = await prisma.pelayanan.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Pelayanan tidak ditemukan');
   await prisma.pelayanan.delete({ where: { id: req.params.id } });
@@ -286,6 +293,7 @@ pelayananRouter.get('/role', async (req, res) => {
 });
 
 pelayananRouter.post('/role', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
   const input = createPelayananRoleSchema.parse(req.body);
   const created = await prisma.pelayananRole.create({
     data: input,
@@ -302,6 +310,7 @@ pelayananRouter.post('/role', async (req, res) => {
 });
 
 pelayananRouter.patch('/role/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
   const input = updatePelayananRoleSchema.parse(req.body);
   const before = await prisma.pelayananRole.findUnique({
     where: { id: req.params.id },
@@ -321,6 +330,7 @@ pelayananRouter.patch('/role/:id', async (req, res) => {
 });
 
 pelayananRouter.delete('/role/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'delete');
   const before = await prisma.pelayananRole.findUnique({
     where: { id: req.params.id },
     include: { pelayanan: { select: { nama: true } } },
@@ -341,6 +351,7 @@ pelayananRouter.delete('/role/:id', async (req, res) => {
 
 // List penugasan untuk 1 jemaat (semua active + history)
 pelayananRouter.get('/assign/jemaat/:jemaatId', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'jemaat'], 'read');
   const data = await prisma.jemaatPelayanan.findMany({
     where: { jemaatId: req.params.jemaatId },
     orderBy: [{ isActive: 'desc' }, { tanggalMulai: 'desc' }],
@@ -353,6 +364,7 @@ pelayananRouter.get('/assign/jemaat/:jemaatId', async (req, res) => {
 });
 
 pelayananRouter.post('/assign', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'jemaat'], 'write');
   const input = assignJemaatPelayananSchema.parse(req.body);
   // Validasi: role harus belong ke pelayanan yang sama
   const role = await prisma.pelayananRole.findUnique({ where: { id: input.pelayananRoleId } });
@@ -389,6 +401,7 @@ pelayananRouter.post('/assign', async (req, res) => {
 });
 
 pelayananRouter.patch('/assign/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'jemaat'], 'write');
   const input = updateJemaatPelayananSchema.parse(req.body);
   const before = await prisma.jemaatPelayanan.findUnique({
     where: { id: req.params.id },
@@ -420,6 +433,7 @@ pelayananRouter.patch('/assign/:id', async (req, res) => {
 });
 
 pelayananRouter.delete('/assign/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'jemaat'], 'delete');
   const before = await prisma.jemaatPelayanan.findUnique({
     where: { id: req.params.id },
     include: {
@@ -443,6 +457,7 @@ pelayananRouter.delete('/assign/:id', async (req, res) => {
 
 // List pelayanan yang melayani di 1 ibadah
 pelayananRouter.get('/ibadah-link/ibadah/:ibadahId', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'read');
   const data = await prisma.ibadahPelayanan.findMany({
     where: { ibadahId: req.params.ibadahId },
     include: { pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } } },
@@ -452,6 +467,7 @@ pelayananRouter.get('/ibadah-link/ibadah/:ibadahId', async (req, res) => {
 });
 
 pelayananRouter.post('/ibadah-link', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'write');
   const input = linkIbadahPelayananSchema.parse(req.body);
   const created = await prisma.ibadahPelayanan.create({
     data: input,
@@ -471,6 +487,7 @@ pelayananRouter.post('/ibadah-link', async (req, res) => {
 });
 
 pelayananRouter.delete('/ibadah-link/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'delete');
   const before = await prisma.ibadahPelayanan.findUnique({
     where: { id: req.params.id },
     include: {
@@ -499,6 +516,7 @@ pelayananRouter.delete('/ibadah-link/:id', async (req, res) => {
 //     semantics: kalau ada override untuk tanggal → pakai override only;
 //     kalau tidak → pakai default).
 pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'read');
   const tanggalStr = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
 
   const all = await prisma.ibadahPelayananPetugas.findMany({
@@ -534,6 +552,7 @@ pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
 
 // Assign petugas (default ATAU override per tanggal)
 pelayananRouter.post('/petugas', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'write');
   const input = assignPetugasSchema.parse(req.body);
 
   // Validasi: pelayananRoleId harus belong ke pelayanan dari ibadahPelayanan
@@ -579,6 +598,7 @@ pelayananRouter.post('/petugas', async (req, res) => {
 
 // Update petugas (mis. ganti role)
 pelayananRouter.patch('/petugas/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'write');
   const input = updatePetugasSchema.parse(req.body);
   const before = await prisma.ibadahPelayananPetugas.findUnique({
     where: { id: req.params.id },
@@ -615,6 +635,7 @@ pelayananRouter.patch('/petugas/:id', async (req, res) => {
 
 // Delete petugas
 pelayananRouter.delete('/petugas/:id', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'delete');
   const before = await prisma.ibadahPelayananPetugas.findUnique({
     where: { id: req.params.id },
     include: {

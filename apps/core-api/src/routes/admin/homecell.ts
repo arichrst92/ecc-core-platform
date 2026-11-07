@@ -16,6 +16,7 @@ import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { MAPS_URL_ERROR, resolveMapsLocation } from '../../lib/geo.js';
 import { assertCanManageHomecell, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { homecellBoardRouter } from './homecell-board.js';
 import {
   getLastAttendanceMap,
@@ -29,6 +30,21 @@ import { renderHomecellReportHtml, type HcReportRow } from '../../lib/homecell-r
 import { homecellScheduleRouter } from './homecell-schedule.js';
 
 export const homecellRouter = Router();
+
+/**
+ * Akses kelola satu homecell: PIC homecell / PIC & pastor zona / Fulltimer
+ * (opsional asisten), ATAU pemegang menu Portal "homecell" pada level tsb.
+ */
+async function assertHomecellAccess(
+  req: import('express').Request,
+  homecellId: string,
+  level: 'read' | 'write' | 'delete',
+  opts: { allowAsisten?: boolean } = {},
+) {
+  if (!req.user?.jemaatId) throw Unauthorized();
+  if (await hasMenuAccessFor(req.user, 'homecell', level)) return;
+  await assertCanManageHomecell(homecellId, req.user.jemaatId, req.user.isFulltimer === true, opts);
+}
 
 // Sub-router: /:homecellId/schedule/* — jadwal pertemuan + QR attendance.
 // Lihat docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
@@ -338,6 +354,7 @@ const fmtTgl = (ymdStr: string | null) =>
 
 
 homecellRouter.get('/export', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'read');
   const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
   if (!['pdf', 'html', 'print'].includes(format)) throw BadRequest('Format tidak dikenali. Pakai format=pdf.');
   const search = typeof req.query.search === 'string' && req.query.search.trim() ? req.query.search.trim() : undefined;
@@ -382,6 +399,7 @@ homecellRouter.get('/export', async (req, res) => {
 // ===== Statistik satu homecell (halaman detail portal; isi sama dengan PDF) =====
 // GET /admin/homecell/:id/stats?periode=&from=&to=
 homecellRouter.get('/:id/stats', async (req, res) => {
+  await assertHomecellAccess(req, req.params.id, 'read', { allowAsisten: true });
   const str = (k: string) => (typeof req.query[k] === 'string' && (req.query[k] as string).trim() ? (req.query[k] as string).trim() : undefined);
   const period = resolvePeriod(str('periode'), str('from'), str('to'));
   const rows = await buildHomecellReportRows({ id: req.params.id }, period);
@@ -394,6 +412,8 @@ homecellRouter.get('/:id/stats', async (req, res) => {
 
 // ===== Detail =====
 homecellRouter.get('/:id', async (req, res) => {
+  // Detail + daftar anggota: PIC / zona / asisten / admin / menu Homecell.
+  await assertHomecellAccess(req, req.params.id, 'read', { allowAsisten: true });
   const item = await prisma.homecell.findUnique({
     where: { id: req.params.id },
     include: {
@@ -522,6 +542,7 @@ async function resolveLokasi(mapsUrl: string | null | undefined) {
 
 // ===== Create =====
 homecellRouter.post('/', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'write');
   const input = createHomecellSchema.parse(req.body);
   if (input.picJemaatId) {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.HOMECELL_LEADER);
@@ -540,6 +561,7 @@ homecellRouter.post('/', async (req, res) => {
 
 // ===== Update =====
 homecellRouter.patch('/:id', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'write');
   const input = updateHomecellSchema.parse(req.body);
   if (input.picJemaatId) {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.HOMECELL_LEADER);
@@ -570,6 +592,7 @@ homecellRouter.patch('/:id', async (req, res) => {
 
 // ===== Delete =====
 homecellRouter.delete('/:id', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'delete');
   const before = await prisma.homecell.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Homecell tidak ditemukan');
   await prisma.homecell.delete({ where: { id: req.params.id } }); // CASCADE members
@@ -589,6 +612,7 @@ homecellRouter.delete('/:id', async (req, res) => {
 
 // Add member by jemaatId
 homecellRouter.post('/:id/members', async (req, res) => {
+  await assertHomecellAccess(req, req.params.id, 'write');
   const homecellId = req.params.id;
   const input = addHomecellMemberSchema.parse(req.body);
 
@@ -624,6 +648,7 @@ homecellRouter.post('/:id/members', async (req, res) => {
 
 // Add member by kode jemaat (scan QR di mobile PIC homecell)
 homecellRouter.post('/:id/members/by-kode', async (req, res) => {
+  await assertHomecellAccess(req, req.params.id, 'write');
   const homecellId = req.params.id;
   const kode = typeof req.body?.kode === 'string' ? req.body.kode.toUpperCase().trim() : '';
   if (!kode) throw BadRequest('Field "kode" wajib');
@@ -665,6 +690,7 @@ homecellRouter.post('/:id/members/by-kode', async (req, res) => {
 
 // Update member (mark keluar / catatan)
 homecellRouter.patch('/:id/members/:memberId', async (req, res) => {
+  await assertHomecellAccess(req, req.params.id, 'write');
   const input = updateHomecellMemberSchema.parse(req.body);
   const before = await prisma.homecellMember.findUnique({
     where: { id: req.params.memberId },
@@ -719,8 +745,7 @@ homecellRouter.patch('/:id/members/:memberId', async (req, res) => {
 // authorization di-enforce via filter di list endpoint.
 homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
   // Hanya PIC homecell, PIC / pastor zona, atau admin (asisten tidak).
-  if (!req.user?.jemaatId) throw Unauthorized();
-  await assertCanManageHomecell(req.params.id, req.user.jemaatId, req.user.isFulltimer === true);
+  await assertHomecellAccess(req, req.params.id, 'delete');
   // Alasan dikeluarkan (2.4.7) — ?alasan=… ; app lama tidak mengirim.
   const alasan = typeof req.query.alasan === 'string' ? req.query.alasan.trim().slice(0, 300) || null : null;
   const before = await prisma.homecellMember.findFirst({
@@ -761,6 +786,7 @@ homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
 
 // Remove member (hard delete)
 homecellRouter.delete('/:id/members/:memberId', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'delete');
   const before = await prisma.homecellMember.findUnique({
     where: { id: req.params.memberId },
     include: { jemaat: { select: { namaLengkap: true } }, homecell: { select: { nama: true } } },

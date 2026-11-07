@@ -39,7 +39,7 @@ import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../l
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
-import { distanceKm, resolveMapsLocation, type LatLng } from '../../lib/geo.js';
+import { MAPS_URL_ERROR, distanceKm, resolveMapsLocation, type LatLng } from '../../lib/geo.js';
 import { scheduleFileSelect } from './homecell-schedule.js';
 
 export const meHomecellRouter = Router();
@@ -907,7 +907,7 @@ meHomecellRouter.patch('/:id', async (req, res) => {
       const loc = await resolveMapsLocation(input.mapsUrl);
       if (!loc) {
         throw BadRequest(
-          'Koordinat tidak ditemukan di link tersebut. Buka Google Maps, tekan lama titik lokasi, lalu salin koordinat (mis. -6.2088, 106.8456) atau tautan "Bagikan".',
+          MAPS_URL_ERROR,
         );
       }
       Object.assign(data, { mapsUrl: input.mapsUrl, latitude: loc.lat, longitude: loc.lng });
@@ -961,7 +961,7 @@ meHomecellRouter.patch('/:id/lokasi', async (req, res) => {
     const loc = await resolveMapsLocation(mapsUrl);
     if (!loc) {
       throw BadRequest(
-        'Koordinat tidak ditemukan di link tersebut. Buka Google Maps, tekan lama titik lokasi, lalu salin koordinat (mis. -6.2088, 106.8456) atau tautan "Bagikan".',
+        MAPS_URL_ERROR,
       );
     }
     data = { mapsUrl, latitude: loc.lat, longitude: loc.lng };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { distanceKm, isShortMapsLink, parseMapsCoordinates } from './geo.js';
+import { distanceKm, extractCoordsFromMapsHtml, isMapsLink, isShortMapsLink, parseMapsCoordinates, placeTextFromMapsUrl } from './geo.js';
 
 describe('parseMapsCoordinates', () => {
   it('koordinat polos', () => {
@@ -54,4 +54,32 @@ describe('presisi koordinat (7 angka di belakang koma)', () => {
       lng: 106.8271837,
     }));
   it('digit sedikit tetap apa adanya', () => expect(parseMapsCoordinates('-6.2088, 106.8456')).toEqual({ lat: -6.2088, lng: 106.8456 }));
+});
+
+describe('link Google Maps tanpa koordinat', () => {
+  it('isMapsLink', () => {
+    expect(isMapsLink('https://maps.app.goo.gl/AbCdEf123')).toBe(true);
+    expect(isMapsLink('https://www.google.com/maps/place/Gereja+ECC/data=!4m2!3m1!1s0x2e6')).toBe(true);
+    expect(isMapsLink('https://maps.google.com/?q=ECC+Bandung&ftid=0x2e68:0x1')).toBe(true);
+    expect(isMapsLink('https://www.google.com/search?q=ecc')).toBe(false);
+    expect(isMapsLink('https://example.com/maps')).toBe(false);
+  });
+
+  it('titik dari HTML halaman Google Maps', () => {
+    expect(
+      extractCoordsFromMapsHtml('<meta content="https://maps.google.com/maps/api/staticmap?center=-6.8915%2C107.6107&amp;zoom=16" property="og:image">'),
+    ).toEqual({ lat: -6.8915, lng: 107.6107 });
+    expect(extractCoordsFromMapsHtml('foo !3d-6.9!4d107.61 bar')).toEqual({ lat: -6.9, lng: 107.61 });
+    expect(extractCoordsFromMapsHtml('window.APP_INITIALIZATION_STATE=[[[2541.6,107.6107,-6.8915],[0,0,0]')).toEqual({
+      lat: -6.8915,
+      lng: 107.6107,
+    });
+    expect(extractCoordsFromMapsHtml('<html>tidak ada</html>')).toBeNull();
+  });
+
+  it('nama tempat dari URL', () => {
+    expect(placeTextFromMapsUrl('https://maps.google.com/?q=Gereja+ECC+Bandung&ftid=0x1:0x2')).toBe('Gereja ECC Bandung');
+    expect(placeTextFromMapsUrl('https://www.google.com/maps/place/Jl.+Dago+No.+12,+Bandung/data=!4m2')).toBe('Jl. Dago No. 12, Bandung');
+    expect(placeTextFromMapsUrl('https://maps.google.com/?q=-6.2,106.8')).toBeNull();
+  });
 });

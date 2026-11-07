@@ -14,7 +14,7 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { resolveMapsLocation } from '../../lib/geo.js';
+import { MAPS_URL_ERROR, resolveMapsLocation } from '../../lib/geo.js';
 import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { homecellBoardRouter } from './homecell-board.js';
 import {
@@ -514,7 +514,7 @@ async function resolveLokasi(mapsUrl: string | null | undefined) {
   const loc = await resolveMapsLocation(mapsUrl);
   if (!loc) {
     throw BadRequest(
-      'Koordinat tidak ditemukan di link Google Maps. Tempel koordinat (mis. -6.2088, 106.8456) atau link "Bagikan" dari Google Maps.',
+      MAPS_URL_ERROR,
     );
   }
   return { mapsUrl, latitude: loc.lat, longitude: loc.lng };

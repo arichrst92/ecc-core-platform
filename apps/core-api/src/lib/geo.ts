@@ -8,6 +8,8 @@
  *   - https://maps.google.com/?q=-6.2088,106.8456   (juga ll=, query=, destination=)
  *   - Link pendek (maps.app.goo.gl / goo.gl/maps) → di-resolve dulu via
  *     redirect (resolveMapsLocation), lalu di-parse.
+ *   - Link TANPA koordinat (…?q=Nama+Tempat, /maps/place/Nama/…) → titik
+ *     diambil dari halaman Google Maps, cadangan geocoding OpenStreetMap.
  */
 
 export interface LatLng {
@@ -66,31 +68,141 @@ export function isShortMapsLink(input: string): boolean {
   return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\//i.test(input.trim());
 }
 
+/** Link Google Maps (pendek / panjang / maps.google.*). */
+export function isMapsLink(input: string): boolean {
+  if (isShortMapsLink(input)) return true;
+  try {
+    const u = new URL(input.trim());
+    if (!/^https?:$/.test(u.protocol)) return false;
+    const h = u.hostname.toLowerCase();
+    if (/^maps\.google\.[a-z.]+$/.test(h)) return true;
+    return /(^|\.)google\.[a-z.]+$/.test(h) && u.pathname.startsWith('/maps');
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Parse koordinat; kalau link pendek, ikuti redirect (maks 5 lompatan,
- * timeout 5 detik) lalu parse URL tujuan.
+ * Koordinat dari isi halaman Google Maps (untuk link tanpa koordinat, mis.
+ * maps.app.goo.gl yang berujung ke ?q=Nama+Tempat&ftid=… atau /place/Nama/data=…).
+ * Urutan: penanda tempat (!3d!4d), gambar peta statis (center= / markers=),
+ * link kanonik (/@lat,lng), lalu pusat tampilan awal (APP_INITIALIZATION_STATE).
+ */
+export function extractCoordsFromMapsHtml(html: string): LatLng | null {
+  const pats: [RegExp, boolean][] = [
+    [new RegExp(`!3d${NUM}!4d${NUM}`), false],
+    [new RegExp(`[?&;](?:center|markers)=${NUM}(?:%2C|,)\\s*${NUM}`), false],
+    [new RegExp(`/@${NUM},${NUM},\\d`), false],
+    [new RegExp(`APP_INITIALIZATION_STATE=\\[\\[\\[[\\d.]+,${NUM},${NUM}\\]`), true], // [zoom, lng, lat]
+  ];
+  for (const [re, lngFirst] of pats) {
+    const m = re.exec(html);
+    if (!m) continue;
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const v = lngFirst ? valid(b, a) : valid(a, b);
+    if (v) return v;
+  }
+  return null;
+}
+
+/** Nama tempat / alamat dari URL Google Maps tanpa koordinat (untuk geocoding). */
+export function placeTextFromMapsUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    for (const k of ['q', 'query', 'destination', 'daddr']) {
+      const v = u.searchParams.get(k);
+      if (v && !parseMapsCoordinates(v) && /\p{L}/u.test(v)) return v.replace(/\+/g, ' ').trim();
+    }
+    const m = /\/maps\/(?:place|search)\/([^/]+)/.exec(u.pathname);
+    if (m) {
+      const t = decodeURIComponent(m[1]!).replace(/\+/g, ' ').trim();
+      if (t && /\p{L}/u.test(t)) return t;
+    }
+  } catch {
+    // abaikan
+  }
+  return null;
+}
+
+const UA_BROWSER =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Geocoding nama tempat / alamat via OpenStreetMap Nominatim (cadangan terakhir). */
+async function geocodeText(text: string): Promise<LatLng | null> {
+  try {
+    const q = encodeURIComponent(text.slice(0, 300));
+    const res = await fetchWithTimeout(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`,
+      { headers: { 'User-Agent': 'ECC-Core-Platform/1.0 (eccchurch.global)', 'Accept-Language': 'id,en' } },
+      6000,
+    );
+    if (!res.ok) return null;
+    const arr = (await res.json()) as { lat?: string; lon?: string }[];
+    const first = arr[0];
+    return first ? valid(Number(first.lat), Number(first.lon)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Koordinat dari teks/link Google Maps:
+ *  1. koordinat langsung di teks/URL;
+ *  2. link pendek → ikuti redirect (maks 6), parse tiap URL;
+ *  3. link tanpa koordinat → baca halaman Google Maps & ambil titiknya;
+ *  4. cadangan: geocoding nama tempat / alamat dari link (OpenStreetMap).
  */
 export async function resolveMapsLocation(input: string): Promise<LatLng | null> {
   const direct = parseMapsCoordinates(input);
-  if (direct || !isShortMapsLink(input)) return direct;
+  if (direct || !isMapsLink(input)) return direct;
   let url = input.trim();
-  for (let i = 0; i < 5; i++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
+  const headers = {
+    'User-Agent': UA_BROWSER,
+    'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
+    // Lewati halaman persetujuan cookie Google (consent.google.com).
+    Cookie: 'CONSENT=YES+cb; SOCS=CAI',
+  };
+  // 2. ikuti redirect manual
+  for (let i = 0; i < 6; i++) {
+    let res: Response;
     try {
-      const res = await fetch(url, { method: 'GET', redirect: 'manual', signal: ctrl.signal });
-      const loc = res.headers.get('location');
-      if (!loc) return null;
-      url = new URL(loc, url).toString();
-      const found = parseMapsCoordinates(url);
-      if (found) return found;
+      res = await fetchWithTimeout(url, { method: 'GET', redirect: 'manual', headers }, 5000);
     } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
+      break;
     }
+    const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!loc) {
+      // 3. halaman akhir → cari titik di HTML
+      try {
+        const html = (await res.text()).slice(0, 3_000_000);
+        const found = extractCoordsFromMapsHtml(html);
+        if (found) return found;
+      } catch {
+        // abaikan
+      }
+      break;
+    }
+    const next = new URL(loc, url);
+    // consent.google.com?continue=<url asli> → lanjut ke URL asli
+    const cont = next.hostname.startsWith('consent.') ? next.searchParams.get('continue') : null;
+    url = cont ?? next.toString();
+    const found = parseMapsCoordinates(url);
+    if (found) return found;
   }
-  return null;
+  // 4. geocoding nama tempat / alamat
+  const text = placeTextFromMapsUrl(url) ?? placeTextFromMapsUrl(input.trim());
+  return text ? geocodeText(text) : null;
 }
 
 /** Jarak garis lurus (km) — rumus haversine. */
@@ -120,7 +232,7 @@ export async function mapsUrlToFields(
 }
 
 export const MAPS_URL_ERROR =
-  'Koordinat tidak ditemukan di link Google Maps. Tempel koordinat (mis. -6.2088, 106.8456) atau link "Bagikan" dari Google Maps.';
+  'Lokasi tidak ditemukan dari link Google Maps tersebut. Coba link "Bagikan" dari Google Maps, atau tempel koordinat (mis. -6.2088, 106.8456).';
 
 /**
  * Radius self check-in butuh titik lokasi: titik ibadah/event sendiri, atau

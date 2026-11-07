@@ -12,10 +12,10 @@ import {
   updateHomecellMemberSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { MAPS_URL_ERROR, resolveMapsLocation } from '../../lib/geo.js';
-import { assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { assertCanManageHomecell, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { homecellBoardRouter } from './homecell-board.js';
 import {
   getLastAttendanceMap,
@@ -718,6 +718,11 @@ homecellRouter.patch('/:id/members/:memberId', async (req, res) => {
 // yang lewat /admin/* di-allow (sama dengan endpoint admin lain). Mobile
 // authorization di-enforce via filter di list endpoint.
 homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
+  // Hanya PIC homecell, PIC / pastor zona, atau admin (asisten tidak).
+  if (!req.user?.jemaatId) throw Unauthorized();
+  await assertCanManageHomecell(req.params.id, req.user.jemaatId, req.user.isFulltimer === true);
+  // Alasan dikeluarkan (2.4.7) — ?alasan=… ; app lama tidak mengirim.
+  const alasan = typeof req.query.alasan === 'string' ? req.query.alasan.trim().slice(0, 300) || null : null;
   const before = await prisma.homecellMember.findFirst({
     where: { homecellId: req.params.id, jemaatId: req.params.jemaatId },
     include: { jemaat: { select: { namaLengkap: true } }, homecell: { select: { nama: true } } },
@@ -739,16 +744,17 @@ homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
       isActive: false,
       isAsisten: false,
       tanggalKeluar: new Date(),
+      alasanKeluar: alasan,
     },
   });
   audit(req, {
     action: 'UPDATE',
     resource: 'homecell_member',
     resourceId: updated.id,
-    resourceLabel: `Remove ${before.jemaat.namaLengkap} from ${before.homecell.nama}`,
+    resourceLabel: `Remove ${before.jemaat.namaLengkap} from ${before.homecell.nama}${alasan ? ` — ${alasan}` : ''}`,
     before,
     after: updated,
-    metadata: { kind: 'homecell-member-soft-remove' },
+    metadata: { kind: 'homecell-member-soft-remove', alasan },
   });
   res.json({ success: true, data: updated });
 });

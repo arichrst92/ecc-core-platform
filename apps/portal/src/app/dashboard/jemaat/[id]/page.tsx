@@ -1660,6 +1660,8 @@ interface JemaatProfileData {
     id: string;
     tanggalBergabung: string;
     tanggalKeluar: string | null;
+    /** Alasan dikeluarkan dari homecell (2.4.7). */
+    alasanKeluar?: string | null;
     isActive: boolean;
     /** PIC = pemimpin homecell, ANGGOTA = anggota biasa. */
     peran?: 'PIC' | 'ANGGOTA';
@@ -2159,6 +2161,7 @@ function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecell
               <div className="text-[11px] text-neutral-500 mt-1 flex flex-wrap gap-x-3">
                 <span>Bergabung {formatDate(h.tanggalBergabung)}</span>
                 {h.tanggalKeluar && <span>Keluar {formatDate(h.tanggalKeluar)}</span>}
+                {h.alasanKeluar && <span>Alasan: {h.alasanKeluar}</span>}
                 {!h.isActive && <span className="text-neutral-400 italic">Nonaktif</span>}
               </div>
             </div>

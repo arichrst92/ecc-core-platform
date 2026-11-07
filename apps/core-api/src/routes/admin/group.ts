@@ -348,7 +348,8 @@ groupRouter.get('/:id', async (req, res) => {
       where: { groupId: group.id, jemaatId: requester.jemaatId, status: 'PENDING' },
       select: { id: true, createdAt: true },
     }),
-    isPicOrAdmin
+    // Jumlah permintaan hanya untuk PIC (Fulltimer: hanya di Portal).
+    group.picJemaatId === requester.jemaatId || (requester.isFulltimer && !isMobileClient(req))
       ? prisma.groupJoinRequest.count({ where: { groupId: group.id, status: 'PENDING' } })
       : Promise.resolve(0),
   ]);
@@ -770,10 +771,25 @@ groupRouter.delete('/:id/join-request', async (req, res) => {
   res.json({ success: true, data: { id: pending.id, status: 'CANCELLED' } });
 });
 
+/**
+ * Siapa yang boleh melihat & memproses permintaan bergabung group:
+ * hanya PIC group. Admin Fulltimer hanya dari Portal — di app, Fulltimer
+ * yang bukan PIC tidak melihat permintaan (privasi pemohon).
+ */
+async function canReviewGroupRequests(req: import('express').Request, groupId: string, jemaatId: string, isFulltimer: boolean) {
+  if (isFulltimer && !isMobileClient(req)) return true;
+  const g = await prisma.group.findUnique({ where: { id: groupId }, select: { picJemaatId: true } });
+  if (!g) throw NotFound('Group tidak ditemukan');
+  return g.picJemaatId === jemaatId;
+}
+
 // GET /:id/join-requests — [PIC/admin] permintaan PENDING
 groupRouter.get('/:id/join-requests', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+    // App lama memanggil ini untuk Fulltimer non-PIC → kosongkan, jangan error.
+    return res.json({ success: true, data: [] });
+  }
   const data = await prisma.groupJoinRequest.findMany({
     where: { groupId: req.params.id, status: 'PENDING' },
     orderBy: { createdAt: 'asc' },
@@ -809,7 +825,9 @@ async function loadGroupRequest(groupId: string, reqId: string) {
 // POST /:id/join-requests/:reqId/approve — [PIC/admin] terima → jadi anggota
 groupRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+    throw Forbidden('Hanya PIC group yang dapat memproses permintaan bergabung.');
+  }
   const request = await loadGroupRequest(req.params.id, req.params.reqId);
   await prisma.$transaction(async (tx) => {
     const claimed = await tx.groupJoinRequest.updateMany({
@@ -849,7 +867,9 @@ groupRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
 // POST /:id/join-requests/:reqId/reject — [PIC/admin] tolak { reason? }
 groupRouter.post('/:id/join-requests/:reqId/reject', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+    throw Forbidden('Hanya PIC group yang dapat memproses permintaan bergabung.');
+  }
   const { reason } = groupRejectSchema.parse(req.body ?? {});
   const request = await loadGroupRequest(req.params.id, req.params.reqId);
   const claimed = await prisma.groupJoinRequest.updateMany({

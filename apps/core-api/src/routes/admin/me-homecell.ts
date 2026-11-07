@@ -38,6 +38,7 @@ import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { MAPS_URL_ERROR, distanceKm, resolveMapsLocation, type LatLng } from '../../lib/geo.js';
 import { scheduleFileSelect } from './homecell-schedule.js';
@@ -133,6 +134,18 @@ async function targetCabangId(req: Request, jemaatId: string): Promise<string> {
   const j = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true } });
   if (!j) throw NotFound('Jemaat tidak ditemukan');
   return j.cabangId;
+}
+
+/**
+ * Permintaan bergabung / tamu homecell hanya diproses PIC homecell-nya.
+ * Fulltimer hanya lewat Portal (di app tidak melihat daftar permintaan).
+ */
+async function assertRequestReviewer(req: Request, homecellId: string) {
+  const u = me(req);
+  if (u.isFulltimer && !isMobileClient(req)) return;
+  const hc = await prisma.homecell.findUnique({ where: { id: homecellId }, select: { picJemaatId: true } });
+  if (!hc) throw NotFound('Homecell tidak ditemukan');
+  if (hc.picJemaatId !== u.jemaatId) throw Forbidden('Hanya pemimpin homecell ini yang dapat memproses permintaan bergabung.');
 }
 
 /** Leader = PIC homecell (Fulltimer boleh juga, mis. pastor/admin). */
@@ -313,7 +326,7 @@ async function loadRequest(reqId: string) {
 meHomecellRouter.post('/join-requests/:reqId/approve', async (req, res) => {
   const u = me(req);
   const request = await loadRequest(req.params.reqId);
-  await assertLeaderOf(req, request.homecellId);
+  await assertRequestReviewer(req, request.homecellId);
 
   const member = await prisma.$transaction(async (tx) => {
     const claimed = await tx.homecellJoinRequest.updateMany({
@@ -363,7 +376,7 @@ meHomecellRouter.post('/join-requests/:reqId/reject', async (req, res) => {
   const u = me(req);
   const { reason } = rejectSchema.parse(req.body ?? {});
   const request = await loadRequest(req.params.reqId);
-  await assertLeaderOf(req, request.homecellId);
+  await assertRequestReviewer(req, request.homecellId);
 
   const claimed = await prisma.homecellJoinRequest.updateMany({
     where: { id: request.id, status: 'PENDING' },
@@ -434,7 +447,7 @@ async function loadGuestRequest(reqId: string) {
 meHomecellRouter.post('/guest-requests/:reqId/approve', async (req, res) => {
   const u = me(req);
   const r = await loadGuestRequest(req.params.reqId);
-  await assertLeaderOf(req, r.homecellId);
+  await assertRequestReviewer(req, r.homecellId);
   if (r.status !== 'PENDING') throw new ApiError(409, 'JOIN_REQUEST_NOT_PENDING', 'Permintaan ini sudah diproses.');
 
   const { tamu, member } = await resolveTamu({ nama: r.nama, noHp: r.noHp, kategori: (r.kategori as 'VISITOR' | 'NEW_COMER' | null) ?? undefined }, r.homecell.area.cabangId);
@@ -486,7 +499,7 @@ meHomecellRouter.post('/guest-requests/:reqId/reject', async (req, res) => {
   const u = me(req);
   const { reason } = rejectSchema.parse(req.body ?? {});
   const r = await loadGuestRequest(req.params.reqId);
-  await assertLeaderOf(req, r.homecellId);
+  await assertRequestReviewer(req, r.homecellId);
   const claimed = await prisma.homecellGuestRequest.updateMany({
     where: { id: r.id, status: 'PENDING' },
     data: { status: 'REJECTED', rejectReason: reason ?? null, reviewedById: u.jemaatId, reviewedAt: new Date() },

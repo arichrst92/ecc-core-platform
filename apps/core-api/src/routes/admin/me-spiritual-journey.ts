@@ -6,7 +6,7 @@
  * status tahap tersebut sebagai "cara mendapatkan".
  *
  * 2.4.6 — request update tahap (disetujui admin di Portal):
- *   POST   /admin/me/spiritual-journey/request      { stepId, catatan }
+ *   POST   /admin/me/spiritual-journey/request      { stepId, catatan? }
  *   DELETE /admin/me/spiritual-journey/request/:id  → batalkan (masih menunggu)
  * GET / juga mengirim `request` = request terakhir (menunggu / hasil terakhir).
  */
@@ -106,7 +106,13 @@ meSpiritualJourneyRouter.get('/', async (req, res) => {
 
 const requestSchema = z.object({
   stepId: z.string().uuid('Pilih tahap.'),
-  catatan: z.string().trim().min(3, 'Ceritakan singkat (min. 3 karakter).').max(1000),
+  // Opsional (2.4.7): kosong → null.
+  catatan: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullish()
+    .transform((v) => (v ? v : null)),
 });
 
 meSpiritualJourneyRouter.post('/request', async (req, res) => {

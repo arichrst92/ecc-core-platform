@@ -16,6 +16,7 @@ import {
   X,
   User as UserIcon,
   ExternalLink,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -52,6 +53,7 @@ interface BusinessItem {
   whatsappUrl: string | null;
   waAdmin?: string | null;
   email?: string | null;
+  viewCount?: number;
   companyProfileUrl: string | null;
   socialLinks: SocialLink[] | null;
   isActive: boolean;
@@ -382,6 +384,10 @@ function BusinessCard({
         {b.industri && (
           <div className="text-xs text-neutral-500 -mt-1">{b.industri}</div>
         )}
+        <div className="flex items-center gap-1 text-xs text-neutral-500">
+          <Eye className="w-3 h-3" />
+          {(b.viewCount ?? 0).toLocaleString('id-ID')} kunjungan
+        </div>
         <div className="flex items-center gap-1.5 text-xs text-neutral-500">
           {b.isOnline ? (
             <>
@@ -617,6 +623,7 @@ interface KatalogItem {
   fotoUrls: string[];
   isActive: boolean;
   isHiddenByAdmin: boolean;
+  viewCount?: number;
 }
 
 function hargaText(it: KatalogItem) {
@@ -703,6 +710,10 @@ function KatalogList({ businessId, apiBase }: { businessId: string; apiBase: str
                 <div className="text-[10px] font-semibold text-neutral-500 uppercase">{it.jenis === 'JASA' ? 'Jasa' : 'Produk'}</div>
                 <div className="text-sm font-medium text-neutral-900 truncate">{it.nama}</div>
                 <div className="text-xs text-brand-700 font-semibold">{hargaText(it)}</div>
+                <div className="flex items-center gap-1 text-[10px] text-neutral-500 mt-0.5">
+                  <Eye className="w-3 h-3" />
+                  {(it.viewCount ?? 0).toLocaleString('id-ID')} kunjungan
+                </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-[10px] text-neutral-500">
                     {it.isHiddenByAdmin ? 'Disembunyikan admin' : !it.isActive ? 'Disembunyikan pemilik' : 'Tampil'}

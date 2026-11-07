@@ -17,6 +17,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
+import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
 interface SocialLink {
@@ -91,6 +92,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
 
   return (
     <article className="py-8 lg:py-12">
+      <MarketViewPing id={b.id} />
       <div className="container-page max-w-3xl mx-auto">
         <Link
           href="/local-market"

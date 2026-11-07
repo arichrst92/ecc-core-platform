@@ -31,7 +31,7 @@ import {
   type SocialUsernames,
 } from '@ecc/shared-types';
 import { z } from 'zod';
-import { serializeItem, publicItemsOf, localMarketMaxItems } from '../../lib/local-market.js';
+import { serializeItem, publicItemsOf, localMarketMaxItems, hitView } from '../../lib/local-market.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -430,7 +430,23 @@ meLocalMarketRouter.get('/:id', async (req, res) => {
   if (hidden && !isOwner) {
     throw NotFound('Bisnis tidak ditemukan'); // sembunyikan keberadaannya
   }
+  if (!isOwner && req.user.jemaatId) void hitView('biz', biz.id, `j:${req.user.jemaatId}`);
   res.json({ success: true, data: { ...biz, items: await publicItemsOf(biz.id) } });
+});
+
+// POST /admin/me/local-market/:id/item/:itemId/view — hitung kunjungan item (app 2.4.7).
+meLocalMarketRouter.post('/:id/item/:itemId/view', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const { id = '', itemId = '' } = req.params as { id?: string; itemId?: string };
+  const item = await prisma.localBusinessItem.findFirst({
+    where: { id: itemId, businessId: id },
+    select: { id: true, business: { select: { ownerJemaatId: true } } },
+  });
+  if (!item) throw NotFound('Item tidak ditemukan');
+  if (item.business.ownerJemaatId !== req.user.jemaatId && req.user.jemaatId) {
+    await hitView('item', item.id, `j:${req.user.jemaatId}`);
+  }
+  res.json({ success: true, data: { ok: true } });
 });
 
 // ============================================================

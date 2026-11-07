@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
+import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
 interface ItemDetail extends KatalogItem {
@@ -61,6 +62,7 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
 
   return (
     <article className="py-8 lg:py-12">
+      <MarketViewPing id={b.id} itemId={it.id} />
       <div className="container-page max-w-3xl mx-auto">
         <Link href={`/local-market/${b.id}`} className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 mb-6">
           <ArrowLeft className="w-4 h-4" />

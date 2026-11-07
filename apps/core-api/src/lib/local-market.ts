@@ -33,3 +33,30 @@ export function hargaLabel(it: Pick<LocalItemDto, 'hargaTipe' | 'harga' | 'mataU
   const num = it.harga.toLocaleString(it.mataUang === 'IDR' ? 'id-ID' : 'en-US', { maximumFractionDigits: 2 });
   return `${it.hargaTipe === 'MULAI_DARI' ? 'Mulai ' : ''}${sym} ${num}${it.satuan ? `/${it.satuan}` : ''}`;
 }
+
+// ===== Jumlah kunjungan (2.4.7) =====
+// Dedupe 1x per 30 menit per pengunjung (jemaatId di app, IP di web) supaya
+// refresh / bolak-balik layar tidak menggelembungkan angka. In-memory per
+// proses — cukup untuk statistik kasar. UPDATE raw supaya updatedAt tidak ikut berubah.
+const VIEW_TTL = 30 * 60_000;
+const seenViews = new Map<string, number>();
+
+export async function hitView(kind: 'biz' | 'item', id: string, viewerKey: string): Promise<void> {
+  const key = `${kind}:${id}:${viewerKey}`;
+  const now = Date.now();
+  const last = seenViews.get(key);
+  if (last && now - last < VIEW_TTL) return;
+  seenViews.set(key, now);
+  if (seenViews.size > 50_000) {
+    for (const [k, t] of seenViews) if (now - t > VIEW_TTL) seenViews.delete(k);
+  }
+  try {
+    if (kind === 'biz') {
+      await prisma.$executeRaw`UPDATE "local_business" SET "view_count" = "view_count" + 1 WHERE "id" = ${id}::uuid AND "is_active" = true`;
+    } else {
+      await prisma.$executeRaw`UPDATE "local_business_item" SET "view_count" = "view_count" + 1 WHERE "id" = ${id}::uuid AND "is_active" = true AND "is_hidden_by_admin" = false`;
+    }
+  } catch {
+    /* statistik — jangan ganggu request */
+  }
+}

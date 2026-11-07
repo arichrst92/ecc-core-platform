@@ -1924,6 +1924,8 @@ model LocalBusiness {
   // 2.4.7 — username sosmed { instagram, facebook, tiktok, youtube, x, linkedin, threads }.
   // socialLinks tetap diisi (URL) dari username ini untuk app lama & web.
   socialUsernames   Json?      @map("social_usernames")
+  // 2.4.7 — berapa kali detail usaha dibuka (app + web; pemilik tidak dihitung, 1x/30 menit per pengunjung).
+  viewCount         Int        @default(0) @map("view_count")
   // Owner toggle: false = hide dari public browse. Owner tetap bisa lihat &
   // edit. Tidak menghapus row (gunakan DELETE endpoint untuk benar2 hilang).
   isActive          Boolean    @default(true) @map("is_active")
@@ -4184,6 +4186,8 @@ model LocalBusinessItem {
   /// Disembunyikan admin Portal (moderasi).
   isHiddenByAdmin Boolean     @default(false) @map("is_hidden_by_admin")
   urutan     Int              @default(0)
+  /// Berapa kali detail item dibuka (app + web).
+  viewCount  Int              @default(0) @map("view_count")
   createdAt  DateTime         @default(now()) @map("created_at")
   updatedAt  DateTime         @updatedAt @map("updated_at")
 

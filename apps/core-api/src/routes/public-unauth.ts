@@ -25,7 +25,7 @@ import {
   publicMinistryQuerySchema,
 } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../lib/errors.js';
-import { hargaLabel, publicItemsOf, serializeItem } from '../lib/local-market.js';
+import { hargaLabel, hitView, publicItemsOf, serializeItem } from '../lib/local-market.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
 import { generateOccurrences } from '../lib/ibadah-occurrences.js';
 
@@ -478,6 +478,28 @@ publicUnauthRouter.get('/local-market/:id/item/:itemId', publicBrowseLimiter, as
   if (!item) throw NotFound('Item tidak ditemukan atau nonaktif.');
   const { business, ...rest } = item;
   res.json({ success: true, data: { ...serializeItem(rest as typeof item), hargaLabel: hargaLabel(serializeItem(rest as typeof item)), business } });
+});
+
+// POST /public/local-market/:id/view  &  /public/local-market/:id/item/:itemId/view
+// Hitung kunjungan dari web (dipanggil proxy landing /api/market-view). Pengunjung
+// dikenali dari IP asli (header x-viewer-ip dari proxy) — dedupe 30 menit.
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+function viewerKey(req: import('express').Request): string {
+  const fwd = (req.get('x-viewer-ip') ?? '').split(',')[0]?.trim();
+  return `ip:${fwd || req.ip || 'unknown'}`;
+}
+publicUnauthRouter.post('/local-market/:id/view', publicBrowseLimiter, async (req, res) => {
+  const id = req.params.id ?? '';
+  if (!UUID_RE.test(id)) throw BadRequest('ID tidak valid.');
+  await hitView('biz', id, viewerKey(req));
+  res.json({ success: true, data: { ok: true } });
+});
+publicUnauthRouter.post('/local-market/:id/item/:itemId/view', publicBrowseLimiter, async (req, res) => {
+  const { id = '', itemId = '' } = req.params as { id?: string; itemId?: string };
+  if (!UUID_RE.test(id) || !UUID_RE.test(itemId)) throw BadRequest('ID tidak valid.');
+  const ok = await prisma.localBusinessItem.count({ where: { id: itemId, businessId: id } });
+  if (ok) await hitView('item', itemId, viewerKey(req));
+  res.json({ success: true, data: { ok: true } });
 });
 
 // GET /public/cabang/:id/rekening

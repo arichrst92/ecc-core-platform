@@ -60,10 +60,21 @@ export async function assertPenggembalaanRole(jemaatId: string, roleNama: string
  */
 import { ApiError } from './errors.js';
 
+/** Anggota aktif yang ditunjuk PIC sebagai asisten homecell. */
+export async function isHomecellAsisten(homecellId: string, jemaatId: string): Promise<boolean> {
+  const m = await prisma.homecellMember.findUnique({
+    where: { homecellId_jemaatId: { homecellId, jemaatId } },
+    select: { isActive: true, isAsisten: true },
+  });
+  return !!m?.isActive && !!m.isAsisten;
+}
+
 export async function assertCanManageHomecell(
   homecellId: string,
   userJemaatId: string,
   isFulltimer: boolean,
+  /** Asisten homecell juga boleh (jadwal, absen, tamu, lampiran). */
+  opts: { allowAsisten?: boolean } = {},
 ): Promise<void> {
   if (isFulltimer) return; // admin bypass
 
@@ -87,6 +98,9 @@ export async function assertCanManageHomecell(
 
   // Pastor zona parent
   if (homecell.area && homecell.area.pastors.length > 0) return;
+
+  // Asisten homecell (ditunjuk PIC)
+  if (opts.allowAsisten && (await isHomecellAsisten(homecellId, userJemaatId))) return;
 
   throw new ApiError(
     403,

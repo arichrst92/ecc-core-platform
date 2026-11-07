@@ -4,7 +4,7 @@
  *   → /admin/homecell/:homecellId/announcements, /admin/homecell/:homecellId/polls
  *
  * Akses:
- *   - Kelola: PIC homecell, PIC area, atau fulltimer (fulltimer hanya via portal)
+ *   - Kelola: PIC homecell, PIC area, asisten homecell, atau fulltimer (fulltimer hanya via portal)
  *   - Lihat & vote: anggota aktif homecell + PIC (fulltimer non-anggota tidak bisa vote)
  */
 import { prisma } from '@ecc/database';
@@ -33,12 +33,13 @@ export const homecellBoardRouter = buildBoardRouter({
       ? null
       : await prisma.homecellMember.findUnique({
           where: { homecellId_jemaatId: { homecellId: hc.id, jemaatId } },
-          select: { isActive: true },
+          select: { isActive: true, isAsisten: true },
         });
     const isParticipant = isPic || !!m?.isActive;
     // Admin fulltimer hanya lewat portal; di app mobile konten hanya untuk anggota & PIC.
     const adminBypass = isFulltimer && !isMobileClient(req);
-    const canManage = isPic || adminBypass;
+    // Asisten homecell (2.4.7) boleh membuat pengumuman & voting.
+    const canManage = isPic || adminBypass || (!!m?.isActive && !!m.isAsisten);
     if (!isParticipant && !adminBypass) throw Forbidden('Konten ini hanya untuk anggota homecell.');
     return {
       ownerId: hc.id,

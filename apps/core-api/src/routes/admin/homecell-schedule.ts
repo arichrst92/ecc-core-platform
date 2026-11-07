@@ -82,7 +82,7 @@ homecellScheduleRouter.post('/', async (req, res) => {
   if (!homecellId) throw BadRequest('homecellId required di path.');
 
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
   const input = createHomecellScheduleSchema.parse(req.body);
 
@@ -125,7 +125,7 @@ homecellScheduleRouter.get('/', async (req, res) => {
   if (!homecellId) throw BadRequest('homecellId required di path.');
 
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
   const q = listHomecellSchedulesQuerySchema.parse(req.query);
 
@@ -180,7 +180,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
   if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
 
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
   const schedule = await prisma.homecellSchedule.findFirst({
     where: { id: scheduleId, homecellId },
@@ -284,7 +284,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
   if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
 
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
   const { kode } = scanHomecellAttendanceSchema.parse(req.body);
 
@@ -400,7 +400,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
   if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
 
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
   const input = bulkScanHomecellAttendanceSchema.parse(req.body);
   const items: Array<{ kode: string | null; jemaatId: string | null }> = [
@@ -604,7 +604,7 @@ homecellScheduleRouter.delete(
     }
 
     const requester = await getRequester(req);
-    await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+    await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
 
     const before = await prisma.homecellAttendance.findFirst({
       where: { id: attendanceId, scheduleId },
@@ -690,7 +690,7 @@ homecellScheduleRouter.post('/:scheduleId/tamu', async (req, res) => {
   const scheduleId = req.params.scheduleId;
   if (!homecellId || !scheduleId) throw BadRequest('homecellId + scheduleId required.');
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
   const { tamuIds } = tamuHadirSchema.parse(req.body ?? {});
 
   const schedule = await prisma.homecellSchedule.findFirst({ where: { id: scheduleId, homecellId }, select: { id: true, tanggal: true } });
@@ -720,7 +720,7 @@ homecellScheduleRouter.delete('/:scheduleId/tamu/:tamuId', async (req, res) => {
   const { scheduleId, tamuId } = req.params;
   if (!homecellId || !scheduleId || !tamuId) throw BadRequest('homecellId + scheduleId + tamuId required.');
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
   const r = await prisma.homecellTamuAttendance.deleteMany({
     where: { scheduleId, tamuId, schedule: { homecellId } },
   });
@@ -746,7 +746,7 @@ async function loadScheduleForManage(req: import('express').Request) {
   const homecellId = (req.params as { homecellId?: string }).homecellId ?? '';
   const scheduleId = (req.params as { scheduleId?: string }).scheduleId ?? '';
   const requester = await getRequester(req);
-  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageHomecell(homecellId, requester.jemaatId, requester.isFulltimer, { allowAsisten: true });
   const schedule = await prisma.homecellSchedule.findFirst({
     where: { id: scheduleId, homecellId },
     select: { id: true, homecellId: true, tanggal: true },

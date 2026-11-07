@@ -36,6 +36,7 @@ import { cariPotensialMember, usiaDari } from '../../lib/potensial-member.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
+import { isHomecellAsisten } from '../../lib/homecell-pic.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { isMobileClient } from '../../lib/client-kind.js';
@@ -342,7 +343,7 @@ meHomecellRouter.post('/join-requests/:reqId/approve', async (req, res) => {
     if (existing) {
       return tx.homecellMember.update({
         where: { id: existing.id },
-        data: { isActive: true, tanggalKeluar: null, tanggalBergabung: existing.isActive ? undefined : new Date() },
+        data: { isActive: true, tanggalKeluar: null, tanggalBergabung: existing.isActive ? undefined : new Date(), ...(existing.isActive ? {} : { isAsisten: false }) },
       });
     }
     return tx.homecellMember.create({
@@ -543,7 +544,7 @@ meHomecellRouter.get('/:id', async (req, res) => {
       ? prisma.homecellMember.findMany({
           where: { homecellId: hc.id, isActive: true },
           orderBy: { jemaat: { namaLengkap: 'asc' } },
-          select: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } } },
+          select: { isAsisten: true, jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } } },
         })
       : Promise.resolve([]),
     // Kontak pemimpin hanya untuk anggota.
@@ -570,8 +571,10 @@ meHomecellRouter.get('/:id', async (req, res) => {
       ...item,
       picJemaat: hc.picJemaat ? { ...hc.picJemaat, noHp: pic?.noHp ?? null } : null,
       upcomingSchedules: schedules,
-      members: members.map((m) => withLastAttendance(m.jemaat.id, m.jemaat, lastMap)),
+      members: members.map((m) => withLastAttendance(m.jemaat.id, { ...m.jemaat, isAsisten: m.isAsisten }, lastMap)),
       myPendingRequest: myPending,
+      // Saya asisten homecell ini (2.4.7) → boleh buka halaman kelola terbatas.
+      isAsisten: members.some((m) => m.jemaat.id === jemaatId && m.isAsisten),
     },
   });
 });
@@ -766,7 +769,7 @@ const homecellTamuSchema = tamuInputSchema.extend({ catatan: z.string().trim().m
 
 meHomecellRouter.get('/:id/tamu', async (req, res) => {
   if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
-  await assertLeaderOrAreaPic(req, req.params.id);
+  await assertLeaderAreaPicOrAsisten(req, req.params.id);
   const rows = await prisma.homecellTamu.findMany({
     where: { homecellId: req.params.id },
     orderBy: { createdAt: 'desc' },
@@ -804,7 +807,7 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
 meHomecellRouter.post('/:id/tamu', async (req, res) => {
   const u = me(req);
   if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
-  await assertLeaderOrAreaPic(req, req.params.id);
+  await assertLeaderAreaPicOrAsisten(req, req.params.id);
   const input = homecellTamuSchema.parse(req.body ?? {});
   const hc = await prisma.homecell.findUnique({
     where: { id: req.params.id },
@@ -840,7 +843,7 @@ meHomecellRouter.post('/:id/tamu', async (req, res) => {
 
 meHomecellRouter.delete('/:id/tamu/:tamuId', async (req, res) => {
   if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
-  await assertLeaderOrAreaPic(req, req.params.id);
+  await assertLeaderAreaPicOrAsisten(req, req.params.id);
   const r = await prisma.homecellTamu.deleteMany({ where: { homecellId: req.params.id, tamuId: String(req.params.tamuId ?? '') } });
   if (r.count === 0) throw NotFound('Tamu tidak ditemukan di homecell ini');
   audit(req, { action: 'DELETE', resource: 'homecell_tamu', resourceId: String(req.params.tamuId), resourceLabel: 'Hapus tamu dari homecell' });
@@ -879,6 +882,13 @@ meHomecellRouter.get('/:id/potensial-member', async (req, res) => {
   });
 });
 
+/** Seperti assertLeaderOrAreaPic, plus asisten homecell (catat tamu). */
+async function assertLeaderAreaPicOrAsisten(req: Request, homecellId: string) {
+  const u = me(req);
+  if (await isHomecellAsisten(homecellId, u.jemaatId)) return;
+  await assertLeaderOrAreaPic(req, homecellId);
+}
+
 /** Pemimpin homecell ATAU PIC / pastor zona homecell tsb (atau fulltimer). */
 async function assertLeaderOrAreaPic(req: Request, homecellId: string) {
   const u = me(req);
@@ -892,6 +902,44 @@ async function assertLeaderOrAreaPic(req: Request, homecellId: string) {
     throw Forbidden('Hanya pemimpin homecell / PIC atau pastor zona yang dapat mengubah homecell ini.');
   }
 }
+
+// Tunjuk / lepas asisten homecell (2.4.7) — oleh PIC homecell (atau PIC / pastor zona).
+// Asisten boleh: jadwal pertemuan, absen, catat tamu, pengumuman, voting, lampiran.
+const asistenSchema = z.object({ jemaatId: z.string().uuid(), isAsisten: z.boolean() });
+
+meHomecellRouter.patch('/:id/asisten', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  await assertLeaderOrAreaPic(req, req.params.id);
+  const input = asistenSchema.parse(req.body ?? {});
+  const m = await prisma.homecellMember.findUnique({
+    where: { homecellId_jemaatId: { homecellId: req.params.id, jemaatId: input.jemaatId } },
+    select: { id: true, isActive: true, isAsisten: true, jemaat: { select: { namaLengkap: true } }, homecell: { select: { id: true, nama: true, picJemaatId: true } } },
+  });
+  if (!m || !m.isActive) throw BadRequest('Asisten harus anggota aktif homecell ini.');
+  if (m.homecell.picJemaatId === input.jemaatId) throw BadRequest('PIC homecell tidak perlu dijadikan asisten.');
+  if (m.isAsisten === input.isAsisten) {
+    res.json({ success: true, data: { jemaatId: input.jemaatId, isAsisten: m.isAsisten } });
+    return;
+  }
+  await prisma.homecellMember.update({ where: { id: m.id }, data: { isAsisten: input.isAsisten } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'homecell_member',
+    resourceId: m.id,
+    resourceLabel: `${input.isAsisten ? 'Tunjuk' : 'Lepas'} asisten: ${m.jemaat.namaLengkap} @ ${m.homecell.nama}`,
+  });
+  if (input.isAsisten) {
+    void createNotification({
+      jemaatId: input.jemaatId,
+      type: 'HOMECELL_ASISTEN_ASSIGNED',
+      title: `Anda asisten ${m.homecell.nama}`,
+      body: `Anda ditunjuk sebagai asisten homecell ${m.homecell.nama}: membantu jadwal pertemuan, absen, tamu, pengumuman, voting, dan lampiran.`,
+      actionUrl: `/homecell/${m.homecell.id}`,
+      metadata: { homecellId: m.homecell.id },
+    });
+  }
+  res.json({ success: true, data: { jemaatId: input.jemaatId, isAsisten: input.isAsisten } });
+});
 
 // Ubah info homecell dari app: nama, deskripsi, alamat, link Google Maps,
 // kategori, rentang usia. Field yang tidak dikirim tidak diubah.

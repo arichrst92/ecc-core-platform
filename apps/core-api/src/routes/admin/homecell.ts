@@ -681,6 +681,8 @@ homecellRouter.patch('/:id/members/:memberId', async (req, res) => {
   if (input.isActive === false && !before.tanggalKeluar && !input.tanggalKeluar) {
     data.tanggalKeluar = new Date();
   }
+  // Keluar dari homecell → lepas status asisten.
+  if (input.isActive === false) data.isAsisten = false;
   // Kalau di-reactivate, clear tanggalKeluar
   if (input.isActive === true) {
     data.tanggalKeluar = null;
@@ -735,6 +737,7 @@ homecellRouter.delete('/:id/members/by-jemaat/:jemaatId', async (req, res) => {
     where: { id: before.id },
     data: {
       isActive: false,
+      isAsisten: false,
       tanggalKeluar: new Date(),
     },
   });

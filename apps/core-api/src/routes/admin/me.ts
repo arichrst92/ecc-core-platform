@@ -27,7 +27,7 @@
  *   - GET    /admin/me/branch-change-requests   → list request user (riwayat)
  *   - POST   /admin/me/branch-change-request    → submit request pindah cabang
  */
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma, Prisma } from '@ecc/database';
 import {
@@ -58,6 +58,15 @@ import { saveProfilePhoto } from '../../lib/storage.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { upsertJemaatRelasi, tipeNamaToBroadRole } from '../../lib/family-relation.js';
+import {
+  approveFamilyLinkRequest,
+  cancelFamilyLinkRequest,
+  createFamilyLinkRequest,
+  listFamilyLinkRequests,
+  rejectFamilyLinkRequest,
+  supportsFamilyRequest,
+  type FamilyVia,
+} from '../../lib/family-request.js';
 import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
 import { meEventCheckinRouter } from './me-event-checkin.js';
@@ -1012,6 +1021,93 @@ meRouter.get('/family', async (req, res) => {
   res.json({ success: true, data });
 });
 
+/**
+ * Menambah jemaat berakun → permintaan yang harus disetujui (2.4.7).
+ * App baru (header X-Family-Request: 1) menerima { status: 'PENDING' }.
+ * App lama tidak mengenal status itu → kirim sebagai pesan (success:false)
+ * supaya yang tampil "Permintaan terkirim…", bukan "berhasil ditambahkan".
+ */
+async function respondFamilyLink(
+  req: Request,
+  res: Response,
+  jemaatId: string,
+  targetId: string,
+  input: { role?: FamilyRole; tipeRelasiId?: string },
+  via: FamilyVia,
+) {
+  const r = await createFamilyLinkRequest(jemaatId, targetId, input, via);
+  const target = { id: r.target.id, namaLengkap: r.target.namaLengkap, kode: r.target.kode };
+  if (r.status === 'LINKED') {
+    audit(req, {
+      action: 'CREATE',
+      resource: 'jemaat_relasi',
+      resourceId: r.link.id,
+      resourceLabel: `${r.link.tipeRelasi.nama} ↔ ${target.namaLengkap}`,
+      metadata: { kind: 'family-link-guardian', via, tipe: r.link.tipeRelasi.nama },
+    });
+    res.status(201).json({ success: true, data: { ...r.link, target, status: 'LINKED' } });
+    return;
+  }
+  audit(req, {
+    action: 'CREATE',
+    resource: 'family_link_request',
+    resourceId: r.requestId,
+    resourceLabel: `Permintaan keluarga: ${r.tipe.nama} ↔ ${target.namaLengkap}`,
+    metadata: { via, tipe: r.tipe.nama, viaGuardian: r.viaGuardian },
+  });
+  if (supportsFamilyRequest(req)) {
+    res.status(201).json({
+      success: true,
+      data: { status: 'PENDING', requestId: r.requestId, target, tipeRelasi: r.tipe, viaGuardian: r.viaGuardian, message: r.message },
+    });
+    return;
+  }
+  res.status(202).json({ success: false, error: { code: 'FAMILY_REQUEST_SENT', message: r.message } });
+}
+
+// ---- Permintaan hubungan keluarga (2.4.7)
+meRouter.get('/family/requests', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  res.json({ success: true, data: await listFamilyLinkRequests(jemaatId) });
+});
+
+meRouter.post('/family/requests/:id/approve', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  if (!UUID_RE_FAMILY.test(req.params.id)) throw NotFound('Permintaan tidak ditemukan.');
+  const r = await approveFamilyLinkRequest(req.params.id, jemaatId);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'family_link_request',
+    resourceId: r.id,
+    resourceLabel: `Setujui keluarga: ${r.requester.namaLengkap} → ${r.target.namaLengkap} (${r.tipeRelasi.nama})`,
+  });
+  res.json({ success: true, data: { id: r.id, status: 'APPROVED' } });
+});
+
+meRouter.post('/family/requests/:id/reject', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  if (!UUID_RE_FAMILY.test(req.params.id)) throw NotFound('Permintaan tidak ditemukan.');
+  const { reason } = z.object({ reason: z.string().trim().max(300).optional() }).parse(req.body ?? {});
+  const r = await rejectFamilyLinkRequest(req.params.id, jemaatId, reason || null);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'family_link_request',
+    resourceId: r.id,
+    resourceLabel: `Tolak keluarga: ${r.requester.namaLengkap} → ${r.target.namaLengkap}`,
+  });
+  res.json({ success: true, data: { id: r.id, status: 'REJECTED' } });
+});
+
+meRouter.delete('/family/requests/:id', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  if (!UUID_RE_FAMILY.test(req.params.id)) throw NotFound('Permintaan tidak ditemukan.');
+  await cancelFamilyLinkRequest(req.params.id, jemaatId);
+  audit(req, { action: 'UPDATE', resource: 'family_link_request', resourceId: req.params.id, resourceLabel: 'Batalkan permintaan keluarga' });
+  res.json({ success: true, data: { id: req.params.id, status: 'CANCELLED' } });
+});
+
+const UUID_RE_FAMILY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 meRouter.post('/family/link-by-kode', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const input = linkFamilyByKodeSchema.parse(req.body);
@@ -1025,16 +1121,7 @@ meRouter.post('/family/link-by-kode', async (req, res) => {
     throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
   }
   if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
-
-  const link = await upsertJemaatRelasi(jemaatId, target.id, input);
-  audit(req, {
-    action: 'CREATE',
-    resource: 'jemaat_relasi',
-    resourceId: link.id,
-    resourceLabel: `${link.tipeRelasi.nama} ↔ ${target.namaLengkap}`,
-    metadata: { kind: 'family-link-kode', via: 'kode', tipe: link.tipeRelasi.nama },
-  });
-  res.status(201).json({ success: true, data: { ...link, target } });
+  await respondFamilyLink(req, res, jemaatId, target.id, input, 'KODE');
 });
 
 meRouter.post('/family/link-by-phone', async (req, res) => {
@@ -1049,16 +1136,7 @@ meRouter.post('/family/link-by-phone', async (req, res) => {
     throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
   }
   if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
-
-  const link = await upsertJemaatRelasi(jemaatId, target.id, input);
-  audit(req, {
-    action: 'CREATE',
-    resource: 'jemaat_relasi',
-    resourceId: link.id,
-    resourceLabel: `${link.tipeRelasi.nama} ↔ ${target.namaLengkap}`,
-    metadata: { kind: 'family-link-phone', via: 'phone', tipe: link.tipeRelasi.nama },
-  });
-  res.status(201).json({ success: true, data: { ...link, target } });
+  await respondFamilyLink(req, res, jemaatId, target.id, input, 'PHONE');
 });
 
 /**
@@ -1100,11 +1178,16 @@ meRouter.get('/family/search', familySearchLimiter, async (req, res) => {
     prisma.jemaatRelasi.findMany({ where: { jemaatId }, select: { jemaatTerkaitId: true } }),
   ]);
   const sudah = new Set(linked.map((l) => l.jemaatTerkaitId));
+  const pend = await prisma.familyLinkRequest.findMany({
+    where: { requesterId: jemaatId, status: 'PENDING', targetId: { in: rows.map((r) => r.id) } },
+    select: { targetId: true },
+  });
+  const menunggu = new Set(pend.map((p) => p.targetId));
   res.json({
     success: true,
     data: {
       mode,
-      items: rows.map(({ cabang, ...j }) => ({ ...j, cabang: cabang.nama, alreadyLinked: sudah.has(j.id) })),
+      items: rows.map(({ cabang, ...j }) => ({ ...j, cabang: cabang.nama, alreadyLinked: sudah.has(j.id), pendingRequest: menunggu.has(j.id) })),
     },
   });
 });
@@ -1121,17 +1204,7 @@ meRouter.post('/family/link-by-id', async (req, res) => {
     throw BadRequest(`Jemaat "${target.namaLengkap}" sudah nonaktif. Hubungi admin.`);
   }
   if (target.id === jemaatId) throw BadRequest('Tidak bisa link diri sendiri.');
-
-  const link = await upsertJemaatRelasi(jemaatId, target.id, input);
-  audit(req, {
-    action: 'CREATE',
-    resource: 'jemaat_relasi',
-    resourceId: link.id,
-    resourceLabel: `${link.tipeRelasi.nama} ↔ ${target.namaLengkap}`,
-    metadata: { kind: 'family-link-search', via: 'search', tipe: link.tipeRelasi.nama },
-  });
-  const { isTamu: _t, isActive: _a, ...t } = target;
-  res.status(201).json({ success: true, data: { ...link, target: t } });
+  await respondFamilyLink(req, res, jemaatId, target.id, input, 'SEARCH');
 });
 
 meRouter.post('/family/register-new', async (req, res) => {

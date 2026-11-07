@@ -253,6 +253,9 @@ model Jemaat {
   spiritualJourneyRequests     SpiritualJourneyRequest[]     @relation("SjRequestJemaat")
   pelayananApprovals           PelayananApprover[]
   spiritualJourneyReviews      SpiritualJourneyRequest[]     @relation("SjRequestReviewer")
+  familyLinkRequestsSent       FamilyLinkRequest[]           @relation("FamilyLinkRequester")
+  familyLinkRequestsTarget     FamilyLinkRequest[]           @relation("FamilyLinkTarget")
+  familyLinkRequestsApprove    FamilyLinkRequest[]           @relation("FamilyLinkApprover")
   homecellPic                  Homecell[]                    @relation("HomecellPic")
   homecellMembership           HomecellMember[]              @relation("HomecellMembership")
   sertifikat                   JemaatSertifikat[]
@@ -608,7 +611,8 @@ model TipeRelasiKeluarga {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  jemaatRelasi JemaatRelasi[]
+  jemaatRelasi       JemaatRelasi[]
+  familyLinkRequests FamilyLinkRequest[]
 
   @@map("tipe_relasi_keluarga")
 }
@@ -2124,6 +2128,9 @@ enum InAppNotifType {
   PRAYER_PRAYED
   SPIRITUAL_JOURNEY_APPROVED
   SPIRITUAL_JOURNEY_REJECTED
+  FAMILY_LINK_REQUESTED
+  FAMILY_LINK_APPROVED
+  FAMILY_LINK_REJECTED
   MINISTRY_DUTY_ASSIGNED
   MINISTRY_DUTY_REMOVED
 
@@ -4104,4 +4111,42 @@ model ServiceReview {
   @@index([eventId])
   @@index([createdAt])
   @@map("service_review")
+}
+
+/// Permintaan hubungan keluarga (2.4.7): menambah jemaat yang sudah punya
+/// akun (scan / kode / cari / no HP) harus disetujui orangnya — atau wali
+/// utamanya bila ia tanggungan tanpa HP. Disetujui → JemaatRelasi dibuat.
+model FamilyLinkRequest {
+  id            String                  @id @default(uuid()) @db.Uuid
+  requesterId   String                  @map("requester_id") @db.Uuid
+  targetId      String                  @map("target_id") @db.Uuid
+  /// Yang menyetujui: target sendiri, atau wali utama bila target tanggungan.
+  approverId    String                  @map("approver_id") @db.Uuid
+  /// Hubungan target di mata pemohon (mis. "Istri").
+  tipeRelasiId  String                  @map("tipe_relasi_id") @db.Uuid
+  via           String                  @db.VarChar(20)
+  status        FamilyLinkRequestStatus @default(PENDING)
+  alasanTolak   String?                 @map("alasan_tolak") @db.Text
+  reviewedAt    DateTime?               @map("reviewed_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  requester  Jemaat             @relation("FamilyLinkRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target     Jemaat             @relation("FamilyLinkTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  approver   Jemaat             @relation("FamilyLinkApprover", fields: [approverId], references: [id], onDelete: Cascade)
+  tipeRelasi TipeRelasiKeluarga @relation(fields: [tipeRelasiId], references: [id], onDelete: Cascade)
+
+  @@index([approverId, status])
+  @@index([requesterId, status])
+  @@index([targetId])
+  @@map("family_link_request")
+}
+
+enum FamilyLinkRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("family_link_request_status")
 }

@@ -180,6 +180,7 @@ export async function upsertJemaatRelasi(
   selfId: string,
   targetId: string,
   input: { role?: FamilyRole; tipeRelasiId?: string },
+  opts: { notify?: boolean } = {},
 ): Promise<{ id: string; tipeRelasi: { id: string; nama: string } }> {
   if (selfId === targetId) throw BadRequest('Tidak bisa link ke diri sendiri.');
 
@@ -252,6 +253,9 @@ export async function upsertJemaatRelasi(
   // Contoh: Ari(L) add Sarah(P) SPOUSE → tipeA=Istri, tipeB=Suami.
   //   Notif ke Sarah: "Ari menambahkan Anda sebagai Istri di daftar keluarganya"
   //   (bukan "Suami" — Sarah perempuan).
+  // Lewat permintaan yang sudah disetujui target → tidak perlu notif "Anda ditambahkan".
+  if (opts.notify === false) return result.a;
+
   void createNotification({
     jemaatId: targetId,
     type: 'FAMILY_LINKED',

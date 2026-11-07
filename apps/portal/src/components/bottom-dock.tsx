@@ -244,6 +244,27 @@ export function BottomDock() {
   // dockRef tree), jadi click item di popover ke-anggap "outside" → popover
   // dismiss BEFORE navigate. Ganti ke backdrop-only click strategy.
 
+  // Ruang bawah konten = tinggi dock nyata (bisa 2 baris / ada scrollbar di
+  // layar sempit) + jarak dari tepi + safe-area. Disimpan di CSS var
+  // --dock-space yang dipakai <main> di dashboard layout.
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const update = () => {
+      const h = el.getBoundingClientRect().height;
+      root.style.setProperty('--dock-space', `${Math.ceil(h + 16 + 24)}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
   // Close popover on route change
   useEffect(() => {
     setOpenGroup(null);
@@ -277,7 +298,10 @@ export function BottomDock() {
       <div
         ref={dockRef}
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll"
-        style={{ boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)' }}
+        style={{
+          boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)',
+          bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+        }}
       >
         {/* Logo ECC */}
         <Link

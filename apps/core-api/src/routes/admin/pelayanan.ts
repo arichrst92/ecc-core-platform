@@ -443,6 +443,14 @@ pelayananRouter.delete('/assign/:id', async (req, res) => {
   });
   if (!before) throw NotFound('Penugasan tidak ditemukan');
   await prisma.jemaatPelayanan.delete({ where: { id: req.params.id } });
+  // Tidak ada keanggotaan aktif lain → otoritas approval ikut dicabut (supaya tidak
+  // "hidup lagi" bila nanti ditambahkan kembali).
+  const masih = await prisma.jemaatPelayanan.count({
+    where: { jemaatId: before.jemaatId, pelayananId: before.pelayananId, isActive: true },
+  });
+  if (masih === 0) {
+    await prisma.pelayananApprover.deleteMany({ where: { pelayananId: before.pelayananId, jemaatId: before.jemaatId } });
+  }
   audit(req, {
     action: 'DELETE',
     resource: 'jemaat_pelayanan',

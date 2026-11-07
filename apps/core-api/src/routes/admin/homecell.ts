@@ -610,6 +610,43 @@ homecellRouter.delete('/:id', async (req, res) => {
 //  MEMBERS
 // ============================================================
 
+/**
+ * Tambah anggota homecell; anggota yang dulu dikeluarkan (baris nonaktif)
+ * diaktifkan kembali — bukan error "sudah terdaftar". Yang masih aktif → 400.
+ */
+async function addOrReactivateMember(
+  homecellId: string,
+  jemaatId: string,
+  extra: { tanggalBergabung?: Date; catatan?: string | null } = {},
+) {
+  const existing = await prisma.homecellMember.findUnique({
+    where: { homecellId_jemaatId: { homecellId, jemaatId } },
+    select: { id: true, isActive: true },
+  });
+  if (existing?.isActive) throw BadRequest('Jemaat sudah jadi member homecell ini');
+  const include = { jemaat: { select: { namaLengkap: true, kode: true, fotoUrl: true } } } as const;
+  if (existing) {
+    const member = await prisma.homecellMember.update({
+      where: { id: existing.id },
+      data: {
+        isActive: true,
+        tanggalKeluar: null,
+        alasanKeluar: null,
+        isAsisten: false,
+        tanggalBergabung: extra.tanggalBergabung ?? new Date(),
+        ...(extra.catatan !== undefined ? { catatan: extra.catatan } : {}),
+      },
+      include,
+    });
+    return { member, reactivated: true };
+  }
+  const member = await prisma.homecellMember.create({
+    data: { homecellId, jemaatId, isActive: true, tanggalBergabung: extra.tanggalBergabung, catatan: extra.catatan ?? undefined },
+    include,
+  });
+  return { member, reactivated: false };
+}
+
 // Add member by jemaatId
 homecellRouter.post('/:id/members', async (req, res) => {
   await assertHomecellAccess(req, req.params.id, 'write');
@@ -619,31 +656,18 @@ homecellRouter.post('/:id/members', async (req, res) => {
   const homecell = await prisma.homecell.findUnique({ where: { id: homecellId } });
   if (!homecell) throw NotFound('Homecell tidak ditemukan');
 
-  try {
-    const created = await prisma.homecellMember.create({
-      data: {
-        homecellId,
-        jemaatId: input.jemaatId,
-        tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
-        catatan: input.catatan,
-        isActive: true,
-      },
-      include: { jemaat: { select: { namaLengkap: true } } },
-    });
-    audit(req, {
-      action: 'CREATE',
-      resource: 'homecell_member',
-      resourceId: created.id,
-      resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama}`,
-      after: created,
-    });
-    res.status(201).json({ success: true, data: created });
-  } catch (err: any) {
-    if (err.code === 'P2002') {
-      throw BadRequest('Jemaat sudah jadi member homecell ini');
-    }
-    throw err;
-  }
+  const { member: created, reactivated } = await addOrReactivateMember(homecellId, input.jemaatId, {
+    tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
+    catatan: input.catatan,
+  });
+  audit(req, {
+    action: reactivated ? 'UPDATE' : 'CREATE',
+    resource: 'homecell_member',
+    resourceId: created.id,
+    resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama}${reactivated ? ' (bergabung kembali)' : ''}`,
+    after: created,
+  });
+  res.status(reactivated ? 200 : 201).json({ success: true, data: created, meta: { reactivated } });
 });
 
 // Add member by kode jemaat (scan QR di mobile PIC homecell)
@@ -662,30 +686,16 @@ homecellRouter.post('/:id/members/by-kode', async (req, res) => {
   });
   if (!jemaat) throw NotFound(`Kode jemaat "${kode}" tidak ditemukan`);
 
-  try {
-    const created = await prisma.homecellMember.create({
-      data: {
-        homecellId,
-        jemaatId: jemaat.id,
-        isActive: true,
-      },
-      include: { jemaat: { select: { namaLengkap: true, kode: true, fotoUrl: true } } },
-    });
-    audit(req, {
-      action: 'CREATE',
-      resource: 'homecell_member',
-      resourceId: created.id,
-      resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama} (via QR)`,
-      after: created,
-      metadata: { kind: 'homecell-add-by-kode' },
-    });
-    res.status(201).json({ success: true, data: created });
-  } catch (err: any) {
-    if (err.code === 'P2002') {
-      throw BadRequest('Jemaat sudah jadi member homecell ini');
-    }
-    throw err;
-  }
+  const { member: created, reactivated } = await addOrReactivateMember(homecellId, jemaat.id);
+  audit(req, {
+    action: reactivated ? 'UPDATE' : 'CREATE',
+    resource: 'homecell_member',
+    resourceId: created.id,
+    resourceLabel: `${created.jemaat.namaLengkap} → ${homecell.nama} (via QR${reactivated ? ', bergabung kembali' : ''})`,
+    after: created,
+    metadata: { kind: 'homecell-add-by-kode', reactivated },
+  });
+  res.status(reactivated ? 200 : 201).json({ success: true, data: created, meta: { reactivated } });
 });
 
 // Update member (mark keluar / catatan)

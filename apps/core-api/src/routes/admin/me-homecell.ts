@@ -343,7 +343,7 @@ meHomecellRouter.post('/join-requests/:reqId/approve', async (req, res) => {
     if (existing) {
       return tx.homecellMember.update({
         where: { id: existing.id },
-        data: { isActive: true, tanggalKeluar: null, tanggalBergabung: existing.isActive ? undefined : new Date(), ...(existing.isActive ? {} : { isAsisten: false }) },
+        data: { isActive: true, tanggalKeluar: null, tanggalBergabung: existing.isActive ? undefined : new Date(), ...(existing.isActive ? {} : { isAsisten: false, alasanKeluar: null }) },
       });
     }
     return tx.homecellMember.create({

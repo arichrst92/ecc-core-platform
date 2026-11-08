@@ -101,6 +101,11 @@ export async function middleware(req: NextRequest) {
     /^\/event\/[^/]+$/.test(pathname) ||
     // Share lagu ECC Worship (OG preview + tombol buka Els App).
     /^\/worship\/[^/]+$/.test(pathname) ||
+    // Link yang dibagikan dari app (tombol Share): detail berita, renungan,
+    // usaha & item Local Market — harus bisa dibuka penerima yang belum punya app.
+    /^\/news\/[^/]+$/.test(pathname) ||
+    /^\/renungan\/[^/]+$/.test(pathname) ||
+    /^\/local-market\/[^/]+(\/item\/[^/]+)?$/.test(pathname) ||
     pathname === '/privacy' ||
     pathname === '/support' ||
     pathname === '/contact' ||

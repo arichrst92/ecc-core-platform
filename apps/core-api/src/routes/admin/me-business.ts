@@ -35,6 +35,7 @@ import { serializeItem, publicItemsOf, localMarketMaxItems, hitView } from '../.
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
+import { resolveMapsLocation } from '../../lib/geo.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { flexPdfUpload } from '../../lib/pdf-upload.js';
 import {
@@ -47,6 +48,16 @@ import {
   saveLocalItemPhoto,
   deleteLocalItemPhoto,
 } from '../../lib/storage.js';
+
+/**
+ * Titik peta dari link Google Maps usaha (untuk pin Local Market di Map View).
+ * Link tidak bisa dibaca → titik kosong (link tetap disimpan; tombol Maps tetap jalan).
+ */
+async function coordsFromMapsUrl(mapsUrl: string | null | undefined): Promise<{ latitude: number | null; longitude: number | null }> {
+  if (!mapsUrl) return { latitude: null, longitude: null };
+  const loc = await resolveMapsLocation(mapsUrl).catch(() => null);
+  return { latitude: loc?.lat ?? null, longitude: loc?.lng ?? null };
+}
 
 /** WA admin (E.164) → link wa.me (dipakai app lama & web sebagai whatsappUrl). */
 const waLink = (n: string | null | undefined) => (n ? `https://wa.me/${n.replace(/\D/g, '')}` : null);
@@ -201,6 +212,7 @@ meBusinessRouter.post('/', async (req, res) => {
       socialUsernames: input.socialUsernames ?? undefined,
       marketplaceLinks: input.marketplaceLinks && Object.keys(input.marketplaceLinks).length ? input.marketplaceLinks : undefined,
       mapsUrl: input.mapsUrl ?? null,
+      ...(await coordsFromMapsUrl(input.mapsUrl)),
     },
     include: { owner: { select: ownerLite } },
   });
@@ -360,7 +372,10 @@ meBusinessRouter.patch('/:id', async (req, res) => {
   if (input.marketplaceLinks !== undefined) {
     data.marketplaceLinks = Object.keys(input.marketplaceLinks).length ? input.marketplaceLinks : Prisma.DbNull;
   }
-  if (input.mapsUrl !== undefined) data.mapsUrl = input.mapsUrl;
+  if (input.mapsUrl !== undefined) {
+    data.mapsUrl = input.mapsUrl;
+    Object.assign(data, await coordsFromMapsUrl(input.mapsUrl));
+  }
   if (input.socialUsernames !== undefined) {
     data.socialUsernames = input.socialUsernames;
     data.socialLinks = socialUsernamesToLinks(input.socialUsernames as SocialUsernames);

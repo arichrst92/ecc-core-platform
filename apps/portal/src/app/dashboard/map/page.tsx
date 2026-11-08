@@ -17,6 +17,9 @@ import {
   homecellPopup,
   jemaatPinElement,
   jemaatPopup,
+  localMarketPopup,
+  PIN_SIZE,
+  JEMAAT_PIN_H,
   sebarTitikSama,
   formatJarak,
   fotoSrc,
@@ -51,6 +54,7 @@ function densityColor(r: number) {
 export default function MapViewPage() {
   const [showCabang, setShowCabang] = useState(true);
   const [showHomecell, setShowHomecell] = useState(true);
+  const [showMarket, setShowMarket] = useState(true);
   const [showArea, setShowArea] = useState(true);
   // Sebaran jemaat (perkiraan dari alamat, tanpa nama) — default mati.
   const [showSebaran, setShowSebaran] = useState(false);
@@ -106,7 +110,7 @@ export default function MapViewPage() {
   const mapRef = useRef<any>(null);
   const GRef = useRef<GMaps>(null);
   const infoRef = useRef<any>(null);
-  const layerRef = useRef<{ cabang: any; homecell: any; jemaat: any; area: any[] } | null>(null);
+  const layerRef = useRef<{ cabang: any; homecell: any; jemaat: any; market: any; area: any[] } | null>(null);
   // Kunci → { posisi, html balon, objek peta } untuk fokus dari pencarian.
   const markerIndex = useRef<Map<string, { pos: { lat: number; lng: number }; html: string; obj?: any; bounds?: any }>>(new Map());
 
@@ -296,6 +300,16 @@ export default function MapViewPage() {
       ),
     [q.data, cabangId, cabangDariArea, needle],
   );
+  const marketList = useMemo(
+    () =>
+      (q.data?.localMarket ?? []).filter(
+        (b) =>
+          (!cabangId || b.owner.cabang?.id === cabangId) &&
+          (!cabangDariArea || b.owner.cabang?.id === cabangDariArea) &&
+          (!needle || `${b.nama} ${b.industri ?? ''} ${b.owner.namaLengkap} ${b.lokasi ?? ''}`.toLowerCase().includes(needle)),
+      ),
+    [q.data, cabangId, cabangDariArea, needle],
+  );
   const homecellList = useMemo(
     () =>
       (q.data?.homecell ?? []).filter(
@@ -395,6 +409,7 @@ export default function MapViewPage() {
           cabang: cluster(PIN_STYLE.cabang.color),
           homecell: cluster(PIN_STYLE.homecell.color),
           jemaat: cluster(PIN_STYLE.jemaat.color),
+          market: cluster(PIN_STYLE.localMarket.color),
         };
         mapRef.current = map;
         setMapError(null);
@@ -450,6 +465,7 @@ export default function MapViewPage() {
     layers.cabang.clearMarkers();
     layers.homecell.clearMarkers();
     layers.jemaat.clearMarkers();
+    layers.market.clearMarkers();
     layers.area.forEach((o) => (o.setMap ? o.setMap(null) : (o.map = null)));
     layers.area = [];
     markerIndex.current.clear();
@@ -460,7 +476,7 @@ export default function MapViewPage() {
         const pos = { lat: h.latitude, lng: h.longitude };
         const html = homecellPopup(h);
         markerIndex.current.set(`h:${h.id}`, { pos, html });
-        const m = makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, 40, 2200);
+        const m = makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, PIN_SIZE.homecell.h, 2200);
         m.map = map;
         layers.area.push(m); // ikut dibersihkan saat digambar ulang
       }
@@ -504,7 +520,7 @@ export default function MapViewPage() {
         const html = cabangPopup(c);
         markerIndex.current.set(`c:${c.id}`, { pos, html });
         add(pos);
-        return makeMarker(pos, pinElement('cabang', c.isActive), c.nama, html, 48, 900);
+        return makeMarker(pos, pinElement('cabang', c.isActive), c.nama, html, PIN_SIZE.cabang.h, 900);
       });
       pasang(layers.cabang, ms);
     }
@@ -514,9 +530,19 @@ export default function MapViewPage() {
         const html = homecellPopup(h);
         markerIndex.current.set(`h:${h.id}`, { pos, html });
         add(pos);
-        return makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, 40);
+        return makeMarker(pos, pinElement('homecell', h.isActive), h.nama, html, PIN_SIZE.homecell.h);
       });
       pasang(layers.homecell, ms);
+    }
+    if (showMarket) {
+      const ms = marketList.map((b) => {
+        const pos = { lat: b.latitude, lng: b.longitude };
+        const html = localMarketPopup(b);
+        markerIndex.current.set(`m:${b.id}`, { pos, html });
+        if (!showCabang && !showHomecell && !showArea) add(pos);
+        return makeMarker(pos, pinElement('localMarket'), b.nama, html, PIN_SIZE.localMarket.h, 1500);
+      });
+      pasang(layers.market, ms);
     }
     if (showJemaat) {
       // Titik yang sama (mis. satu keluarga) disebar melingkar supaya semua pin terlihat.
@@ -528,7 +554,7 @@ export default function MapViewPage() {
         markerIndex.current.set(`j:${j.id}`, { pos, html });
         // Jemaat tidak ikut menentukan zoom awal kecuali satu-satunya lapisan.
         if (!showCabang && !showHomecell && !showArea) add(pos);
-        return makeMarker(pos, jemaatPinElement(j), j.namaLengkap, html, 52);
+        return makeMarker(pos, jemaatPinElement(j), j.namaLengkap, html, JEMAAT_PIN_H);
       });
       pasang(layers.jemaat, ms);
     }
@@ -548,7 +574,7 @@ export default function MapViewPage() {
         });
       }
     }
-  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showJemaat, cabangId, areaId, homecellId, areaEfektif, kategori, pastorId, jemaatHc, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, fokusHcId, q.data]);
+  }, [tick, cabangList, homecellList, areaList, jemaatList, showCabang, showArea, showHomecell, showMarket, marketList, showJemaat, cabangId, areaId, homecellId, areaEfektif, kategori, pastorId, jemaatHc, needle, q.dataUpdatedAt, jemaatQ.dataUpdatedAt, fokusHcId, q.data]);
 
   // Lapisan kepadatan (sebaran jemaat) — lingkaran per sel ±100 m, warna & ukuran
   // sesuai jumlah jemaat (lapisan heatmap Google sudah dihentikan Google).
@@ -621,7 +647,7 @@ export default function MapViewPage() {
       }
       memberOverlay.current.push(balon);
       memberIndex.current.set(m.id, { pos, html });
-      const mk = makeMarker(pos, jemaatPinElement(m, color), m.namaLengkap, html, 52, m.isPic ? 2100 : 2000);
+      const mk = makeMarker(pos, jemaatPinElement(m, color), m.namaLengkap, html, JEMAAT_PIN_H, m.isPic ? 2100 : 2000);
       mk.map = map;
       memberOverlay.current.push(mk);
     }
@@ -662,7 +688,7 @@ export default function MapViewPage() {
       const pos = sebar.get(m.id)?.pos ?? { lat: m.latitude, lng: m.longitude };
       const html = potensialPopup(m, d.homecell);
       potIndex.current.set(m.id, { pos, html });
-      const mk = makeMarker(pos, jemaatPinElement(m, POTENSIAL_COLOR), m.namaLengkap, html, 52, 2000);
+      const mk = makeMarker(pos, jemaatPinElement(m, POTENSIAL_COLOR), m.namaLengkap, html, JEMAAT_PIN_H, 2000);
       mk.map = map;
       potOverlay.current.push(mk);
     }
@@ -721,6 +747,7 @@ export default function MapViewPage() {
         ...(showHomecell
           ? homecellList.map((h) => ({ key: `h:${h.id}`, nama: h.nama, sub: `Homecell · ${h.area.cabang.nama}` }))
           : []),
+        ...(showMarket ? marketList.map((b) => ({ key: `m:${b.id}`, nama: b.nama, sub: `Local Market · ${b.owner.cabang?.nama ?? ''}` })) : []),
         ...(showJemaat ? jemaatList.map((j) => ({ key: `j:${j.id}`, nama: j.namaLengkap, sub: `Jemaat · ${j.cabang.nama}` })) : []),
       ].slice(0, 8)
     : [];
@@ -748,6 +775,12 @@ export default function MapViewPage() {
             onChange={setShowHomecell}
             color={PIN_STYLE.homecell.color}
             label={`Homecell (${homecellList.length})`}
+          />
+          <Toggle
+            checked={showMarket}
+            onChange={setShowMarket}
+            color={PIN_STYLE.localMarket.color}
+            label={`Local Market (${marketList.length})`}
           />
           <Toggle
             checked={showJemaat}
@@ -924,6 +957,7 @@ export default function MapViewPage() {
       <Legend kind="cabang" />
       <AreaLegend />
       <Legend kind="homecell" />
+      <Legend kind="localMarket" />
       <JemaatLegend />
       <Legend kind="nonaktif" />
     </>
@@ -1345,11 +1379,15 @@ function Avatar({ nama, foto, color }: { nama: string; foto: string | null; colo
   );
 }
 
-function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'nonaktif' }) {
+function Legend({ kind }: { kind: 'cabang' | 'homecell' | 'localMarket' | 'nonaktif' }) {
   const html = kind === 'nonaktif' ? pinHtml('homecell', false) : pinHtml(kind);
   return (
     <span className="inline-flex items-center gap-1.5 text-neutral-700">
-      <span className="inline-block scale-[0.6] origin-left -mr-3" style={{ height: 30 }} dangerouslySetInnerHTML={{ __html: html }} />
+      <span
+        className="inline-block scale-[0.6] origin-left"
+        style={{ height: 34, marginRight: kind === 'nonaktif' ? -12 : -(PIN_SIZE[kind].w * 0.4) + 2, marginTop: kind === 'cabang' ? -10 : 0 }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
       {PIN_STYLE[kind].label}
     </span>
   );

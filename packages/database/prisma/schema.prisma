@@ -1929,6 +1929,9 @@ model LocalBusiness {
   // 2.4.7 — link toko online { shopee, lazada, tiktokshop, tokopedia } & link Google Maps.
   marketplaceLinks  Json?      @map("marketplace_links")
   mapsUrl           String?    @map("maps_url") @db.Text
+  // Titik dari link Google Maps (diisi server) — untuk pin Local Market di Map View.
+  latitude          Float?
+  longitude         Float?
   // 2.4.7 — berapa kali detail usaha dibuka (app + web; pemilik tidak dihitung, 1x/30 menit per pengunjung).
   viewCount         Int        @default(0) @map("view_count")
   // Owner toggle: false = hide dari public browse. Owner tetap bisa lihat &

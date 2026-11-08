@@ -15,7 +15,7 @@ import { requireMenu } from '../../middleware/require-menu.js';
 import { GEOCODE_VERSION, alamatHash, geocodeEnabled, geocodeJemaatBatch, geocodePerBatch, geocodeProvider, geocodeState } from '../../lib/jemaat-geocode.js';
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
-import { distanceKm } from '../../lib/geo.js';
+import { distanceKm, resolveMapsLocation } from '../../lib/geo.js';
 import { cariPotensialMember, usiaDari } from '../../lib/potensial-member.js';
 
 export const mapViewRouter = Router();
@@ -44,7 +44,7 @@ mapViewRouter.get('/', async (req, res) => {
     ...(aktifSaja ? { isActive: true, cabang: { isActive: true } } : {}),
   };
 
-  const [cabangRows, homecellRows, areaRows] = await Promise.all([
+  const [cabangRows, homecellRows, areaRows, bizRows] = await Promise.all([
     prisma.cabangGereja.findMany({
       where: cabangWhere,
       orderBy: { nama: 'asc' },
@@ -101,7 +101,31 @@ mapViewRouter.get('/', async (req, res) => {
         pastors: { orderBy: { createdAt: 'asc' }, select: { jemaat: { select: { id: true, namaLengkap: true } } } },
       },
     }),
+    // Local Market — usaha aktif yang sudah punya link Google Maps.
+    prisma.localBusiness.findMany({
+      where: {
+        isActive: true,
+        mapsUrl: { not: null },
+        owner: { isActive: true, ...(q.cabangId ? { cabangId: q.cabangId } : {}) },
+      },
+      orderBy: { nama: 'asc' },
+      select: {
+        id: true,
+        nama: true,
+        industri: true,
+        lokasi: true,
+        logoUrl: true,
+        mapsUrl: true,
+        waAdmin: true,
+        latitude: true,
+        longitude: true,
+        owner: { select: { namaLengkap: true, cabang: { select: { id: true, nama: true } } } },
+        _count: { select: { items: { where: { isActive: true, isHiddenByAdmin: false } } } },
+      },
+    }),
   ]);
+  // Usaha lama (link diisi sebelum titik disimpan) → isi titiknya di latar belakang.
+  void backfillBusinessCoords(bizRows.filter((b) => b.latitude == null).map((b) => ({ id: b.id, mapsUrl: b.mapsUrl! })));
 
   const homecellPerCabang = new Map<string, number>();
   for (const h of homecellRows) homecellPerCabang.set(h.area.cabang.id, (homecellPerCabang.get(h.area.cabang.id) ?? 0) + 1);
@@ -131,12 +155,17 @@ mapViewRouter.get('/', async (req, res) => {
   }));
   const homecell = homecellRows.filter(hasPoint).map(({ _count, ...h }) => ({ ...h, memberCount: _count.members }));
 
+  const localMarket = bizRows
+    .filter((b) => b.latitude != null && b.longitude != null)
+    .map(({ _count, ...b }) => ({ ...b, itemCount: _count.items }));
+
   res.json({
     success: true,
     data: {
       cabang,
       area,
       homecell,
+      localMarket,
       // Belum punya titik → tidak tampil di peta (ditampilkan sebagai catatan).
       tanpaTitik: {
         cabang: cabangRows.filter((r) => !hasPoint(r)).map((r) => ({ id: r.id, nama: r.nama })),
@@ -147,6 +176,26 @@ mapViewRouter.get('/', async (req, res) => {
     },
   });
 });
+
+/** Isi titik usaha Local Market dari link Google Maps (maks. 10 per panggilan, satu per satu). */
+let backfillRunning = false;
+async function backfillBusinessCoords(rows: { id: string; mapsUrl: string }[]) {
+  if (backfillRunning || rows.length === 0) return;
+  backfillRunning = true;
+  try {
+    for (const r of rows.slice(0, 10)) {
+      const loc = await resolveMapsLocation(r.mapsUrl).catch(() => null);
+      if (loc) {
+        // raw → updatedAt usaha tidak ikut berubah
+        await prisma.$executeRaw`UPDATE "local_business" SET "latitude" = ${loc.lat}, "longitude" = ${loc.lng} WHERE "id" = ${r.id}::uuid`.catch(() => undefined);
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'map-view: backfill titik usaha gagal');
+  } finally {
+    backfillRunning = false;
+  }
+}
 
 /** Titik hanya dipakai bila dihitung dari alamat jemaat yang sekarang. */
 function alamatMasihSama(r: { alamatHash: string; jemaat: { alamat: string | null } }): boolean {

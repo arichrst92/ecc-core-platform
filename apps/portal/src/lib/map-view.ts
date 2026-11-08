@@ -115,8 +115,23 @@ export interface MapArea {
   denganTitik: number;
 }
 
+export interface MapLocalBusiness {
+  id: string;
+  nama: string;
+  industri: string | null;
+  lokasi: string | null;
+  logoUrl: string | null;
+  mapsUrl: string | null;
+  waAdmin: string | null;
+  latitude: number;
+  longitude: number;
+  itemCount: number;
+  owner: { namaLengkap: string; cabang: { id: string; nama: string } | null };
+}
+
 export interface MapViewData {
   cabang: MapCabang[];
+  localMarket?: MapLocalBusiness[];
   area: MapArea[];
   homecell: MapHomecell[];
   tanpaTitik: { cabang: { id: string; nama: string }[]; homecell: { id: string; nama: string; cabang: string }[] };
@@ -129,6 +144,7 @@ export const PIN_STYLE = {
   area: { color: '#0D9488', label: 'Zona' },
   jemaat: { color: '#0284C7', label: 'Jemaat' },
   homecell: { color: '#7C3AED', label: 'Homecell' },
+  localMarket: { color: '#D97706', label: 'Local Market' },
   nonaktif: { color: '#9CA3AF', label: 'Nonaktif' },
 } as const;
 
@@ -140,14 +156,29 @@ const ICON_PATH = {
   // rumah
   homecell:
     '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  // bisnis / toko (lucide "store")
+  localMarket:
+    '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/>',
 };
 
-export function pinHtml(kind: 'cabang' | 'homecell', active = true): string {
+/**
+ * Ukuran pin bertingkat (lebar × tinggi px):
+ *   Sangat besar — Cabang gereja · Besar — Homecell · Sedang — Local Market · Kecil — Jemaat.
+ */
+export type PinKind = 'cabang' | 'homecell' | 'localMarket';
+export const PIN_SIZE: Record<PinKind, { w: number; h: number; icon: number }> = {
+  cabang: { w: 52, h: 68, icon: 26 },
+  homecell: { w: 40, h: 52, icon: 20 },
+  localMarket: { w: 32, h: 42, icon: 16 },
+};
+/** Tinggi pin (px) — untuk posisi balon di atas pin. */
+export const JEMAAT_PIN_H = 36;
+
+export function pinHtml(kind: PinKind, active = true): string {
   const color = active ? PIN_STYLE[kind].color : PIN_STYLE.nonaktif.color;
-  const big = kind === 'cabang';
-  const w = big ? 40 : 32;
-  const h = big ? 52 : 42;
-  const icon = big ? 20 : 16;
+  const { w, h, icon } = PIN_SIZE[kind];
+  // lingkaran putih di kepala pin (viewBox 40×52: pusat y 19.5, r 13) → posisi ikon proporsional
+  const top = (19.5 / 52) * h - icon / 2;
   return `
 <div class="ecc-pin" style="width:${w}px;height:${h}px">
   <svg viewBox="0 0 40 52" width="${w}" height="${h}" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">
@@ -155,12 +186,12 @@ export function pinHtml(kind: 'cabang' | 'homecell', active = true): string {
     <circle cx="20" cy="19.5" r="13" fill="#fff"/>
   </svg>
   <svg viewBox="0 0 24 24" width="${icon}" height="${icon}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-       style="position:absolute;left:${(w - icon) / 2}px;top:${big ? 9.5 : 7.5}px">${ICON_PATH[kind]}</svg>
+       style="position:absolute;left:${(w - icon) / 2}px;top:${top}px">${ICON_PATH[kind]}</svg>
 </div>`;
 }
 
 /** Elemen pin (untuk AdvancedMarkerElement — ujung pin = titik lokasi). */
-export function pinElement(kind: 'cabang' | 'homecell', active = true): HTMLElement {
+export function pinElement(kind: PinKind, active = true): HTMLElement {
   const el = document.createElement('div');
   el.className = 'ecc-pin-wrap';
   el.innerHTML = pinHtml(kind, active);
@@ -410,11 +441,12 @@ function avatarHtml(j: Pick<MapJemaat, 'fotoUrl' | 'jenisKelamin' | 'namaLengkap
 
 /** Pin jemaat: foto profil bulat dengan bingkai biru + ujung penunjuk. */
 export function jemaatPinElement(j: Pick<MapJemaat, 'fotoUrl' | 'jenisKelamin' | 'namaLengkap'>, c: string = PIN_STYLE.jemaat.color): HTMLElement {
-  const html = `<div class="ecc-pin" style="width:44px;height:54px">
-    <div style="box-sizing:border-box;width:44px;height:44px;border-radius:999px;background:${c};padding:3px;box-shadow:0 2px 4px rgba(0,0,0,.35)">
-      <div style="box-sizing:border-box;width:38px;height:38px;border-radius:999px;overflow:hidden;border:2px solid #fff">${avatarHtml(j, 34)}</div>
+  // Kecil (pin terkecil di peta): lingkaran 28 px + ekor.
+  const html = `<div class="ecc-pin" style="width:28px;height:${JEMAAT_PIN_H}px">
+    <div style="box-sizing:border-box;width:28px;height:28px;border-radius:999px;background:${c};padding:2px;box-shadow:0 1px 3px rgba(0,0,0,.35)">
+      <div style="box-sizing:border-box;width:24px;height:24px;border-radius:999px;overflow:hidden;border:1.5px solid #fff">${avatarHtml(j, 21)}</div>
     </div>
-    <div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid ${c}"></div>
+    <div style="width:0;height:0;margin:-1px auto 0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid ${c}"></div>
   </div>`;
   const el = document.createElement('div');
   el.className = 'ecc-pin-wrap';
@@ -626,5 +658,25 @@ export function potensialPopup(m: PotensialMember, hc: PotensialMemberData['home
     </div>
     <div style="font-size:11px;color:#a3a3a3;margin-top:6px">Lokasi = perkiraan dari alamat.</div>
     ${buttons(`/dashboard/jemaat/${m.id}`, rute, c).replace('>Google Maps<', '>Rute ke homecell<')}
+  </div>`;
+}
+
+// ------------------------------------------------------------------ Local Market
+
+export function localMarketPopup(b: MapLocalBusiness): string {
+  const color = PIN_STYLE.localMarket.color;
+  const wa = b.waAdmin ? b.waAdmin.replace(/\D/g, '').replace(/^0/, '62') : null;
+  const web = `https://eccchurch.global/local-market/${encodeURIComponent(b.id)}`;
+  return `<div style="min-width:230px;max-width:280px;font-family:inherit">
+    <div style="display:flex;align-items:center;gap:6px">${badge('Local Market', '#FEF3C7', '#B45309')}${b.industri ? badge(b.industri, '#F5F5F5', '#525252') : ''}</div>
+    <div style="font-size:15px;font-weight:700;color:#171717;margin:6px 0 2px">${esc(b.nama)}</div>
+    <div style="font-size:12px;color:#737373;margin-bottom:6px">${esc(b.owner.namaLengkap)}${b.owner.cabang ? ` · ${esc(b.owner.cabang.nama)}` : ''}</div>
+    ${b.lokasi ? row('Lokasi', esc(b.lokasi)) : ''}
+    ${row('Katalog', `${b.itemCount.toLocaleString('id-ID')} item`)}
+    ${wa ? row('WhatsApp', `<a href="https://wa.me/${wa}" target="_blank" rel="noopener noreferrer" style="color:#16A34A;font-weight:600">Chat</a>`) : ''}
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <a href="${esc(web)}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;padding:6px 8px;border-radius:8px;background:${color};color:#fff;font-size:12px;font-weight:600;text-decoration:none">Lihat usaha</a>
+      <a href="${esc(gmapsHref(b.mapsUrl, b.latitude, b.longitude))}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;padding:6px 8px;border-radius:8px;border:1px solid #e5e5e5;color:#404040;font-size:12px;font-weight:600;text-decoration:none">Google Maps</a>
+    </div>
   </div>`;
 }

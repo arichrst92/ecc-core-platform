@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
+import { BrandIconLink } from '@/components/brand-icon';
+import { MARKET_ICONS, SOCIAL_ICONS } from '@/lib/brand-icons-data';
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
@@ -39,6 +41,8 @@ interface LocalBusinessDetail {
   websiteUrl: string | null;
   whatsappUrl: string | null;
   waAdmin?: string | null;
+  mapsUrl?: string | null;
+  marketplaceLinks?: Partial<Record<keyof typeof MARKET_LABEL, string>> | null;
   email?: string | null;
   items?: KatalogItem[];
   isOnline: boolean;
@@ -68,20 +72,23 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 // Helper — smart label detection berdasarkan platform / URL.
-function guessPlatformLabel(s: SocialLink): string {
-  const p = (s.platform ?? '').toLowerCase().trim();
-  if (p) return s.platform;
-  const u = (s.url ?? '').toLowerCase();
-  if (u.includes('instagram')) return 'Instagram';
-  if (u.includes('facebook')) return 'Facebook';
-  if (u.includes('tiktok')) return 'TikTok';
-  if (u.includes('youtube')) return 'YouTube';
-  if (u.includes('linkedin')) return 'LinkedIn';
-  if (u.includes('twitter') || u.includes('x.com')) return 'X (Twitter)';
-  if (u.includes('shopee')) return 'Shopee';
-  if (u.includes('tokopedia')) return 'Tokopedia';
-  return 'Link';
+type SocialKey = keyof typeof SOCIAL_ICONS;
+const SOCIAL_LABEL: Record<SocialKey, string> = {
+  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube', x: 'X', linkedin: 'LinkedIn', threads: 'Threads',
+};
+/** Platform dari URL sosmed (socialLinks disinkronkan dari username sejak 2.4.7). */
+function platformOf(url: string): SocialKey | null {
+  const h = (/^https?:\/\/(?:www\.|m\.)?([^/?#]+)/i.exec(url)?.[1] ?? '').toLowerCase();
+  if (h.endsWith('instagram.com')) return 'instagram';
+  if (h.endsWith('facebook.com') || h === 'fb.com') return 'facebook';
+  if (h.endsWith('tiktok.com')) return 'tiktok';
+  if (h.endsWith('youtube.com') || h === 'youtu.be') return 'youtube';
+  if (h === 'x.com' || h.endsWith('twitter.com')) return 'x';
+  if (h.endsWith('linkedin.com')) return 'linkedin';
+  if (h.endsWith('threads.net') || h.endsWith('threads.com')) return 'threads';
+  return null;
 }
+const MARKET_LABEL = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' } as const;
 
 export default async function LocalMarketDetailPage({ params }: PageProps) {
   const b = await apiGet<LocalBusinessDetail>(
@@ -90,6 +97,9 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
   if (!b) notFound();
 
   const socials = Array.isArray(b.socialLinks) ? b.socialLinks : [];
+  const shops = (Object.keys(MARKET_LABEL) as (keyof typeof MARKET_LABEL)[])
+    .filter((k) => b.marketplaceLinks?.[k])
+    .map((k) => [k, b.marketplaceLinks![k]!] as const);
 
   return (
     <article className="py-8 lg:py-12">
@@ -215,7 +225,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
           </section>
         )}
 
-        {(b.websiteUrl || b.whatsappUrl || b.waAdmin || b.email) && (
+        {(b.websiteUrl || b.whatsappUrl || b.waAdmin || b.email || b.mapsUrl) && (
           <section className="mb-8">
             <h2 className="font-bold text-neutral-900 mb-3">Kontak</h2>
             <div className="grid sm:grid-cols-2 gap-2">
@@ -236,6 +246,23 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                     <div className="text-sm text-neutral-900 truncate">
                       {b.websiteUrl.replace(/^https?:\/\//, '')}
                     </div>
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                </a>
+              )}
+              {b.mapsUrl && (
+                <a
+                  href={b.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Lokasi</div>
+                    <div className="text-sm text-neutral-900 truncate">Buka di Google Maps</div>
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                 </a>
@@ -266,7 +293,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">
-                      WhatsApp admin
+                      WhatsApp
                     </div>
                     <div className="text-sm text-neutral-900">Chat sekarang</div>
                   </div>
@@ -277,39 +304,49 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
           </section>
         )}
 
-        {/* Sosial Media */}
-        {socials.length > 0 && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-brand-500" />
-              Sosial Media
-            </h2>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {socials.map((s, idx) => (
-                <a
-                  key={`${s.url}-${idx}`}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-neutral-100 text-neutral-600 group-hover:bg-brand-100 group-hover:text-brand-700 flex items-center justify-center shrink-0 transition">
-                      <Link2 className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-neutral-900">
-                        {guessPlatformLabel(s)}
-                      </div>
-                      <div className="text-xs text-neutral-500 truncate">
-                        {s.url.replace(/^https?:\/\//, '')}
-                      </div>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-brand-600 shrink-0" />
-                </a>
-              ))}
-            </div>
+        {/* Sosial media & toko online — ikon, hanya yang ada datanya (2.4.7) */}
+        {(socials.length > 0 || shops.length > 0) && (
+          <section className="mb-8 grid sm:grid-cols-2 gap-6">
+            {socials.length > 0 && (
+              <div>
+                <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-brand-500" />
+                  Sosial Media
+                </h2>
+                <div className="flex flex-wrap gap-2.5">
+                  {socials.map((s, idx) => {
+                    const k = platformOf(s.url);
+                    return k ? (
+                      <BrandIconLink key={`${s.url}-${idx}`} glyph={SOCIAL_ICONS[k]} url={s.url} label={SOCIAL_LABEL[k]} />
+                    ) : (
+                      <a
+                        key={`${s.url}-${idx}`}
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={s.platform || s.url}
+                        className="w-10 h-10 rounded-full bg-neutral-200 text-neutral-700 inline-flex items-center justify-center hover:opacity-80"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {shops.length > 0 && (
+              <div>
+                <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
+                  <Store className="w-4 h-4 text-brand-500" />
+                  Toko Online
+                </h2>
+                <div className="flex flex-wrap gap-2.5">
+                  {shops.map(([k, url]) => (
+                    <BrandIconLink key={k} glyph={MARKET_ICONS[k]} url={url} label={MARKET_LABEL[k]} shape="square" />
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -334,13 +371,25 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
         )}
 
         {/* Lokasi */}
-        {b.lokasi && (
+        {(b.lokasi || b.mapsUrl) && (
           <section className="mb-8">
             <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-brand-500" />
               Lokasi
             </h2>
-            <p className="text-sm text-neutral-700 whitespace-pre-line">{b.lokasi}</p>
+            {b.lokasi && <p className="text-sm text-neutral-700 whitespace-pre-line">{b.lokasi}</p>}
+            {b.mapsUrl && (
+              <a
+                href={b.mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-brand-700 hover:underline"
+              >
+                <MapPin className="w-4 h-4" />
+                Buka di Google Maps
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
           </section>
         )}
         <MarketDisclaimer className="mt-8" />

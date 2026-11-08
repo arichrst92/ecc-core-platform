@@ -9,6 +9,7 @@ export interface KatalogItem {
   mataUang: string;
   satuan: string | null;
   fotoUrls: string[];
+  marketplaceLinks?: Partial<Record<'shopee' | 'lazada' | 'tiktokshop' | 'tokopedia', string>> | null;
 }
 
 const SYMBOL: Record<string, string> = { IDR: 'Rp', AUD: 'A$', SGD: 'S$', MYR: 'RM', USD: 'US$', EUR: '€', NZD: 'NZ$', HKD: 'HK$', TWD: 'NT$', CNY: '¥', JPY: '¥' };

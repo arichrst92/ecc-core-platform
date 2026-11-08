@@ -9,6 +9,10 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
+import { BrandIconLink } from '@/components/brand-icon';
+import { MARKET_ICONS } from '@/lib/brand-icons-data';
+
+const MARKET_LABEL = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' } as const;
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 
@@ -57,6 +61,10 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
   if (!it) notFound();
   const b = it.business;
   const url = `${SITE}/local-market/${params.id}/item/${params.itemId}`;
+  // Link produk saja — tidak memakai link toko usaha sebagai cadangan.
+  const shops = (Object.keys(MARKET_LABEL) as (keyof typeof MARKET_LABEL)[])
+    .filter((k) => it.marketplaceLinks?.[k])
+    .map((k) => [k, it.marketplaceLinks![k]!] as const);
   const pesan = `Halo ${b.nama}, saya tertarik dengan ${it.nama} (${hargaText(it)}). ${url}`;
   const wa = b.waAdmin ? `https://wa.me/${b.waAdmin.replace(/\D/g, '')}?text=${encodeURIComponent(pesan)}` : null;
   const mail = b.email ? `mailto:${b.email}?subject=${encodeURIComponent(`Tanya: ${it.nama}`)}&body=${encodeURIComponent(pesan)}` : null;
@@ -89,6 +97,16 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
         </span>
         <h1 className="text-3xl font-bold text-neutral-900 leading-tight mt-2">{it.nama}</h1>
         <p className={`text-xl font-semibold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</p>
+        {shops.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs font-semibold text-neutral-500 mb-2">Beli juga di</div>
+            <div className="flex flex-wrap gap-2.5">
+              {shops.map(([k, url]) => (
+                <BrandIconLink key={k} glyph={MARKET_ICONS[k]} url={url} label={MARKET_LABEL[k]} shape="square" />
+              ))}
+            </div>
+          </div>
+        )}
         {it.deskripsi ? <p className="text-neutral-700 whitespace-pre-line leading-relaxed mt-4">{it.deskripsi}</p> : null}
 
         <Link href={`/local-market/${b.id}`} className="flex items-center gap-3 mt-6 p-3 border border-neutral-200 rounded-xl hover:border-brand-300">

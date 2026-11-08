@@ -247,6 +247,9 @@ meBusinessRouter.post('/:id/partners', async (req, res) => {
     select: { id: true, namaLengkap: true, isActive: true, isTamu: true },
   });
   if (!target || !target.isActive || target.isTamu) throw NotFound('Jemaat tidak ditemukan atau tidak aktif.');
+  if (!(await prisma.user.count({ where: { jemaatId: target.id } }))) {
+    throw BadRequest(`${target.namaLengkap} belum punya akun Els App, jadi tidak bisa menerima undangan.`);
+  }
   if (target.id === biz.ownerJemaatId) throw BadRequest(`${target.namaLengkap} adalah pemilik usaha ini.`);
   const existing = await prisma.localBusinessPartner.findUnique({
     where: { businessId_jemaatId: { businessId: biz.id, jemaatId: target.id } },
@@ -649,7 +652,10 @@ meLocalMarketRouter.post('/:id/item/:itemId/view', async (req, res) => {
     select: { id: true, business: { select: { ownerJemaatId: true } } },
   });
   if (!item) throw NotFound('Item tidak ditemukan');
-  if (item.business.ownerJemaatId !== req.user.jemaatId && req.user.jemaatId) {
+  const isPartner =
+    !!req.user.jemaatId &&
+    (await prisma.localBusinessPartner.count({ where: { businessId: id, jemaatId: req.user.jemaatId, status: 'ACCEPTED' } })) > 0;
+  if (item.business.ownerJemaatId !== req.user.jemaatId && !isPartner && req.user.jemaatId) {
     await hitView('item', item.id, `j:${req.user.jemaatId}`);
   }
   res.json({ success: true, data: { ok: true } });

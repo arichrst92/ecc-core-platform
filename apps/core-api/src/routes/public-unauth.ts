@@ -447,6 +447,8 @@ publicUnauthRouter.get('/local-market/:id', publicBrowseLimiter, async (req, res
       waAdmin: true,
       email: true,
       socialUsernames: true,
+      marketplaceLinks: true,
+      mapsUrl: true,
       isOnline: true,
       lokasi: true,
       createdAt: true,

@@ -20,7 +20,7 @@
  *   - GET    /admin/me/local-market/:id                 → detail public (sembunyikan isActive=false)
  */
 import { Router } from 'express';
-import { prisma } from '@ecc/database';
+import { prisma, Prisma } from '@ecc/database';
 import {
   createLocalBusinessSchema,
   updateLocalBusinessSchema,
@@ -110,6 +110,8 @@ meBusinessRouter.post('/', async (req, res) => {
       waAdmin: input.waAdmin ?? null,
       email: input.email ?? null,
       socialUsernames: input.socialUsernames ?? undefined,
+      marketplaceLinks: input.marketplaceLinks && Object.keys(input.marketplaceLinks).length ? input.marketplaceLinks : undefined,
+      mapsUrl: input.mapsUrl ?? null,
     },
     include: { owner: { select: ownerLite } },
   });
@@ -158,6 +160,10 @@ meBusinessRouter.patch('/:id', async (req, res) => {
     data.whatsappUrl = waLink(input.waAdmin);
   }
   if (input.email !== undefined) data.email = input.email;
+  if (input.marketplaceLinks !== undefined) {
+    data.marketplaceLinks = Object.keys(input.marketplaceLinks).length ? input.marketplaceLinks : Prisma.DbNull;
+  }
+  if (input.mapsUrl !== undefined) data.mapsUrl = input.mapsUrl;
   if (input.socialUsernames !== undefined) {
     data.socialUsernames = input.socialUsernames;
     data.socialLinks = socialUsernamesToLinks(input.socialUsernames as SocialUsernames);
@@ -492,6 +498,7 @@ meBusinessRouter.post('/:id/items', async (req, res) => {
       mataUang: input.mataUang,
       satuan: input.hargaTipe === 'NEGO' ? null : input.satuan ?? null,
       isActive: input.isActive ?? true,
+      ...(input.marketplaceLinks && Object.keys(input.marketplaceLinks).length ? { marketplaceLinks: input.marketplaceLinks } : {}),
       urutan: (last?.urutan ?? 0) + 1,
     },
   });
@@ -517,6 +524,9 @@ meBusinessRouter.patch('/:id/items/:itemId', async (req, res) => {
       ...(input.mataUang !== undefined ? { mataUang: input.mataUang } : {}),
       ...(tipe === 'NEGO' ? { satuan: null } : input.satuan !== undefined ? { satuan: input.satuan } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(input.marketplaceLinks !== undefined
+        ? { marketplaceLinks: Object.keys(input.marketplaceLinks).length ? input.marketplaceLinks : Prisma.DbNull }
+        : {}),
     },
   });
   audit(req, { action: 'UPDATE', resource: 'local_business_item', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });

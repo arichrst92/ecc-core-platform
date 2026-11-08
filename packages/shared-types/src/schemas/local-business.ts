@@ -74,6 +74,55 @@ export function socialUsernamesToLinks(u: SocialUsernames | null | undefined): {
   return SOCIAL_PLATFORM_KEYS.filter((k) => u[k]).map((k) => ({ platform: SOCIAL_PLATFORMS[k].label, url: SOCIAL_PLATFORMS[k].url(u[k]!) }));
 }
 
+// ===== Marketplace (2.4.7) =====
+// Link toko (usaha) atau link produk (item). Domain dicek supaya ikon Shopee
+// benar-benar menuju Shopee, dst. Item TIDAK memakai link toko sebagai cadangan.
+export const MARKETPLACES = {
+  shopee: { label: 'Shopee', host: /(^|\.)(shopee\.[a-z.]+|shp\.ee)$/i },
+  lazada: { label: 'Lazada', host: /(^|\.)(lazada\.[a-z.]+|lzd\.co)$/i },
+  tiktokshop: { label: 'TikTok Shop', host: /(^|\.)(tiktok\.com|tiktokshop\.com)$/i },
+  tokopedia: { label: 'Tokopedia', host: /(^|\.)(tokopedia\.(com|link)|tkp\.me)$/i },
+} as const;
+export type MarketplaceKey = keyof typeof MARKETPLACES;
+export const MARKETPLACE_KEYS = Object.keys(MARKETPLACES) as MarketplaceKey[];
+export type MarketplaceLinks = Partial<Record<MarketplaceKey, string>>;
+
+function withScheme(v: string) {
+  const t = v.trim();
+  return !t ? '' : /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
+function hostOf(u: string): string | null {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return null;
+  }
+}
+const marketplaceUrl = (k: MarketplaceKey) =>
+  z
+    .string()
+    .trim()
+    .max(500)
+    .transform(withScheme)
+    .refine((v) => v === '' || (hostOf(v) != null && MARKETPLACES[k].host.test(hostOf(v)!)), `Link ${MARKETPLACES[k].label} tidak valid.`);
+
+/** { shopee?, lazada?, tiktokshop?, tokopedia? } — string kosong dibuang. */
+export const marketplaceLinksSchema = z
+  .object(Object.fromEntries(MARKETPLACE_KEYS.map((k) => [k, marketplaceUrl(k).optional()])) as Record<MarketplaceKey, z.ZodOptional<ReturnType<typeof marketplaceUrl>>>)
+  .partial()
+  .transform((o) => Object.fromEntries(Object.entries(o).filter(([, v]) => !!v)) as MarketplaceLinks);
+
+/** Link Google Maps (tautan Bagikan, link tempat, maps.app.goo.gl). */
+export const mapsUrlSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .transform(withScheme)
+  .refine(
+    (v) => v === '' || /^(www\.)?(google\.[a-z.]+|maps\.google\.[a-z.]+|maps\.app\.goo\.gl|goo\.gl)$/i.test(hostOf(v) ?? ''),
+    'Link Google Maps tidak valid.',
+  );
+
 // ===== Mata uang katalog =====
 export const LOCAL_CURRENCIES = ['IDR', 'AUD', 'SGD', 'MYR', 'USD', 'EUR', 'NZD', 'HKD', 'TWD', 'CNY', 'JPY'] as const;
 export const localCurrencySchema = z.enum(LOCAL_CURRENCIES);
@@ -95,6 +144,8 @@ export const createLocalBusinessSchema = z.object({
   waAdmin: emptyToUndefined(noHpSchema),
   email: emptyToUndefined(z.string().trim().toLowerCase().email('Format email tidak valid').max(255)),
   socialUsernames: socialUsernamesSchema.optional(),
+  marketplaceLinks: marketplaceLinksSchema.optional(),
+  mapsUrl: mapsUrlSchema.optional().transform((v) => v || undefined),
 });
 export type CreateLocalBusinessInput = z.infer<typeof createLocalBusinessSchema>;
 
@@ -119,6 +170,9 @@ export const updateLocalBusinessSchema = z.object({
     .optional()
     .transform((v) => (v === '' ? null : v)),
   socialUsernames: socialUsernamesSchema.optional(),
+  marketplaceLinks: marketplaceLinksSchema.optional(),
+  // '' / null = hapus
+  mapsUrl: z.union([z.null(), mapsUrlSchema]).optional().transform((v) => (v === '' ? null : v)),
 });
 export type UpdateLocalBusinessInput = z.infer<typeof updateLocalBusinessSchema>;
 
@@ -161,6 +215,7 @@ const itemBase = {
     .nullish()
     .transform((v) => (v === undefined ? undefined : v ? v.replace(/^\//, '').trim() || null : null)),
   isActive: z.boolean().optional(),
+  marketplaceLinks: marketplaceLinksSchema.optional(),
 };
 
 export const createLocalItemSchema = z
@@ -180,5 +235,6 @@ export const updateLocalItemSchema = z.object({
   mataUang: localCurrencySchema.optional(),
   satuan: itemBase.satuan,
   isActive: z.boolean().optional(),
+  marketplaceLinks: marketplaceLinksSchema.optional(),
 });
 export type UpdateLocalItemInput = z.infer<typeof updateLocalItemSchema>;

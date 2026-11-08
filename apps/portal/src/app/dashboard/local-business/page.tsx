@@ -38,6 +38,10 @@ interface SocialLink {
   url: string;
 }
 
+type MarketKey = 'shopee' | 'lazada' | 'tiktokshop' | 'tokopedia';
+const MARKET_KEYS: MarketKey[] = ['shopee', 'lazada', 'tiktokshop', 'tokopedia'];
+const MARKET_LABEL: Record<MarketKey, string> = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' };
+
 interface BusinessItem {
   id: string;
   ownerJemaatId: string;
@@ -54,6 +58,8 @@ interface BusinessItem {
   waAdmin?: string | null;
   email?: string | null;
   viewCount?: number;
+  mapsUrl?: string | null;
+  marketplaceLinks?: Partial<Record<MarketKey, string>> | null;
   companyProfileUrl: string | null;
   socialLinks: SocialLink[] | null;
   isActive: boolean;
@@ -543,11 +549,15 @@ function DetailModal({
 
             {/* Links */}
             <div className="space-y-1.5">
-              {b.waAdmin && <LinkRow icon={MessageCircle} label="WhatsApp admin" url={`https://wa.me/${b.waAdmin.replace(/\D/g, '')}`} />}
+              {b.waAdmin && <LinkRow icon={MessageCircle} label="WhatsApp" url={`https://wa.me/${b.waAdmin.replace(/\D/g, '')}`} />}
               {b.email && <LinkRow icon={ExternalLink} label="Email" url={`mailto:${b.email}`} />}
               {b.websiteUrl && (
                 <LinkRow icon={Globe} label="Website" url={b.websiteUrl} />
               )}
+              {b.mapsUrl && <LinkRow icon={MapPin} label="Google Maps" url={b.mapsUrl} />}
+              {MARKET_KEYS.filter((k) => b.marketplaceLinks?.[k]).map((k) => (
+                <LinkRow key={k} icon={Store} label={`Toko ${MARKET_LABEL[k]}`} url={b.marketplaceLinks![k]!} />
+              ))}
               {b.whatsappUrl && !b.waAdmin && (
                 <LinkRow icon={MessageCircle} label="WhatsApp" url={b.whatsappUrl} />
               )}
@@ -624,6 +634,7 @@ interface KatalogItem {
   isActive: boolean;
   isHiddenByAdmin: boolean;
   viewCount?: number;
+  marketplaceLinks?: Partial<Record<MarketKey, string>> | null;
 }
 
 function hargaText(it: KatalogItem) {
@@ -714,6 +725,15 @@ function KatalogList({ businessId, apiBase }: { businessId: string; apiBase: str
                   <Eye className="w-3 h-3" />
                   {(it.viewCount ?? 0).toLocaleString('id-ID')} kunjungan
                 </div>
+                {MARKET_KEYS.some((k) => it.marketplaceLinks?.[k]) && (
+                  <div className="flex flex-wrap gap-x-2 text-[10px] mt-0.5">
+                    {MARKET_KEYS.filter((k) => it.marketplaceLinks?.[k]).map((k) => (
+                      <a key={k} href={it.marketplaceLinks![k]!} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline">
+                        {MARKET_LABEL[k]}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-[10px] text-neutral-500">
                     {it.isHiddenByAdmin ? 'Disembunyikan admin' : !it.isActive ? 'Disembunyikan pemilik' : 'Tampil'}

@@ -1924,6 +1924,9 @@ model LocalBusiness {
   // 2.4.7 — username sosmed { instagram, facebook, tiktok, youtube, x, linkedin, threads }.
   // socialLinks tetap diisi (URL) dari username ini untuk app lama & web.
   socialUsernames   Json?      @map("social_usernames")
+  // 2.4.7 — link toko online { shopee, lazada, tiktokshop, tokopedia } & link Google Maps.
+  marketplaceLinks  Json?      @map("marketplace_links")
+  mapsUrl           String?    @map("maps_url") @db.Text
   // 2.4.7 — berapa kali detail usaha dibuka (app + web; pemilik tidak dihitung, 1x/30 menit per pengunjung).
   viewCount         Int        @default(0) @map("view_count")
   // Owner toggle: false = hide dari public browse. Owner tetap bisa lihat &
@@ -4186,6 +4189,8 @@ model LocalBusinessItem {
   /// Disembunyikan admin Portal (moderasi).
   isHiddenByAdmin Boolean     @default(false) @map("is_hidden_by_admin")
   urutan     Int              @default(0)
+  /// Link produk di marketplace { shopee, lazada, tiktokshop, tokopedia } (tanpa fallback ke link toko).
+  marketplaceLinks Json?        @map("marketplace_links")
   /// Berapa kali detail item dibuka (app + web).
   viewCount  Int              @default(0) @map("view_count")
   createdAt  DateTime         @default(now()) @map("created_at")

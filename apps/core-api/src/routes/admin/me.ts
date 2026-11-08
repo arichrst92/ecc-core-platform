@@ -1677,10 +1677,14 @@ meRouter.get('/reservasi', async (req, res) => {
   const activeOnly = req.query.activeOnly !== 'false';
 
   // Orang yang reservasinya saya pegang (anak, tanggungan, tamu).
-  const [childIds, dependents, tamu] = await Promise.all([
+  const [childIds, dependents, tamu, keluarga] = await Promise.all([
     getMyChildrenIds(jemaatId),
     prisma.jemaat.findMany({ where: { primaryGuardianId: jemaatId }, select: { id: true } }),
     prisma.jemaatTamu.findMany({ where: { inviterId: jemaatId }, select: { tamuId: true } }),
+    // Keluarga lain (pasangan, ortu, saudara, keluarga via pasangan) — sebelumnya
+    // tidak ikut, sehingga reservasi untuk pasangan tidak tampil sebagai tiket
+    // (sama dengan daftar tiket event & menu Keluarga).
+    familyOf(jemaatId),
   ]);
   const people = new Map<string, 'ANAK' | 'TANGGUNGAN' | 'TAMU'>();
   for (const t of tamu) people.set(t.tamuId, 'TAMU');
@@ -1691,7 +1695,7 @@ meRouter.get('/reservasi', async (req, res) => {
   const and: Prisma.ReservasiWhereInput[] = [
     {
       OR: [
-        { jemaatId: { in: [jemaatId, ...people.keys()] } },
+        { jemaatId: { in: [...new Set([jemaatId, ...people.keys(), ...keluarga.keys()])] } },
         // Keluarga yang saya self check-in-kan (bukan hasil scan usher).
         { checkedInBy: userId, checkinMethod: 'SELF' },
         { invitedByJemaatId: jemaatId },

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
+import { ShareButton } from '@/components/share-button';
 import { BrandIconLink } from '@/components/brand-icon';
 import { MARKET_ICONS, SOCIAL_ICONS } from '@/lib/brand-icons-data';
 import { MarketViewPing } from '@/components/market-view-ping';
@@ -138,6 +139,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
               <p className="text-sm text-neutral-500 mt-1">{b.industri}</p>
             )}
           </div>
+          <ShareButton title={b.nama} text={b.industri ?? 'ECC Local Market'} className="shrink-0 self-start" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs mb-6">

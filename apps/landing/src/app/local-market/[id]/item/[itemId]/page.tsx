@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
+import { ShareButton } from '@/components/share-button';
 import { BrandIconLink } from '@/components/brand-icon';
 import { MARKET_ICONS } from '@/lib/brand-icons-data';
 
@@ -95,7 +96,10 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
         <span className="inline-block text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
           {it.jenis === 'JASA' ? 'Jasa' : 'Produk'}
         </span>
-        <h1 className="text-3xl font-bold text-neutral-900 leading-tight mt-2">{it.nama}</h1>
+        <div className="flex items-start gap-3 mt-2">
+          <h1 className="text-3xl font-bold text-neutral-900 leading-tight flex-1">{it.nama}</h1>
+          <ShareButton title={`${it.nama} — ${b.nama}`} text={hargaText(it)} className="shrink-0" />
+        </div>
         <p className={`text-xl font-semibold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</p>
         {shops.length > 0 && (
           <div className="mt-4">

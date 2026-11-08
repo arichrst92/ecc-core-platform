@@ -228,7 +228,7 @@ const SECTIONS: Section[] = [
     summary: 'Kelola struktur organisasi level atas: sinode, cabang gereja, dan rekening bank cabang.',
     content: [
       { kind: 'menu-card', href: '/dashboard/sinode', label: 'Gereja', description: 'Top-level organisasi gereja/sinode (mis. ECC Indonesia) yang menaungi banyak cabang. Di sidebar ada di grup Sinode dengan nama menu "Gereja".' },
-      { kind: 'menu-card', href: '/dashboard/cabang', label: 'Cabang Gereja', description: 'Cabang lokal di bawah sinode. Punya alamat, kontak, koordinat untuk peta, dan multi-rekening bank.' },
+      { kind: 'menu-card', href: '/dashboard/cabang', label: 'Cabang Gereja', description: 'Cabang lokal di bawah sinode. Punya alamat, kontak, link Google Maps (titik peta otomatis), dan multi-rekening bank.' },
       {
         kind: 'steps',
         title: 'Tambah cabang baru',
@@ -236,7 +236,7 @@ const SECTIONS: Section[] = [
           'Buka menu Cabang Gereja → klik Tambah Cabang.',
           'Pilih Sinode, isi nama + kode unik per sinode (mis. JKT, BDG).',
           'Isi alamat + kontak opsional.',
-          'Untuk plotting di peta dashboard, isi latitude/longitude (WGS84 — bisa cek di Google Maps right-click → "What\'s here").',
+          'Untuk titik di peta & Petunjuk arah, tempel link Google Maps (tautan Bagikan / link tempat) — koordinat diambil otomatis.',
           'Klik Simpan.',
         ],
       },

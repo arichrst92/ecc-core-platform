@@ -34,6 +34,7 @@ import { z } from 'zod';
 import { serializeItem, publicItemsOf, localMarketMaxItems, hitView } from '../../lib/local-market.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { createNotification } from '../../lib/notification.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { flexPdfUpload } from '../../lib/pdf-upload.js';
 import {
@@ -65,14 +66,40 @@ function assertJemaatId(req: Parameters<Parameters<typeof meBusinessRouter.get>[
   return req.user.jemaatId;
 }
 
+/** Pemilik ATAU partner yang sudah menerima undangan (2.4.7) — hak sama. */
 async function findMyBusinessOrThrow(id: string, jemaatId: string) {
   const biz = await prisma.localBusiness.findUnique({
     where: { id },
     include: { owner: { select: ownerLite } },
   });
   if (!biz) throw NotFound('Bisnis tidak ditemukan');
-  if (biz.ownerJemaatId !== jemaatId) throw Forbidden('Bukan owner bisnis ini');
+  if (biz.ownerJemaatId !== jemaatId) {
+    const p = await prisma.localBusinessPartner.findUnique({
+      where: { businessId_jemaatId: { businessId: biz.id, jemaatId } },
+      select: { status: true },
+    });
+    if (p?.status !== 'ACCEPTED') throw Forbidden('Anda bukan pemilik atau partner bisnis ini');
+  }
   return biz;
+}
+
+/** Partner (diterima & menunggu) untuk halaman kelola. */
+async function partnersOf(businessId: string) {
+  return prisma.localBusinessPartner.findMany({
+    where: { businessId },
+    orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, status: true, createdAt: true, respondedAt: true, jemaat: { select: ownerLite }, invitedBy: { select: { id: true, namaLengkap: true } } },
+  });
+}
+
+/** Partner yang sudah menerima — ditampilkan ke jemaat di detail usaha. */
+async function acceptedPartnersOf(businessId: string) {
+  const rows = await prisma.localBusinessPartner.findMany({
+    where: { businessId, status: 'ACCEPTED' },
+    orderBy: { respondedAt: 'asc' },
+    select: { jemaat: { select: ownerLite } },
+  });
+  return rows.map((r) => r.jemaat);
 }
 
 // ============================================================
@@ -81,11 +108,73 @@ async function findMyBusinessOrThrow(id: string, jemaatId: string) {
 meBusinessRouter.get('/', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const rows = await prisma.localBusiness.findMany({
-    where: { ownerJemaatId: jemaatId },
+    where: {
+      OR: [{ ownerJemaatId: jemaatId }, { partners: { some: { jemaatId, status: 'ACCEPTED' } } }],
+    },
     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
     include: { owner: { select: ownerLite } },
   });
+  res.json({ success: true, data: rows.map((r) => ({ ...r, myRole: r.ownerJemaatId === jemaatId ? 'OWNER' : 'PARTNER' })) });
+});
+
+// ============================================================
+//  PARTNER (2.4.7) — undangan untuk saya
+//  (didefinisikan sebelum /:id supaya "invitations" tidak dianggap id)
+// ============================================================
+meBusinessRouter.get('/invitations', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const rows = await prisma.localBusinessPartner.findMany({
+    where: { jemaatId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      createdAt: true,
+      invitedBy: { select: { id: true, namaLengkap: true } },
+      business: { select: { id: true, nama: true, logoUrl: true, industri: true, owner: { select: { id: true, namaLengkap: true } } } },
+    },
+  });
   res.json({ success: true, data: rows });
+});
+
+async function respondInvitation(req: Parameters<Parameters<typeof meBusinessRouter.post>[1]>[0], accept: boolean) {
+  const jemaatId = assertJemaatId(req);
+  const inv = await prisma.localBusinessPartner.findFirst({
+    where: { id: req.params.pid, jemaatId, status: 'PENDING' },
+    include: { business: { select: { id: true, nama: true } }, jemaat: { select: { namaLengkap: true } } },
+  });
+  if (!inv) throw NotFound('Undangan tidak ditemukan atau sudah diproses.');
+  if (accept) {
+    await prisma.localBusinessPartner.update({ where: { id: inv.id }, data: { status: 'ACCEPTED', respondedAt: new Date() } });
+  } else {
+    await prisma.localBusinessPartner.delete({ where: { id: inv.id } });
+  }
+  void createNotification({
+    jemaatId: inv.invitedById,
+    type: accept ? 'BUSINESS_PARTNER_ACCEPTED' : 'BUSINESS_PARTNER_REJECTED',
+    title: accept ? 'Undangan partner diterima' : 'Undangan partner ditolak',
+    body: accept
+      ? `${inv.jemaat.namaLengkap} kini menjadi partner usaha "${inv.business.nama}".`
+      : `${inv.jemaat.namaLengkap} menolak menjadi partner usaha "${inv.business.nama}".`,
+    actionUrl: '/profile/businesses',
+    metadata: { businessId: inv.business.id },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'local_business_partner',
+    resourceId: inv.id,
+    resourceLabel: `${accept ? 'Terima' : 'Tolak'} partner: ${inv.business.nama}`,
+  });
+  return inv;
+}
+
+meBusinessRouter.post('/invitations/:pid/accept', async (req, res) => {
+  const inv = await respondInvitation(req, true);
+  res.json({ success: true, data: { id: inv.id, businessId: inv.business.id, status: 'ACCEPTED' } });
+});
+
+meBusinessRouter.post('/invitations/:pid/reject', async (req, res) => {
+  const inv = await respondInvitation(req, false);
+  res.json({ success: true, data: { id: inv.id, status: 'REJECTED' } });
 });
 
 // ============================================================
@@ -132,7 +221,112 @@ meBusinessRouter.post('/', async (req, res) => {
 meBusinessRouter.get('/:id', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
-  res.json({ success: true, data: biz });
+  res.json({
+    success: true,
+    data: { ...biz, myRole: biz.ownerJemaatId === jemaatId ? 'OWNER' : 'PARTNER', partners: await partnersOf(biz.id) },
+  });
+});
+
+// ---- Kelola partner (pemilik & partner punya hak yang sama)
+meBusinessRouter.get('/:id/partners', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  res.json({ success: true, data: await partnersOf(biz.id) });
+});
+
+/** Undang partner: { kode } atau { jemaatId }. Orangnya harus menerima di app. */
+meBusinessRouter.post('/:id/partners', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  const input = z
+    .object({ kode: z.string().trim().toUpperCase().max(20).optional(), jemaatId: z.string().uuid().optional() })
+    .refine((v) => !!v.kode || !!v.jemaatId, 'Pilih jemaat yang diundang.')
+    .parse(req.body ?? {});
+  const target = await prisma.jemaat.findFirst({
+    where: input.jemaatId ? { id: input.jemaatId } : { kode: input.kode },
+    select: { id: true, namaLengkap: true, isActive: true, isTamu: true },
+  });
+  if (!target || !target.isActive || target.isTamu) throw NotFound('Jemaat tidak ditemukan atau tidak aktif.');
+  if (target.id === biz.ownerJemaatId) throw BadRequest(`${target.namaLengkap} adalah pemilik usaha ini.`);
+  const existing = await prisma.localBusinessPartner.findUnique({
+    where: { businessId_jemaatId: { businessId: biz.id, jemaatId: target.id } },
+  });
+  if (existing) {
+    throw BadRequest(
+      existing.status === 'ACCEPTED'
+        ? `${target.namaLengkap} sudah menjadi partner.`
+        : `${target.namaLengkap} sudah diundang dan belum menjawab.`,
+    );
+  }
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { namaLengkap: true } });
+  const row = await prisma.localBusinessPartner.create({
+    data: { businessId: biz.id, jemaatId: target.id, invitedById: jemaatId },
+  });
+  void createNotification({
+    jemaatId: target.id,
+    type: 'BUSINESS_PARTNER_INVITED',
+    title: 'Undangan partner usaha',
+    body: `${me?.namaLengkap ?? 'Seseorang'} mengundang Anda menjadi partner usaha "${biz.nama}" di Local Market. Terima atau tolak di Usaha Saya.`,
+    actionUrl: '/profile/businesses',
+    metadata: { businessId: biz.id, partnerId: row.id },
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'local_business_partner',
+    resourceId: row.id,
+    resourceLabel: `Undang partner ${target.namaLengkap} → ${biz.nama}`,
+  });
+  res.status(201).json({ success: true, data: (await partnersOf(biz.id)).find((p) => p.id === row.id) });
+});
+
+/** Batalkan undangan / keluarkan partner. */
+meBusinessRouter.delete('/:id/partners/:pid', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const biz = await findMyBusinessOrThrow(req.params.id, jemaatId);
+  const row = await prisma.localBusinessPartner.findFirst({
+    where: { id: req.params.pid, businessId: biz.id },
+    include: { jemaat: { select: { namaLengkap: true } } },
+  });
+  if (!row) throw NotFound('Partner tidak ditemukan.');
+  await prisma.localBusinessPartner.delete({ where: { id: row.id } });
+  if (row.status === 'ACCEPTED' && row.jemaatId !== jemaatId) {
+    void createNotification({
+      jemaatId: row.jemaatId,
+      type: 'BUSINESS_PARTNER_REMOVED',
+      title: 'Tidak lagi partner usaha',
+      body: `Anda tidak lagi menjadi partner usaha "${biz.nama}".`,
+      actionUrl: '/profile/businesses',
+      metadata: { businessId: biz.id },
+    });
+  }
+  audit(req, {
+    action: 'DELETE',
+    resource: 'local_business_partner',
+    resourceId: row.id,
+    resourceLabel: `${row.status === 'ACCEPTED' ? 'Keluarkan' : 'Batalkan undangan'} partner ${row.jemaat.namaLengkap} — ${biz.nama}`,
+  });
+  res.json({ success: true, data: { id: row.id } });
+});
+
+/** Partner keluar sendiri dari usaha. */
+meBusinessRouter.post('/:id/leave', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const row = await prisma.localBusinessPartner.findUnique({
+    where: { businessId_jemaatId: { businessId: req.params.id, jemaatId } },
+    include: { business: { select: { nama: true, ownerJemaatId: true } }, jemaat: { select: { namaLengkap: true } } },
+  });
+  if (!row || row.status !== 'ACCEPTED') throw NotFound('Anda bukan partner usaha ini.');
+  await prisma.localBusinessPartner.delete({ where: { id: row.id } });
+  void createNotification({
+    jemaatId: row.business.ownerJemaatId,
+    type: 'BUSINESS_PARTNER_REMOVED',
+    title: 'Partner keluar',
+    body: `${row.jemaat.namaLengkap} keluar sebagai partner usaha "${row.business.nama}".`,
+    actionUrl: '/profile/businesses',
+    metadata: { businessId: req.params.id },
+  });
+  audit(req, { action: 'DELETE', resource: 'local_business_partner', resourceId: row.id, resourceLabel: `Keluar partner — ${row.business.nama}` });
+  res.json({ success: true, data: { id: row.id } });
 });
 
 // ============================================================
@@ -424,7 +618,13 @@ meLocalMarketRouter.get('/:id', async (req, res) => {
     include: { owner: { select: ownerLite } },
   });
   if (!biz) throw NotFound('Bisnis tidak ditemukan');
-  const isOwner = biz.ownerJemaatId === req.user.jemaatId;
+  // Pemilik & partner (2.4.7) tetap melihat usaha nonaktif dan tidak dihitung sebagai kunjungan.
+  const isOwner =
+    biz.ownerJemaatId === req.user.jemaatId ||
+    (!!req.user.jemaatId &&
+      (await prisma.localBusinessPartner.count({
+        where: { businessId: biz.id, jemaatId: req.user.jemaatId, status: 'ACCEPTED' },
+      })) > 0);
   // Cek owner.isActive — Prisma return owner relation, butuh refetch atau
   // include `isActive`. Sementara owner select tidak include isActive,
   // pakai query terpisah ringan.
@@ -437,7 +637,7 @@ meLocalMarketRouter.get('/:id', async (req, res) => {
     throw NotFound('Bisnis tidak ditemukan'); // sembunyikan keberadaannya
   }
   if (!isOwner && req.user.jemaatId) void hitView('biz', biz.id, `j:${req.user.jemaatId}`);
-  res.json({ success: true, data: { ...biz, items: await publicItemsOf(biz.id) } });
+  res.json({ success: true, data: { ...biz, items: await publicItemsOf(biz.id), partners: await acceptedPartnersOf(biz.id) } });
 });
 
 // POST /admin/me/local-market/:id/item/:itemId/view — hitung kunjungan item (app 2.4.7).

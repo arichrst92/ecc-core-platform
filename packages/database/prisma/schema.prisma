@@ -323,6 +323,8 @@ model Jemaat {
   visitsAsTarget               Visit[]                       @relation("VisitTarget")
   // Local Market (Movement) — bisnis jemaat (UMKM directory).
   localBusinesses              LocalBusiness[]               @relation("LocalBusinessOwner")
+  businessPartnerships         LocalBusinessPartner[]        @relation("LocalBusinessPartnerJemaat")
+  businessPartnerInvites       LocalBusinessPartner[]        @relation("LocalBusinessPartnerInviter")
   // WA Notification logs (reminder ibadah/event, dst) — recipient.
   notificationLogs             NotificationLog[]             @relation("NotificationLogTarget")
   // In-app notification feed (Modul 30) — recipient.
@@ -1937,6 +1939,7 @@ model LocalBusiness {
 
   owner Jemaat @relation("LocalBusinessOwner", fields: [ownerJemaatId], references: [id], onDelete: Cascade)
   items LocalBusinessItem[]
+  partners LocalBusinessPartner[]
 
   @@index([ownerJemaatId])
   @@index([nama])
@@ -2147,6 +2150,11 @@ enum InAppNotifType {
   FAMILY_LINK_REQUESTED
   FAMILY_LINK_APPROVED
   FAMILY_LINK_REJECTED
+  // Local Market — partner usaha (2.4.7)
+  BUSINESS_PARTNER_INVITED
+  BUSINESS_PARTNER_ACCEPTED
+  BUSINESS_PARTNER_REJECTED
+  BUSINESS_PARTNER_REMOVED
   HOMECELL_ASISTEN_ASSIGNED
   MINISTRY_DUTY_ASSIGNED
   MINISTRY_DUTY_REMOVED
@@ -4200,6 +4208,33 @@ model LocalBusinessItem {
 
   @@index([businessId, urutan])
   @@map("local_business_item")
+}
+
+/// Partner usaha (2.4.7): hak sama dengan pemilik setelah undangan diterima.
+/// Undangan ditolak / dibatalkan / partner keluar → baris dihapus.
+model LocalBusinessPartner {
+  id          String             @id @default(uuid()) @db.Uuid
+  businessId  String             @map("business_id") @db.Uuid
+  jemaatId    String             @map("jemaat_id") @db.Uuid
+  invitedById String             @map("invited_by_id") @db.Uuid
+  status      LocalPartnerStatus @default(PENDING)
+  respondedAt DateTime?          @map("responded_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  business  LocalBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  jemaat    Jemaat        @relation("LocalBusinessPartnerJemaat", fields: [jemaatId], references: [id], onDelete: Cascade)
+  invitedBy Jemaat        @relation("LocalBusinessPartnerInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, jemaatId])
+  @@index([jemaatId, status])
+  @@map("local_business_partner")
+}
+
+enum LocalPartnerStatus {
+  PENDING
+  ACCEPTED
+
+  @@map("local_partner_status")
 }
 
 enum LocalItemJenis {

@@ -66,6 +66,7 @@ interface BusinessItem {
   createdAt: string;
   updatedAt: string;
   owner: JemaatLite;
+  partners?: { jemaat: JemaatLite }[];
 }
 
 interface CabangLite {
@@ -540,6 +541,25 @@ function DetailModal({
                 <div className="text-xs text-neutral-500">{b.owner.cabang.nama}</div>
               </div>
             </Link>
+
+            {(b.partners ?? []).length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5">Partner</div>
+                <div className="flex flex-wrap gap-2">
+                  {(b.partners ?? []).map(({ jemaat: p }) => (
+                    <Link
+                      key={p.id}
+                      href={`/dashboard/jemaat/${p.id}`}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 border border-neutral-200 rounded-full hover:bg-neutral-50 text-sm"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-neutral-500" />
+                      {p.namaLengkap}
+                      <span className="text-xs text-neutral-400">{p.cabang?.nama}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {b.deskripsi && (
               <div className="text-sm text-neutral-700 whitespace-pre-wrap bg-neutral-50 p-3 rounded-lg">

@@ -104,7 +104,11 @@ localBusinessRouter.get('/', async (req, res) => {
       skip: (q.page - 1) * q.limit,
       take: q.limit,
       orderBy,
-      include: { owner: { select: ownerLite } },
+      include: {
+        owner: { select: ownerLite },
+        // 2.4.7 — partner yang sudah menerima undangan
+        partners: { where: { status: 'ACCEPTED' }, select: { jemaat: { select: ownerLite } } },
+      },
     }),
     prisma.localBusiness.count({ where }),
   ]);

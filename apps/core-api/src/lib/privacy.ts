@@ -205,6 +205,28 @@ export async function privacyGate(viewerId: string, targetIdsIn: Iterable<string
   };
 }
 
+/** Setelan awal jemaat yang baru onboard: semua data hanya untuk diri sendiri
+ *  (PIC homecell/pastoral & keluarga inti tetap bisa lihat sesuai aturan di atas). */
+export const SELF_ONLY_PRIVACY: PrivacySettings = Object.fromEntries(
+  PRIVACY_FIELDS.map((f) => [f, [] as Audience[]]),
+) as unknown as PrivacySettings;
+
+/**
+ * Dipanggil saat akun app pertama kali dibuat (daftar / login pertama).
+ * Hanya membuat baris kalau belum ada — setelan yang sudah diatur jemaat
+ * tidak pernah ditimpa. Gagal → diabaikan (tidak boleh memblokir login).
+ */
+export async function ensureNewMemberPrivacy(jemaatId: string): Promise<void> {
+  try {
+    await prisma.jemaatPrivacy.createMany({
+      data: [{ jemaatId, settings: SELF_ONLY_PRIVACY as unknown as object }],
+      skipDuplicates: true,
+    });
+  } catch {
+    /* abaikan */
+  }
+}
+
 /** Setelan privasi milik jemaat (default kalau belum pernah diatur). */
 export async function getPrivacy(jemaatId: string) {
   const row = await prisma.jemaatPrivacy.findUnique({ where: { jemaatId } });

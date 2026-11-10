@@ -732,7 +732,7 @@ async function computeCkids(cabangId: string, from: Date, to: Date) {
       _sum: { amount: true },
     }),
     prisma.hadiahRedeem.count({ where: { cabangId, cancelledAt: null, processedAt: { gte: from, lte: to } } }),
-    prisma.hadiahKatalog.findMany({ where: { cabangId, isActive: true }, select: { stock: true } }),
+    prisma.hadiahKatalog.findMany({ where: { cabangId, isActive: true, deletedAt: null }, select: { stock: true } }),
     prisma.hadiahRedeem.groupBy({
       by: ['hadiahNama'],
       where: { cabangId, cancelledAt: null, processedAt: { gte: from, lte: to } },

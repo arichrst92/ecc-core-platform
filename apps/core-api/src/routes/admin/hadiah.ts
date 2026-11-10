@@ -35,7 +35,7 @@ hadiahRouter.get('/', async (req, res) => {
       : undefined;
   const search = typeof req.query.search === 'string' ? req.query.search : undefined;
 
-  const where: Prisma.HadiahKatalogWhereInput = {};
+  const where: Prisma.HadiahKatalogWhereInput = { deletedAt: null };
   if (cabangId) where.cabangId = cabangId;
   if (isActive !== undefined) where.isActive = isActive;
   if (!isAdmin) {
@@ -118,7 +118,7 @@ hadiahRouter.post('/', async (req, res) => {
 hadiahRouter.patch('/:id', async (req, res) => {
   const input = updateHadiahSchema.parse(req.body);
   const before = await prisma.hadiahKatalog.findUnique({ where: { id: req.params.id } });
-  if (!before) throw NotFound('Hadiah tidak ditemukan');
+  if (!before || before.deletedAt) throw NotFound('Hadiah tidak ditemukan');
 
   const updated = await prisma.hadiahKatalog.update({
     where: { id: req.params.id },
@@ -186,23 +186,40 @@ hadiahRouter.delete('/:id/photo', async (req, res) => {
 });
 
 // ============================================================
-// DELETE /admin/hadiah/:id — soft delete via isActive=false (hard delete
-// blocked karena FK redeem)
+// DELETE /admin/hadiah/:id — hapus dari katalog.
+//   - belum pernah di-redeem → hapus permanen (+ file foto)
+//   - punya riwayat redeem   → deletedAt + nonaktif (riwayat point tetap utuh,
+//     FK redeem Restrict). Tidak muncul lagi di daftar mana pun.
+// Nonaktif sementara tetap lewat toggle Status Aktif.
 // ============================================================
 hadiahRouter.delete('/:id', async (req, res) => {
   const before = await prisma.hadiahKatalog.findUnique({ where: { id: req.params.id } });
-  if (!before) throw NotFound('Hadiah tidak ditemukan');
+  if (!before || before.deletedAt) throw NotFound('Hadiah tidak ditemukan');
+  const redeemCount = await prisma.hadiahRedeem.count({ where: { hadiahId: before.id } });
+  if (redeemCount === 0) {
+    await prisma.hadiahKatalog.delete({ where: { id: before.id } });
+    if (before.fotoUrl) await deleteHadiahPhoto(before.id).catch(() => {});
+    audit(req, {
+      action: 'DELETE',
+      resource: 'hadiah_katalog',
+      resourceId: before.id,
+      resourceLabel: before.nama,
+      before,
+    });
+    res.json({ success: true, data: { id: before.id, permanent: true }, message: 'Hadiah dihapus' });
+    return;
+  }
   const updated = await prisma.hadiahKatalog.update({
-    where: { id: req.params.id },
-    data: { isActive: false },
+    where: { id: before.id },
+    data: { isActive: false, deletedAt: new Date() },
   });
   audit(req, {
     action: 'DELETE',
     resource: 'hadiah_katalog',
     resourceId: updated.id,
-    resourceLabel: `[deactivate] ${updated.nama}`,
+    resourceLabel: `${updated.nama} (riwayat ${redeemCount} redeem disimpan)`,
     before,
     after: updated,
   });
-  res.json({ success: true, data: updated });
+  res.json({ success: true, data: { id: updated.id, permanent: false }, message: 'Hadiah dihapus dari katalog' });
 });

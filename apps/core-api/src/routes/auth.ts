@@ -57,6 +57,7 @@ import { generateUniqueKode } from '../lib/kode-reservasi.js';
 import { saveProfilePhoto } from '../lib/storage.js';
 import { faceTelemetryRouter } from './face-telemetry.js';
 import { isWithinRotationGrace } from '../lib/refresh-rotation.js';
+import { ensureNewMemberPrivacy } from '../lib/privacy.js';
 
 export const authRouter = Router();
 
@@ -431,6 +432,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 
   // 8. Create User row (auth account)
   const user = await prisma.user.create({ data: { jemaatId: created.id } });
+  await ensureNewMemberPrivacy(created.id);
 
   // 8b. Bukti persetujuan S&K + Kebijakan Privasi (kepatuhan no. 2)
   if (input.consent) {
@@ -1022,6 +1024,7 @@ async function issueAuthResponse(noHp: string, req: Request, method: 'OTP' | 'FA
   let user = jemaat.user;
   if (!user) {
     user = await prisma.user.create({ data: { jemaatId: jemaat.id } });
+    await ensureNewMemberPrivacy(jemaat.id);
   }
   await prisma.user.update({
     where: { id: user.id },
@@ -1140,6 +1143,7 @@ async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
   let user = jemaat.user;
   if (!user) {
     user = await prisma.user.create({ data: { jemaatId: jemaat.id } });
+    await ensureNewMemberPrivacy(jemaat.id);
   }
   await prisma.user.update({
     where: { id: user.id },

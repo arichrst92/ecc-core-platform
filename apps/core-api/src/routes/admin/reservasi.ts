@@ -671,6 +671,35 @@ reservasiRouter.get('/active-today', async (req, res) => {
   res.json({ success: true, data: items });
 });
 
+// ===== Reservasi ibadah anak milik 1 jemaat di tanggal tertentu =====
+// GET /admin/reservasi/kids-reserved?jemaatId=&tanggal=YYYY-MM-DD
+// Dipakai meja CKids: anak yang sudah reservasi langsung terpilih ibadahnya
+// (tidak perlu pilih ibadah lagi). Mengembalikan RESERVE & JOIN (JOIN supaya
+// meja tahu anak sudah check-in).
+reservasiRouter.get('/kids-reserved', async (req, res) => {
+  const jemaatId = typeof req.query.jemaatId === 'string' ? req.query.jemaatId : '';
+  const tanggal = typeof req.query.tanggal === 'string' ? req.query.tanggal : '';
+  if (!/^[0-9a-f-]{36}$/i.test(jemaatId)) throw BadRequest('jemaatId required');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) throw BadRequest('tanggal (YYYY-MM-DD) required');
+  const items = await prisma.reservasi.findMany({
+    where: {
+      jemaatId,
+      tanggalIbadah: new Date(`${tanggal}T00:00:00.000Z`),
+      status: { in: ['RESERVE', 'JOIN'] },
+      ibadah: { isKidsIbadah: true },
+    },
+    orderBy: { ibadah: { jamMulai: 'asc' } },
+    select: {
+      id: true,
+      kode: true,
+      status: true,
+      tanggalIbadah: true,
+      ibadah: { select: { id: true, nama: true, jamMulai: true, isKidsIbadah: true, requiresCheckout: true, cabangId: true } },
+    },
+  });
+  res.json({ success: true, data: items });
+});
+
 // ===== Walk-in check-in / checkout / pickup (Modul 28-K) =====
 //
 // Universal endpoint — jemaat identified by jemaatId (from scan QR profile

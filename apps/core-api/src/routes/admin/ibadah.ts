@@ -1,6 +1,6 @@
 import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo.js';
 import { Router } from 'express';
-import { prisma } from '@ecc/database';
+import { prisma, type Prisma } from '@ecc/database';
 import {
   createIbadahSchema,
   updateIbadahSchema,
@@ -172,11 +172,15 @@ ibadahRouter.get('/calendar', async (req, res) => {
 });
 
 // ===== Ibadah =====
+const UUID_RE_IBADAH = /^[0-9a-f-]{36}$/i;
+
 ibadahRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const where = q.search
-    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
-    : {};
+  // Filter opsional: ?cabangId= & ?kids=1 (dipakai meja CKids — hanya ibadah anak).
+  const where: Prisma.IbadahWhereInput = {};
+  if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
+  if (typeof req.query.cabangId === 'string' && UUID_RE_IBADAH.test(req.query.cabangId)) where.cabangId = req.query.cabangId;
+  if (req.query.kids === '1' || req.query.kids === 'true') where.isKidsIbadah = true;
   const [rows, total] = await Promise.all([
     prisma.ibadah.findMany({
       where,

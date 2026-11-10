@@ -64,6 +64,14 @@ function calcUmur(tanggalLahir: string | null): number | null {
   return age;
 }
 
+interface KidsReserved {
+  id: string;
+  kode: string;
+  status: 'RESERVE' | 'JOIN';
+  tanggalIbadah: string;
+  ibadah: IbadahItem;
+}
+
 interface ActiveReservasi {
   id: string;
   tanggalIbadah: string;
@@ -594,9 +602,11 @@ function ActionPanel({
   const qc = useQueryClient();
   const ctx = useIbadahContextStore();
   const [ibadahId, setIbadahId] = useState<string | null>(ctx.ibadahId);
-  const [tanggal, setTanggal] = useState<string>(
-    ctx.tanggalIbadah ?? localYmd(),
-  );
+  // Tanggal tersimpan dari sesi lama (mis. minggu lalu) → pakai hari ini.
+  const [tanggal, setTanggal] = useState<string>(() => {
+    const today = localYmd();
+    return ctx.tanggalIbadah && ctx.tanggalIbadah >= today ? ctx.tanggalIbadah : today;
+  });
   const [lastResult, setLastResult] = useState<any>(null);
   const [pointDialog, setPointDialog] = useState<null | {
     reservasiId: string;
@@ -605,15 +615,52 @@ function ActionPanel({
 
   const umur = calcUmur(jemaat.tanggalLahir);
 
+  // Meja CKids hanya melayani ibadah anak di cabang terpilih.
   const ibadahQ = useQuery({
-    queryKey: ['ibadah', 'active', cabangId],
+    queryKey: ['ibadah', 'kids', cabangId],
     queryFn: async () => {
       const res = await apiClient.get<{ data: IbadahItem[] }>('/admin/ibadah', {
-        params: { cabangId, limit: 50, sortBy: 'nama', sortOrder: 'asc' },
+        params: { cabangId, kids: 1, limit: 100, sortBy: 'nama', sortOrder: 'asc' },
+      });
+      // Filter ulang di klien (aman walau API lama belum mendukung filter).
+      return res.data.data.filter((i) => i.isKidsIbadah && i.cabangId === cabangId);
+    },
+  });
+
+  // Reservasi ibadah anak milik anak ini di tanggal terpilih → ibadah
+  // langsung terpilih, tidak perlu pilih manual.
+  const reservedQ = useQuery({
+    queryKey: ['reservasi', 'kids-reserved', jemaat.id, tanggal],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: KidsReserved[] }>('/admin/reservasi/kids-reserved', {
+        params: { jemaatId: jemaat.id, tanggal },
       });
       return res.data.data;
     },
+    retry: false,
   });
+  const reservedPending = (reservedQ.data ?? []).filter((r) => r.status === 'RESERVE');
+  const [manualPick, setManualPick] = useState(false);
+  const autoFromReservasi = !manualPick && reservedPending.length > 0;
+
+  useEffect(() => {
+    if (manualPick) return;
+    const first = reservedPending[0];
+    if (first) {
+      if (!reservedPending.some((r) => r.ibadah.id === ibadahId)) setIbadahId(first.ibadah.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservedQ.data, manualPick]);
+
+  // Pilihan tersimpan dari scan sebelumnya bisa saja bukan ibadah anak (versi
+  // lama) → kosongkan.
+  useEffect(() => {
+    if (!ibadahQ.data || ibadahId == null) return;
+    const known =
+      ibadahQ.data.some((i) => i.id === ibadahId) || reservedPending.some((r) => r.ibadah.id === ibadahId);
+    if (!known) setIbadahId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ibadahQ.data, reservedQ.data]);
 
   // Fetch active reservasi hari ini untuk auto-detect ibadah checkout/pickup
   const activeQ = useQuery({
@@ -635,7 +682,10 @@ function ActionPanel({
     (r) => r.ibadah.isKidsIbadah && !r.pickedUpAt,
   );
 
-  const selectedIbadah = (ibadahQ.data ?? []).find((i) => i.id === ibadahId) ?? null;
+  const selectedIbadah =
+    (ibadahQ.data ?? []).find((i) => i.id === ibadahId) ??
+    reservedPending.find((r) => r.ibadah.id === ibadahId)?.ibadah ??
+    null;
 
   const submitMut = useMutation({
     mutationFn: async ({ action, targetIbadahId, targetTanggal }: {
@@ -652,10 +702,17 @@ function ActionPanel({
         tanggalIbadah: finalTanggal,
         action,
       });
-      return { data: res.data.data, action, ibadahNama: (ibadahQ.data ?? []).find((i) => i.id === finalIbadahId)?.nama ?? '' };
+      const ibNama =
+        (ibadahQ.data ?? []).find((i) => i.id === finalIbadahId)?.nama ??
+        reservedPending.find((r) => r.ibadah.id === finalIbadahId)?.ibadah.nama ??
+        '';
+      return { data: res.data.data, action, ibadahNama: ibNama };
     },
     onSuccess: ({ data, action, ibadahNama }) => {
-      const ib = (ibadahQ.data ?? []).find((i) => i.id === (data?.reservasi?.ibadahId ?? ibadahId));
+      const ibId = data?.reservasi?.ibadahId ?? ibadahId;
+      const ib =
+        (ibadahQ.data ?? []).find((i) => i.id === ibId) ??
+        reservedPending.find((r) => r.ibadah.id === ibId)?.ibadah;
       if (ib && action === 'checkin') {
         // Persist context hanya untuk check-in (sebagai default berikutnya)
         ctx.setContext({
@@ -670,6 +727,7 @@ function ActionPanel({
       setLastResult({ ok: true, action, data, ibadahNama });
       qc.invalidateQueries({ queryKey: ['kehadiran'] });
       qc.invalidateQueries({ queryKey: ['reservasi', 'active-today'] });
+      qc.invalidateQueries({ queryKey: ['reservasi', 'kids-reserved'] });
 
       if (action === 'checkin' && data?.pickupCode && data?.reservasi?.id) {
         setPointDialog({
@@ -817,9 +875,51 @@ function ActionPanel({
         {/* Ibadah selector — untuk check-in (tanggal + ibadah).
             Untuk checkout/pickup, kalau ada active reservasi hari ini,
             otomatis pakai — no need pilih manual. */}
+        {autoFromReservasi ? (
+          <div className="bg-kids-50 border border-kids-200 rounded-xl p-3 sm:p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-kids-800">Sudah reservasi — ibadah otomatis dipilih</div>
+              <button
+                type="button"
+                onClick={() => setManualPick(true)}
+                className="text-[11px] font-semibold text-kids-700 underline shrink-0"
+              >
+                Pilih ibadah lain
+              </button>
+            </div>
+            {reservedPending.map((r) => {
+              const on = r.ibadah.id === ibadahId;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setIbadahId(r.ibadah.id)}
+                  className={`w-full flex items-center gap-2 p-2.5 rounded-lg border text-left ${
+                    on ? 'border-kids-500 bg-white ring-2 ring-kids-300' : 'border-kids-200 bg-white/60'
+                  }`}
+                >
+                  <CheckCircle2 className={`w-4 h-4 shrink-0 ${on ? 'text-kids-600' : 'text-neutral-300'}`} />
+                  <span className="flex-1 min-w-0 text-sm font-semibold text-neutral-900 truncate">
+                    {r.ibadah.nama} <span className="font-normal text-neutral-500">({r.ibadah.jamMulai})</span>
+                  </span>
+                  <span className="font-mono text-[11px] text-neutral-500">{r.kode}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
         <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4 space-y-3">
           <div className="text-xs text-neutral-500 mb-1">
-            Untuk <strong>Check-in</strong> — pilih ibadah + tanggal:
+            Untuk <strong>Check-in</strong> — pilih ibadah anak + tanggal:
+            {manualPick && reservedPending.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setManualPick(false)}
+                className="ml-2 text-[11px] font-semibold text-kids-700 underline"
+              >
+                Pakai reservasi
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="sm:col-span-1">
@@ -850,18 +950,21 @@ function ActionPanel({
                   onChange={(e) => setIbadahId(e.target.value || null)}
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
                 >
-                  <option value="">— Pilih Ibadah —</option>
+                  <option value="">— Pilih Ibadah Anak —</option>
                   {(ibadahQ.data ?? []).map((ib) => (
                     <option key={ib.id} value={ib.id}>
                       {ib.nama} ({ib.jamMulai})
-                      {ib.isKidsIbadah && ' 🧒'}
                     </option>
                   ))}
                 </select>
               )}
+              {!ibadahQ.isLoading && (ibadahQ.data ?? []).length === 0 && (
+                <p className="text-[11px] text-amber-700 mt-1">Belum ada ibadah anak di cabang ini.</p>
+              )}
             </div>
           </div>
         </div>
+        )}
 
         {/* Action buttons dengan auto-detect logic */}
         <div className="grid grid-cols-3 gap-2">
@@ -931,7 +1034,7 @@ function ActionPanel({
                 <div className="text-xs mt-1 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" />
                   <strong>{jemaat.namaLengkap}</strong> ·{' '}
-                  {selectedIbadah?.nama}
+                  {lastResult.ibadahNama || selectedIbadah?.nama}
                 </div>
                 {lastResult.data?.pickupCode && (
                   <div className="mt-2 bg-white/70 border border-current/20 rounded px-2 py-2 text-center">

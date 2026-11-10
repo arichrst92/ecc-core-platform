@@ -7,6 +7,15 @@ export const jenisKelaminSchema = z.enum(['L', 'P']);
 const nullableText = (max: number) =>
   z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), z.string().trim().max(max).nullable()).optional();
 
+// Foto bisa URL penuh atau path relatif hasil upload ("/uploads/..."). Dulu
+// hanya URL penuh → edit profil di portal gagal diam-diam untuk jemaat yang
+// fotonya diunggah dari app.
+const fotoUrlSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine((v) => v.startsWith('/') || /^https?:\/\//i.test(v), 'URL foto tidak valid');
+
 // Mandatory: cabangId (FK constraint DB), namaLengkap, noHp.
 // Sisanya opsional dan terima empty string dari form.
 export const createJemaatSchema = z.object({
@@ -19,7 +28,7 @@ export const createJemaatSchema = z.object({
   jenisKelamin: emptyToUndefined(jenisKelaminSchema),
   alamat: emptyToUndefined(z.string().trim()),
   tanggalBergabung: emptyToUndefined(z.string().date()),
-  fotoUrl: emptyToUndefined(z.string().url()),
+  fotoUrl: emptyToUndefined(fotoUrlSchema),
   statusPekerjaan: nullableText(100),
   namaKantor: nullableText(255),
   statusPernikahan: nullableText(50),
@@ -37,7 +46,7 @@ export const updateJemaatSchema = z.object({
   jenisKelamin: emptyToUndefined(jenisKelaminSchema),
   alamat: emptyToUndefined(z.string().trim()),
   tanggalBergabung: emptyToUndefined(z.string().date()),
-  fotoUrl: emptyToUndefined(z.string().url()),
+  fotoUrl: emptyToUndefined(fotoUrlSchema),
   isActive: z.boolean().optional(),
   // Pekerjaan & pernikahan — '' / null = kosongkan, undefined = tidak diubah.
   statusPekerjaan: nullableText(100),

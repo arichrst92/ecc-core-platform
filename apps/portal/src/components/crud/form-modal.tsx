@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo } from 'react';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import toast from 'react-hot-toast';
 import { X, Loader2 } from 'lucide-react';
 import type { ZodSchema } from 'zod';
 import type { FieldConfig } from '@/lib/crud-types';
@@ -133,7 +134,21 @@ export function FormModal<T extends Record<string, unknown>>({
 
           <FormProvider {...methods}>
             <form
-              onSubmit={methods.handleSubmit((v) => onSubmit(v as T))}
+              onSubmit={methods.handleSubmit(
+                (v) => onSubmit(v as T),
+                (errs) => {
+                  // Error pada field yang tidak tampil di form tidak punya
+                  // pesan di layar — tampilkan lewat toast supaya Simpan tidak
+                  // terlihat "diam saja".
+                  const shown = new Set(visibleFields.map((f) => f.name));
+                  const hidden = Object.entries(errs).filter(([k]) => !shown.has(k));
+                  const first = hidden[0];
+                  if (first) {
+                    const [k, e] = first;
+                    toast.error(`Data "${k}" tidak valid: ${(e as { message?: string })?.message ?? 'periksa kembali'}`);
+                  } else toast.error('Periksa kembali isian yang ditandai merah');
+                },
+              )}
               className="overflow-y-auto"
             >
               <div className="p-6 space-y-4">

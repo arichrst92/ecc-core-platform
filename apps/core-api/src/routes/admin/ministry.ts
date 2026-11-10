@@ -386,7 +386,8 @@ ministryRouter.get('/:id', async (req, res) => {
       // Menerima pendaftaran dari cabang saya (app lama: tombol Gabung).
       isOpen: item.isActive && myPend?.status !== 'TUTUP',
       pendaftaran: myPend,
-      memberCount: item._count.jemaatPelayanan,
+      // Hitung orang unik — satu jemaat bisa punya beberapa role di pelayanan yang sama.
+      memberCount: new Set(item.jemaatPelayanan.map((jp) => jp.jemaat.id)).size,
       roles: item.roles,
       leader: item.jemaatPelayanan[0]
         ? {

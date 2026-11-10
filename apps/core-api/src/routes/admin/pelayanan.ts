@@ -205,8 +205,8 @@ pelayananRouter.get('/:id/candidates', async (req, res, next) => {
       cabang: { select: { id: true, nama: true } },
       jemaatPelayanan: {
         where: { pelayananId: req.params.id, isActive: true },
-        select: { pelayananRole: { select: { nama: true } } },
-        take: 1,
+        orderBy: { pelayananRole: { level: 'desc' } },
+        select: { pelayananRole: { select: { id: true, nama: true } } },
       },
     },
   });
@@ -214,7 +214,11 @@ pelayananRouter.get('/:id/candidates', async (req, res, next) => {
   rows.sort((a, b) => Number(b.kode === kode) - Number(a.kode === kode));
   res.json({
     success: true,
-    data: rows.map(({ jemaatPelayanan, ...j }) => ({ ...j, memberRole: jemaatPelayanan[0]?.pelayananRole.nama ?? null })),
+    data: rows.map(({ jemaatPelayanan, ...j }) => ({
+      ...j,
+      memberRole: jemaatPelayanan.length ? jemaatPelayanan.map((jp) => jp.pelayananRole.nama).join(', ') : null,
+      memberRoleIds: jemaatPelayanan.map((jp) => jp.pelayananRole.id),
+    })),
   });
 });
 
@@ -371,12 +375,18 @@ pelayananRouter.post('/assign', async (req, res) => {
   if (!role || role.pelayananId !== input.pelayananId) {
     throw BadRequest('Role tidak terkait dengan pelayanan yang dipilih');
   }
-  // Satu keanggotaan aktif per jemaat per pelayanan (ganti role lewat PATCH).
+  // Satu jemaat boleh punya beberapa penugasan aktif di pelayanan yang sama
+  // (role berbeda). Yang ditolak hanya duplikat persis: pelayanan + role sama.
   const existing = await prisma.jemaatPelayanan.findFirst({
-    where: { jemaatId: input.jemaatId, pelayananId: input.pelayananId, isActive: true },
+    where: {
+      jemaatId: input.jemaatId,
+      pelayananId: input.pelayananId,
+      pelayananRoleId: input.pelayananRoleId,
+      isActive: true,
+    },
     select: { pelayananRole: { select: { nama: true } } },
   });
-  if (existing) throw Conflict(`Jemaat ini sudah menjadi anggota pelayanan ini (role ${existing.pelayananRole.nama}).`);
+  if (existing) throw Conflict(`Jemaat ini sudah aktif di pelayanan ini sebagai ${existing.pelayananRole.nama}.`);
   const data = {
     ...input,
     tanggalMulai: input.tanggalMulai ? new Date(input.tanggalMulai) : new Date(),

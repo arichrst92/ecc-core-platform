@@ -52,6 +52,7 @@ interface Candidate {
   fotoUrl: string | null;
   cabang: { id: string; nama: string };
   memberRole: string | null;
+  memberRoleIds?: string[];
 }
 
 const errMsg = (e: any, fb: string) => e?.response?.data?.error?.message ?? fb;
@@ -398,8 +399,11 @@ function AddMemberModal({
                     <div className="text-xs text-neutral-500 truncate">{[c.kode, c.noHp, c.cabang.nama].filter(Boolean).join(' · ')}</div>
                   </div>
                   {c.memberRole ? (
-                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">Sudah · {c.memberRole}</span>
-                  ) : (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full max-w-[140px] truncate" title={c.memberRole}>
+                      Sudah · {c.memberRole}
+                    </span>
+                  ) : null}
+                  {c.memberRoleIds?.includes(roleId) ? null : (
                     <button
                       onClick={() => add.mutate(c)}
                       disabled={add.isPending || !roleId}

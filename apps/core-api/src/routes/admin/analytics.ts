@@ -22,12 +22,13 @@ export const analyticsRouter = Router();
 analyticsRouter.use(requireMenu('analitik'));
 
 const NB = LATENCY_EDGES.length + 1;
-const DAYS = { '7d': 7, '30d': 30, '90d': 90 } as const;
+const DAYS = { today: 1, '7d': 7, '30d': 30, '90d': 90 } as const;
 type PeriodeKey = keyof typeof DAYS;
 
 function filterOf(req: Request) {
   const q = req.query as Record<string, string | undefined>;
-  const periode: PeriodeKey = q.periode === '7d' || q.periode === '90d' ? q.periode : '30d';
+  const periode: PeriodeKey =
+    q.periode === 'today' || q.periode === '7d' || q.periode === '90d' ? q.periode : '30d';
   const platform = q.platform === 'ios' || q.platform === 'android' || q.platform === 'web' ? q.platform : 'all';
   const mode = q.mode === 'login' || q.mode === 'tamu' ? q.mode : 'all';
   const days = DAYS[periode];
@@ -290,7 +291,9 @@ const successPct = (a: Agg) => (a.count ? Math.round(((a.count - a.c5xx - a.cNet
 
 export async function computeApiPerformance(f: F) {
 
-  const since = new Date(Date.now() - f.days * 86_400_000);
+  // "Hari ini" = sejak 00:00 WIB (bukan 24 jam bergulir) — paling ringan dimuat.
+  const todayStart = new Date(`${ymd(todayInTz(DEFAULT_TZ))}T00:00:00+07:00`).getTime();
+  const since = f.periode === 'today' ? new Date(todayStart) : new Date(Date.now() - f.days * 86_400_000);
   const appPlatform = f.platform === 'all' ? undefined : f.platform;
 
   const dbRows = await prisma.apiMetric.findMany({
@@ -310,7 +313,6 @@ export async function computeApiPerformance(f: F) {
   const perEndpoint = new Map<string, { method: string; route: string; server: Agg; app: Agg }>();
   const perBucket = new Map<number, number>();
   const lastErr = new Map<string, { code: string; method: string; route: string; count: number; last: number }>();
-  const todayStart = new Date(`${ymd(todayInTz(DEFAULT_TZ))}T00:00:00+07:00`).getTime();
 
   for (const r of all) {
     const target = r.source === 'server' ? server : app;
@@ -431,7 +433,7 @@ analyticsRouter.get('/api', async (req, res) => {
 
 // ------------------------------------------------------------------ export PDF (print view)
 
-const PERIODE_LABEL: Record<string, string> = { '7d': '7 hari terakhir', '30d': '30 hari terakhir', '90d': '90 hari terakhir' };
+const PERIODE_LABEL: Record<string, string> = { today: 'Hari ini', '7d': '7 hari terakhir', '30d': '30 hari terakhir', '90d': '90 hari terakhir' };
 const PLATFORM_LABEL: Record<string, string> = { all: 'Semua platform (iOS, Android, web)', ios: 'iPhone (iOS)', android: 'Android', web: 'Els App web' };
 const MODE_LABEL: Record<string, string> = { all: 'Jemaat login & mode tamu', login: 'Jemaat login', tamu: 'Mode tamu' };
 

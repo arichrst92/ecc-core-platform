@@ -1,6 +1,6 @@
 /** Bentuk data menu Analitik & Monitor Ibadah — sama dengan respons core-api /admin/analytics & /admin/ibadah-monitor. */
 
-export type Periode = '7d' | '30d' | '90d';
+export type Periode = 'today' | '7d' | '30d' | '90d';
 export type PlatformFilter = 'all' | 'ios' | 'android' | 'web';
 export type ModeFilter = 'all' | 'login' | 'tamu';
 

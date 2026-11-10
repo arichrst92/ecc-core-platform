@@ -27,6 +27,7 @@ const TABS: { k: Tab; label: string; icon: typeof Activity }[] = [
 ];
 
 const PERIODE: { v: Periode; l: string }[] = [
+  { v: 'today', l: 'Hari Ini' },
   { v: '7d', l: '7 hari' },
   { v: '30d', l: '30 hari' },
   { v: '90d', l: '90 hari' },
@@ -45,7 +46,11 @@ const MODE: { v: ModeFilter; l: string }[] = [
 
 export default function AnalitikPage() {
   const [tab, setTab] = useState<Tab>('halaman');
-  const [filter, setFilter] = useState<AnalyticsFilter>({ periode: '30d', platform: 'all', mode: 'all' });
+  const [pagesFilter, setPagesFilter] = useState<AnalyticsFilter>({ periode: '30d', platform: 'all', mode: 'all' });
+  // Performa API: default "Hari Ini" — rentang panjang berat dimuat (data per 5 menit).
+  const [apiFilter, setApiFilter] = useState<AnalyticsFilter>({ periode: 'today', platform: 'all', mode: 'all' });
+  const filter = tab === 'api' ? apiFilter : pagesFilter;
+  const setFilter = tab === 'api' ? setApiFilter : setPagesFilter;
   const set = <K extends keyof AnalyticsFilter>(k: K, v: AnalyticsFilter[K]) => setFilter((f) => ({ ...f, [k]: v }));
   const [exporting, setExporting] = useState(false);
 
@@ -122,11 +127,11 @@ export default function AnalitikPage() {
       </div>
 
       {tab === 'halaman' ? (
-        <PagesTab filter={filter} />
+        <PagesTab filter={pagesFilter} />
       ) : tab === 'live' ? (
         <LiveTab />
       ) : (
-        <ApiTab filter={filter} />
+        <ApiTab filter={apiFilter} />
       )}
     </div>
   );

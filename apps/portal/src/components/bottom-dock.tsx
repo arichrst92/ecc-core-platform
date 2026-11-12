@@ -51,6 +51,7 @@ import {
   Handshake,
   Store,
   ShieldCheck,
+  Baby,
   FileText,
   Smartphone,
   Wrench,
@@ -199,6 +200,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/hadiah', label: 'Katalog Hadiah', icon: Gift, menuKey: 'hadiah' },
       { href: 'https://ckids.eccchurch.global', label: 'Gift Stall (CKids)', icon: Store, menuKey: 'gift-stall' },
+      { href: '/dashboard/data-anak', label: 'Data Anak', icon: Baby, menuKey: 'data-anak' },
       { href: '/dashboard/ckids-access', label: 'Akses CKids', icon: ShieldCheck, menuKey: 'ckids-access' },
     ],
   },

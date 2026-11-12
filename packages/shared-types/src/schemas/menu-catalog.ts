@@ -91,6 +91,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // hadiah master data di portal.
   { key: 'hadiah', label: 'Katalog Hadiah', href: '/dashboard/hadiah', group: 'CKids' },
   { key: 'gift-stall', label: 'Gift Stall (CKids)', href: 'https://ckids.eccchurch.global', group: 'CKids' },
+  { key: 'data-anak', label: 'Data Anak', href: '/dashboard/data-anak', group: 'CKids' },
   { key: 'ckids-access', label: 'Akses CKids', href: '/dashboard/ckids-access', group: 'CKids' },
 
   // Website — CMS untuk landing site eccchurch.global

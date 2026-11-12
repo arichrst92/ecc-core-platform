@@ -84,9 +84,10 @@ function HadirContent() {
     queryFn: async () => {
       const res = await apiClient.get<{ data: HadirItem[] }>(
         '/admin/reservasi/today',
-        { params: { cabangId } },
+        { params: { cabangId, kids: 1 } },
       );
-      return res.data.data;
+      // Hanya kehadiran ibadah anak (filter ulang di klien untuk API lama).
+      return res.data.data.filter((r) => r.ibadah.isKidsIbadah);
     },
   });
 
@@ -113,14 +114,14 @@ function HadirContent() {
 
   // Summary counters
   const stats = useMemo(() => {
-    const kids = items.filter((r) => r.ibadah.isKidsIbadah).length;
+    const sudahDijemput = items.filter((r) => !!r.pickedUpAt).length;
     const belumCheckout = items.filter(
       (r) => r.ibadah.requiresCheckout && !r.checkedOutAt,
     ).length;
     const belumDijemput = items.filter(
       (r) => r.ibadah.isKidsIbadah && !r.pickedUpAt,
     ).length;
-    return { total: items.length, kids, belumCheckout, belumDijemput };
+    return { total: items.length, sudahDijemput, belumCheckout, belumDijemput };
   }, [items]);
 
   if (!cabangId) {
@@ -139,7 +140,7 @@ function HadirContent() {
             <ClipboardList className="w-5 h-5" /> Daftar Hadir Hari Ini
           </h1>
           <p className="text-xs text-neutral-500">
-            {cabangNama} · auto-refresh 15s
+            {cabangNama} · ibadah anak · auto-refresh 15s
           </p>
         </div>
         <button
@@ -154,16 +155,16 @@ function HadirContent() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         <StatCard
-          label="Total Hadir"
+          label="Anak Hadir"
           value={stats.total}
-          Icon={Users}
-          color="bg-blue-50 text-blue-800 border-blue-200"
-        />
-        <StatCard
-          label="Anak"
-          value={stats.kids}
           Icon={Baby}
           color="bg-kids-50 text-kids-700 border-kids-200"
+        />
+        <StatCard
+          label="Sudah Dijemput"
+          value={stats.sudahDijemput}
+          Icon={Users}
+          color="bg-blue-50 text-blue-800 border-blue-200"
         />
         <StatCard
           label="Belum Checkout"
@@ -222,7 +223,7 @@ function HadirContent() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-10 bg-white rounded-xl border border-neutral-200 text-neutral-500 text-sm">
           {items.length === 0
-            ? 'Belum ada kehadiran hari ini.'
+            ? 'Belum ada anak yang check-in di ibadah anak hari ini.'
             : `Tidak ada hasil untuk filter "${filter}"${search ? ` + search "${search}"` : ''}.`}
         </div>
       ) : (

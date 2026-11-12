@@ -1,4 +1,4 @@
-import { instantInTzLabel } from '../../lib/tz.js';
+import { DEFAULT_TZ, instantInTzLabel, todayInTz } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -580,16 +580,18 @@ reservasiRouter.post('/award-point', async (req, res) => {
 reservasiRouter.get('/today', async (req, res) => {
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
   if (!cabangId) throw BadRequest('cabangId required');
+  // ?kids=1 → hanya ibadah anak (halaman Daftar Hadir CKids).
+  const kidsOnly = req.query.kids === '1' || req.query.kids === 'true';
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  // "Hari ini" menurut zona waktu cabang (bukan jam server UTC).
+  const cabang = await prisma.cabangGereja.findUnique({ where: { id: cabangId }, select: { timezone: true } });
+  const today = todayInTz(cabang?.timezone || DEFAULT_TZ);
 
   const items = await prisma.reservasi.findMany({
     where: {
       status: 'JOIN',
-      tanggalIbadah: { gte: today, lt: tomorrow },
-      ibadah: { cabangId },
+      tanggalIbadah: today,
+      ibadah: { cabangId, ...(kidsOnly ? { isKidsIbadah: true } : {}) },
     },
     include: {
       jemaat: {

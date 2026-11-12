@@ -49,6 +49,7 @@ import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
 import { ckidsAccessRouter } from './ckids-access.js';
+import { dataAnakRouter } from './data-anak.js';
 import { elsaRouter } from './elsa.js';
 import { planningRouter } from './planning.js';
 import { jemaatConsolidationRouter } from './jemaat-consolidation.js';
@@ -127,6 +128,7 @@ adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
 adminRouter.use('/hadiah', hadiahRouter);
 adminRouter.use('/gift-stall', giftStallRouter);
 adminRouter.use('/ckids-access', ckidsAccessRouter);
+adminRouter.use('/data-anak', dataAnakRouter);
 // Modul 31 — Elsa (Els Agentic) AI chat agent untuk data ECC.
 // Fulltimer-only (guard di dalam router). Powered by Anthropic Claude.
 adminRouter.use('/elsa', elsaRouter);

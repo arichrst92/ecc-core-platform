@@ -49,7 +49,7 @@ async function assertAddGuestAccess(req: Request) {
   if (!req.user) throw Unauthorized();
   if (req.user.isFulltimer) return;
   const acc = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess;
-  if (acc['tamu']?.canWrite || acc['gift-stall']?.canRead) return;
+  if (acc['tamu']?.canWrite || acc['gift-stall']?.canRead || acc['ckids:scanner']?.canRead) return;
   throw Forbidden('Anda tidak punya akses untuk menambah tamu.');
 }
 

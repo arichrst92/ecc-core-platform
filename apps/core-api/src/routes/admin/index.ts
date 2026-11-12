@@ -48,6 +48,7 @@ import { tamuRouter } from './tamu.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
+import { ckidsAccessRouter } from './ckids-access.js';
 import { elsaRouter } from './elsa.js';
 import { planningRouter } from './planning.js';
 import { jemaatConsolidationRouter } from './jemaat-consolidation.js';
@@ -125,6 +126,7 @@ adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
 // CKids (Modul 28) — Hadiah katalog master + Gift Stall (redeem POS).
 adminRouter.use('/hadiah', hadiahRouter);
 adminRouter.use('/gift-stall', giftStallRouter);
+adminRouter.use('/ckids-access', ckidsAccessRouter);
 // Modul 31 — Elsa (Els Agentic) AI chat agent untuk data ECC.
 // Fulltimer-only (guard di dalam router). Powered by Anthropic Claude.
 adminRouter.use('/elsa', elsaRouter);

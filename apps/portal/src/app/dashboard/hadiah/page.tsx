@@ -1,47 +1,105 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { X, Filter, Gift, ExternalLink } from 'lucide-react';
+import { Gift, ExternalLink, X } from 'lucide-react';
 import Link from 'next/link';
 import { CrudPage } from '@/components/crud/crud-page';
 import { hadiahResource } from '@/lib/resources/hadiah-config';
 import { apiClient } from '@/lib/api-client';
 
+const STATUS = [
+  { v: '', l: 'Semua status' },
+  { v: 'aktif', l: 'Aktif' },
+  { v: 'nonaktif', l: 'Nonaktif' },
+];
+const STOK = [
+  { v: '', l: 'Semua stok' },
+  { v: 'tersedia', l: 'Tersedia' },
+  { v: 'menipis', l: 'Menipis (< 5)' },
+  { v: 'habis', l: 'Habis' },
+];
+
 function HadiahInner() {
   const sp = useSearchParams();
-  const router = useRouter();
-  const cabangId = sp.get('cabangId') ?? undefined;
+  const [cabangId, setCabangId] = useState(sp.get('cabangId') ?? '');
+  const [status, setStatus] = useState('');
+  const [stok, setStok] = useState('');
+  const [minPoint, setMinPoint] = useState('');
+  const [maxPoint, setMaxPoint] = useState('');
 
   const cabangQ = useQuery({
-    queryKey: ['cabang', 'detail', cabangId],
-    enabled: !!cabangId,
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: { nama: string } }>(
-        `/admin/cabang/${cabangId}`,
-      );
-      return res.data.data;
-    },
+    queryKey: ['cabang', 'options'],
+    queryFn: async () =>
+      (await apiClient.get<{ data: { id: string; nama: string }[] }>('/admin/cabang', {
+        params: { limit: 100, sortBy: 'nama', sortOrder: 'asc' },
+      })).data.data,
+    staleTime: 300_000,
   });
 
-  let banner: React.ReactNode = null;
-  if (cabangId) {
-    banner = (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm">
-        <div className="flex items-center gap-2 text-brand-800">
-          <Filter className="w-4 h-4" />
-          Filter cabang: <strong>{cabangQ.data?.nama ?? '...'}</strong>
-        </div>
-        <button
-          onClick={() => router.push('/dashboard/hadiah')}
-          className="flex items-center gap-1 text-xs text-brand-700 hover:text-brand-900 px-2 py-1 hover:bg-brand-100 rounded"
-        >
-          <X className="w-3 h-3" /> Reset
-        </button>
+  const active = !!(cabangId || status || stok || minPoint || maxPoint);
+  const sel = 'h-9 rounded-lg border border-neutral-300 bg-white px-2.5 text-sm';
+
+  const banner = (
+    <div className="flex flex-wrap items-center gap-2">
+      <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={sel}>
+        <option value="">Semua cabang</option>
+        {(cabangQ.data ?? []).map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nama}
+          </option>
+        ))}
+      </select>
+      <select value={status} onChange={(e) => setStatus(e.target.value)} className={sel}>
+        {STATUS.map((o) => (
+          <option key={o.v} value={o.v}>
+            {o.l}
+          </option>
+        ))}
+      </select>
+      <select value={stok} onChange={(e) => setStok(e.target.value)} className={sel}>
+        {STOK.map((o) => (
+          <option key={o.v} value={o.v}>
+            {o.l}
+          </option>
+        ))}
+      </select>
+      <div className="flex items-center gap-1 text-sm text-neutral-500">
+        <input
+          type="number"
+          min={0}
+          value={minPoint}
+          onChange={(e) => setMinPoint(e.target.value)}
+          placeholder="Point min"
+          className={`${sel} w-28`}
+        />
+        –
+        <input
+          type="number"
+          min={0}
+          value={maxPoint}
+          onChange={(e) => setMaxPoint(e.target.value)}
+          placeholder="Point max"
+          className={`${sel} w-28`}
+        />
       </div>
-    );
-  }
+      {active ? (
+        <button
+          onClick={() => {
+            setCabangId('');
+            setStatus('');
+            setStok('');
+            setMinPoint('');
+            setMaxPoint('');
+          }}
+          className="inline-flex items-center gap-1 h-9 px-2.5 text-xs text-brand-700 hover:bg-brand-50 rounded-lg"
+        >
+          <X className="w-3.5 h-3.5" /> Reset filter
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <>
@@ -64,7 +122,19 @@ function HadiahInner() {
         </div>
       </div>
 
-      <CrudPage config={hadiahResource} extraParams={{ cabangId }} filterBanner={banner} />
+      <CrudPage
+        config={hadiahResource}
+        // cabangId juga mengisi otomatis form Tambah. status/stok/point bukan
+        // field form (dibuang schema saat simpan).
+        extraParams={{
+          cabangId: cabangId || undefined,
+          status: status || undefined,
+          stok: stok || undefined,
+          minPoint: minPoint || undefined,
+          maxPoint: maxPoint || undefined,
+        }}
+        filterBanner={banner}
+      />
     </>
   );
 }

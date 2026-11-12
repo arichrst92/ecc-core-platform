@@ -40,8 +40,11 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
     },
   });
 
+  // Akses menu aplikasi CKids dari config pelayanan/role (Portal → Akses CKids).
+  const ckids = await ckidsMenusFor(jemaatId);
+
   if (jemaatRoles.length === 0) {
-    return { canAccessPortal: false, menuAccess: {} };
+    return { canAccessPortal: false, menuAccess: ckids };
   }
 
   // Resolve canAccessPortal: SubRole override (kalau non-null) > Role.
@@ -93,5 +96,25 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
     }
   }
 
+  for (const [k, v] of Object.entries(ckids)) unionInto(menuAccess, k, v);
   return { canAccessPortal, menuAccess };
+}
+
+/**
+ * Menu CKids yang diberikan lewat keanggotaan pelayanan aktif atau role aktif
+ * → `{ 'ckids:<menu>': { canRead, canWrite } }`. Satu query.
+ */
+async function ckidsMenusFor(jemaatId: string): Promise<Record<string, MenuAccessLevels>> {
+  const rows = await prisma.ckidsMenuAccess.findMany({
+    where: {
+      OR: [
+        { pelayanan: { isActive: true, jemaatPelayanan: { some: { jemaatId, isActive: true } } } },
+        { role: { isActive: true, jemaatRoles: { some: { jemaatId, isActive: true } } } },
+      ],
+    },
+    select: { menuKey: true },
+  });
+  const out: Record<string, MenuAccessLevels> = {};
+  for (const r of rows) out[`ckids:${r.menuKey}`] = { canRead: true, canWrite: true, canDelete: false };
+  return out;
 }

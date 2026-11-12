@@ -2,13 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { LogOut, MapPin, Loader2 } from 'lucide-react';
 import { BottomNav } from './bottom-nav';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { useCabangStore } from '@/lib/cabang-store';
+import { MENU_HREF, useCkidsMenus, type CkidsMenuKey } from '@/lib/access';
+
+/** Menu CKids yang dibutuhkan tiap halaman (salah satu cukup). */
+const PAGE_MENUS: [string, CkidsMenuKey[]][] = [
+  ['/ibadah', ['scanner']],
+  ['/hadir', ['hadir']],
+  ['/adjust-point', ['adjust-point']],
+  ['/history', ['history', 'cancel-redeem']],
+  ['/report', ['report']],
+  ['/', ['gift', 'katalog']],
+];
+const menusForPath = (p: string) =>
+  PAGE_MENUS.find(([href]) => (href === '/' ? p === '/' : p === href || p.startsWith(href + '/')))?.[1] ?? [];
 
 interface CabangItem {
   id: string;
@@ -55,7 +68,7 @@ export function Header() {
         <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-3">
           {/* Brand */}
           <div className="flex items-center gap-2 shrink-0">
-            <Image src="/logo-ecc.webp" alt="ECC" width={32} height={32} priority />
+            <Image src="/logo-ckids.webp" alt="CKids — Creative Kids" width={44} height={44} className="-my-1" priority />
             <div className="hidden sm:block">
               <div className="font-bold text-neutral-900 text-sm sm:text-base">
                 CKids
@@ -127,11 +140,42 @@ export function Header() {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, accessToken } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname() ?? '/';
+  const allowed = useCkidsMenus();
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  // Muat ulang hak akses (admin bisa mengubah Akses CKids kapan saja) —
+  // tidak perlu login ulang.
+  useEffect(() => {
+    if (!hydrated || !accessToken) return;
+    apiClient
+      .get<{ data: { menuAccess: Record<string, { canRead: boolean; canWrite: boolean; canDelete: boolean }> } }>('/auth/me/access')
+      .then((r) => {
+        const cur = useAuthStore.getState();
+        if (cur.user && cur.accessToken && cur.refreshToken) {
+          cur.setAuth({
+            accessToken: cur.accessToken,
+            refreshToken: cur.refreshToken,
+            user: { ...cur.user, menuAccess: r.data.data.menuAccess },
+          });
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, accessToken]);
+
+  // Halaman yang tidak diizinkan → pindah ke menu pertama yang diizinkan.
+  const need = menusForPath(pathname);
+  const pageOk = need.length === 0 || need.some((m) => allowed.has(m));
+  const firstAllowed = [...allowed][0];
+  useEffect(() => {
+    if (!hydrated || !user || pageOk) return;
+    if (firstAllowed && MENU_HREF[firstAllowed] !== pathname) router.replace(MENU_HREF[firstAllowed]);
+  }, [hydrated, user, pageOk, firstAllowed, pathname, router]);
 
   useEffect(() => {
     if (hydrated && (!user || !accessToken)) {
@@ -151,6 +195,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center text-neutral-500">
         Redirecting to login…
+      </div>
+    );
+  }
+
+  if (!pageOk) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 text-center px-6 text-neutral-500">
+        <div className="font-semibold text-neutral-800">Tidak ada akses ke menu ini</div>
+        <div className="text-sm">
+          {firstAllowed ? 'Mengalihkan…' : 'Minta admin menambahkan pelayanan / role Anda di Portal → Akses CKids.'}
+        </div>
       </div>
     );
   }

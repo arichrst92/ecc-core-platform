@@ -93,14 +93,14 @@ export default function LoginPage() {
       <div className="bg-white border border-neutral-200 rounded-2xl shadow-xl w-full max-w-sm p-8 space-y-6">
         <div className="text-center">
           <Image
-            src="/logo-ecc.webp"
-            alt="ECC Logo"
-            width={100}
-            height={100}
+            src="/logo-ckids.webp"
+            alt="CKids — Creative Kids"
+            width={150}
+            height={150}
             className="mx-auto"
             priority
           />
-          <h1 className="text-xl font-bold text-neutral-900 mt-3">CKids</h1>
+          <h1 className="sr-only">CKids</h1>
           <p className="text-xs text-neutral-500 mt-1">
             Portal untuk kakak CKids
           </p>

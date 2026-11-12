@@ -62,3 +62,30 @@ export async function requireAnyMenuP(
   for (const k of menuKeys) if (await hasMenuAccessFor(req.user, k, level)) return;
   throw Forbidden(`Anda tidak punya akses ke menu ini (${menuKeys.join(' / ')}).`);
 }
+
+/**
+ * Gate aplikasi CKids. Lolos bila Fulltimer, Role Access "Gift Stall"
+ * (read untuk menu lihat, write untuk menu ubah), menu portal tambahan
+ * (`alsoMenus`, level sama), atau config Akses CKids `ckids:<menu>`.
+ *   menus = 'any' → cukup punya salah satu menu CKids.
+ */
+export function requireCkids(menus: string[] | 'any', opts: { manage?: boolean; alsoMenus?: string[] } = {}): RequestHandler {
+  return (req, _res, next) => {
+    if (!req.user) throw Unauthorized();
+    if (req.user.isFulltimer) return next();
+    resolveJemaatAccess(req.user.jemaatId)
+      .then((access) => {
+        const a = access.menuAccess;
+        const gs = a['gift-stall'];
+        const ok =
+          (opts.manage ? gs?.canWrite : gs?.canRead) ||
+          (opts.alsoMenus ?? []).some((k) => (opts.manage ? a[k]?.canWrite : a[k]?.canRead)) ||
+          (menus === 'any'
+            ? Object.keys(a).some((k) => k.startsWith('ckids:') && a[k]?.canRead)
+            : menus.some((k) => a[`ckids:${k}`]?.canRead));
+        if (!ok) return next(Forbidden('Anda tidak punya akses ke menu CKids ini.'));
+        next();
+      })
+      .catch(next);
+  };
+}

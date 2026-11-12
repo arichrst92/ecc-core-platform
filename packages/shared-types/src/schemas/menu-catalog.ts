@@ -91,6 +91,7 @@ export const MENU_CATALOG: MenuItem[] = [
   // hadiah master data di portal.
   { key: 'hadiah', label: 'Katalog Hadiah', href: '/dashboard/hadiah', group: 'CKids' },
   { key: 'gift-stall', label: 'Gift Stall (CKids)', href: 'https://ckids.eccchurch.global', group: 'CKids' },
+  { key: 'ckids-access', label: 'Akses CKids', href: '/dashboard/ckids-access', group: 'CKids' },
 
   // Website — CMS untuk landing site eccchurch.global
   { key: 'website-content', label: 'Konten Website', href: '/dashboard/website/content', group: 'Website' },
@@ -155,3 +156,41 @@ export const updateCanAccessPortalSchema = z.object({
   canAccessPortal: z.boolean().nullable(),
 });
 export type UpdateCanAccessPortalInput = z.infer<typeof updateCanAccessPortalSchema>;
+
+// ---------------------------------------------------------------- CKids
+/**
+ * Menu di aplikasi CKids (ckids.eccchurch.global). Akses per menu diatur di
+ * Portal → CKids → Akses CKids (per pelayanan / role). Hasilnya muncul di
+ * menuAccess user sebagai key `ckids:<key>`.
+ * `manage` = menu yang mengubah data (dulu butuh Gift Stall "Ubah").
+ */
+export const CKIDS_MENUS = [
+  { key: 'gift', label: 'Gift Stall', desc: 'Lihat katalog & redeem hadiah', manage: false },
+  { key: 'katalog', label: 'Kelola Hadiah', desc: 'Tambah, edit, foto & stok hadiah', manage: true },
+  { key: 'scanner', label: 'Scanner Ibadah', desc: 'Check-in, checkout & pickup anak', manage: false },
+  { key: 'hadir', label: 'Daftar Hadir', desc: 'Pantau anak yang sudah check-in', manage: false },
+  { key: 'adjust-point', label: 'Adjust Point', desc: 'Koreksi point anak manual', manage: true },
+  { key: 'history', label: 'History', desc: 'Riwayat redeem', manage: false },
+  { key: 'cancel-redeem', label: 'Batalkan Redeem', desc: 'Batalkan / ganti hadiah di History', manage: true },
+  { key: 'report', label: 'Report', desc: 'Ringkasan hari ini', manage: false },
+] as const;
+export type CkidsMenuKey = (typeof CKIDS_MENUS)[number]['key'];
+export const CKIDS_MENU_KEYS = CKIDS_MENUS.map((m) => m.key) as CkidsMenuKey[];
+
+/** Menu CKids yang boleh dibuka user (Fulltimer, Role Access Gift Stall, atau config pelayanan/role). */
+export function ckidsAllowedMenus(user: {
+  isFulltimer?: boolean;
+  menuAccess?: Record<string, Partial<MenuAccessLevels> | undefined>;
+} | null | undefined): Set<CkidsMenuKey> {
+  const out = new Set<CkidsMenuKey>();
+  if (!user) return out;
+  const gs = user.menuAccess?.['gift-stall'];
+  for (const m of CKIDS_MENUS) {
+    if (
+      user.isFulltimer ||
+      user.menuAccess?.[`ckids:${m.key}`]?.canRead ||
+      (m.manage ? gs?.canWrite : gs?.canRead)
+    ) out.add(m.key);
+  }
+  return out;
+}

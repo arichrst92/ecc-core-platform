@@ -398,6 +398,7 @@ model Role {
   journeySteps      SpiritualJourneyStep[] @relation("JourneyRole")
   prayerPetugasRoles PrayerPetugasRole[]
   onboardingRules   OnboardingRoleRule[]
+  ckidsAccess       CkidsMenuAccess[]
 
   @@map("role")
 }
@@ -848,6 +849,7 @@ model Pelayanan {
   prayerPetugas   PrayerPetugasPelayanan[]
   approvers       PelayananApprover[]
   pendaftaran     PelayananPendaftaran[]
+  ckidsAccess     CkidsMenuAccess[]
 
   @@map("pelayanan")
 }
@@ -4255,4 +4257,24 @@ enum LocalHargaTipe {
   NEGO
 
   @@map("local_harga_tipe")
+}
+
+// Akses menu aplikasi CKids (ckids.eccchurch.global) per pelayanan / role.
+// Anggota aktif pelayanan atau pemegang role aktif yang terdaftar di sini
+// boleh membuka menu tsb. Fulltimer & Role Access "Gift Stall" tetap berlaku.
+model CkidsMenuAccess {
+  id          String   @id @default(uuid()) @db.Uuid
+  menuKey     String   @map("menu_key") @db.VarChar(40)
+  pelayananId String?  @map("pelayanan_id") @db.Uuid
+  roleId      String?  @map("role_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  pelayanan Pelayanan? @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  role      Role?      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([menuKey, pelayananId])
+  @@unique([menuKey, roleId])
+  @@index([pelayananId])
+  @@index([roleId])
+  @@map("ckids_menu_access")
 }

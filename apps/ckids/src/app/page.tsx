@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Gift, Loader2, Package, Plus, ScanLine, AlertTriangle, X, Search, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,7 +11,7 @@ import { Header, AuthGuard } from '@/components/header';
 import { QrScannerModal } from '@/components/qr-scanner';
 import { PhotoUpload } from '@/components/photo-upload';
 import { resolveMediaUrl } from '@/lib/media';
-import { useCanManage } from '@/lib/access';
+import { useCanManage, useCanMenu } from '@/lib/access';
 
 interface Hadiah {
   id: string;
@@ -23,6 +23,15 @@ interface Hadiah {
   stock: number;
   isActive: boolean;
 }
+
+type StokFilter = 'semua' | 'tersedia' | 'menipis' | 'habis';
+type SortKey = 'point-asc' | 'point-desc' | 'nama' | 'stok-desc';
+const STOK_FILTERS: { v: StokFilter; l: string }[] = [
+  { v: 'semua', l: 'Semua' },
+  { v: 'tersedia', l: 'Tersedia' },
+  { v: 'menipis', l: 'Menipis' },
+  { v: 'habis', l: 'Habis' },
+];
 
 export default function GiftStallHome() {
   return (
@@ -38,6 +47,10 @@ function GiftStallContent() {
   const { cabangId, cabangNama } = useCabangStore();
   const [selectedHadiah, setSelectedHadiah] = useState<Hadiah | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [stok, setStok] = useState<StokFilter>('semua');
+  const [maxPoint, setMaxPoint] = useState('');
+  const [sort, setSort] = useState<SortKey>('point-asc');
 
   const hadiahQ = useQuery({
     queryKey: ['hadiah', cabangId],
@@ -49,6 +62,28 @@ function GiftStallContent() {
       return res.data.data;
     },
   });
+
+  const all = hadiahQ.data ?? [];
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const max = Number(maxPoint);
+    const out = all.filter((h) => {
+      if (s && !h.nama.toLowerCase().includes(s) && !(h.deskripsi ?? '').toLowerCase().includes(s)) return false;
+      if (stok === 'tersedia' && h.stock <= 0) return false;
+      if (stok === 'menipis' && !(h.stock > 0 && h.stock < 5)) return false;
+      if (stok === 'habis' && h.stock > 0) return false;
+      if (maxPoint && Number.isFinite(max) && max > 0 && h.pointCost > max) return false;
+      return true;
+    });
+    const cmp: Record<SortKey, (a: Hadiah, b: Hadiah) => number> = {
+      'point-asc': (a, b) => a.pointCost - b.pointCost,
+      'point-desc': (a, b) => b.pointCost - a.pointCost,
+      nama: (a, b) => a.nama.localeCompare(b.nama),
+      'stok-desc': (a, b) => b.stock - a.stock,
+    };
+    return [...out].sort(cmp[sort]);
+  }, [all, q, stok, maxPoint, sort]);
+  const filtered = !!(q.trim() || stok !== 'semua' || maxPoint);
 
   if (!cabangId) {
     return (
@@ -71,7 +106,7 @@ function GiftStallContent() {
               🎁 Katalog Hadiah — {cabangNama}
             </h1>
             <p className="text-xs sm:text-sm text-neutral-500">
-              Klik hadiah untuk redeem / add stock / edit. Klik + untuk tambah hadiah baru.
+              {filtered ? `${list.length} dari ${all.length} hadiah` : 'Klik hadiah untuk redeem / add stock / edit.'}
             </p>
           </div>
           {canManage && <button
@@ -82,18 +117,91 @@ function GiftStallContent() {
           </button>}
         </div>
 
+        {/* Search + filter katalog */}
+        <div className="mb-4 bg-white border border-neutral-200 rounded-xl p-2.5 sm:p-3 space-y-2">
+          <div className="flex gap-2">
+            <div className="flex items-center gap-2 flex-1 border border-neutral-300 rounded-lg px-3 min-w-0">
+              <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Cari hadiah…"
+                className="flex-1 py-2 outline-none bg-transparent min-w-0 text-sm"
+              />
+              {q ? (
+                <button type="button" onClick={() => setQ('')} className="text-neutral-400">
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+            </div>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="border border-neutral-300 rounded-lg px-2 text-sm bg-white shrink-0"
+              title="Urutkan"
+            >
+              <option value="point-asc">Point termurah</option>
+              <option value="point-desc">Point termahal</option>
+              <option value="nama">Nama A–Z</option>
+              <option value="stok-desc">Stok terbanyak</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {STOK_FILTERS.map((f) => (
+              <button
+                key={f.v}
+                type="button"
+                onClick={() => setStok(f.v)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                  stok === f.v ? 'bg-kids-500 text-white border-kids-500' : 'bg-white text-neutral-600 border-neutral-300 hover:border-kids-400'
+                }`}
+              >
+                {f.l}
+              </button>
+            ))}
+            <div className="flex items-center gap-1 ml-auto">
+              <span className="text-xs text-neutral-500">Maks</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={maxPoint}
+                onChange={(e) => setMaxPoint(e.target.value)}
+                placeholder="point"
+                className="w-20 border border-neutral-300 rounded-lg px-2 py-1 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
         {hadiahQ.isLoading ? (
           <div className="text-center p-10">
             <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
           </div>
-        ) : (hadiahQ.data ?? []).length === 0 ? (
+        ) : all.length > 0 && list.length === 0 ? (
+          <div className="text-center p-10 text-neutral-500 bg-white rounded-xl border">
+            Tidak ada hadiah yang cocok dengan pencarian / filter.
+            {filtered ? (
+              <button
+                onClick={() => {
+                  setQ('');
+                  setStok('semua');
+                  setMaxPoint('');
+                }}
+                className="block mx-auto mt-2 text-sm font-semibold text-kids-600 underline"
+              >
+                Reset filter
+              </button>
+            ) : null}
+          </div>
+        ) : all.length === 0 ? (
           <div className="text-center p-10 text-neutral-500 bg-white rounded-xl border">
             Belum ada hadiah aktif di cabang ini. Klik <strong>Tambah Hadiah</strong> di
             kanan atas untuk mulai.
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-            {(hadiahQ.data ?? []).map((h) => (
+            {list.map((h) => (
               <button
                 key={h.id}
                 onClick={() => setSelectedHadiah(h)}
@@ -154,7 +262,8 @@ function GiftStallContent() {
 // ============================================================
 function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void }) {
   const canManage = useCanManage();
-  const [tab, setTab] = useState<'redeem' | 'stock' | 'edit'>('redeem');
+  const canRedeem = useCanMenu('gift');
+  const [tab, setTab] = useState<'redeem' | 'stock' | 'edit'>(canRedeem ? 'redeem' : 'stock');
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
@@ -182,7 +291,7 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
         </div>
 
         <div className="flex border-b">
-          <button
+          {canRedeem && <button
             onClick={() => setTab('redeem')}
             className={`flex-1 py-2.5 text-sm font-semibold ${
               tab === 'redeem'
@@ -191,7 +300,7 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
             }`}
           >
             <ScanLine className="w-4 h-4 inline mr-1" /> Redeem
-          </button>
+          </button>}
           {canManage && <>
           <button
             onClick={() => setTab('stock')}
@@ -216,7 +325,7 @@ function HadiahModal({ hadiah, onClose }: { hadiah: Hadiah; onClose: () => void 
           </>}
         </div>
 
-        {tab === 'redeem' && <RedeemTab hadiah={hadiah} onClose={onClose} />}
+        {canRedeem && tab === 'redeem' && <RedeemTab hadiah={hadiah} onClose={onClose} />}
         {canManage && tab === 'stock' && <AddStockTab hadiah={hadiah} onClose={onClose} />}
         {canManage && tab === 'edit' && <EditHadiahTab hadiah={hadiah} onClose={onClose} />}
       </div>

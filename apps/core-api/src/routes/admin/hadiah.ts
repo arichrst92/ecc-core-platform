@@ -11,7 +11,7 @@ import {
   updateHadiahSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { requireMenu } from '../../middleware/require-menu.js';
+import { requireCkids } from '../../middleware/require-menu.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
@@ -29,10 +29,15 @@ hadiahRouter.get('/', async (req, res) => {
   const isAdmin = req.user?.isFulltimer === true;
   const q = paginationQuerySchema.parse(req.query);
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
+  // `status=aktif|nonaktif` (filter portal) atau `isActive=true|false`.
   const isActive =
-    typeof req.query.isActive === 'string'
-      ? req.query.isActive === 'true'
-      : undefined;
+    req.query.status === 'aktif'
+      ? true
+      : req.query.status === 'nonaktif'
+        ? false
+        : typeof req.query.isActive === 'string'
+          ? req.query.isActive === 'true'
+          : undefined;
   const search = typeof req.query.search === 'string' ? req.query.search : undefined;
 
   const where: Prisma.HadiahKatalogWhereInput = { deletedAt: null };
@@ -47,6 +52,16 @@ hadiahRouter.get('/', async (req, res) => {
     where.isActive = true;
   }
   if (search) where.nama = { contains: search, mode: 'insensitive' };
+  // Filter stok: habis (0) · menipis (1–4) · tersedia (>0)
+  const stok = typeof req.query.stok === 'string' ? req.query.stok : '';
+  if (stok === 'habis') where.stock = { lte: 0 };
+  else if (stok === 'menipis') where.stock = { gt: 0, lt: 5 };
+  else if (stok === 'tersedia') where.stock = { gt: 0 };
+  // Filter harga point
+  const minPoint = Number(req.query.minPoint);
+  const maxPoint = Number(req.query.maxPoint);
+  if (Number.isFinite(minPoint) && minPoint > 0) where.pointCost = { ...(where.pointCost as object), gte: minPoint };
+  if (Number.isFinite(maxPoint) && maxPoint > 0) where.pointCost = { ...(where.pointCost as object), lte: maxPoint };
 
   const page = q.page ?? 1;
   const limit = Math.min(q.limit ?? 20, 100);
@@ -71,8 +86,9 @@ hadiahRouter.get('/', async (req, res) => {
 
 // Endpoint di bawah: Fulltimer, atau menu "Gift Stall (CKids)" —
 // lihat detail = read, tambah/ubah/hapus hadiah & foto = write.
-const hadiahRead = requireMenu('gift-stall');
-const hadiahWrite = requireMenu('gift-stall', 'write');
+const hadiahRead = requireCkids('any', { alsoMenus: ['hadiah'] });
+// Tulis: Gift Stall (Ubah), menu portal Katalog Hadiah (Ubah), atau Akses CKids "Kelola Hadiah".
+const hadiahWrite = requireCkids(['katalog'], { manage: true, alsoMenus: ['hadiah'] });
 hadiahRouter.use((req, res, next) => (req.method === 'GET' ? hadiahRead : hadiahWrite)(req, res, next));
 
 // ============================================================

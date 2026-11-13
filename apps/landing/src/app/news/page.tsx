@@ -7,6 +7,7 @@ import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
+import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
 
 
 export function generateMetadata(): Metadata {
@@ -54,14 +55,14 @@ export default async function NewsListPage() {
               </div>
               <div className="s-card-body flex flex-col gap-2">
                 {item.cabang ? (
-                  <span className="self-start inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-700 rounded-full text-[11px] font-semibold">
+                  <span className="self-start shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-700 rounded-full text-[11px] font-semibold">
                     <Church className="w-3 h-3" />
                     {item.cabang.nama}
                   </span>
                 ) : null}
-                <h3 className="font-bold text-lg leading-snug text-neutral-900 group-hover:text-brand-600 transition line-clamp-2">{item.judul}</h3>
-                {item.ringkasan ? <p className="text-sm text-neutral-600 line-clamp-3">{item.ringkasan}</p> : null}
-                <div className="mt-auto flex items-center gap-2 text-xs text-neutral-500 pt-2">
+                <h3 className={CARD_TITLE}>{item.judul}</h3>
+                {item.ringkasan ? <p className={`shrink-0 text-sm text-neutral-600 ${summaryClamp(item.judul, 3, 25)}`}>{item.ringkasan}</p> : null}
+                <div className="mt-auto shrink-0 flex items-center gap-2 text-xs text-neutral-500 pt-2">
                   {item.tanggal ? (
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />

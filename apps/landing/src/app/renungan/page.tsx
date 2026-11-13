@@ -7,6 +7,7 @@ import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
+import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
 
 
 export function generateMetadata(): Metadata {
@@ -61,10 +62,10 @@ export default async function RenunganListPage() {
                 </div>
               )}
               <div className="s-card-body flex flex-col gap-2">
-                {r.ayatAlkitab ? <p className="text-xs font-bold text-brand-600">{r.ayatAlkitab}</p> : null}
-                <h3 className="font-bold text-lg leading-snug text-neutral-900 group-hover:text-brand-600 transition line-clamp-2">{r.judul}</h3>
-                {r.ringkasan ? <p className="text-sm text-neutral-600 line-clamp-4">{r.ringkasan}</p> : null}
-                <span className="mt-auto pt-2 text-sm font-semibold text-brand-600 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
+                {r.ayatAlkitab ? <p className="shrink-0 text-xs font-bold text-brand-600">{r.ayatAlkitab}</p> : null}
+                <h3 className={CARD_TITLE}>{r.judul}</h3>
+                {r.ringkasan ? <p className={`shrink-0 text-sm text-neutral-600 ${summaryClamp(r.judul, 4, 23)}`}>{r.ringkasan}</p> : null}
+                <span className="mt-auto shrink-0 pt-2 text-sm font-semibold text-brand-600 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
                   {t('common.readMore')}
                   <ArrowRight className="w-4 h-4" />
                 </span>

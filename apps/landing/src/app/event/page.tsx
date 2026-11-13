@@ -13,6 +13,7 @@ import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
+import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -86,11 +87,11 @@ export default async function EventListPage() {
         </span>
       </div>
       <div className="s-card-body flex flex-col gap-2">
-        <h3 className="font-bold text-lg leading-snug text-neutral-900 group-hover:text-brand-600 transition line-clamp-2">{e.judul}</h3>
+        <h3 className={CARD_TITLE}>{e.judul}</h3>
         {e.ringkasan || e.deskripsi ? (
-          <p className="text-sm text-neutral-600 line-clamp-2">{e.ringkasan || plainText(e.deskripsi ?? '')}</p>
+          <p className={`shrink-0 text-sm text-neutral-600 ${summaryClamp(e.judul, 2)}`}>{e.ringkasan || plainText(e.deskripsi ?? '')}</p>
         ) : null}
-        <div className="mt-auto space-y-1.5 text-[13px] text-neutral-600">
+        <div className="mt-auto shrink-0 space-y-1.5 text-[13px] text-neutral-600">
           <p className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-brand-500" />
             {fmt(e.tanggalMulai)}
@@ -130,7 +131,7 @@ export default async function EventListPage() {
         <EmptyState Icon={Megaphone}>{t('event.empty')}</EmptyState>
       ) : (
         <GroupCarousel
-          itemWidth="min(310px, 82vw)" itemH={440}
+          itemWidth="min(310px, 82vw)" itemH={460}
           groups={sorted.map(([key, g]) => ({ key, label: g.label, items: g.items.map(card) }))}
         />
       )}

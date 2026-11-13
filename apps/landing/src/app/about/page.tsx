@@ -111,15 +111,41 @@ export default async function AboutPage() {
     : getJson<ValueCard[]>(cms, 'about.values', VALUES_FALLBACK);
   const team = pastors ?? [];
 
+  const visiMisi = (
+    <section className="shrink-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] overflow-hidden">
+      {/* Visi — pita oranye gradient, teks putih */}
+      <div className="relative bg-brand-grad text-white px-6 py-5 sm:px-7">
+        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
+        <div className="relative text-[11px] font-bold uppercase tracking-[0.2em] text-white/80">{t('about.visi')}</div>
+        <Markdown
+          content={visi}
+          className="relative mt-2 prose max-w-none prose-p:my-0 prose-p:text-lg sm:prose-p:text-xl prose-p:font-bold prose-p:leading-snug prose-p:text-white"
+        />
+      </div>
+      {/* Misi */}
+      <div className="px-6 py-5 sm:px-7">
+        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.misi')}</div>
+        {misi.length === 1 ? (
+          <p className="mt-2 text-[14.5px] text-neutral-700 leading-relaxed">{misi[0]}</p>
+        ) : (
+          <ol className="mt-2 space-y-2">
+            {misi.map((m, idx) => (
+              <li key={idx} className="flex gap-3 text-[14.5px] text-neutral-700 leading-relaxed">
+                <span className="font-extrabold text-brand-600 tabular-nums">{String(idx + 1).padStart(2, '0')}</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+
   return (
     <ScreenPage title={t('about.title')} subtitle={t('about.sub')}>
-      <div
-        className={`h-full min-h-0 grid gap-6 overflow-y-auto lg:overflow-visible ${
-          team.length ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]' : ''
-        }`}
-      >
-        {/* Satu lembar editorial: cerita · visi · misi · nilai */}
-        <article className="min-h-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] overflow-y-auto">
+      <div className="h-full min-h-0 grid gap-5 overflow-y-auto lg:overflow-visible lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        {/* Kiri: cerita + nilai-nilai (menggulung di dalam kartu) */}
+        <article className="min-h-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] lg:overflow-y-auto">
           <div className="px-6 py-7 sm:px-10 sm:py-9">
             <div className="flex items-center gap-3">
               <EccLogo height={44} className="text-brand-600 shrink-0" />
@@ -135,40 +161,16 @@ export default async function AboutPage() {
 
             <div className="my-8 h-px bg-gradient-to-r from-brand-300 via-orange-100 to-transparent" />
 
-            <div className="grid gap-8 md:grid-cols-2">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.visi')}</div>
-                <div className="mt-3 relative pl-5 border-l-4 border-brand-500">
-                  <Markdown content={visi} className="prose max-w-none prose-p:text-xl prose-p:font-semibold prose-p:leading-snug prose-p:text-neutral-900" />
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.misi')}</div>
-                {misi.length === 1 ? (
-                  <p className="mt-3 text-[14.5px] text-neutral-700 leading-relaxed">{misi[0]}</p>
-                ) : (
-                  <ol className="mt-3 space-y-2.5">
-                    {misi.map((m, idx) => (
-                      <li key={idx} className="flex gap-3 text-[14.5px] text-neutral-700 leading-relaxed">
-                        <span className="font-extrabold text-brand-600 tabular-nums">{String(idx + 1).padStart(2, '0')}</span>
-                        <span>{m}</span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            </div>
-
-            <div className="my-8 h-px bg-gradient-to-r from-brand-300 via-orange-100 to-transparent" />
-
             <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.valuesTitle')}</div>
-            <div className="mt-4 grid gap-x-6 gap-y-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {values.map((v, idx) => {
                 const Icon = ICONS[v.icon] ?? Heart;
                 return (
-                  <div key={`${v.title}-${idx}`} className="flex gap-3">
-                    <Icon className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" strokeWidth={1.8} />
-                    <div>
+                  <div key={`${v.title}-${idx}`} className="flex gap-3 rounded-2xl bg-brand-50/60 border border-orange-100 p-4">
+                    <span className="w-10 h-10 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
+                      <Icon className="w-5 h-5" strokeWidth={1.9} />
+                    </span>
+                    <div className="min-w-0">
                       <div className="font-bold text-neutral-900">{v.title}</div>
                       <p className="text-sm text-neutral-600 leading-snug">{v.desc}</p>
                     </div>
@@ -179,33 +181,42 @@ export default async function AboutPage() {
           </div>
         </article>
 
-        {/* Tim pastoral — dari pelayanan Penggembalaan (level ≥ 8) */}
-        {team.length ? (
-          <section className="min-h-[420px] lg:min-h-0 flex flex-col">
-            <div className="shrink-0 mb-3 px-1">
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-700">{t('about.pastors')}</h2>
-              <p className="text-sm text-neutral-500">{t('about.pastorsSub')}</p>
-            </div>
-            <div className="flex-1 min-h-0">
-              <HCarousel itemWidth="min(250px, 70vw)" itemH={420}>
+        {/* Kanan: visi & misi + tim pastoral */}
+        <div className="min-h-0 flex flex-col gap-5 lg:overflow-y-auto no-scrollbar">
+          {visiMisi}
+
+          {team.length ? (
+            <section className="shrink-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] p-5 sm:p-6">
+              <div className="flex items-end justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.pastors')}</h2>
+                  <p className="text-sm text-neutral-600">{t('about.pastorsSub')}</p>
+                </div>
+              </div>
+              <HCarousel itemWidth="min(190px, 55vw)">
                 {team.map((p) => (
-                  <figure key={p.id} className="relative h-full rounded-3xl overflow-hidden bg-brand-grad shadow-[0_24px_48px_-28px_rgba(124,45,18,.7)]">
+                  <figure
+                    key={p.id}
+                    className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-brand-grad shadow-[0_18px_36px_-24px_rgba(124,45,18,.7)]"
+                  >
                     {p.fotoUrl ? (
-                      <Image src={absoluteUrl(p.fotoUrl) ?? ''} alt={p.nama} fill className="object-cover object-top" sizes="250px" />
+                      <Image src={absoluteUrl(p.fotoUrl) ?? ''} alt={p.nama} fill className="object-cover object-top" sizes="190px" />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-white/90 text-6xl font-extrabold tracking-tight">{initials(p.nama)}</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-white/90 text-5xl font-extrabold tracking-tight">
+                        {initials(p.nama)}
+                      </div>
                     )}
-                    <figcaption className="absolute inset-x-0 bottom-0 p-4 pt-16 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-white">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">{p.posisi}</div>
-                      <div className="text-lg font-extrabold leading-tight">{p.nama}</div>
-                      {p.cabang ? <div className="text-xs text-white/80 mt-0.5">{p.cabang.nama}</div> : null}
+                    <figcaption className="absolute inset-x-0 bottom-0 p-3 pt-12 bg-gradient-to-t from-black/85 via-black/45 to-transparent text-white">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-200 line-clamp-1">{p.posisi}</div>
+                      <div className="text-[15px] font-extrabold leading-tight line-clamp-2">{p.nama}</div>
+                      {p.cabang ? <div className="text-[11px] text-white/80 mt-0.5 truncate">{p.cabang.nama}</div> : null}
                     </figcaption>
                   </figure>
                 ))}
               </HCarousel>
-            </div>
-          </section>
-        ) : null}
+            </section>
+          ) : null}
+        </div>
       </div>
     </ScreenPage>
   );

@@ -44,6 +44,7 @@ import {
 } from '../../lib/homecell-pic.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import { homecellLeaders } from '../../lib/homecell-leaders.js';
 
 // mergeParams: true supaya :homecellId di parent router accessible di sini.
 export const homecellScheduleRouter = Router({ mergeParams: true });
@@ -282,13 +283,25 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
     }
   }
   const attendedIds = new Set(schedule.attendances.map((a) => a.jemaatId));
-  const missingMembers = members
-    .filter((m) => !attendedIds.has(m.jemaat.id))
-    .map((m) => ({
-      jemaatId: m.jemaat.id,
-      namaLengkap: m.jemaat.namaLengkap,
-      kode: m.jemaat.kode,
-    }));
+  // PIC homecell, Zone Leader, dan Pastor zona juga bisa diabsen (walau bukan
+  // anggota). Tampil paling atas di daftar belum hadir, dengan `peran`.
+  const leaders = await homecellLeaders(homecellId);
+  const peranOf = new Map(leaders.map((l) => [l.jemaatId, l.peran]));
+  const memberIds = new Set(members.map((m) => m.jemaat.id));
+  const missingMembers = [
+    ...leaders
+      .filter((l) => !attendedIds.has(l.jemaatId))
+      .map((l) => ({ jemaatId: l.jemaatId, namaLengkap: l.namaLengkap, kode: l.kode, peran: l.peran as string | null })),
+    ...members
+      .filter((m) => !attendedIds.has(m.jemaat.id) && !peranOf.has(m.jemaat.id))
+      .map((m) => ({
+        jemaatId: m.jemaat.id,
+        namaLengkap: m.jemaat.namaLengkap,
+        kode: m.jemaat.kode,
+        peran: null as string | null,
+      })),
+  ];
+  const leadersNotMember = leaders.filter((l) => !memberIds.has(l.jemaatId)).length;
 
   // Tamu terdaftar di homecell yang belum ditandai hadir di pertemuan ini.
   const tamuHadirIds = new Set(schedule.tamuAttendances.map((t) => t.tamu.id));
@@ -313,8 +326,9 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       createdBy: schedule.createdBy,
       createdAt: schedule.createdAt,
       attendanceCount: schedule.attendances.length,
-      memberCount: members.length,
-      attendances: schedule.attendances,
+      // Anggota + pemimpin yang bukan anggota (yang bisa diabsen).
+      memberCount: members.length + leadersNotMember,
+      attendances: schedule.attendances.map((a) => ({ ...a, peran: peranOf.get(a.jemaatId) ?? null })),
       missingMembers,
       tamuCount: schedule.tamuAttendances.length,
       tamuAttendances: schedule.tamuAttendances,
@@ -361,12 +375,13 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
     );
   }
 
-  // Verify jemaat adalah active member homecell ini
+  // Verify jemaat adalah active member homecell ini — atau pemimpinnya
+  // (PIC homecell, Zone Leader, Pastor zona).
   const membership = await prisma.homecellMember.findFirst({
     where: { homecellId, jemaatId: jemaat.id, isActive: true },
     select: { id: true },
   });
-  if (!membership) {
+  if (!membership && !(await homecellLeaders(homecellId)).some((l) => l.jemaatId === jemaat.id)) {
     throw new ApiError(
       400,
       'NOT_HOMECELL_MEMBER',
@@ -486,6 +501,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
     error: { code: string; message: string };
   }
   const results: Array<BulkResultOk | BulkResultErr> = [];
+  const leaderIds = new Set((await homecellLeaders(homecellId)).map((l) => l.jemaatId));
 
   // Process per kode. Tidak di-transactional supaya 1 kode fail tidak rollback
   // kode lain — partial success is intentional (per request doc).
@@ -528,12 +544,12 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
         continue;
       }
 
-      // Verify active member of this homecell
+      // Verify active member of this homecell — atau pemimpinnya (PIC, Zone Leader, Pastor).
       const membership = await prisma.homecellMember.findFirst({
         where: { homecellId, jemaatId: jemaat.id, isActive: true },
         select: { id: true },
       });
-      if (!membership) {
+      if (!membership && !leaderIds.has(jemaat.id)) {
         results.push({
           kode,
           status: 'error',

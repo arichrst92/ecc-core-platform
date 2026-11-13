@@ -13,6 +13,7 @@ export function HCarousel({
   itemWidth = 'min(300px, 82vw)',
   minItemH,
   itemH,
+  rows: fixedRows,
   className = '',
 }: {
   children: React.ReactNode;
@@ -26,6 +27,8 @@ export function HCarousel({
   minItemH?: number;
   /** Tinggi standar kartu (px) — semua kartu sama tinggi; isi panjang dipotong "…". */
   itemH?: number;
+  /** Paksa jumlah baris (mis. 2) — kartu mengisi tinggi baris; lebar ikut isi (mis. kartu persegi). */
+  rows?: number;
   className?: string;
 }) {
   const { t } = useLang();
@@ -69,16 +72,17 @@ export function HCarousel({
     el.scrollBy({ left: dir * step * per, behavior: 'smooth' });
   };
 
-  const multi = rows > 1;
+  const effRows = fixedRows ?? rows;
+  const multi = effRows > 1;
   return (
-    <div ref={wrapRef} className={`relative h-full min-h-0 ${className}`}>
+    <div ref={wrapRef} className={`relative h-full min-h-0 w-full min-w-0 ${className}`}>
       <div
         ref={ref}
         onScroll={update}
         className={`h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-px-1 px-1 pb-2 no-scrollbar ${
           multi ? 'grid grid-flow-col gap-4' : 'flex items-start gap-4'
         }`}
-        style={multi ? { gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`, gridAutoColumns: itemWidth } : undefined}
+        style={multi ? { gridTemplateRows: `repeat(${effRows}, minmax(0, 1fr))`, gridAutoColumns: itemWidth } : undefined}
       >
         {items.map((c, i) => (
           <div

@@ -2,14 +2,20 @@ import type { Metadata } from 'next';
 import { apiGet } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
 import { ShieldCheck } from 'lucide-react';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell } from '@/components/detail-shell';
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy',
-  description: 'Kebijakan privasi Elshaddai Creative Community.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Kebijakan Privasi', 'Privacy Policy'),
+    description: L(
+      'Kebijakan privasi Elshaddai Creative Community.',
+      'Privacy policy of Elshaddai Creative Community.',
+    ),
+  };
+}
 
 interface LegalDoc {
   key: string;

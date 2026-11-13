@@ -1,14 +1,20 @@
 import type { Metadata } from 'next';
 import { Church } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { IbadahBrowser, type IbadahEvent } from './ibadah-browser';
 
-export const metadata: Metadata = {
-  title: 'Jadwal Ibadah',
-  description: 'Jadwal ibadah Elshaddai Creative Community di semua cabang.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Jadwal Ibadah', 'Service Schedule'),
+    description: L(
+      'Jadwal ibadah Elshaddai Creative Community di semua cabang.',
+      'Elshaddai Creative Community service schedule across all branches.',
+    ),
+  };
+}
 
 type CalendarEvent = IbadahEvent;
 

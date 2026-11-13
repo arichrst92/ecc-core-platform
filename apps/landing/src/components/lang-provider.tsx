@@ -14,7 +14,9 @@ export function LangProvider({ lang, children }: { lang: Lang; children: React.R
 export function useLang() {
   const lang = useContext(Ctx);
   const t = useMemo(() => translator(lang), [lang]);
-  return { lang, t };
+  /** Teks sekali pakai: L('Indonesia', 'English'). */
+  const L = (idText: string, enText: string) => (lang === 'en' ? enText : idText);
+  return { lang, t, L };
 }
 
 export function LangSwitch({ tone = 'light' }: { tone?: 'light' | 'dark' }) {

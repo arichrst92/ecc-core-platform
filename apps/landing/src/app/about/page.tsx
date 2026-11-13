@@ -4,14 +4,20 @@ import { Heart, Users, BookOpen, Globe, Sparkles, type LucideIcon } from 'lucide
 import { getWebsiteContent, getMarkdown, getJson } from '@/lib/website-content';
 import { Markdown } from '@/components/markdown';
 import { apiGet, absoluteUrl } from '@/lib/api';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
 
-export const metadata: Metadata = {
-  title: 'Tentang Kami',
-  description: 'Tentang Elshaddai Creative Community (ECC) — visi, misi, dan nilai-nilai kami.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Tentang Kami', 'About Us'),
+    description: L(
+      'Tentang Elshaddai Creative Community (ECC) — visi, misi, dan nilai-nilai kami.',
+      'About Elshaddai Creative Community (ECC) — our vision, mission, and values.',
+    ),
+  };
+}
 
 interface ValueCard {
   icon: string;
@@ -44,6 +50,30 @@ const MISI_FALLBACK = [
   'Menjangkau komunitas dengan kasih dan tindakan nyata',
 ];
 
+const STORY_FALLBACK_EN = `Elshaddai Creative Community (ECC) was founded with a vision to be a spiritually mature community of believers.
+
+Since its founding, ECC has kept growing by opening branches in cities across Indonesia.
+
+We believe the church is not just a place for Sunday worship, but a living community that serves one another throughout the week.`;
+
+const VISI_FALLBACK_EN =
+  'To be a spiritually mature community of believers through creative ministry across all ECC branches.';
+
+const MISI_FALLBACK_EN = [
+  "Teach God's Word systematically and relevantly",
+  'Build authentic fellowship through homecells & small groups',
+  'Equip members for ministry and mission',
+  'Develop expressions of faith through art, music, media, and creativity',
+  'Reach the community with love and real action',
+];
+
+const VALUES_FALLBACK_EN: ValueCard[] = [
+  { icon: 'Heart', title: 'Love', desc: 'Loving God and others.' },
+  { icon: 'BookOpen', title: 'The Word', desc: 'Holding to the Bible.' },
+  { icon: 'Users', title: 'Community', desc: 'Building authentic relationships.' },
+  { icon: 'Sparkles', title: 'Creativity', desc: 'Serving God with creativity.' },
+];
+
 const VALUES_FALLBACK: ValueCard[] = [
   { icon: 'Heart', title: 'Kasih', desc: 'Mengasihi Tuhan dan sesama.' },
   { icon: 'BookOpen', title: 'Firman', desc: 'Berpegang pada Alkitab.' },
@@ -68,12 +98,16 @@ const initials = (n: string) =>
     .join('');
 
 export default async function AboutPage() {
-  const { t } = getT();
+  const { lang, t } = getT();
+  const en = lang === 'en';
   const [cms, pastors] = await Promise.all([getWebsiteContent(), apiGet<Pastor[]>('/public/pastors', { revalidate: 600 })]);
-  const story = getMarkdown(cms, 'about.story', STORY_FALLBACK);
-  const visi = getMarkdown(cms, 'about.visi', VISI_FALLBACK);
-  const misi = getJson<string[]>(cms, 'about.misi', MISI_FALLBACK);
-  const values = getJson<ValueCard[]>(cms, 'about.values', VALUES_FALLBACK);
+  // EN: pakai section "<key>.en" dari Portal; kalau belum ada → teks EN bawaan.
+  const story = en ? getMarkdown(cms, 'about.story.en', STORY_FALLBACK_EN) : getMarkdown(cms, 'about.story', STORY_FALLBACK);
+  const visi = en ? getMarkdown(cms, 'about.visi.en', VISI_FALLBACK_EN) : getMarkdown(cms, 'about.visi', VISI_FALLBACK);
+  const misi = en ? getJson<string[]>(cms, 'about.misi.en', MISI_FALLBACK_EN) : getJson<string[]>(cms, 'about.misi', MISI_FALLBACK);
+  const values = en
+    ? getJson<ValueCard[]>(cms, 'about.values.en', VALUES_FALLBACK_EN)
+    : getJson<ValueCard[]>(cms, 'about.values', VALUES_FALLBACK);
   const team = pastors ?? [];
 
   return (

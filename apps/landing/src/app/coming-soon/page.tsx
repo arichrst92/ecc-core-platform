@@ -1,15 +1,22 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Mail, Instagram, Sparkles, Heart } from 'lucide-react';
+import { getL } from '@/lib/i18n-server';
 
-export const metadata: Metadata = {
-  title: 'Segera Hadir — ECC',
-  description:
-    'Elshaddai Creative Community — komunitas yang bertumbuh dalam kasih Kristus. Website resmi kami akan hadir sebentar lagi.',
-  robots: { index: false, follow: false },
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Segera Hadir — ECC', 'Coming Soon — ECC'),
+    description: L(
+      'Elshaddai Creative Community — komunitas yang bertumbuh dalam kasih Kristus. Website resmi kami akan hadir sebentar lagi.',
+      "Elshaddai Creative Community — a community growing in the love of Christ. Our official website is coming soon.",
+    ),
+    robots: { index: false, follow: false },
+  };
+}
 
 export default function ComingSoonPage() {
+  const { L } = getL();
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#FFF7ED] via-[#FFEEDD] to-[#FED7AA]">
       {/* Decorative orbs */}
@@ -51,19 +58,22 @@ export default function ComingSoonPage() {
                 </div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full uppercase tracking-wider">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Segera Hadir
+                  {L('Segera Hadir', 'Coming Soon')}
                 </span>
               </div>
 
               {/* Headline */}
               <div className="text-center mb-8">
                 <h1 className="text-4xl md:text-5xl font-bold text-neutral-900 leading-tight mb-3">
-                  Sesuatu yang <span className="text-transparent bg-clip-text bg-brand-grad">indah</span> sedang kami siapkan
+                  {L('Sesuatu yang ', 'Something ')}
+                  <span className="text-transparent bg-clip-text bg-brand-grad">{L('indah', 'beautiful')}</span>
+                  {L(' sedang kami siapkan', ' is on its way')}
                 </h1>
                 <p className="text-base md:text-lg text-neutral-600 leading-relaxed">
-                  Website Elshaddai Creative Community akan segera hadir dengan
-                  pengalaman baru untuk mengenal komunitas, ibadah, dan pelayanan kami
-                  lebih dekat.
+                  {L(
+                    'Website Elshaddai Creative Community akan segera hadir dengan pengalaman baru untuk mengenal komunitas, ibadah, dan pelayanan kami lebih dekat.',
+                    'The Elshaddai Creative Community website is coming soon with a new way to get to know our community, services, and ministries.',
+                  )}
                 </p>
               </div>
 
@@ -71,8 +81,10 @@ export default function ComingSoonPage() {
               <div className="bg-brand-grad rounded-2xl p-6 text-white text-center mb-6">
                 <Heart className="w-6 h-6 mx-auto mb-2" fill="white" />
                 <p className="text-sm md:text-base leading-relaxed mb-4">
-                  Ingin terhubung lebih dulu dengan komunitas kami?
-                  Hubungi tim kami — pintu kami selalu terbuka untuk Anda.
+                  {L(
+                    'Ingin terhubung lebih dulu dengan komunitas kami? Hubungi tim kami — pintu kami selalu terbuka untuk Anda.',
+                    'Want to connect with our community now? Reach out to our team — our doors are always open to you.',
+                  )}
                 </p>
                 <a
                   href="mailto:info@eccchurch.global"

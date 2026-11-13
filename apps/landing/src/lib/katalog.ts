@@ -13,9 +13,13 @@ export interface KatalogItem {
 }
 
 const SYMBOL: Record<string, string> = { IDR: 'Rp', AUD: 'A$', SGD: 'S$', MYR: 'RM', USD: 'US$', EUR: '€', NZD: 'NZ$', HKD: 'HK$', TWD: 'NT$', CNY: '¥', JPY: '¥' };
-export function hargaText(it: Pick<KatalogItem, 'hargaTipe' | 'harga' | 'mataUang' | 'satuan'>): string {
-  if (it.hargaTipe === 'NEGO' || it.harga == null) return 'Harga by agreement';
+/** Teks harga item — ikut bahasa situs (default Indonesia). */
+export function hargaText(
+  it: Pick<KatalogItem, 'hargaTipe' | 'harga' | 'mataUang' | 'satuan'>,
+  lang: 'id' | 'en' = 'id',
+): string {
+  if (it.hargaTipe === 'NEGO' || it.harga == null) return lang === 'en' ? 'Price by agreement' : 'Harga by agreement';
   const n = it.harga.toLocaleString(it.mataUang === 'IDR' ? 'id-ID' : 'en-US', { maximumFractionDigits: 2 });
-  return `${it.hargaTipe === 'MULAI_DARI' ? 'Mulai ' : ''}${SYMBOL[it.mataUang] ?? it.mataUang} ${n}${it.satuan ? `/${it.satuan}` : ''}`;
+  const from = it.hargaTipe === 'MULAI_DARI' ? (lang === 'en' ? 'From ' : 'Mulai ') : '';
+  return `${from}${SYMBOL[it.mataUang] ?? it.mataUang} ${n}${it.satuan ? `/${it.satuan}` : ''}`;
 }
-

@@ -37,7 +37,7 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
     return NextResponse.json(
       {
         success: false,
-        error: { code: 'WEB_SESSION_EXPIRED', message: 'Sesi kedaluwarsa. Buka ulang dari Els App.' },
+        error: { code: 'WEB_SESSION_EXPIRED', message: cookies().get('lang')?.value === 'en' ? 'Session expired. Reopen from Els App.' : 'Sesi kedaluwarsa. Buka ulang dari Els App.' },
       },
       { status: 401 },
     );

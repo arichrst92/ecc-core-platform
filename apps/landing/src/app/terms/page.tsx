@@ -2,14 +2,20 @@ import type { Metadata } from 'next';
 import { apiGet } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
 import { ShieldCheck } from 'lucide-react';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell } from '@/components/detail-shell';
 
-export const metadata: Metadata = {
-  title: 'Terms & Conditions',
-  description: 'Syarat dan ketentuan penggunaan layanan Elshaddai Creative Community.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Syarat & Ketentuan', 'Terms & Conditions'),
+    description: L(
+      'Syarat dan ketentuan penggunaan layanan Elshaddai Creative Community.',
+      'Terms and conditions for using Elshaddai Creative Community services.',
+    ),
+  };
+}
 
 interface LegalDoc {
   key: string;

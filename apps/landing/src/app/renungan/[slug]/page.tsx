@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Calendar, BookOpen  } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
 
@@ -30,7 +30,7 @@ export async function generateMetadata({
     `/public/renungan/${params.slug}`,
   );
   if (!item) {
-    return { title: 'Renungan tidak ditemukan' };
+    return { title: getL().L('Renungan tidak ditemukan', 'Devotional not found') };
   }
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eccchurch.global').replace(/\/$/, '');

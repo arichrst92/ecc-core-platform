@@ -10,3 +10,9 @@ export function getT() {
   const lang = getLang();
   return { lang, t: translator(lang) };
 }
+
+/** Bahasa aktif + helper L('ID', 'EN') untuk teks sekali pakai. */
+export function getL() {
+  const lang = getLang();
+  return { lang, L: (idText: string, enText: string) => (lang === 'en' ? enText : idText) };
+}

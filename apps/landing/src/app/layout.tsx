@@ -5,15 +5,19 @@ import { Footer } from '@/components/footer';
 import { SiteChrome } from '@/components/site-chrome';
 import { LangProvider } from '@/components/lang-provider';
 import { PanelProvider } from '@/components/panel-host';
-import { getLang } from '@/lib/i18n-server';
+import { getL, getLang } from '@/lib/i18n-server';
 
-export const metadata: Metadata = {
+export function generateMetadata(): Metadata {
+  const { lang, L } = getL();
+  return {
   title: {
     default: 'ECC — Elshaddai Creative Community',
     template: '%s · ECC',
   },
-  description:
+  description: L(
     'Elshaddai Creative Community (ECC) — komunitas jemaat yang bertumbuh dalam Kristus, melayani dengan kreativitas. Bergabung dengan ibadah, persekutuan, dan pelayanan di cabang terdekat.',
+    'Elshaddai Creative Community (ECC) — a community of believers growing in Christ and serving with creativity. Join a service, fellowship, and ministry at the branch nearest you.',
+  ),
   keywords: [
     'ECC',
     'Elshaddai Creative Community',
@@ -29,7 +33,7 @@ export const metadata: Metadata = {
     description: 'Elshaddai Creative Community',
     url: 'https://eccchurch.global',
     siteName: 'ECC',
-    locale: 'id_ID',
+    locale: lang === 'en' ? 'en_US' : 'id_ID',
     type: 'website',
   },
   robots: {
@@ -39,7 +43,8 @@ export const metadata: Metadata = {
   icons: {
     icon: '/logo-ecc.webp',
   },
-};
+  };
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // Coming-soon mode: hide Navbar/Footer, render page fullscreen. Toggle

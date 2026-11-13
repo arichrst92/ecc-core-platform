@@ -22,7 +22,7 @@ import { BrandIconLink } from '@/components/brand-icon';
 import { MARKET_ICONS, SOCIAL_ICONS } from '@/lib/brand-icons-data';
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { HCarousel } from '@/components/h-carousel';
 import { FitImage } from '@/components/fit-image';
@@ -63,12 +63,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const item = await apiGet<LocalBusinessDetail>(
     `/public/local-market/${params.id}`,
   );
-  if (!item) return { title: 'Bisnis tidak ditemukan' };
+  const { L } = getL();
+  if (!item) return { title: L('Bisnis tidak ditemukan', 'Business not found') };
   return {
     title: `${item.nama} — Local Market`,
     description:
       item.deskripsi?.slice(0, 160) ??
-      `${item.nama} di ECC Local Market — ${item.industri ?? 'bisnis komunitas'}`,
+      L(
+        `${item.nama} di ECC Local Market — ${item.industri ?? 'bisnis komunitas'}`,
+        `${item.nama} on ECC Local Market — ${item.industri ?? 'community business'}`,
+      ),
     openGraph: item.heroImageUrl
       ? { images: [absoluteUrl(item.heroImageUrl) ?? ''] }
       : undefined,
@@ -267,7 +271,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                       <div className="p-3 shrink-0 flex flex-col">
                         <div className="text-sm font-bold text-neutral-900 line-clamp-1">{it.nama}</div>
                         {it.deskripsi ? <div className="text-xs text-neutral-500 line-clamp-1 mt-0.5">{it.deskripsi}</div> : null}
-                        <div className={`pt-1 text-sm font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</div>
+                        <div className={`pt-1 text-sm font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it, lang)}</div>
                       </div>
                     </Link>
                   ))}

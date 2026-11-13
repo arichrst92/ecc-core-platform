@@ -3,17 +3,22 @@ import { BookOpen, ArrowRight  } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { FitImage } from '@/components/fit-image';
 import { PanelTrigger } from '@/components/panel-host';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
 
 
-export const metadata: Metadata = {
-  title: 'Renungan',
-  description:
-    'Renungan harian dari Elshaddai Creative Community — firman Tuhan untuk perjalanan iman Anda.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Renungan', 'Devotionals'),
+    description: L(
+      'Renungan harian dari Elshaddai Creative Community — firman Tuhan untuk perjalanan iman Anda.',
+      'Daily devotionals from Elshaddai Creative Community — God\'s word for your faith journey.',
+    ),
+  };
+}
 
 interface RenunganItem {
   id: string;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Smartphone, ExternalLink } from 'lucide-react';
 
+import { useLang } from '@/components/lang-provider';
 import { APP_STORE_URL as IOS_APP_URL, PLAY_STORE_URL as ANDROID_APP_URL } from '@/lib/app-links';
 
 /**
@@ -26,6 +27,7 @@ function readWebReturnUrl(): string | null {
 export function BackToAppButton({ eventId }: { eventId: string }) {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
   const [webReturn, setWebReturn] = useState<string | null>(null);
+  const { L } = useLang();
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -39,15 +41,18 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
     return (
       <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 text-center shadow-sm">
         <Smartphone className="w-8 h-8 text-orange-500 mx-auto mb-3" />
-        <h3 className="font-semibold text-neutral-900 mb-2">Kembali ke Els App</h3>
+        <h3 className="font-semibold text-neutral-900 mb-2">{L('Kembali ke Els App', 'Back to Els App')}</h3>
         <p className="text-xs text-neutral-500 mb-4">
-          Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di Els App.
+          {L(
+            'Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di Els App.',
+            'After transferring, continue uploading the receipt & confirming registration in Els App.',
+          )}
         </p>
         <a
           href={webReturn}
           className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl hover:shadow-lg transition"
         >
-          Kembali ke Els App
+          {L('Kembali ke Els App', 'Back to Els App')}
         </a>
       </div>
     );
@@ -88,9 +93,12 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
   return (
     <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 text-center shadow-sm">
       <Smartphone className="w-8 h-8 text-orange-500 mx-auto mb-3" />
-      <h3 className="font-semibold text-neutral-900 mb-2">Kembali ke Els App</h3>
+      <h3 className="font-semibold text-neutral-900 mb-2">{L('Kembali ke Els App', 'Back to Els App')}</h3>
       <p className="text-xs text-neutral-500 mb-4">
-        Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di aplikasi.
+        {L(
+          'Setelah transfer, lanjutkan upload bukti & konfirmasi pendaftaran di aplikasi.',
+          'After transferring, continue uploading the receipt & confirming registration in the app.',
+        )}
       </p>
 
       {isMobile ? (
@@ -100,21 +108,24 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
             onClick={handleClick}
             className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl hover:shadow-lg transition"
           >
-            Kembali ke Els App
+            {L('Kembali ke Els App', 'Back to Els App')}
           </button>
           <p className="text-[11px] text-neutral-500 leading-relaxed mt-2">
-            Tombol tidak respon? Tap <strong>Done</strong> di pojok kanan atas atau
-            <strong> ◁ Els App</strong> di kiri atas layar untuk kembali.
+            {L('Tombol tidak respon? Tap ', 'Button not responding? Tap ')}
+            <strong>Done</strong>
+            {L(' di pojok kanan atas atau', ' in the top-right corner or')}
+            <strong> ◁ Els App</strong>
+            {L(' di kiri atas layar untuk kembali.', ' in the top-left of the screen to go back.')}
           </p>
           <p className="text-[11px] text-neutral-400 mt-1">
-            Belum install?{' '}
+            {L('Belum install?', 'Not installed yet?')}{' '}
             <a
               href={storeUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-orange-600 hover:underline inline-flex items-center gap-0.5"
             >
-              Download di {platform === 'ios' ? 'App Store' : 'Play Store'}
+              {L('Download di', 'Download on')} {platform === 'ios' ? 'App Store' : 'Play Store'}
               <ExternalLink className="w-3 h-3" />
             </a>
           </p>
@@ -127,7 +138,7 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
           >
-            Download di App Store
+            {L('Download di App Store', 'Download on the App Store')}
           </a>
           <a
             href={ANDROID_APP_URL}
@@ -135,7 +146,7 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800"
           >
-            Download di Play Store
+            {L('Download di Play Store', 'Get it on Google Play')}
           </a>
         </div>
       )}

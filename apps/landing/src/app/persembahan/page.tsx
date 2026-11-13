@@ -4,13 +4,19 @@ import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
 import Image from 'next/image';
 import { Church, ChevronRight, Info } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { getL } from '@/lib/i18n-server';
 
-export const metadata: Metadata = {
-  title: 'Persembahan — Pilih Cabang',
-  description:
-    'Pilih cabang gereja ECC Anda untuk melihat info rekening persembahan (perpuluhan, ucapan syukur, diakonia, dll).',
-  robots: { index: true, follow: true },
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Persembahan — Pilih Cabang', 'Giving — Choose a Branch'),
+    description: L(
+      'Pilih cabang gereja ECC Anda untuk melihat info rekening persembahan (perpuluhan, ucapan syukur, diakonia, dll).',
+      'Choose your ECC church branch to see giving account info (tithes, thanksgiving, diakonia, etc.).',
+    ),
+    robots: { index: true, follow: true },
+  };
+}
 
 interface Cabang {
   id: string;
@@ -21,6 +27,7 @@ interface Cabang {
 }
 
 export default async function PersembahanIndexPage() {
+  const { L } = getL();
   const cabangList = (await apiGet<Cabang[]>('/auth/cabang?isActive=true')) ?? [];
 
   return (
@@ -35,12 +42,12 @@ export default async function PersembahanIndexPage() {
                 Elshaddai Creative Community
               </p>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-neutral-900">
-                Persembahan / Giving
+                {L('Persembahan', 'Giving')}
               </h1>
             </div>
           </div>
           <p className="text-sm text-neutral-600 mt-3 leading-relaxed">
-            Pilih cabang Anda untuk melihat info rekening persembahan.
+            {L('Pilih cabang Anda untuk melihat info rekening persembahan.', 'Choose your branch to see the giving account info.')}
           </p>
         </div>
       </section>
@@ -50,7 +57,7 @@ export default async function PersembahanIndexPage() {
           <div className="text-center py-16 bg-white border border-orange-100 rounded-2xl">
             <Info className="w-10 h-10 text-orange-400 mx-auto mb-3" />
             <p className="text-sm text-neutral-600">
-              Data cabang sedang dalam pembaruan. Silakan hubungi tim ECC.
+              {L('Data cabang sedang dalam pembaruan. Silakan hubungi tim ECC.', 'Branch data is being updated. Please contact the ECC team.')}
             </p>
           </div>
         ) : (

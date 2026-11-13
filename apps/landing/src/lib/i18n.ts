@@ -336,3 +336,6 @@ export function translator(lang: Lang) {
   const d = DICTS[lang] ?? DICTS.id;
   return (key: DictKey) => d[key] ?? DICTS.id[key] ?? key;
 }
+
+/** Teks dwibahasa sekali pakai: L('Teks Indonesia', 'English text'). */
+export const pick = (lang: Lang) => (idText: string, enText: string) => (lang === 'en' ? enText : idText);

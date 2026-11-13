@@ -16,7 +16,7 @@ import { MARKET_ICONS } from '@/lib/brand-icons-data';
 const MARKET_LABEL = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' } as const;
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
 import { FitImage } from '@/components/fit-image';
 import { HCarousel } from '@/components/h-carousel';
@@ -47,10 +47,14 @@ async function load(p: PageProps['params']) {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const it = await load(params);
-  if (!it) return { title: 'Item tidak ditemukan' };
+  const { lang, L } = getL();
+  if (!it) return { title: L('Item tidak ditemukan', 'Item not found') };
   const img = absoluteUrl(it.fotoUrls[0] ?? it.business.heroImageUrl ?? it.business.logoUrl);
   const title = `${it.nama} — ${it.business.nama}`;
-  const description = `${hargaText(it)} · ${it.deskripsi?.slice(0, 140) ?? `${it.jenis === 'JASA' ? 'Jasa' : 'Produk'} di ECC Local Market`}`;
+  const description = `${hargaText(it, lang)} · ${
+    it.deskripsi?.slice(0, 140) ??
+    (it.jenis === 'JASA' ? L('Jasa di ECC Local Market', 'Service on ECC Local Market') : L('Produk di ECC Local Market', 'Product on ECC Local Market'))
+  }`;
   const url = `${SITE}/local-market/${params.id}/item/${params.itemId}`;
   return {
     title,
@@ -62,7 +66,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function LocalMarketItemPage({ params }: PageProps) {
-  const { t } = getT();
+  const { lang, t } = getT();
   const it = await load(params);
   if (!it) notFound();
   const b = it.business;
@@ -128,13 +132,13 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
         Icon={Store}
         badge={it.jenis === 'JASA' ? t('mk.service') : t('mk.product')}
         title={it.nama}
-        actions={<ShareButton title={`${it.nama} — ${b.nama}`} text={hargaText(it)} className="!bg-white !text-brand-700 !border-white" />}
-        meta={<HeroChip strong>{hargaText(it)}</HeroChip>}
+        actions={<ShareButton title={`${it.nama} — ${b.nama}`} text={hargaText(it, lang)} className="!bg-white !text-brand-700 !border-white" />}
+        meta={<HeroChip strong>{hargaText(it, lang)}</HeroChip>}
         media={media}
         aside={aside}
       >
         <div className="text-xs font-bold uppercase tracking-wider text-brand-600">{t('it.price')}</div>
-        <p className={`text-3xl font-extrabold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</p>
+        <p className={`text-3xl font-extrabold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it, lang)}</p>
         {shops.length > 0 ? (
           <div className="mt-5">
             <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">{t('it.buyAlso')}</div>

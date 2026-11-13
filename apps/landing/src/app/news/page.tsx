@@ -3,16 +3,22 @@ import { Calendar, Church, Newspaper } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { FitImage } from '@/components/fit-image';
 import { PanelTrigger } from '@/components/panel-host';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
 
 
-export const metadata: Metadata = {
-  title: 'News',
-  description: 'Berita terbaru dari Elshaddai Creative Community.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Berita', 'News'),
+    description: L(
+      'Berita terbaru dari Elshaddai Creative Community.',
+      'The latest news from Elshaddai Creative Community.',
+    ),
+  };
+}
 
 interface NewsItem {
   id: string;

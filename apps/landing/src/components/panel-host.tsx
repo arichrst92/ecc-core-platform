@@ -306,7 +306,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
                   </div>
                   <div className="p-2">
                     <div className="text-xs font-bold text-neutral-900 line-clamp-1">{it.nama}</div>
-                    <div className={`text-xs font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</div>
+                    <div className={`text-xs font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it, lang)}</div>
                   </div>
                 </Link>
               ))}

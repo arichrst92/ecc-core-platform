@@ -2,15 +2,20 @@ import type { Metadata } from 'next';
 import { HandHeart } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { MinistryBrowser } from './ministry-browser';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 
 
-export const metadata: Metadata = {
-  title: 'Ministry',
-  description:
-    'Berbagai pelayanan / ministry yang ada di Elshaddai Creative Community.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Ministry', 'Ministry'),
+    description: L(
+      'Berbagai pelayanan / ministry yang ada di Elshaddai Creative Community.',
+      'The ministries of Elshaddai Creative Community.',
+    ),
+  };
+}
 
 interface Ministry {
   id: string;

@@ -13,15 +13,21 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getWebsiteContent, getJson } from '@/lib/website-content';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
 import { apiGet } from '@/lib/api';
 
-export const metadata: Metadata = {
-  title: 'Kontak',
-  description: 'Hubungi Elshaddai Creative Community (ECC) — email, alamat, dan social media.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Kontak', 'Contact'),
+    description: L(
+      'Hubungi Elshaddai Creative Community (ECC) — email, alamat, dan social media.',
+      'Contact Elshaddai Creative Community (ECC) — email, address, and social media.',
+    ),
+  };
+}
 
 interface Cabang {
   id: string;

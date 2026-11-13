@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useLang } from '@/components/lang-provider';
 import { Copy, Check } from 'lucide-react';
 
 export function CopyRekeningButton({ nomor }: { nomor: string }) {
   const [copied, setCopied] = useState(false);
+  const { L } = useLang();
 
   async function handleCopy() {
     try {
@@ -38,15 +40,15 @@ export function CopyRekeningButton({ nomor }: { nomor: string }) {
           ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
           : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
       }`}
-      aria-label="Salin nomor rekening"
+      aria-label={L('Salin nomor rekening', 'Copy account number')}
     >
       {copied ? (
         <>
-          <Check className="w-3.5 h-3.5" /> Tersalin
+          <Check className="w-3.5 h-3.5" /> {L('Tersalin', 'Copied')}
         </>
       ) : (
         <>
-          <Copy className="w-3.5 h-3.5" /> Salin
+          <Copy className="w-3.5 h-3.5" /> {L('Salin', 'Copy')}
         </>
       )}
     </button>

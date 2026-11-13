@@ -10,16 +10,21 @@ import { MarketDisclaimer } from '@/components/market-disclaimer';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { FitImage } from '@/components/fit-image';
 import { PanelTrigger } from '@/components/panel-host';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
 
 
-export const metadata: Metadata = {
-  title: 'Local Market',
-  description:
-    'Marketplace bisnis jemaat Elshaddai Creative Community — dukung sesama dengan berbelanja dari komunitas.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Local Market', 'Local Market'),
+    description: L(
+      'Marketplace bisnis jemaat Elshaddai Creative Community — dukung sesama dengan berbelanja dari komunitas.',
+      'Marketplace of Elshaddai Creative Community member businesses — support one another by shopping from the community.',
+    ),
+  };
+}
 
 interface LocalBusiness {
   id: string;

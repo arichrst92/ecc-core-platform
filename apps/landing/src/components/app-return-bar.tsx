@@ -11,6 +11,7 @@
  *  - Android      → intent ke paket app (fallback Play Store).
  */
 import { useEffect, useState } from 'react';
+import { useLang } from '@/components/lang-provider';
 import { ArrowLeft } from 'lucide-react';
 
 const KEY = 'els-app-return';
@@ -42,6 +43,7 @@ function readMode(): Mode | null {
 
 export function AppReturnBar() {
   const [mode, setMode] = useState<Mode | null>(null);
+  const { L } = useLang();
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function AppReturnBar() {
           className="max-w-3xl mx-auto w-full flex items-center gap-2 px-4 py-3 text-sm font-semibold"
         >
           <ArrowLeft className="w-4 h-4" />
-          Kembali ke Els App
+          {L('Kembali ke Els App', 'Back to Els App')}
         </button>
       </div>
     </>
@@ -94,15 +96,18 @@ export function AppReturnBar() {
 /** Tombol besar di akhir halaman (sama fungsinya dengan bar atas). */
 export function AppReturnFooter() {
   const [show, setShow] = useState(false);
+  const { L } = useLang();
   useEffect(() => setShow(!!readMode()), []);
   if (!show) return null;
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-10">
       <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 text-center">
-        <p className="text-sm text-neutral-600 mb-3">Sudah selesai memberi? Terima kasih, Tuhan memberkati.</p>
+        <p className="text-sm text-neutral-600 mb-3">{L('Sudah selesai memberi? Terima kasih, Tuhan memberkati.', 'Done giving? Thank you, God bless you.')}</p>
         <AppReturnButton />
         <p className="text-[11px] text-neutral-400 mt-2">
-          Tombol tidak merespons? Tap <strong>◀ Els App</strong> di kiri atas (iPhone) atau tombol tutup / kembali di browser.
+          {L('Tombol tidak merespons? Tap ', 'Button not responding? Tap ')}
+          <strong>◀ Els App</strong>
+          {L(' di kiri atas (iPhone) atau tombol tutup / kembali di browser.', ' at the top left (iPhone) or the close / back button in your browser.')}
         </p>
       </div>
     </div>
@@ -110,6 +115,7 @@ export function AppReturnFooter() {
 }
 
 function AppReturnButton() {
+  const { L } = useLang();
   return (
     <button
       type="button"
@@ -120,7 +126,7 @@ function AppReturnButton() {
       className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl"
     >
       <ArrowLeft className="w-4 h-4" />
-      Kembali ke Els App
+      {L('Kembali ke Els App', 'Back to Els App')}
     </button>
   );
 }

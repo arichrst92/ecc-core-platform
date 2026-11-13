@@ -7,16 +7,17 @@
  */
 import { useEffect, useState } from 'react';
 import { CheckCircle2, HandHeart, Loader2, Upload, UserCheck, AlertTriangle } from 'lucide-react';
+import { useLang } from '@/components/lang-provider';
 import type { WaDonation, WaFamilyItem, WaParticipation, WaSessionInfo } from '@/lib/web-action-server';
 
 const MIN_BEBAS = 1000;
 
-const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  DAFTAR: { label: 'Menunggu bukti transfer', cls: 'bg-amber-100 text-amber-800' },
-  MENUNGGU_VERIFIKASI: { label: 'Menunggu verifikasi', cls: 'bg-blue-100 text-blue-800' },
-  BAYAR: { label: 'Lunas', cls: 'bg-emerald-100 text-emerald-800' },
-  BATAL: { label: 'Dibatalkan', cls: 'bg-neutral-100 text-neutral-600' },
-  HADIR: { label: 'Hadir', cls: 'bg-emerald-100 text-emerald-800' },
+const STATUS_LABEL: Record<string, { label: string; en: string; cls: string }> = {
+  DAFTAR: { label: 'Menunggu bukti transfer', en: 'Awaiting receipt', cls: 'bg-amber-100 text-amber-800' },
+  MENUNGGU_VERIFIKASI: { label: 'Menunggu verifikasi', en: 'Awaiting verification', cls: 'bg-blue-100 text-blue-800' },
+  BAYAR: { label: 'Lunas', en: 'Paid', cls: 'bg-emerald-100 text-emerald-800' },
+  BATAL: { label: 'Dibatalkan', en: 'Cancelled', cls: 'bg-neutral-100 text-neutral-600' },
+  HADIR: { label: 'Hadir', en: 'Attended', cls: 'bg-emerald-100 text-emerald-800' },
 };
 
 function rupiah(n: number) {
@@ -40,6 +41,12 @@ export function WebActionPanel({
   family,
   initialParticipations,
 }: Props) {
+  const { lang, L } = useLang();
+  const statusOf = (status: string) => {
+    const st = STATUS_LABEL[status];
+    if (!st) return { label: status, cls: 'bg-neutral-100 text-neutral-700' };
+    return { label: lang === 'en' ? st.en : st.label, cls: st.cls };
+  };
   const isBebas = tipeBayar === 'NOMINAL_BEBAS';
   const minNominal = Math.max(MIN_BEBAS, nominalEvent ?? 0);
 
@@ -58,7 +65,7 @@ export function WebActionPanel({
   const [donasiBusy, setDonasiBusy] = useState(false);
 
   const candidates = [
-    { id: session.jemaat.id, namaLengkap: session.jemaat.namaLengkap, label: 'Diri sendiri' },
+    { id: session.jemaat.id, namaLengkap: session.jemaat.namaLengkap, label: L('Diri sendiri', 'Myself') },
     ...family.map((f) => ({ id: f.jemaat.id, namaLengkap: f.jemaat.namaLengkap, label: f.tipeRelasi.nama })),
   ].filter((c, i, arr) => arr.findIndex((x) => x.id === c.id) === i);
 
@@ -90,11 +97,11 @@ export function WebActionPanel({
     setMessage(null);
     const amount = Number(donasiNominal);
     if (!Number.isFinite(amount) || amount < MIN_BEBAS) {
-      setMessage({ type: 'err', text: `Nominal donasi minimal Rp ${rupiah(MIN_BEBAS)}.` });
+      setMessage({ type: 'err', text: L(`Nominal donasi minimal Rp ${rupiah(MIN_BEBAS)}.`, `Minimum donation is Rp ${rupiah(MIN_BEBAS)}.`) });
       return;
     }
     if (!donasiFile) {
-      setMessage({ type: 'err', text: 'Pilih foto bukti transfer donasi.' });
+      setMessage({ type: 'err', text: L('Pilih foto bukti transfer donasi.', 'Choose a photo of the donation transfer receipt.') });
       return;
     }
     setDonasiBusy(true);
@@ -105,13 +112,13 @@ export function WebActionPanel({
     const r = await call(`event/${eventId}/donations`, { method: 'POST', body: fd });
     setDonasiBusy(false);
     if (!r.ok) {
-      setMessage({ type: 'err', text: r.json?.error?.message ?? 'Donasi gagal dikirim.' });
+      setMessage({ type: 'err', text: r.json?.error?.message ?? L('Donasi gagal dikirim.', 'Failed to send donation.') });
       return;
     }
     setDonasiNominal('');
     setDonasiFile(null);
     await refreshDonations();
-    setMessage({ type: 'ok', text: 'Terima kasih! Donasi Anda terkirim dan menunggu verifikasi admin.' });
+    setMessage({ type: 'ok', text: L('Terima kasih! Donasi Anda terkirim dan menunggu verifikasi admin.', 'Thank you! Your donation was sent and is awaiting admin verification.') });
   }
 
   function toggle(id: string) {
@@ -127,7 +134,7 @@ export function WebActionPanel({
     setMessage(null);
     const amount = Number(nominal);
     if (isBebas && (!Number.isFinite(amount) || amount < minNominal)) {
-      setMessage({ type: 'err', text: `Nominal minimal Rp ${rupiah(minNominal)} per orang.` });
+      setMessage({ type: 'err', text: L(`Nominal minimal Rp ${rupiah(minNominal)} per orang.`, `Minimum amount is Rp ${rupiah(minNominal)} per person.`) });
       return;
     }
     setBusy(true);
@@ -140,7 +147,7 @@ export function WebActionPanel({
     });
     setBusy(false);
     if (!r.ok) {
-      setMessage({ type: 'err', text: r.json?.error?.message ?? 'Pendaftaran gagal.' });
+      setMessage({ type: 'err', text: r.json?.error?.message ?? L('Pendaftaran gagal.', 'Registration failed.') });
       return;
     }
     const failed = (r.json.data?.failed ?? []) as { error: { message: string } }[];
@@ -148,8 +155,8 @@ export function WebActionPanel({
     await refresh();
     setMessage(
       failed.length
-        ? { type: 'err', text: `Sebagian gagal: ${failed.map((f) => f.error.message).join('; ')}` }
-        : { type: 'ok', text: 'Pendaftaran berhasil. Silakan transfer lalu upload bukti di bawah.' },
+        ? { type: 'err', text: `${L('Sebagian gagal', 'Some failed')}: ${failed.map((f) => f.error.message).join('; ')}` }
+        : { type: 'ok', text: L('Pendaftaran berhasil. Silakan transfer lalu upload bukti di bawah.', 'Registration successful. Please transfer, then upload the receipt below.') },
     );
   }
 
@@ -161,19 +168,19 @@ export function WebActionPanel({
     const r = await call(`event/${eventId}/peserta/${participationId}/bukti`, { method: 'POST', body: fd });
     setUploading(null);
     if (!r.ok) {
-      setMessage({ type: 'err', text: r.json?.error?.message ?? 'Upload bukti gagal.' });
+      setMessage({ type: 'err', text: r.json?.error?.message ?? L('Upload bukti gagal.', 'Failed to upload receipt.') });
       return;
     }
     await refresh();
-    setMessage({ type: 'ok', text: 'Bukti transfer terkirim. Menunggu verifikasi admin.' });
+    setMessage({ type: 'ok', text: L('Bukti transfer terkirim. Menunggu verifikasi admin.', 'Receipt sent. Awaiting admin verification.') });
   }
 
   if (expired) {
     return (
       <div className="bg-white border-2 border-red-200 rounded-2xl p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-        <p className="font-semibold text-neutral-900">Sesi kedaluwarsa</p>
-        <p className="text-sm text-neutral-600 mt-1">Buka ulang halaman ini dari Els App.</p>
+        <p className="font-semibold text-neutral-900">{L('Sesi kedaluwarsa', 'Session expired')}</p>
+        <p className="text-sm text-neutral-600 mt-1">{L('Buka ulang halaman ini dari Els App.', 'Reopen this page from Els App.')}</p>
       </div>
     );
   }
@@ -182,9 +189,9 @@ export function WebActionPanel({
     <div className="bg-white border-2 border-orange-200 rounded-2xl overflow-hidden">
       <div className="px-6 py-4 bg-brand-grad text-white">
         <h2 className="font-bold text-lg flex items-center gap-2">
-          <UserCheck className="w-5 h-5" /> Pendaftaran
+          <UserCheck className="w-5 h-5" /> {L('Pendaftaran', 'Registration')}
         </h2>
-        <p className="text-xs text-white/90 mt-0.5">Masuk sebagai {session.jemaat.namaLengkap}</p>
+        <p className="text-xs text-white/90 mt-0.5">{L('Masuk sebagai', 'Signed in as')} {session.jemaat.namaLengkap}</p>
       </div>
 
       <div className="p-6 space-y-6">
@@ -200,7 +207,7 @@ export function WebActionPanel({
 
         {/* 1. Pilih peserta */}
         <section>
-          <h3 className="text-sm font-semibold text-neutral-900 mb-2">1. Pilih peserta</h3>
+          <h3 className="text-sm font-semibold text-neutral-900 mb-2">1. {L('Pilih peserta', 'Choose participants')}</h3>
           <div className="space-y-2">
             {candidates.map((c) => {
               const done = registeredIds.has(c.id);
@@ -225,7 +232,7 @@ export function WebActionPanel({
                     <p className="text-sm font-medium text-neutral-900 truncate">{c.namaLengkap}</p>
                     <p className="text-xs text-neutral-500">{c.label}</p>
                   </div>
-                  {done && <span className="text-[11px] text-emerald-700">Sudah terdaftar</span>}
+                  {done && <span className="text-[11px] text-emerald-700">{L('Sudah terdaftar', 'Registered')}</span>}
                 </label>
               );
             })}
@@ -234,7 +241,7 @@ export function WebActionPanel({
           {isBebas && (
             <label className="block mt-4">
               <span className="text-xs font-medium text-neutral-600">
-                Nominal per orang (min Rp {rupiah(minNominal)})
+                {L('Nominal per orang', 'Amount per person')} (min Rp {rupiah(minNominal)})
               </span>
               <div className="mt-1 flex items-center border border-neutral-300 rounded-lg overflow-hidden">
                 <span className="px-3 text-sm text-neutral-500 bg-neutral-50 py-2">Rp</span>
@@ -258,17 +265,18 @@ export function WebActionPanel({
             className="mt-4 w-full py-3 rounded-xl bg-brand-grad text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            Daftar {selected.size > 0 ? `${selected.size} orang` : ''}
+            {L('Daftar', 'Register')}{' '}
+            {selected.size > 0 ? `${selected.size} ${L('orang', selected.size === 1 ? 'person' : 'people')}` : ''}
           </button>
         </section>
 
         {/* 2. Upload bukti */}
         {participations.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-neutral-900 mb-2">2. Upload bukti transfer</h3>
+            <h3 className="text-sm font-semibold text-neutral-900 mb-2">2. {L('Upload bukti transfer', 'Upload transfer receipt')}</h3>
             <div className="space-y-2">
               {participations.map((p) => {
-                const st = STATUS_LABEL[p.status] ?? { label: p.status, cls: 'bg-neutral-100 text-neutral-700' };
+                const st = statusOf(p.status);
                 const canUpload = p.status === 'DAFTAR' || p.status === 'MENUNGGU_VERIFIKASI';
                 return (
                   <div key={p.id} className="border border-neutral-200 rounded-xl px-3 py-2.5">
@@ -291,7 +299,7 @@ export function WebActionPanel({
                         ) : (
                           <Upload className="w-4 h-4" />
                         )}
-                        {p.buktiTransferUrl ? 'Ganti bukti transfer' : 'Upload bukti transfer'}
+                        {p.buktiTransferUrl ? L('Ganti bukti transfer', 'Replace receipt') : L('Upload bukti transfer', 'Upload receipt')}
                         <input
                           type="file"
                           accept="image/*"
@@ -310,7 +318,7 @@ export function WebActionPanel({
               })}
             </div>
             <p className="text-[11px] text-neutral-500 mt-2">
-              Pembatalan pendaftaran dilakukan dari Els App.
+              {L('Pembatalan pendaftaran dilakukan dari Els App.', 'Registrations can be cancelled from Els App.')}
             </p>
           </section>
         )}
@@ -319,20 +327,23 @@ export function WebActionPanel({
         {isBebas && participations.length > 0 && (
           <section className="border-t border-neutral-100 pt-5">
             <h3 className="text-sm font-semibold text-neutral-900 mb-1 flex items-center gap-1.5">
-              <HandHeart className="w-4 h-4 text-orange-500" /> 3. Donasi lagi
+              <HandHeart className="w-4 h-4 text-orange-500" /> 3. {L('Donasi lagi', 'Give again')}
             </h3>
             <p className="text-xs text-neutral-500 mb-3">
-              Ingin memberi lagi untuk event ini? Transfer ke rekening di atas, lalu kirim bukti di sini. Bisa berkali-kali.
+              {L(
+                'Ingin memberi lagi untuk event ini? Transfer ke rekening di atas, lalu kirim bukti di sini. Bisa berkali-kali.',
+                'Want to give again for this event? Transfer to the account above, then send the receipt here. You can do this multiple times.',
+              )}
             </p>
             {participations.length > 1 && (
               <label className="block mb-3">
-                <span className="text-xs font-medium text-neutral-600">Atas nama</span>
+                <span className="text-xs font-medium text-neutral-600">{L('Atas nama', 'On behalf of')}</span>
                 <select
                   value={donasiFor}
                   onChange={(e) => setDonasiFor(e.target.value)}
                   className="mt-1 w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white outline-none"
                 >
-                  <option value="">{session.jemaat.namaLengkap} (saya)</option>
+                  <option value="">{session.jemaat.namaLengkap} ({L('saya', 'me')})</option>
                   {participations
                     .filter((p) => !p.isSelf)
                     .map((p) => (
@@ -344,7 +355,7 @@ export function WebActionPanel({
               </label>
             )}
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Nominal donasi (min Rp {rupiah(MIN_BEBAS)})</span>
+              <span className="text-xs font-medium text-neutral-600">{L('Nominal donasi', 'Donation amount')} (min Rp {rupiah(MIN_BEBAS)})</span>
               <div className="mt-1 flex items-center border border-neutral-300 rounded-lg overflow-hidden">
                 <span className="px-3 text-sm text-neutral-500 bg-neutral-50 py-2">Rp</span>
                 <input
@@ -362,7 +373,7 @@ export function WebActionPanel({
             <label className="mt-3 flex items-center gap-2 text-sm border border-dashed border-neutral-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-orange-300">
               <Upload className="w-4 h-4 text-orange-500 shrink-0" />
               <span className={`truncate ${donasiFile ? 'text-neutral-900' : 'text-neutral-500'}`}>
-                {donasiFile ? donasiFile.name : 'Pilih foto bukti transfer'}
+                {donasiFile ? donasiFile.name : L('Pilih foto bukti transfer', 'Choose receipt photo')}
               </span>
               <input
                 type="file"
@@ -381,21 +392,21 @@ export function WebActionPanel({
               className="mt-3 w-full py-3 rounded-xl bg-brand-grad text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {donasiBusy && <Loader2 className="w-4 h-4 animate-spin" />}
-              Kirim donasi
+              {L('Kirim donasi', 'Send donation')}
             </button>
 
             {donations.length > 0 && (
               <div className="mt-4 space-y-2">
-                <p className="text-xs font-semibold text-neutral-700">Riwayat donasi tambahan</p>
+                <p className="text-xs font-semibold text-neutral-700">{L('Riwayat donasi tambahan', 'Additional donation history')}</p>
                 {donations.map((d) => {
-                  const st = STATUS_LABEL[d.status] ?? { label: d.status, cls: 'bg-neutral-100 text-neutral-700' };
+                  const st = statusOf(d.status);
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-2 border border-neutral-200 rounded-xl px-3 py-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-neutral-900">Rp {rupiah(Number(d.nominalBayar))}</p>
                         <p className="text-[11px] text-neutral-500 truncate">
                           {d.jemaat.namaLengkap} ·{' '}
-                          {new Date(d.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {new Date(d.createdAt).toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>{st.label}</span>

@@ -9,15 +9,21 @@ import {
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { FitImage } from '@/components/fit-image';
 import { PanelTrigger } from '@/components/panel-host';
-import { getT } from '@/lib/i18n-server';
+import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
 
-export const metadata: Metadata = {
-  title: 'Event',
-  description: 'Acara mendatang Elshaddai Creative Community.',
-};
+export function generateMetadata(): Metadata {
+  const { L } = getL();
+  return {
+    title: L('Event', 'Events'),
+    description: L(
+      'Acara mendatang Elshaddai Creative Community.',
+      'Upcoming Elshaddai Creative Community events.',
+    ),
+  };
+}
 
 interface EventItem {
   id: string;

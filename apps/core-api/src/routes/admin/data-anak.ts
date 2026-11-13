@@ -15,6 +15,7 @@ import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest } from '../../lib/errors.js';
 import { DEFAULT_TZ, addDays, todayInTz } from '../../lib/tz.js';
 import { renderDataAnakPdfHtml, renderDataAnakQrHtml } from '../../lib/data-anak-html.js';
+import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 
 export const dataAnakRouter = Router();
 dataAnakRouter.use(requireMenu('data-anak'));
@@ -82,8 +83,24 @@ export interface AnakRow {
   jumlahHadir: number;
 }
 
+/**
+ * Anak tanpa kode jemaat (mis. didaftarkan sebagai tamu / data lama) tidak
+ * punya QR. Beri kode otomatis supaya semua anak bisa dicetak & discan.
+ */
+async function ensureKode(where: Prisma.JemaatWhereInput): Promise<number> {
+  const tanpa = await prisma.jemaat.findMany({ where: { AND: [where, { kode: null }] }, select: { id: true }, take: EXPORT_MAX });
+  let n = 0;
+  for (const j of tanpa) {
+    const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
+    const r = await prisma.jemaat.updateMany({ where: { id: j.id, kode: null }, data: { kode } });
+    n += r.count;
+  }
+  return n;
+}
+
 async function loadAnak(f: Filter, skip: number, take: number): Promise<{ rows: AnakRow[]; total: number }> {
   const where = whereOf(f);
+  await ensureKode(where);
   const [rows, total] = await Promise.all([
     prisma.jemaat.findMany({
       where,

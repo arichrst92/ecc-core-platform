@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { apiGet } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
+import { ShieldCheck } from 'lucide-react';
+import { getT } from '@/lib/i18n-server';
+import { localeOf } from '@/lib/i18n';
+import { DetailShell } from '@/components/detail-shell';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -17,35 +21,37 @@ interface LegalDoc {
 }
 
 export default async function PrivacyPage() {
-  const doc = await apiGet<LegalDoc>('/public/legal/PRIVACY?lang=id');
+  const { lang, t } = getT();
+  const doc =
+    (await apiGet<LegalDoc>(`/public/legal/PRIVACY?lang=${lang}`)) ??
+    (lang !== 'id' ? await apiGet<LegalDoc>('/public/legal/PRIVACY?lang=id') : null);
 
   return (
-    <article className="container-page py-12 lg:py-16 max-w-3xl mx-auto">
-      <h1 className="text-4xl font-bold text-neutral-900 mb-2">
-        {doc?.title ?? 'Privacy Policy'}
-      </h1>
-      {doc && (
-        <p className="text-sm text-neutral-500 mb-8">
-          Versi {doc.version} · Diperbarui{' '}
-          {new Date(doc.updatedAt).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })}
-        </p>
-      )}
+    <DetailShell
+      backHref="/"
+      backLabel={t('nav.home')}
+      Icon={ShieldCheck}
+      badge={t('foot.privacy')}
+      title={doc?.title ?? t('foot.privacy')}
+      meta={
+        doc ? (
+          <span>
+            v{doc.version} · {t('legal.updated')}{' '}
+            {new Date(doc.updatedAt).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'long', year: 'numeric' })}
+          </span>
+        ) : null
+      }
+    >
       {doc ? (
         <Markdown content={doc.content} />
       ) : (
-        <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-8 text-center text-neutral-500">
-          Dokumen Privacy Policy sedang di-update. Silakan kembali lagi nanti, atau hubungi
-          kami di{' '}
+        <p className="text-neutral-500">
+          {t('dt.noContent')}{' '}
           <a href="mailto:info@eccchurch.global" className="text-brand-600 hover:underline">
             info@eccchurch.global
           </a>
-          .
-        </div>
+        </p>
       )}
-    </article>
+    </DetailShell>
   );
 }

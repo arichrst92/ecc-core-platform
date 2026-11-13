@@ -3,74 +3,95 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import type { DictKey } from '@/lib/i18n';
+import { LangSwitch, useLang } from './lang-provider';
 import {
   Menu,
   X,
   Home,
   Church,
-  Megaphone,
+  CalendarDays,
   Newspaper,
   BookOpen,
   HandHeart,
   Store,
-  MapPin,
-  Info,
-  Mail,
-  type LucideIcon,
+  Users,
+  Phone,
+  type LucideIcon
 } from 'lucide-react';
 
 interface NavLink {
   href: string;
-  label: string;
+  label: DictKey;
   Icon: LucideIcon;
 }
 
 // Urutan: Beranda → Ibadah → Event → News → Renungan → Ministry →
 // Local Market → Cabang → Tentang Kami → Kontak.
-const NAV_LINKS: NavLink[] = [
-  { href: '/', label: 'Beranda', Icon: Home },
-  { href: '/ibadah', label: 'Ibadah', Icon: Church },
-  { href: '/event', label: 'Event', Icon: Megaphone },
-  { href: '/news', label: 'News', Icon: Newspaper },
-  { href: '/renungan', label: 'Renungan', Icon: BookOpen },
-  { href: '/ministry', label: 'Ministry', Icon: HandHeart },
-  { href: '/local-market', label: 'Local Market', Icon: Store },
-  { href: '/cabang', label: 'Cabang', Icon: MapPin },
-  { href: '/about', label: 'Tentang Kami', Icon: Info },
-  { href: '/contact', label: 'Kontak', Icon: Mail },
+export const NAV_LINKS: NavLink[] = [
+  { href: '/', label: 'nav.home', Icon: Home },
+  { href: '/ibadah', label: 'nav.ibadah', Icon: Church },
+  { href: '/event', label: 'nav.event', Icon: CalendarDays },
+  { href: '/news', label: 'nav.news', Icon: Newspaper },
+  { href: '/renungan', label: 'nav.renungan', Icon: BookOpen },
+  { href: '/ministry', label: 'nav.ministry', Icon: HandHeart },
+  { href: '/local-market', label: 'nav.market', Icon: Store },
+  { href: '/about', label: 'nav.about', Icon: Users },
+  { href: '/contact', label: 'nav.contact', Icon: Phone },
 ];
 
+/**
+ * Navbar situs — persona beranda: latar oranye gradient brand (sama dengan
+ * Els App), teks putih, menu aktif berupa pil putih. Halaman dengan hero
+ * gradient (PageHero) menyambung mulus di bawahnya.
+ */
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
+  const pathname = usePathname() ?? '/';
+  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/'));
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-neutral-100">
-      <nav className="container-page flex items-center justify-between h-16">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} priority />
-          <span className="font-bold text-neutral-900 text-lg tracking-tight">ECC</span>
+    <header className="relative shrink-0 z-40 grad-fixed text-white">
+      <nav className="container-page flex items-center gap-4 h-16">
+        <Link href="/" className="flex items-center gap-2.5 shrink-0">
+          <span className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
+            <Image src="/logo-ecc.webp" alt="ECC" width={32} height={32} priority />
+          </span>
+          <span className="leading-tight">
+            <span className="block font-extrabold text-lg tracking-tight">ECC</span>
+            <span className="hidden sm:block xl:hidden 2xl:block text-[10.5px] text-white/85">Elshaddai Creative Community</span>
+          </span>
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden lg:flex items-center gap-4">
+        <div className="hidden xl:flex items-center gap-0.5 ml-auto">
           {NAV_LINKS.map(({ href, label, Icon }) => (
             <Link
               key={href}
               href={href}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-brand-500 transition"
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition ${
+                isActive(href) ? 'bg-white text-brand-700 font-bold' : 'text-white/90 hover:bg-white/15 hover:text-white'
+              }`}
             >
-              <Icon className="w-4 h-4" />
-              {label}
+              <Icon className="w-3.5 h-3.5" />
+              {t(label)}
             </Link>
           ))}
         </div>
+
+        <span className="ml-auto xl:ml-2">
+          <LangSwitch />
+        </span>
+
 
         {/* Mobile menu button */}
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="lg:hidden p-2 -mr-2 text-neutral-600 hover:text-neutral-900"
-          aria-label={open ? 'Tutup menu' : 'Buka menu'}
+          className="xl:hidden p-2 -mr-2 text-white"
+          aria-label={open ? t('nav.closeMenu') : t('nav.openMenu')}
         >
           {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -78,17 +99,19 @@ export function Navbar() {
 
       {/* Mobile menu drawer */}
       {open && (
-        <div className="lg:hidden border-t border-neutral-100 bg-white">
-          <div className="container-page py-4 flex flex-col gap-1">
+        <div className="xl:hidden absolute inset-x-0 top-full grad-fixed border-t border-white/15 shadow-xl">
+          <div className="container-page py-3 flex flex-col gap-1">
             {NAV_LINKS.map(({ href, label, Icon }) => (
               <Link
                 key={href}
                 href={href}
                 onClick={() => setOpen(false)}
-                className="py-2 px-3 rounded text-neutral-700 hover:bg-neutral-50 font-medium inline-flex items-center gap-2.5"
+                className={`py-2.5 px-3 rounded-xl font-semibold inline-flex items-center gap-2.5 ${
+                  isActive(href) ? 'bg-white text-brand-700' : 'text-white hover:bg-white/15'
+                }`}
               >
-                <Icon className="w-4 h-4 text-brand-500" />
-                {label}
+                <Icon className="w-4 h-4" />
+                {t(label)}
               </Link>
             ))}
           </div>

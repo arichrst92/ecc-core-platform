@@ -1,19 +1,20 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   Calendar,
   Clock,
   MapPin,
   CreditCard,
-  ArrowLeft,
   Tag,
   Smartphone,
   PlayCircle,
+  Megaphone
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
+import { getT } from '@/lib/i18n-server';
+import { localeOf } from '@/lib/i18n';
+import { DetailShell, HeroChip } from '@/components/detail-shell';
 
 interface EventDetail {
   id: string;
@@ -101,149 +102,109 @@ export default async function EventDetailPage({
 }: {
   params: { slug: string };
 }) {
+  const { lang, t } = getT();
   const event = await apiGet<EventDetail>(`/public/event/${params.slug}`);
   if (!event) notFound();
 
-  return (
-    <article className="py-8 lg:py-12">
-      <div className="container-page max-w-3xl mx-auto">
-        <Link
-          href="/event"
-          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Kembali ke Event
-        </Link>
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const when = `${fmt(event.tanggalMulai)}${event.tanggalSelesai && event.tanggalSelesai !== event.tanggalMulai ? ` – ${fmt(event.tanggalSelesai)}` : ''}`;
+  const fee =
+    event.tipeBayar === 'GRATIS'
+      ? t('common.free')
+      : event.nominal
+        ? `Rp ${Number(event.nominal).toLocaleString('id-ID')}`
+        : t('ev.flexible');
 
-        {event.heroImageUrl && (
-          <div className="aspect-video relative bg-neutral-100 rounded-2xl overflow-hidden mb-8">
-            <Image
-              src={absoluteUrl(event.heroImageUrl) ?? ''}
-              alt={event.judul}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 768px"
-              priority
-            />
-          </div>
-        )}
-
-        <h1 className="text-3xl sm:text-4xl font-bold text-neutral-900 leading-tight mb-4">
-          {event.judul}
-        </h1>
-
-        {event.ringkasan && (
-          <p className="text-lg text-neutral-700 mb-6">{event.ringkasan}</p>
-        )}
-
-        {/* Event meta card */}
-        <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-5 mb-8 space-y-3 text-sm">
-          <div className="flex items-start gap-3">
-            <Calendar className="w-5 h-5 text-brand-500 shrink-0" />
-            <div>
-              <div className="font-medium text-neutral-900">
-                {formatDate(event.tanggalMulai)}
-                {event.tanggalSelesai && event.tanggalSelesai !== event.tanggalMulai
-                  ? ` – ${formatDate(event.tanggalSelesai)}`
-                  : ''}
-              </div>
-              {event.jamMulai && (
-                <div className="text-neutral-600 mt-0.5 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  {event.jamMulai}
-                  {event.jamSelesai ? ` – ${event.jamSelesai}` : ''} WIB
-                </div>
-              )}
+  const info = (
+    <div className="p-5 space-y-3 text-sm">
+      <div className="flex items-start gap-3">
+        <span className="w-9 h-9 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
+          <Calendar className="w-4 h-4" />
+        </span>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{t('ev.when')}</div>
+          <div className="font-semibold text-neutral-900">{when}</div>
+          {event.jamMulai ? (
+            <div className="text-neutral-600 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              {event.jamMulai}
+              {event.jamSelesai ? ` – ${event.jamSelesai}` : ''} WIB
             </div>
-          </div>
-          {event.lokasi && (
-            <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-brand-500 shrink-0" />
-              <div className="text-neutral-700">{event.lokasi}</div>
-            </div>
-          )}
-          {event.cabang && (
-            <div className="flex items-start gap-3">
-              <span className="text-brand-500 w-5 text-center">⛪</span>
-              <div className="text-neutral-700">{event.cabang.nama}</div>
-            </div>
-          )}
-          <div className="flex items-start gap-3 pt-3 border-t border-neutral-200">
-            <CreditCard className="w-5 h-5 text-brand-500 shrink-0" />
-            <div>
-              {event.tipeBayar === 'GRATIS' ? (
-                <span className="font-medium text-green-700">GRATIS</span>
-              ) : (
-                <div>
-                  <div className="font-medium text-neutral-900">
-                    {event.nominal
-                      ? `Rp ${Number(event.nominal).toLocaleString('id-ID')}`
-                      : 'Berbayar (nominal bebas)'}
-                  </div>
-                  {event.bankNama && (
-                    <div className="text-xs text-neutral-500 mt-1">
-                      Info pembayaran tersedia di aplikasi ECC saat daftar.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Description */}
-        <Markdown content={event.deskripsi} />
-
-        {/* Video embed */}
-        {event.videoUrl && (
-          <div className="mt-8 pt-6 border-t border-neutral-200">
-            <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-              <PlayCircle className="w-5 h-5 text-brand-500" />
-              Video Promo
-            </h3>
-            <a
-              href={event.videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-600 hover:underline break-all text-sm"
-            >
-              {event.videoUrl}
-            </a>
-          </div>
-        )}
-
-        {event.tags.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-neutral-200">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Tag className="w-4 h-4 text-neutral-400" />
-              {event.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-2.5 py-0.5 bg-neutral-100 text-neutral-700 rounded text-xs"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Download CTA — view-only di landing, daftar via app */}
-        <div className="mt-10 p-6 bg-gradient-to-br from-brand-500 to-brand-600 rounded-2xl text-center text-white">
-          <Smartphone className="w-10 h-10 mx-auto mb-3 opacity-90" />
-          <h3 className="font-bold text-lg mb-2">Mau Daftar Event Ini?</h3>
-          <p className="text-brand-50 text-sm mb-4">
-            Pendaftaran event tersedia di aplikasi ECC. Download untuk daftar + dapat info
-            real-time.
-          </p>
-          <a
-            href="https://apps.apple.com/app/ecc-church"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-brand-600 hover:bg-brand-50 rounded-lg font-semibold transition"
-          >
-            Download Aplikasi ECC
-          </a>
+          ) : null}
         </div>
       </div>
-    </article>
+      {event.lokasi || event.cabang ? (
+        <div className="flex items-start gap-3">
+          <span className="w-9 h-9 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
+            <MapPin className="w-4 h-4" />
+          </span>
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{t('ev.where')}</div>
+            {event.lokasi ? <div className="font-semibold text-neutral-900">{event.lokasi}</div> : null}
+            {event.cabang ? <div className="text-neutral-600">{event.cabang.nama}</div> : null}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex items-start gap-3">
+        <span className="w-9 h-9 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
+          <CreditCard className="w-4 h-4" />
+        </span>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{t('ev.fee')}</div>
+          <div className={`font-semibold ${event.tipeBayar === 'GRATIS' ? 'text-green-700' : 'text-neutral-900'}`}>{fee}</div>
+          {event.tipeBayar !== 'GRATIS' && event.bankNama ? <div className="text-xs text-neutral-500">{t('ev.payInfo')}</div> : null}
+        </div>
+      </div>
+      <a href="https://elsapp.eccchurch.global" target="_blank" rel="noopener noreferrer" className="btn-primary w-full justify-center !mt-4">
+        <Smartphone className="w-4 h-4" />
+        {t('ev.register')}
+      </a>
+    </div>
+  );
+
+  return (
+    <DetailShell
+      backHref="/event"
+      backLabel={t('nav.event')}
+      Icon={Megaphone}
+      badge={t('nav.event')}
+      title={event.judul}
+      image={event.heroImageUrl ? { src: absoluteUrl(event.heroImageUrl) ?? '', alt: event.judul } : null}
+      aside={info}
+      meta={
+        <>
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-4 h-4" />
+            {fmt(event.tanggalMulai)}
+          </span>
+          {event.cabang ? <HeroChip>{event.cabang.nama}</HeroChip> : null}
+          <HeroChip strong>{fee}</HeroChip>
+        </>
+      }
+    >
+      {event.ringkasan ? <p className="text-lg text-neutral-700 leading-relaxed mb-6 font-medium border-l-4 border-brand-400 pl-4">{event.ringkasan}</p> : null}
+      <Markdown content={event.deskripsi} />
+      {event.videoUrl ? (
+        <div className="mt-8 pt-5 border-t border-neutral-200">
+          <h3 className="font-semibold text-neutral-900 mb-2 flex items-center gap-2">
+            <PlayCircle className="w-5 h-5 text-brand-500" />
+            {t('ev.video')}
+          </h3>
+          <a href={event.videoUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline break-all text-sm">
+            {event.videoUrl}
+          </a>
+        </div>
+      ) : null}
+      {event.tags.length > 0 ? (
+        <div className="mt-8 pt-5 border-t border-neutral-200 flex items-center gap-2 flex-wrap">
+          <Tag className="w-4 h-4 text-brand-500" />
+          {event.tags.map((tag) => (
+            <span key={tag} className="px-2.5 py-0.5 bg-brand-50 text-brand-700 rounded-full text-xs font-semibold">
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </DetailShell>
   );
 }

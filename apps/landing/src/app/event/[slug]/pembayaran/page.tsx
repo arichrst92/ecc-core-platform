@@ -229,7 +229,7 @@ export default async function EventPembayaranPage(
         {/* Payment info */}
         {!isFree && event.bankNomor && (
           <div className="bg-white border border-orange-100 rounded-2xl overflow-hidden">
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-grad text-white">
               <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Landmark className="w-5 h-5" /> Info Pembayaran
               </h2>

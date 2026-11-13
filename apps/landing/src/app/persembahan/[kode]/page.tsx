@@ -119,7 +119,7 @@ export default async function PersembahanCabangPage(
           </div>
         ) : (
           <div className="bg-white border border-orange-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-grad text-white flex items-center gap-3">
               <Church className="w-5 h-5 shrink-0" />
               <h2 className="font-bold text-base sm:text-lg min-w-0 break-words">{cabang.nama}</h2>
             </div>

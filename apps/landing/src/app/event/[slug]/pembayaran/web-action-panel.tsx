@@ -180,7 +180,7 @@ export function WebActionPanel({
 
   return (
     <div className="bg-white border-2 border-orange-200 rounded-2xl overflow-hidden">
-      <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
+      <div className="px-6 py-4 bg-brand-grad text-white">
         <h2 className="font-bold text-lg flex items-center gap-2">
           <UserCheck className="w-5 h-5" /> Pendaftaran
         </h2>
@@ -255,7 +255,7 @@ export function WebActionPanel({
             type="button"
             disabled={selected.size === 0 || busy}
             onClick={register}
-            className="mt-4 w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 rounded-xl bg-brand-grad text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
             Daftar {selected.size > 0 ? `${selected.size} orang` : ''}
@@ -378,7 +378,7 @@ export function WebActionPanel({
               type="button"
               disabled={donasiBusy || !donasiNominal || !donasiFile}
               onClick={donate}
-              className="mt-3 w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="mt-3 w-full py-3 rounded-xl bg-brand-grad text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {donasiBusy && <Loader2 className="w-4 h-4 animate-spin" />}
               Kirim donasi

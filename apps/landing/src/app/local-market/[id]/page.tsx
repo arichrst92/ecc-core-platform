@@ -13,8 +13,7 @@ import {
   FileText,
   ExternalLink,
   Calendar,
-  Link2,
-  Mail,
+  Mail
 } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
@@ -23,6 +22,10 @@ import { BrandIconLink } from '@/components/brand-icon';
 import { MARKET_ICONS, SOCIAL_ICONS } from '@/lib/brand-icons-data';
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
+import { getT } from '@/lib/i18n-server';
+import { localeOf } from '@/lib/i18n';
+import { HCarousel } from '@/components/h-carousel';
+import { FitImage } from '@/components/fit-image';
 
 interface SocialLink {
   platform: string;
@@ -92,6 +95,7 @@ function platformOf(url: string): SocialKey | null {
 const MARKET_LABEL = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' } as const;
 
 export default async function LocalMarketDetailPage({ params }: PageProps) {
+  const { lang, t } = getT();
   const b = await apiGet<LocalBusinessDetail>(
     `/public/local-market/${params.id}`,
   );
@@ -102,300 +106,177 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
     .filter((k) => b.marketplaceLinks?.[k])
     .map((k) => [k, b.marketplaceLinks![k]!] as const);
 
+  const wa = b.waAdmin ? `https://wa.me/${b.waAdmin.replace(/\D/g, '')}` : b.whatsappUrl;
+  const items = b.items ?? [];
+  const actions = [
+    b.mapsUrl ? { href: b.mapsUrl, Icon: MapPin, label: t('mk.location'), value: b.lokasi || t('mk.maps') } : null,
+    b.websiteUrl ? { href: b.websiteUrl, Icon: Globe, label: t('mk.website'), value: b.websiteUrl.replace(/^https?:\/\//, '') } : null,
+    b.email ? { href: `mailto:${b.email}`, Icon: Mail, label: t('mk.email'), value: b.email } : null,
+    b.companyProfileUrl ? { href: absoluteUrl(b.companyProfileUrl) ?? '#', Icon: FileText, label: t('mk.profile'), value: t('mk.download') } : null,
+  ].filter(Boolean) as { href: string; Icon: typeof MapPin; label: string; value: string }[];
+
   return (
-    <article className="py-8 lg:py-12">
+    <div className="screen-page">
       <MarketViewPing id={b.id} />
-      <div className="container-page max-w-3xl mx-auto">
-        <Link
-          href="/local-market"
-          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Kembali ke Local Market
-        </Link>
-
-        {/* Header — logo + nama + badge */}
-        <div className="flex items-start gap-4 mb-4">
-          {b.logoUrl ? (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 relative shrink-0 rounded-xl overflow-hidden bg-neutral-100 border border-neutral-200">
-              <Image
-                src={absoluteUrl(b.logoUrl) ?? ''}
-                alt={`${b.nama} logo`}
-                fill
-                className="object-cover"
-                sizes="80px"
-              />
+      {/* Pita judul: logo + nama + info singkat */}
+      <section className="screen-hero !pb-16">
+        <div className="container-page">
+          <Link href="/local-market" className="inline-flex items-center gap-1.5 text-sm text-white/85 hover:text-white mb-3">
+            <ArrowLeft className="w-4 h-4" />
+            {t('nav.market')}
+          </Link>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 relative shrink-0 rounded-2xl overflow-hidden bg-white border-4 border-white/70 shadow-lg">
+              {b.logoUrl ? (
+                <Image src={absoluteUrl(b.logoUrl) ?? ''} alt={`${b.nama} logo`} fill className="object-cover" sizes="80px" />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-brand-600">
+                  <Store className="w-8 h-8" />
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl bg-brand-100 text-brand-600 flex items-center justify-center">
-              <Store className="w-8 h-8" />
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl sm:text-4xl font-extrabold leading-tight line-clamp-2">{b.nama}</h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                {b.industri ? <span className="px-2.5 py-0.5 rounded-full bg-white/20 border border-white/25 font-semibold">{b.industri}</span> : null}
+                {b.tipeBisnis ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/25">
+                    <Building2 className="w-3 h-3" />
+                    {b.tipeBisnis}
+                  </span>
+                ) : null}
+                {b.isOnline ? <span className="px-2.5 py-0.5 rounded-full bg-white text-brand-700 font-bold">{t('common.online')}</span> : null}
+                {b.owner?.cabang ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/25">
+                    <Church className="w-3 h-3" />
+                    {b.owner.cabang.nama}
+                  </span>
+                ) : null}
+                <span className="hidden sm:inline-flex items-center gap-1 text-white/80">
+                  <Calendar className="w-3 h-3" />
+                  {t('mk.joined')} {new Date(b.createdAt).toLocaleDateString(localeOf(lang), { month: 'short', year: 'numeric' })}
+                </span>
+              </div>
             </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-4xl font-bold text-neutral-900 leading-tight">
-              {b.nama}
-            </h1>
-            {b.industri && (
-              <p className="text-sm text-neutral-500 mt-1">{b.industri}</p>
-            )}
+            <ShareButton title={b.nama} text={b.industri ?? 'ECC Local Market'} className="shrink-0 self-start !bg-white !text-brand-700 !border-white" />
           </div>
-          <ShareButton title={b.nama} text={b.industri ?? 'ECC Local Market'} className="shrink-0 self-start" />
+        </div>
+      </section>
+
+      {/* Isi: kiri = foto + tentang, kanan = hubungi + katalog. Setinggi layar. */}
+      <div className="screen-body container-page grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] overflow-y-auto lg:overflow-visible">
+        <div className="s-card lg:h-full">
+          {b.heroImageUrl ? (
+            <FitImage src={absoluteUrl(b.heroImageUrl) ?? ''} alt={b.nama} priority sizes="(max-width: 1024px) 100vw, 560px" className="shrink-0 w-full aspect-video" />
+          ) : null}
+          <div className="s-card-body s-scroll">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600 mb-2">{t('mk.about')}</h2>
+            <p className="text-neutral-700 whitespace-pre-line leading-relaxed text-[15px]">{b.deskripsi || t('mk.noDesc')}</p>
+            {b.lokasi ? (
+              <p className="mt-4 text-sm text-neutral-600 flex items-start gap-2">
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand-500" />
+                <span className="whitespace-pre-line">{b.lokasi}</span>
+              </p>
+            ) : null}
+            <MarketDisclaimer className="mt-5" />
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs mb-6">
-          {b.tipeBisnis && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-              <Building2 className="w-3 h-3" />
-              {b.tipeBisnis}
-            </span>
-          )}
-          {b.isOnline && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
-              Online
-            </span>
-          )}
-          {b.owner?.cabang && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
-              <Church className="w-3 h-3" />
-              {b.owner.cabang.nama}
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1 text-neutral-500">
-            <Calendar className="w-3 h-3" />
-            Terdaftar{' '}
-            {new Date(b.createdAt).toLocaleDateString('id-ID', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })}
-          </span>
-        </div>
-
-        {/* Hero image — contained, aspect-video, rounded (sama pattern news detail) */}
-        {b.heroImageUrl && (
-          <div className="aspect-video relative bg-neutral-100 rounded-2xl overflow-hidden mb-8">
-            <Image
-              src={absoluteUrl(b.heroImageUrl) ?? ''}
-              alt={b.nama}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 768px"
-              priority
-            />
-          </div>
-        )}
-
-        {/* Tentang */}
-        {b.deskripsi && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3">Tentang</h2>
-            <p className="text-neutral-700 whitespace-pre-line leading-relaxed">
-              {b.deskripsi}
-            </p>
-          </section>
-        )}
-
-        {/* Kontak */}
-        {/* Katalog (2.4.7) */}
-        {(b.items ?? []).length > 0 && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3">Katalog</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {(b.items ?? []).map((it) => (
-                <Link
-                  key={it.id}
-                  href={`/local-market/${b.id}/item/${it.id}`}
-                  className="block border border-neutral-200 rounded-xl overflow-hidden hover:border-brand-300 transition"
-                >
-                  <div className="relative bg-neutral-100" style={{ aspectRatio: '3 / 2' }}>
-                    {it.fotoUrls[0] ? (
-                      <Image src={absoluteUrl(it.fotoUrls[0]) ?? ''} alt={it.nama} fill className="object-cover" sizes="(max-width: 640px) 50vw, 256px" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-brand-300">
-                        <Store className="w-8 h-8" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-2.5">
-                    <div className="text-[10px] font-semibold uppercase text-neutral-500">{it.jenis === 'JASA' ? 'Jasa' : 'Produk'}</div>
-                    <div className="text-sm font-semibold text-neutral-900 line-clamp-2">{it.nama}</div>
-                    <div className={`text-sm font-semibold mt-0.5 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {(b.websiteUrl || b.whatsappUrl || b.waAdmin || b.email || b.mapsUrl) && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3">Kontak</h2>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {b.websiteUrl && (
-                <a
-                  href={b.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">
-                      Website
-                    </div>
-                    <div className="text-sm text-neutral-900 truncate">
-                      {b.websiteUrl.replace(/^https?:\/\//, '')}
-                    </div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+        <div className="flex flex-col gap-4 min-h-0 lg:h-full">
+          {/* Hubungi */}
+          <div className="s-card shrink-0">
+            <div className="p-5 space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600">{t('mk.contact')}</h2>
+              {wa ? (
+                <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 transition">
+                  <MessageCircle className="w-5 h-5" />
+                  {t('mk.chat')}
                 </a>
-              )}
-              {b.mapsUrl && (
-                <a
-                  href={b.mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition">
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Lokasi</div>
-                    <div className="text-sm text-neutral-900 truncate">Buka di Google Maps</div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                </a>
-              )}
-              {b.email && (
-                <a
-                  href={`mailto:${b.email}`}
-                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-brand-300 hover:bg-brand-50 transition group"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Email</div>
-                    <div className="text-sm text-neutral-900 truncate">{b.email}</div>
-                  </div>
-                </a>
-              )}
-              {(b.waAdmin || b.whatsappUrl) && (
-                <a
-                  href={b.waAdmin ? `https://wa.me/${b.waAdmin.replace(/\D/g, '')}` : b.whatsappUrl!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 border border-neutral-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition group"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition">
-                    <MessageCircle className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">
-                      WhatsApp
-                    </div>
-                    <div className="text-sm text-neutral-900">Chat sekarang</div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                </a>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Sosial media & toko online — ikon, hanya yang ada datanya (2.4.7) */}
-        {(socials.length > 0 || shops.length > 0) && (
-          <section className="mb-8 grid sm:grid-cols-2 gap-6">
-            {socials.length > 0 && (
-              <div>
-                <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-brand-500" />
-                  Sosial Media
-                </h2>
-                <div className="flex flex-wrap gap-2.5">
+              ) : null}
+              {actions.length ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {actions.map((x) => (
+                    <a
+                      key={x.label}
+                      href={x.href}
+                      target={x.href.startsWith('mailto:') ? undefined : '_blank'}
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 rounded-2xl border border-orange-100 bg-brand-50/50 px-3 py-2.5 hover:border-brand-300 hover:bg-brand-50 transition min-w-0"
+                    >
+                      <span className="w-9 h-9 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
+                        <x.Icon className="w-4 h-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[11px] font-bold uppercase tracking-wide text-neutral-500">{x.label}</span>
+                        <span className="block text-sm text-neutral-900 truncate">{x.value}</span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+              {socials.length > 0 || shops.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
                   {socials.map((s, idx) => {
                     const k = platformOf(s.url);
                     return k ? (
-                      <BrandIconLink key={`${s.url}-${idx}`} glyph={SOCIAL_ICONS[k]} url={s.url} label={SOCIAL_LABEL[k]} />
+                      <BrandIconLink key={`${s.url}-${idx}`} glyph={SOCIAL_ICONS[k]} url={s.url} label={SOCIAL_LABEL[k]} size={36} />
                     ) : (
-                      <a
-                        key={`${s.url}-${idx}`}
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={s.platform || s.url}
-                        className="w-10 h-10 rounded-full bg-neutral-200 text-neutral-700 inline-flex items-center justify-center hover:opacity-80"
-                      >
+                      <a key={`${s.url}-${idx}`} href={s.url} target="_blank" rel="noopener noreferrer" title={s.platform || s.url} className="w-9 h-9 rounded-full bg-neutral-200 text-neutral-700 inline-flex items-center justify-center hover:opacity-80">
                         <ExternalLink className="w-4 h-4" />
                       </a>
                     );
                   })}
-                </div>
-              </div>
-            )}
-            {shops.length > 0 && (
-              <div>
-                <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                  <Store className="w-4 h-4 text-brand-500" />
-                  Toko Online
-                </h2>
-                <div className="flex flex-wrap gap-2.5">
+                  {socials.length > 0 && shops.length > 0 ? <span className="w-px h-6 bg-neutral-200 mx-1" /> : null}
                   {shops.map(([k, url]) => (
-                    <BrandIconLink key={k} glyph={MARKET_ICONS[k]} url={url} label={MARKET_LABEL[k]} shape="square" />
+                    <BrandIconLink key={k} glyph={MARKET_ICONS[k]} url={url} label={MARKET_LABEL[k]} shape="square" size={36} />
                   ))}
                 </div>
-              </div>
-            )}
-          </section>
-        )}
+              ) : null}
+            </div>
+          </div>
 
-        {/* Company Profile PDF */}
-        {b.companyProfileUrl && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-brand-500" />
-              Company Profile
-            </h2>
-            <a
-              href={absoluteUrl(b.companyProfileUrl) ?? '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition"
-            >
-              <FileText className="w-4 h-4" />
-              Download PDF
-              <ExternalLink className="w-3.5 h-3.5 opacity-75" />
-            </a>
-          </section>
-        )}
-
-        {/* Lokasi */}
-        {(b.lokasi || b.mapsUrl) && (
-          <section className="mb-8">
-            <h2 className="font-bold text-neutral-900 mb-3 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-brand-500" />
-              Lokasi
-            </h2>
-            {b.lokasi && <p className="text-sm text-neutral-700 whitespace-pre-line">{b.lokasi}</p>}
-            {b.mapsUrl && (
-              <a
-                href={b.mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-brand-700 hover:underline"
-              >
-                <MapPin className="w-4 h-4" />
-                Buka di Google Maps
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-          </section>
-        )}
-        <MarketDisclaimer className="mt-8" />
+          {/* Katalog — geser menyamping */}
+          <div className="s-card flex-1 min-h-[300px] lg:min-h-0">
+            <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600">{t('mk.catalog')}</h2>
+              {items.length ? (
+                <span className="text-xs text-neutral-500">
+                  {items.length} {t('mk.items')}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex-1 min-h-0 px-5 pb-4">
+              {items.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-neutral-500 rounded-2xl border border-dashed border-orange-200">{t('mk.noCatalog')}</div>
+              ) : (
+                <HCarousel itemWidth="min(200px, 60vw)" itemH={320}>
+                  {items.map((it) => (
+                    <Link key={it.id} href={`/local-market/${b.id}/item/${it.id}`} className="h-full flex flex-col rounded-2xl border border-neutral-200 overflow-hidden hover:border-brand-300 transition bg-white">
+                      <div className="relative aspect-[3/2] w-full shrink-0 bg-brand-grad">
+                        {it.fotoUrls[0] ? (
+                          <FitImage src={absoluteUrl(it.fotoUrls[0]) ?? ''} alt={it.nama} sizes="200px" className="absolute inset-0" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-white/85">
+                            <Store className="w-8 h-8" />
+                          </div>
+                        )}
+                        <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-700">
+                          {it.jenis === 'JASA' ? t('mk.service') : t('mk.product')}
+                        </span>
+                      </div>
+                      <div className="p-3 shrink-0 flex flex-col">
+                        <div className="text-sm font-bold text-neutral-900 line-clamp-1">{it.nama}</div>
+                        {it.deskripsi ? <div className="text-xs text-neutral-500 line-clamp-1 mt-0.5">{it.deskripsi}</div> : null}
+                        <div className={`pt-1 text-sm font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</div>
+                      </div>
+                    </Link>
+                  ))}
+                </HCarousel>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </article>
+    </div>
   );
 }

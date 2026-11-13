@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { Heart, Users, BookOpen, Globe, Sparkles, type LucideIcon } from 'lucide-react';
 import { getWebsiteContent, getMarkdown, getJson } from '@/lib/website-content';
 import { Markdown } from '@/components/markdown';
+import { apiGet, absoluteUrl } from '@/lib/api';
+import { getT } from '@/lib/i18n-server';
+import { ScreenPage } from '@/components/screen-page';
+import { HCarousel } from '@/components/h-carousel';
 
 export const metadata: Metadata = {
   title: 'Tentang Kami',
@@ -46,85 +51,123 @@ const VALUES_FALLBACK: ValueCard[] = [
   { icon: 'Sparkles', title: 'Kreativitas', desc: 'Melayani Tuhan dengan kreativitas.' },
 ];
 
+interface Pastor {
+  id: string;
+  nama: string;
+  fotoUrl: string | null;
+  posisi: string;
+  cabang: { id: string; nama: string } | null;
+}
+
+const initials = (n: string) =>
+  n
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+
 export default async function AboutPage() {
-  const cms = await getWebsiteContent();
+  const { t } = getT();
+  const [cms, pastors] = await Promise.all([getWebsiteContent(), apiGet<Pastor[]>('/public/pastors', { revalidate: 600 })]);
   const story = getMarkdown(cms, 'about.story', STORY_FALLBACK);
   const visi = getMarkdown(cms, 'about.visi', VISI_FALLBACK);
   const misi = getJson<string[]>(cms, 'about.misi', MISI_FALLBACK);
   const values = getJson<ValueCard[]>(cms, 'about.values', VALUES_FALLBACK);
+  const team = pastors ?? [];
 
   return (
-    <>
-      <section className="bg-gradient-to-br from-brand-50 to-white py-16 lg:py-20">
-        <div className="container-page text-center max-w-3xl mx-auto">
-          <h1 className="text-4xl sm:text-5xl font-bold text-neutral-900 mb-4">Tentang ECC</h1>
-          <p className="text-lg text-neutral-600">
-            <strong>Elshaddai Creative Community</strong> — komunitas jemaat yang
-            berkomitmen membangun kerajaan Allah melalui kasih, kebenaran, kreativitas, dan
-            pelayanan.
-          </p>
-        </div>
-      </section>
-
-      <section className="py-16 lg:py-20">
-        <div className="container-page max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-neutral-900 mb-6">Cerita Kami</h2>
-          <Markdown content={story} />
-        </div>
-      </section>
-
-      <section className="py-16 lg:py-20 bg-neutral-50">
-        <div className="container-page max-w-5xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl p-8 border border-neutral-200">
-              <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-4">
-                <Heart className="w-6 h-6" />
+    <ScreenPage title={t('about.title')} subtitle={t('about.sub')}>
+      <div
+        className={`h-full min-h-0 grid gap-6 overflow-y-auto lg:overflow-visible ${
+          team.length ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]' : ''
+        }`}
+      >
+        {/* Satu lembar editorial: cerita · visi · misi · nilai */}
+        <article className="min-h-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] overflow-y-auto">
+          <div className="px-6 py-7 sm:px-10 sm:py-9">
+            <div className="flex items-center gap-3">
+              <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} />
+              <div className="leading-tight">
+                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.story')}</div>
+                <div className="text-sm text-neutral-500">{t('about.since')}</div>
               </div>
-              <h3 className="font-bold text-2xl text-neutral-900 mb-3">Visi</h3>
-              <Markdown content={visi} className="prose prose-neutral max-w-none prose-p:text-neutral-700" />
             </div>
-            <div className="bg-white rounded-2xl p-8 border border-neutral-200">
-              <div className="w-12 h-12 bg-accent-400/20 text-accent-600 rounded-xl flex items-center justify-center mb-4">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-2xl text-neutral-900 mb-3">Misi</h3>
-              <ul className="text-neutral-700 leading-relaxed space-y-2 list-disc list-inside">
-                {misi.map((m, idx) => (
-                  <li key={idx}>{m}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+            <Markdown
+              content={story}
+              className="mt-5 prose prose-neutral max-w-none prose-p:text-[15.5px] prose-p:leading-[1.85] prose-p:text-neutral-700 first-letter:float-left first-letter:mr-2 first-letter:text-5xl first-letter:font-extrabold first-letter:leading-none first-letter:text-brand-600"
+            />
 
-      <section className="py-16 lg:py-20">
-        <div className="container-page">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-neutral-900 mb-3">Nilai-Nilai Kami</h2>
-            <p className="text-neutral-600 max-w-xl mx-auto">
-              Pilar yang menjadi fondasi setiap pelayanan dan kegiatan di ECC.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-            {values.map((v, idx) => {
-              const Icon = ICONS[v.icon] ?? Heart;
-              return (
-                <div
-                  key={`${v.title}-${idx}`}
-                  className="text-center bg-white border border-neutral-200 rounded-xl p-6 hover:shadow-md transition"
-                >
-                  <div className="w-12 h-12 bg-brand-50 text-brand-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-bold text-neutral-900 mb-2">{v.title}</h3>
-                  <p className="text-sm text-neutral-600 leading-relaxed">{v.desc}</p>
+            <div className="my-8 h-px bg-gradient-to-r from-brand-300 via-orange-100 to-transparent" />
+
+            <div className="grid gap-8 md:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.visi')}</div>
+                <div className="mt-3 relative pl-5 border-l-4 border-brand-500">
+                  <Markdown content={visi} className="prose max-w-none prose-p:text-xl prose-p:font-semibold prose-p:leading-snug prose-p:text-neutral-900" />
                 </div>
-              );
-            })}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.misi')}</div>
+                <ol className="mt-3 space-y-2.5">
+                  {misi.map((m, idx) => (
+                    <li key={idx} className="flex gap-3 text-[14.5px] text-neutral-700 leading-relaxed">
+                      <span className="font-extrabold text-brand-600 tabular-nums">{String(idx + 1).padStart(2, '0')}</span>
+                      <span>{m}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="my-8 h-px bg-gradient-to-r from-brand-300 via-orange-100 to-transparent" />
+
+            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.valuesTitle')}</div>
+            <div className="mt-4 grid gap-x-6 gap-y-5 sm:grid-cols-2">
+              {values.map((v, idx) => {
+                const Icon = ICONS[v.icon] ?? Heart;
+                return (
+                  <div key={`${v.title}-${idx}`} className="flex gap-3">
+                    <Icon className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" strokeWidth={1.8} />
+                    <div>
+                      <div className="font-bold text-neutral-900">{v.title}</div>
+                      <p className="text-sm text-neutral-600 leading-snug">{v.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
-    </>
+        </article>
+
+        {/* Tim pastoral — dari pelayanan Penggembalaan (level ≥ 8) */}
+        {team.length ? (
+          <section className="min-h-[420px] lg:min-h-0 flex flex-col">
+            <div className="shrink-0 mb-3 px-1">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-700">{t('about.pastors')}</h2>
+              <p className="text-sm text-neutral-500">{t('about.pastorsSub')}</p>
+            </div>
+            <div className="flex-1 min-h-0">
+              <HCarousel itemWidth="min(250px, 70vw)" itemH={420}>
+                {team.map((p) => (
+                  <figure key={p.id} className="relative h-full rounded-3xl overflow-hidden bg-brand-grad shadow-[0_24px_48px_-28px_rgba(124,45,18,.7)]">
+                    {p.fotoUrl ? (
+                      <Image src={absoluteUrl(p.fotoUrl) ?? ''} alt={p.nama} fill className="object-cover object-top" sizes="250px" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-white/90 text-6xl font-extrabold tracking-tight">{initials(p.nama)}</div>
+                    )}
+                    <figcaption className="absolute inset-x-0 bottom-0 p-4 pt-16 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-white">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">{p.posisi}</div>
+                      <div className="text-lg font-extrabold leading-tight">{p.nama}</div>
+                      {p.cabang ? <div className="text-xs text-white/80 mt-0.5">{p.cabang.nama}</div> : null}
+                    </figcaption>
+                  </figure>
+                ))}
+              </HCarousel>
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </ScreenPage>
   );
 }

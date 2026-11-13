@@ -66,7 +66,7 @@ export default async function WorshipSharePage({ params }: { params: { id: strin
         {s.ciptaan ? <p className="text-sm text-neutral-500">Cipt. {s.ciptaan}</p> : null}
         <a
           href={`ecc://worship/song/${s.id}`}
-          className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold shadow"
+          className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-brand-grad text-white font-semibold shadow"
         >
           <Headphones className="w-5 h-5" /> Dengarkan di Els App
         </a>

@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import {
   Mail,
   MapPin,
+  Church,
+  Navigation,
   Globe,
   Instagram,
   Youtube,
@@ -11,11 +13,22 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getWebsiteContent, getJson } from '@/lib/website-content';
+import { getT } from '@/lib/i18n-server';
+import { ScreenPage } from '@/components/screen-page';
+import { GroupCarousel } from '@/components/h-carousel';
+import { apiGet } from '@/lib/api';
 
 export const metadata: Metadata = {
   title: 'Kontak',
   description: 'Hubungi Elshaddai Creative Community (ECC) — email, alamat, dan social media.',
 };
+
+interface Cabang {
+  id: string;
+  nama: string;
+  alamat: string | null;
+  mapsUrl?: string | null;
+}
 
 interface ContactInfo {
   email: string;
@@ -46,59 +59,43 @@ const SOCIAL_LABELS: Record<string, string> = {
 };
 
 export default async function ContactPage() {
-  const cms = await getWebsiteContent();
+  const { t } = getT();
+  const [cms, cabang] = await Promise.all([getWebsiteContent(), apiGet<Cabang[]>('/auth/cabang?isActive=true')]);
   const info = getJson<ContactInfo>(cms, 'contact.info', CONTACT_FALLBACK);
   const activeSocial = info.socialLinks.filter((s) => s.url && s.url.trim() !== '');
 
-  return (
-    <>
-      <section className="bg-gradient-to-br from-brand-50 to-white py-16">
-        <div className="container-page text-center max-w-2xl mx-auto">
-          <h1 className="text-4xl sm:text-5xl font-bold text-neutral-900 mb-4">Hubungi Kami</h1>
-          <p className="text-lg text-neutral-600">
-            Kami senang mendengar dari Anda. Sampaikan pertanyaan, masukan, atau request
-            informasi lebih lanjut.
-          </p>
-        </div>
-      </section>
-
-      <section className="py-16">
-        <div className="container-page max-w-4xl mx-auto">
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div className="bg-white border border-neutral-200 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-4">
-                <Mail className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-xl text-neutral-900 mb-2">Email</h3>
-              <a
-                href={`mailto:${info.email}`}
-                className="text-brand-600 hover:text-brand-700 hover:underline break-all"
-              >
-                {info.email}
-              </a>
-              <p className="text-sm text-neutral-500 mt-2">Kami akan membalas dalam 1-2 hari kerja.</p>
+  const kontak = [
+        <div key="email" className="s-card h-full">
+          <div className="s-card-body flex flex-col gap-3">
+            <div className="w-12 h-12 bg-brand-grad text-white rounded-2xl flex items-center justify-center">
+              <Mail className="w-6 h-6" />
             </div>
-
-            <div className="bg-white border border-neutral-200 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-4">
-                <MapPin className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-xl text-neutral-900 mb-2">Alamat</h3>
-              <p className="text-neutral-700">{info.alamat}</p>
-              <p className="text-sm text-neutral-500 mt-2">
-                Lihat lokasi cabang gereja terdekat di halaman{' '}
-                <a href="/cabang" className="text-brand-600 hover:underline">
-                  Cabang
-                </a>
-                .
-              </p>
-            </div>
+            <h3 className="font-extrabold text-xl text-neutral-900">{t('contact.email')}</h3>
+            <a href={`mailto:${info.email}`} className="text-brand-600 font-semibold hover:underline break-all">
+              {info.email}
+            </a>
+            <p className="text-sm text-neutral-500">{t('contact.emailNote')}</p>
           </div>
-
-          {activeSocial.length > 0 && (
-            <div className="mt-12 text-center">
-              <h3 className="font-semibold text-neutral-900 mb-4">Ikuti Kami di Social Media</h3>
-              <div className="flex items-center justify-center gap-3 flex-wrap">
+        </div>,
+        <div key="alamat" className="s-card h-full">
+          <div className="s-card-body flex flex-col gap-3">
+            <div className="w-12 h-12 bg-brand-grad text-white rounded-2xl flex items-center justify-center">
+              <MapPin className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-xl text-neutral-900">{t('contact.address')}</h3>
+            <p className="text-neutral-700">{info.alamat}</p>
+            <p className="text-sm text-neutral-500">{t('contact.addressNote')}</p>
+          </div>
+        </div>,
+        activeSocial.length > 0 ? (
+          <div key="sosial" className="s-card h-full">
+            <div className="s-card-body flex flex-col gap-3">
+              <div className="w-12 h-12 bg-brand-grad text-white rounded-2xl flex items-center justify-center">
+                <Globe className="w-6 h-6" />
+              </div>
+              <h3 className="font-extrabold text-xl text-neutral-900">{t('contact.social')}</h3>
+              <p className="text-sm text-neutral-500">{t('contact.socialNote')}</p>
+              <div className="flex items-center gap-2.5 flex-wrap">
                 {activeSocial.map((s) => {
                   const Icon = SOCIAL_ICONS[s.platform.toLowerCase()] ?? Globe;
                   const label = SOCIAL_LABELS[s.platform.toLowerCase()] ?? s.platform;
@@ -108,7 +105,7 @@ export default async function ContactPage() {
                       href={s.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-11 h-11 bg-white border border-neutral-200 rounded-full flex items-center justify-center text-neutral-600 hover:text-brand-500 hover:border-brand-300 hover:bg-brand-50 transition"
+                      className="w-11 h-11 bg-white border border-neutral-200 rounded-full flex items-center justify-center text-neutral-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition"
                       title={label}
                     >
                       <Icon className="w-5 h-5" />
@@ -117,9 +114,51 @@ export default async function ContactPage() {
                 })}
               </div>
             </div>
-          )}
-        </div>
-      </section>
-    </>
+          </div>
+        ) : null,
+  ].filter(Boolean) as React.ReactElement[];
+
+  const cabangCards = (cabang ?? []).map((c) => (
+    <div key={c.id} className="s-card h-full">
+      <div className="bg-brand-grad text-white px-5 py-4 shrink-0 flex items-center gap-3">
+        <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+          <Church className="w-6 h-6" />
+        </span>
+        <h3 className="font-extrabold text-lg leading-tight line-clamp-2 min-h-[2.5em] flex items-center">{c.nama}</h3>
+      </div>
+      <div className="flex-1 min-h-0 p-5 flex flex-col">
+        <p className="text-sm text-neutral-600 flex items-start gap-2 flex-1 min-h-0">
+          <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand-500" />
+          <span className="line-clamp-3">{c.alamat || c.nama}</span>
+        </p>
+        <a
+          href={
+            c.mapsUrl && /^https?:\/\//i.test(c.mapsUrl)
+              ? c.mapsUrl
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([c.nama, c.alamat].filter(Boolean).join(', '))}`
+          }
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-100"
+        >
+          <Navigation className="w-4 h-4" />
+          {t('mk.maps')}
+        </a>
+      </div>
+    </div>
+  ));
+
+  return (
+    <ScreenPage title={t('contact.title')} subtitle={t('contact.sub')}>
+      <GroupCarousel
+        itemWidth="min(290px, 82vw)"
+        minItemH={240}
+        itemH={280}
+        groups={[
+          { key: 'kontak', label: t('nav.contact'), items: kontak },
+          ...(cabangCards.length ? [{ key: 'cabang', label: t('nav.cabang'), items: cabangCards }] : []),
+        ]}
+      />
+    </ScreenPage>
   );
 }

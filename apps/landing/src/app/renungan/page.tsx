@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { BookOpen, Calendar, ArrowRight } from 'lucide-react';
-import { apiGet } from '@/lib/api';
+import { BookOpen, ArrowRight  } from 'lucide-react';
+import { apiGet, absoluteUrl } from '@/lib/api';
+import { FitImage } from '@/components/fit-image';
+import { PanelTrigger } from '@/components/panel-host';
+import { getT } from '@/lib/i18n-server';
+import { localeOf } from '@/lib/i18n';
+import { ScreenPage, EmptyState } from '@/components/screen-page';
+import { HCarousel } from '@/components/h-carousel';
+
 
 export const metadata: Metadata = {
   title: 'Renungan',
@@ -16,84 +22,52 @@ interface RenunganItem {
   ringkasan: string | null;
   ayatAlkitab: string | null;
   tanggal: string | null;
+  heroImageUrl?: string | null;
 }
 
 export default async function RenunganListPage() {
+  const { lang, t } = getT();
   const list = (await apiGet<RenunganItem[]>('/public/renungan?limit=30')) ?? [];
-
   return (
-    <>
-      <section className="bg-gradient-to-br from-brand-50 to-white py-12 lg:py-16">
-        <div className="container-page text-center max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 mb-3 bg-brand-100 text-brand-700 rounded-full text-xs font-semibold uppercase tracking-wider">
-            <BookOpen className="w-3.5 h-3.5" />
-            Renungan
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-neutral-900 mb-3">
-            Renungan Harian
-          </h1>
-          <p className="text-neutral-600">
-            Firman Tuhan untuk menyegarkan iman dan menemani perjalanan harianmu.
-          </p>
-        </div>
-      </section>
-
-      <section className="py-12">
-        <div className="container-page max-w-3xl mx-auto">
-          {list.length === 0 ? (
-            <div className="text-center py-12 text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-xl">
-              Belum ada renungan yang dipublikasikan.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {list.map((r) => (
-                <Link
-                  key={r.id}
-                  href={`/renungan/${r.slug}`}
-                  className="group block bg-white border border-neutral-200 rounded-2xl p-6 hover:shadow-md hover:border-brand-200 transition"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-brand-50 text-brand-500 rounded-xl flex items-center justify-center shrink-0">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-neutral-900 group-hover:text-brand-600 transition mb-1">
-                        {r.judul}
-                      </h3>
-                      {r.ayatAlkitab && (
-                        <p className="text-xs font-medium text-brand-600 mb-2">
-                          {r.ayatAlkitab}
-                        </p>
-                      )}
-                      {r.ringkasan && (
-                        <p className="text-sm text-neutral-600 line-clamp-2 mb-3">
-                          {r.ringkasan}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between gap-3">
-                        {r.tanggal && (
-                          <span className="text-xs text-neutral-500 inline-flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(r.tanggal).toLocaleDateString('id-ID', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
-                          </span>
-                        )}
-                        <span className="text-xs font-medium text-brand-600 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
-                          Baca selengkapnya
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-    </>
+    <ScreenPage Icon={BookOpen} badge={t('nav.renungan')} title={t('renungan.title')} subtitle={t('renungan.sub')}>
+      {list.length === 0 ? (
+        <EmptyState Icon={BookOpen}>{t('renungan.empty')}</EmptyState>
+      ) : (
+        <HCarousel itemWidth="min(300px, 82vw)" itemH={420}>
+          {list.map((r) => (
+            <PanelTrigger key={r.id} type="renungan" id={r.slug} title={r.judul} className="s-card group">
+              {r.heroImageUrl ? (
+                <div className="relative aspect-[3/2] w-full shrink-0">
+                  <FitImage src={absoluteUrl(r.heroImageUrl) ?? ''} alt={r.judul} sizes="320px" className="absolute inset-0" />
+                  {r.tanggal ? (
+                    <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short' })}
+                    </span>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="bg-brand-grad text-white px-5 pt-5 pb-6 shrink-0">
+                  <BookOpen className="w-7 h-7 opacity-90" />
+                  {r.tanggal ? (
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-white/85">
+                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+              <div className="s-card-body flex flex-col gap-2">
+                {r.ayatAlkitab ? <p className="text-xs font-bold text-brand-600">{r.ayatAlkitab}</p> : null}
+                <h3 className="font-bold text-lg leading-snug text-neutral-900 group-hover:text-brand-600 transition line-clamp-2">{r.judul}</h3>
+                {r.ringkasan ? <p className="text-sm text-neutral-600 line-clamp-4">{r.ringkasan}</p> : null}
+                <span className="mt-auto pt-2 text-sm font-semibold text-brand-600 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
+                  {t('common.readMore')}
+                  <ArrowRight className="w-4 h-4" />
+                </span>
+              </div>
+            </PanelTrigger>
+          ))}
+        </HCarousel>
+      )}
+    </ScreenPage>
   );
 }

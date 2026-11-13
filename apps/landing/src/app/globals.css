@@ -3,11 +3,21 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Tinggi bidang oranye (navbar + pita judul): gradient penuh terang → gelap
+       dihitung hanya di area ini, bukan setinggi layar. */
+    --band-h: 300px;
+  }
   html {
     scroll-behavior: smooth;
   }
+  html,
   body {
-    @apply bg-white text-neutral-900 antialiased;
+    height: 100%;
+  }
+  body {
+    @apply text-neutral-900 antialiased;
+    background: #fffbf7;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 }
@@ -16,10 +26,101 @@
   .container-page {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
+  /* Persona beranda: oranye gradient brand (sama dengan Els App). */
+  /* Gradient terkunci ke layar: navbar + pita judul tampil sebagai satu bidang
+     tanpa sambungan (warna di batas keduanya sama persis). */
+  .grad-fixed {
+    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    background-attachment: fixed;
+    background-size: 100vw var(--band-h);
+    background-repeat: no-repeat;
+    background-color: #c2410c;
+  }
+  .bg-brand-grad {
+    background-image: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+  }
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-lg transition shadow-sm;
+    @apply inline-flex items-center gap-2 px-5 py-2.5 text-white font-semibold rounded-xl transition;
+    background-image: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    box-shadow: 0 10px 24px -12px rgba(234, 88, 12, 0.8);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.06);
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 font-medium rounded-lg transition border border-neutral-200;
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-brand-50 text-neutral-800 font-semibold rounded-xl transition border border-neutral-200;
+  }
+  /* Hero halaman: menyambung dari navbar gradient. */
+  .page-hero {
+    @apply relative overflow-hidden text-white py-12 lg:py-16;
+    background-image: radial-gradient(700px 360px at 80% -10%, rgba(255, 255, 255, 0.25), transparent 60%),
+      radial-gradient(600px 300px at 0% 120%, rgba(124, 45, 18, 0.4), transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    border-radius: 0 0 2rem 2rem;
+  }
+  .page-hero h1 {
+    @apply text-white tracking-tight;
+  }
+  .page-hero-badge {
+    @apply inline-flex items-center gap-2 px-3 py-1 mb-3 rounded-full text-xs font-semibold uppercase tracking-wider text-white border border-white/30 bg-white/15;
+  }
+  /* Halaman satu layar (fit to screen). */
+  .screen-page {
+    @apply h-full min-h-0 flex flex-col;
+  }
+  .screen-hero {
+    @apply relative text-white pt-4 pb-14 sm:pt-5 sm:pb-16 shrink-0;
+    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    background-attachment: fixed;
+    background-size: 100vw var(--band-h);
+    background-repeat: no-repeat;
+    background-color: #c2410c;
+  }
+  .screen-body {
+    @apply relative flex-1 min-h-0 w-full -mt-10 pb-4;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Kartu standar di dalam carousel: isi panjang menggulung di dalam kartu. */
+  .s-card {
+    @apply min-h-0 flex flex-col bg-white rounded-3xl border border-orange-100 overflow-hidden transition;
+    box-shadow: 0 20px 40px -30px rgba(124, 45, 18, 0.55);
+  }
+  .s-card:hover {
+    @apply border-brand-300;
+  }
+  .s-card-body {
+    @apply flex-1 min-h-0 overflow-hidden p-5;
+  }
+  .s-scroll {
+    @apply overflow-y-auto;
+  }
+  /* Halaman detail: pita gradient + kartu putih setinggi layar (isi menggulung di kartu). */
+  .detail-page {
+    @apply relative h-full min-h-0 flex flex-col pb-4;
+  }
+  .detail-page::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 96px;
+    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    background-attachment: fixed;
+    background-size: 100vw var(--band-h);
+    background-repeat: no-repeat;
+    background-color: #c2410c;
+  }
+  .detail-card {
+    @apply relative flex-1 min-h-0 overflow-y-auto bg-white rounded-3xl border border-orange-100 px-5 py-6 sm:px-8 sm:py-8;
+    margin-top: 1.25rem;
+    width: min(calc(100% - 2rem), 100%);
+    box-shadow: 0 24px 48px -32px rgba(124, 45, 18, 0.55);
   }
 }

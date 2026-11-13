@@ -47,7 +47,7 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
         </p>
         <a
           href={webReturn}
-          className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
+          className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl hover:shadow-lg transition"
         >
           Kembali ke Els App
         </a>
@@ -100,7 +100,7 @@ export function BackToAppButton({ eventId }: { eventId: string }) {
           <button
             type="button"
             onClick={handleClick}
-            className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl hover:shadow-lg transition"
           >
             Kembali ke Els App
           </button>

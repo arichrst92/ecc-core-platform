@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, BookOpen } from 'lucide-react';
+import { Calendar, BookOpen  } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
+import { getT } from '@/lib/i18n-server';
+import { localeOf } from '@/lib/i18n';
+import { DetailShell, HeroChip } from '@/components/detail-shell';
 
 interface RenunganDetail {
   id: string;
@@ -61,65 +63,37 @@ export async function generateMetadata({
 }
 
 export default async function RenunganDetailPage({ params }: PageProps) {
+  const { lang, t } = getT();
   const item = await apiGet<RenunganDetail>(
     `/public/renungan/${params.slug}`,
   );
   if (!item) notFound();
 
   return (
-    <article className="py-12 lg:py-16">
-      <div className="container-page max-w-3xl mx-auto">
-        <Link
-          href="/renungan"
-          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 transition mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Semua renungan
-        </Link>
-
-        <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 bg-brand-100 text-brand-700 rounded-full text-xs font-semibold uppercase tracking-wider">
-          <BookOpen className="w-3.5 h-3.5" />
-          Renungan
-        </div>
-
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900 mb-3">
-          {item.judul}
-        </h1>
-
-        {item.ayatAlkitab && (
-          <p className="text-base font-semibold text-brand-600 mb-3">
-            {item.ayatAlkitab}
-          </p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500 mb-8 pb-8 border-b border-neutral-200">
-          {item.tanggal && (
+    <DetailShell
+      backHref="/renungan"
+      backLabel={t('nav.renungan')}
+      Icon={BookOpen}
+      badge={t('nav.renungan')}
+      title={item.judul}
+      image={item.heroImageUrl ? { src: absoluteUrl(item.heroImageUrl) ?? '', alt: item.judul } : null}
+      meta={
+        <>
+          {item.ayatAlkitab ? <HeroChip strong>{item.ayatAlkitab}</HeroChip> : null}
+          {item.tanggal ? (
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5" />
-              {new Date(item.tanggal).toLocaleDateString('id-ID', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
+              {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
-          )}
-          <span>· {item.viewCount.toLocaleString('id-ID')} dibaca</span>
-        </div>
-
-        {item.ringkasan && (
-          <p className="text-lg text-neutral-600 leading-relaxed mb-6">
-            {item.ringkasan}
-          </p>
-        )}
-
-        {item.konten ? (
-          <Markdown content={item.konten} />
-        ) : (
-          <p className="text-neutral-500 italic">
-            Isi renungan belum tersedia.
-          </p>
-        )}
-      </div>
-    </article>
+          ) : null}
+          <span>
+            · {item.viewCount.toLocaleString(localeOf(lang))} {t('dt.reads')}
+          </span>
+        </>
+      }
+    >
+      {item.ringkasan ? <p className="text-lg text-neutral-600 leading-relaxed mb-6 italic border-l-4 border-brand-400 pl-4">{item.ringkasan}</p> : null}
+      {item.konten ? <Markdown content={item.konten} /> : <p className="text-neutral-500 italic">{t('dt.noContent')}</p>}
+    </DetailShell>
   );
 }

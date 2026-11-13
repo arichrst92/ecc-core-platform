@@ -61,7 +61,7 @@ export default async function PersembahanIndexPage() {
                 href={`/persembahan/${encodeURIComponent(c.kode)}`}
                 className="group flex min-w-0 items-center gap-3 sm:gap-4 bg-white border border-orange-100 hover:border-orange-300 hover:shadow-md rounded-2xl p-4 sm:p-5 transition"
               >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-brand-grad text-white flex items-center justify-center shrink-0">
                   <Church className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">

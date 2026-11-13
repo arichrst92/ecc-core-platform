@@ -117,7 +117,7 @@ function AppReturnButton() {
         const btn = document.querySelector<HTMLButtonElement>('[data-app-return]');
         btn?.click();
       }}
-      className="inline-flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl"
+      className="inline-flex items-center justify-center gap-2 w-full py-3 bg-brand-grad text-white font-semibold rounded-xl"
     >
       <ArrowLeft className="w-4 h-4" />
       Kembali ke Els App

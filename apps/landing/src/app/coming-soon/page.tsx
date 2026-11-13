@@ -58,7 +58,7 @@ export default function ComingSoonPage() {
               {/* Headline */}
               <div className="text-center mb-8">
                 <h1 className="text-4xl md:text-5xl font-bold text-neutral-900 leading-tight mb-3">
-                  Sesuatu yang <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500">indah</span> sedang kami siapkan
+                  Sesuatu yang <span className="text-transparent bg-clip-text bg-brand-grad">indah</span> sedang kami siapkan
                 </h1>
                 <p className="text-base md:text-lg text-neutral-600 leading-relaxed">
                   Website Elshaddai Creative Community akan segera hadir dengan
@@ -68,7 +68,7 @@ export default function ComingSoonPage() {
               </div>
 
               {/* CTA */}
-              <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl p-6 text-white text-center mb-6">
+              <div className="bg-brand-grad rounded-2xl p-6 text-white text-center mb-6">
                 <Heart className="w-6 h-6 mx-auto mb-2" fill="white" />
                 <p className="text-sm md:text-base leading-relaxed mb-4">
                   Ingin terhubung lebih dulu dengan komunitas kami?

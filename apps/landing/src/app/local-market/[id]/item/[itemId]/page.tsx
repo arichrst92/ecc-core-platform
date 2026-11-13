@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
+import { Mail, MessageCircle, Smartphone, Store } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { MarketDisclaimer } from '@/components/market-disclaimer';
 import { ShareButton } from '@/components/share-button';
@@ -16,6 +16,10 @@ import { MARKET_ICONS } from '@/lib/brand-icons-data';
 const MARKET_LABEL = { shopee: 'Shopee', lazada: 'Lazada', tiktokshop: 'TikTok Shop', tokopedia: 'Tokopedia' } as const;
 import { MarketViewPing } from '@/components/market-view-ping';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
+import { getT } from '@/lib/i18n-server';
+import { DetailShell, HeroChip } from '@/components/detail-shell';
+import { FitImage } from '@/components/fit-image';
+import { HCarousel } from '@/components/h-carousel';
 
 interface ItemDetail extends KatalogItem {
   hargaLabel: string;
@@ -58,6 +62,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function LocalMarketItemPage({ params }: PageProps) {
+  const { t } = getT();
   const it = await load(params);
   if (!it) notFound();
   const b = it.business;
@@ -70,82 +75,84 @@ export default async function LocalMarketItemPage({ params }: PageProps) {
   const wa = b.waAdmin ? `https://wa.me/${b.waAdmin.replace(/\D/g, '')}?text=${encodeURIComponent(pesan)}` : null;
   const mail = b.email ? `mailto:${b.email}?subject=${encodeURIComponent(`Tanya: ${it.nama}`)}&body=${encodeURIComponent(pesan)}` : null;
 
+  const fotos = it.fotoUrls.map((f) => absoluteUrl(f)).filter(Boolean) as string[];
+  const media = fotos.length ? (
+    <div className="p-2">
+      <HCarousel itemWidth="100%">
+        {fotos.map((f, i) => (
+          <FitImage key={f} src={f} alt={`${it.nama} ${i + 1}`} priority={i === 0} sizes="(max-width: 1024px) 100vw, 600px" className="w-full aspect-[3/2] rounded-2xl" />
+        ))}
+      </HCarousel>
+    </div>
+  ) : (
+    <div className="aspect-[3/2] bg-brand-grad flex items-center justify-center text-white/85">
+      <Store className="w-14 h-14" />
+    </div>
+  );
+
+  const aside = (
+    <div className="p-4 space-y-3">
+      <Link href={`/local-market/${b.id}`} className="flex items-center gap-3 p-2.5 rounded-2xl border border-orange-100 hover:border-brand-300">
+        <div className="w-11 h-11 relative rounded-xl overflow-hidden bg-brand-grad text-white flex items-center justify-center shrink-0">
+          {b.logoUrl ? <Image src={absoluteUrl(b.logoUrl) ?? ''} alt={b.nama} fill className="object-cover" sizes="44px" /> : <Store className="w-5 h-5" />}
+        </div>
+        <div className="min-w-0">
+          <div className="font-bold text-neutral-900 truncate">{b.nama}</div>
+          <div className="text-xs text-neutral-500 truncate">{[b.industri, b.owner?.cabang?.nama].filter(Boolean).join(' · ')}</div>
+        </div>
+      </Link>
+      <div className="grid grid-cols-2 gap-2">
+        {wa ? (
+          <a href={wa} target="_blank" rel="noopener noreferrer" className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+            <MessageCircle className="w-4 h-4" /> {t('it.ask')}
+          </a>
+        ) : null}
+        {mail ? (
+          <a href={mail} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl border border-orange-100 bg-brand-50/50 hover:border-brand-300 text-neutral-800 font-semibold text-sm">
+            <Mail className="w-4 h-4" /> {t('mk.email')}
+          </a>
+        ) : null}
+        <a href={`ecc://local-market/${b.id}/item/${it.id}`} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl border border-orange-100 bg-brand-50/50 hover:border-brand-300 text-neutral-800 font-semibold text-sm ${mail ? '' : 'col-span-2'}`}>
+          <Smartphone className="w-4 h-4" /> {t('common.openApp')}
+        </a>
+      </div>
+    </div>
+  );
+
   return (
-    <article className="py-8 lg:py-12">
+    <>
       <MarketViewPing id={b.id} itemId={it.id} />
-      <div className="container-page max-w-3xl mx-auto">
-        <Link href={`/local-market/${b.id}`} className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 mb-6">
-          <ArrowLeft className="w-4 h-4" />
-          {b.nama}
-        </Link>
-
-        <div className="grid gap-2 mb-6">
-          {(it.fotoUrls.length ? it.fotoUrls : [null]).map((f, i) => (
-            <div key={i} className="relative bg-neutral-100 rounded-2xl overflow-hidden" style={{ aspectRatio: '3 / 2' }}>
-              {f ? (
-                <Image src={absoluteUrl(f) ?? ''} alt={it.nama} fill className="object-cover" sizes="(max-width: 768px) 100vw, 768px" priority={i === 0} />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-brand-300">
-                  <Store className="w-12 h-12" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <span className="inline-block text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
-          {it.jenis === 'JASA' ? 'Jasa' : 'Produk'}
-        </span>
-        <div className="flex items-start gap-3 mt-2">
-          <h1 className="text-3xl font-bold text-neutral-900 leading-tight flex-1">{it.nama}</h1>
-          <ShareButton title={`${it.nama} — ${b.nama}`} text={hargaText(it)} className="shrink-0" />
-        </div>
-        <p className={`text-xl font-semibold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</p>
-        {shops.length > 0 && (
-          <div className="mt-4">
-            <div className="text-xs font-semibold text-neutral-500 mb-2">Beli juga di</div>
+      <DetailShell
+        backHref={`/local-market/${b.id}`}
+        backLabel={b.nama}
+        Icon={Store}
+        badge={it.jenis === 'JASA' ? t('mk.service') : t('mk.product')}
+        title={it.nama}
+        actions={<ShareButton title={`${it.nama} — ${b.nama}`} text={hargaText(it)} className="!bg-white !text-brand-700 !border-white" />}
+        meta={<HeroChip strong>{hargaText(it)}</HeroChip>}
+        media={media}
+        aside={aside}
+      >
+        <div className="text-xs font-bold uppercase tracking-wider text-brand-600">{t('it.price')}</div>
+        <p className={`text-3xl font-extrabold mt-1 ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it)}</p>
+        {shops.length > 0 ? (
+          <div className="mt-5">
+            <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">{t('it.buyAlso')}</div>
             <div className="flex flex-wrap gap-2.5">
               {shops.map(([k, url]) => (
                 <BrandIconLink key={k} glyph={MARKET_ICONS[k]} url={url} label={MARKET_LABEL[k]} shape="square" />
               ))}
             </div>
           </div>
-        )}
-        {it.deskripsi ? <p className="text-neutral-700 whitespace-pre-line leading-relaxed mt-4">{it.deskripsi}</p> : null}
-
-        <Link href={`/local-market/${b.id}`} className="flex items-center gap-3 mt-6 p-3 border border-neutral-200 rounded-xl hover:border-brand-300">
-          {b.logoUrl ? (
-            <div className="w-10 h-10 relative rounded-lg overflow-hidden bg-neutral-100">
-              <Image src={absoluteUrl(b.logoUrl) ?? ''} alt={b.nama} fill className="object-cover" sizes="40px" />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center">
-              <Store className="w-5 h-5" />
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="font-semibold text-neutral-900 truncate">{b.nama}</div>
-            <div className="text-xs text-neutral-500">{[b.industri, b.owner?.cabang?.nama].filter(Boolean).join(' · ')}</div>
-          </div>
-        </Link>
-
-        <div className="grid sm:grid-cols-2 gap-2 mt-6">
-          {wa ? (
-            <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
-              <MessageCircle className="w-4 h-4" /> Tanya via WhatsApp
-            </a>
-          ) : null}
-          {mail ? (
-            <a href={mail} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-neutral-300 hover:border-brand-300 text-neutral-800 font-semibold">
-              <Mail className="w-4 h-4" /> Kirim email
-            </a>
-          ) : null}
-          <a href={`ecc://local-market/${b.id}/item/${it.id}`} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-neutral-300 hover:border-brand-300 text-neutral-800 font-semibold sm:col-span-2">
-            <Smartphone className="w-4 h-4" /> Buka di Els App
-          </a>
-        </div>
+        ) : null}
+        {it.deskripsi ? (
+          <>
+            <div className="mt-6 text-xs font-bold uppercase tracking-wider text-brand-600">{t('mk.about')}</div>
+            <p className="text-neutral-700 whitespace-pre-line leading-relaxed mt-2">{it.deskripsi}</p>
+          </>
+        ) : null}
         <MarketDisclaimer className="mt-8" />
-      </div>
-    </article>
+      </DetailShell>
+    </>
   );
 }

@@ -17,8 +17,7 @@ interface WorshipShare {
   album: { id: string; tipe: 'ALBUM' | 'SINGLE'; judul: string; coverUrl: string | null };
 }
 
-const URL_IOS = 'https://apps.apple.com/id/app/els-app/id6804400672';
-const URL_ANDROID = 'https://play.google.com/store/apps/details?id=idea.eccchurch.global';
+import { APP_STORE_URL as URL_IOS, PLAY_STORE_URL as URL_ANDROID } from '@/lib/app-links';
 
 const subtitle = (s: WorshipShare) =>
   [s.album.tipe === 'SINGLE' ? 'Single' : `Album ${s.album.judul}`, s.ciptaan ? `Cipt. ${s.ciptaan}` : null].filter(Boolean).join(' · ');

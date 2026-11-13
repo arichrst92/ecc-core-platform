@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Smartphone, ExternalLink } from 'lucide-react';
 
-// Store URL tanpa country code (/id/) biar tidak region-locked.
-const IOS_APP_URL = 'https://apps.apple.com/app/els-global-app/id6743088520';
-const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=idea.eccchurch.global';
+import { APP_STORE_URL as IOS_APP_URL, PLAY_STORE_URL as ANDROID_APP_URL } from '@/lib/app-links';
 
 /**
  * Els App versi web (elsapp.eccchurch.global) membuka halaman ini di tab yang

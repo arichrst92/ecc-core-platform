@@ -164,7 +164,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
       </section>
 
       {/* Isi: kiri = foto + tentang, kanan = hubungi + katalog. Setinggi layar. */}
-      <div className="screen-body container-page grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] overflow-y-auto lg:overflow-visible">
+      <div className="screen-body container-page grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] overflow-y-auto overflow-x-hidden lg:overflow-visible">
         <div className="s-card lg:h-full">
           {b.heroImageUrl ? (
             <FitImage src={absoluteUrl(b.heroImageUrl) ?? ''} alt={b.nama} priority sizes="(max-width: 1024px) 100vw, 560px" className="shrink-0 w-full aspect-video" />
@@ -175,7 +175,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
             {b.lokasi ? (
               <p className="mt-4 text-sm text-neutral-600 flex items-start gap-2">
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand-500" />
-                <span className="whitespace-pre-line">{b.lokasi}</span>
+                <span className="whitespace-pre-line break-words min-w-0">{b.lokasi}</span>
               </p>
             ) : null}
             <MarketDisclaimer className="mt-5" />
@@ -194,7 +194,7 @@ export default async function LocalMarketDetailPage({ params }: PageProps) {
                 </a>
               ) : null}
               {actions.length ? (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {actions.map((x) => (
                     <a
                       key={x.label}

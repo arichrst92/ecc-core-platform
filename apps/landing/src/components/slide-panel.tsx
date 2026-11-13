@@ -55,7 +55,7 @@ export function SlidePanel({
           <h2 className="text-2xl font-extrabold leading-tight pr-10 line-clamp-3">{title}</h2>
           {chips ? <div className="mt-3 flex flex-wrap gap-1.5 text-xs">{chips}</div> : null}
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-5 space-y-3 [overflow-wrap:anywhere]">{children}</div>
         {footer ? <div className="shrink-0 p-5 pt-3 border-t border-orange-100 bg-white space-y-2">{footer}</div> : null}
       </aside>
     </div>

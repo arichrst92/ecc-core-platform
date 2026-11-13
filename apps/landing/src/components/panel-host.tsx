@@ -225,7 +225,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
             </Row>
             {d.lokasi || d.cabang ? (
               <Row Icon={MapPin} label={t('ev.where')}>
-                {d.lokasi ? <div className="font-semibold text-neutral-900">{d.lokasi}</div> : null}
+                {d.lokasi ? <div className="font-semibold text-neutral-900 break-words">{d.lokasi}</div> : null}
                 {d.cabang ? <div className="text-neutral-600">{d.cabang.nama}</div> : null}
               </Row>
             ) : null}
@@ -282,7 +282,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
             </p>
           ) : null}
         </PanelSection>
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {maps ? <PanelAction href={maps} Icon={Navigation} title={t('mk.maps')} sub={d.lokasi ?? undefined} /> : null}
           {d.websiteUrl ? <PanelAction href={d.websiteUrl} Icon={Globe} title={t('mk.website')} sub={String(d.websiteUrl).replace(/^https?:\/\//, '')} /> : null}
           {d.email ? <PanelAction href={`mailto:${d.email}`} Icon={Mail} title={t('mk.email')} sub={d.email} /> : null}

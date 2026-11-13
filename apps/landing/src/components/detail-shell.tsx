@@ -62,7 +62,7 @@ export function DetailShell({
 
       <div
         className={`screen-body container-page overflow-y-auto lg:overflow-visible ${
-          split ? 'grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]' : 'flex justify-center'
+          split ? 'grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]' : 'flex justify-center'
         }`}
       >
         {split ? (

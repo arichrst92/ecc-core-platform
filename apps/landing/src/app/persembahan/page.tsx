@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
-import Image from 'next/image';
 import { Church, ChevronRight, Info } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { getL } from '@/lib/i18n-server';
+import { EccLogo } from '@/components/ecc-logo';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -36,7 +36,7 @@ export default async function PersembahanIndexPage() {
       <section className="border-b border-orange-100 bg-white/60 backdrop-blur">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="flex items-center gap-3 mb-2">
-            <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} />
+            <EccLogo height={44} className="text-brand-600 shrink-0" />
             <div>
               <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
                 Elshaddai Creative Community

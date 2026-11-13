@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import { Mail, Instagram, Sparkles, Heart } from 'lucide-react';
 import { getL } from '@/lib/i18n-server';
+import { EccLogo } from '@/components/ecc-logo';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -47,13 +47,7 @@ export default function ComingSoonPage() {
                 <div className="relative mb-4">
                   <div className="absolute inset-0 bg-orange-400 rounded-3xl blur-2xl opacity-40 animate-pulse" />
                   <div className="relative bg-white rounded-3xl p-3 shadow-lg">
-                    <Image
-                      src="/logo-ecc.webp"
-                      alt="ECC"
-                      width={80}
-                      height={80}
-                      priority
-                    />
+                    <EccLogo height={88} className="text-brand-600" />
                   </div>
                 </div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full uppercase tracking-wider">

@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
@@ -20,6 +19,7 @@ import {
   Phone,
   type LucideIcon
 } from 'lucide-react';
+import { EccLogo } from '@/components/ecc-logo';
 
 interface NavLink {
   href: string;
@@ -56,12 +56,10 @@ export function Navbar() {
     <header className="relative shrink-0 z-40 grad-fixed text-white">
       <nav className="container-page flex items-center gap-4 h-16">
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <span className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
-            <Image src="/logo-ecc.webp" alt="ECC" width={32} height={32} priority />
-          </span>
+          <EccLogo height={42} className="text-white shrink-0" />
           <span className="leading-tight">
             <span className="block font-extrabold text-lg tracking-tight">ECC</span>
-            <span className="hidden sm:block xl:hidden 2xl:block text-[10.5px] text-white/85">Elshaddai Creative Community</span>
+            <span className="block text-[10px] sm:text-[10.5px] text-white/85 whitespace-nowrap">El Shaddai Creative Community</span>
           </span>
         </Link>
 
@@ -75,7 +73,7 @@ export function Navbar() {
                 isActive(href) ? 'bg-white text-brand-700 font-bold' : 'text-white/90 hover:bg-white/15 hover:text-white'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 xl:hidden 2xl:inline" />
               {t(label)}
             </Link>
           ))}

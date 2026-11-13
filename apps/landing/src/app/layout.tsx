@@ -41,7 +41,7 @@ export function generateMetadata(): Metadata {
     follow: true,
   },
   icons: {
-    icon: '/logo-ecc.webp',
+    icon: [{ url: '/logo-ecc.svg', type: 'image/svg+xml' }, { url: '/logo-ecc.webp' }],
   },
   };
 }

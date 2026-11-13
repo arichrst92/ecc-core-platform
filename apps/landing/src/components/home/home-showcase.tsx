@@ -14,6 +14,7 @@ import { LangSwitch, useLang } from '../lang-provider';
 import { NAV_LINKS } from '../navbar';
 import type { DictKey } from '@/lib/i18n';
 import './home.css';
+import { EccLogo } from '@/components/ecc-logo';
 
 export interface TodayIbadah {
   id: string;
@@ -205,11 +206,9 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
       {/* ① Navbar transparan */}
       <header className="hm-nav">
         <Link href="/" className="hm-brand">
-          <span className="lg">
-            <Image src="/logo-ecc.webp" alt="ECC" width={34} height={34} priority />
-          </span>
+          <EccLogo height={44} className="lg-svg" />
           <span>
-            ECC<small>Elshaddai Creative Community</small>
+            ECC<small>El Shaddai Creative Community</small>
           </span>
         </Link>
         <nav className="hm-links">

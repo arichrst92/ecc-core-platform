@@ -7,6 +7,7 @@ import { apiGet, absoluteUrl } from '@/lib/api';
 import { getL, getT } from '@/lib/i18n-server';
 import { ScreenPage } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
+import { EccLogo } from '@/components/ecc-logo';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -121,7 +122,7 @@ export default async function AboutPage() {
         <article className="min-h-0 bg-white rounded-3xl border border-orange-100 shadow-[0_24px_48px_-32px_rgba(124,45,18,.5)] overflow-y-auto">
           <div className="px-6 py-7 sm:px-10 sm:py-9">
             <div className="flex items-center gap-3">
-              <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} />
+              <EccLogo height={44} className="text-brand-600 shrink-0" />
               <div className="leading-tight">
                 <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.story')}</div>
                 <div className="text-sm text-neutral-500">{t('about.since')}</div>
@@ -143,14 +144,18 @@ export default async function AboutPage() {
               </div>
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">{t('about.misi')}</div>
-                <ol className="mt-3 space-y-2.5">
-                  {misi.map((m, idx) => (
-                    <li key={idx} className="flex gap-3 text-[14.5px] text-neutral-700 leading-relaxed">
-                      <span className="font-extrabold text-brand-600 tabular-nums">{String(idx + 1).padStart(2, '0')}</span>
-                      <span>{m}</span>
-                    </li>
-                  ))}
-                </ol>
+                {misi.length === 1 ? (
+                  <p className="mt-3 text-[14.5px] text-neutral-700 leading-relaxed">{misi[0]}</p>
+                ) : (
+                  <ol className="mt-3 space-y-2.5">
+                    {misi.map((m, idx) => (
+                      <li key={idx} className="flex gap-3 text-[14.5px] text-neutral-700 leading-relaxed">
+                        <span className="font-extrabold text-brand-600 tabular-nums">{String(idx + 1).padStart(2, '0')}</span>
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </div>
             </div>
 

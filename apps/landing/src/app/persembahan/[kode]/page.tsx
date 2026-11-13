@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { Church, Landmark, QrCode, ChevronLeft, Info } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { getL } from '@/lib/i18n-server';
 import { CopyRekeningButton } from '../copy-button';
 import { QrisPreview } from '@/components/qris-preview';
+import { EccLogo } from '@/components/ecc-logo';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
@@ -93,7 +93,7 @@ export default async function PersembahanCabangPage(
           </Link>
 
           <div className="flex items-start gap-3 mb-2">
-            <Image src="/logo-ecc.webp" alt="ECC" width={40} height={40} className="shrink-0" />
+            <EccLogo height={44} className="text-brand-600 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
                 {L('Persembahan', 'Giving')} · {cabang.kode}

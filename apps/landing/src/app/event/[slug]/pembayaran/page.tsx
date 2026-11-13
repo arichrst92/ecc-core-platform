@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Calendar, MapPin, Church, QrCode, Info, Landmark, ChevronLeft } from 'lucide-react';
@@ -17,6 +16,7 @@ import {
   type WaSessionInfo,
 } from '@/lib/web-action-server';
 import { getL } from '@/lib/i18n-server';
+import { EccLogo } from '@/components/ecc-logo';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
@@ -134,7 +134,7 @@ export default async function EventPembayaranPage(
           </Link>
 
           <div className="flex items-center gap-3 mb-1">
-            <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} />
+            <EccLogo height={40} className="text-brand-600 shrink-0" />
             <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
               {L('Pendaftaran & Pembayaran Event', 'Event Registration & Payment')}
             </p>

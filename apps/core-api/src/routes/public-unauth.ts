@@ -266,6 +266,10 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     // URL streaming Zoom/YouTube — guest bisa lihat tanpa login (link
     // biasanya public di poster). Mobile gate "Akses Online" button.
     linkOnline: string | null;
+    // Detail untuk panel ibadah di website (eccchurch.global/ibadah).
+    deskripsi: string | null;
+    mapsUrl: string | null;
+    isKidsIbadah: boolean;
   }> = [];
 
   for (const i of ibadahs) {
@@ -289,6 +293,9 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         isOnline: i.isOnline,
         urutan: i.urutan,
         linkOnline: i.linkOnline,
+        deskripsi: i.deskripsi,
+        mapsUrl: i.mapsUrl,
+        isKidsIbadah: i.isKidsIbadah,
       });
     }
   }
@@ -839,6 +846,41 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
 //  dilakukan client-side: kita cuma return jumlah total — kalau perlu
 //  presisi aktif vs nonaktif, expand ke 2 query terpisah.
 // ============================================================
+// GET /public/pastors — tim pastoral ECC untuk halaman "Tentang Kami".
+// Anggota aktif pelayanan "Penggembalaan" dengan level posisi ≥ 8 (mis. Senior
+// Pastor, Pastor). Hanya nama, foto, posisi, dan cabang — tanpa kontak.
+publicUnauthRouter.get('/pastors', publicBrowseLimiter, async (_req, res) => {
+  const rows = await prisma.jemaatPelayanan.findMany({
+    where: {
+      isActive: true,
+      pelayanan: { nama: { equals: 'Penggembalaan', mode: 'insensitive' }, isActive: true },
+      pelayananRole: { level: { gte: 8 }, isActive: true },
+      jemaat: { isActive: true },
+    },
+    select: {
+      jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, cabang: { select: { id: true, nama: true } } } },
+      pelayananRole: { select: { nama: true, level: true } },
+    },
+  });
+  // Satu orang satu kartu (posisi tertinggi).
+  const best = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const cur = best.get(r.jemaat.id);
+    if (!cur || r.pelayananRole.level > cur.pelayananRole.level) best.set(r.jemaat.id, r);
+  }
+  const data = [...best.values()]
+    .sort((a, b) => b.pelayananRole.level - a.pelayananRole.level || a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap))
+    .map((r) => ({
+      id: r.jemaat.id,
+      nama: r.jemaat.namaLengkap,
+      fotoUrl: r.jemaat.fotoUrl,
+      posisi: r.pelayananRole.nama,
+      level: r.pelayananRole.level,
+      cabang: r.jemaat.cabang,
+    }));
+  res.json({ success: true, data });
+});
+
 publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
   const q = publicMinistryQuerySchema.parse(req.query);
 
@@ -853,6 +895,8 @@ publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
         id: true,
         nama: true,
         deskripsi: true,
+        ikon: true,
+        warna: true,
         _count: { select: { roles: true, jemaatPelayanan: true } },
       },
     }),
@@ -865,6 +909,9 @@ publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
       id: r.id,
       nama: r.nama,
       deskripsi: r.deskripsi,
+      // Ikon & warna yang dipilih admin di Portal → Pelayanan (website & app sama).
+      ikon: r.ikon,
+      warna: r.warna,
       roleCount: r._count.roles,
       memberCount: r._count.jemaatPelayanan,
     })),

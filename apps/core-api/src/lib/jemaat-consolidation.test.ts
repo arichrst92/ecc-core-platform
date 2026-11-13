@@ -5,6 +5,8 @@ import {
   majority,
   matchRow,
   normalizeName,
+  nameSimilarity,
+  similarNames,
   normalizePhone,
   parseSheetRows,
   suggestPelayanan,
@@ -257,5 +259,24 @@ describe('tanggal lahir, jenis kelamin, orang tua / wali', () => {
   it('kunci orang (hindari jemaat ganda)', () => {
     expect(personKeys({ namaLengkap: 'Budi', noHp: '0812-1111-2222' })).toEqual(['hp:+6281211112222']);
     expect(personKeys({ namaLengkap: 'Ps. Budi  S' })).toEqual(['nm:budi s']);
+  });
+});
+
+describe('kemiripan nama leader', () => {
+  it('abaikan sapaan & cocokkan awalan / salah ketik', () => {
+    expect(nameSimilarity('Ko Andi', 'Andi Setiawan')).toBeGreaterThanOrEqual(0.8);
+    expect(nameSimilarity('Pak Budi S.', 'Budi Santoso')).toBeGreaterThanOrEqual(0.8);
+    expect(nameSimilarity('Jonathan Wijaya', 'Jonatan Wijaya')).toBeGreaterThanOrEqual(0.85);
+    expect(nameSimilarity('Andi', 'Rina Kusuma')).toBeLessThan(0.6);
+  });
+  it('similarNames mengurutkan skor tertinggi dulu', () => {
+    const ix = buildIndex([
+      J({ id: '1', namaLengkap: 'Andi Setiawan' }),
+      J({ id: '2', namaLengkap: 'Rina Kusuma' }),
+      J({ id: '3', namaLengkap: 'Andika Pratama' }),
+    ]);
+    const r = similarNames(ix, 'Ko Andi Setiawan');
+    expect(r[0]?.id).toBe('1');
+    expect(r.some((x) => x.id === '2')).toBe(false);
   });
 });

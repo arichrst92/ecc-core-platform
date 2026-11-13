@@ -46,6 +46,7 @@ import {
   matchRow,
   journeyStepsToGrant,
   normalizeName,
+  similarNames,
   parseSheetRows,
   suggestJourneyStep,
   suggestPelayanan,
@@ -251,6 +252,16 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
       .map((id) => ({ ...jemaatOut(id), via: ['nama'] }))
       .sort((a, b) => Number(b.cabangSama) - Number(a.cabangSama));
   };
+  // Nama leader tidak ada yang persis → tawarkan jemaat dengan nama mirip
+  // (skor 0..1; cabang sama didahulukan bila skornya setara).
+  const leaderSimilar = (name: string | null) => {
+    const key = normalizeName(name);
+    if (!key || ix.byName.has(key)) return [];
+    return similarNames(ix, name)
+      .map(({ id, score }) => ({ ...jemaatOut(id), score }))
+      .sort((a, b) => b.score - a.score || Number(b.cabangSama) - Number(a.cabangSama))
+      .slice(0, 5);
+  };
 
   const areaNames = [...new Set(rows.map((r) => r.area).filter((x): x is string => !!x))].sort();
   const areas = areaNames.map((nama) => {
@@ -262,6 +273,7 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
       existingPicJemaatId: ex?.picJemaatId ?? null,
       leaderNama: leader,
       leaderCandidates: leaderCandidates(leader),
+      leaderSimilar: leaderSimilar(leader),
       memberCount: rows.filter((r) => r.area === nama).length,
     };
   });
@@ -283,6 +295,7 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
       existingPicJemaatId: ex?.picJemaatId ?? null,
       leaderNama: leader,
       leaderCandidates: leaderCandidates(leader),
+      leaderSimilar: leaderSimilar(leader),
       memberCount: members.length,
     };
   });

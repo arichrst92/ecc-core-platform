@@ -295,6 +295,107 @@ export function buildIndex(list: JemaatLite[]): JemaatIndex {
   return ix;
 }
 
+// ------------------------------------------------------------
+//  Kemiripan nama (PIC / leader homecell yang tidak sama persis)
+// ------------------------------------------------------------
+
+/** Sapaan / gelar yang sering ditulis di sheet tapi tidak ada di nama database. */
+const HONORIFICS = new Set([
+  'ps', 'pdt', 'pastor', 'pak', 'bpk', 'bapak', 'bu', 'ibu', 'ko', 'koh', 'ci', 'cik', 'kak', 'ka',
+  'sdr', 'sdri', 'mas', 'mbak', 'mba', 'bang', 'om', 'tante', 'opa', 'oma', 'dr', 'ir', 'pnt', 'ev', 'gembala',
+]);
+
+/** Token nama: huruf kecil, tanpa tanda baca & sapaan/gelar. */
+export function nameTokens(v: string | null | undefined): string[] {
+  if (!v) return [];
+  return v
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t && !HONORIFICS.has(t));
+}
+
+function bigrams(s: string): string[] {
+  if (s.length < 2) return [s];
+  const out: string[] = [];
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  return out;
+}
+
+/** Dice coefficient bigram (0..1) — toleran salah ketik kecil. */
+export function diceSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const A = bigrams(a);
+  const B = new Map<string, number>();
+  for (const g of bigrams(b)) B.set(g, (B.get(g) ?? 0) + 1);
+  let hit = 0;
+  for (const g of A) {
+    const n = B.get(g) ?? 0;
+    if (n > 0) {
+      hit++;
+      B.set(g, n - 1);
+    }
+  }
+  return (2 * hit) / (A.length + bigrams(b).length);
+}
+
+/**
+ * Skor kemiripan nama sheet vs nama database (0..1).
+ * Tiap kata di sheet dicari padanan terbaiknya di nama database:
+ *   sama persis = 1 · inisial / awalan ("A." / "Andi" → "Andika") = 0.85 · selain itu Dice bigram.
+ * Rata-rata kata sheet, dikurangi sedikit bila nama database punya banyak kata lain,
+ * lalu diambil maksimum dengan Dice nama utuh (menangkap spasi yang hilang, mis. "Mariaelena").
+ */
+export function nameSimilarity(sheetName: string, dbName: string): number {
+  const a = nameTokens(sheetName);
+  const b = nameTokens(dbName);
+  if (!a.length || !b.length) return 0;
+  const used = new Set<number>();
+  let total = 0;
+  for (const t of a) {
+    let best = 0;
+    let bestIdx = -1;
+    b.forEach((u, i) => {
+      if (used.has(i)) return;
+      let sc: number;
+      if (t === u) sc = 1;
+      else if ((t.length === 1 && u.startsWith(t)) || (t.length >= 3 && u.startsWith(t)) || (u.length >= 3 && t.startsWith(u))) sc = 0.85;
+      else sc = diceSimilarity(t, u);
+      if (sc > best) {
+        best = sc;
+        bestIdx = i;
+      }
+    });
+    if (bestIdx >= 0 && best >= 0.5) used.add(bestIdx);
+    total += best;
+  }
+  const tokenScore = (total / a.length) * (1 - Math.min(0.15, Math.max(0, b.length - a.length) * 0.05));
+  const whole = diceSimilarity(a.join(''), b.join(''));
+  return Math.round(Math.max(tokenScore, whole) * 100) / 100;
+}
+
+/**
+ * Kandidat jemaat yang namanya mirip `name` (skor ≥ minScore), terbaik dulu.
+ * Dipakai bila nama leader di sheet tidak ditemukan persis di database.
+ */
+export function similarNames(
+  ix: Pick<JemaatIndex, 'byName'>,
+  name: string | null,
+  opts: { limit?: number; minScore?: number } = {},
+): { id: string; score: number }[] {
+  const { limit = 5, minScore = 0.6 } = opts;
+  if (!nameTokens(name).length) return [];
+  const out: { id: string; score: number }[] = [];
+  for (const [key, ids] of ix.byName) {
+    const score = nameSimilarity(name!, key);
+    if (score >= minScore) for (const id of ids) out.push({ id, score });
+  }
+  return out.sort((x, y) => y.score - x.score).slice(0, limit * 3);
+}
+
 export type MatchStatus = 'MATCHED' | 'CONFLICT' | 'NAME_ONLY' | 'NOT_FOUND';
 export type MatchVia = 'kode' | 'email' | 'hp' | 'nama';
 

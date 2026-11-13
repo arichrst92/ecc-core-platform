@@ -80,7 +80,20 @@ interface LeaderPlan {
   existingPicJemaatId: string | null;
   leaderNama: string | null;
   leaderCandidates: Candidate[];
+  /** Nama tidak ada yang persis → jemaat dengan nama mirip (score 0..1). */
+  leaderSimilar?: (Candidate & { score: number })[];
   memberCount: number;
+}
+
+/**
+ * Kandidat kemiripan yang cukup meyakinkan untuk dipilih otomatis:
+ * skor ≥ 0.9 dan jelas unggul dari kandidat berikutnya.
+ */
+function autoSimilar(l: LeaderPlan): string | null {
+  const [a, b] = l.leaderSimilar ?? [];
+  if (!a || a.score < 0.9) return null;
+  if (b && b.score > a.score - 0.05) return null;
+  return a.id;
 }
 interface Preview {
   sheetNames: string[];
@@ -242,7 +255,8 @@ export default function JemaatConsolidationPage() {
       };
     }
     setChoices(ch);
-    const pick = (l: LeaderPlan) => l.existingPicJemaatId ?? l.leaderCandidates.find((c) => c.cabangSama)?.id ?? l.leaderCandidates[0]?.id ?? null;
+    const pick = (l: LeaderPlan) =>
+      l.existingPicJemaatId ?? l.leaderCandidates.find((c) => c.cabangSama)?.id ?? l.leaderCandidates[0]?.id ?? autoSimilar(l);
     setAreaPic(Object.fromEntries(p.areas.map((a) => [a.nama, pick(a)])));
     setHcPic(Object.fromEntries(p.homecells.map((h) => [hcKey(h.areaNama, h.nama), pick(h)])));
     setMinistry(
@@ -596,7 +610,9 @@ export default function JemaatConsolidationPage() {
             <div className="space-y-4">
               <p className="text-xs text-neutral-500">
                 Area & homecell yang belum ada akan dibuat di cabang {data.cabang?.nama}. PIC dipilih dari jemaat
-                ber-nama sama dengan Zone/Home Leader di sheet, dan otomatis ditambahkan ke pelayanan Penggembalaan.
+                ber-nama sama dengan Zone/Home Leader di sheet; bila tidak ada yang sama persis, pilihan PIC menampilkan
+                jemaat dengan nama mirip (sapaan seperti Ko/Ci/Pak/Bu/Ps diabaikan). PIC otomatis ditambahkan ke pelayanan
+                Penggembalaan.
               </p>
               <LeaderTable
                 title="Zona"
@@ -1255,10 +1271,32 @@ function LeaderTable({
                         {candLabel(c)}
                       </option>
                     ))}
+                    {plan.leaderCandidates.length === 0 && (plan.leaderSimilar?.length ?? 0) > 0 && (
+                      <optgroup label={`Kemiripan dengan “${plan.leaderNama}”`}>
+                        {plan.leaderSimilar!.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {Math.round(c.score * 100)}% · {candLabel(c)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
-                  {plan.leaderNama && plan.leaderCandidates.length === 0 && (
-                    <div className="text-xs text-amber-700 mt-1">“{plan.leaderNama}” tidak ditemukan di database</div>
-                  )}
+                  {plan.leaderNama && plan.leaderCandidates.length === 0 && (() => {
+                    const sim = plan.leaderSimilar ?? [];
+                    const chosen = sim.find((c) => c.id === value[key]);
+                    if (chosen)
+                      return (
+                        <div className="text-xs text-amber-700 mt-1">
+                          Dipilih dari kemiripan dengan “{plan.leaderNama}” ({Math.round(chosen.score * 100)}%) — pastikan orangnya benar
+                        </div>
+                      );
+                    return (
+                      <div className="text-xs text-amber-700 mt-1">
+                        “{plan.leaderNama}” tidak ditemukan persis di database
+                        {sim.length ? ` — ${sim.length} nama mirip tersedia di pilihan PIC` : ' dan tidak ada nama yang mirip'}
+                      </div>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

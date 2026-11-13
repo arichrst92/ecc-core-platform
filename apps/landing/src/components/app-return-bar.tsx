@@ -78,7 +78,7 @@ export function AppReturnBar() {
   return (
     <>
       {/* Bar atas — selalu terlihat */}
-      <div className="sticky top-0 z-50 bg-orange-500 text-white shadow-md">
+      <div className="sticky top-0 z-50 bg-neutral-900 text-white shadow-md">
         <button
           type="button"
           data-app-return

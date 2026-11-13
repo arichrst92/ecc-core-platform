@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
 import { notFound } from 'next/navigation';
-import { Church, Landmark, QrCode, ChevronLeft, Info } from 'lucide-react';
+import { HandCoins, Landmark, QrCode, ChevronLeft, Info, MapPin, Sparkles } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { getL } from '@/lib/i18n-server';
 import { CopyRekeningButton } from '../copy-button';
@@ -80,46 +80,54 @@ export default async function PersembahanCabangPage(
   const rekening = resp?.rekening ?? [];
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50">
+    <div className="min-h-screen overflow-x-hidden bg-[#FFFBF7]">
       <AppReturnBar />
-      {/* Header */}
-      <section className="border-b border-orange-100 bg-white/60 backdrop-blur">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+      {/* Hero oranye gradient — judul cabang (persona ECC) */}
+      <section className="relative overflow-hidden bg-brand-grad text-white">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_85%_0%,rgba(255,255,255,.22),transparent_60%),radial-gradient(500px_300px_at_0%_100%,rgba(124,45,18,.35),transparent_60%)]"
+        />
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-16 sm:pt-7 sm:pb-20">
           <Link
             href="/persembahan"
-            className="inline-flex items-center gap-1 text-xs text-orange-700 hover:text-orange-800 mb-4"
+            className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-white/85 hover:text-white"
           >
             <ChevronLeft className="w-4 h-4" /> {L('Ganti cabang', 'Change branch')}
           </Link>
 
-          <div className="flex items-start gap-3 mb-2">
-            <EccLogo height={44} className="text-brand-600 shrink-0" />
+          <div className="mt-5 flex items-start gap-4">
+            <EccLogo height={60} className="text-white shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-white/80">
                 {L('Persembahan', 'Giving')} · {cabang.kode}
               </p>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-neutral-900 break-words">
+              <h1 className="mt-1 text-2xl sm:text-3xl md:text-4xl font-extrabold leading-tight break-words">
                 {cabang.nama}
               </h1>
               {cabang.alamat && (
-                <p className="text-xs text-neutral-500 mt-1 leading-relaxed break-words">{cabang.alamat}</p>
+                <p className="mt-1.5 flex items-start gap-1.5 text-xs sm:text-sm text-white/85 leading-relaxed break-words">
+                  <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>{cabang.alamat}</span>
+                </p>
               )}
             </div>
           </div>
-          <p className="text-sm text-neutral-600 mt-3 leading-relaxed">
+          <p className="mt-5 text-sm sm:text-base text-white/90 leading-relaxed max-w-2xl">
             {L(
-              `Terima kasih atas kesetiaan Anda dalam memberi. Berikut info rekening resmi cabang ${cabang.nama}.`,
-              `Thank you for your faithfulness in giving. Here is the official account info for ${cabang.nama}.`,
+              'Terima kasih atas kesetiaan Anda dalam memberi. Berikut info rekening resmi cabang ini.',
+              'Thank you for your faithfulness in giving. Here is the official account info for this branch.',
             )}
           </p>
         </div>
       </section>
 
-      {/* Rekening list */}
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      {/* Daftar rekening — kartu menumpang di bawah pita oranye */}
+      <section className="relative max-w-3xl mx-auto px-4 sm:px-6 -mt-10 sm:-mt-12 pb-8">
         {rekening.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-orange-100 rounded-2xl">
-            <Info className="w-10 h-10 text-orange-400 mx-auto mb-3" />
+          <div className="text-center py-14 px-6 bg-white border border-orange-100 rounded-3xl shadow-[0_24px_48px_-32px_rgba(124,45,18,.55)]">
+            <Info className="w-10 h-10 text-brand-400 mx-auto mb-3" />
             <p className="text-sm text-neutral-600">
               {L(
                 `Info rekening cabang ini sedang dalam pembaruan. Silakan hubungi admin cabang ${cabang.nama}.`,
@@ -128,49 +136,48 @@ export default async function PersembahanCabangPage(
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-orange-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-grad text-white flex items-center gap-3">
-              <Church className="w-5 h-5 shrink-0" />
-              <h2 className="font-bold text-base sm:text-lg min-w-0 break-words">{cabang.nama}</h2>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            {rekening.map((r) => (
+              <article
+                key={r.id}
+                className="min-w-0 flex flex-col bg-white rounded-3xl border border-orange-100 shadow-[0_20px_40px_-30px_rgba(124,45,18,.55)] hover:border-brand-300 transition overflow-hidden"
+              >
+                <div className="flex items-center gap-3 px-5 pt-5">
+                  <span className="w-10 h-10 rounded-2xl bg-brand-grad text-white flex items-center justify-center shrink-0 shadow-[0_10px_20px_-10px_rgba(234,88,12,.8)]">
+                    <HandCoins className="w-5 h-5" />
+                  </span>
+                  <h2 className="min-w-0 flex-1 text-[13px] font-extrabold uppercase tracking-[0.12em] text-brand-700 break-words">
+                    {r.purpose}
+                  </h2>
+                </div>
 
-            <div className="p-3 sm:p-6 grid grid-cols-1 gap-3 sm:gap-4">
-              {rekening.map((r) => (
-                <div
-                  key={r.id}
-                  className="min-w-0 border border-neutral-200 rounded-xl p-4 hover:border-orange-300 transition"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0 flex-1">
-                      <span className="inline-block max-w-full px-2 py-0.5 mb-2 bg-orange-100 text-orange-700 text-[11px] font-semibold rounded-full uppercase tracking-wide break-words">
-                        {r.purpose}
-                      </span>
-                      <p className="text-sm text-neutral-500">{r.bankNama}</p>
-                      <p className="text-lg sm:text-xl font-bold text-neutral-900 tracking-wide break-all">
+                <div className="px-5 pt-4 pb-5 flex-1">
+                  <div className="rounded-2xl bg-brand-50/70 border border-orange-100 px-4 py-3.5">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
+                      <Landmark className="w-3.5 h-3.5" /> {r.bankNama}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="min-w-0 text-xl sm:text-2xl font-extrabold text-neutral-900 tracking-wide tabular-nums break-all">
                         {r.bankNomor}
                       </p>
-                      <p className="text-sm text-neutral-700 mt-1 break-words">
-                        {L('a.n.', 'Name:')} {r.bankAtasNama}
-                      </p>
-                      {r.catatan && (
-                        <p className="text-xs text-neutral-500 mt-2 italic">
-                          {r.catatan}
-                        </p>
-                      )}
+                      <CopyRekeningButton nomor={r.bankNomor} />
                     </div>
-                    <CopyRekeningButton nomor={r.bankNomor} />
+                    <p className="mt-1 text-sm text-neutral-700 break-words">
+                      <span className="text-neutral-500">{L('a.n.', 'Name:')}</span> {r.bankAtasNama}
+                    </p>
                   </div>
+                  {r.catatan && <p className="mt-3 text-xs text-neutral-500 italic">{r.catatan}</p>}
 
                   {r.qrisImageUrl && (
-                    <div className="mt-3 pt-3 border-t border-neutral-100 flex items-start gap-3">
+                    <div className="mt-4 flex items-start gap-3">
                       <QrisPreview
                         src={resolveAssetUrl(r.qrisImageUrl) ?? ''}
                         alt={`QRIS ${r.purpose} — ${cabang.nama}`}
                         downloadName={`qris-${cabang.kode}-${r.purpose}`.toLowerCase().replace(/\s+/g, '-')}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-neutral-700 mb-1 flex items-center gap-1">
-                          <QrCode className="w-3.5 h-3.5" /> QRIS
+                        <p className="text-xs font-bold text-neutral-800 mb-1 flex items-center gap-1">
+                          <QrCode className="w-3.5 h-3.5 text-brand-600" /> QRIS
                         </p>
                         <p className="text-xs text-neutral-500 leading-relaxed">
                           {L(
@@ -182,31 +189,38 @@ export default async function PersembahanCabangPage(
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+              </article>
+            ))}
           </div>
         )}
 
         {/* Panduan */}
-        <div className="mt-8 sm:mt-10 bg-white border border-orange-100 rounded-2xl p-4 sm:p-6">
-          <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-            <Landmark className="w-4 h-4 text-orange-600" />
+        <div className="mt-6 sm:mt-8 bg-white border border-orange-100 rounded-3xl p-5 sm:p-6 shadow-[0_20px_40px_-30px_rgba(124,45,18,.45)]">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
             {L('Panduan Persembahan', 'Giving Guide')}
           </h3>
-          <ol className="text-sm text-neutral-700 space-y-2 list-decimal list-inside">
-            <li>{L('Pilih peruntukan (perpuluhan, ucapan syukur, dsb).', 'Choose the purpose (tithe, thanksgiving, etc.).')}</li>
-            <li>{L('Transfer ke rekening di atas atau scan QRIS jika tersedia.', 'Transfer to the account above or scan the QRIS if available.')}</li>
-            <li>
-              {L(
+          <ol className="mt-4 space-y-3">
+            {[
+              L('Pilih peruntukan (perpuluhan, ucapan syukur, dsb).', 'Choose the purpose (tithe, thanksgiving, etc.).'),
+              L('Transfer ke rekening di atas atau scan QRIS jika tersedia.', 'Transfer to the account above or scan the QRIS if available.'),
+              L(
                 `Simpan bukti transfer dan kirim ke bendahara / admin cabang ${cabang.nama} via WhatsApp untuk konfirmasi.`,
                 `Keep the transfer receipt and send it to the ${cabang.nama} treasurer / branch admin via WhatsApp for confirmation.`,
-              )}
-            </li>
+              ),
+            ].map((step, i) => (
+              <li key={i} className="flex gap-3 text-sm text-neutral-700 leading-relaxed">
+                <span className="w-6 h-6 rounded-full bg-brand-grad text-white text-xs font-bold flex items-center justify-center shrink-0">
+                  {i + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
           </ol>
         </div>
 
         {/* Legal */}
-        <div className="mt-6 text-xs text-neutral-500 space-y-1">
+        <div className="mt-6 text-xs text-neutral-500 space-y-1 text-center">
           <p>
             {L(
               `Persembahan bersifat sukarela. Untuk bukti resmi atau keperluan administrasi pajak, hubungi bendahara cabang ${cabang.nama}.`,
@@ -214,17 +228,15 @@ export default async function PersembahanCabangPage(
             )}
           </p>
           <p>
-            <a href="/privacy" className="text-orange-600 hover:underline">
+            <a href="/privacy" className="text-brand-600 hover:underline">
               {L('Kebijakan Privasi', 'Privacy Policy')}
             </a>
             {' · '}
-            <a href="/terms" className="text-orange-600 hover:underline">
+            <a href="/terms" className="text-brand-600 hover:underline">
               {L('Syarat & Ketentuan', 'Terms & Conditions')}
             </a>
           </p>
-          <p className="pt-2">
-            &copy; {new Date().getFullYear()} Elshaddai Creative Community
-          </p>
+          <p className="pt-2">&copy; {new Date().getFullYear()} El Shaddai Creative Community</p>
         </div>
       </section>
       <AppReturnFooter />

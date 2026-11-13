@@ -11,7 +11,7 @@
  *   - Participation lifecycle (DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR / BATAL)
  *   - Bukti transfer upload per participation + admin approval
  */
-import { eventDateLabel, instantInTzLabel } from '../../lib/tz.js';
+import { DEFAULT_TZ, eventDateLabel, instantInTzLabel, todayInTz } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -265,12 +265,30 @@ eventRouter.get('/', async (req, res) => {
     where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), { OR: conds }];
   }
 
-  const [rows, total] = await Promise.all([
+  // Tab Portal: periode=upcoming (belum selesai, terdekat dulu) | past (sudah lewat, terbaru dulu).
+  // Batas = awal hari ini (WIB); event multi-hari dihitung dari tanggal selesai.
+  const periode = req.query.periode === 'upcoming' || req.query.periode === 'past' ? req.query.periode : undefined;
+  const cutoff = todayInTz(DEFAULT_TZ);
+  const upcomingWhere: Prisma.EventWhereInput = {
+    OR: [{ tanggalSelesai: { gte: cutoff } }, { tanggalSelesai: null, tanggalMulai: { gte: cutoff } }],
+  };
+  const pastWhere: Prisma.EventWhereInput = {
+    OR: [{ tanggalSelesai: { lt: cutoff } }, { tanggalSelesai: null, tanggalMulai: { lt: cutoff } }],
+  };
+  const baseWhere = where;
+  const listWhere: Prisma.EventWhereInput = periode
+    ? { AND: [baseWhere, periode === 'upcoming' ? upcomingWhere : pastWhere] }
+    : baseWhere;
+
+  const [rows, total, upcomingCount, pastCount] = await Promise.all([
     prisma.event.findMany({
-      where,
+      where: listWhere,
       skip: (q.page - 1) * q.limit,
       take: q.limit,
-      orderBy: [{ tanggalMulai: 'desc' }, { createdAt: 'desc' }],
+      orderBy:
+        periode === 'upcoming'
+          ? [{ tanggalMulai: 'asc' }, { createdAt: 'desc' }]
+          : [{ tanggalMulai: 'desc' }, { createdAt: 'desc' }],
       include: {
         sinode: { select: { id: true, nama: true } },
         cabang: { select: { id: true, nama: true, timezone: true } },
@@ -285,7 +303,9 @@ eventRouter.get('/', async (req, res) => {
         },
       },
     }),
-    prisma.event.count({ where }),
+    prisma.event.count({ where: listWhere }),
+    periode ? prisma.event.count({ where: { AND: [baseWhere, upcomingWhere] } }) : Promise.resolve(null),
+    periode ? prisma.event.count({ where: { AND: [baseWhere, pastWhere] } }) : Promise.resolve(null),
   ]);
 
   const data = rows.map((r) => ({
@@ -296,7 +316,13 @@ eventRouter.get('/', async (req, res) => {
   res.json({
     success: true,
     data,
-    meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
+    meta: {
+      page: q.page,
+      limit: q.limit,
+      total,
+      totalPages: Math.ceil(total / q.limit),
+      ...(periode ? { counts: { upcoming: upcomingCount, past: pastCount } } : {}),
+    },
   });
 });
 

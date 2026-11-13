@@ -25,7 +25,7 @@
  */
 import { Router } from 'express';
 import multer from 'multer';
-import { prisma } from '@ecc/database';
+import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
 import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
@@ -48,6 +48,7 @@ import {
   normalizeName,
   similarNames,
   parseSheetRows,
+  parseStructureSheet,
   suggestJourneyStep,
   suggestPelayanan,
   splitMinistries,
@@ -138,11 +139,15 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
     throw BadRequest(`Sheet "${requested}" tidak ada. Pilihan: ${wb.sheetNames.join(', ')}`);
   }
 
-  const { rows, missingColumns } = parseSheetRows(wb.readSheet(sheet));
+  const cells = wb.readSheet(sheet);
+  const { rows, missingColumns } = parseSheetRows(cells);
   if (missingColumns.length) {
+    // Sheet struktur homecell (Area/Zona/Homecell + leader, tanpa daftar jemaat)
+    // → Portal beralih ke POST /structure-preview.
+    const structureDetected = parseStructureSheet(cells).ok;
     return res.json({
       success: true,
-      data: { sheetNames: wb.sheetNames, sheet, missingColumns, rows: [], cabang: null },
+      data: { sheetNames: wb.sheetNames, sheet, missingColumns, structureDetected, rows: [], cabang: null },
     });
   }
 
@@ -352,6 +357,38 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
   });
 });
 
+/**
+ * Pemimpin homecell (PIC area/homecell, pastor) dipastikan tercatat di pelayanan
+ * Penggembalaan dengan peran bernama `roleNama` (fallback: peran level terendah).
+ * Jemaat yang sudah aktif di Penggembalaan tidak diubah.
+ */
+async function penggembalaanEnsurer(onAdded: () => void) {
+  const penggembalaan = await prisma.pelayanan.findFirst({
+    where: { nama: { equals: 'Penggembalaan', mode: 'insensitive' } },
+    select: { id: true, roles: { select: { id: true, nama: true, level: true } } },
+  });
+  const pgRole = (nama: string) =>
+    penggembalaan?.roles.find((r) => r.nama.toLowerCase() === nama.toLowerCase())?.id ??
+    [...(penggembalaan?.roles ?? [])].sort((a, b) => a.level - b.level)[0]?.id;
+  return async (jemaatId: string, roleNama: string, opts: { strict?: boolean } = {}) => {
+    if (!penggembalaan) return;
+    // strict: hanya bila peran bernama persis ada (mis. "Pastor" — jangan jatuh ke peran terendah).
+    const roleId = opts.strict
+      ? penggembalaan.roles.find((r) => r.nama.toLowerCase() === roleNama.toLowerCase())?.id
+      : pgRole(roleNama);
+    if (!roleId) return;
+    const exists = await prisma.jemaatPelayanan.findFirst({
+      where: { jemaatId, pelayananId: penggembalaan.id, isActive: true },
+      select: { id: true },
+    });
+    if (exists) return;
+    await prisma.jemaatPelayanan.create({
+      data: { jemaatId, pelayananId: penggembalaan.id, pelayananRoleId: roleId, isActive: true },
+    });
+    onAdded();
+  };
+}
+
 // ============================================================
 //  APPLY
 // ============================================================
@@ -529,27 +566,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
   }
 
   // ---- Penggembalaan (untuk PIC area/homecell) ----
-  const penggembalaan = await prisma.pelayanan.findFirst({
-    where: { nama: { equals: 'Penggembalaan', mode: 'insensitive' } },
-    select: { id: true, roles: { select: { id: true, nama: true, level: true } } },
-  });
-  const pgRole = (nama: string) =>
-    penggembalaan?.roles.find((r) => r.nama.toLowerCase() === nama.toLowerCase())?.id ??
-    penggembalaan?.roles.sort((a, b) => a.level - b.level)[0]?.id;
-  async function ensurePenggembalaan(jemaatId: string, roleNama: string) {
-    if (!penggembalaan) return;
-    const roleId = pgRole(roleNama);
-    if (!roleId) return;
-    const exists = await prisma.jemaatPelayanan.findFirst({
-      where: { jemaatId, pelayananId: penggembalaan.id, isActive: true },
-      select: { id: true },
-    });
-    if (exists) return;
-    await prisma.jemaatPelayanan.create({
-      data: { jemaatId, pelayananId: penggembalaan.id, pelayananRoleId: roleId, isActive: true },
-    });
-    summary.penggembalaanAdded += 1;
-  }
+  const ensurePenggembalaan = await penggembalaanEnsurer(() => (summary.penggembalaanAdded += 1));
 
   // ---- Area ----
   const areaIdByNama = new Map<string, string>();
@@ -885,4 +902,285 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
   });
 
   res.json({ success: true, data: { summary, results } });
+});
+
+// ============================================================
+//  STRUKTUR HOMECELL (sheet tanpa daftar jemaat)
+// ============================================================
+//  POST /structure-preview  multipart file, ?sheet=, ?cabangId=
+//  POST /structure-apply    JSON keputusan admin
+//  ZONA → Area Els (PIC = Zone Leader, Pastor = Area/Zone Pastor, deskripsi = nama AREA sheet)
+//  NAMA HOMECELL → Homecell (PIC = Home Leader, usia dari JENIS HOMECELL).
+
+jemaatConsolidationRouter.post('/structure-preview', upload.single('file'), async (req, res) => {
+  if (!req.file) throw BadRequest('File .xlsx wajib di-upload (field "file").');
+  let wb;
+  try {
+    wb = readXlsx(req.file.buffer);
+  } catch (e) {
+    throw BadRequest((e as Error).message);
+  }
+  const requested = typeof req.query.sheet === 'string' ? req.query.sheet : undefined;
+  const sheet = requested ?? wb.sheetNames[0];
+  if (!sheet || !wb.sheetNames.includes(sheet)) {
+    throw BadRequest(`Sheet "${requested}" tidak ada. Pilihan: ${wb.sheetNames.join(', ')}`);
+  }
+  const parsed = parseStructureSheet(wb.readSheet(sheet));
+  if (!parsed.ok) throw BadRequest('Sheet ini bukan struktur homecell (kolom ZONA & NAMA HOMECELL tidak ditemukan).');
+  const rows = parsed.rows;
+
+  const cabangOptions = await prisma.cabangGereja.findMany({
+    where: { isActive: true },
+    orderBy: { nama: 'asc' },
+    select: { id: true, nama: true },
+  });
+  // Cabang: dari query, atau tebakan = cabang yang paling banyak punya area/homecell bernama sama.
+  let cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
+  let cabangGuessed = false;
+  if (!cabangId) {
+    const zonaNames = [...new Set(rows.map((r) => r.zona))];
+    const hcNames = [...new Set(rows.map((r) => r.homecell))];
+    const [byArea, byHc] = await Promise.all([
+      prisma.homecellArea.findMany({ where: { nama: { in: zonaNames, mode: 'insensitive' } }, select: { cabangId: true } }),
+      prisma.homecell.findMany({ where: { nama: { in: hcNames, mode: 'insensitive' } }, select: { area: { select: { cabangId: true } } } }),
+    ]);
+    cabangId = majority([...byArea.map((a) => a.cabangId), ...byHc.map((h) => h.area.cabangId)]) ?? undefined;
+    cabangGuessed = !!cabangId;
+  }
+  const cabang = cabangId ? cabangOptions.find((c) => c.id === cabangId) ?? null : null;
+  const base = { sheetNames: wb.sheetNames, sheet, cabangOptions, cabangGuessed, rowCount: rows.length };
+  if (!cabang) return res.json({ success: true, data: { ...base, cabang: null, areas: [], homecells: [] } });
+
+  const all = await loadAllJemaat();
+  const ix = buildIndex(all);
+  const jemaatOut = (id: string) => {
+    const j = ix.byId.get(id)!;
+    return {
+      id: j.id,
+      kode: j.kode,
+      namaLengkap: j.namaLengkap,
+      email: j.email,
+      noHp: j.noHp,
+      alamat: j.alamat,
+      statusPernikahan: j.statusPernikahan,
+      tanggalBergabungGereja: j.tanggalBergabungGereja,
+      tanggalLahir: j.tanggalLahir,
+      jenisKelamin: j.jenisKelamin,
+      cabang: j.cabangNama,
+      cabangSama: j.cabangId === cabang.id,
+    };
+  };
+  const exact = (name: string | null) => {
+    const key = normalizeName(name);
+    if (!key) return [];
+    return (ix.byName.get(key) ?? [])
+      .map((id) => ({ ...jemaatOut(id), via: ['nama'] }))
+      .sort((a, b) => Number(b.cabangSama) - Number(a.cabangSama));
+  };
+  const similar = (name: string | null) => {
+    const key = normalizeName(name);
+    if (!key || ix.byName.has(key)) return [];
+    return similarNames(ix, name)
+      .map(({ id, score }) => ({ ...jemaatOut(id), score }))
+      .sort((a, b) => b.score - a.score || Number(b.cabangSama) - Number(a.cabangSama))
+      .slice(0, 5);
+  };
+
+  const existingAreas = await prisma.homecellArea.findMany({
+    where: { cabangId: cabang.id },
+    select: {
+      id: true,
+      nama: true,
+      deskripsi: true,
+      picJemaatId: true,
+      pastors: { select: { jemaatId: true } },
+      homecells: { select: { id: true, nama: true, picJemaatId: true, usiaMin: true, usiaMax: true } },
+    },
+  });
+  const findArea = (nama: string) => existingAreas.find((a) => a.nama.toLowerCase() === nama.toLowerCase());
+
+  const zonaNames = [...new Set(rows.map((r) => r.zona))];
+  const areas = zonaNames.map((nama) => {
+    const zr = rows.filter((r) => r.zona === nama);
+    const ex = findArea(nama);
+    const leader = majority(zr.map((r) => r.zoneLeader));
+    const pastorNames = [...new Set(zr.flatMap((r) => [r.zonePastor, r.areaPastor]).filter((x): x is string => !!x))];
+    return {
+      nama,
+      areaSheet: majority(zr.map((r) => r.areaSheet)),
+      existingId: ex?.id ?? null,
+      existingDeskripsi: ex?.deskripsi ?? null,
+      existingPicJemaatId: ex?.picJemaatId ?? null,
+      existingPastorIds: ex?.pastors.map((p) => p.jemaatId) ?? [],
+      leaderNama: leader,
+      leaderCandidates: exact(leader),
+      leaderSimilar: similar(leader),
+      pastors: pastorNames.map((p) => ({ nama: p, candidates: exact(p), similar: similar(p) })),
+      memberCount: zr.length, // jumlah homecell di zona ini
+    };
+  });
+
+  const homecells = rows.map((r) => {
+    const inZona = findArea(r.zona)?.homecells.find((h) => h.nama.toLowerCase() === r.homecell.toLowerCase());
+    // Belum ada di zona ini → cari di area lain cabang yang sama (akan dipindah).
+    const elsewhere = inZona
+      ? null
+      : existingAreas
+          .map((a) => ({ a, h: a.homecells.find((h) => h.nama.toLowerCase() === r.homecell.toLowerCase()) }))
+          .find((x) => x.h);
+    const ex = inZona ?? elsewhere?.h ?? null;
+    return {
+      rowNo: r.rowNo,
+      nama: r.homecell,
+      areaNama: r.zona,
+      hcCode: r.hcCode,
+      existingId: ex?.id ?? null,
+      movedFromArea: elsewhere ? elsewhere.a.nama : null,
+      existingPicJemaatId: ex?.picJemaatId ?? null,
+      existingUsiaMin: ex?.usiaMin ?? null,
+      existingUsiaMax: ex?.usiaMax ?? null,
+      usiaMin: r.usiaMin,
+      usiaMax: r.usiaMax,
+      leaderNama: r.homeLeader,
+      leaderCandidates: exact(r.homeLeader),
+      leaderSimilar: similar(r.homeLeader),
+      memberCount: 0,
+    };
+  });
+
+  res.json({ success: true, data: { ...base, cabang, areas, homecells } });
+});
+
+const structureApplySchema = z.object({
+  cabangId: z.string().uuid(),
+  areas: z
+    .array(
+      z.object({
+        nama: z.string().trim().min(1).max(100),
+        deskripsi: z.string().trim().max(500).nullable().optional(),
+        picJemaatId: z.string().uuid().nullable(),
+        pastorIds: z.array(z.string().uuid()).max(20).default([]),
+      }),
+    )
+    .max(1000),
+  homecells: z
+    .array(
+      z.object({
+        nama: z.string().trim().min(1).max(150),
+        areaNama: z.string().trim().min(1).max(100),
+        picJemaatId: z.string().uuid().nullable(),
+        usiaMin: z.number().int().min(0).max(120).nullable().optional(),
+        usiaMax: z.number().int().min(0).max(120).nullable().optional(),
+      }),
+    )
+    .max(5000),
+});
+
+jemaatConsolidationRouter.post('/structure-apply', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const input = structureApplySchema.parse(req.body);
+  const cabang = await prisma.cabangGereja.findUnique({ where: { id: input.cabangId }, select: { id: true, nama: true } });
+  if (!cabang) throw NotFound('Cabang tidak ditemukan.');
+
+  const summary = {
+    areasCreated: 0,
+    homecellsCreated: 0,
+    homecellsMoved: 0,
+    picSet: 0,
+    pastorsAdded: 0,
+    usiaSet: 0,
+    penggembalaanAdded: 0,
+  };
+  const ensurePenggembalaan = await penggembalaanEnsurer(() => (summary.penggembalaanAdded += 1));
+
+  // ---- Area (= ZONA sheet) ----
+  const areaIdByNama = new Map<string, string>();
+  for (const a of input.areas) {
+    const existing = await prisma.homecellArea.findFirst({
+      where: { cabangId: cabang.id, nama: { equals: a.nama, mode: 'insensitive' } },
+      select: { id: true, picJemaatId: true, deskripsi: true },
+    });
+    let id = existing?.id;
+    if (!id) {
+      id = (
+        await prisma.homecellArea.create({
+          data: { cabangId: cabang.id, nama: a.nama, deskripsi: a.deskripsi || null },
+          select: { id: true },
+        })
+      ).id;
+      summary.areasCreated += 1;
+    } else if (a.deskripsi && !existing?.deskripsi) {
+      await prisma.homecellArea.update({ where: { id }, data: { deskripsi: a.deskripsi } });
+    }
+    if (a.picJemaatId && a.picJemaatId !== existing?.picJemaatId) {
+      await prisma.homecellArea.update({ where: { id }, data: { picJemaatId: a.picJemaatId } });
+      summary.picSet += 1;
+    }
+    if (a.picJemaatId) await ensurePenggembalaan(a.picJemaatId, 'Zone Leader');
+    if (a.pastorIds.length) {
+      const r = await prisma.homecellAreaPastor.createMany({
+        data: [...new Set(a.pastorIds)].map((jemaatId) => ({ areaId: id!, jemaatId })),
+        skipDuplicates: true,
+      });
+      summary.pastorsAdded += r.count;
+      for (const pid of a.pastorIds) await ensurePenggembalaan(pid, 'Pastor', { strict: true });
+    }
+    areaIdByNama.set(a.nama.toUpperCase(), id);
+  }
+
+  // ---- Homecell ----
+  for (const h of input.homecells) {
+    const areaId = areaIdByNama.get(h.areaNama.toUpperCase());
+    if (!areaId) throw BadRequest(`Zona "${h.areaNama}" untuk homecell "${h.nama}" tidak ada di daftar area.`);
+    // Cari di seluruh cabang: homecell yang sama di area lain dipindah ke zona sheet.
+    const existing =
+      (await prisma.homecell.findFirst({
+        where: { areaId, nama: { equals: h.nama, mode: 'insensitive' } },
+        select: { id: true, areaId: true, picJemaatId: true, usiaMin: true, usiaMax: true },
+      })) ??
+      (await prisma.homecell.findFirst({
+        where: { area: { cabangId: cabang.id }, nama: { equals: h.nama, mode: 'insensitive' } },
+        select: { id: true, areaId: true, picJemaatId: true, usiaMin: true, usiaMax: true },
+      }));
+    const data: Prisma.HomecellUncheckedUpdateInput = {};
+    if (h.usiaMin != null || h.usiaMax != null) {
+      if (h.usiaMin != null && h.usiaMin !== existing?.usiaMin) data.usiaMin = h.usiaMin;
+      if (h.usiaMax != null && h.usiaMax !== existing?.usiaMax) data.usiaMax = h.usiaMax;
+    }
+    if (!existing) {
+      await prisma.homecell.create({
+        data: {
+          areaId,
+          nama: h.nama,
+          picJemaatId: h.picJemaatId,
+          usiaMin: h.usiaMin ?? null,
+          usiaMax: h.usiaMax ?? null,
+        },
+      });
+      summary.homecellsCreated += 1;
+      if (h.picJemaatId) summary.picSet += 1;
+      if (h.usiaMin != null || h.usiaMax != null) summary.usiaSet += 1;
+    } else {
+      if (existing.areaId !== areaId) {
+        data.areaId = areaId;
+        summary.homecellsMoved += 1;
+      }
+      if (h.picJemaatId && h.picJemaatId !== existing.picJemaatId) {
+        data.picJemaatId = h.picJemaatId;
+        summary.picSet += 1;
+      }
+      if ('usiaMin' in data || 'usiaMax' in data) summary.usiaSet += 1;
+      if (Object.keys(data).length) await prisma.homecell.update({ where: { id: existing.id }, data });
+    }
+    if (h.picJemaatId) await ensurePenggembalaan(h.picJemaatId, 'Homecell Leader');
+  }
+
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat_consolidation',
+    resourceLabel: `Struktur homecell ${cabang.nama}: ${input.areas.length} zona, ${input.homecells.length} homecell`,
+    metadata: summary,
+  });
+
+  res.json({ success: true, data: { summary } });
 });

@@ -567,3 +567,94 @@ export function personKeys(p: { namaLengkap: string; noHp?: string | null; email
   }
   return keys;
 }
+
+// ------------------------------------------------------------
+//  Sheet struktur homecell (mis. "leaders bridge 2026.xlsx")
+// ------------------------------------------------------------
+//  Satu baris = satu homecell (bukan jemaat):
+//    AREA · NAMA AREA PASTOR · ZONA · NAMA ZONE LEADER · HC Code · NAMA HOMECELL ·
+//    NAMA HOME LEADER · NAMA ZONE PASTOR · JADWAL · JENIS HOMECELL ("3-10 tahun")
+//  Pemetaan ke Els (2 tingkat): ZONA → Area (PIC = Zone Leader, Pastor = Area/Zone
+//  Pastor); NAMA HOMECELL → Homecell (PIC = Home Leader). Nama AREA sheet → deskripsi area.
+
+export interface StructureRow {
+  rowNo: number;
+  areaSheet: string | null;
+  areaPastor: string | null;
+  zona: string;
+  zoneLeader: string | null;
+  zonePastor: string | null;
+  hcCode: string | null;
+  homecell: string;
+  homeLeader: string | null;
+  usiaMin: number | null;
+  usiaMax: number | null;
+}
+
+const STRUCT_ALIASES = {
+  areaSheet: ['area'],
+  areaPastor: ['nama area pastor', 'area pastor'],
+  zona: ['zona', 'zone'],
+  zoneLeader: ['nama zone leader', 'zone leader'],
+  zonePastor: ['nama zone pastor', 'zone pastor'],
+  hcCode: ['hc code', 'kode homecell', 'kode hc'],
+  homecell: ['nama homecell', 'homecell'],
+  homeLeader: ['nama home leader', 'home leader'],
+  usia: ['jenis homecell', 'usia', 'rentang usia'],
+} as const;
+
+/** "3-10 tahun" / "3 – 10" / "13+" → usia min/max. */
+export function parseUsiaRange(v: string | null): { usiaMin: number | null; usiaMax: number | null } {
+  if (!v) return { usiaMin: null, usiaMax: null };
+  const m = /(\d{1,2})\s*(?:-|–|—|s\/d|sampai|to)\s*(\d{1,2})/i.exec(v);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return { usiaMin: Math.min(a, b), usiaMax: Math.max(a, b) };
+  }
+  const plus = /(\d{1,2})\s*\+/.exec(v);
+  if (plus) return { usiaMin: Number(plus[1]), usiaMax: null };
+  return { usiaMin: null, usiaMax: null };
+}
+
+/** Kenali sheet struktur homecell; `ok=false` bila kolom ZONA / NAMA HOMECELL tidak ada. */
+export function parseStructureSheet(rows: CellValue[][]): { ok: boolean; rows: StructureRow[] } {
+  const header = (rows[0] ?? []).map((h) => String(h ?? '').trim().toLowerCase().replace(/[_\s]+/g, ' '));
+  // Alias pertama yang ketemu menang (mis. "nama homecell" didahulukan dari kolom "homecell" pendek).
+  const find = (aliases: readonly string[]) => {
+    for (const a of aliases) {
+      const i = header.indexOf(a);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const idx = Object.fromEntries(Object.entries(STRUCT_ALIASES).map(([k, a]) => [k, find(a)])) as Record<
+    keyof typeof STRUCT_ALIASES,
+    number
+  >;
+  if (idx.zona < 0 || idx.homecell < 0) return { ok: false, rows: [] };
+  const out: StructureRow[] = [];
+  rows.slice(1).forEach((r, i) => {
+    const at = (k: keyof typeof STRUCT_ALIASES) => (idx[k] >= 0 ? text(r[idx[k]]) : null);
+    const person = (k: keyof typeof STRUCT_ALIASES) => {
+      const v = at(k);
+      return v && normalizeName(v) && v !== '-' ? v.replace(/\s+/g, ' ') : null;
+    };
+    const zona = at('zona');
+    const homecell = at('homecell');
+    if (!zona || !homecell) return;
+    out.push({
+      rowNo: i + 2,
+      areaSheet: at('areaSheet'),
+      areaPastor: person('areaPastor'),
+      zona: zona.replace(/\s+/g, ' '),
+      zoneLeader: person('zoneLeader'),
+      zonePastor: person('zonePastor'),
+      hcCode: at('hcCode'),
+      homecell: homecell.replace(/\s+/g, ' '),
+      homeLeader: person('homeLeader'),
+      ...parseUsiaRange(at('usia')),
+    });
+  });
+  return { ok: true, rows: out };
+}

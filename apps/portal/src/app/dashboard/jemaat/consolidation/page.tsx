@@ -13,6 +13,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { HomecellStructureImport } from '@/components/jemaat/homecell-structure-import';
 
 // ---------- Tipe respons ----------
 type MatchStatus = 'MATCHED' | 'CONFLICT' | 'NAME_ONLY' | 'NOT_FOUND';
@@ -99,6 +100,8 @@ interface Preview {
   sheetNames: string[];
   sheet: string;
   missingColumns: string[];
+  /** Sheet struktur homecell (Area/Zona/Homecell + leader) — bukan daftar jemaat. */
+  structureDetected?: boolean;
   cabang: { id: string; nama: string } | null;
   rows: Row[];
   areas: LeaderPlan[];
@@ -287,7 +290,8 @@ export default function JemaatConsolidationPage() {
       setData(p);
       setResult(null);
       setTab('data');
-      if (p.missingColumns.length) toast.error(`Kolom wajib tidak ada: ${p.missingColumns.join(', ')}`);
+      if (p.missingColumns.length && !p.structureDetected) toast.error(`Kolom wajib tidak ada: ${p.missingColumns.join(', ')}`);
+      else if (p.missingColumns.length) return; // struktur homecell → panel khusus
       else initDecisions(p);
     },
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal membaca file'),
@@ -506,6 +510,10 @@ export default function JemaatConsolidationPage() {
         )}
         {data?.cabang && <span className="text-sm text-neutral-600">Cabang: <b>{data.cabang.nama}</b></span>}
       </div>
+
+      {data && file && data.missingColumns.length > 0 && data.structureDetected && (
+        <HomecellStructureImport file={file} sheet={data.sheet} />
+      )}
 
       {data && !data.missingColumns.length && !result && (
         <>

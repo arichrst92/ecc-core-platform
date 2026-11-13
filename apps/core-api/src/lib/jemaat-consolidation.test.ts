@@ -6,6 +6,7 @@ import {
   matchRow,
   normalizeName,
   nameSimilarity,
+  parseStructureSheet,
   similarNames,
   normalizePhone,
   parseSheetRows,
@@ -278,5 +279,23 @@ describe('kemiripan nama leader', () => {
     const r = similarNames(ix, 'Ko Andi Setiawan');
     expect(r[0]?.id).toBe('1');
     expect(r.some((x) => x.id === '2')).toBe(false);
+  });
+});
+
+describe('sheet struktur homecell', () => {
+  it('parse zona, homecell, leader & usia', () => {
+    const r = parseStructureSheet([
+      ['NO', 'AREA', 'NAMA AREA PASTOR', 'ZONA', 'NAMA ZONE LEADER', 'HC Code', 'NAMA HOMECELL', 'NAMA HOME LEADER', null, 'HOMECELL', 'JENIS HOMECELL'],
+      [1, 'Bridge Teens 1', 'Catharine C', 'Bridge Teens 1.1', 'Catharine C', 'Teens 1.1.1', 'Teens 1.1.1A1', 'Cleon  Nicholas ', null, 'A1', '3-10 tahun'],
+      [2, 'Bridge Teens 1', 'Catharine C', 'Bridge Teens 1.2', null, 'Teens 1.2.1', 'Teens 1.2.1B', null, null, 'B', null],
+      [3, null, null, null, null, null, null, null, null, null, null],
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.rows).toHaveLength(2);
+    expect(r.rows[0]).toMatchObject({ zona: 'Bridge Teens 1.1', homecell: 'Teens 1.1.1A1', homeLeader: 'Cleon Nicholas', usiaMin: 3, usiaMax: 10 });
+    expect(r.rows[1]!.zoneLeader).toBeNull();
+  });
+  it('bukan sheet struktur', () => {
+    expect(parseStructureSheet([['Nama Lengkap', 'No HP']]).ok).toBe(false);
   });
 });

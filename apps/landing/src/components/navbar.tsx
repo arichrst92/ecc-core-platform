@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   Home,
+  HousePlus,
   Church,
   CalendarDays,
   Newspaper,
@@ -27,11 +28,12 @@ interface NavLink {
   Icon: LucideIcon;
 }
 
-// Urutan: Beranda → Ibadah → Event → News → Renungan → Ministry →
+// Urutan: Beranda → Ibadah → Homecell → Event → News → Renungan → Ministry →
 // Local Market → Cabang → Tentang Kami → Kontak.
 export const NAV_LINKS: NavLink[] = [
   { href: '/', label: 'nav.home', Icon: Home },
   { href: '/ibadah', label: 'nav.ibadah', Icon: Church },
+  { href: '/homecell', label: 'nav.homecell', Icon: HousePlus },
   { href: '/event', label: 'nav.event', Icon: CalendarDays },
   { href: '/news', label: 'nav.news', Icon: Newspaper },
   { href: '/renungan', label: 'nav.renungan', Icon: BookOpen },

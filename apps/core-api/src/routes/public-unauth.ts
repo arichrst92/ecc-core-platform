@@ -886,6 +886,65 @@ publicUnauthRouter.get('/pastors', publicBrowseLimiter, async (_req, res) => {
   res.json({ success: true, data });
 });
 
+// GET /public/homecell — struktur homecell untuk website (eccchurch.global/homecell).
+// Cabang → Area (zona) → Homecell, dengan foto & nama PIC zona, pastor zona, dan
+// PIC homecell. TANPA alamat, kontak, atau daftar anggota (privasi) — hanya
+// jadwal, kategori, rentang usia, dan jumlah anggota aktif.
+publicUnauthRouter.get('/homecell', publicBrowseLimiter, async (_req, res) => {
+  const person = { select: { id: true, namaLengkap: true, fotoUrl: true, isActive: true } } as const;
+  const areas = await prisma.homecellArea.findMany({
+    where: { isActive: true, cabang: { isActive: true }, homecells: { some: { isActive: true } } },
+    orderBy: [{ cabang: { nama: 'asc' } }, { nama: 'asc' }],
+    select: {
+      id: true,
+      nama: true,
+      cabang: { select: { id: true, nama: true } },
+      picJemaat: person,
+      pastors: { select: { jemaat: person } },
+      homecells: {
+        where: { isActive: true },
+        orderBy: { nama: 'asc' },
+        select: {
+          id: true,
+          nama: true,
+          deskripsi: true,
+          hari: true,
+          jam: true,
+          kategori: true,
+          usiaMin: true,
+          usiaMax: true,
+          picJemaat: person,
+          _count: { select: { members: { where: { isActive: true } } } },
+        },
+      },
+    },
+  });
+  type P = { id: string; namaLengkap: string; fotoUrl: string | null; isActive: boolean } | null;
+  const pub = (j: P) => (j && j.isActive ? { id: j.id, nama: j.namaLengkap, fotoUrl: j.fotoUrl } : null);
+  res.json({
+    success: true,
+    data: areas.map((a) => ({
+      id: a.id,
+      nama: a.nama,
+      cabang: a.cabang,
+      pic: pub(a.picJemaat),
+      pastors: a.pastors.map((p) => pub(p.jemaat)).filter((x): x is NonNullable<typeof x> => !!x),
+      homecells: a.homecells.map((h) => ({
+        id: h.id,
+        nama: h.nama,
+        deskripsi: h.deskripsi,
+        hari: h.hari,
+        jam: h.jam,
+        kategori: h.kategori,
+        usiaMin: h.usiaMin,
+        usiaMax: h.usiaMax,
+        memberCount: h._count.members,
+        pic: pub(h.picJemaat),
+      })),
+    })),
+  });
+});
+
 publicUnauthRouter.get('/ministry', publicBrowseLimiter, async (req, res) => {
   const q = publicMinistryQuerySchema.parse(req.query);
 

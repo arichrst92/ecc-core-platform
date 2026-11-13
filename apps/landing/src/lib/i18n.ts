@@ -13,6 +13,7 @@ export const localeOf = (l: Lang) => (l === 'en' ? 'en-GB' : 'id-ID');
 const id = {
   'nav.home': 'Beranda',
   'nav.ibadah': 'Ibadah',
+  'nav.homecell': 'Homecell',
   'nav.event': 'Event',
   'nav.news': 'News',
   'nav.renungan': 'Renungan',
@@ -174,6 +175,7 @@ export type DictKey = keyof typeof id;
 const en: Record<DictKey, string> = {
   'nav.home': 'Home',
   'nav.ibadah': 'Services',
+  'nav.homecell': 'Homecell',
   'nav.event': 'Events',
   'nav.news': 'News',
   'nav.renungan': 'Devotions',

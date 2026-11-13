@@ -4,12 +4,13 @@
  * Data Anak (CKids) — anak di bawah 13 tahun. Hanya data untuk pelayanan
  * anak: QR, foto, usia, ulang tahun, orang tua/wali, jumlah hadir ibadah anak.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Baby, Cake, ChevronLeft, ChevronRight, Loader2, Search, X } from 'lucide-react';
+import { Baby, Cake, ChevronLeft, ChevronRight, FileText, Loader2, QrCode, Search, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media-url';
+import { usePersistentState } from '@/lib/use-persistent-state';
 
 interface Anak {
   id: string;
@@ -57,20 +58,30 @@ const qrSrc = (kode: string, size: number) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=4&data=${encodeURIComponent(kode)}`;
 
 export default function DataAnakPage() {
-  const [cabangId, setCabangId] = useState('');
-  const [searchIn, setSearchIn] = useState('');
-  const [search, setSearch] = useState('');
-  const [preset, setPreset] = useState<Preset>('90');
-  const [cDari, setCDari] = useState(() => rangeOf('90', '', '').dari);
-  const [cSampai, setCSampai] = useState(() => ymd(new Date()));
-  const [page, setPage] = useState(1);
+  // Filter & halaman disimpan (sessionStorage) — tetap sama saat pindah menu lalu kembali.
+  const [cabangId, setCabangId] = usePersistentState('data-anak:cabang', '');
+  const [searchIn, setSearchIn] = usePersistentState('data-anak:search', '');
+  const [search, setSearch] = useState(searchIn.trim());
+  const [preset, setPreset] = usePersistentState<Preset>('data-anak:preset', '90');
+  const [cDari, setCDari] = usePersistentState('data-anak:dari', rangeOf('90', '', '').dari);
+  const [cSampai, setCSampai] = usePersistentState('data-anak:sampai', ymd(new Date()));
+  const [page, setPage] = usePersistentState('data-anak:page', 1);
   const [qrOf, setQrOf] = useState<Anak | null>(null);
+  const [opening, setOpening] = useState<'pdf' | 'qr' | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchIn.trim()), 300);
     return () => clearTimeout(t);
   }, [searchIn]);
-  useEffect(() => setPage(1), [cabangId, search, preset, cDari, cSampai]);
+  // Filter berubah → kembali ke halaman 1 (bukan saat halaman pertama kali dibuka).
+  const filterKey = JSON.stringify([cabangId, search, preset, cDari, cSampai]);
+  const lastKey = useRef(filterKey);
+  useEffect(() => {
+    if (lastKey.current !== filterKey) {
+      lastKey.current = filterKey;
+      setPage(1);
+    }
+  }, [filterKey, setPage]);
 
   const range = rangeOf(preset, cDari, cSampai);
 
@@ -94,20 +105,64 @@ export default function DataAnakPage() {
       ).data,
   });
   const rows = q.data?.data ?? [];
+
+  // Laporan PDF / lembar QR: semua hasil filter (bukan hanya halaman ini).
+  async function openPrint(kind: 'pdf' | 'qr') {
+    const win = window.open('', '_blank'); // buka sinkron supaya tidak diblok popup blocker
+    setOpening(kind);
+    try {
+      const res = await apiClient.get(kind === 'pdf' ? '/admin/data-anak/export' : '/admin/data-anak/qr', {
+        params: { cabangId: cabangId || undefined, search: search || undefined, dari: range.dari, sampai: range.sampai },
+        responseType: 'blob',
+        timeout: 120_000,
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      if (win) win.location.href = url;
+      else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      if (win) win.close();
+      alert(kind === 'pdf' ? 'Gagal membuat laporan. Coba lagi.' : 'Gagal membuat lembar QR. Coba lagi.');
+    } finally {
+      setOpening(null);
+    }
+  }
   const meta = q.data?.meta;
   const sel = 'h-9 rounded-lg border border-neutral-300 bg-white px-2.5 text-sm';
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
-          <Baby className="w-5 h-5 text-pink-600" />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
+            <Baby className="w-5 h-5 text-pink-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-neutral-900">Data Anak</h1>
+            <p className="text-sm text-neutral-500">
+              Anak di bawah 13 tahun · jumlah hadir dihitung dari check-in di ibadah anak dalam periode.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-neutral-900">Data Anak</h1>
-          <p className="text-sm text-neutral-500">
-            Anak di bawah 13 tahun · jumlah hadir dihitung dari check-in di ibadah anak dalam periode.
-          </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => openPrint('qr')}
+            disabled={!!opening || !meta?.total}
+            title="Lembar A4 berisi QR 3×3 cm + nama anak, dengan garis potong. Mengikuti filter."
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {opening === 'qr' ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+            Cetak QR
+          </button>
+          <button
+            onClick={() => openPrint('pdf')}
+            disabled={!!opening}
+            title="Laporan sesuai filter. Pilih “Save as PDF” saat dialog cetak terbuka."
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-rose-200 bg-white text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+          >
+            {opening === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            Export PDF
+          </button>
         </div>
       </div>
 

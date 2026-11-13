@@ -2,6 +2,8 @@
  * Data Anak (CKids) — anak di bawah 13 tahun.
  *
  *   GET /admin/data-anak?cabangId=&search=&dari=YYYY-MM-DD&sampai=YYYY-MM-DD&page=&limit=
+ *   GET /admin/data-anak/export?…filter sama   → laporan siap cetak / Save as PDF (semua hasil filter)
+ *   GET /admin/data-anak/qr?…filter sama       → lembar QR A4 (3×3 cm + nama, garis potong)
  *
  * Sengaja hanya data yang dibutuhkan pelayanan anak: kode (QR), foto, usia,
  * tanggal ulang tahun, orang tua/wali, dan jumlah hadir di ibadah anak dalam
@@ -12,6 +14,7 @@ import { prisma, type Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest } from '../../lib/errors.js';
 import { DEFAULT_TZ, addDays, todayInTz } from '../../lib/tz.js';
+import { renderDataAnakPdfHtml, renderDataAnakQrHtml } from '../../lib/data-anak-html.js';
 
 export const dataAnakRouter = Router();
 dataAnakRouter.use(requireMenu('data-anak'));
@@ -25,39 +28,68 @@ const ORTU_DARI_ANAK = ['Ayah', 'Ibu', 'Wali', 'Kakek', 'Nenek'];
 /** Relasi "anak adalah <tipe> dari X" (dicatat dari sisi orang tua). */
 const ANAK_DARI_ORTU: Record<string, string> = { 'Anak Laki-Laki': 'Orang tua', 'Anak Perempuan': 'Orang tua' };
 
-dataAnakRouter.get('/', async (req, res) => {
+const EXPORT_MAX = 3000;
+
+interface Filter {
+  cabangId?: string;
+  search: string;
+  dari: Date;
+  sampai: Date;
+  today: Date;
+}
+
+function filterOf(req: { query: unknown }): Filter {
   const q = req.query as Record<string, string | undefined>;
-  const page = Math.max(1, Number(q.page) || 1);
-  const limit = Math.min(100, Math.max(1, Number(q.limit) || 25));
-  const search = (q.search ?? '').trim();
-
   const today = todayInTz(DEFAULT_TZ);
-  // Lahir setelah (hari ini − 13 tahun) → usia < 13.
-  const batas = new Date(today);
-  batas.setUTCFullYear(batas.getUTCFullYear() - MAX_UMUR);
-
   const sampai = q.sampai && YMD.test(q.sampai) ? new Date(`${q.sampai}T00:00:00.000Z`) : today;
   const dari = q.dari && YMD.test(q.dari) ? new Date(`${q.dari}T00:00:00.000Z`) : addDays(sampai, -89);
   if (dari > sampai) throw BadRequest('Tanggal "dari" harus sebelum "sampai".');
-
-  const where: Prisma.JemaatWhereInput = {
-    isActive: true,
-    tanggalLahir: { gt: batas, lte: today },
+  return {
+    cabangId: q.cabangId && UUID.test(q.cabangId) ? q.cabangId : undefined,
+    search: (q.search ?? '').trim(),
+    dari,
+    sampai,
+    today,
   };
-  if (q.cabangId && UUID.test(q.cabangId)) where.cabangId = q.cabangId;
-  if (search) {
+}
+
+function whereOf(f: Filter): Prisma.JemaatWhereInput {
+  // Lahir setelah (hari ini − 13 tahun) → usia < 13.
+  const batas = new Date(f.today);
+  batas.setUTCFullYear(batas.getUTCFullYear() - MAX_UMUR);
+  const where: Prisma.JemaatWhereInput = { isActive: true, tanggalLahir: { gt: batas, lte: f.today } };
+  if (f.cabangId) where.cabangId = f.cabangId;
+  if (f.search) {
     where.OR = [
-      { namaLengkap: { contains: search, mode: 'insensitive' } },
-      { kode: { startsWith: search.toUpperCase() } },
+      { namaLengkap: { contains: f.search, mode: 'insensitive' } },
+      { kode: { startsWith: f.search.toUpperCase() } },
     ];
   }
+  return where;
+}
 
+export interface AnakRow {
+  id: string;
+  namaLengkap: string;
+  kode: string | null;
+  fotoUrl: string | null;
+  jenisKelamin: string | null;
+  isTamu: boolean;
+  cabang: { id: string; nama: string } | null;
+  tanggalLahir: string | null;
+  usia: number | null;
+  orangTua: { id: string; nama: string; hubungan: string }[];
+  jumlahHadir: number;
+}
+
+async function loadAnak(f: Filter, skip: number, take: number): Promise<{ rows: AnakRow[]; total: number }> {
+  const where = whereOf(f);
   const [rows, total] = await Promise.all([
     prisma.jemaat.findMany({
       where,
       orderBy: { namaLengkap: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip,
+      take,
       select: {
         id: true,
         namaLengkap: true,
@@ -89,7 +121,7 @@ dataAnakRouter.get('/', async (req, res) => {
           where: {
             jemaatId: { in: ids },
             status: 'JOIN',
-            tanggalIbadah: { gte: dari, lte: sampai },
+            tanggalIbadah: { gte: f.dari, lte: f.sampai },
             ibadah: { isKidsIbadah: true },
           },
           _count: { _all: true },
@@ -109,15 +141,15 @@ dataAnakRouter.get('/', async (req, res) => {
   const hadirMap = new Map(hadir.map((h) => [h.jemaatId, h._count._all]));
 
   const usia = (lahir: Date) => {
-    let u = today.getUTCFullYear() - lahir.getUTCFullYear();
-    const m = today.getUTCMonth() - lahir.getUTCMonth();
-    if (m < 0 || (m === 0 && today.getUTCDate() < lahir.getUTCDate())) u--;
+    let u = f.today.getUTCFullYear() - lahir.getUTCFullYear();
+    const m = f.today.getUTCMonth() - lahir.getUTCMonth();
+    if (m < 0 || (m === 0 && f.today.getUTCDate() < lahir.getUTCDate())) u--;
     return u;
   };
 
-  res.json({
-    success: true,
-    data: rows.map((r) => ({
+  return {
+    total,
+    rows: rows.map((r) => ({
       id: r.id,
       namaLengkap: r.namaLengkap,
       kode: r.kode,
@@ -130,13 +162,57 @@ dataAnakRouter.get('/', async (req, res) => {
       orangTua: [...(ortu.get(r.id)?.values() ?? [])],
       jumlahHadir: hadirMap.get(r.id) ?? 0,
     })),
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      dari: dari.toISOString().slice(0, 10),
-      sampai: sampai.toISOString().slice(0, 10),
-    },
+  };
+}
+
+const ymdOf = (d: Date) => d.toISOString().slice(0, 10);
+
+dataAnakRouter.get('/', async (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  const page = Math.max(1, Number(q.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(q.limit) || 25));
+  const f = filterOf(req);
+  const { rows, total } = await loadAnak(f, (page - 1) * limit, limit);
+  res.json({
+    success: true,
+    data: rows,
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), dari: ymdOf(f.dari), sampai: ymdOf(f.sampai) },
   });
+});
+
+/** Label filter untuk kepala laporan. */
+async function filterLabel(f: Filter) {
+  const cabang = f.cabangId
+    ? (await prisma.cabangGereja.findUnique({ where: { id: f.cabangId }, select: { nama: true } }))?.nama ?? '—'
+    : 'Semua cabang';
+  return { cabang, search: f.search, dari: ymdOf(f.dari), sampai: ymdOf(f.sampai) };
+}
+
+const isMobile = (req: { get: (h: string) => string | undefined }) =>
+  /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
+
+dataAnakRouter.get('/export', async (req, res) => {
+  const f = filterOf(req);
+  const { rows, total } = await loadAnak(f, 0, EXPORT_MAX);
+  const apiBase = (process.env.PUBLIC_API_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(
+    renderDataAnakPdfHtml({ rows, total, max: EXPORT_MAX, filter: await filterLabel(f), apiBase, isMobileUa: isMobile(req) }),
+  );
+});
+
+dataAnakRouter.get('/qr', async (req, res) => {
+  const f = filterOf(req);
+  const { rows, total } = await loadAnak(f, 0, EXPORT_MAX);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(
+    renderDataAnakQrHtml({
+      rows: rows.filter((r) => r.kode),
+      tanpaKode: rows.filter((r) => !r.kode).length,
+      total,
+      max: EXPORT_MAX,
+      filter: await filterLabel(f),
+      isMobileUa: isMobile(req),
+    }),
+  );
 });

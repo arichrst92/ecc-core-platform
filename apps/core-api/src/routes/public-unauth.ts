@@ -351,6 +351,7 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
         slug: true,
         judul: true,
         ringkasan: true,
+        deskripsi: true,
         heroImageUrl: true,
         tanggalMulai: true,
         tanggalSelesai: true,
@@ -367,7 +368,11 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
 
   res.json({
     success: true,
-    data: rows,
+    // Daftar cukup cuplikan deskripsi (kartu website); isi lengkap di GET /event/:id.
+    data: rows.map((r) => ({
+      ...r,
+      deskripsi: r.deskripsi ? (r.deskripsi.length > 300 ? `${r.deskripsi.slice(0, 300).trimEnd()}…` : r.deskripsi) : null,
+    })),
     meta: { page: q.page, limit: q.limit, total },
   });
 });

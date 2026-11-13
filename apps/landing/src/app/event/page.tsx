@@ -38,10 +38,20 @@ interface EventItem {
   lokasi: string | null;
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS' | string;
   nominal: string | null;
+  deskripsi?: string | null;
   cabang: { id: string; nama: string } | null;
 }
 
 const UNASSIGNED = '__unassigned__';
+
+/** Cuplikan teks polos dari deskripsi (buang sintaks markdown sederhana). */
+const plainText = (s: string) =>
+  s
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[#*_>`~]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 export default async function EventListPage() {
   const { lang, t } = getT();
@@ -77,7 +87,9 @@ export default async function EventListPage() {
       </div>
       <div className="s-card-body flex flex-col gap-2">
         <h3 className="font-bold text-lg leading-snug text-neutral-900 group-hover:text-brand-600 transition line-clamp-2">{e.judul}</h3>
-        {e.ringkasan ? <p className="text-sm text-neutral-600 line-clamp-2">{e.ringkasan}</p> : null}
+        {e.ringkasan || e.deskripsi ? (
+          <p className="text-sm text-neutral-600 line-clamp-2">{e.ringkasan || plainText(e.deskripsi ?? '')}</p>
+        ) : null}
         <div className="mt-auto space-y-1.5 text-[13px] text-neutral-600">
           <p className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-brand-500" />

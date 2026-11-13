@@ -183,7 +183,7 @@ export default async function EventDetailPage({
       }
     >
       {event.ringkasan ? <p className="text-lg text-neutral-700 leading-relaxed mb-6 font-medium border-l-4 border-brand-400 pl-4">{event.ringkasan}</p> : null}
-      <Markdown content={event.deskripsi} />
+      <Markdown content={(event.deskripsi ?? '').replace(/\n/g, '  \n')} />
       {event.videoUrl ? (
         <div className="mt-8 pt-5 border-t border-neutral-200">
           <h3 className="font-semibold text-neutral-900 mb-2 flex items-center gap-2">

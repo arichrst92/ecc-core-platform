@@ -25,7 +25,6 @@ import {
   Smartphone,
   Store,
   Tag,
-  User,
 } from 'lucide-react';
 import { Markdown } from './markdown';
 import { FitImage } from './fit-image';
@@ -155,12 +154,6 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
             {date(d.tanggal)}
           </PanelChip>
         ) : null}
-        {d.author ? (
-          <PanelChip>
-            <User className="w-3.5 h-3.5" />
-            {d.author.namaLengkap}
-          </PanelChip>
-        ) : null}
         {d.cabang ? (
           <PanelChip>
             <Church className="w-3.5 h-3.5" />
@@ -238,7 +231,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
         {d.ringkasan || d.deskripsi ? (
           <PanelSection>
             {d.ringkasan ? <p className="text-[15px] text-neutral-700 font-medium mb-3">{d.ringkasan}</p> : null}
-            {d.deskripsi ? <Markdown content={d.deskripsi} className="prose prose-neutral prose-sm max-w-none" /> : null}
+            {d.deskripsi ? <Markdown content={String(d.deskripsi).replace(/\n/g, '  \n')} className="prose prose-neutral prose-sm max-w-none" /> : null}
           </PanelSection>
         ) : null}
       </>

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { Calendar, User, Tag, Newspaper } from 'lucide-react';
+import { Calendar, Tag, Newspaper } from 'lucide-react';
 import { apiGet, absoluteUrl } from '@/lib/api';
 import { Markdown } from '@/components/markdown';
 import { getT } from '@/lib/i18n-server';
@@ -81,12 +81,6 @@ export default async function NewsDetailPage({
             <span className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
               {new Date(news.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-          ) : null}
-          {news.author ? (
-            <span className="flex items-center gap-1.5">
-              <User className="w-4 h-4" />
-              {news.author.namaLengkap}
             </span>
           ) : null}
           {news.cabang ? <HeroChip>{news.cabang.nama}</HeroChip> : null}

@@ -68,7 +68,6 @@ export default async function NewsListPage() {
                       {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   ) : null}
-                  {item.author ? <span className="truncate">· {item.author.namaLengkap}</span> : null}
                 </div>
               </div>
             </PanelTrigger>

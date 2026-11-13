@@ -109,6 +109,14 @@ async function ckidsMenusFor(jemaatId: string): Promise<Record<string, MenuAcces
     where: {
       OR: [
         { pelayanan: { isActive: true, jemaatPelayanan: { some: { jemaatId, isActive: true } } } },
+        // Posisi tertentu di pelayanan (mis. Multimedia → Sound System).
+        {
+          pelayananRole: {
+            isActive: true,
+            pelayanan: { isActive: true },
+            jemaatPelayanan: { some: { jemaatId, isActive: true } },
+          },
+        },
         { role: { isActive: true, jemaatRoles: { some: { jemaatId, isActive: true } } } },
       ],
     },

@@ -873,6 +873,7 @@ model PelayananRole {
   scheduleAssignments    PelayananScheduleAssignment[]
   joinRequests           PelayananJoinRequest[]
   prayerPetugas          PrayerPetugasPelayanan[]
+  ckidsAccess            CkidsMenuAccess[]
 
   @@unique([pelayananId, nama])
   @@index([pelayananId])
@@ -4269,16 +4270,23 @@ enum LocalHargaTipe {
 model CkidsMenuAccess {
   id          String   @id @default(uuid()) @db.Uuid
   menuKey     String   @map("menu_key") @db.VarChar(40)
-  pelayananId String?  @map("pelayanan_id") @db.Uuid
-  roleId      String?  @map("role_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
+  // Satu baris = SATU sumber akses: seluruh anggota pelayanan (pelayananId),
+  // hanya posisi tertentu di pelayanan (pelayananRoleId, mis. Multimedia →
+  // Sound System), atau role jemaat (roleId).
+  pelayananId     String?  @map("pelayanan_id") @db.Uuid
+  pelayananRoleId String?  @map("pelayanan_role_id") @db.Uuid
+  roleId          String?  @map("role_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
 
-  pelayanan Pelayanan? @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
-  role      Role?      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  pelayanan     Pelayanan?     @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  pelayananRole PelayananRole? @relation(fields: [pelayananRoleId], references: [id], onDelete: Cascade)
+  role          Role?          @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([menuKey, pelayananId])
+  @@unique([menuKey, pelayananRoleId])
   @@unique([menuKey, roleId])
   @@index([pelayananId])
+  @@index([pelayananRoleId])
   @@index([roleId])
   @@map("ckids_menu_access")
 }

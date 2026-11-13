@@ -3,7 +3,9 @@
  * boleh dibuka anggota pelayanan / pemegang role tertentu.
  *
  *   GET /admin/ckids-access              → daftar menu + pelayanan & role per menu
- *   PUT /admin/ckids-access/:menuKey     { pelayananIds: [], roleIds: [] } → ganti isi
+ *   PUT /admin/ckids-access/:menuKey     { pelayananIds: [], pelayananRoleIds: [], roleIds: [] } → ganti isi
+ *     pelayananIds     = seluruh anggota pelayanan
+ *     pelayananRoleIds = hanya posisi tertentu (mis. Multimedia → Sound System)
  *
  * Fulltimer dan Role Access "Gift Stall (CKids)" tetap berlaku seperti biasa.
  */
@@ -24,6 +26,9 @@ ckidsAccessRouter.get('/', canRead, async (_req, res) => {
     select: {
       menuKey: true,
       pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
+      pelayananRole: {
+        select: { id: true, nama: true, pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } } },
+      },
       role: { select: { id: true, nama: true } },
     },
   });
@@ -33,6 +38,10 @@ ckidsAccessRouter.get('/', canRead, async (_req, res) => {
       .filter((r) => r.menuKey === m.key && r.pelayanan)
       .map((r) => r.pelayanan!)
       .sort((a, b) => a.nama.localeCompare(b.nama)),
+    pelayananRoles: rows
+      .filter((r) => r.menuKey === m.key && r.pelayananRole)
+      .map((r) => r.pelayananRole!)
+      .sort((a, b) => `${a.pelayanan.nama} ${a.nama}`.localeCompare(`${b.pelayanan.nama} ${b.nama}`)),
     roles: rows
       .filter((r) => r.menuKey === m.key && r.role)
       .map((r) => r.role!)
@@ -43,6 +52,7 @@ ckidsAccessRouter.get('/', canRead, async (_req, res) => {
 
 const putSchema = z.object({
   pelayananIds: z.array(z.string().uuid()).max(100).default([]),
+  pelayananRoleIds: z.array(z.string().uuid()).max(300).default([]),
   roleIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
@@ -52,6 +62,13 @@ ckidsAccessRouter.put('/:menuKey', canWrite, async (req, res) => {
   const input = putSchema.parse(req.body ?? {});
   const pelayananIds = [...new Set(input.pelayananIds)];
   const roleIds = [...new Set(input.roleIds)];
+  // Posisi yang pelayanannya sudah dipilih utuh tidak perlu disimpan terpisah.
+  const posisi = await prisma.pelayananRole.findMany({
+    where: { id: { in: [...new Set(input.pelayananRoleIds)] } },
+    select: { id: true, pelayananId: true },
+  });
+  if (posisi.length !== new Set(input.pelayananRoleIds).size) throw BadRequest('Ada posisi pelayanan yang tidak ditemukan.');
+  const pelayananRoleIds = posisi.filter((p) => !pelayananIds.includes(p.pelayananId)).map((p) => p.id);
   const [np, nr] = await Promise.all([
     prisma.pelayanan.count({ where: { id: { in: pelayananIds } } }),
     prisma.role.count({ where: { id: { in: roleIds } } }),
@@ -59,12 +76,16 @@ ckidsAccessRouter.put('/:menuKey', canWrite, async (req, res) => {
   if (np !== pelayananIds.length) throw BadRequest('Ada pelayanan yang tidak ditemukan.');
   if (nr !== roleIds.length) throw BadRequest('Ada role yang tidak ditemukan.');
 
-  const before = await prisma.ckidsMenuAccess.findMany({ where: { menuKey }, select: { pelayananId: true, roleId: true } });
+  const before = await prisma.ckidsMenuAccess.findMany({
+    where: { menuKey },
+    select: { pelayananId: true, pelayananRoleId: true, roleId: true },
+  });
   await prisma.$transaction([
     prisma.ckidsMenuAccess.deleteMany({ where: { menuKey } }),
     prisma.ckidsMenuAccess.createMany({
       data: [
         ...pelayananIds.map((pelayananId) => ({ menuKey, pelayananId })),
+        ...pelayananRoleIds.map((pelayananRoleId) => ({ menuKey, pelayananRoleId })),
         ...roleIds.map((roleId) => ({ menuKey, roleId })),
       ],
     }),
@@ -76,7 +97,7 @@ ckidsAccessRouter.put('/:menuKey', canWrite, async (req, res) => {
     resourceId: menuKey,
     resourceLabel: `Akses CKids: ${label}`,
     before,
-    after: { pelayananIds, roleIds },
+    after: { pelayananIds, pelayananRoleIds, roleIds },
   });
-  res.json({ success: true, data: { menuKey, pelayananIds, roleIds }, message: `Akses "${label}" disimpan` });
+  res.json({ success: true, data: { menuKey, pelayananIds, pelayananRoleIds, roleIds }, message: `Akses "${label}" disimpan` });
 });

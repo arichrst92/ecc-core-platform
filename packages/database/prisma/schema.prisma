@@ -992,6 +992,8 @@ model Reservasi {
   reservedAt         DateTime        @default(now()) @map("reserved_at")
   joinedAt           DateTime?       @map("joined_at")
   cancelledAt        DateTime?       @map("cancelled_at")
+  // NO_SHOW = dibatalkan otomatis karena tidak check-in sampai 30 menit setelah ibadah selesai.
+  cancelReason       String?         @map("cancel_reason") @db.VarChar(20)
   catatan            String?         @db.Text
   // Metadata: siapa yang trigger checkin (mobile app scan, manual admin, dll)
   checkedInBy        String?         @map("checked_in_by") @db.Uuid // userId yang scan
@@ -1578,6 +1580,8 @@ model EventParticipation {
   paidAt       DateTime? @map("paid_at")
   attendedAt   DateTime? @map("attended_at")
   cancelledAt  DateTime? @map("cancelled_at")
+  // NO_SHOW = dibatalkan otomatis karena tidak check-in sampai 30 menit setelah event selesai.
+  cancelReason String?   @map("cancel_reason") @db.VarChar(20)
 
   // Approval audit (deprecated — pakai EventDonation.approvedBy)
   approvedBy String?   @map("approved_by") @db.Uuid

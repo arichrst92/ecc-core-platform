@@ -6,6 +6,8 @@
  *   2. cleanup-audit-log          → DELETE AuditLog > AUDIT_LOG_RETENTION_DAYS (interval 24 jam)
  *   3. dispatch-ibadah-reminder   → kirim WA reminder H-1 ke jemaat dengan reservasi (interval 1 jam)
  *   4. dispatch-event-reminder    → sama untuk EventParticipation (interval 1 jam)
+ *   5. auto-cancel-no-show        → tiket ibadah/event yang tidak check-in dibatalkan
+ *                                   30 menit setelah selesai (interval 10 menit)
  *
  * Strategy: setInterval dengan startup delay supaya tidak compete dgn boot.
  * Multi-pod note: kalau scale >1 pod, semua pod jalan job ini. DELETE +
@@ -26,6 +28,7 @@ import { waAllowedForJemaat } from './comm-prefs.js';
 import { logger } from './logger.js';
 import { flushApiMetrics } from './api-metrics.js';
 import { samplePresence } from './telemetry.js';
+import { autoCancelNoShowEvent, autoCancelNoShowReservasi } from './auto-cancel.js';
 
 // ===== Intervals =====
 const REFRESH_TOKEN_INTERVAL_MS = 6 * 60 * 60 * 1000;       // 6 jam
@@ -465,7 +468,18 @@ export function startScheduledJobs() {
   // Onboarding: New Comer → Jemaat Tetap setelah hadir ibadah N× (Portal → Onboarding Config).
   const promosiJob = wrap('new-comer-promotion', applyNewComerPromotion);
   const h13 = setInterval(() => void promosiJob(), 30 * 60_000);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13]) {
+  // Tiket tidak dipakai → batal otomatis setelah self check-in ditutup
+  // (30 menit setelah ibadah/event selesai). Cek tiap 10 menit.
+  const noShowJob = wrap('auto-cancel-no-show', () =>
+    withJobLock('auto-cancel-no-show', async () => ({
+      reservasi: await autoCancelNoShowReservasi(),
+      event: await autoCancelNoShowEvent(),
+    })),
+  );
+  const g1 = setTimeout(() => void noShowJob(), STARTUP_DELAY_MS + 60_000);
+  g1.unref?.();
+  const h14 = setInterval(() => void noShowJob(), 10 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14]) {
     h.unref?.();
     intervalHandles.push(h);
   }

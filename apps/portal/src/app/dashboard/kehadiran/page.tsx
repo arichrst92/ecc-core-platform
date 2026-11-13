@@ -38,6 +38,8 @@ interface ReservasiItem {
   reservedAt: string;
   joinedAt: string | null;
   cancelledAt: string | null;
+  /** NO_SHOW = dibatalkan otomatis (tidak check-in s.d. 30 menit setelah ibadah selesai). */
+  cancelReason?: string | null;
   catatan: string | null;
   guestSource?: string | null;
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null; isTamu?: boolean };
@@ -385,8 +387,13 @@ export default function KehadiranPage() {
                         className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLOR[r.status]}`}
                       >
                         <Icon className="w-3 h-3" />
-                        {STATUS_LABEL[r.status]}
+                        {r.status === 'CANCEL' && r.cancelReason === 'NO_SHOW' ? 'Tidak hadir' : STATUS_LABEL[r.status]}
                       </span>
+                      {r.status === 'CANCEL' && r.cancelReason === 'NO_SHOW' ? (
+                        <div className="text-[10px] text-neutral-400 mt-0.5" title="Tidak check-in sampai 30 menit setelah ibadah selesai">
+                          batal otomatis
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">

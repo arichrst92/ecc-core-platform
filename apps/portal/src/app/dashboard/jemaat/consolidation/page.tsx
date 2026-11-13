@@ -140,6 +140,8 @@ const validSheetValue = (f: Field, v: string | null) =>
 const fieldText = (f: Field, v: string | null) =>
   f === 'jenisKelamin' && v ? (v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : v) : v;
 
+type EditableKey = 'nama' | 'noHp' | 'email' | 'tanggalLahir' | 'jenisKelamin';
+
 interface RowChoice {
   jemaatId: string | null; // null = skip baris (kecuali create)
   fields: Field[]; // field yang diambil dari sheet
@@ -215,6 +217,8 @@ export default function JemaatConsolidationPage() {
   const [journey, setJourney] = useState<Record<string, string>>({}); // sheet value → stepId | 'skip'
   const [journeySub, setJourneySub] = useState<Record<string, string>>({}); // stepId → subRoleId
   const [result, setResult] = useState<ApplyResult | null>(null);
+  /** Baris yang dipisah dari jemaat yang sama (No HP/email dipakai baris lain) → boleh dibuat baru. */
+  const [split, setSplit] = useState<Set<number>>(new Set());
 
   const candById = useMemo(() => {
     const m = new Map<string, Candidate>();
@@ -225,6 +229,7 @@ export default function JemaatConsolidationPage() {
   const hcKey = (area: string | null, nama: string) => `${area ?? ''}|${nama}`;
 
   function initDecisions(p: Preview) {
+    setSplit(new Set());
     const ch: Record<number, RowChoice> = {};
     for (const r of p.rows) {
       const target = r.match.status === 'MATCHED' ? r.match.candidates[0] : undefined;
@@ -364,13 +369,14 @@ export default function JemaatConsolidationPage() {
           r.match.status !== 'MATCHED' ||
           (target && !target.cabangSama) ||
           (target && FIELDS.some((f) => diff(f, r[f], target[f]) === 'differ')) ||
+          (!!c?.jemaatId && dupTargets.has(c.jemaatId)) ||
           familyNeedsReview(r, c)
         );
       }
       if (filter === 'changes') return (choices[r.rowNo]?.fields.length ?? 0) > 0 || !!choices[r.rowNo]?.create;
       return true;
     });
-  }, [data, filter, q, choices, candById]);
+  }, [data, filter, q, choices, candById, dupTargets]);
 
   function setRow(rowNo: number, patch: Partial<RowChoice>) {
     setChoices((p) => ({ ...p, [rowNo]: { ...p[rowNo]!, ...patch } }));
@@ -399,6 +405,29 @@ export default function JemaatConsolidationPage() {
       }
       return next;
     });
+  }
+
+  /** Ubah data sheet satu baris (mis. No HP yang terpakai baris lain). */
+  function editRow(rowNo: number, patch: Partial<Pick<Row, EditableKey>>) {
+    setData((d) => (d ? { ...d, rows: d.rows.map((x) => (x.rowNo === rowNo ? { ...x, ...patch } : x)) } : d));
+    // Field yang sebelumnya dipilih tapi kini tidak valid → lepas.
+    setChoices((p) => {
+      const c = p[rowNo];
+      if (!c) return p;
+      const fields = c.fields.filter((f) => !(f in patch) || validSheetValue(f, (patch as Record<string, string | null>)[f] ?? null));
+      return { ...p, [rowNo]: { ...c, fields } };
+    });
+  }
+  /** Lepas baris dari jemaat yang dipakai bersama → jadikan jemaat baru. */
+  function splitRow(rowNo: number) {
+    setSplit((p) => new Set(p).add(rowNo));
+    setRow(rowNo, { jemaatId: null, create: true, fields: [] });
+  }
+  /** Baris-baris yang memilih jemaat yang sama dengan baris ini. */
+  function rowsSharing(r: Row): Row[] {
+    const id = choices[r.rowNo]?.jemaatId;
+    if (!id || !data) return [];
+    return data.rows.filter((x) => x.rowNo !== r.rowNo && choices[x.rowNo]?.jemaatId === id);
   }
 
   function toggleField(rowNo: number, f: Field, useSheet: boolean) {
@@ -548,6 +577,11 @@ export default function JemaatConsolidationPage() {
                     choice={choices[r.rowNo]!}
                     target={choices[r.rowNo]?.jemaatId ? candById.get(choices[r.rowNo]!.jemaatId!) : undefined}
                     duplicate={!!choices[r.rowNo]?.jemaatId && dupTargets.has(choices[r.rowNo]!.jemaatId!)}
+                    sharing={rowsSharing(r)}
+                    allowCreate={canCreate(r) || split.has(r.rowNo)}
+                    onEditRow={editRow}
+                    onSplit={splitRow}
+                    onSkipRow={(rowNo) => setRow(rowNo, { jemaatId: null, create: false, fields: [] })}
                     onPick={(id) => pickCandidate(r, id)}
                     onCreate={(on) => setCreate(r, on)}
                     onToggle={(f, v) => toggleField(r.rowNo, f, v)}
@@ -780,6 +814,11 @@ function RowCard({
   choice,
   target,
   duplicate,
+  sharing,
+  allowCreate,
+  onEditRow,
+  onSplit,
+  onSkipRow,
   onPick,
   onCreate,
   onToggle,
@@ -789,6 +828,11 @@ function RowCard({
   choice: RowChoice;
   target: Candidate | undefined;
   duplicate: boolean;
+  sharing: Row[];
+  allowCreate: boolean;
+  onEditRow: (rowNo: number, patch: Partial<Pick<Row, EditableKey>>) => void;
+  onSplit: (rowNo: number) => void;
+  onSkipRow: (rowNo: number) => void;
   onPick: (id: string | null) => void;
   onCreate: (on: boolean) => void;
   onToggle: (f: Field, useSheet: boolean) => void;
@@ -832,7 +876,17 @@ function RowCard({
           </option>
         ))}
       </select>
-      {!choice.jemaatId && canCreate(row) && (
+      {duplicate && target && sharing.length > 0 && (
+        <DuplicatePanel
+          target={target}
+          rows={[row, ...sharing]}
+          currentRowNo={row.rowNo}
+          onEditRow={onEditRow}
+          onSplit={onSplit}
+          onSkipRow={onSkipRow}
+        />
+      )}
+      {!choice.jemaatId && allowCreate && (
         <label className="flex items-center gap-2 text-sm text-neutral-800 cursor-pointer mb-1">
           <input type="checkbox" checked={choice.create} onChange={(e) => onCreate(e.target.checked)} />
           <span>
@@ -936,6 +990,163 @@ function RowCard({
         <FamilySection row={row} choice={choice} onFamily={onFamily} />
       )}
     </div>
+  );
+}
+
+/**
+ * Beberapa baris sheet menunjuk jemaat yang sama (biasanya karena No HP / email
+ * sama — mis. anak memakai nomor orang tua). Tampilkan semuanya berdampingan
+ * dan izinkan mengedit / memisahkan salah satunya.
+ */
+function DuplicatePanel({
+  target,
+  rows,
+  currentRowNo,
+  onEditRow,
+  onSplit,
+  onSkipRow,
+}: {
+  target: Candidate;
+  rows: Row[];
+  currentRowNo: number;
+  onEditRow: (rowNo: number, patch: Partial<Pick<Row, EditableKey>>) => void;
+  onSplit: (rowNo: number) => void;
+  onSkipRow: (rowNo: number) => void;
+}) {
+  const [editing, setEditing] = useState<number | null>(null);
+  const same = (a: string | null, b: string | null, f: Field) => !!a && !!b && norm(f, a) === norm(f, b);
+  const cols: { k: EditableKey; label: string }[] = [
+    { k: 'nama', label: 'Nama' },
+    { k: 'noHp', label: 'No HP' },
+    { k: 'email', label: 'Email' },
+    { k: 'tanggalLahir', label: 'Tgl lahir' },
+    { k: 'jenisKelamin', label: 'L/P' },
+  ];
+  return (
+    <div className="mb-2 rounded-lg border border-red-200 bg-red-50/50 p-2.5">
+      <div className="flex items-start gap-1.5 text-xs text-red-800 mb-2">
+        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>
+          {rows.length} baris menunjuk jemaat yang sama: <b>{target.namaLengkap}</b>
+          {target.kode ? ` · ${target.kode}` : ''} ({[target.noHp, target.email].filter(Boolean).join(' · ') || 'tanpa kontak'}). Kalau
+          ini orang yang berbeda (mis. anak memakai No HP orang tua), edit data barisnya lalu <b>Jadikan jemaat baru</b>, atau skip.
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs bg-white rounded border border-red-100">
+          <thead className="text-neutral-500">
+            <tr>
+              <th className="text-left font-medium px-2 py-1 w-10">Baris</th>
+              {cols.map((c) => (
+                <th key={c.k} className="text-left font-medium px-2 py-1">
+                  {c.label}
+                </th>
+              ))}
+              <th className="text-right font-medium px-2 py-1">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) =>
+              editing === r.rowNo ? (
+                <DupEditRow key={r.rowNo} row={r} cols={cols} onCancel={() => setEditing(null)} onSave={(patch) => { onEditRow(r.rowNo, patch); setEditing(null); }} />
+              ) : (
+                <tr key={r.rowNo} className={`border-t border-neutral-100 align-top ${r.rowNo === currentRowNo ? 'bg-amber-50/60' : ''}`}>
+                  <td className="px-2 py-1 text-neutral-400">#{r.rowNo}</td>
+                  {cols.map((c) => {
+                    const v = r[c.k];
+                    const hit =
+                      (c.k === 'noHp' && same(v, target.noHp, 'noHp')) || (c.k === 'email' && same(v, target.email, 'email'));
+                    return (
+                      <td key={c.k} className={`px-2 py-1 break-words ${hit ? 'text-red-700 font-semibold' : 'text-neutral-800'}`}>
+                        {c.k === 'jenisKelamin' ? fieldText('jenisKelamin', v) ?? '—' : v || <i className="text-neutral-300">kosong</i>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-2 py-1 text-right whitespace-nowrap">
+                    <button onClick={() => setEditing(r.rowNo)} className="text-brand-700 hover:underline mr-2">
+                      Edit
+                    </button>
+                    <button onClick={() => onSplit(r.rowNo)} className="text-blue-700 hover:underline mr-2" title="Lepas dari jemaat ini dan buat jemaat baru dari baris ini">
+                      Jadikan jemaat baru
+                    </button>
+                    <button onClick={() => onSkipRow(r.rowNo)} className="text-neutral-500 hover:underline">
+                      Skip
+                    </button>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-neutral-500 mt-1.5">
+        No HP / email yang sudah dipakai jemaat lain tidak disimpan ke jemaat baru (kolom unik) — kosongkan atau ganti di Edit.
+      </p>
+    </div>
+  );
+}
+
+function DupEditRow({
+  row,
+  cols,
+  onSave,
+  onCancel,
+}: {
+  row: Row;
+  cols: { k: EditableKey; label: string }[];
+  onSave: (patch: Partial<Pick<Row, EditableKey>>) => void;
+  onCancel: () => void;
+}) {
+  const [v, setV] = useState<Record<EditableKey, string>>({
+    nama: row.nama ?? '',
+    noHp: row.noHp ?? '',
+    email: row.email ?? '',
+    tanggalLahir: row.tanggalLahir ?? '',
+    jenisKelamin: row.jenisKelamin ?? '',
+  });
+  const inp = 'w-full border border-neutral-300 rounded px-1.5 py-0.5 text-xs';
+  return (
+    <tr className="border-t border-neutral-100 bg-brand-50/40 align-top">
+      <td className="px-2 py-1 text-neutral-400">#{row.rowNo}</td>
+      {cols.map((c) => (
+        <td key={c.k} className="px-1 py-1">
+          {c.k === 'jenisKelamin' ? (
+            <select value={v.jenisKelamin} onChange={(e) => setV({ ...v, jenisKelamin: e.target.value })} className={inp}>
+              <option value="">—</option>
+              <option value="L">L</option>
+              <option value="P">P</option>
+            </select>
+          ) : (
+            <input
+              type={c.k === 'tanggalLahir' ? 'date' : 'text'}
+              value={v[c.k]}
+              onChange={(e) => setV({ ...v, [c.k]: e.target.value })}
+              className={inp}
+              placeholder={c.k === 'noHp' ? 'kosongkan bila tidak punya' : ''}
+            />
+          )}
+        </td>
+      ))}
+      <td className="px-2 py-1 text-right whitespace-nowrap">
+        <button
+          onClick={() =>
+            onSave({
+              nama: v.nama.trim() || row.nama,
+              noHp: v.noHp.trim() || null,
+              email: v.email.trim() || null,
+              tanggalLahir: v.tanggalLahir || null,
+              jenisKelamin: v.jenisKelamin || null,
+            })
+          }
+          className="text-green-700 font-semibold hover:underline mr-2"
+        >
+          Simpan
+        </button>
+        <button onClick={onCancel} className="text-neutral-500 hover:underline">
+          Batal
+        </button>
+      </td>
+    </tr>
   );
 }
 

@@ -588,25 +588,37 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
   // Orang yang sama bisa muncul di beberapa baris (mis. satu baris per ministry).
   // Jemaat baru hanya dibuat sekali; baris berikutnya memakai jemaat yang sama.
   const createdByKey = new Map<string, string>();
+  const createdNama = new Map<string, string | null>(); // jemaatId → nama ternormalisasi (baris yang dibuat di sini)
   const createKeys = personKeys;
   for (const r of input.rows) {
     const changes: string[] = [];
     let jemaatId: string | null = r.jemaatId ?? null;
     try {
-      const reuse = r.create ? createKeys(r.create).map((k) => createdByKey.get(k)).find(Boolean) : undefined;
+      // Baris lain dengan kontak sama DAN nama sama = orang yang sama. Kontak sama
+      // tapi nama beda (mis. kakak-adik memakai No HP orang tua) = orang berbeda.
+      const reuse = r.create
+        ? createKeys(r.create)
+            .map((k) => createdByKey.get(k))
+            .find((id) => !!id && createdNama.get(id) === normalizeName(r.create!.namaLengkap))
+        : undefined;
       if (r.create && reuse) {
         jemaatId = reuse;
         changes.push('baris tambahan (jemaat sama)');
       } else if (r.create) {
         // Jemaat baru dari baris sheet (dicentang admin).
         const c = r.create;
+        // No HP / email unik — kalau sudah dipakai jemaat lain, simpan tanpa itu.
+        const hp = c.noHp ? normalizePhone(c.noHp) : null;
+        const em = c.email ? c.email.toLowerCase() : null;
+        const takenHp = hp ? !!(await prisma.jemaat.findFirst({ where: { noHp: hp }, select: { id: true } })) : false;
+        const takenEm = em ? !!(await prisma.jemaat.findFirst({ where: { email: em }, select: { id: true } })) : false;
         const created = await prisma.jemaat.create({
           data: {
             cabangId: cabang.id,
             kode: await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } }))),
             namaLengkap: c.namaLengkap,
-            noHp: c.noHp ?? null,
-            email: c.email ? c.email.toLowerCase() : null,
+            noHp: hp && !takenHp ? hp : null,
+            email: em && !takenEm ? em : null,
             alamat: c.alamat ?? null,
             statusPernikahan: c.statusPernikahan ?? null,
             tanggalBergabungGereja: c.tanggalBergabungGereja ? new Date(c.tanggalBergabungGereja) : null,
@@ -616,8 +628,11 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
           select: { id: true },
         });
         jemaatId = created.id;
-        for (const k of createKeys(c)) createdByKey.set(k, created.id);
+        createdNama.set(created.id, normalizeName(c.namaLengkap));
+        for (const k of createKeys(c)) if (!createdByKey.has(k)) createdByKey.set(k, created.id);
         changes.push('dibuat');
+        if (takenHp) changes.push('No HP sudah dipakai jemaat lain — tidak disimpan');
+        if (takenEm) changes.push('email sudah dipakai jemaat lain — tidak disimpan');
         summary.jemaatCreated += 1;
       }
       if (!jemaatId) throw new Error('Jemaat tidak ditentukan.');
@@ -774,6 +789,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
       : null;
     if (byContact && normalizeName(byContact.namaLengkap) === normalizeName(c.namaLengkap)) {
       for (const k of keys) createdByKey.set(k, byContact.id);
+      createdNama.set(byContact.id, normalizeName(byContact.namaLengkap));
       return { id: byContact.id, created: false };
     }
     // Kontak dipakai orang lain (mis. nomor anak = nomor orang tua) → buat tanpa kontak itu.
@@ -791,6 +807,7 @@ jemaatConsolidationRouter.post('/apply', async (req, res) => {
       select: { id: true },
     });
     for (const k of keys) createdByKey.set(k, created.id);
+    createdNama.set(created.id, normalizeName(c.namaLengkap));
     summary.keluargaDibuat += 1;
     const dropped = [takenHp ? 'No HP' : null, takenEm ? 'email' : null].filter(Boolean);
     return {

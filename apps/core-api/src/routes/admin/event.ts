@@ -279,7 +279,8 @@ eventRouter.get('/', async (req, res) => {
         // 2026-09-01). Alias `partisipasiAll` return total termasuk BATAL untuk audit.
         _count: {
           select: {
-            partisipasi: { where: { status: { not: 'BATAL' } } },
+            // No-show yang dibatalkan otomatis tetap dihitung sebagai pendaftar.
+            partisipasi: { where: { OR: [{ status: { not: 'BATAL' } }, { cancelReason: 'NO_SHOW' }] } },
           },
         },
       },
@@ -322,7 +323,8 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md 2026-09-01).
       _count: {
         select: {
-          partisipasi: { where: { status: { not: 'BATAL' } } },
+          // No-show yang dibatalkan otomatis tetap dihitung sebagai pendaftar.
+          partisipasi: { where: { OR: [{ status: { not: 'BATAL' } }, { cancelReason: 'NO_SHOW' }] } },
         },
       },
     },

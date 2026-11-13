@@ -24,6 +24,8 @@ export function normalizePhone(v: CellValue | undefined): string | null {
 export function normalizeEmail(v: CellValue | undefined): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim().toLowerCase();
+  // Email @shiftsoft.org = email palsu bawaan migrasi Shiftsoft → dianggap kosong.
+  if (/@([a-z0-9-]+\.)*shiftsoft\.org$/.test(s)) return null;
   return s.includes('@') ? s : null;
 }
 

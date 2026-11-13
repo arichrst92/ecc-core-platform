@@ -62,7 +62,9 @@ export function mapLegacyUserToJemaat(
     return null;
   }
 
-  const email = cleanString(u.Email);
+  // Email @shiftsoft.org = email palsu bawaan Shiftsoft → abaikan.
+  const emailRaw = cleanString(u.Email);
+  const email = emailRaw && /@([a-z0-9-]+\.)*shiftsoft\.org$/i.test(emailRaw.trim()) ? null : emailRaw;
   const noHpRaw = cleanString(u.Phone1);
   const noHp = noHpRaw ? normalizePhone(noHpRaw) : null;
   if (noHpRaw && !noHp) {

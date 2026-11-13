@@ -59,6 +59,7 @@ const DISPOSABLE = [
   'example.com',
   'test.com',
   'email.com',
+  'shiftsoft.org', // email palsu bawaan migrasi Shiftsoft
 ];
 const MONTH = 30 * 86_400_000;
 

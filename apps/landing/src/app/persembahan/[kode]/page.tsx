@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { AppReturnBar, AppReturnFooter } from '@/components/app-return-bar';
 import { notFound } from 'next/navigation';
-import { HandCoins, Landmark, QrCode, ChevronLeft, Info, MapPin, Sparkles } from 'lucide-react';
+import { HandCoins, Landmark, QrCode, Info, MapPin, Sparkles } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { getL } from '@/lib/i18n-server';
 import { CopyRekeningButton } from '../copy-button';
@@ -89,15 +88,8 @@ export default async function PersembahanCabangPage(
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_85%_0%,rgba(255,255,255,.22),transparent_60%),radial-gradient(500px_300px_at_0%_100%,rgba(124,45,18,.35),transparent_60%)]"
         />
-        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-16 sm:pt-7 sm:pb-20">
-          <Link
-            href="/persembahan"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-white/85 hover:text-white"
-          >
-            <ChevronLeft className="w-4 h-4" /> {L('Ganti cabang', 'Change branch')}
-          </Link>
-
-          <div className="mt-5 flex items-start gap-4">
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 pt-7 pb-16 sm:pt-9 sm:pb-20">
+          <div className="flex items-start gap-4">
             <EccLogo height={60} className="text-white shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-white/80">

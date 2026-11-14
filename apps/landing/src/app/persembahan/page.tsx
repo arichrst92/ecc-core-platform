@@ -31,10 +31,10 @@ export default async function PersembahanIndexPage() {
   const cabangList = (await apiGet<Cabang[]>('/auth/cabang?isActive=true')) ?? [];
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#FFFBF7]">
+    <div className="min-h-screen overflow-x-hidden page-fabric">
       <AppReturnBar />
 
-      <section className="relative overflow-hidden bg-brand-grad text-white">
+      <section className="relative overflow-hidden hero-fabric band-shadow text-white">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_85%_0%,rgba(255,255,255,.22),transparent_60%),radial-gradient(500px_300px_at_0%_100%,rgba(124,45,18,.35),transparent_60%)]"

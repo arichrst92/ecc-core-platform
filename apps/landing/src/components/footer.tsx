@@ -6,7 +6,7 @@ import { getT } from '@/lib/i18n-server';
 export async function Footer() {
   const { t } = getT();
   return (
-    <footer className="shrink-0 bg-[#FFFBF7] text-neutral-500 text-xs">
+    <footer className="shrink-0 page-fabric text-neutral-500 text-xs">
       <div className="container-page py-2.5 flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-3">
         <p className="text-center sm:text-left">
           © {new Date().getFullYear()} Gereja Elshaddai Injil Sepenuh

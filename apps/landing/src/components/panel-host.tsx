@@ -27,6 +27,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { Markdown } from './markdown';
+import { SeatBar } from './seat-bar';
 import { FitImage } from './fit-image';
 import { PanelAction, PanelChip, PanelSection, SlidePanel } from './slide-panel';
 import { useLang } from './lang-provider';
@@ -229,6 +230,9 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
             <Row Icon={CreditCard} label={t('ev.fee')}>
               <div className={`font-semibold ${d.tipeBayar === 'GRATIS' ? 'text-green-700' : 'text-neutral-900'}`}>{fee}</div>
             </Row>
+            <div className="rounded-2xl bg-brand-50/70 border border-orange-100 p-3">
+              <SeatBar quota={d.quotaPeserta} filled={d.pesertaCount} size="md" />
+            </div>
           </div>
         </PanelSection>
         {d.lokasi ? <PanelAction href={mapsSearch([d.lokasi, d.cabang?.nama].filter(Boolean).join(', '))} Icon={Navigation} title={t('mk.maps')} sub={d.lokasi} /> : null}

@@ -1,6 +1,6 @@
 /* Beranda satu layar — showcase Els App + ibadah hari ini (desain: docs/design/mockup-beranda-eccchurch-v3.html). */
 .hm{--grad:linear-gradient(135deg,#F97316 0%,#C2410C 100%);--od:#C2410C;--navh:68px;
-  position:fixed;inset:0;overflow:hidden;color:#fff;background:var(--grad);
+  position:fixed;inset:0;overflow:hidden;color:#fff;background:var(--fabric) 0 0/var(--fabric-size) repeat,var(--grad);background-blend-mode:var(--fabric-blend),normal;
   display:grid;grid-template-rows:var(--navh) minmax(0,1fr) auto auto;-webkit-font-smoothing:antialiased}
 .hm:before{content:"";position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(800px 520px at 72% 18%,rgba(255,255,255,.26),transparent 62%),radial-gradient(700px 420px at 0% 100%,rgba(124,45,18,.45),transparent 60%),radial-gradient(500px 400px at 100% 100%,rgba(0,0,0,.18),transparent 60%)}
@@ -20,7 +20,7 @@
 .hm-cta img{border-radius:5px;background:#fff}
 .hm-lang{margin-left:8px;display:flex}
 .hm-burger{display:none;background:none;border:0;color:#fff;padding:6px;cursor:pointer}
-.hm-menu{position:fixed;inset:0;z-index:90;background:var(--grad);display:flex;flex-direction:column;padding:16px 20px;gap:4px}
+.hm-menu{position:fixed;inset:0;z-index:90;background:var(--fabric) 0 0/var(--fabric-size) repeat,var(--grad);background-blend-mode:var(--fabric-blend),normal;display:flex;flex-direction:column;padding:16px 20px;gap:4px}
 .hm-menu-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .hm-menu a{font-size:18px;font-weight:700;padding:10px 6px;border-bottom:1px solid rgba(255,255,255,.18)}
 
@@ -91,7 +91,7 @@
 
 @media (max-height:800px){.hm-inf p{display:none}}
 @media (max-height:700px){.hm-feat{display:none}.hm-qr{display:none}}
-@media (max-width:1535px){.hm-links a svg{display:none}.hm-links a{padding:7px 8px}}
+@media (max-width:1535px){.hm-links{gap:0}.hm-links a{padding:7px 7px;gap:4px;font-size:12.5px}}
 @media (max-width:1279px){.hm-links{display:none}.hm-burger{display:flex;margin-left:6px}.hm-lang{margin-left:auto}.hm-ibc{flex-basis:calc((100% - 20px)/3)}}
 @media (max-width:900px){
   .hm{--navh:56px}.hm-brand small{font-size:9.5px}.hm-brand .lg-svg{height:38px;width:28px}.hm-foot{display:none}

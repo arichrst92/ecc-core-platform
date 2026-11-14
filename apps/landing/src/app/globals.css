@@ -7,6 +7,14 @@
     /* Tinggi bidang oranye (navbar + pita judul): gradient penuh terang → gelap
        dihitung hanya di area ini, bukan setinggi layar. */
     --band-h: 300px;
+    /* Tekstur kain di semua bidang oranye (overlay soft-light di atas gradient). */
+    --fabric: url('/textures/fabric.png');
+    --fabric-size: 190px;
+    --fabric-blend: soft-light;
+    /* Bayangan bidang oranye ke bidang putih di bawahnya (oranye tampak "di atas"). */
+    --band-shadow: 0 18px 30px -14px rgba(124, 45, 18, 0.45), 0 6px 12px -8px rgba(124, 45, 18, 0.35);
+    /* Varian terang untuk bidang putih (multiply di atas krem). */
+    --fabric-light: url('/textures/fabric-light.png');
   }
   html {
     scroll-behavior: smooth;
@@ -17,7 +25,11 @@
   }
   body {
     @apply text-neutral-900 antialiased;
-    background: #fffbf7;
+    background-color: #fffbf7;
+    background-image: var(--fabric-light);
+    background-size: var(--fabric-size);
+    background-attachment: fixed;
+    background-blend-mode: multiply;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 }
@@ -30,15 +42,34 @@
   /* Gradient terkunci ke layar: navbar + pita judul tampil sebagai satu bidang
      tanpa sambungan (warna di batas keduanya sama persis). */
   .grad-fixed {
-    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+    background-image: var(--fabric), radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
       linear-gradient(135deg, #f97316 0%, #c2410c 100%);
     background-attachment: fixed;
-    background-size: 100vw var(--band-h);
-    background-repeat: no-repeat;
+    background-size: var(--fabric-size), 100vw var(--band-h), 100vw var(--band-h);
+    background-repeat: repeat, no-repeat, no-repeat;
+    background-blend-mode: var(--fabric-blend), normal, normal;
     background-color: #c2410c;
   }
   .bg-brand-grad {
     background-image: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+  }
+  /* Bidang putih bertekstur kain (latar halaman, footer, halaman persembahan). */
+  .page-fabric {
+    background-color: #fffbf7;
+    background-image: var(--fabric-light);
+    background-size: var(--fabric-size);
+    background-attachment: fixed;
+    background-blend-mode: multiply;
+  }
+  /* Tekstur kain hanya untuk bidang oranye bagian atas halaman (bukan kartu / ikon). */
+  .band-shadow {
+    box-shadow: var(--band-shadow);
+  }
+  .hero-fabric {
+    background-image: var(--fabric), linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    background-size: var(--fabric-size), 100% 100%;
+    background-repeat: repeat, no-repeat;
+    background-blend-mode: var(--fabric-blend), normal;
   }
   .btn-primary {
     @apply inline-flex items-center gap-2 px-5 py-2.5 text-white font-semibold rounded-xl transition;
@@ -54,9 +85,12 @@
   /* Hero halaman: menyambung dari navbar gradient. */
   .page-hero {
     @apply relative overflow-hidden text-white py-12 lg:py-16;
-    background-image: radial-gradient(700px 360px at 80% -10%, rgba(255, 255, 255, 0.25), transparent 60%),
+    background-image: var(--fabric), radial-gradient(700px 360px at 80% -10%, rgba(255, 255, 255, 0.25), transparent 60%),
       radial-gradient(600px 300px at 0% 120%, rgba(124, 45, 18, 0.4), transparent 60%),
       linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    background-size: var(--fabric-size), auto, auto, auto;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-blend-mode: var(--fabric-blend), normal, normal, normal;
     border-radius: 0 0 2rem 2rem;
   }
   .page-hero h1 {
@@ -71,11 +105,13 @@
   }
   .screen-hero {
     @apply relative text-white pt-4 pb-14 sm:pt-5 sm:pb-16 shrink-0;
-    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+    box-shadow: var(--band-shadow);
+    background-image: var(--fabric), radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
       linear-gradient(135deg, #f97316 0%, #c2410c 100%);
     background-attachment: fixed;
-    background-size: 100vw var(--band-h);
-    background-repeat: no-repeat;
+    background-size: var(--fabric-size), 100vw var(--band-h), 100vw var(--band-h);
+    background-repeat: repeat, no-repeat, no-repeat;
+    background-blend-mode: var(--fabric-blend), normal, normal;
     background-color: #c2410c;
   }
   .screen-body {
@@ -110,11 +146,13 @@
     position: absolute;
     inset: 0 0 auto 0;
     height: 96px;
-    background-image: radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+    box-shadow: var(--band-shadow);
+    background-image: var(--fabric), radial-gradient(900px 420px at 82% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
       linear-gradient(135deg, #f97316 0%, #c2410c 100%);
     background-attachment: fixed;
-    background-size: 100vw var(--band-h);
-    background-repeat: no-repeat;
+    background-size: var(--fabric-size), 100vw var(--band-h), 100vw var(--band-h);
+    background-repeat: repeat, no-repeat, no-repeat;
+    background-blend-mode: var(--fabric-blend), normal, normal;
     background-color: #c2410c;
   }
   .detail-card {

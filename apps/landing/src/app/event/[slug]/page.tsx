@@ -16,6 +16,7 @@ import { getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
 import { tzLabel } from '@/lib/tz';
+import { SeatBar } from '@/components/seat-bar';
 
 interface EventDetail {
   id: string;
@@ -38,6 +39,8 @@ interface EventDetail {
   bankAtasNama: string | null;
   tags: string[];
   viewCount: number;
+  quotaPeserta?: number | null;
+  pesertaCount?: number;
   cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
@@ -159,6 +162,9 @@ export default async function EventDetailPage({
           <div className={`font-semibold ${event.tipeBayar === 'GRATIS' ? 'text-green-700' : 'text-neutral-900'}`}>{fee}</div>
           {event.tipeBayar !== 'GRATIS' && event.bankNama ? <div className="text-xs text-neutral-500">{t('ev.payInfo')}</div> : null}
         </div>
+      </div>
+      <div className="rounded-2xl bg-brand-50/70 border border-orange-100 p-3">
+        <SeatBar quota={event.quotaPeserta} filled={event.pesertaCount} size="md" />
       </div>
       <a href="https://elsapp.eccchurch.global" target="_blank" rel="noopener noreferrer" className="btn-primary w-full justify-center !mt-4">
         <Smartphone className="w-4 h-4" />

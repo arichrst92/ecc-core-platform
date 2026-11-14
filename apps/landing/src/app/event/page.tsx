@@ -15,6 +15,7 @@ import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
 import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
 import { tzLabel } from '@/lib/tz';
+import { SeatBar } from '@/components/seat-bar';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -41,6 +42,8 @@ interface EventItem {
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS' | string;
   nominal: string | null;
   deskripsi?: string | null;
+  quotaPeserta?: number | null;
+  pesertaCount?: number;
   cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
@@ -113,6 +116,9 @@ export default async function EventListPage() {
             </p>
           ) : null}
           <div className="pt-1">
+            <SeatBar quota={e.quotaPeserta} filled={e.pesertaCount} />
+          </div>
+          <div className="pt-1">
             {e.tipeBayar === 'GRATIS' ? (
               <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-bold">{t('common.free')}</span>
             ) : (
@@ -133,7 +139,7 @@ export default async function EventListPage() {
         <EmptyState Icon={Megaphone}>{t('event.empty')}</EmptyState>
       ) : (
         <GroupCarousel
-          itemWidth="min(310px, 82vw)" itemH={460}
+          itemWidth="min(310px, 82vw)" itemH={495}
           groups={sorted.map(([key, g]) => ({ key, label: g.label, items: g.items.map(card) }))}
         />
       )}

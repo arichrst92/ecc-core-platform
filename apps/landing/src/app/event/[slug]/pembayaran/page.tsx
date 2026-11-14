@@ -17,6 +17,7 @@ import {
 } from '@/lib/web-action-server';
 import { getL } from '@/lib/i18n-server';
 import { EccLogo } from '@/components/ecc-logo';
+import { DEFAULT_TZ, tzLabel } from '@/lib/tz';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_CORE_API_URL ?? 'https://api.eccchurch.global';
@@ -46,7 +47,7 @@ interface EventDetail {
   bankNama: string | null;
   bankNomor: string | null;
   bankAtasNama: string | null;
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
 function formatIdrDate(iso: string, lang: 'id' | 'en' = 'id'): string {
@@ -188,12 +189,15 @@ export default async function EventPembayaranPage(
             <div className="flex items-start gap-2 text-neutral-700">
               <Calendar className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
               <div>
-                <p className="font-medium">{formatIdrDate(event.tanggalMulai, lang)}</p>
+                <p className="font-medium">
+                  {formatIdrDate(event.tanggalMulai, lang)}
+                  {event.jamMulai || event.jamSelesai ? null : ` · ${tzLabel(event.cabang?.timezone)}`}
+                </p>
                 {(event.jamMulai || event.jamSelesai) && (
                   <p className="text-xs text-neutral-500">
                     {event.jamMulai ?? ''}
                     {event.jamMulai && event.jamSelesai ? ' – ' : ''}
-                    {event.jamSelesai ?? ''}
+                    {event.jamSelesai ?? ''} {tzLabel(event.cabang?.timezone)}
                   </p>
                 )}
               </div>

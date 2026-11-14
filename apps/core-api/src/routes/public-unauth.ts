@@ -898,7 +898,7 @@ publicUnauthRouter.get('/homecell', publicBrowseLimiter, async (_req, res) => {
     select: {
       id: true,
       nama: true,
-      cabang: { select: { id: true, nama: true } },
+      cabang: { select: { id: true, nama: true, timezone: true } },
       picJemaat: person,
       pastors: { select: { jemaat: person } },
       homecells: {

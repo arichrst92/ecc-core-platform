@@ -15,6 +15,7 @@ import { NAV_LINKS } from '../navbar';
 import type { DictKey } from '@/lib/i18n';
 import './home.css';
 import { EccLogo } from '@/components/ecc-logo';
+import { tzLabel } from '@/lib/tz';
 
 export interface TodayIbadah {
   id: string;
@@ -361,7 +362,9 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
                 <Link key={`${i.id}-${i.jam}`} href="/ibadah" className={`hm-ibc ${i.st}`}>
                   <div className="hm-ibt">
                     <b>{hhmm(i.jam)}</b>
-                    <small>{hhmm(i.jamSelesai)}</small>
+                    <small>
+                      {hhmm(i.jamSelesai)} {tzLabel(i.cabang.timezone)}
+                    </small>
                   </div>
                   <div className="hm-ibm">
                     <span className="hm-st">

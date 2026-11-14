@@ -6,6 +6,7 @@ import { Markdown } from '@/components/markdown';
 import { getL, getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
+import { DEFAULT_TZ, tzLabel } from '@/lib/tz';
 
 interface RenunganDetail {
   id: string;
@@ -83,7 +84,7 @@ export default async function RenunganDetailPage({ params }: PageProps) {
           {item.tanggal ? (
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5" />
-              {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: DEFAULT_TZ })} · {tzLabel()}
             </span>
           ) : null}
           <span>

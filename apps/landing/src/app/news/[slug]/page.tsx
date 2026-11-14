@@ -6,6 +6,7 @@ import { Markdown } from '@/components/markdown';
 import { getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
+import { DEFAULT_TZ, tzLabel } from '@/lib/tz';
 
 interface NewsDetail {
   id: string;
@@ -17,7 +18,7 @@ interface NewsDetail {
   tanggal: string | null;
   tags: string[];
   viewCount: number;
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string | null } | null;
   author: { namaLengkap: string } | null;
 }
 
@@ -80,7 +81,8 @@ export default async function NewsDetailPage({
           {news.tanggal ? (
             <span className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
-              {new Date(news.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date(news.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'long', year: 'numeric', timeZone: news.cabang?.timezone || DEFAULT_TZ })}{' '}
+              · {tzLabel(news.cabang?.timezone)}
             </span>
           ) : null}
           {news.cabang ? <HeroChip>{news.cabang.nama}</HeroChip> : null}

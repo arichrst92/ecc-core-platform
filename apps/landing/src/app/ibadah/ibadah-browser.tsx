@@ -9,6 +9,7 @@ import { Baby, Calendar, Church, Clock, ExternalLink, Globe, MapPin, Navigation,
 import { GroupCarousel } from '@/components/h-carousel';
 import { useLang } from '@/components/lang-provider';
 import { localeOf } from '@/lib/i18n';
+import { tzLabel } from '@/lib/tz';
 
 export interface IbadahEvent {
   id: string;
@@ -19,7 +20,7 @@ export interface IbadahEvent {
   kategori: { id: string; nama: string } | null;
   lokasi: string | null;
   isOnline: boolean;
-  cabang: { id: string; nama: string };
+  cabang: { id: string; nama: string; timezone?: string | null };
   linkOnline?: string | null;
   deskripsi?: string | null;
   mapsUrl?: string | null;
@@ -60,9 +61,9 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
   }, [sel]);
 
   // cabang → tanggal → ibadah
-  const cabangMap = new Map<string, { nama: string; perTanggal: Map<string, IbadahEvent[]> }>();
+  const cabangMap = new Map<string, { nama: string; tz: string; perTanggal: Map<string, IbadahEvent[]> }>();
   for (const e of events) {
-    const b = cabangMap.get(e.cabang.id) ?? { nama: e.cabang.nama, perTanggal: new Map<string, IbadahEvent[]>() };
+    const b = cabangMap.get(e.cabang.id) ?? { nama: e.cabang.nama, tz: tzLabel(e.cabang.timezone), perTanggal: new Map<string, IbadahEvent[]>() };
     const arr = b.perTanggal.get(e.tanggal) ?? [];
     arr.push(e);
     b.perTanggal.set(e.tanggal, arr);
@@ -70,7 +71,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
   }
   const groups = [...cabangMap.entries()]
     .sort(([, a], [, b]) => a.nama.localeCompare(b.nama))
-    .map(([key, { nama, perTanggal }]) => ({
+    .map(([key, { nama, tz, perTanggal }]) => ({
       key,
       label: nama,
       items: [...perTanggal.entries()]
@@ -80,7 +81,9 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
             <div className={`px-5 py-4 shrink-0 ${tanggal === todayIso ? 'bg-brand-grad text-white' : 'bg-brand-50 text-brand-800'}`}>
               <p className="text-xs font-bold uppercase tracking-wider opacity-85">{fmt(tanggal, { weekday: 'long' })}</p>
               <p className="text-2xl font-extrabold leading-tight">{fmt(tanggal, { day: 'numeric', month: 'long' })}</p>
-              <p className="text-xs opacity-80 mt-0.5">{nama}</p>
+              <p className="text-xs opacity-80 mt-0.5">
+                {nama} · {t('common.tzTime')} {tz}
+              </p>
             </div>
             <div className="s-card-body s-scroll space-y-2">
               {[...list]
@@ -95,6 +98,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                     <div className="w-14 shrink-0 text-center rounded-xl bg-brand-50 py-1.5 text-brand-700 group-hover:bg-brand-grad group-hover:text-white transition">
                       <b className="block text-sm">{hhmm(e.jam)}</b>
                       <span className="text-[11px] opacity-75">{hhmm(e.jamSelesai)}</span>
+                      <span className="block text-[9.5px] font-bold opacity-70">{tz}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-sm text-neutral-900 leading-snug line-clamp-2">{e.judul}</p>
@@ -142,7 +146,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white text-brand-700 px-2.5 py-1 font-bold">
                   <Clock className="w-3.5 h-3.5" />
-                  {hhmm(sel.jam)} – {hhmm(sel.jamSelesai)}
+                  {hhmm(sel.jam)} – {hhmm(sel.jamSelesai)} {tzLabel(sel.cabang.timezone)}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/20 border border-white/25 px-2.5 py-1 font-semibold">
                   <Church className="w-3.5 h-3.5" />
@@ -156,7 +160,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                 <Row Icon={Calendar} label={t('ib.time')}>
                   <div className="font-semibold text-neutral-900">{fmt(sel.tanggal, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
                   <div className="text-neutral-600">
-                    {hhmm(sel.jam)} – {hhmm(sel.jamSelesai)}
+                    {hhmm(sel.jam)} – {hhmm(sel.jamSelesai)} {tzLabel(sel.cabang.timezone)}
                   </div>
                 </Row>
                 <div className="h-px bg-orange-100" />

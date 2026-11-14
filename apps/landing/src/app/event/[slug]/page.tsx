@@ -15,6 +15,7 @@ import { Markdown } from '@/components/markdown';
 import { getT } from '@/lib/i18n-server';
 import { localeOf } from '@/lib/i18n';
 import { DetailShell, HeroChip } from '@/components/detail-shell';
+import { tzLabel } from '@/lib/tz';
 
 interface EventDetail {
   id: string;
@@ -37,7 +38,7 @@ interface EventDetail {
   bankAtasNama: string | null;
   tags: string[];
   viewCount: number;
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
 export async function generateMetadata({
@@ -108,6 +109,7 @@ export default async function EventDetailPage({
 
   const fmt = (iso: string) => new Date(iso).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const when = `${fmt(event.tanggalMulai)}${event.tanggalSelesai && event.tanggalSelesai !== event.tanggalMulai ? ` – ${fmt(event.tanggalSelesai)}` : ''}`;
+  const tz = tzLabel(event.cabang?.timezone);
   const fee =
     event.tipeBayar === 'GRATIS'
       ? t('common.free')
@@ -123,12 +125,15 @@ export default async function EventDetailPage({
         </span>
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{t('ev.when')}</div>
-          <div className="font-semibold text-neutral-900">{when}</div>
+          <div className="font-semibold text-neutral-900">
+            {when}
+            {event.jamMulai ? null : <span className="font-normal text-neutral-500"> · {tz}</span>}
+          </div>
           {event.jamMulai ? (
             <div className="text-neutral-600 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
               {event.jamMulai}
-              {event.jamSelesai ? ` – ${event.jamSelesai}` : ''} WIB
+              {event.jamSelesai ? ` – ${event.jamSelesai}` : ''} {tz}
             </div>
           ) : null}
         </div>
@@ -176,6 +181,7 @@ export default async function EventDetailPage({
           <span className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
             {fmt(event.tanggalMulai)}
+            {event.jamMulai ? ` · ${event.jamMulai} ${tz}` : ` · ${tz}`}
           </span>
           {event.cabang ? <HeroChip>{event.cabang.nama}</HeroChip> : null}
           <HeroChip strong>{fee}</HeroChip>

@@ -32,6 +32,7 @@ import { PanelAction, PanelChip, PanelSection, SlidePanel } from './slide-panel'
 import { useLang } from './lang-provider';
 import { localeOf } from '@/lib/i18n';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
+import { tzLabel } from '@/lib/tz';
 
 export type PanelType = 'news' | 'renungan' | 'event' | 'market';
 type Target = { type: PanelType; id: string; title?: string };
@@ -151,7 +152,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
         {d.tanggal ? (
           <PanelChip>
             <Calendar className="w-3.5 h-3.5" />
-            {date(d.tanggal)}
+            {date(d.tanggal)} · {tzLabel(d.cabang?.timezone)}
           </PanelChip>
         ) : null}
         {d.cabang ? (
@@ -196,7 +197,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
           <PanelChip>
             <Clock className="w-3.5 h-3.5" />
             {d.jamMulai}
-            {d.jamSelesai ? ` – ${d.jamSelesai}` : ''}
+            {d.jamSelesai ? ` – ${d.jamSelesai}` : ''} {tzLabel(d.cabang?.timezone)}
           </PanelChip>
         ) : null}
         <PanelChip strong>{fee}</PanelChip>
@@ -208,11 +209,14 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
         <PanelSection>
           <div className="space-y-3 text-sm">
             <Row Icon={Calendar} label={t('ev.when')}>
-              <div className="font-semibold text-neutral-900">{when}</div>
+              <div className="font-semibold text-neutral-900">
+                {when}
+                {d.jamMulai ? null : <span className="font-normal text-neutral-500"> · {tzLabel(d.cabang?.timezone)}</span>}
+              </div>
               {d.jamMulai ? (
                 <div className="text-neutral-600">
                   {d.jamMulai}
-                  {d.jamSelesai ? ` – ${d.jamSelesai}` : ''} WIB
+                  {d.jamSelesai ? ` – ${d.jamSelesai}` : ''} {tzLabel(d.cabang?.timezone)}
                 </div>
               ) : null}
             </Row>

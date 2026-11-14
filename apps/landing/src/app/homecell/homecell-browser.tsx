@@ -10,6 +10,7 @@ import { CalendarClock, Church, HousePlus, Smartphone, Users, X, Baby, Heart } f
 import { GroupCarousel } from '@/components/h-carousel';
 import { useLang } from '@/components/lang-provider';
 import { absoluteUrl } from '@/lib/api';
+import { tzLabel } from '@/lib/tz';
 
 export interface HomecellPerson {
   id: string;
@@ -31,7 +32,7 @@ export interface HomecellItem {
 export interface HomecellZona {
   id: string;
   nama: string;
-  cabang: { id: string; nama: string };
+  cabang: { id: string; nama: string; timezone?: string | null };
   pic: HomecellPerson | null;
   pastors: HomecellPerson[];
   homecells: HomecellItem[];
@@ -83,14 +84,18 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
   const [open, setOpen] = useState(false);
 
   const hariLabel = (h: string | null) => (h ? (HARI[h]?.[en ? 1 : 0] ?? h) : null);
-  const jadwal = (h: HomecellItem) => [hariLabel(h.hari), h.jam].filter(Boolean).join(' · ');
+  const jadwal = (h: HomecellItem, z: HomecellZona) =>
+    [hariLabel(h.hari), h.jam ? `${h.jam} ${tzLabel(z.cabang.timezone)}` : null].filter(Boolean).join(' · ');
+  // Usia & kategori selalu tampil: kosong = semua usia / umum.
   const usia = (h: HomecellItem) =>
     h.usiaMin != null && h.usiaMax != null
       ? `${h.usiaMin}–${h.usiaMax} ${L('th', 'yrs')}`
       : h.usiaMin != null
         ? `${h.usiaMin}+ ${L('th', 'yrs')}`
-        : null;
-  const kategori = (h: HomecellItem) => (h.kategori === 'COUPLE' ? L('Pasutri', 'Couples') : h.kategori === 'SINGLE' ? 'Single' : null);
+        : h.usiaMax != null
+          ? `≤ ${h.usiaMax} ${L('th', 'yrs')}`
+          : L('Semua usia', 'All ages');
+  const kategori = (h: HomecellItem) => (h.kategori === 'COUPLE' ? 'Couple' : h.kategori === 'SINGLE' ? 'Single' : L('Umum', 'General'));
 
   const show = (hc: HomecellItem, zona: HomecellZona) => {
     setSel({ hc, zona });
@@ -170,9 +175,25 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-sm text-neutral-900 leading-snug line-clamp-2 group-hover:text-brand-700">{h.nama}</p>
                   <p className="text-xs text-neutral-500 truncate">{h.pic ? h.pic.nama : L('PIC belum ditentukan', 'Leader to be announced')}</p>
-                  {jadwal(h) || usia(h) ? (
-                    <p className="mt-0.5 text-[11px] text-brand-700 font-semibold truncate">{[jadwal(h), usia(h)].filter(Boolean).join(' · ')}</p>
-                  ) : null}
+                  {jadwal(h, z) ? <p className="mt-0.5 text-[11px] text-brand-700 font-semibold truncate">{jadwal(h, z)}</p> : null}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                      <Baby className="w-3 h-3" />
+                      {usia(h)}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        h.kategori === 'COUPLE'
+                          ? 'bg-pink-50 text-pink-700'
+                          : h.kategori === 'SINGLE'
+                            ? 'bg-sky-50 text-sky-700'
+                            : 'bg-neutral-100 text-neutral-600'
+                      }`}
+                    >
+                      <Heart className="w-3 h-3" />
+                      {kategori(h)}
+                    </span>
+                  </div>
                 </div>
               </button>
             ))}
@@ -221,10 +242,10 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
                   <Church className="w-3.5 h-3.5" />
                   {zona.cabang.nama}
                 </span>
-                {jadwal(hc) ? (
+                {jadwal(hc, zona) ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white text-brand-700 px-2.5 py-1 font-bold">
                     <CalendarClock className="w-3.5 h-3.5" />
-                    {jadwal(hc)}
+                    {jadwal(hc, zona)}
                   </span>
                 ) : null}
               </div>
@@ -245,10 +266,10 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
 
               {/* Info */}
               <section className="bg-white rounded-3xl border border-orange-100 p-5 grid grid-cols-2 gap-3 text-sm">
-                <Info Icon={CalendarClock} label={L('Jadwal', 'Schedule')} value={jadwal(hc) || L('Menyesuaikan', 'Flexible')} />
+                <Info Icon={CalendarClock} label={L('Jadwal', 'Schedule')} value={jadwal(hc, zona) || L('Menyesuaikan', 'Flexible')} />
                 <Info Icon={Users} label={L('Anggota', 'Members')} value={String(hc.memberCount)} />
-                {usia(hc) ? <Info Icon={Baby} label={L('Usia', 'Age')} value={usia(hc)!} /> : null}
-                {kategori(hc) ? <Info Icon={Heart} label={L('Kategori', 'Category')} value={kategori(hc)!} /> : null}
+                <Info Icon={Baby} label={L('Usia', 'Age')} value={usia(hc)} />
+                <Info Icon={Heart} label={L('Kategori', 'Category')} value={kategori(hc)} />
               </section>
 
               {hc.deskripsi ? (

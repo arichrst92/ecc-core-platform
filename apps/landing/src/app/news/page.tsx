@@ -8,6 +8,7 @@ import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
 import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
+import { DEFAULT_TZ, tzLabel } from '@/lib/tz';
 
 
 export function generateMetadata(): Metadata {
@@ -29,7 +30,7 @@ interface NewsItem {
   heroImageUrl: string | null;
   tanggal: string | null;
   tags: string[];
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string | null } | null;
   author: { namaLengkap: string } | null;
 }
 
@@ -66,7 +67,8 @@ export default async function NewsListPage() {
                   {item.tanggal ? (
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {new Date(item.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short', year: 'numeric', timeZone: item.cabang?.timezone || DEFAULT_TZ })}{' '}
+                      · {tzLabel(item.cabang?.timezone)}
                     </span>
                   ) : null}
                 </div>

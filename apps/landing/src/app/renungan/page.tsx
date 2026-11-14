@@ -8,6 +8,7 @@ import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { HCarousel } from '@/components/h-carousel';
 import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
+import { DEFAULT_TZ, tzLabel } from '@/lib/tz';
 
 
 export function generateMetadata(): Metadata {
@@ -47,7 +48,7 @@ export default async function RenunganListPage() {
                   <FitImage src={absoluteUrl(r.heroImageUrl) ?? ''} alt={r.judul} sizes="320px" className="absolute inset-0" />
                   {r.tanggal ? (
                     <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-brand-700">
-                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short' })}
+                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short', timeZone: DEFAULT_TZ })} · {tzLabel()}
                     </span>
                   ) : null}
                 </div>
@@ -56,7 +57,7 @@ export default async function RenunganListPage() {
                   <BookOpen className="w-7 h-7 opacity-90" />
                   {r.tanggal ? (
                     <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-white/85">
-                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {new Date(r.tanggal).toLocaleDateString(localeOf(lang), { weekday: 'long', day: 'numeric', month: 'long', timeZone: DEFAULT_TZ })} · {tzLabel()}
                     </p>
                   ) : null}
                 </div>

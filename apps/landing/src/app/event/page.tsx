@@ -14,6 +14,7 @@ import { localeOf } from '@/lib/i18n';
 import { ScreenPage, EmptyState } from '@/components/screen-page';
 import { GroupCarousel } from '@/components/h-carousel';
 import { CARD_TITLE, summaryClamp } from '@/lib/card-text';
+import { tzLabel } from '@/lib/tz';
 
 export function generateMetadata(): Metadata {
   const { L } = getL();
@@ -40,7 +41,7 @@ interface EventItem {
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS' | string;
   nominal: string | null;
   deskripsi?: string | null;
-  cabang: { id: string; nama: string } | null;
+  cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
 const UNASSIGNED = '__unassigned__';
@@ -96,12 +97,13 @@ export default async function EventListPage() {
             <Calendar className="w-4 h-4 text-brand-500" />
             {fmt(e.tanggalMulai)}
             {e.tanggalSelesai && e.tanggalSelesai !== e.tanggalMulai ? ` – ${fmt(e.tanggalSelesai)}` : ''}
+            {e.jamMulai ? '' : ` · ${tzLabel(e.cabang?.timezone)}`}
           </p>
           {e.jamMulai ? (
             <p className="flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-brand-500" />
               {e.jamMulai}
-              {e.jamSelesai ? ` – ${e.jamSelesai}` : ''}
+              {e.jamSelesai ? ` – ${e.jamSelesai}` : ''} {tzLabel(e.cabang?.timezone)}
             </p>
           ) : null}
           {e.lokasi ? (

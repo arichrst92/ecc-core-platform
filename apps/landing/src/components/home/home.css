@@ -104,7 +104,7 @@
   .hm-stage{grid-row:2;margin-top:6px}
   .hm-inf{grid-row:3;max-width:none;padding:10px 12px}.hm-inf p,.hm-feat{display:none}.hm-dots{margin-top:6px}
   .hm-acc{grid-row:4;flex-wrap:wrap;gap:6px;justify-content:center}
-  .hm-store{padding:6px 9px;gap:6px}.hm-store small{display:none}.hm-store b{font-size:12px}.hm-store .lg{width:22px;height:22px}.hm-store.yt b{font-size:0}.hm-store.yt b::after{content:'YouTube';font-size:12px}
+  .hm-store{padding:6px 9px;gap:6px}.hm-store small{display:none}.hm-store b{font-size:12px}.hm-store .lg{width:22px;height:22px}
   .hm-qr{display:none}.hm-arw{display:none}.hm-cta span{display:none}
   .hm-today{grid-template-columns:1fr;gap:6px;padding:8px 14px 12px}.hm-today .hm-arrs{display:none}.hm-today-h small{display:none}
   .hm-ibc{flex-basis:82%}

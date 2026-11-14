@@ -16,7 +16,7 @@ import type { DictKey } from '@/lib/i18n';
 import './home.css';
 import { EccLogo } from '@/components/ecc-logo';
 import { tzLabel } from '@/lib/tz';
-import { YouTubePanel, YOUTUBE_PATH } from './youtube-panel';
+import { YOUTUBE_PATH } from '@/lib/youtube';
 
 export interface TodayIbadah {
   id: string;
@@ -119,17 +119,6 @@ function useSwipe(onSwipe: (dx: number) => void) {
 
 export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[]; todayLabel: string; links: HomeAppLinks }) {
   const [menu, setMenu] = useState(false);
-  // Panel "Our YouTube Channel": pasang dulu, lalu geser masuk (animasi).
-  const [ytMounted, setYtMounted] = useState(false);
-  const [ytOpen, setYtOpen] = useState(false);
-  const openYt = () => {
-    setYtMounted(true);
-    requestAnimationFrame(() => requestAnimationFrame(() => setYtOpen(true)));
-  };
-  const closeYt = () => {
-    setYtOpen(false);
-    setTimeout(() => setYtMounted(false), 300);
-  };
   const { lang, t } = useLang();
   const slides = SLIDES[lang] ?? SLIDES.id;
 
@@ -303,7 +292,7 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
                 <b>{t('home.webVersion')}</b>
               </span>
             </a>
-            <button type="button" className="hm-store yt" onClick={openYt}>
+            <a href="https://www.youtube.com/@ECCChurchChannel" className="hm-store yt">
               <span className="lg">
                 <svg width={17} height={17} viewBox="0 0 24 24" aria-hidden fill="#FF0000">
                   <path d={YOUTUBE_PATH} />
@@ -311,9 +300,20 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
               </span>
               <span>
                 <small>YouTube</small>
-                <b>Our YouTube Channel</b>
+                <b>@ECCChurchChannel</b>
               </span>
-            </button>
+            </a>
+            <a href="https://www.youtube.com/@ECCWorship" className="hm-store yt">
+              <span className="lg">
+                <svg width={17} height={17} viewBox="0 0 24 24" aria-hidden fill="#FF0000">
+                  <path d={YOUTUBE_PATH} />
+                </svg>
+              </span>
+              <span>
+                <small>YouTube</small>
+                <b>@ECCWorship</b>
+              </span>
+            </a>
           </div>
         </div>
         <div
@@ -427,7 +427,6 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
         </span>
       </footer>
     </div>
-    {ytMounted ? <YouTubePanel open={ytOpen} onClose={closeYt} /> : null}
     </>
   );
 }

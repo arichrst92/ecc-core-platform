@@ -25,7 +25,7 @@ export default async function IbadahPage() {
   const tz = 'Asia/Jakarta';
   const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
   const futureIso = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(Date.now() + 30 * 86_400_000));
-  const events = (await apiGet<CalendarEvent[]>(`/public/ibadah/calendar?from=${todayIso}&to=${futureIso}`)) ?? [];
+  const events = (await apiGet<CalendarEvent[]>(`/public/ibadah/calendar?from=${todayIso}&to=${futureIso}`, { revalidate: 120 })) ?? [];
 
   const total = events.length;
 

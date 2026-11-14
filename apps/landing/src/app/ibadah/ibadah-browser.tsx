@@ -5,11 +5,29 @@
  * klik ibadah → panel detail meluncur dari kanan ke kiri.
  */
 import { useEffect, useState } from 'react';
-import { Baby, Calendar, Church, Clock, ExternalLink, Globe, MapPin, Navigation, Smartphone, X } from 'lucide-react';
+import { Baby, Calendar, Church, Clock, ExternalLink, Globe, HandHeart, Loader2, MapPin, Navigation, Smartphone, X } from 'lucide-react';
 import { GroupCarousel } from '@/components/h-carousel';
 import { useLang } from '@/components/lang-provider';
+import { SeatBar } from '@/components/seat-bar';
+import { absoluteUrl } from '@/lib/api';
 import { localeOf } from '@/lib/i18n';
 import { tzLabel } from '@/lib/tz';
+
+interface Petugas {
+  id: string;
+  nama: string;
+  fotoUrl: string | null;
+  peran: string;
+  pelayanan: string;
+}
+
+const initials = (s: string) =>
+  s
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
 
 export interface IbadahEvent {
   id: string;
@@ -25,16 +43,38 @@ export interface IbadahEvent {
   deskripsi?: string | null;
   mapsUrl?: string | null;
   isKidsIbadah?: boolean;
+  kapasitasSeat?: number | null;
+  terisi?: number;
 }
 
 const hhmm = (s: string) => (s ?? '').slice(0, 5);
 
 export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; todayIso: string }) {
-  const { lang, t } = useLang();
+  const { lang, t, L } = useLang();
   const loc = localeOf(lang);
   const fmt = (iso: string, o: Intl.DateTimeFormatOptions) => new Date(`${iso}T00:00:00`).toLocaleDateString(loc, o);
   const [sel, setSel] = useState<IbadahEvent | null>(null);
   const [open, setOpen] = useState(false);
+  // Petugas pertemuan terpilih — dimuat saat panel dibuka.
+  const [petugas, setPetugas] = useState<Petugas[] | null>(null);
+  useEffect(() => {
+    if (!sel) return;
+    let alive = true;
+    setPetugas(null);
+    fetch(`/api/ibadah-petugas?id=${sel.id}&tanggal=${sel.tanggal}`)
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j: { data?: Petugas[] }) => alive && setPetugas(j.data ?? []))
+      .catch(() => alive && setPetugas([]));
+    return () => {
+      alive = false;
+    };
+  }, [sel?.id, sel?.tanggal]);
+  const petugasGroups = (petugas ?? []).reduce<{ pelayanan: string; list: Petugas[] }[]>((acc, p) => {
+    const last = acc[acc.length - 1];
+    if (last && last.pelayanan === p.pelayanan) last.list.push(p);
+    else acc.push({ pelayanan: p.pelayanan, list: [p] });
+    return acc;
+  }, []);
   const isUrl = (u?: string | null) => !!u && /^https?:\/\//i.test(u);
   // Google Maps: titik dari Portal bila ada; kalau tidak, cari lokasi + cabang.
   const mapsHref = !sel || sel.isOnline
@@ -107,6 +147,11 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                         {e.isOnline ? <Globe className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
                         <span className="truncate">{e.isOnline ? t('common.online') : e.lokasi ?? nama}</span>
                       </p>
+                      {e.kapasitasSeat ? (
+                        <div className="mt-2">
+                          <SeatBar quota={e.kapasitasSeat} filled={e.terisi} />
+                        </div>
+                      ) : null}
                     </div>
                   </button>
                 ))}
@@ -168,6 +213,12 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                   <div className="font-semibold text-neutral-900">{sel.isOnline ? t('common.online') : sel.lokasi ?? sel.cabang.nama}</div>
                   <div className="text-neutral-600">{sel.cabang.nama}</div>
                 </Row>
+                {sel.kapasitasSeat ? (
+                  <>
+                    <div className="h-px bg-orange-100" />
+                    <SeatBar quota={sel.kapasitasSeat} filled={sel.terisi} size="md" />
+                  </>
+                ) : null}
               </section>
 
               {mapsHref || online ? (
@@ -223,6 +274,49 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                 <section className="bg-white rounded-3xl border border-orange-100 p-5">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-brand-600 mb-2">{t('ib.about')}</h3>
                   <p className="text-sm text-neutral-700 whitespace-pre-line leading-relaxed">{sel.deskripsi}</p>
+                </section>
+              ) : null}
+
+              {petugas === null || petugas.length > 0 ? (
+                <section className="bg-white rounded-3xl border border-orange-100 p-5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-brand-600 mb-3 flex items-center gap-1.5">
+                    <HandHeart className="w-4 h-4" />
+                    {L('Petugas pelayanan', 'Serving team')}
+                  </h3>
+                  {petugas === null ? (
+                    <p className="flex items-center gap-2 text-sm text-neutral-500">
+                      <Loader2 className="w-4 h-4 animate-spin" /> {L('Memuat…', 'Loading…')}
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {petugasGroups.map((g) => (
+                        <div key={g.pelayanan}>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500 mb-2">{g.pelayanan}</p>
+                          <ul className="space-y-2">
+                            {g.list.map((p) => {
+                              const src = absoluteUrl(p.fotoUrl);
+                              return (
+                                <li key={`${g.pelayanan}-${p.id}-${p.peran}`} className="flex items-center gap-3 min-w-0">
+                                  <span className="relative w-10 h-10 shrink-0 overflow-hidden rounded-full bg-brand-grad text-white text-sm font-bold flex items-center justify-center">
+                                    {src ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={src} alt={p.nama} loading="lazy" className="absolute inset-0 w-full h-full object-cover object-top" />
+                                    ) : (
+                                      initials(p.nama)
+                                    )}
+                                  </span>
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-bold text-neutral-900 truncate">{p.nama}</span>
+                                    <span className="block text-xs text-neutral-500 truncate">{p.peran}</span>
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
               ) : null}
             </div>

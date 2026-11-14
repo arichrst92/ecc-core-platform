@@ -270,7 +270,26 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     deskripsi: string | null;
     mapsUrl: string | null;
     isKidsIbadah: boolean;
+    // Kapasitas seat (NULL = tidak diisi di Portal) & seat terisi =
+    // reservasi aktif (RESERVE + JOIN) untuk tanggal itu.
+    kapasitasSeat: number | null;
+    terisi: number;
   }> = [];
+
+  const filledRows = ibadahIds.length
+    ? await prisma.reservasi.groupBy({
+        by: ['ibadahId', 'tanggalIbadah'],
+        where: {
+          ibadahId: { in: ibadahIds },
+          tanggalIbadah: { gte: from, lte: to },
+          status: { in: ['RESERVE', 'JOIN'] },
+        },
+        _count: { _all: true },
+      })
+    : [];
+  const filled = new Map(
+    filledRows.map((r) => [`${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`, r._count._all]),
+  );
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
@@ -296,6 +315,8 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         deskripsi: i.deskripsi,
         mapsUrl: i.mapsUrl,
         isKidsIbadah: i.isKidsIbadah,
+        kapasitasSeat: i.kapasitasSeat,
+        terisi: filled.get(`${i.id}:${iso}`) ?? 0,
       });
     }
   }
@@ -312,6 +333,58 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     data: events,
     meta: { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), count: events.length },
   });
+});
+
+// GET /public/ibadah/:id/petugas?tanggal=YYYY-MM-DD
+// Petugas pelayanan satu pertemuan untuk panel website — HANYA foto, nama,
+// peran (role) & nama pelayanan. Aturan sama dengan detail ibadah admin:
+// petugas khusus tanggal itu REPLACE petugas default per pelayanan.
+publicUnauthRouter.get('/ibadah/:id/petugas', publicBrowseLimiter, async (req, res) => {
+  const id = req.params.id ?? '';
+  const tanggal = typeof req.query.tanggal === 'string' ? req.query.tanggal : '';
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw NotFound('Ibadah tidak ditemukan');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) throw BadRequest('tanggal wajib (YYYY-MM-DD)');
+  const ibadah = await prisma.ibadah.findFirst({
+    where: { id, isActive: true, isPublic: true },
+    select: {
+      ibadahPelayanan: {
+        select: {
+          pelayanan: { select: { nama: true, isActive: true } },
+          petugas: {
+            where: { OR: [{ tanggalIbadah: null }, { tanggalIbadah: new Date(`${tanggal}T00:00:00Z`) }] },
+            select: {
+              tanggalIbadah: true,
+              jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, isActive: true } },
+              pelayananRole: { select: { nama: true, level: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
+
+  const out: { id: string; nama: string; fotoUrl: string | null; peran: string; pelayanan: string; level: number }[] = [];
+  for (const link of ibadah.ibadahPelayanan) {
+    if (!link.pelayanan.isActive) continue;
+    const rows = link.petugas.filter((p) => p.jemaat.isActive);
+    const overrides = rows.filter((p) => p.tanggalIbadah);
+    for (const p of overrides.length ? overrides : rows.filter((r) => !r.tanggalIbadah)) {
+      out.push({
+        id: p.jemaat.id,
+        nama: p.jemaat.namaLengkap,
+        fotoUrl: p.jemaat.fotoUrl,
+        peran: p.pelayananRole.nama,
+        pelayanan: link.pelayanan.nama,
+        level: p.pelayananRole.level,
+      });
+    }
+  }
+  // Pelayanan A→Z, lalu role senior dulu, lalu nama.
+  out.sort(
+    (a, b) => a.pelayanan.localeCompare(b.pelayanan) || b.level - a.level || a.nama.localeCompare(b.nama),
+  );
+  res.json({ success: true, data: out.map(({ level: _l, ...p }) => p) });
 });
 
 // GET /public/event?cabangId=&limit=&page=

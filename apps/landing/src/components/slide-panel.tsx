@@ -38,11 +38,11 @@ export function SlidePanel({
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
       <div onClick={onClose} className={`absolute inset-0 bg-neutral-900/40 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`} />
       <aside
-        className={`absolute right-0 top-0 h-full w-full sm:w-[480px] bg-[#FFFBF7] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`absolute right-0 top-0 h-full w-full sm:w-[480px] panel-fabric shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <div className="bg-brand-grad text-white px-6 pt-5 pb-5 shrink-0 relative">
+        <div className="hero-fabric band-shadow text-white px-6 pt-5 pb-5 shrink-0 relative z-[1]">
           <button type="button" onClick={onClose} aria-label={t('ib.close')} className="absolute right-4 top-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>

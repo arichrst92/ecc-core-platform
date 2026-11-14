@@ -61,6 +61,13 @@
     background-attachment: fixed;
     background-blend-mode: multiply;
   }
+  /* Panel detail (geser dari kanan): latar krem bertekstur ikut panel (bukan layar). */
+  .panel-fabric {
+    background-color: #fffbf7;
+    background-image: var(--fabric-light);
+    background-size: var(--fabric-size);
+    background-blend-mode: multiply;
+  }
   /* Tekstur kain hanya untuk bidang oranye bagian atas halaman (bukan kartu / ikon). */
   .band-shadow {
     box-shadow: var(--band-shadow);

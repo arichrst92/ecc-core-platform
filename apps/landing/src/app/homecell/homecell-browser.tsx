@@ -216,11 +216,11 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
             className={`absolute inset-0 bg-neutral-900/40 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`}
           />
           <aside
-            className={`absolute right-0 top-0 h-full w-full sm:w-[440px] bg-[#FFFBF7] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+            className={`absolute right-0 top-0 h-full w-full sm:w-[440px] panel-fabric shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
               open ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="bg-brand-grad text-white px-6 pt-5 pb-5 shrink-0 relative">
+            <div className="hero-fabric band-shadow text-white px-6 pt-5 pb-5 shrink-0 relative z-[1]">
               <button
                 type="button"
                 onClick={close}

@@ -53,6 +53,7 @@ import {
   CloudUpload,
   ClipboardList,
   UserCheck,
+  Download,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -189,6 +190,8 @@ const groups: NavGroup[] = [
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
       { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
+      { href: '/dashboard/dev-download', label: 'Download', icon: Download, menuKey: 'dev-download' },
+      { href: '/dashboard/api-access', label: 'API Access', icon: KeyRound, menuKey: 'api-access' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
       // Ticketing Tools (dulu Planning Backlog) — di-mount sebagai path /planning di portal.eccchurch.global
       // via nginx reverse proxy ke apps/planning (port 3300). Same-origin → localStorage

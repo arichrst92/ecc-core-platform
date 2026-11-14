@@ -54,12 +54,26 @@ import { elsaRouter } from './elsa.js';
 import { planningRouter } from './planning.js';
 import { jemaatConsolidationRouter } from './jemaat-consolidation.js';
 import { jemaatSertifikatRouter } from './jemaat-sertifikat.js';
+import { apiTokenRouter } from './api-token.js';
+import { devDocsRouter } from './dev-docs.js';
+import { Forbidden } from '../../lib/errors.js';
 
 export const adminRouter = Router();
 
 // Semua /admin/* wajib JWT. Sebelumnya juga requireFulltimer, tapi gate
 // itu dicabut — semua role yang punya akun valid bisa akses portal.
 adminRouter.use(requireAuth);
+
+// Token API pribadi (otomasi / agentic AI) tidak boleh mengubah akun pemiliknya
+// sendiri (/admin/me: hapus akun, ganti nomor, dsb) — cukup baca.
+adminRouter.use('/me', (req, _res, next) => {
+  if (req.pat && req.method !== 'GET') return next(Forbidden('Token API tidak boleh mengubah akun pribadi — gunakan Portal / app.'));
+  next();
+});
+
+// Developer Tools: token API pribadi (Team IT Minister) & unduhan dokumentasi.
+adminRouter.use('/api-token', apiTokenRouter);
+adminRouter.use('/dev-docs', devDocsRouter);
 
 // /admin/me/* — self-service mobile endpoints (HARUS sebelum /jemaat untuk
 // jaga-jaga kalau ada path collision).

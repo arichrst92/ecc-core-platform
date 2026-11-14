@@ -57,7 +57,10 @@ export function audit(req: Request, input: AuditInput): void {
         resourceLabel: input.resourceLabel ?? null,
         before: before as Prisma.InputJsonValue | undefined,
         after: after as Prisma.InputJsonValue | undefined,
-        metadata: (input.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
+        // Lewat token API pribadi → catat token yang dipakai (otomasi / agentic AI).
+        metadata: (req.pat
+          ? { ...((input.metadata as Record<string, unknown> | undefined) ?? {}), viaApiToken: req.pat.nama, apiTokenId: req.pat.id }
+          : input.metadata) as Prisma.InputJsonValue | undefined,
         ipAddress: req.ip ?? null,
         userAgent: req.get('user-agent') ?? null,
       },

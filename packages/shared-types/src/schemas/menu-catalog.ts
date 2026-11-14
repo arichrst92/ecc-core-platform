@@ -79,6 +79,8 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'diagnostics', label: 'Diagnostics', href: '/dashboard/diagnostics', group: 'Developer Tools' },
   { key: 'shiftsoft-sync', label: 'Shiftsoft Sync', href: '/dashboard/shiftsoft-sync', group: 'Developer Tools' },
   { key: 'tech-docs', label: 'Technical Documentation', href: '/dashboard/tech-docs', group: 'Developer Tools' },
+  { key: 'dev-download', label: 'Download', href: '/dashboard/dev-download', group: 'Developer Tools' },
+  { key: 'api-access', label: 'API Access', href: '/dashboard/api-access', group: 'Developer Tools' },
   { key: 'it-minister-team', label: 'Team IT Minister', href: '/dashboard/it-minister-team', group: 'Developer Tools' },
   { key: 'wa-config', label: 'WhatsApp Notif Config', href: '/dashboard/wa-config', group: 'Developer Tools' },
   // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global

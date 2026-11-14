@@ -690,11 +690,35 @@ model User {
 
   jemaat         Jemaat         @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
   refreshTokens  RefreshToken[]
+  accessTokens   PersonalAccessToken[]
   auditLogs      AuditLog[]
   authoredKonten Konten[]
   authoredEvents Event[]        @relation("EventAuthor")
 
   @@map("user")
+}
+
+// Token API pribadi (Developer Tools → API Access) untuk otomasi / agentic AI.
+// Bertindak atas nama user pemiliknya (hak akses = role user, tercatat di Audit Log).
+// Hanya anggota aktif Team IT Minister dengan role yang diizinkan (AppConfig.apiAccessItRoles);
+// keluar dari tim / role dicabut → token otomatis ditolak.
+// Format: ecc_pat_<prefix>_<secret> — yang disimpan hanya hash bcrypt.
+model PersonalAccessToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  nama       String    @db.VarChar(120)
+  keyPrefix  String    @unique @map("key_prefix") @db.VarChar(20)
+  keyHash    String    @map("key_hash") @db.VarChar(255)
+  lastUsedAt DateTime? @map("last_used_at")
+  lastUsedIp String?   @map("last_used_ip") @db.VarChar(64)
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("personal_access_token")
 }
 
 model OtpVerification {
@@ -2285,6 +2309,8 @@ model AppConfig {
   newComerMinHadir           Int?     @map("new_comer_min_hadir")
   // Local Market (2.4.7): batas jumlah item katalog per usaha.
   localMarketMaxItems        Int      @default(50) @map("local_market_max_items")
+  // Developer Tools → API Access: role Team IT Minister yang boleh membuat token API pribadi.
+  apiAccessItRoles           ITMinisterRole[] @default([HEAD_IT_MINISTER]) @map("api_access_it_roles")
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")

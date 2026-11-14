@@ -220,6 +220,8 @@ serverHealthRouter.get('/', async (_req, res) => {
         reminderHourStart: Number(process.env.REMINDER_SEND_HOUR_START ?? 7),
         reminderHourEnd: Number(process.env.REMINDER_SEND_HOUR_END ?? 10),
         fonnteConfigured: !!process.env.FONNTE_TOKEN,
+        starsenderConfigured: !!process.env.STARSENDER_DEVICE_KEY,
+        waProviderOrder: process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender',
         livenessSecretSet: !!process.env.LIVENESS_NONCE_SECRET,
       },
     },

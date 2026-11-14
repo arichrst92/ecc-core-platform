@@ -24,7 +24,7 @@
  *  - `withJobLock`: satu jenis dispatch tidak bisa berjalan bersamaan.
  */
 import { prisma, Prisma } from '@ecc/database';
-import { sendWhatsAppText } from '@ecc/auth';
+import { ALL_FAILED_PREFIX, sendWhatsAppText } from '@ecc/auth';
 import { logger } from './logger.js';
 
 export const MAX_ATTEMPTS = Number(process.env.WA_DISPATCH_MAX_ATTEMPTS ?? 3);
@@ -34,10 +34,18 @@ type NotifType = Prisma.NotificationLogCreateInput['type'];
 
 /** Kegagalan pasti = pesan jelas TIDAK terkirim → aman dicoba lagi. */
 export function isDefiniteFailure(message: string): boolean {
+  // Semua provider (Fonnte + StarSender) gagal → pasti bila tiap alasannya pasti.
+  if (message.startsWith(ALL_FAILED_PREFIX)) {
+    return message.slice(ALL_FAILED_PREFIX.length).split(' | ').every((m) => isDefiniteFailure(m));
+  }
   return (
     message.startsWith('Fonnte error:') ||
     /^Fonnte send failed \(4\d\d\)/.test(message) ||
-    message.startsWith('Fonnte not configured')
+    message.startsWith('Fonnte not configured') ||
+    message.startsWith('StarSender error:') ||
+    /^StarSender send failed \(4\d\d\)/.test(message) ||
+    message.startsWith('StarSender not configured') ||
+    message.startsWith('WhatsApp gateway not configured')
   );
 }
 

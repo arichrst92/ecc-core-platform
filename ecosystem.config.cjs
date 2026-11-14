@@ -70,6 +70,9 @@ const sharedEnv = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN,
   FONNTE_TOKEN: process.env.FONNTE_TOKEN,
+  // Gateway WA cadangan (failover bila Fonnte gagal) + urutan provider.
+  STARSENDER_DEVICE_KEY: process.env.STARSENDER_DEVICE_KEY,
+  WA_PROVIDER_ORDER: process.env.WA_PROVIDER_ORDER,
   OTP_LENGTH: process.env.OTP_LENGTH,
   OTP_EXPIRES_SECONDS: process.env.OTP_EXPIRES_SECONDS,
   OTP_MAX_ATTEMPTS: process.env.OTP_MAX_ATTEMPTS,

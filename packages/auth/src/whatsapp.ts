@@ -1,6 +1,13 @@
 /**
- * WhatsApp gateway client — Fonnte (gateway lokal Indonesia).
+ * WhatsApp gateway client — dua provider dengan failover otomatis:
+ *   1. Fonnte      (utama)   — FONNTE_TOKEN
+ *   2. StarSender  (cadangan) — STARSENDER_DEVICE_KEY (Device API key, menu Device)
+ * Urutan bisa diubah lewat WA_PROVIDER_ORDER="fonnte,starsender" (atau sebaliknya).
+ * Bila provider pertama gagal (perangkat terputus, kuota habis, HTTP error,
+ * timeout), pesan otomatis dikirim lewat provider berikutnya. Provider yang
+ * baru gagal dilewati sementara (60 detik) supaya OTP tidak menunggu lama.
  *
+ * Fonnte:
  * Endpoint: https://api.fonnte.com/send
  * Docs:     https://docs.fonnte.com/
  *
@@ -19,6 +26,11 @@ import { normalizePhoneNumber } from '@ecc/shared-types';
 
 const FONNTE_URL = 'https://api.fonnte.com/send';
 const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
+const STARSENDER_URL = 'https://api.starsender.online/api/send';
+const STARSENDER_KEY = process.env.STARSENDER_DEVICE_KEY ?? '';
+const SEND_TIMEOUT_MS = 12_000;
+
+export type WaProvider = 'fonnte' | 'starsender';
 
 /**
  * Signature di-append di SEMUA outbound WA message (OTP, reminder ibadah,
@@ -64,83 +76,129 @@ async function parseFonnteResponse(res: Response): Promise<string> {
 export interface SendOtpResult {
   messageId: string;
   to: string;
+  /** Provider yang berhasil mengirim. */
+  provider?: WaProvider;
 }
 
-/**
- * Kirim OTP via Fonnte. Format `noHpE164` = "+628...".
- * Fonnte minta tanpa "+" di field `target` (mis. "628123456789").
- */
-export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise<SendOtpResult> {
-  if (!FONNTE_TOKEN) {
-    throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
-  }
-
-  const target = noHpE164.replace(/^\+/, '');
-  const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
-  const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
-  const body = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
-  const message = appendSignature(body);
-
+// ------------------------------------------------------------
+//  Provider: Fonnte
+// ------------------------------------------------------------
+async function sendViaFonnte(target: string, message: string): Promise<string> {
+  if (!FONNTE_TOKEN) throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
   const formData = new URLSearchParams();
   formData.append('target', target);
   formData.append('message', message);
   formData.append('countryCode', fonnteCountryCode(target));
-
   const res = await fetch(FONNTE_URL, {
     method: 'POST',
-    headers: {
-      Authorization: FONNTE_TOKEN,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Authorization: FONNTE_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
+  if (!res.ok) throw new Error(`Fonnte send failed (${res.status}): ${await res.text()}`);
+  return parseFonnteResponse(res);
+}
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Fonnte send failed (${res.status}): ${text}`);
+// ------------------------------------------------------------
+//  Provider: StarSender (https://docs.starsender.online/docs/message-api/kirim-pesan)
+// ------------------------------------------------------------
+async function sendViaStarsender(target: string, message: string): Promise<string> {
+  if (!STARSENDER_KEY) throw new Error('StarSender not configured: set STARSENDER_DEVICE_KEY di .env');
+  const res = await fetch(STARSENDER_URL, {
+    method: 'POST',
+    headers: { Authorization: STARSENDER_KEY, 'Content-Type': 'application/json' },
+    // Nomor dengan kode negara (tanpa "+"), mis. 628123456789.
+    body: JSON.stringify({ messageType: 'text', to: target, body: message }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+  });
+  let data: { success?: boolean; message?: string; data?: Record<string, unknown> } = {};
+  try {
+    data = (await res.json()) as typeof data;
+  } catch {
+    if (!res.ok) throw new Error(`StarSender send failed (${res.status})`);
+    return '';
   }
+  if (!res.ok || data.success === false) {
+    throw new Error(`StarSender error: ${data.message ?? `HTTP ${res.status}`}`);
+  }
+  const id = data.data?.message_id ?? data.data?.id;
+  return id === undefined || id === null ? '' : String(id).slice(0, 100);
+}
 
-  const messageId = await parseFonnteResponse(res);
-  return { messageId, to: target };
+// ------------------------------------------------------------
+//  Failover
+// ------------------------------------------------------------
+const SENDERS: Record<WaProvider, { configured: () => boolean; send: (t: string, m: string) => Promise<string> }> = {
+  fonnte: { configured: () => !!FONNTE_TOKEN, send: sendViaFonnte },
+  starsender: { configured: () => !!STARSENDER_KEY, send: sendViaStarsender },
+};
+const COOLDOWN_MS = 60_000;
+/** Awalan error bila semua provider gagal (dipakai wa-dispatch untuk klasifikasi). */
+export const ALL_FAILED_PREFIX = 'Semua gateway WhatsApp gagal — ';
+const lastFailure: Partial<Record<WaProvider, number>> = {};
+
+/** Urutan provider (WA_PROVIDER_ORDER), hanya yang punya kredensial. */
+export function waProviders(): WaProvider[] {
+  const order = (process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x): x is WaProvider => x === 'fonnte' || x === 'starsender');
+  const uniq = [...new Set(order.length ? order : (['fonnte', 'starsender'] as WaProvider[]))];
+  return uniq.filter((p) => SENDERS[p].configured());
 }
 
 /**
- * Generic Fonnte text send — dipakai untuk reminder ibadah, event,
- * announcement, dll (selain OTP). Mengembalikan {messageId, to} sama seperti
- * `sendOtpViaWhatsApp()`.
- *
- * Throws kalau Fonnte error (caller bisa catch + log ke NotificationLog).
+ * Kirim teks lewat provider pertama yang berhasil. Provider yang gagal dalam
+ * 60 detik terakhir dicoba paling akhir (tetap dicoba bila yang lain gagal).
+ * Throw berisi alasan semua provider bila semuanya gagal.
  */
-export async function sendWhatsAppText(
-  noHpE164: string,
-  message: string,
-): Promise<SendOtpResult> {
-  if (!FONNTE_TOKEN) {
-    throw new Error('Fonnte not configured: set FONNTE_TOKEN di .env');
+async function sendWithFailover(target: string, message: string): Promise<{ messageId: string; provider: WaProvider }> {
+  const providers = waProviders();
+  if (!providers.length) {
+    throw new Error('WhatsApp gateway not configured: set FONNTE_TOKEN dan/atau STARSENDER_DEVICE_KEY di .env');
   }
-  const target = noHpE164.replace(/^\+/, '');
-  // Auto-append signature ke semua outbound message. Idempotent — kalau caller
-  // sudah include manual, tidak duplicate.
-  const finalMessage = appendSignature(message);
-  const formData = new URLSearchParams();
-  formData.append('target', target);
-  formData.append('message', finalMessage);
-  formData.append('countryCode', fonnteCountryCode(target));
+  const now = Date.now();
+  const ordered = [
+    ...providers.filter((p) => !(lastFailure[p] && now - lastFailure[p]! < COOLDOWN_MS)),
+    ...providers.filter((p) => lastFailure[p] && now - lastFailure[p]! < COOLDOWN_MS),
+  ];
+  const errors: string[] = [];
+  for (const p of ordered) {
+    try {
+      const messageId = await SENDERS[p].send(target, message);
+      delete lastFailure[p];
+      return { messageId, provider: p };
+    } catch (e) {
+      lastFailure[p] = Date.now();
+      // Pesan error tiap provider sudah diawali nama provider ("Fonnte …" / "StarSender …").
+      errors.push((e as Error).message);
+    }
+  }
+  throw new Error(errors.length === 1 ? errors[0]! : `${ALL_FAILED_PREFIX}${errors.join(' | ')}`);
+}
 
-  const res = await fetch(FONNTE_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: FONNTE_TOKEN,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData.toString(),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Fonnte send failed (${res.status}): ${text}`);
-  }
-  const messageId = await parseFonnteResponse(res);
-  return { messageId, to: target };
+/**
+ * Kirim OTP via WhatsApp (Fonnte → StarSender bila gagal). Format `noHpE164` = "+628...".
+ */
+export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise<SendOtpResult> {
+  const target = noHpE164.replace(/^\+/, '');
+  const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
+  const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
+  const body = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
+  const { messageId, provider } = await sendWithFailover(target, appendSignature(body));
+  return { messageId, to: target, provider };
+}
+
+/**
+ * Kirim teks WhatsApp umum — reminder ibadah, event, pengumuman, dll (selain OTP).
+ * Fonnte → StarSender bila gagal. Throws bila semua provider gagal
+ * (caller bisa catch + log ke NotificationLog).
+ */
+export async function sendWhatsAppText(noHpE164: string, message: string): Promise<SendOtpResult> {
+  const target = noHpE164.replace(/^\+/, '');
+  // Auto-append signature ke semua outbound message (idempotent).
+  const { messageId, provider } = await sendWithFailover(target, appendSignature(message));
+  return { messageId, to: target, provider };
 }
 
 /**

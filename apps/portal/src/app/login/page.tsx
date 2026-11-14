@@ -83,11 +83,11 @@ export default function LoginPage() {
   }
 
   if (checkingSession) {
-    return <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white" />;
+    return <div className="min-h-screen fabric-cream" />;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 to-white px-4">
+    <div className="min-h-screen flex items-center justify-center fabric-cream px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Image src="/logo-ecc.webp" alt="ECC Logo" width={120} height={120} className="mx-auto" priority />

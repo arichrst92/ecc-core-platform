@@ -59,7 +59,7 @@ function VerifyMagicLinkInner() {
   }, [phase, mobileDeepLink]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center px-4">
+    <div className="min-h-screen fabric-cream flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-neutral-200 p-8">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm">

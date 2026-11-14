@@ -7,11 +7,36 @@
   --color-fg: #0a0a0a;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
+  --fabric: url('/textures/fabric.png');
+  --fabric-light: url('/textures/fabric-light.png');
+  --fabric-size: 190px;
+}
+
+/* Bidang oranye bertekstur kain (banner / hero). Pakai bersama warna gradient-nya. */
+.fabric-orange {
+  background-image: var(--fabric), linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
+  background-size: var(--fabric-size), 100% 100% !important;
+  background-repeat: repeat, no-repeat !important;
+  background-blend-mode: soft-light, normal !important;
+}
+/* Bidang terang (krem → putih) bertekstur kain, mis. halaman login. */
+.fabric-cream {
+  background-color: #fff7ed;
+  background-image: var(--fabric-light), linear-gradient(135deg, #fff7ed 0%, #ffffff 100%) !important;
+  background-size: var(--fabric-size), 100% 100% !important;
+  background-repeat: repeat, no-repeat !important;
+  background-attachment: fixed, scroll;
+  background-blend-mode: multiply, normal !important;
 }
 
 html,
 body {
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  /* Tekstur kain (sama dengan website eccchurch.global) — varian terang. */
+  background-image: var(--fabric-light);
+  background-size: var(--fabric-size);
+  background-attachment: fixed;
+  background-blend-mode: multiply;
   color: var(--color-fg);
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;

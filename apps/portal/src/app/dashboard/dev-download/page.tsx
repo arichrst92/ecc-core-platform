@@ -164,7 +164,7 @@ export default function DevDownloadPage() {
       </div>
 
       {/* Paket gabungan */}
-      <div className="bg-gradient-to-br from-brand-500 to-brand-700 text-white rounded-2xl p-5 mb-5 flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="fabric-orange text-white rounded-2xl p-5 mb-5 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
           <Package className="w-6 h-6" />
         </div>

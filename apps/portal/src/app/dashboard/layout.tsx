@@ -2,7 +2,7 @@ import { BottomDock } from '@/components/bottom-dock';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50">
+    <div className="min-h-screen flex flex-col">
       {/* Ruang bawah = tinggi BottomDock nyata (CSS var --dock-space diisi oleh
           BottomDock via ResizeObserver) + safe-area; fallback 8rem sebelum terukur. */}
       <main

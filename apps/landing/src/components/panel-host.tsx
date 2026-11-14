@@ -14,6 +14,7 @@ import {
   Clock,
   CreditCard,
   Globe,
+  ExternalLink,
   Loader2,
   Mail,
   MapPin,
@@ -24,6 +25,7 @@ import {
   Smartphone,
   Store,
   Tag,
+  FileText,
 } from 'lucide-react';
 import { Markdown } from './markdown';
 import { SeatBar } from './seat-bar';
@@ -33,6 +35,8 @@ import { useLang } from './lang-provider';
 import { localeOf } from '@/lib/i18n';
 import { hargaText, type KatalogItem } from '@/lib/katalog';
 import { tzLabel } from '@/lib/tz';
+import { MARKET_ICONS, SOCIAL_ICONS, type BrandGlyph } from '@/lib/brand-icons-data';
+import { MARKET_LABEL, SOCIAL_LABEL, handleOf, platformOf, shortUrl, type MarketKey, type SocialKey } from '@/lib/business-links';
 
 export type PanelType = 'news' | 'renungan' | 'event' | 'market';
 type Target = { type: PanelType; id: string; title?: string };
@@ -119,7 +123,7 @@ const META: Record<PanelType, { Icon: typeof Newspaper; badge: 'nav.news' | 'nav
 };
 
 function PanelBody({ target, open, onClose, data, state }: { target: Target; open: boolean; onClose: () => void; data: any; state: string }) {
-  const { lang, t } = useLang();
+  const { lang, t, L } = useLang();
   const loc = localeOf(lang);
   const d = data;
   const meta = META[target.type];
@@ -262,27 +266,97 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
         ) : null}
       </>
     );
+    const socials: { url: string; key: SocialKey | null }[] = (Array.isArray(d.socialLinks) ? d.socialLinks : [])
+      .filter((x: { url?: string }) => x?.url)
+      .map((x: { url: string; platform?: string }) => ({ url: x.url, key: platformOf(x.url) }));
+    const shops = (Object.keys(MARKET_LABEL) as MarketKey[]).filter((k) => d.marketplaceLinks?.[k]).map((k) => [k, d.marketplaceLinks[k] as string] as const);
+    const phone = d.waAdmin ? String(d.waAdmin).replace(/\D/g, '') : null;
     body = (
       <>
+        {/* Identitas usaha */}
+        <PanelSection>
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl overflow-hidden bg-brand-50 border border-orange-100 shrink-0 flex items-center justify-center">
+              {d.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={abs(d.logoUrl)!} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Store className="w-6 h-6 text-brand-500" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-neutral-900 leading-tight">{d.nama}</div>
+              <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
+                {d.industri ? <span className="rounded-full bg-brand-50 text-brand-700 px-2 py-0.5">{d.industri}</span> : null}
+                {d.tipeBisnis ? <span className="rounded-full bg-neutral-100 text-neutral-700 px-2 py-0.5">{d.tipeBisnis}</span> : null}
+                <span className={`rounded-full px-2 py-0.5 ${d.isOnline ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {d.isOnline ? t('common.online') : L('Toko fisik', 'Physical store')}
+                </span>
+              </div>
+              {d.createdAt ? (
+                <div className="text-[11px] text-neutral-500 mt-1">
+                  {t('mk.joined')} {new Date(d.createdAt).toLocaleDateString(loc, { month: 'long', year: 'numeric' })}
+                  {d.owner?.cabang ? ` · ${d.owner.cabang.nama}` : ''}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </PanelSection>
+
         {d.heroImageUrl ? <FitImage src={abs(d.heroImageUrl)!} alt={title} sizes="480px" className="w-full aspect-video rounded-3xl" /> : null}
+
         <PanelSection title={t('mk.about')}>
           <p className="text-sm text-neutral-700 whitespace-pre-line leading-relaxed">{d.deskripsi || t('mk.noDesc')}</p>
-          {d.lokasi ? (
-            <p className="mt-3 text-sm text-neutral-600 flex items-start gap-2">
-              <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand-500" />
-              {d.lokasi}
-            </p>
-          ) : null}
         </PanelSection>
-        <div className="grid grid-cols-1 gap-2">
-          {maps ? <PanelAction href={maps} Icon={Navigation} title={t('mk.maps')} sub={d.lokasi ?? undefined} /> : null}
-          {d.websiteUrl ? <PanelAction href={d.websiteUrl} Icon={Globe} title={t('mk.website')} sub={String(d.websiteUrl).replace(/^https?:\/\//, '')} /> : null}
-          {d.email ? <PanelAction href={`mailto:${d.email}`} Icon={Mail} title={t('mk.email')} sub={d.email} /> : null}
-        </div>
+
+        {/* Kontak & lokasi */}
+        {maps || d.lokasi || phone || d.email || d.websiteUrl || d.companyProfileUrl ? (
+          <PanelSection title={t('mk.contact')}>
+            <div className="grid grid-cols-1 gap-2">
+              {d.lokasi || maps ? (
+                <PanelAction href={maps ?? '#'} Icon={MapPin} title={t('mk.location')} sub={d.lokasi ?? t('mk.maps')} />
+              ) : null}
+              {phone ? <PanelAction href={`https://wa.me/${phone}`} Icon={MessageCircle} title="WhatsApp" sub={`+${phone}`} tone="wa" /> : null}
+              {d.email ? <PanelAction href={`mailto:${d.email}`} Icon={Mail} title={t('mk.email')} sub={d.email} /> : null}
+              {d.websiteUrl ? <PanelAction href={d.websiteUrl} Icon={Globe} title={t('mk.website')} sub={shortUrl(String(d.websiteUrl))} /> : null}
+              {d.companyProfileUrl ? <PanelAction href={abs(d.companyProfileUrl)!} Icon={FileText} title={t('mk.profile')} sub={t('mk.download')} /> : null}
+            </div>
+          </PanelSection>
+        ) : null}
+
+        {/* Sosial media */}
+        {socials.length ? (
+          <PanelSection title={t('mk.social')}>
+            <div className="grid grid-cols-1 gap-2">
+              {socials.map((x, i) => (
+                <BrandRow
+                  key={`${x.url}-${i}`}
+                  href={x.url}
+                  glyph={x.key ? SOCIAL_ICONS[x.key] : null}
+                  label={x.key ? SOCIAL_LABEL[x.key] : shortUrl(x.url)}
+                  sub={handleOf(x.url)}
+                  shape="circle"
+                />
+              ))}
+            </div>
+          </PanelSection>
+        ) : null}
+
+        {/* Marketplace */}
+        {shops.length ? (
+          <PanelSection title={t('mk.shops')}>
+            <div className="grid grid-cols-1 gap-2">
+              {shops.map(([k, url]) => (
+                <BrandRow key={k} href={url} glyph={MARKET_ICONS[k]} label={MARKET_LABEL[k]} sub={shortUrl(url)} shape="square" />
+              ))}
+            </div>
+          </PanelSection>
+        ) : null}
+
         {items.length ? (
-          <PanelSection title={`${t('mk.catalog')} · ${items.length}`}>
+          <PanelSection title={`${t('mk.catalog')} · ${items.length} ${t('mk.items')}`}>
             <div className="grid grid-cols-2 gap-2.5">
-              {items.slice(0, 6).map((it) => (
+              {items.map((it) => (
                 <Link key={it.id} href={`/local-market/${target.id}/item/${it.id}`} className="rounded-2xl border border-neutral-200 overflow-hidden hover:border-brand-300 transition bg-white">
                   <div className="relative aspect-[3/2] w-full bg-brand-grad">
                     {it.fotoUrls[0] ? (
@@ -297,14 +371,20 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
                     </span>
                   </div>
                   <div className="p-2">
-                    <div className="text-xs font-bold text-neutral-900 line-clamp-1">{it.nama}</div>
+                    <div className="text-xs font-bold text-neutral-900 line-clamp-2">{it.nama}</div>
                     <div className={`text-xs font-extrabold ${it.hargaTipe === 'NEGO' ? 'text-neutral-500' : 'text-brand-700'}`}>{hargaText(it, lang)}</div>
                   </div>
                 </Link>
               ))}
             </div>
           </PanelSection>
-        ) : null}
+        ) : (
+          <PanelSection title={t('mk.catalog')}>
+            <p className="text-sm text-neutral-500">{t('mk.noCatalog')}</p>
+          </PanelSection>
+        )}
+
+        <p className="text-[11px] text-neutral-500 leading-relaxed px-1">{t('mk.disclaimer')}</p>
       </>
     );
     footer = wa ? (
@@ -333,5 +413,42 @@ function Row({ Icon, label, children }: { Icon: typeof Calendar; label: string; 
         {children}
       </div>
     </div>
+  );
+}
+
+/** Baris tautan merek (sosial media / marketplace): ikon brand + nama + akun / alamat. */
+function BrandRow({ href, glyph, label, sub, shape }: { href: string; glyph: BrandGlyph | null; label: string; sub: string; shape: 'circle' | 'square' }) {
+  const size = 36;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-3 rounded-2xl bg-white border border-orange-100 px-3 py-2.5 hover:border-brand-300 hover:bg-brand-50 transition"
+    >
+      <span
+        className="shrink-0 inline-flex items-center justify-center"
+        style={{ width: size, height: size, borderRadius: shape === 'circle' ? size / 2 : size * 0.28, backgroundColor: glyph?.color ?? '#F97316' }}
+      >
+        {glyph ? (
+          <svg width={Math.round(size * (glyph.mode === 'stroke' ? 0.62 : 0.5))} height={Math.round(size * (glyph.mode === 'stroke' ? 0.62 : 0.5))} viewBox={`0 0 ${glyph.viewBox} ${glyph.viewBox}`} aria-hidden>
+            {glyph.paths.map((p, i) =>
+              glyph.mode === 'fill' ? (
+                <path key={i} d={p} fill="#fff" />
+              ) : (
+                <path key={i} d={p} fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              ),
+            )}
+          </svg>
+        ) : (
+          <Globe className="w-4 h-4 text-white" />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-bold text-sm text-neutral-900">{label}</span>
+        <span className="block text-xs text-neutral-500 truncate">{sub}</span>
+      </span>
+      <ExternalLink className="w-4 h-4 text-neutral-400 shrink-0" />
+    </a>
   );
 }

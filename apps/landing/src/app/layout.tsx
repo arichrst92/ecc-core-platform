@@ -30,11 +30,21 @@ export function generateMetadata(): Metadata {
   ],
   openGraph: {
     title: 'ECC — Elshaddai Creative Community',
-    description: 'Elshaddai Creative Community',
+    description: L(
+      'Kemudahan beribadah dan berkomunitas dalam satu genggaman — Els App, aplikasi jemaat ECC.',
+      'Worship and community made easy, all in one app — Els App for the ECC family.',
+    ),
     url: 'https://eccchurch.global',
     siteName: 'ECC',
     locale: lang === 'en' ? 'en_US' : 'id_ID',
     type: 'website',
+    // Gambar pratinjau link utama (WhatsApp, medsos): tampilan beranda + Els App.
+    images: [{ url: 'https://eccchurch.global/og-home.jpg', width: 1200, height: 630, alt: 'ECC — Els App, aplikasi jemaat ECC' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ECC — Elshaddai Creative Community',
+    images: ['https://eccchurch.global/og-home.jpg'],
   },
   robots: {
     index: true,

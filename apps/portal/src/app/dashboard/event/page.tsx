@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { EventFormModal, type EventFormValues } from '@/components/event/event-form-modal';
+import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
 
 interface EventListItem {
   id: string;
@@ -389,6 +390,7 @@ export default function EventPage() {
                       <Eye className="w-3.5 h-3.5" />
                       Detail
                     </Link>
+                    <DuplicateEventButton eventId={e.id} judul={e.judul} />
                     <button
                       onClick={() => setEditing(e)}
                       className="flex items-center gap-1 px-2 py-1 rounded text-neutral-600 hover:bg-neutral-100"

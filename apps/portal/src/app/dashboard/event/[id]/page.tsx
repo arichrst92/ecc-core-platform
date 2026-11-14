@@ -35,6 +35,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { EventMinistrySection } from '@/components/event/ministry-section';
 import { DonationsSection } from '@/components/event/donations-section';
 import { UploadHint } from '@/components/upload/upload-hint';
+import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
 
 interface EventDetail {
   id: string;
@@ -341,10 +342,13 @@ export default function EventDetailPage() {
         </div>
 
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <Megaphone className="w-6 h-6 text-brand-500" />
-            {e.judul}
-          </h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+              <Megaphone className="w-6 h-6 text-brand-500" />
+              {e.judul}
+            </h1>
+            <DuplicateEventButton eventId={e.id} judul={e.judul} variant="button" />
+          </div>
           <div className="text-sm text-neutral-500 mt-1">{targetLabel}</div>
           {e.ringkasan && <p className="mt-3 text-neutral-700">{e.ringkasan}</p>}
 

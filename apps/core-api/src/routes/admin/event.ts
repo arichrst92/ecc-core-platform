@@ -47,6 +47,7 @@ import {
 import { idOrSlugWhere } from '../../lib/id-or-slug.js';
 import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
+import { requireMenuP } from '../../middleware/require-menu.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import {
@@ -529,6 +530,109 @@ eventRouter.post('/', async (req, res) => {
     resourceId: created.id,
     resourceLabel: created.judul,
     after: created,
+  });
+  res.status(201).json({ success: true, data: created });
+});
+
+/**
+ * POST /admin/event/:id/duplicate — "Duplicate from": salin event menjadi DRAFT
+ * (belum dipublish) untuk diubah admin. Disalin: semua isi & pengaturan event,
+ * syarat role, role yang diberikan, pelayanan + petugasnya. TIDAK disalin:
+ * peserta/pendaftaran, donasi, jumlah dilihat, status publish.
+ */
+eventRouter.post('/:id/duplicate', async (req, res) => {
+  if (!req.user) throw BadRequest('User tidak terautentikasi');
+  await requireMenuP(req, 'event', 'write');
+  const src = await prisma.event.findUnique({
+    where: { id: req.params.id },
+    include: {
+      roleRequirements: true,
+      pelayanan: { include: { petugas: true } },
+    },
+  });
+  if (!src) throw NotFound('Event tidak ditemukan');
+  const authorExists = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { id: true } });
+  if (!authorExists) throw Unauthorized('Sesi Anda tidak valid. Silakan logout dan login ulang.');
+
+  const judul = `${src.judul} (Salinan)`.slice(0, 255);
+  const slug = await ensureUniqueSlug(slugify(`${src.slug}-salinan`));
+
+  const created = await prisma.$transaction(async (tx) => {
+    const ev = await tx.event.create({
+      data: {
+        judul,
+        slug,
+        ringkasan: src.ringkasan,
+        deskripsi: src.deskripsi,
+        heroImageUrl: src.heroImageUrl,
+        videoUrl: src.videoUrl,
+        tanggalMulai: src.tanggalMulai,
+        tanggalSelesai: src.tanggalSelesai,
+        jamMulai: src.jamMulai,
+        jamSelesai: src.jamSelesai,
+        lokasi: src.lokasi,
+        latitude: src.latitude,
+        longitude: src.longitude,
+        mapsUrl: src.mapsUrl,
+        selfCheckinRadiusM: src.selfCheckinRadiusM,
+        sinodeId: src.sinodeId,
+        cabangId: src.cabangId,
+        tipeBayar: src.tipeBayar,
+        nominal: src.nominal,
+        qrisImageUrl: src.qrisImageUrl,
+        bankNama: src.bankNama,
+        bankNomor: src.bankNomor,
+        bankAtasNama: src.bankAtasNama,
+        quotaPeserta: src.quotaPeserta,
+        tags: src.tags,
+        butuhKehadiran: src.butuhKehadiran,
+        allowReview: src.allowReview,
+        allowSelfCheckin: src.allowSelfCheckin,
+        grantRoleId: src.grantRoleId,
+        grantSubRoleId: src.grantSubRoleId,
+        grantSubRoleStatusId: src.grantSubRoleStatusId,
+        isPublic: src.isPublic,
+        isActive: true,
+        // Selalu draft — admin mengubah lalu publish sendiri.
+        isPublished: false,
+        publishedAt: null,
+        authorId: req.user!.sub,
+      },
+    });
+    if (src.roleRequirements.length) {
+      await tx.eventRoleRequirement.createMany({
+        data: src.roleRequirements.map((r) => ({
+          eventId: ev.id,
+          roleId: r.roleId,
+          subRoleId: r.subRoleId,
+          subRoleStatusId: r.subRoleStatusId,
+        })),
+      });
+    }
+    for (const link of src.pelayanan) {
+      const nl = await tx.eventPelayanan.create({ data: { eventId: ev.id, pelayananId: link.pelayananId } });
+      if (link.petugas.length) {
+        await tx.eventPelayananPetugas.createMany({
+          data: link.petugas.map((p) => ({
+            eventPelayananId: nl.id,
+            jemaatId: p.jemaatId,
+            pelayananRoleId: p.pelayananRoleId,
+            canScanAttendance: p.canScanAttendance,
+            catatan: p.catatan,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+    return ev;
+  });
+
+  audit(req, {
+    action: 'CREATE',
+    resource: 'event',
+    resourceId: created.id,
+    resourceLabel: created.judul,
+    metadata: { duplicatedFrom: src.id, duplicatedFromJudul: src.judul },
   });
   res.status(201).json({ success: true, data: created });
 });

@@ -360,6 +360,9 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
         lokasi: true,
         tipeBayar: true,
         nominal: true,
+        // Kuota seat (website: progress bar). Terisi = pendaftar selain BATAL (sama dengan guard kuota).
+        quotaPeserta: true,
+        _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } },
         cabang: { select: { id: true, nama: true, timezone: true } },
       },
     }),
@@ -369,8 +372,9 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
   res.json({
     success: true,
     // Daftar cukup cuplikan deskripsi (kartu website); isi lengkap di GET /event/:id.
-    data: rows.map((r) => ({
+    data: rows.map(({ _count, ...r }) => ({
       ...r,
+      pesertaCount: _count.partisipasi,
       deskripsi: r.deskripsi ? (r.deskripsi.length > 300 ? `${r.deskripsi.slice(0, 300).trimEnd()}…` : r.deskripsi) : null,
     })),
     meta: { page: q.page, limit: q.limit, total },
@@ -818,6 +822,8 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       bankAtasNama: true,
       tags: true,
       viewCount: true,
+      quotaPeserta: true,
+      _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } },
       cabang: { select: { id: true, nama: true, timezone: true } },
     },
   });
@@ -831,7 +837,8 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
   res.json({
     success: true,
     data: {
-      ...row,
+      ...(({ _count, ...rest }) => rest)(row),
+      pesertaCount: row._count.partisipasi,
       viewCount: row.viewCount + 1,
     },
   });
@@ -855,6 +862,33 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
 // Anggota aktif pelayanan "Penggembalaan" dengan level posisi ≥ 8 (mis. Senior
 // Pastor, Pastor). Hanya nama, foto, posisi, dan cabang — tanpa kontak.
 publicUnauthRouter.get('/pastors', publicBrowseLimiter, async (_req, res) => {
+  // Utama: daftar yang diatur admin di Portal → Konten Website (about.pastors).
+  const section = await prisma.websiteSection.findUnique({ where: { key: 'about.pastors' } });
+  if (section) {
+    let list: { nama?: string; jabatan?: string; cabang?: string | null; fotoUrl?: string | null }[] = [];
+    try {
+      const parsed = JSON.parse(section.content);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {
+      list = [];
+    }
+    return res.json({
+      success: true,
+      data: section.isActive
+        ? list
+            .filter((p) => p && typeof p.nama === 'string' && p.nama.trim())
+            .map((p, i) => ({
+              id: `cfg-${i}`,
+              nama: p.nama!.trim(),
+              fotoUrl: p.fotoUrl || null,
+              posisi: p.jabatan?.trim() || '',
+              level: 0,
+              cabang: p.cabang ? { id: '', nama: p.cabang } : null,
+            }))
+        : [],
+    });
+  }
+  // Cadangan (section belum ada): pelayanan Penggembalaan level ≥ 8.
   const rows = await prisma.jemaatPelayanan.findMany({
     where: {
       isActive: true,

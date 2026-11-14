@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import { PastorEditor } from '@/components/website/pastor-editor';
 
 interface WebsiteSection {
   id: string;
@@ -154,7 +155,18 @@ export default function WebsiteContentPage() {
         </div>
       )}
 
-      {editing && (
+      {editing && editing.key === 'about.pastors' && (
+        <PastorEditor
+          section={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ['website-content'] });
+            setEditing(null);
+          }}
+        />
+      )}
+
+      {editing && editing.key !== 'about.pastors' && (
         <EditModal
           section={editing}
           onClose={() => setEditing(null)}

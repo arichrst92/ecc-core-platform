@@ -16,6 +16,7 @@
  *
  * File di-serve via static route `/uploads/*` (lihat app.ts).
  */
+import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import sharp from 'sharp';
@@ -521,4 +522,20 @@ export async function deleteGroupHero(groupId: string): Promise<void> {
   } catch (err: any) {
     if (err.code !== 'ENOENT') throw err;
   }
+}
+
+// =====================================================
+//  Website: foto tim pastoral (Portal → Konten Website → about.pastors)
+// =====================================================
+//   website/pastors/{uuid}.webp — persegi (sudah di-crop di Portal), maks 800×800.
+export async function saveWebsitePastorPhoto(buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'website', 'pastors');
+  await ensureDir(dir);
+  const filename = `${crypto.randomUUID()}.webp`;
+  await sharp(assertRasterImage(buffer))
+    .rotate()
+    .resize({ width: 800, height: 800, fit: 'cover', position: 'centre', withoutEnlargement: false })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return `${PUBLIC_UPLOADS_PREFIX}/website/pastors/${filename}`;
 }

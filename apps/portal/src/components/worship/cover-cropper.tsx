@@ -14,9 +14,15 @@ interface Props {
   file: File;
   onCancel: () => void;
   onDone: (blob: Blob) => void | Promise<void>;
+  /** Judul jendela (default "Atur cover"). */
+  title?: string;
+  /** Label tombol simpan (default "Simpan cover"). */
+  saveLabel?: string;
+  /** Pratinjau: 'worship' (album/player) atau 'avatar' (foto profil persegi & bulat). */
+  variant?: 'worship' | 'avatar';
 }
 
-export function CoverCropper({ file, onCancel, onDone }: Props) {
+export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', saveLabel = 'Simpan cover', variant = 'worship' }: Props) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rot, setRot] = useState(0);
@@ -96,7 +102,7 @@ export function CoverCropper({ file, onCancel, onDone }: Props) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl pointer-events-auto">
           <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
-            <h2 className="font-semibold text-neutral-900">Atur cover</h2>
+            <h2 className="font-semibold text-neutral-900">{title}</h2>
             <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-neutral-100" disabled={saving}>
               <X className="w-4 h-4" />
             </button>
@@ -169,6 +175,20 @@ export function CoverCropper({ file, onCancel, onDone }: Props) {
               </div>
               <p className="text-xs text-neutral-500 mt-1.5">Geser gambar untuk mengatur posisi. Rasio terkunci 1:1.</p>
             </div>
+            {variant === 'avatar' ? (
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-neutral-600">Pratinjau</div>
+                <div>
+                  <div className="w-[130px] h-[130px] rounded-2xl bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                  <div className="text-[11px] text-neutral-500 mt-1">Kartu website (persegi)</div>
+                </div>
+                <div>
+                  <div className="w-14 h-14 rounded-full bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                  <div className="text-[11px] text-neutral-500 mt-1">Avatar</div>
+                </div>
+                <div className="text-[11px] text-neutral-500">Disimpan persegi (WebP).</div>
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="text-xs font-semibold text-neutral-600">Pratinjau di Els App</div>
               <div className="flex items-end gap-3">
@@ -187,6 +207,7 @@ export function CoverCropper({ file, onCancel, onDone }: Props) {
               </div>
               <div className="text-[11px] text-neutral-500">Disimpan 1000×1000 (WebP).</div>
             </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
             <button onClick={onCancel} disabled={saving} className="h-9 px-4 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
@@ -198,7 +219,7 @@ export function CoverCropper({ file, onCancel, onDone }: Props) {
               className="flex items-center gap-2 h-9 px-4 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Simpan cover
+              {saveLabel}
             </button>
           </div>
         </div>

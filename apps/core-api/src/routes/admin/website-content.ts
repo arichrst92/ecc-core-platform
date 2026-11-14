@@ -14,6 +14,8 @@ import { prisma } from '@ecc/database';
 import { updateWebsiteSectionSchema } from '@ecc/shared-types';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { flexImageUpload } from '../../lib/image-upload.js';
+import { saveWebsitePastorPhoto } from '../../lib/storage.js';
 
 export const websiteContentRouter = Router();
 
@@ -23,6 +25,14 @@ websiteContentRouter.get('/', async (_req, res) => {
     orderBy: [{ isActive: 'desc' }, { key: 'asc' }],
   });
   res.json({ success: true, data: rows });
+});
+
+// POST /admin/website-content/pastor-photo — unggah foto tim pastoral (sudah
+// di-crop persegi di Portal) → URL untuk disimpan di section about.pastors.
+websiteContentRouter.post('/pastor-photo', flexImageUpload(), async (req, res) => {
+  if (!req.file) throw BadRequest('File foto wajib diunggah.');
+  const url = await saveWebsitePastorPhoto(req.file.buffer);
+  res.status(201).json({ success: true, data: { url } });
 });
 
 // GET /admin/website-content/:id — single section detail.

@@ -45,6 +45,8 @@ export function isDefiniteFailure(message: string): boolean {
     message.startsWith('StarSender error:') ||
     /^StarSender send failed \(4\d\d\)/.test(message) ||
     message.startsWith('StarSender not configured') ||
+    message.startsWith('Resmi error:') ||
+    message.startsWith('Resmi not configured') ||
     message.startsWith('WhatsApp gateway not configured')
   );
 }

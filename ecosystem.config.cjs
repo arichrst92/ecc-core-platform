@@ -73,6 +73,10 @@ const sharedEnv = {
   // Gateway WA cadangan (failover bila Fonnte gagal) + urutan provider.
   STARSENDER_DEVICE_KEY: process.env.STARSENDER_DEVICE_KEY,
   WA_PROVIDER_ORDER: process.env.WA_PROVIDER_ORDER,
+  RESMI_API_URL: process.env.RESMI_API_URL,
+  RESMI_API_KEY: process.env.RESMI_API_KEY,
+  RESMI_OTP_TEMPLATE: process.env.RESMI_OTP_TEMPLATE,
+  RESMI_OTP_TEMPLATE_LANG: process.env.RESMI_OTP_TEMPLATE_LANG,
   OTP_LENGTH: process.env.OTP_LENGTH,
   OTP_EXPIRES_SECONDS: process.env.OTP_EXPIRES_SECONDS,
   OTP_MAX_ATTEMPTS: process.env.OTP_MAX_ATTEMPTS,

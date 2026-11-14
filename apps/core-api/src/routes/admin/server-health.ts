@@ -222,6 +222,8 @@ serverHealthRouter.get('/', async (_req, res) => {
         fonnteConfigured: !!process.env.FONNTE_TOKEN,
         starsenderConfigured: !!process.env.STARSENDER_DEVICE_KEY,
         waProviderOrder: process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender',
+        // OTP: Resmi.ID (WABA resmi) dipakai lebih dulu bila dikonfigurasi.
+        resmiOtpConfigured: !!(process.env.RESMI_API_URL && process.env.RESMI_API_KEY && process.env.RESMI_OTP_TEMPLATE),
         livenessSecretSet: !!process.env.LIVENESS_NONCE_SECRET,
       },
     },

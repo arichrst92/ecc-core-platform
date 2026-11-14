@@ -1,8 +1,11 @@
 /**
- * WhatsApp gateway client — dua provider dengan failover otomatis:
- *   1. Fonnte      (utama)   — FONNTE_TOKEN
- *   2. StarSender  (cadangan) — STARSENDER_DEVICE_KEY (Device API key, menu Device)
- * Urutan bisa diubah lewat WA_PROVIDER_ORDER="fonnte,starsender" (atau sebaliknya).
+ * WhatsApp gateway client — failover otomatis:
+ *   OTP:  Resmi.ID (WABA resmi, template Authentication) → Fonnte → StarSender
+ *         Resmi.ID aktif bila RESMI_API_URL + RESMI_API_KEY + RESMI_OTP_TEMPLATE diisi.
+ *   Teks lain (notifikasi, reminder): Fonnte → StarSender (non-official, teks bebas).
+ *   1. Fonnte      — FONNTE_TOKEN
+ *   2. StarSender  — STARSENDER_DEVICE_KEY (Device API key, menu Device)
+ * Urutan Fonnte/StarSender lewat WA_PROVIDER_ORDER="fonnte,starsender" (atau sebaliknya).
  * Bila provider pertama gagal (perangkat terputus, kuota habis, HTTP error,
  * timeout), pesan otomatis dikirim lewat provider berikutnya. Provider yang
  * baru gagal dilewati sementara (60 detik) supaya OTP tidak menunggu lama.
@@ -29,8 +32,16 @@ const FONNTE_TOKEN = process.env.FONNTE_TOKEN ?? '';
 const STARSENDER_URL = 'https://api.starsender.online/api/send';
 const STARSENDER_KEY = process.env.STARSENDER_DEVICE_KEY ?? '';
 const SEND_TIMEOUT_MS = 12_000;
+// Resmi.ID — WhatsApp Business API resmi (Meta), KHUSUS OTP lewat template
+// Authentication. URL endpoint diambil dari dokumentasi di dashboard Resmi.ID.
+const RESMI_API_URL = process.env.RESMI_API_URL ?? '';
+const RESMI_API_KEY = process.env.RESMI_API_KEY ?? '';
+const RESMI_OTP_TEMPLATE = process.env.RESMI_OTP_TEMPLATE ?? '';
+const RESMI_OTP_TEMPLATE_LANG = process.env.RESMI_OTP_TEMPLATE_LANG || 'id';
 
-export type WaProvider = 'fonnte' | 'starsender';
+/** Provider teks bebas (non-official). */
+export type WaTextProvider = 'fonnte' | 'starsender';
+export type WaProvider = WaTextProvider | 'resmi';
 
 /**
  * Signature di-append di SEMUA outbound WA message (OTP, reminder ibadah,
@@ -126,9 +137,57 @@ async function sendViaStarsender(target: string, message: string): Promise<strin
 }
 
 // ------------------------------------------------------------
+//  Provider: Resmi.ID (WABA resmi) — OTP via template Authentication
+// ------------------------------------------------------------
+// Format body mengikuti Meta Cloud API (Resmi.ID = Tech Partner Meta). Template
+// Authentication Meta: kode di {{1}} body + tombol "Salin kode" (URL button
+// index 0) yang juga diisi kode. Sesuaikan bila dokumentasi Resmi.ID berbeda.
+const resmiConfigured = () => !!(RESMI_API_URL && RESMI_API_KEY && RESMI_OTP_TEMPLATE);
+
+async function sendOtpViaResmi(target: string, otp: string): Promise<string> {
+  if (!resmiConfigured()) {
+    throw new Error('Resmi not configured: set RESMI_API_URL, RESMI_API_KEY, RESMI_OTP_TEMPLATE di .env');
+  }
+  const res = await fetch(RESMI_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESMI_API_KEY}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: target,
+      type: 'template',
+      template: {
+        name: RESMI_OTP_TEMPLATE,
+        language: { code: RESMI_OTP_TEMPLATE_LANG },
+        components: [
+          { type: 'body', parameters: [{ type: 'text', text: otp }] },
+          { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otp }] },
+        ],
+      },
+    }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+  });
+  let data: Record<string, any> = {};
+  try {
+    data = (await res.json()) as Record<string, any>;
+  } catch {
+    if (!res.ok) throw new Error(`Resmi error: HTTP ${res.status}`);
+    return '';
+  }
+  // Sebagian gateway menjawab error dengan HTTP 200 → cek isi juga.
+  const err = data.error ?? (data.success === false || data.status === false ? data : null);
+  if (!res.ok || err) {
+    const msg = typeof err === 'string' ? err : err?.message ?? data.message ?? `HTTP ${res.status}`;
+    throw new Error(`Resmi error: ${String(msg).slice(0, 300)}`);
+  }
+  const id = data.messages?.[0]?.id ?? data.data?.messages?.[0]?.id ?? data.data?.id ?? data.id ?? data.message_id;
+  return id === undefined || id === null ? '' : String(id).slice(0, 100);
+}
+
+// ------------------------------------------------------------
 //  Failover
 // ------------------------------------------------------------
-const SENDERS: Record<WaProvider, { configured: () => boolean; send: (t: string, m: string) => Promise<string> }> = {
+const TEXT_SENDERS: Record<WaTextProvider, { configured: () => boolean; send: (t: string, m: string) => Promise<string> }> = {
   fonnte: { configured: () => !!FONNTE_TOKEN, send: sendViaFonnte },
   starsender: { configured: () => !!STARSENDER_KEY, send: sendViaStarsender },
 };
@@ -137,55 +196,67 @@ const COOLDOWN_MS = 60_000;
 export const ALL_FAILED_PREFIX = 'Semua gateway WhatsApp gagal — ';
 const lastFailure: Partial<Record<WaProvider, number>> = {};
 
-/** Urutan provider (WA_PROVIDER_ORDER), hanya yang punya kredensial. */
-export function waProviders(): WaProvider[] {
+/** Urutan provider teks bebas (WA_PROVIDER_ORDER), hanya yang punya kredensial. */
+export function waProviders(): WaTextProvider[] {
   const order = (process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender')
     .split(',')
     .map((x) => x.trim().toLowerCase())
-    .filter((x): x is WaProvider => x === 'fonnte' || x === 'starsender');
-  const uniq = [...new Set(order.length ? order : (['fonnte', 'starsender'] as WaProvider[]))];
-  return uniq.filter((p) => SENDERS[p].configured());
+    .filter((x): x is WaTextProvider => x === 'fonnte' || x === 'starsender');
+  const uniq = [...new Set(order.length ? order : (['fonnte', 'starsender'] as WaTextProvider[]))];
+  return uniq.filter((p) => TEXT_SENDERS[p].configured());
 }
 
+/** Urutan provider OTP: Resmi.ID (bila dikonfigurasi) lalu provider teks. */
+export function waOtpProviders(): WaProvider[] {
+  return [...(resmiConfigured() ? (['resmi'] as WaProvider[]) : []), ...waProviders()];
+}
+
+type Attempt = { provider: WaProvider; send: () => Promise<string> };
+
 /**
- * Kirim teks lewat provider pertama yang berhasil. Provider yang gagal dalam
- * 60 detik terakhir dicoba paling akhir (tetap dicoba bila yang lain gagal).
- * Throw berisi alasan semua provider bila semuanya gagal.
+ * Jalankan percobaan berurutan sampai ada yang berhasil. Provider yang gagal
+ * dalam 60 detik terakhir dicoba paling akhir (tetap dicoba bila yang lain
+ * gagal). Throw berisi alasan semua provider bila semuanya gagal.
  */
-async function sendWithFailover(target: string, message: string): Promise<{ messageId: string; provider: WaProvider }> {
-  const providers = waProviders();
-  if (!providers.length) {
+async function runFailover(attempts: Attempt[]): Promise<{ messageId: string; provider: WaProvider }> {
+  if (!attempts.length) {
     throw new Error('WhatsApp gateway not configured: set FONNTE_TOKEN dan/atau STARSENDER_DEVICE_KEY di .env');
   }
   const now = Date.now();
-  const ordered = [
-    ...providers.filter((p) => !(lastFailure[p] && now - lastFailure[p]! < COOLDOWN_MS)),
-    ...providers.filter((p) => lastFailure[p] && now - lastFailure[p]! < COOLDOWN_MS),
-  ];
+  const cooling = (a: Attempt) => !!lastFailure[a.provider] && now - lastFailure[a.provider]! < COOLDOWN_MS;
+  const ordered = [...attempts.filter((a) => !cooling(a)), ...attempts.filter(cooling)];
   const errors: string[] = [];
-  for (const p of ordered) {
+  for (const a of ordered) {
     try {
-      const messageId = await SENDERS[p].send(target, message);
-      delete lastFailure[p];
-      return { messageId, provider: p };
+      const messageId = await a.send();
+      delete lastFailure[a.provider];
+      return { messageId, provider: a.provider };
     } catch (e) {
-      lastFailure[p] = Date.now();
-      // Pesan error tiap provider sudah diawali nama provider ("Fonnte …" / "StarSender …").
+      lastFailure[a.provider] = Date.now();
+      // Pesan error tiap provider sudah diawali nama provider ("Resmi …" / "Fonnte …" / "StarSender …").
       errors.push((e as Error).message);
     }
   }
   throw new Error(errors.length === 1 ? errors[0]! : `${ALL_FAILED_PREFIX}${errors.join(' | ')}`);
 }
 
+const textAttempts = (target: string, message: string): Attempt[] =>
+  waProviders().map((p) => ({ provider: p, send: () => TEXT_SENDERS[p].send(target, message) }));
+
 /**
- * Kirim OTP via WhatsApp (Fonnte → StarSender bila gagal). Format `noHpE164` = "+628...".
+ * Kirim OTP via WhatsApp: Resmi.ID (WABA resmi, template) → Fonnte → StarSender.
+ * Format `noHpE164` = "+628...".
  */
 export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise<SendOtpResult> {
   const target = noHpE164.replace(/^\+/, '');
   const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
   const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
   const body = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
-  const { messageId, provider } = await sendWithFailover(target, appendSignature(body));
+  const attempts: Attempt[] = [
+    ...(resmiConfigured() ? [{ provider: 'resmi' as const, send: () => sendOtpViaResmi(target, otp) }] : []),
+    ...textAttempts(target, appendSignature(body)),
+  ];
+  const { messageId, provider } = await runFailover(attempts);
   return { messageId, to: target, provider };
 }
 
@@ -197,7 +268,7 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
 export async function sendWhatsAppText(noHpE164: string, message: string): Promise<SendOtpResult> {
   const target = noHpE164.replace(/^\+/, '');
   // Auto-append signature ke semua outbound message (idempotent).
-  const { messageId, provider } = await sendWithFailover(target, appendSignature(message));
+  const { messageId, provider } = await runFailover(textAttempts(target, appendSignature(message)));
   return { messageId, to: target, provider };
 }
 

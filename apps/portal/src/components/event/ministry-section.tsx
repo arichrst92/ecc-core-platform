@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
+import { BulkPelayananPicker, linkAll } from '@/components/pelayanan/bulk-pelayanan-picker';
 
 // ============== Types ==============
 
@@ -81,22 +82,35 @@ export function EventMinistrySection({ eventId }: { eventId: string }) {
     enabled: addLinkOpen,
     queryFn: async () => {
       const res = await apiClient.get<{ data: PelayananLite[] }>('/admin/pelayanan', {
-        params: { limit: 100 },
+        params: { limit: 500 },
       });
       return res.data.data;
     },
     staleTime: 60_000,
   });
 
+  // Tautkan beberapa pelayanan sekaligus (dipilih / pilih semua).
+  const [linkProgress, setLinkProgress] = useState<{ done: number; total: number } | null>(null);
   const linkMut = useMutation({
-    mutationFn: async (pelayananId: string) =>
-      apiClient.post(`/admin/event/${eventId}/pelayanan`, { pelayananId }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['event', eventId, 'pelayanan'] });
-      toast.success('Pelayanan ditautkan');
-      setAddLinkOpen(false);
+    mutationFn: async (pelayananIds: string[]) => {
+      setLinkProgress({ done: 0, total: pelayananIds.length });
+      return linkAll(
+        pelayananIds,
+        (pelayananId) => apiClient.post(`/admin/event/${eventId}/pelayanan`, { pelayananId }),
+        (done) => setLinkProgress({ done, total: pelayananIds.length }),
+      );
     },
-    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
+    onSuccess: ({ ok, failed }) => {
+      qc.invalidateQueries({ queryKey: ['event', eventId, 'pelayanan'] });
+      if (ok) toast.success(`${ok} pelayanan ditautkan`);
+      if (failed.length) toast.error(`${failed.length} gagal: ${failed[0]!.message}`, { duration: 6000 });
+      setLinkProgress(null);
+      if (!failed.length) setAddLinkOpen(false);
+    },
+    onError: (err: any) => {
+      setLinkProgress(null);
+      toast.error(err.response?.data?.error?.message ?? 'Gagal');
+    },
   });
 
   const unlinkMut = useMutation({
@@ -181,12 +195,15 @@ export function EventMinistrySection({ eventId }: { eventId: string }) {
       </div>
 
       {addLinkOpen && (
-        <AddLinkModal
+        <BulkPelayananPicker
+          title="Tambah Pelayanan ke Event"
           available={availablePelayanan}
           loading={pelayananOptionsQ.isLoading}
           submitting={linkMut.isPending}
+          progress={linkProgress}
           onClose={() => setAddLinkOpen(false)}
-          onAdd={(id) => linkMut.mutate(id)}
+          onAdd={(ids) => linkMut.mutate(ids)}
+          emptyText="Semua pelayanan sudah ditautkan ke event ini."
         />
       )}
 
@@ -465,77 +482,6 @@ function VolunteerRow({
 }
 
 // ============== Modals ==============
-
-function AddLinkModal({
-  available,
-  loading,
-  submitting,
-  onClose,
-  onAdd,
-}: {
-  available: PelayananLite[];
-  loading: boolean;
-  submitting: boolean;
-  onClose: () => void;
-  onAdd: (pelayananId: string) => void;
-}) {
-  const [pelayananId, setPelayananId] = useState('');
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-            <h2 className="font-semibold text-neutral-900">Tambah Pelayanan ke Event</h2>
-            <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="p-6 space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-neutral-700">Pelayanan</span>
-              <select
-                value={pelayananId}
-                onChange={(e) => setPelayananId(e.target.value)}
-                disabled={loading}
-                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:opacity-50"
-              >
-                <option value="">{loading ? 'Memuat...' : '— pilih pelayanan —'}</option>
-                {available.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nama}
-                  </option>
-                ))}
-              </select>
-              {!loading && available.length === 0 && (
-                <span className="block mt-1 text-xs text-neutral-500">
-                  Semua pelayanan sudah ter-link ke event ini.
-                </span>
-              )}
-            </label>
-          </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
-            <button
-              onClick={onClose}
-              disabled={submitting}
-              className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
-            >
-              Batal
-            </button>
-            <button
-              onClick={() => onAdd(pelayananId)}
-              disabled={!pelayananId || submitting}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
-            >
-              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              Tautkan
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
 
 function AddVolunteerModal({
   eventId,

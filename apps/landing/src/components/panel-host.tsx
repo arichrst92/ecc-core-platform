@@ -13,7 +13,6 @@ import {
   Church,
   Clock,
   CreditCard,
-  ExternalLink,
   Globe,
   Loader2,
   Mail,
@@ -127,16 +126,11 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
   const date = (iso?: string | null, o: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' }) =>
     iso ? new Date(iso).toLocaleDateString(loc, o) : null;
   const title = d?.judul ?? d?.nama ?? target.title ?? '';
-  const full = meta.href(d, target.id);
 
   let chips: React.ReactNode = null;
   let body: React.ReactNode = null;
-  let footer: React.ReactNode = (
-    <Link href={full} className="btn-secondary w-full justify-center">
-      <ExternalLink className="w-4 h-4" />
-      {t('pn.full')}
-    </Link>
-  );
+  // Cukup panel samping — tanpa tautan "Lihat halaman lengkap".
+  let footer: React.ReactNode = null;
 
   if (state === 'loading') {
     body = (
@@ -250,9 +244,6 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
           <Smartphone className="w-4 h-4" />
           {t('ev.register')}
         </a>
-        <Link href={full} className="block text-center text-sm font-semibold text-brand-700 hover:underline">
-          {t('pn.full')}
-        </Link>
       </>
     );
   } else if (target.type === 'market') {
@@ -316,20 +307,12 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
         ) : null}
       </>
     );
-    footer = (
-      <>
-        {wa ? (
-          <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 transition">
-            <MessageCircle className="w-5 h-5" />
-            {t('mk.chat')}
-          </a>
-        ) : null}
-        <Link href={full} className="btn-secondary w-full justify-center">
-          <ExternalLink className="w-4 h-4" />
-          {t('pn.full')}
-        </Link>
-      </>
-    );
+    footer = wa ? (
+      <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 transition">
+        <MessageCircle className="w-5 h-5" />
+        {t('mk.chat')}
+      </a>
+    ) : null;
   }
 
   return (

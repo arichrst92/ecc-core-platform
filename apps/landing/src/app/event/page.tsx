@@ -77,7 +77,7 @@ export default async function EventListPage() {
   );
 
   const card = (e: EventItem) => (
-    <PanelTrigger key={e.id} type="event" id={e.slug} title={e.judul} className="s-card group">
+    <PanelTrigger key={e.id} type="event" id={e.slug} title={e.judul} className="s-card group overflow-y-auto overscroll-contain">
       <div className="relative aspect-[3/2] w-full shrink-0 bg-brand-grad">
         {e.heroImageUrl ? (
           <FitImage src={absoluteUrl(e.heroImageUrl) ?? ''} alt={e.judul} sizes="340px" className="absolute inset-0" />
@@ -90,7 +90,8 @@ export default async function EventListPage() {
           {fmt(e.tanggalMulai)}
         </span>
       </div>
-      <div className="s-card-body flex flex-col gap-2">
+      {/* Isi kartu bisa digulir vertikal bila layar pendek (HP) — tidak terpotong. */}
+      <div className="s-card-body !overflow-visible flex flex-col gap-2">
         <h3 className={CARD_TITLE}>{e.judul}</h3>
         {e.ringkasan || e.deskripsi ? (
           <p className={`shrink-0 text-sm text-neutral-600 ${summaryClamp(e.judul, 2)}`}>{e.ringkasan || plainText(e.deskripsi ?? '')}</p>

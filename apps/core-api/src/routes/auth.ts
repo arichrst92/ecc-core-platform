@@ -1126,6 +1126,15 @@ async function issueAuthResponseByEmail(email: string, req: Request) {
  * Issue JWT untuk jemaat yg belum punya noHp (magic link path, legacy).
  * Same output shape sebagai issueAuthResponse.
  */
+/**
+ * Sementara: lewati verifikasi OTP nomor HP saat onboarding (login via magic
+ * link, akun belum punya nomor). Nomor bisa dilengkapi nanti dari profil.
+ * Atur lewat ENV tanpa rilis app: ONBOARDING_SKIP_NOHP_OTP=true.
+ */
+function skipNoHpOtp(): boolean {
+  return (process.env.ONBOARDING_SKIP_NOHP_OTP ?? '').toLowerCase() === 'true';
+}
+
 async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
   const jemaat = await prisma.jemaat.findUniqueOrThrow({
     where: { id: jemaatId },
@@ -1195,7 +1204,9 @@ async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
         needsOnboarding,
         onboardingReason: needsOnboarding
           ? {
-              missingNoHp: !jemaat.noHp,
+              // ONBOARDING_SKIP_NOHP_OTP=true → wizard app melewati langkah
+              // tambah nomor HP + OTP WhatsApp (app lama ikut, tanpa update).
+              missingNoHp: !jemaat.noHp && !skipNoHpOtp(),
               missingProfile: (
                 [
                   !jemaat.jenisKelamin ? 'jenisKelamin' : null,

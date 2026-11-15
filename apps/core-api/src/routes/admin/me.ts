@@ -1740,7 +1740,17 @@ meRouter.get('/reservasi', async (req, res) => {
 
   // Saring "aktif" per zona waktu cabang masing-masing ibadah.
   const now = new Date();
-  const visible = activeOnly && !tanggalStr ? rows.filter((r) => isActiveRow(r, tzOr(r.ibadah.cabang.timezone), now)) : rows;
+  // Aktif = belum selesai (lihat isActiveRow). Riwayat (activeOnly=false, tanpa
+  // filter tanggal/ibadah) = sisanya, supaya tiket tidak muncul di dua tab.
+  const activeOf = (r: (typeof rows)[number]) => isActiveRow(r, tzOr(r.ibadah.cabang.timezone), now, r.ibadah);
+  const visible =
+    tanggalStr || ibadahId
+      ? activeOnly && !tanggalStr
+        ? rows.filter(activeOf)
+        : rows
+      : activeOnly
+        ? rows.filter(activeOf)
+        : rows.filter((r) => !activeOf(r));
   res.json({
     success: true,
     data: visible.map((r) => {

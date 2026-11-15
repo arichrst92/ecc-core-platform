@@ -14,7 +14,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
-import { eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { CLOSE_AFTER_MIN, eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { tzOr } from '../../lib/tz.js';
 import { eventStartsAt } from '../../lib/event-time.js';
 import { revokeEventRole } from '../../lib/event-role.js';
@@ -112,6 +112,10 @@ meEventTiketRouter.get('/', async (req, res) => {
       const tz = tzOr(ev.cabang?.timezone);
       const win = eventSelfCheckinWindow(ev, now, tz);
       const ended = !!win.closesAt && now > new Date(win.closesAt);
+      // Tab: pindah ke Riwayat begitu event SELESAI (jam selesai). Yang belum
+      // check-in tetap di Mendatang sampai jendela self check-in tutup (+30 menit).
+      const endAt = win.closesAt ? new Date(win.closesAt).getTime() - CLOSE_AFTER_MIN * 60_000 : null;
+      const finished = endAt != null && now.getTime() > endAt && (r.status === 'HADIR' || r.status === 'BATAL' || ended);
       const paid = ev.tipeBayar === 'GRATIS';
       const payment: 'GRATIS' | 'LUNAS' | 'MENUNGGU' | 'BELUM_BAYAR' = paid
         ? 'GRATIS'
@@ -162,13 +166,18 @@ meEventTiketRouter.get('/', async (req, res) => {
           venue: venueInfo(ev.selfCheckinRadiusM, venuePoint(ev, ev.cabang)),
         },
         _ended: ended,
+        _finished: finished,
       };
     })
     .filter((t) =>
-      eventId ? t.status !== 'BATAL' || scope === 'history' : scope === 'upcoming' ? t.status !== 'BATAL' && !t._ended : t.status === 'BATAL' || t._ended,
+      eventId
+        ? t.status !== 'BATAL' || scope === 'history'
+        : scope === 'upcoming'
+          ? t.status !== 'BATAL' && !t._finished
+          : t.status === 'BATAL' || t._finished,
     )
     .slice(0, 100)
-    .map(({ _ended, ...t }) => ({ ...t, ended: _ended }));
+    .map(({ _ended, _finished, ...t }) => ({ ...t, ended: _ended }));
 
   // serverNow: app menghitung jendela check-in dengan jam server (bukan jam HP).
   res.json({ success: true, data: { tickets: data, serverNow: now.toISOString() } });

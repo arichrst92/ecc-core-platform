@@ -12,11 +12,14 @@ export function SeatBar({
   filled,
   size = 'sm',
   tone = 'light',
+  showLeft = true,
 }: {
   quota: number | null | undefined;
   filled: number | null | undefined;
   size?: 'sm' | 'md';
   tone?: 'light' | 'dark';
+  /** Tampilkan "xx tersisa" di kanan (false = sembunyikan). */
+  showLeft?: boolean;
 }) {
   const { L } = useLang();
   const n = Math.max(0, filled ?? 0);
@@ -49,9 +52,9 @@ export function SeatBar({
         </span>
         {badge ? (
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${badge.cls}`}>{badge.text}</span>
-        ) : (
+        ) : showLeft ? (
           <span className={muted}>{L(`${left} tersisa`, `${left} left`)}</span>
-        )}
+        ) : null}
       </div>
       <div
         className={`mt-1.5 w-full overflow-hidden rounded-full ${tone === 'dark' ? 'bg-white/25' : 'bg-orange-100'} ${size === 'md' ? 'h-2.5' : 'h-2'}`}

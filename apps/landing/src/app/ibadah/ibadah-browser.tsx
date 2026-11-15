@@ -149,7 +149,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                       </p>
                       {e.kapasitasSeat ? (
                         <div className="mt-2">
-                          <SeatBar quota={e.kapasitasSeat} filled={e.terisi} />
+                          <SeatBar quota={e.kapasitasSeat} filled={e.terisi} showLeft={false} />
                         </div>
                       ) : null}
                     </div>

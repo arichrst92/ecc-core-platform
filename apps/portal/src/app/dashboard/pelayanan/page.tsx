@@ -157,8 +157,11 @@ export default function PelayananPage() {
                 <div className="flex items-center gap-2.5 min-w-0">
                   <PelayananIcon ikon={p.ikon} warna={p.warna} size={34} />
                   <div className="min-w-0">
-                    <Link href={`/dashboard/pelayanan/${p.id}`} className="font-semibold text-neutral-900 hover:text-brand-600 hover:underline truncate block">
+                    <Link href={`/dashboard/pelayanan/${p.id}`} className="font-semibold text-neutral-900 hover:text-brand-600 hover:underline truncate flex items-center gap-1.5">
                       {p.nama}
+                      {!p.isActive ? (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-600">Nonaktif</span>
+                      ) : null}
                     </Link>
                     {p.deskripsi && (
                       <div className="text-xs text-neutral-500 truncate">{p.deskripsi}</div>
@@ -494,9 +497,10 @@ function EditPelayananModal({
   const [deskripsi, setDeskripsi] = useState(pelayanan.deskripsi ?? '');
   const [ikon, setIkon] = useState<string>(pelayanan.ikon ?? 'heart-handshake');
   const [warna, setWarna] = useState<string>(pelayanan.warna ?? 'orange');
+  const [isActive, setIsActive] = useState<boolean>(pelayanan.isActive);
   const save = useMutation({
     mutationFn: async () =>
-      apiClient.patch(`/admin/pelayanan/${pelayanan.id}`, { nama: nama.trim(), deskripsi: deskripsi.trim(), ikon, warna }),
+      apiClient.patch(`/admin/pelayanan/${pelayanan.id}`, { nama: nama.trim(), deskripsi: deskripsi.trim(), ikon, warna, isActive }),
     onSuccess: () => {
       toast.success('Pelayanan diperbarui');
       onSuccess();
@@ -517,6 +521,20 @@ function EditPelayananModal({
             </button>
           </div>
           <div className="p-6 space-y-4 overflow-y-auto">
+            <label className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-brand-600"
+              />
+              <span>
+                <span className="block text-sm font-medium text-neutral-800">Pelayanan aktif</span>
+                <span className="block text-xs text-neutral-500">
+                  Matikan untuk menonaktifkan pelayanan tanpa menghapus anggota & riwayatnya.
+                </span>
+              </span>
+            </label>
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Nama</span>
               <input

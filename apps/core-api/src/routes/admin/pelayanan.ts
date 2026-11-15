@@ -257,7 +257,29 @@ pelayananRouter.delete('/:id', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'delete');
   const before = await prisma.pelayanan.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Pelayanan tidak ditemukan');
-  await prisma.pelayanan.delete({ where: { id: req.params.id } });
+
+  // Anggota (jemaat_pelayanan) sengaja tidak ikut terhapus — riwayat pelayanan
+  // jemaat penting. Minta admin mengeluarkan anggota dulu, atau nonaktifkan.
+  const [aktif, total] = await Promise.all([
+    prisma.jemaatPelayanan.count({ where: { pelayananId: before.id, isActive: true } }),
+    prisma.jemaatPelayanan.count({ where: { pelayananId: before.id } }),
+  ]);
+  if (total > 0) {
+    throw Conflict(
+      `Pelayanan "${before.nama}" tidak bisa dihapus karena masih tercatat ${total} anggota` +
+        (aktif !== total ? ` (${aktif} aktif, ${total - aktif} riwayat)` : '') +
+        '. Keluarkan anggotanya dulu di halaman detail pelayanan, atau nonaktifkan pelayanan ini lewat tombol ubah (data & riwayat tetap tersimpan).',
+    );
+  }
+
+  // Susunan petugas memakai role pelayanan ini (FK RESTRICT ke role) → hapus
+  // dulu secara eksplisit, lalu pelayanan (link ibadah/event, role, jadwal ikut terhapus).
+  await prisma.$transaction([
+    prisma.ibadahPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+    prisma.eventPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+    prisma.pelayananScheduleAssignment.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+    prisma.pelayanan.delete({ where: { id: before.id } }),
+  ]);
   audit(req, {
     action: 'DELETE',
     resource: 'pelayanan',

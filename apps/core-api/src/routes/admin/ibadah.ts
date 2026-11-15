@@ -132,7 +132,22 @@ ibadahRouter.get('/calendar', async (req, res) => {
     // URL streaming Zoom/YouTube — null kalau ibadah offline atau belum di-set.
     // Mobile gate "Akses Online" button dengan field ini.
     linkOnline: string | null;
+    /** Okupansi seat pertemuan (sama dengan detail ?tanggal=); null bila seat belum diisi. */
+    okupansi: { tanggal: string; seat: number; hadir: number; persen: number | null } | null;
   }[] = [];
+
+  // Hadir (JOIN) per pertemuan — hanya ibadah yang punya kapasitas seat.
+  const seatIds = ibadahs.filter((i) => i.kapasitasSeat).map((i) => i.id);
+  const hadirRows = seatIds.length
+    ? await prisma.reservasi.groupBy({
+        by: ['ibadahId', 'tanggalIbadah'],
+        where: { ibadahId: { in: seatIds }, tanggalIbadah: { gte: from, lte: to }, status: 'JOIN' },
+        _count: { _all: true },
+      })
+    : [];
+  const hadirMap = new Map(
+    hadirRows.map((r) => [`${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`, r._count._all]),
+  );
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
@@ -157,6 +172,12 @@ ibadahRouter.get('/calendar', async (req, res) => {
         isOnline: i.isOnline,
         urutan: i.urutan,
         linkOnline: i.linkOnline,
+        okupansi: i.kapasitasSeat
+          ? (() => {
+              const hadir = hadirMap.get(`${i.id}:${iso}`) ?? 0;
+              return { tanggal: iso, seat: i.kapasitasSeat, hadir, persen: occupancyPct(hadir, i.kapasitasSeat) };
+            })()
+          : null,
       });
     }
   }

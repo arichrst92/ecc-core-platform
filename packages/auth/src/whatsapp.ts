@@ -33,11 +33,21 @@ const STARSENDER_URL = 'https://api.starsender.online/api/send';
 const STARSENDER_KEY = process.env.STARSENDER_DEVICE_KEY ?? '';
 const SEND_TIMEOUT_MS = 12_000;
 // Resmi.ID — WhatsApp Business API resmi (Meta), KHUSUS OTP lewat template
-// Authentication. URL endpoint diambil dari dokumentasi di dashboard Resmi.ID.
-const RESMI_API_URL = process.env.RESMI_API_URL ?? '';
+// Authentication. Docs: dashboard Resmi.ID → Developer → View API documentation.
+//   POST https://whatsapp.resmi.id/api/v1-public/messages (scope messages:send)
+//   Header: Authorization: Bearer wadash_…
+//   Sukses 202: { data: { message_id, status: "queued" } }
+//   Gagal:      { error: { code, message } } — validation_error, template_not_found,
+//               invalid_api_key, insufficient_scope, rate_limit_exceeded, …
+const RESMI_API_URL = process.env.RESMI_API_URL || 'https://whatsapp.resmi.id/api/v1-public/messages';
 const RESMI_API_KEY = process.env.RESMI_API_KEY ?? '';
+// ID nomor pengirim (Settings → Number & WABA → Identifiers). Wajib: jangan waba_id.
+const RESMI_PHONE_ID = process.env.RESMI_PHONE_ID ?? '';
 const RESMI_OTP_TEMPLATE = process.env.RESMI_OTP_TEMPLATE ?? '';
 const RESMI_OTP_TEMPLATE_LANG = process.env.RESMI_OTP_TEMPLATE_LANG || 'id';
+// Template Authentication Meta punya tombol "Salin kode" (URL button index 0)
+// yang juga diisi kode. Set "false" bila template tidak punya tombol.
+const RESMI_OTP_BUTTON = (process.env.RESMI_OTP_BUTTON ?? 'true').toLowerCase() !== 'false';
 
 /** Provider teks bebas (non-official). */
 export type WaTextProvider = 'fonnte' | 'starsender';
@@ -139,31 +149,26 @@ async function sendViaStarsender(target: string, message: string): Promise<strin
 // ------------------------------------------------------------
 //  Provider: Resmi.ID (WABA resmi) — OTP via template Authentication
 // ------------------------------------------------------------
-// Format body mengikuti Meta Cloud API (Resmi.ID = Tech Partner Meta). Template
-// Authentication Meta: kode di {{1}} body + tombol "Salin kode" (URL button
-// index 0) yang juga diisi kode. Sesuaikan bila dokumentasi Resmi.ID berbeda.
-const resmiConfigured = () => !!(RESMI_API_URL && RESMI_API_KEY && RESMI_OTP_TEMPLATE);
+// Template Authentication: kode di {{1}} body + tombol "Salin kode" (URL
+// button index 0) yang juga diisi kode — sesuai contoh OTP di docs Resmi.ID.
+const resmiConfigured = () => !!(RESMI_API_KEY && RESMI_PHONE_ID && RESMI_OTP_TEMPLATE);
 
 async function sendOtpViaResmi(target: string, otp: string): Promise<string> {
   if (!resmiConfigured()) {
-    throw new Error('Resmi not configured: set RESMI_API_URL, RESMI_API_KEY, RESMI_OTP_TEMPLATE di .env');
+    throw new Error('Resmi not configured: set RESMI_API_KEY, RESMI_PHONE_ID, RESMI_OTP_TEMPLATE di .env');
+  }
+  const components: Record<string, unknown>[] = [{ type: 'body', parameters: [{ type: 'text', text: otp }] }];
+  if (RESMI_OTP_BUTTON) {
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otp }] });
   }
   const res = await fetch(RESMI_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESMI_API_KEY}`, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
       to: target,
+      phone_id: RESMI_PHONE_ID,
       type: 'template',
-      template: {
-        name: RESMI_OTP_TEMPLATE,
-        language: { code: RESMI_OTP_TEMPLATE_LANG },
-        components: [
-          { type: 'body', parameters: [{ type: 'text', text: otp }] },
-          { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otp }] },
-        ],
-      },
+      template: { name: RESMI_OTP_TEMPLATE, language: { code: RESMI_OTP_TEMPLATE_LANG }, components },
     }),
     signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
@@ -174,13 +179,14 @@ async function sendOtpViaResmi(target: string, otp: string): Promise<string> {
     if (!res.ok) throw new Error(`Resmi error: HTTP ${res.status}`);
     return '';
   }
-  // Sebagian gateway menjawab error dengan HTTP 200 → cek isi juga.
-  const err = data.error ?? (data.success === false || data.status === false ? data : null);
+  const err = data.error;
   if (!res.ok || err) {
-    const msg = typeof err === 'string' ? err : err?.message ?? data.message ?? `HTTP ${res.status}`;
-    throw new Error(`Resmi error: ${String(msg).slice(0, 300)}`);
+    const code = typeof err === 'object' && err?.code ? `${err.code}: ` : '';
+    const msg = typeof err === 'string' ? err : err?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Resmi error: ${code}${String(msg).slice(0, 300)}`);
   }
-  const id = data.messages?.[0]?.id ?? data.data?.messages?.[0]?.id ?? data.data?.id ?? data.id ?? data.message_id;
+  // message_id = ID antrean Resmi.ID (status "queued"), bukan wamid Meta.
+  const id = data.data?.message_id ?? data.data?.id;
   return id === undefined || id === null ? '' : String(id).slice(0, 100);
 }
 

@@ -9,7 +9,8 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { ArrowDownUp, KeyRound, Loader2, Mail, Router, UserCheck } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDownUp, KeyRound, Loader2, Mail, Router, Send, UserCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type EmailMode = 'fallback' | 'always' | 'off';
@@ -29,11 +30,33 @@ interface Gateway {
     starsender: { configured: boolean; enabled: boolean };
     resmi: { configured: boolean; enabled: boolean; template: string | null; lang: string };
   };
+  health: Record<ProviderKey, { state: 'ok' | 'error' | 'unknown'; lastOkAt: string | null; lastErrAt: string | null; lastErr: string | null }>;
+  fonnteDevice: { connected: boolean; device: string | null; error?: string } | null;
   effective: { order: string; otpEmailCopy: EmailMode; onboardingSkipNoHpOtp: boolean };
   env: { waProviderOrder: string | null; otpEmailCopy: string | null; onboardingSkipNoHpOtp: string | null };
 }
 
+type ProviderKey = 'resmi' | 'fonnte' | 'starsender';
 const KEY = ['wa-config', 'gateway'];
+const jam = (iso: string) =>
+  new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** Pil status: terhubung / terputus / belum ada data. */
+function StatusPill({ tone, children, title }: { tone: 'green' | 'red' | 'gray' | 'amber'; children: React.ReactNode; title?: string }) {
+  const cls = {
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+    amber: 'bg-amber-50 text-amber-800 border-amber-200',
+    gray: 'bg-neutral-50 text-neutral-500 border-neutral-200',
+  }[tone];
+  const dot = { green: 'bg-emerald-500', red: 'bg-red-500', amber: 'bg-amber-500', gray: 'bg-neutral-400' }[tone];
+  return (
+    <span title={title} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {children}
+    </span>
+  );
+}
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -73,6 +96,23 @@ export function GatewaySettings() {
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menyimpan'),
   });
 
+  const [testing, setTesting] = useState<ProviderKey | null>(null);
+  const test = useMutation({
+    mutationFn: async (provider: ProviderKey) => {
+      setTesting(provider);
+      return (
+        await apiClient.post<{ data: { ok: boolean; to?: string; error?: string; gateway: Gateway } }>('/admin/wa-config/gateway/test', { provider })
+      ).data.data;
+    },
+    onSuccess: (r) => {
+      qc.setQueryData(KEY, r.gateway);
+      if (r.ok) toast.success(`Pesan tes terkirim ke ${r.to} — cek WhatsApp Anda`);
+      else toast.error(`Tes gagal: ${r.error}`);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Tes gagal'),
+    onSettled: () => setTesting(null),
+  });
+
   const d = q.data;
   const busy = save.isPending;
 
@@ -94,8 +134,37 @@ export function GatewaySettings() {
       .map((k) => (k === 'fonnte' ? (p.fonnte.configured && p.fonnte.enabled ? 'Fonnte' : null) : p.starsender.configured && p.starsender.enabled ? 'StarSender' : null)),
   ].filter(Boolean) as string[];
 
+  /** Status koneksi: Fonnte dari API perangkat; lainnya dari hasil kirim terakhir / tes. */
+  const statusOf = (key: ProviderKey, st: { configured: boolean; enabled: boolean }) => {
+    if (!st.configured) return <StatusPill tone="gray">Belum dikonfigurasi</StatusPill>;
+    const h = d.health[key];
+    const last =
+      h.state === 'ok' && h.lastOkAt ? `Terkirim terakhir ${jam(h.lastOkAt)}` : h.state === 'error' && h.lastErrAt ? `Gagal ${jam(h.lastErrAt)}` : null;
+    let pill: React.ReactNode;
+    if (key === 'fonnte' && d.fonnteDevice) {
+      pill = d.fonnteDevice.connected ? (
+        <StatusPill tone="green">Connect{d.fonnteDevice.device ? ` · ${d.fonnteDevice.device}` : ''}</StatusPill>
+      ) : (
+        <StatusPill tone="red" title={d.fonnteDevice.error}>
+          Disconnect
+        </StatusPill>
+      );
+    } else if (h.state === 'ok') pill = <StatusPill tone="green">Connect</StatusPill>;
+    else if (h.state === 'error') pill = <StatusPill tone="red" title={h.lastErr ?? undefined}>Disconnect / gagal</StatusPill>;
+    else pill = <StatusPill tone="gray">Belum dicek — tekan Tes</StatusPill>;
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {pill}
+        {!st.enabled ? <StatusPill tone="amber">Dimatikan</StatusPill> : null}
+        {last ? <span className="text-[11px] text-neutral-500">{last}</span> : null}
+        {h.state === 'error' && h.lastErr ? <span className="w-full text-[11px] text-red-600 break-words">{h.lastErr}</span> : null}
+      </div>
+    );
+  };
+
   const providerRow = (
-    key: 'fonnte' | 'starsender' | 'resmi',
+    rank: number,
+    key: ProviderKey,
     title: string,
     sub: string,
     st: { configured: boolean; enabled: boolean },
@@ -103,18 +172,49 @@ export function GatewaySettings() {
     envHint: string,
   ) => (
     <div key={key} className="flex items-start gap-3 py-3">
+      <span className="w-7 h-7 rounded-full bg-neutral-100 text-neutral-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+        {rank}
+      </span>
       <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-neutral-900">{title}</span>
-          <Badge ok={st.configured} okText="Kredensial ada" noText="Belum diisi di .env" />
-          {st.configured && !st.enabled ? <Badge ok={false} okText="" noText="Dimatikan" /> : null}
-        </div>
-        <p className="text-xs text-neutral-500 mt-0.5">{sub}</p>
+        <div className="font-semibold text-neutral-900">{title}</div>
+        <p className="text-xs text-neutral-500 mb-1.5">{sub}</p>
+        {statusOf(key, st)}
         {!st.configured ? <p className="text-[11px] text-amber-700 mt-1">Isi {envHint} di .env VPS untuk memakai provider ini.</p> : null}
       </div>
-      <Toggle on={st.enabled} disabled={busy || !st.configured} onChange={(v) => save.mutate({ [field]: v } as Partial<Settings>)} />
+      <div className="flex items-center gap-3 shrink-0">
+        <button
+          type="button"
+          onClick={() => test.mutate(key)}
+          disabled={!st.configured || test.isPending}
+          title={key === 'resmi' ? 'Kirim template OTP contoh (123456) ke nomor Anda' : 'Kirim pesan tes ke nomor Anda'}
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-300 text-xs font-medium hover:bg-neutral-50 disabled:opacity-40"
+        >
+          {testing === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+          Tes
+        </button>
+        <Toggle on={st.enabled} disabled={busy || !st.configured} onChange={(v) => save.mutate({ [field]: v } as Partial<Settings>)} />
+      </div>
     </div>
   );
+
+  // Prioritas: Resmi.ID (OTP) → urutan Fonnte/StarSender.
+  const textOrder = d.effective.order.split(',').filter((k): k is 'fonnte' | 'starsender' => k === 'fonnte' || k === 'starsender');
+  const rows: [ProviderKey, string, string, { configured: boolean; enabled: boolean }, 'waFonnteEnabled' | 'waStarsenderEnabled' | 'waResmiOtpEnabled', string][] = [
+    [
+      'resmi',
+      'Resmi.ID (WABA resmi)',
+      `Khusus OTP, dicoba paling awal.${p.resmi.template ? ` Template: ${p.resmi.template} (${p.resmi.lang}).` : ''} Template harus sudah disetujui Meta.`,
+      p.resmi,
+      'waResmiOtpEnabled',
+      'RESMI_API_KEY, RESMI_PHONE_ID, RESMI_OTP_TEMPLATE',
+    ],
+    ...textOrder.map(
+      (k) =>
+        (k === 'fonnte'
+          ? ['fonnte', 'Fonnte', 'Non-official — OTP & semua notifikasi.', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN']
+          : ['starsender', 'StarSender', 'Non-official — cadangan OTP & notifikasi.', p.starsender, 'waStarsenderEnabled', 'STARSENDER_DEVICE_KEY']) as (typeof rows)[number],
+    ),
+  ];
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl mb-6 overflow-hidden">
@@ -143,22 +243,13 @@ export function GatewaySettings() {
       </div>
 
       <div className="px-5 divide-y divide-neutral-100">
-        {providerRow('fonnte', 'Fonnte', 'Non-official — OTP & semua notifikasi.', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN')}
-        {providerRow('starsender', 'StarSender', 'Non-official — cadangan OTP & notifikasi.', p.starsender, 'waStarsenderEnabled', 'STARSENDER_DEVICE_KEY')}
-        {providerRow(
-          'resmi',
-          'Resmi.ID (WABA resmi)',
-          `Khusus OTP, dicoba paling awal.${p.resmi.template ? ` Template: ${p.resmi.template} (${p.resmi.lang}).` : ''} Template harus sudah disetujui Meta.`,
-          p.resmi,
-          'waResmiOtpEnabled',
-          'RESMI_API_KEY, RESMI_PHONE_ID, RESMI_OTP_TEMPLATE',
-        )}
+        {rows.map(([key, title, sub, st, field, env], i) => providerRow(i + 1, key, title, sub, st, field, env))}
 
         {/* Urutan */}
         <div className="flex flex-wrap items-center gap-3 py-3">
           <ArrowDownUp className="w-4 h-4 text-neutral-500" />
           <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-neutral-900">Urutan Fonnte / StarSender</div>
+            <div className="font-semibold text-neutral-900">Urutan Fonnte / StarSender (setelah Resmi.ID)</div>
             <p className="text-xs text-neutral-500">Yang pertama dipakai; yang kedua otomatis jadi cadangan.</p>
           </div>
           <select

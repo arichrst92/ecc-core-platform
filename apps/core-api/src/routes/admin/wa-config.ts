@@ -13,7 +13,14 @@ import {
   renderTemplate,
   type WaNotifType,
 } from '../../lib/wa-notif.js';
-import { getFonnteDevice, isWhatsAppRegistered, sendWhatsAppText, waProviderStatus } from '@ecc/auth';
+import {
+  getFonnteDevice,
+  isWhatsAppRegistered,
+  sendWhatsAppText,
+  testWaProvider,
+  waProviderHealth,
+  waProviderStatus,
+} from '@ecc/auth';
 import { z } from 'zod';
 import {
   OTP_EMAIL_MODES,
@@ -55,9 +62,22 @@ waConfigRouter.get('/device', async (_req, res) => {
 async function gatewayView() {
   const settings = await loadWaRuntime(true);
   const st = waProviderStatus();
+  // Status perangkat Fonnte langsung dari API-nya (connect / disconnect).
+  let fonnteDevice: { connected: boolean; device: string | null; error?: string } | null = null;
+  if (st.fonnte.configured) {
+    try {
+      const dev = await getFonnteDevice();
+      fonnteDevice = { connected: dev.connected, device: dev.device ? `+${dev.device.replace(/^\+/, '')}` : null };
+    } catch (err) {
+      fonnteDevice = { connected: false, device: null, error: (err as Error).message };
+    }
+  }
   return {
     settings,
     providers: st,
+    // Hasil kirim terakhir per provider (sejak server terakhir start).
+    health: waProviderHealth(),
+    fonnteDevice,
     effective: {
       order: st.order,
       otpEmailCopy: otpEmailMode(),
@@ -102,6 +122,30 @@ waConfigRouter.patch('/gateway', async (req, res) => {
     metadata: { kind: 'wa-gateway-update', fields: Object.keys(patch) },
   });
   res.json({ success: true, data: await gatewayView() });
+});
+
+/**
+ * POST /admin/wa-config/gateway/test { provider, noHp? } — kirim pesan tes
+ * lewat SATU provider (default ke nomor admin) untuk cek koneksinya.
+ */
+waConfigRouter.post('/gateway/test', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const provider = z.enum(['resmi', 'fonnte', 'starsender']).parse(req.body?.provider);
+  let noHp: string | null = null;
+  if (typeof req.body?.noHp === 'string' && req.body.noHp.trim()) {
+    noHp = normalizePhoneNumber(req.body.noHp);
+    if (!noHp) throw BadRequest(describeInvalidPhone(req.body.noHp));
+  } else {
+    const self = await prisma.jemaat.findUnique({ where: { id: req.user.jemaatId }, select: { noHp: true } });
+    noHp = self?.noHp ?? null;
+  }
+  if (!noHp) throw BadRequest('Akun Anda belum punya nomor HP — isi nomor tujuan tes.');
+  try {
+    const r = await testWaProvider(provider, noHp);
+    res.json({ success: true, data: { ok: true, provider, to: `+${r.to}`, messageId: r.messageId, gateway: await gatewayView() } });
+  } catch (err) {
+    res.json({ success: true, data: { ok: false, provider, error: (err as Error).message, gateway: await gatewayView() } });
+  }
 });
 
 waConfigRouter.get('/:type', async (req, res) => {

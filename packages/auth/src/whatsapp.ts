@@ -69,6 +69,35 @@ export function setWaRuntimeConfig(cfg: WaRuntimeConfig): void {
 }
 const isDisabled = (p: WaProvider) => !!runtime.disabled?.includes(p);
 
+/** Riwayat kirim terakhir per provider (memori proses) — status di Portal. */
+interface ProviderHealth {
+  lastOkAt?: number;
+  lastErrAt?: number;
+  lastErr?: string;
+}
+const health: Partial<Record<WaProvider, ProviderHealth>> = {};
+function markOk(p: WaProvider) {
+  health[p] = { ...health[p], lastOkAt: Date.now() };
+}
+function markErr(p: WaProvider, msg: string) {
+  health[p] = { ...health[p], lastErrAt: Date.now(), lastErr: msg.slice(0, 300) };
+}
+/** Status kirim terakhir: 'ok' bila sukses terakhir lebih baru dari gagal terakhir. */
+export function waProviderHealth() {
+  const out = {} as Record<WaProvider, { state: 'ok' | 'error' | 'unknown'; lastOkAt: string | null; lastErrAt: string | null; lastErr: string | null }>;
+  for (const p of ['resmi', 'fonnte', 'starsender'] as WaProvider[]) {
+    const h = health[p] ?? {};
+    const state = h.lastOkAt && (!h.lastErrAt || h.lastOkAt >= h.lastErrAt) ? 'ok' : h.lastErrAt ? 'error' : 'unknown';
+    out[p] = {
+      state,
+      lastOkAt: h.lastOkAt ? new Date(h.lastOkAt).toISOString() : null,
+      lastErrAt: h.lastErrAt ? new Date(h.lastErrAt).toISOString() : null,
+      lastErr: h.lastErr ?? null,
+    };
+  }
+  return out;
+}
+
 /** Status tiap provider untuk Portal: ada kredensial di .env? diaktifkan? */
 export function waProviderStatus() {
   return {
@@ -272,9 +301,11 @@ async function runFailover(attempts: Attempt[]): Promise<{ messageId: string; pr
     try {
       const messageId = await a.send();
       delete lastFailure[a.provider];
+      markOk(a.provider);
       return { messageId, provider: a.provider };
     } catch (e) {
       lastFailure[a.provider] = Date.now();
+      markErr(a.provider, (e as Error).message);
       // Pesan error tiap provider sudah diawali nama provider ("Resmi …" / "Fonnte …" / "StarSender …").
       errors.push((e as Error).message);
     }
@@ -391,5 +422,29 @@ export async function isWhatsAppRegistered(noHpE164: string): Promise<boolean | 
     return null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Tes koneksi satu provider (Portal → WhatsApp Config). Tetap jalan walau
+ * provider dimatikan (untuk cek sebelum dinyalakan); butuh kredensial.
+ * Resmi.ID mengirim template OTP dengan kode contoh 123456.
+ */
+export async function testWaProvider(provider: WaProvider, noHpE164: string): Promise<{ messageId: string; to: string }> {
+  const target = noHpE164.replace(/^\+/, '');
+  try {
+    const messageId =
+      provider === 'resmi'
+        ? await sendOtpViaResmi(target, '123456')
+        : await TEXT_SENDERS[provider].send(
+            target,
+            appendSignature(`*ECC — Tes koneksi WhatsApp*\nPesan ini dikirim lewat ${provider === 'fonnte' ? 'Fonnte' : 'StarSender'} dari Portal (WhatsApp Config).`),
+          );
+    markOk(provider);
+    delete lastFailure[provider];
+    return { messageId, to: target };
+  } catch (e) {
+    markErr(provider, (e as Error).message);
+    throw e;
   }
 }

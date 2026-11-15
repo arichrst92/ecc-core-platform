@@ -16,6 +16,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { GatewaySettings } from '@/components/wa/gateway-settings';
 
 interface WaConfig {
   id: string;
@@ -77,6 +78,8 @@ export default function WaConfigPage() {
           Button <strong>Test</strong> kirim pesan contoh ke nomor Anda (atau nomor yang di-override).
         </div>
       </div>
+
+      <GatewaySettings />
 
       <DeviceStatus />
 

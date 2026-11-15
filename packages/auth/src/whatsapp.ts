@@ -54,6 +54,38 @@ export type WaTextProvider = 'fonnte' | 'starsender';
 export type WaProvider = WaTextProvider | 'resmi';
 
 /**
+ * Pengaturan runtime dari Portal (WhatsApp Config → Gateway & OTP), di-set
+ * oleh core-api dari tabel app_config. Kosong = ikuti .env.
+ *   order    — "fonnte,starsender" / "starsender,fonnte" (null = WA_PROVIDER_ORDER)
+ *   disabled — provider yang dimatikan sementara (kredensial tetap di .env)
+ */
+export interface WaRuntimeConfig {
+  order?: string | null;
+  disabled?: WaProvider[];
+}
+let runtime: WaRuntimeConfig = {};
+export function setWaRuntimeConfig(cfg: WaRuntimeConfig): void {
+  runtime = { order: cfg.order ?? null, disabled: [...(cfg.disabled ?? [])] };
+}
+const isDisabled = (p: WaProvider) => !!runtime.disabled?.includes(p);
+
+/** Status tiap provider untuk Portal: ada kredensial di .env? diaktifkan? */
+export function waProviderStatus() {
+  return {
+    order: (runtime.order || process.env.WA_PROVIDER_ORDER || 'fonnte,starsender').toLowerCase(),
+    orderSource: runtime.order ? ('portal' as const) : ('env' as const),
+    fonnte: { configured: !!FONNTE_TOKEN, enabled: !isDisabled('fonnte') },
+    starsender: { configured: !!STARSENDER_KEY, enabled: !isDisabled('starsender') },
+    resmi: {
+      configured: !!(RESMI_API_KEY && RESMI_PHONE_ID && RESMI_OTP_TEMPLATE),
+      enabled: !isDisabled('resmi'),
+      template: RESMI_OTP_TEMPLATE || null,
+      lang: RESMI_OTP_TEMPLATE_LANG,
+    },
+  };
+}
+
+/**
  * Signature di-append di SEMUA outbound WA message (OTP, reminder ibadah,
  * reminder event, broadcast future). Single source of truth supaya kalau
  * branding berubah, edit di sini saja.
@@ -151,10 +183,12 @@ async function sendViaStarsender(target: string, message: string): Promise<strin
 // ------------------------------------------------------------
 // Template Authentication: kode di {{1}} body + tombol "Salin kode" (URL
 // button index 0) yang juga diisi kode — sesuai contoh OTP di docs Resmi.ID.
-const resmiConfigured = () => !!(RESMI_API_KEY && RESMI_PHONE_ID && RESMI_OTP_TEMPLATE);
+const resmiCredentials = () => !!(RESMI_API_KEY && RESMI_PHONE_ID && RESMI_OTP_TEMPLATE);
+/** Dipakai untuk OTP: kredensial ada DAN tidak dimatikan di Portal. */
+const resmiConfigured = () => resmiCredentials() && !isDisabled('resmi');
 
 async function sendOtpViaResmi(target: string, otp: string): Promise<string> {
-  if (!resmiConfigured()) {
+  if (!resmiCredentials()) {
     throw new Error('Resmi not configured: set RESMI_API_KEY, RESMI_PHONE_ID, RESMI_OTP_TEMPLATE di .env');
   }
   const components: Record<string, unknown>[] = [{ type: 'body', parameters: [{ type: 'text', text: otp }] }];
@@ -204,12 +238,12 @@ const lastFailure: Partial<Record<WaProvider, number>> = {};
 
 /** Urutan provider teks bebas (WA_PROVIDER_ORDER), hanya yang punya kredensial. */
 export function waProviders(): WaTextProvider[] {
-  const order = (process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender')
+  const order = (runtime.order || process.env.WA_PROVIDER_ORDER || 'fonnte,starsender')
     .split(',')
     .map((x) => x.trim().toLowerCase())
     .filter((x): x is WaTextProvider => x === 'fonnte' || x === 'starsender');
   const uniq = [...new Set(order.length ? order : (['fonnte', 'starsender'] as WaTextProvider[]))];
-  return uniq.filter((p) => TEXT_SENDERS[p].configured());
+  return uniq.filter((p) => TEXT_SENDERS[p].configured() && !isDisabled(p));
 }
 
 /** Urutan provider OTP: Resmi.ID (bila dikonfigurasi) lalu provider teks. */
@@ -226,7 +260,9 @@ type Attempt = { provider: WaProvider; send: () => Promise<string> };
  */
 async function runFailover(attempts: Attempt[]): Promise<{ messageId: string; provider: WaProvider }> {
   if (!attempts.length) {
-    throw new Error('WhatsApp gateway not configured: set FONNTE_TOKEN dan/atau STARSENDER_DEVICE_KEY di .env');
+    throw new Error(
+      'WhatsApp gateway not configured: semua provider nonaktif / belum diisi (Portal → WhatsApp Config, atau FONNTE_TOKEN / STARSENDER_DEVICE_KEY di .env)',
+    );
   }
   const now = Date.now();
   const cooling = (a: Attempt) => !!lastFailure[a.provider] && now - lastFailure[a.provider]! < COOLDOWN_MS;

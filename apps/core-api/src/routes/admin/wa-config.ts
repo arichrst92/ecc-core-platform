@@ -13,7 +13,17 @@ import {
   renderTemplate,
   type WaNotifType,
 } from '../../lib/wa-notif.js';
-import { getFonnteDevice, isWhatsAppRegistered, sendWhatsAppText } from '@ecc/auth';
+import { getFonnteDevice, isWhatsAppRegistered, sendWhatsAppText, waProviderStatus } from '@ecc/auth';
+import { z } from 'zod';
+import {
+  OTP_EMAIL_MODES,
+  WA_ORDERS,
+  loadWaRuntime,
+  otpEmailMode,
+  saveWaRuntime,
+  skipNoHpOtp,
+  waRuntimeSettings,
+} from '../../lib/wa-runtime.js';
 import { describeInvalidPhone, normalizePhoneNumber } from '@ecc/shared-types';
 
 export const waConfigRouter = Router();
@@ -36,6 +46,62 @@ waConfigRouter.get('/device', async (_req, res) => {
   } catch (err) {
     res.json({ success: true, data: { error: (err as Error).message } });
   }
+});
+
+/**
+ * GET /admin/wa-config/gateway — saklar provider WhatsApp & OTP (Portal).
+ * Kredensial tetap di .env; respons hanya menyebut ada/tidaknya (tanpa nilai).
+ */
+async function gatewayView() {
+  const settings = await loadWaRuntime(true);
+  const st = waProviderStatus();
+  return {
+    settings,
+    providers: st,
+    effective: {
+      order: st.order,
+      otpEmailCopy: otpEmailMode(),
+      onboardingSkipNoHpOtp: skipNoHpOtp(),
+    },
+    env: {
+      waProviderOrder: process.env.WA_PROVIDER_ORDER || null,
+      otpEmailCopy: process.env.OTP_EMAIL_COPY || null,
+      onboardingSkipNoHpOtp: process.env.ONBOARDING_SKIP_NOHP_OTP || null,
+    },
+  };
+}
+
+waConfigRouter.get('/gateway', async (_req, res) => {
+  res.json({ success: true, data: await gatewayView() });
+});
+
+const gatewaySchema = z
+  .object({
+    waProviderOrder: z.enum(WA_ORDERS).nullable(),
+    waFonnteEnabled: z.boolean(),
+    waStarsenderEnabled: z.boolean(),
+    waResmiOtpEnabled: z.boolean(),
+    otpEmailCopy: z.enum(OTP_EMAIL_MODES as [string, ...string[]]).nullable(),
+    onboardingSkipNoHpOtp: z.boolean().nullable(),
+  })
+  .partial();
+
+/** PATCH /admin/wa-config/gateway — simpan & terapkan langsung (tanpa restart). */
+waConfigRouter.patch('/gateway', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const patch = gatewaySchema.parse(req.body ?? {});
+  const before = { ...waRuntimeSettings() };
+  const after = await saveWaRuntime(patch as Parameters<typeof saveWaRuntime>[0], req.user.sub ?? null);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'wa_gateway_config',
+    resourceId: 'global',
+    resourceLabel: 'WhatsApp gateway & OTP',
+    before,
+    after,
+    metadata: { kind: 'wa-gateway-update', fields: Object.keys(patch) },
+  });
+  res.json({ success: true, data: await gatewayView() });
 });
 
 waConfigRouter.get('/:type', async (req, res) => {

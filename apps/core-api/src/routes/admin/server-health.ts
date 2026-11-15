@@ -16,6 +16,7 @@
  * Endpoint sengaja heavyweight (queries beberapa table). Jangan polling
  * lebih cepat dari setiap 5 detik.
  */
+import { waProviderStatus } from '@ecc/auth';
 import { Router } from 'express';
 import os from 'node:os';
 import path from 'node:path';
@@ -221,7 +222,7 @@ serverHealthRouter.get('/', async (_req, res) => {
         reminderHourEnd: Number(process.env.REMINDER_SEND_HOUR_END ?? 10),
         fonnteConfigured: !!process.env.FONNTE_TOKEN,
         starsenderConfigured: !!process.env.STARSENDER_DEVICE_KEY,
-        waProviderOrder: process.env.WA_PROVIDER_ORDER ?? 'fonnte,starsender',
+        waProviderOrder: waProviderStatus().order,
         // OTP: Resmi.ID (WABA resmi) dipakai lebih dulu bila dikonfigurasi.
         resmiOtpConfigured: !!(process.env.RESMI_API_KEY && process.env.RESMI_PHONE_ID && process.env.RESMI_OTP_TEMPLATE),
         livenessSecretSet: !!process.env.LIVENESS_NONCE_SECRET,

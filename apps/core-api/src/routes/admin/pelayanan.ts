@@ -260,9 +260,12 @@ pelayananRouter.delete('/:id', async (req, res) => {
 
   // Anggota (jemaat_pelayanan) sengaja tidak ikut terhapus — riwayat pelayanan
   // jemaat penting. Minta admin mengeluarkan anggota dulu, atau nonaktifkan.
+  // Termasuk keanggotaan yang memakai ROLE milik pelayanan ini walau tercatat
+  // di pelayanan lain (data lama tidak konsisten) — FK role juga RESTRICT.
+  const memberWhere = { OR: [{ pelayananId: before.id }, { pelayananRole: { pelayananId: before.id } }] };
   const [aktif, total] = await Promise.all([
-    prisma.jemaatPelayanan.count({ where: { pelayananId: before.id, isActive: true } }),
-    prisma.jemaatPelayanan.count({ where: { pelayananId: before.id } }),
+    prisma.jemaatPelayanan.count({ where: { ...memberWhere, isActive: true } }),
+    prisma.jemaatPelayanan.count({ where: memberWhere }),
   ]);
   // Hapus permanen (Portal, konfirmasi ketik nama): ?force=true&confirm=<nama>
   // → anggota & riwayat pelayanan jemaat ikut terhapus (tidak bisa dikembalikan).
@@ -284,14 +287,28 @@ pelayananRouter.delete('/:id', async (req, res) => {
 
   // Susunan petugas memakai role pelayanan ini (FK RESTRICT ke role) → hapus
   // dulu secara eksplisit, lalu pelayanan (link ibadah/event, role, jadwal ikut terhapus).
-  await prisma.$transaction([
-    prisma.ibadahPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
-    prisma.eventPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
-    prisma.pelayananScheduleAssignment.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
-    // Hanya terisi saat force (tanpa force, total sudah dipastikan 0).
-    prisma.jemaatPelayanan.deleteMany({ where: { pelayananId: before.id } }),
-    prisma.pelayanan.delete({ where: { id: before.id } }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.ibadahPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+      prisma.eventPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+      prisma.pelayananScheduleAssignment.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+      // Hanya terisi saat force (tanpa force, total sudah dipastikan 0).
+      prisma.jemaatPelayanan.deleteMany({ where: memberWhere }),
+      prisma.pelayanan.delete({ where: { id: before.id } }),
+    ]);
+  } catch (err) {
+    // Masih ada data lain yang mengunci (relasi baru / data tidak konsisten) —
+    // sebutkan constraint-nya supaya mudah ditelusuri, bukan pesan generik.
+    const e = err as { code?: string; meta?: { field_name?: string; constraint?: string } };
+    if (e.code === 'P2003') {
+      throw Conflict(
+        `Pelayanan "${before.nama}" masih dipakai data lain (${e.meta?.field_name ?? e.meta?.constraint ?? 'relasi'}). ` +
+          'Hubungi tim IT dengan pesan ini.',
+        { reason: 'FK_BLOCKED', constraint: e.meta?.field_name ?? e.meta?.constraint ?? null },
+      );
+    }
+    throw err;
+  }
   audit(req, {
     action: 'DELETE',
     resource: 'pelayanan',

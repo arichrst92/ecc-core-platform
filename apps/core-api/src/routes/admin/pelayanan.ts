@@ -264,11 +264,21 @@ pelayananRouter.delete('/:id', async (req, res) => {
     prisma.jemaatPelayanan.count({ where: { pelayananId: before.id, isActive: true } }),
     prisma.jemaatPelayanan.count({ where: { pelayananId: before.id } }),
   ]);
-  if (total > 0) {
+  // Hapus permanen (Portal, konfirmasi ketik nama): ?force=true&confirm=<nama>
+  // → anggota & riwayat pelayanan jemaat ikut terhapus (tidak bisa dikembalikan).
+  const force = req.query.force === 'true';
+  if (force) {
+    const confirm = typeof req.query.confirm === 'string' ? req.query.confirm.trim().toLowerCase() : '';
+    if (confirm !== before.nama.trim().toLowerCase()) {
+      throw BadRequest('Konfirmasi tidak cocok — ketik nama pelayanan persis untuk menghapus permanen.');
+    }
+  }
+  if (total > 0 && !force) {
     throw Conflict(
       `Pelayanan "${before.nama}" tidak bisa dihapus karena masih tercatat ${total} anggota` +
         (aktif !== total ? ` (${aktif} aktif, ${total - aktif} riwayat)` : '') +
-        '. Keluarkan anggotanya dulu di halaman detail pelayanan, atau nonaktifkan pelayanan ini lewat tombol ubah (data & riwayat tetap tersimpan).',
+        '. Keluarkan anggotanya dulu, nonaktifkan pelayanan ini (data & riwayat tetap tersimpan), atau pilih Hapus permanen.',
+      { reason: 'HAS_MEMBERS', members: total, active: aktif },
     );
   }
 
@@ -278,14 +288,17 @@ pelayananRouter.delete('/:id', async (req, res) => {
     prisma.ibadahPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
     prisma.eventPelayananPetugas.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
     prisma.pelayananScheduleAssignment.deleteMany({ where: { pelayananRole: { pelayananId: before.id } } }),
+    // Hanya terisi saat force (tanpa force, total sudah dipastikan 0).
+    prisma.jemaatPelayanan.deleteMany({ where: { pelayananId: before.id } }),
     prisma.pelayanan.delete({ where: { id: before.id } }),
   ]);
   audit(req, {
     action: 'DELETE',
     resource: 'pelayanan',
     resourceId: before.id,
-    resourceLabel: before.nama,
+    resourceLabel: force ? `${before.nama} (hapus permanen, ${total} anggota)` : before.nama,
     before,
+    metadata: { force, membersDeleted: force ? total : 0 },
   });
   res.status(204).end();
 });

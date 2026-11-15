@@ -75,6 +75,8 @@ function JoinRequestsLink() {
 export default function PelayananPage() {
   const qc = useQueryClient();
   const [deleting, setDeleting] = useState<DeletingTarget>(null);
+  // Pelayanan masih beranggota → tawarkan hapus permanen (ketik nama).
+  const [forceDel, setForceDel] = useState<{ id: string; label: string; members: number; active: number; message: string } | null>(null);
   const [editingRole, setEditingRole] = useState<PelayananRole | null>(null);
   const [editingPel, setEditingPel] = useState<Pelayanan | null>(null);
   const [penugasanFor, setPenugasanFor] = useState<string | null>(null);
@@ -120,8 +122,14 @@ export default function PelayananPage() {
       toast.success('Berhasil dihapus');
       setDeleting(null);
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.error?.message ?? 'Gagal menghapus');
+    onError: (err: any, target) => {
+      const e = err.response?.data?.error;
+      if (target.kind === 'pelayanan' && err.response?.status === 409 && e?.details?.reason === 'HAS_MEMBERS') {
+        setDeleting(null);
+        setForceDel({ id: target.id, label: target.label, members: e.details.members, active: e.details.active, message: e.message });
+        return;
+      }
+      toast.error(e?.message ?? 'Gagal menghapus');
     },
   });
 
@@ -266,6 +274,17 @@ export default function PelayananPage() {
         itemName={deleting?.label}
         onConfirm={() => deleting && deleteMut.mutate(deleting)}
       />
+
+      {forceDel ? (
+        <ForceDeleteModal
+          target={forceDel}
+          onClose={() => setForceDel(null)}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ['pelayanan'] });
+            setForceDel(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -603,6 +622,85 @@ function EditPelayananModal({
             >
               {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Hapus permanen pelayanan beserta anggota & riwayatnya — konfirmasi ketik nama. */
+function ForceDeleteModal({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: { id: string; label: string; members: number; active: number; message: string };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  const match = typed.trim().toLowerCase() === target.label.trim().toLowerCase();
+  const del = useMutation({
+    mutationFn: async () =>
+      apiClient.delete(`/admin/pelayanan/${target.id}`, { params: { force: 'true', confirm: typed.trim() } }),
+    onSuccess: () => {
+      toast.success(`Pelayanan "${target.label}" dihapus permanen beserta ${target.members} anggota`);
+      onDone();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal menghapus'),
+  });
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+            <h2 className="font-semibold text-red-700 inline-flex items-center gap-2">
+              <Trash2 className="w-4 h-4" /> Hapus permanen pelayanan?
+            </h2>
+            <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded" aria-label="Tutup">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4 text-sm">
+            <p className="text-neutral-700">{target.message}</p>
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-800 space-y-1">
+              <p className="font-semibold">Yang ikut terhapus dan tidak bisa dikembalikan:</p>
+              <ul className="list-disc pl-5 text-xs space-y-0.5">
+                <li>
+                  {target.members} anggota ({target.active} aktif, {target.members - target.active} riwayat) beserta riwayat pelayanannya
+                </li>
+                <li>Semua role, penugasan ke ibadah & event (termasuk yang sudah lewat), susunan petugas & jadwal</li>
+              </ul>
+            </div>
+            <p className="text-neutral-600">
+              Kalau hanya ingin berhenti dipakai, lebih aman <b>nonaktifkan</b> lewat tombol ubah (ikon pensil).
+            </p>
+            <label className="block">
+              <span className="text-neutral-700">
+                Ketik <b className="text-neutral-900">{target.label}</b> untuk konfirmasi
+              </span>
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                autoFocus
+                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100">
+            <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg hover:bg-neutral-100">
+              Batal
+            </button>
+            <button
+              onClick={() => del.mutate()}
+              disabled={!match || del.isPending}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+            >
+              {del.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Hapus permanen
             </button>
           </div>
         </div>

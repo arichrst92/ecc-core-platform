@@ -11,7 +11,7 @@
  *   - Participation lifecycle (DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR / BATAL)
  *   - Bukti transfer upload per participation + admin approval
  */
-import { DEFAULT_TZ, eventDateLabel, instantInTzLabel, todayInTz } from '../../lib/tz.js';
+import { DEFAULT_TZ, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -34,6 +34,7 @@ import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 import { isMobileClient } from '../../lib/client-kind.js';
+import { eventStartsAt, REGISTRATION_CLOSED_MESSAGE } from '../../lib/event-time.js';
 import {
   saveContentHero,
   deleteContentHero,
@@ -312,6 +313,8 @@ eventRouter.get('/', async (req, res) => {
   const data = rows.map((r) => ({
     ...r,
     pesertaCount: r._count.partisipasi,
+    // Batas pendaftaran online (countdown di app) = saat event dimulai.
+    registrationClosesAt: eventStartsAt(r, tzOr(r.cabang?.timezone)).toISOString(),
   }));
 
   res.json({
@@ -420,6 +423,9 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       ...item,
       ...mobileDisplay,
       pesertaCount: item._count.partisipasi,
+      // Batas pendaftaran online (countdown di app) = saat event dimulai;
+      // setelah itu registrasi walk-in di lokasi.
+      registrationClosesAt: eventStartsAt(item, tzOr(item.cabang?.timezone)).toISOString(),
       myParticipation,
       familyParticipationsCount,
       // Syarat role (kosong = terbuka untuk semua) + kelayakan user login.
@@ -885,6 +891,15 @@ eventRouter.post('/:id/peserta', async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
+  // Pendaftaran online dari app ditutup saat event dimulai → walk-in di lokasi.
+  if (isMobileClient(req)) {
+    const cab = event.cabangId
+      ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
+      : null;
+    if (new Date() >= eventStartsAt(event, tzOr(cab?.timezone))) {
+      throw new ApiError(400, 'REGISTRATION_CLOSED', REGISTRATION_CLOSED_MESSAGE);
+    }
+  }
 
   const input = registerEventParticipationSchema.parse(req.body);
 
@@ -1052,6 +1067,15 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
+  // Pendaftaran online dari app ditutup saat event dimulai → walk-in di lokasi.
+  if (isMobileClient(req)) {
+    const cab = event.cabangId
+      ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
+      : null;
+    if (new Date() >= eventStartsAt(event, tzOr(cab?.timezone))) {
+      throw new ApiError(400, 'REGISTRATION_CLOSED', REGISTRATION_CLOSED_MESSAGE);
+    }
+  }
 
   const currentCount = event._count.partisipasi;
   const slotsLeft = event.quotaPeserta == null ? Infinity : event.quotaPeserta - currentCount;

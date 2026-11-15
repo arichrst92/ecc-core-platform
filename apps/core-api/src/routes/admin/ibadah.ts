@@ -16,6 +16,8 @@ import { audit } from '../../lib/audit.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
+import { occurrenceStart } from '../../lib/reservasi-window.js';
+import { tzOr } from '../../lib/tz.js';
 
 export const ibadahRouter = Router();
 
@@ -134,6 +136,8 @@ ibadahRouter.get('/calendar', async (req, res) => {
     linkOnline: string | null;
     /** Okupansi seat pertemuan (sama dengan detail ?tanggal=); null bila seat belum diisi. */
     okupansi: { tanggal: string; seat: number; hadir: number; persen: number | null } | null;
+    /** Batas reservasi pertemuan ini (= jam mulai, zona cabang) — countdown di app. */
+    reservasiClosesAt: string;
   }[] = [];
 
   // Hadir (JOIN) per pertemuan — hanya ibadah yang punya kapasitas seat.
@@ -172,6 +176,7 @@ ibadahRouter.get('/calendar', async (req, res) => {
         isOnline: i.isOnline,
         urutan: i.urutan,
         linkOnline: i.linkOnline,
+        reservasiClosesAt: occurrenceStart(iso, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
         okupansi: i.kapasitasSeat
           ? (() => {
               const hadir = hadirMap.get(`${i.id}:${iso}`) ?? 0;
@@ -342,7 +347,11 @@ ibadahRouter.get('/:id', async (req, res) => {
       persen: occupancyPct(hadir, item.kapasitasSeat),
     };
   }
-  res.json({ success: true, data: { ...rest, petugas, okupansi } });
+  // Batas reservasi pertemuan ?tanggal= (= jam mulai, zona cabang).
+  const reservasiClosesAt = tanggalDate
+    ? occurrenceStart(tanggalDate.toISOString().slice(0, 10), item.jamMulai, tzOr(item.cabang?.timezone)).toISOString()
+    : null;
+  res.json({ success: true, data: { ...rest, petugas, okupansi, reservasiClosesAt } });
 });
 
 /**

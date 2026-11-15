@@ -15,19 +15,13 @@ import { prisma } from '@ecc/database';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
 import { eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
-import { calendarDateOf, tzOr, wallToInstant } from '../../lib/tz.js';
+import { tzOr } from '../../lib/tz.js';
+import { eventStartsAt } from '../../lib/event-time.js';
 import { revokeEventRole } from '../../lib/event-role.js';
 import { audit } from '../../lib/audit.js';
 
 export const meEventTiketRouter = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Mulai event (jam dinding cabang) → instant. Tanpa jam = 00:00. */
-function eventStartsAt(ev: { tanggalMulai: Date; jamMulai: string | null }, tz: string): Date {
-  const m = /^(\d{1,2}):(\d{2})/.exec(ev.jamMulai ?? '');
-  const min = m ? Number(m[1]) * 60 + Number(m[2]) : 0;
-  return wallToInstant(calendarDateOf(ev.tanggalMulai, tz), min, tz);
-}
 
 /**
  * Boleh dibatalkan sendiri dari tiket: belum hadir/batal, belum ada uang

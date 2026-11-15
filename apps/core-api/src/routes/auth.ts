@@ -32,7 +32,7 @@ import {
   completeOnboardingSchema,
 } from '@ecc/shared-types';
 import { randomBytes } from 'node:crypto';
-import { sendMagicLinkEmail } from '../lib/sendgrid.js';
+import { sendMagicLinkEmail, sendOtpEmail } from '../lib/sendgrid.js';
 import {
   issueLivenessNonce,
   consumeLivenessNonce,
@@ -132,6 +132,8 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     });
   }
 
+  // Jemaat pemilik nomor (purpose LOGIN) — untuk OTP cadangan lewat email.
+  let loginJemaat: { namaLengkap: string; email: string | null } | null = null;
   if (purpose === 'ENROLLMENT') {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
     const existing = await prisma.jemaat.findUnique({ where: { noHp } });
@@ -151,6 +153,7 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     const jemaat = await prisma.jemaat.findUnique({ where: { noHp } });
     // Tamu belum punya akun → arahkan ke pendaftaran.
     if (!jemaat || jemaat.isTamu) throw NotFound('Nomor HP belum terdaftar sebagai jemaat');
+    loginJemaat = jemaat;
   }
 
   const recent = await prisma.otpVerification.findFirst({
@@ -176,13 +179,46 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     },
   });
 
+  // OTP cadangan lewat email (login, jemaat punya email). OTP_EMAIL_COPY:
+  //   "fallback" (default) — hanya bila semua gateway WhatsApp gagal
+  //   "always"            — selalu dikirim juga ke email (gateway antre/terblokir diam-diam)
+  //   "off"               — nonaktif
+  const emailMode = (process.env.OTP_EMAIL_COPY ?? 'fallback').toLowerCase();
+  const emailTo = purpose === 'LOGIN' && emailMode !== 'off' ? loginJemaat?.email ?? null : null;
+  const EMAIL_NOTE =
+    'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirim OTP ke email Anda.';
+  const sendEmailCopy = async (): Promise<boolean> => {
+    if (!emailTo || !loginJemaat) return false;
+    try {
+      await sendOtpEmail({
+        to: emailTo,
+        namaLengkap: loginJemaat.namaLengkap,
+        otp,
+        expiresInMinutes: Math.max(1, Math.round(Number(process.env.OTP_EXPIRES_SECONDS ?? 300) / 60)),
+      });
+      logger.info({ noHp, purpose, mode: emailMode }, '[auth-otp] OTP dikirim juga lewat email');
+      return true;
+    } catch (err) {
+      logger.error({ err, noHp }, '[auth-otp] gagal kirim OTP lewat email');
+      return false;
+    }
+  };
+
+  // Mode "always": email dikirim bersamaan, tidak menunggu WhatsApp.
+  const emailAlways = emailMode === 'always' ? sendEmailCopy() : null;
+
   try {
     await sendOtpViaWhatsApp(noHp, otp);
   } catch (e) {
+    logger.error({ err: e, noHp, purpose }, '[auth-otp] gagal kirim OTP via WhatsApp');
+    // Semua gateway WhatsApp gagal → kode tetap berlaku bila terkirim ke email.
+    const viaEmail = emailAlways ? await emailAlways : await sendEmailCopy();
+    if (viaEmail) {
+      return res.json({ success: true, message: EMAIL_NOTE, data: { channel: 'email' } });
+    }
     // Gagal kirim (mis. perangkat WhatsApp Fonnte terputus): hapus OTP yang tidak
     // pernah terkirim supaya user tidak tertahan cooldown "Mohon tunggu 60 detik",
     // dan beri pesan yang jelas (bukan 500).
-    logger.error({ err: e, noHp, purpose }, '[auth-otp] gagal kirim OTP via WhatsApp');
     await prisma.otpVerification.delete({ where: { id: otpRow.id } }).catch(() => undefined);
     throw ServiceUnavailable(
       purpose === 'LOGIN'
@@ -192,6 +228,9 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     );
   }
 
+  if (emailAlways && (await emailAlways)) {
+    return res.json({ success: true, message: `OTP telah dikirim via WhatsApp. ${EMAIL_NOTE}`, data: { channel: 'whatsapp+email' } });
+  }
   res.json({ success: true, message: 'OTP telah dikirim via WhatsApp' });
 });
 

@@ -678,3 +678,120 @@ pelayananRouter.delete('/petugas/:id', async (req, res) => {
   });
   res.status(204).end();
 });
+
+// ===== Penugasan pelayanan ke ibadah & event (Portal → Pelayanan → Lihat penugasan) =====
+//   GET  /admin/pelayanan/:id/penugasan  → semua ibadah aktif + event mendatang,
+//        dengan tanda `linked` (pelayanan ini melayani di sana) + jumlah petugas.
+//   POST /admin/pelayanan/:id/penugasan  { action: 'assign'|'unassign', ibadahIds, eventIds }
+//        Tugaskan / lepas tugaskan massal. Lepas tugas = hapus link → susunan
+//        petugas pelayanan ini di ibadah/event tsb ikut terhapus.
+const penugasanSchema = z.object({
+  action: z.enum(['assign', 'unassign']),
+  ibadahIds: z.array(z.string().uuid()).max(500).default([]),
+  eventIds: z.array(z.string().uuid()).max(500).default([]),
+});
+
+pelayananRouter.get('/:id/penugasan', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
+  if (!UUID_PARAM.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan');
+  const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true, nama: true, ikon: true, warna: true } });
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan');
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const [ibadahs, events] = await Promise.all([
+    prisma.ibadah.findMany({
+      where: { isActive: true },
+      orderBy: [{ cabang: { nama: 'asc' } }, { urutan: 'asc' }, { jamMulai: 'asc' }],
+      select: {
+        id: true,
+        nama: true,
+        tipeJadwal: true,
+        hari: true,
+        jamMulai: true,
+        jamSelesai: true,
+        isKidsIbadah: true,
+        cabang: { select: { id: true, nama: true } },
+        kategoriIbadah: { select: { nama: true } },
+        ibadahPelayanan: { where: { pelayananId: pel.id }, select: { id: true, _count: { select: { petugas: true } } } },
+      },
+    }),
+    prisma.event.findMany({
+      where: { isActive: true, OR: [{ tanggalSelesai: { gte: today } }, { tanggalSelesai: null, tanggalMulai: { gte: today } }] },
+      orderBy: { tanggalMulai: 'asc' },
+      take: 300,
+      select: {
+        id: true,
+        judul: true,
+        tanggalMulai: true,
+        tanggalSelesai: true,
+        jamMulai: true,
+        isPublished: true,
+        cabang: { select: { id: true, nama: true } },
+        pelayanan: { where: { pelayananId: pel.id }, select: { id: true, _count: { select: { petugas: true } } } },
+      },
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      pelayanan: pel,
+      ibadah: ibadahs.map(({ ibadahPelayanan, ...i }) => ({
+        ...i,
+        linked: ibadahPelayanan.length > 0,
+        petugasCount: ibadahPelayanan[0]?._count.petugas ?? 0,
+      })),
+      events: events.map(({ pelayanan: links, ...e }) => ({
+        ...e,
+        linked: links.length > 0,
+        petugasCount: links[0]?._count.petugas ?? 0,
+      })),
+    },
+  });
+});
+
+pelayananRouter.post('/:id/penugasan', async (req, res) => {
+  const input = penugasanSchema.parse(req.body);
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], input.action === 'assign' ? 'write' : 'delete');
+  if (!UUID_PARAM.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan');
+  const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true, nama: true } });
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan');
+  if (!input.ibadahIds.length && !input.eventIds.length) throw BadRequest('Pilih minimal satu ibadah atau event.');
+
+  let ibadahCount = 0;
+  let eventCount = 0;
+  if (input.action === 'assign') {
+    // Hanya ibadah/event yang ada (id asing diabaikan); yang sudah ditugaskan dilewati.
+    const [ibs, evs] = await Promise.all([
+      input.ibadahIds.length ? prisma.ibadah.findMany({ where: { id: { in: input.ibadahIds } }, select: { id: true } }) : [],
+      input.eventIds.length ? prisma.event.findMany({ where: { id: { in: input.eventIds } }, select: { id: true } }) : [],
+    ]);
+    const r1 = ibs.length
+      ? await prisma.ibadahPelayanan.createMany({ data: ibs.map((i) => ({ ibadahId: i.id, pelayananId: pel.id })), skipDuplicates: true })
+      : { count: 0 };
+    const r2 = evs.length
+      ? await prisma.eventPelayanan.createMany({ data: evs.map((e) => ({ eventId: e.id, pelayananId: pel.id })), skipDuplicates: true })
+      : { count: 0 };
+    ibadahCount = r1.count;
+    eventCount = r2.count;
+  } else {
+    const r1 = input.ibadahIds.length
+      ? await prisma.ibadahPelayanan.deleteMany({ where: { pelayananId: pel.id, ibadahId: { in: input.ibadahIds } } })
+      : { count: 0 };
+    const r2 = input.eventIds.length
+      ? await prisma.eventPelayanan.deleteMany({ where: { pelayananId: pel.id, eventId: { in: input.eventIds } } })
+      : { count: 0 };
+    ibadahCount = r1.count;
+    eventCount = r2.count;
+  }
+
+  audit(req, {
+    action: input.action === 'assign' ? 'CREATE' : 'DELETE',
+    resource: 'pelayanan_penugasan',
+    resourceId: pel.id,
+    resourceLabel: `${input.action === 'assign' ? 'Tugaskan' : 'Lepas tugas'} ${pel.nama}: ${ibadahCount} ibadah, ${eventCount} event`,
+    metadata: { ibadahIds: input.ibadahIds, eventIds: input.eventIds, ibadahCount, eventCount },
+  });
+  res.json({ success: true, data: { action: input.action, ibadah: ibadahCount, event: eventCount } });
+});

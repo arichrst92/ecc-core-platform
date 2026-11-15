@@ -11,12 +11,14 @@ import {
   Pencil,
   X,
   UserPlus,
+  CalendarCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { PELAYANAN_ICON_MAP, PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
+import { PenugasanModal } from '@/components/pelayanan/penugasan-modal';
 import { PELAYANAN_IKON, PELAYANAN_WARNA } from '@ecc/shared-types';
 
 interface PelayananRole {
@@ -75,6 +77,7 @@ export default function PelayananPage() {
   const [deleting, setDeleting] = useState<DeletingTarget>(null);
   const [editingRole, setEditingRole] = useState<PelayananRole | null>(null);
   const [editingPel, setEditingPel] = useState<Pelayanan | null>(null);
+  const [penugasanFor, setPenugasanFor] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['pelayanan', 'tree'],
@@ -174,6 +177,14 @@ export default function PelayananPage() {
                     </Link>
                   )}
                   <button
+                    onClick={() => setPenugasanFor(p.id)}
+                    className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline px-2 py-1 rounded-lg hover:bg-brand-50"
+                    title="Lihat & atur di ibadah / event mana pelayanan ini bertugas"
+                  >
+                    <CalendarCheck className="w-3 h-3" />
+                    Lihat penugasan{p._count ? ` (${p._count.ibadahPelayanan})` : ''}
+                  </button>
+                  <button
                     onClick={() => setEditingPel(p)}
                     className="p-1.5 hover:bg-brand-50 rounded text-neutral-500 hover:text-brand-700"
                     title="Ubah nama, deskripsi, ikon & warna"
@@ -226,6 +237,8 @@ export default function PelayananPage() {
           }}
         />
       )}
+
+      {penugasanFor && <PenugasanModal pelayananId={penugasanFor} onClose={() => setPenugasanFor(null)} />}
 
       {editingRole && (
         <EditRoleModal

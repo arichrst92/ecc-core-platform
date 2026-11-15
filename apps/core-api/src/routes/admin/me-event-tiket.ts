@@ -28,7 +28,19 @@ function me(req: Request) {
 meEventTiketRouter.get('/', async (req, res) => {
   const u = me(req);
   const scope = req.query.scope === 'history' ? 'history' : 'upcoming';
-  const eventId = typeof req.query.eventId === 'string' && UUID_RE.test(req.query.eventId) ? req.query.eventId : undefined;
+  // eventId boleh UUID atau slug (halaman event app dibuka via slug). Bila
+  // parameter dikirim tapi event tidak ditemukan → daftar kosong, JANGAN
+  // jatuh ke "semua tiket" (dulu slug diabaikan → semua event tampil).
+  const rawEventId = typeof req.query.eventId === 'string' ? req.query.eventId.trim() : '';
+  let eventId: string | undefined;
+  if (rawEventId) {
+    if (UUID_RE.test(rawEventId)) eventId = rawEventId;
+    else {
+      const ev = await prisma.event.findFirst({ where: { slug: rawEventId }, select: { id: true } });
+      if (!ev) return res.json({ success: true, data: { tickets: [], serverNow: new Date().toISOString() } });
+      eventId = ev.id;
+    }
+  }
 
   const fam = await familyOf(u.jemaatId);
   const ids = [u.jemaatId, ...fam.keys()];

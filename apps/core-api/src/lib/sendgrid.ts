@@ -247,6 +247,75 @@ ${brandName}`;
   await sendEmail({ to: args.to, subject, html, text });
 }
 
+/**
+ * Pemberitahuan sekali kirim: OTP WhatsApp tertunda → minta jemaat meminta
+ * kode lagi (kode baru ikut dikirim ke email). TIDAK berisi kode OTP.
+ */
+export async function sendOtpRetryNoticeEmail(args: { to: string; namaLengkap: string }): Promise<void> {
+  const brandName = process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community';
+  const subject = 'Kode OTP login ECC Anda tertunda — silakan minta kode lagi';
+  const note =
+    'Pengiriman OTP lewat WhatsApp sedang dalam antrean, sehingga kode yang Anda minta sebelumnya mungkin belum sampai.';
+  const steps = [
+    'Buka aplikasi ECC (Els App).',
+    'Masukkan nomor HP Anda dan minta kode OTP lagi.',
+    'Kode baru juga kami kirimkan ke email ini — masukkan kode tersebut di aplikasi.',
+  ];
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+    <div style="background:linear-gradient(135deg,#F26522,#F5A623);padding:32px 32px 24px;color:white;">
+      <h1 style="margin:0;font-size:24px;font-weight:700;">${brandName}</h1>
+      <p style="margin:8px 0 0;font-size:14px;opacity:0.9;">Login aplikasi ECC</p>
+    </div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">Halo <strong>${escapeHtml(args.namaLengkap)}</strong>,</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        ${note}
+      </p>
+      <p style="margin:0 0 8px;font-size:15px;color:#374151;">Untuk mempercepat proses:</p>
+      <ol style="margin:0 0 24px;padding-left:20px;font-size:15px;line-height:1.7;color:#374151;">
+        ${steps.map((s) => `<li>${s}</li>`).join('')}
+      </ol>
+      <p style="margin:0 0 8px;font-size:14px;color:#374151;">Mohon maaf atas ketidaknyamanannya. Terima kasih atas kesabaran Anda.</p>
+      <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0;">
+      <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+        Email ini tidak berisi kode OTP. Jangan bagikan kode OTP Anda ke siapa pun, termasuk yang mengaku petugas gereja.
+      </p>
+    </div>
+    <div style="padding:16px 32px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;">
+        © ${new Date().getFullYear()} ${brandName}. Email otomatis, jangan reply.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Halo ${args.namaLengkap},
+
+${note}
+
+Untuk mempercepat proses:
+${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+Mohon maaf atas ketidaknyamanannya.
+
+Email ini tidak berisi kode OTP. Jangan bagikan kode OTP Anda ke siapa pun.
+
+--
+${brandName}`;
+
+  await sendEmail({ to: args.to, subject, html, text });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

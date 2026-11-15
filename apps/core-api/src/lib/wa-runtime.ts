@@ -8,12 +8,13 @@
  * dan langsung setelah disimpan) → getter sinkron aman dipakai di handler.
  */
 import { prisma } from '@ecc/database';
-import { setWaRuntimeConfig, type WaProvider } from '@ecc/auth';
+import { setWaRuntimeConfig, type WaProvider, type WaUsage } from '@ecc/auth';
 import { logger } from './logger.js';
 
 export type OtpEmailMode = 'fallback' | 'always' | 'off';
 export const OTP_EMAIL_MODES: OtpEmailMode[] = ['fallback', 'always', 'off'];
 export const WA_ORDERS = ['fonnte,starsender', 'starsender,fonnte'] as const;
+export const WA_USAGES: WaUsage[] = ['otp', 'notif', 'both'];
 
 export interface WaGatewaySettings {
   /** null = ikuti WA_PROVIDER_ORDER */
@@ -21,6 +22,9 @@ export interface WaGatewaySettings {
   waFonnteEnabled: boolean;
   waStarsenderEnabled: boolean;
   waResmiOtpEnabled: boolean;
+  /** Fungsi provider: otp | notif | both (prioritas tetap). */
+  waFonnteUsage: WaUsage;
+  waStarsenderUsage: WaUsage;
   /** null = ikuti OTP_EMAIL_COPY */
   otpEmailCopy: OtpEmailMode | null;
   /** null = ikuti ONBOARDING_SKIP_NOHP_OTP */
@@ -32,6 +36,8 @@ const SELECT = {
   waFonnteEnabled: true,
   waStarsenderEnabled: true,
   waResmiOtpEnabled: true,
+  waFonnteUsage: true,
+  waStarsenderUsage: true,
   otpEmailCopy: true,
   onboardingSkipNoHpOtp: true,
 } as const;
@@ -41,6 +47,8 @@ const DEFAULTS: WaGatewaySettings = {
   waFonnteEnabled: true,
   waStarsenderEnabled: true,
   waResmiOtpEnabled: true,
+  waFonnteUsage: 'both',
+  waStarsenderUsage: 'both',
   otpEmailCopy: null,
   onboardingSkipNoHpOtp: null,
 };
@@ -56,8 +64,15 @@ function apply(s: WaGatewaySettings) {
   if (!s.waFonnteEnabled) disabled.push('fonnte');
   if (!s.waStarsenderEnabled) disabled.push('starsender');
   if (!s.waResmiOtpEnabled) disabled.push('resmi');
-  setWaRuntimeConfig({ order: s.waProviderOrder, disabled });
+  setWaRuntimeConfig({
+    order: s.waProviderOrder,
+    disabled,
+    usage: { fonnte: s.waFonnteUsage, starsender: s.waStarsenderUsage },
+  });
 }
+
+const normUsage = (v: string | null | undefined): WaUsage =>
+  v && (WA_USAGES as string[]).includes(v) ? (v as WaUsage) : 'both';
 
 const normMode = (v: string | null | undefined): OtpEmailMode | null =>
   v && (OTP_EMAIL_MODES as string[]).includes(v.toLowerCase()) ? (v.toLowerCase() as OtpEmailMode) : null;
@@ -69,7 +84,13 @@ export async function loadWaRuntime(force = false): Promise<WaGatewaySettings> {
     const row = await prisma.appConfig.findUnique({ where: { id: 'global' }, select: SELECT });
     apply(
       row
-        ? { ...row, otpEmailCopy: normMode(row.otpEmailCopy), waProviderOrder: row.waProviderOrder || null }
+        ? {
+            ...row,
+            otpEmailCopy: normMode(row.otpEmailCopy),
+            waProviderOrder: row.waProviderOrder || null,
+            waFonnteUsage: normUsage(row.waFonnteUsage),
+            waStarsenderUsage: normUsage(row.waStarsenderUsage),
+          }
         : DEFAULTS,
     );
   } catch (err) {

@@ -14,11 +14,16 @@ import { ArrowDownUp, KeyRound, Loader2, Mail, Router, Send, UserCheck } from 'l
 import { apiClient } from '@/lib/api-client';
 
 type EmailMode = 'fallback' | 'always' | 'off';
+/** Fungsi provider: OTP saja / notifikasi saja / keduanya. */
+type Usage = 'otp' | 'notif' | 'both';
+const USAGE_LABEL: Record<Usage, string> = { both: 'OTP & notifikasi', otp: 'OTP saja', notif: 'Notifikasi saja (non-OTP)' };
 interface Settings {
   waProviderOrder: 'fonnte,starsender' | 'starsender,fonnte' | null;
   waFonnteEnabled: boolean;
   waStarsenderEnabled: boolean;
   waResmiOtpEnabled: boolean;
+  waFonnteUsage: Usage;
+  waStarsenderUsage: Usage;
   otpEmailCopy: EmailMode | null;
   onboardingSkipNoHpOtp: boolean | null;
 }
@@ -26,9 +31,9 @@ interface Gateway {
   settings: Settings;
   providers: {
     order: string;
-    fonnte: { configured: boolean; enabled: boolean };
-    starsender: { configured: boolean; enabled: boolean };
-    resmi: { configured: boolean; enabled: boolean; template: string | null; lang: string };
+    fonnte: { configured: boolean; enabled: boolean; usage: Usage };
+    starsender: { configured: boolean; enabled: boolean; usage: Usage };
+    resmi: { configured: boolean; enabled: boolean; template: string | null; lang: string; usage: Usage };
   };
   health: Record<ProviderKey, { state: 'ok' | 'error' | 'unknown'; lastOkAt: string | null; lastErrAt: string | null; lastErr: string | null }>;
   fonnteDevice: { connected: boolean; device: string | null; error?: string } | null;
@@ -126,13 +131,16 @@ export function GatewaySettings() {
   if (!d) return <div className="bg-white border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-600">Gagal memuat pengaturan gateway.</div>;
 
   const p = d.providers;
-  const textActive = [p.fonnte, p.starsender].filter((x) => x.configured && x.enabled).length;
+  // Rantai per jenis pesan — prioritas tetap, provider di luar fungsinya dilewati.
+  const live = (k: 'fonnte' | 'starsender') => p[k].configured && p[k].enabled;
+  const serves = (k: 'fonnte' | 'starsender', kind: 'otp' | 'notif') => p[k].usage === 'both' || p[k].usage === kind;
+  const NAME = { fonnte: 'Fonnte', starsender: 'StarSender' } as const;
+  const orderKeys = d.effective.order.split(',').filter((k): k is 'fonnte' | 'starsender' => k === 'fonnte' || k === 'starsender');
   const otpChain = [
     p.resmi.configured && p.resmi.enabled ? 'Resmi.ID' : null,
-    ...d.effective.order
-      .split(',')
-      .map((k) => (k === 'fonnte' ? (p.fonnte.configured && p.fonnte.enabled ? 'Fonnte' : null) : p.starsender.configured && p.starsender.enabled ? 'StarSender' : null)),
+    ...orderKeys.map((k) => (live(k) && serves(k, 'otp') ? NAME[k] : null)),
   ].filter(Boolean) as string[];
+  const notifChain = orderKeys.filter((k) => live(k) && serves(k, 'notif')).map((k) => NAME[k]);
 
   /** Status koneksi: Fonnte dari API perangkat; lainnya dari hasil kirim terakhir / tes. */
   const statusOf = (key: ProviderKey, st: { configured: boolean; enabled: boolean }) => {
@@ -178,6 +186,29 @@ export function GatewaySettings() {
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-neutral-900">{title}</div>
         <p className="text-xs text-neutral-500 mb-1.5">{sub}</p>
+        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+          <span className="text-[11px] font-semibold text-neutral-500">Fungsi:</span>
+          {key === 'resmi' ? (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700" title="Resmi.ID hanya mengirim template OTP (Authentication)">
+              OTP saja
+            </span>
+          ) : (
+            <select
+              value={(key === 'fonnte' ? d.settings.waFonnteUsage : d.settings.waStarsenderUsage) ?? 'both'}
+              disabled={busy}
+              onChange={(e) =>
+                save.mutate({ [key === 'fonnte' ? 'waFonnteUsage' : 'waStarsenderUsage']: e.target.value as Usage } as Partial<Settings>)
+              }
+              className="px-2 py-1 border border-neutral-300 rounded-md text-xs"
+            >
+              {(['both', 'otp', 'notif'] as Usage[]).map((u) => (
+                <option key={u} value={u}>
+                  {USAGE_LABEL[u]}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         {statusOf(key, st)}
         {!st.configured ? <p className="text-[11px] text-amber-700 mt-1">Isi {envHint} di .env VPS untuk memakai provider ini.</p> : null}
       </div>
@@ -211,8 +242,8 @@ export function GatewaySettings() {
     ...textOrder.map(
       (k) =>
         (k === 'fonnte'
-          ? ['fonnte', 'Fonnte', 'Non-official — OTP & semua notifikasi.', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN']
-          : ['starsender', 'StarSender', 'Non-official — cadangan OTP & notifikasi.', p.starsender, 'waStarsenderEnabled', 'STARSENDER_DEVICE_KEY']) as (typeof rows)[number],
+          ? ['fonnte', 'Fonnte', 'Non-official (teks bebas).', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN']
+          : ['starsender', 'StarSender', 'Non-official (teks bebas).', p.starsender, 'waStarsenderEnabled', 'STARSENDER_DEVICE_KEY']) as (typeof rows)[number],
     ),
   ];
 
@@ -238,7 +269,7 @@ export function GatewaySettings() {
         </div>
         <div>
           <b>Notifikasi:</b>{' '}
-          {textActive ? otpChain.filter((x) => x !== 'Resmi.ID').join(' → ') : <span className="text-red-600 font-semibold">tidak ada provider aktif — notifikasi WA tidak terkirim</span>}
+          {notifChain.length ? notifChain.join(' → ') : <span className="text-red-600 font-semibold">tidak ada provider aktif — notifikasi WA tidak terkirim</span>}
         </div>
       </div>
 

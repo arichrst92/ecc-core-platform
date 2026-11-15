@@ -2317,6 +2317,9 @@ model AppConfig {
   waFonnteEnabled            Boolean  @default(true) @map("wa_fonnte_enabled")
   waStarsenderEnabled        Boolean  @default(true) @map("wa_starsender_enabled")
   waResmiOtpEnabled          Boolean  @default(true) @map("wa_resmi_otp_enabled")
+  // Fungsi provider: "otp" | "notif" | "both" (prioritas tidak berubah).
+  waFonnteUsage              String   @default("both") @map("wa_fonnte_usage") @db.VarChar(10)
+  waStarsenderUsage          String   @default("both") @map("wa_starsender_usage") @db.VarChar(10)
   otpEmailCopy               String?  @map("otp_email_copy") @db.VarChar(10)
   onboardingSkipNoHpOtp      Boolean? @map("onboarding_skip_nohp_otp")
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid

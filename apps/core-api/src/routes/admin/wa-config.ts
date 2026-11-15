@@ -25,6 +25,7 @@ import { z } from 'zod';
 import {
   OTP_EMAIL_MODES,
   WA_ORDERS,
+  WA_USAGES,
   loadWaRuntime,
   otpEmailMode,
   saveWaRuntime,
@@ -101,6 +102,8 @@ const gatewaySchema = z
     waFonnteEnabled: z.boolean(),
     waStarsenderEnabled: z.boolean(),
     waResmiOtpEnabled: z.boolean(),
+    waFonnteUsage: z.enum(WA_USAGES as [string, ...string[]]),
+    waStarsenderUsage: z.enum(WA_USAGES as [string, ...string[]]),
     otpEmailCopy: z.enum(OTP_EMAIL_MODES as [string, ...string[]]).nullable(),
     onboardingSkipNoHpOtp: z.boolean().nullable(),
   })

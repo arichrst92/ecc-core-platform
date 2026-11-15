@@ -6,7 +6,7 @@
  * Pola sama dengan halaman Ibadah (GroupCarousel + panel geser).
  */
 import { useEffect, useState } from 'react';
-import { CalendarClock, Church, HousePlus, Smartphone, Users, X, Baby, Heart } from 'lucide-react';
+import { CalendarClock, Church, HousePlus, Smartphone, Users, X, Cake, Heart } from 'lucide-react';
 import { GroupCarousel } from '@/components/h-carousel';
 import { useLang } from '@/components/lang-provider';
 import { absoluteUrl } from '@/lib/api';
@@ -178,7 +178,7 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
                   {jadwal(h, z) ? <p className="mt-0.5 text-[11px] text-brand-700 font-semibold truncate">{jadwal(h, z)}</p> : null}
                   <div className="mt-1 flex flex-wrap gap-1">
                     <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
-                      <Baby className="w-3 h-3" />
+                      <Cake className="w-3 h-3" />
                       {usia(h)}
                     </span>
                     <span
@@ -268,7 +268,7 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
               <section className="bg-white rounded-3xl border border-orange-100 p-5 grid grid-cols-2 gap-3 text-sm">
                 <Info Icon={CalendarClock} label={L('Jadwal', 'Schedule')} value={jadwal(hc, zona) || L('Menyesuaikan', 'Flexible')} />
                 <Info Icon={Users} label={L('Anggota', 'Members')} value={String(hc.memberCount)} />
-                <Info Icon={Baby} label={L('Usia', 'Age')} value={usia(hc)} />
+                <Info Icon={Cake} label={L('Usia', 'Age')} value={usia(hc)} />
                 <Info Icon={Heart} label={L('Kategori', 'Category')} value={kategori(hc)} />
               </section>
 

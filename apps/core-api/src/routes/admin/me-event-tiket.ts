@@ -12,13 +12,38 @@
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
-import { Unauthorized } from '../../lib/errors.js';
+import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
 import { eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
-import { tzOr } from '../../lib/tz.js';
+import { calendarDateOf, tzOr, wallToInstant } from '../../lib/tz.js';
+import { revokeEventRole } from '../../lib/event-role.js';
+import { audit } from '../../lib/audit.js';
 
 export const meEventTiketRouter = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Mulai event (jam dinding cabang) → instant. Tanpa jam = 00:00. */
+function eventStartsAt(ev: { tanggalMulai: Date; jamMulai: string | null }, tz: string): Date {
+  const m = /^(\d{1,2}):(\d{2})/.exec(ev.jamMulai ?? '');
+  const min = m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+  return wallToInstant(calendarDateOf(ev.tanggalMulai, tz), min, tz);
+}
+
+/**
+ * Boleh dibatalkan sendiri dari tiket: belum hadir/batal, belum ada uang
+ * (gratis atau belum bayar — yang lunas / menunggu verifikasi lewat admin),
+ * dan event belum dimulai.
+ */
+function canCancelTicket(
+  status: string,
+  payment: 'GRATIS' | 'LUNAS' | 'MENUNGGU' | 'BELUM_BAYAR',
+  startsAt: Date,
+  now: Date,
+): boolean {
+  if (status === 'HADIR' || status === 'BATAL' || status === 'BAYAR') return false;
+  if (payment !== 'GRATIS' && payment !== 'BELUM_BAYAR') return false;
+  return now < startsAt;
+}
 
 function me(req: Request) {
   if (!req.user) throw Unauthorized();
@@ -102,6 +127,7 @@ meEventTiketRouter.get('/', async (req, res) => {
             ? 'MENUNGGU'
             : 'BELUM_BAYAR';
       const totalBayar = r.donations.filter((d) => d.status === 'BAYAR').reduce((a, d) => a + Number(d.nominalBayar), 0);
+      const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventStartsAt(ev, tz), now);
       const relasi = r.jemaat.id === u.jemaatId ? null : (fam.get(r.jemaat.id) ?? (r.jemaat.isTamu ? 'Tamu' : null));
       return {
         id: r.id,
@@ -111,6 +137,7 @@ meEventTiketRouter.get('/', async (req, res) => {
         checkinMethod: r.checkinMethod,
         payment,
         totalBayar,
+        canCancel,
         isSelf: r.jemaat.id === u.jemaatId,
         relasi,
         jemaat: { id: r.jemaat.id, namaLengkap: r.jemaat.namaLengkap, kode: r.jemaat.kode, fotoUrl: r.jemaat.fotoUrl, isTamu: r.jemaat.isTamu },
@@ -151,4 +178,67 @@ meEventTiketRouter.get('/', async (req, res) => {
 
   // serverNow: app menghitung jendela check-in dengan jam server (bukan jam HP).
   res.json({ success: true, data: { tickets: data, serverNow: now.toISOString() } });
+});
+
+/**
+ * POST /admin/me/event-tiket/:id/cancel — batalkan tiket event (diri sendiri,
+ * keluarga, atau tamu yang saya undang). Aturan = canCancelTicket di atas.
+ * Soft cancel (status BATAL) → kuota kembali tersedia.
+ */
+meEventTiketRouter.post('/:id/cancel', async (req, res) => {
+  const u = me(req);
+  if (!UUID_RE.test(req.params.id ?? '')) throw NotFound('Tiket tidak ditemukan');
+  const p = await prisma.eventParticipation.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      eventId: true,
+      jemaatId: true,
+      status: true,
+      invitedByJemaatId: true,
+      jemaat: { select: { namaLengkap: true } },
+      donations: { select: { status: true } },
+      event: {
+        select: { judul: true, isActive: true, tipeBayar: true, tanggalMulai: true, jamMulai: true, cabang: { select: { timezone: true } } },
+      },
+    },
+  });
+  if (!p) throw NotFound('Tiket tidak ditemukan');
+  const fam = await familyOf(u.jemaatId);
+  if (p.jemaatId !== u.jemaatId && !fam.has(p.jemaatId) && p.invitedByJemaatId !== u.jemaatId) {
+    throw NotFound('Tiket tidak ditemukan');
+  }
+  if (p.status === 'BATAL') return res.json({ success: true, data: { id: p.id, status: p.status }, meta: { alreadyCancelled: true } });
+
+  const tz = tzOr(p.event.cabang?.timezone);
+  const payment: 'GRATIS' | 'LUNAS' | 'MENUNGGU' | 'BELUM_BAYAR' =
+    p.event.tipeBayar === 'GRATIS'
+      ? 'GRATIS'
+      : p.status === 'BAYAR' || p.status === 'HADIR'
+        ? 'LUNAS'
+        : p.donations.some((d) => d.status === 'MENUNGGU_VERIFIKASI')
+          ? 'MENUNGGU'
+          : 'BELUM_BAYAR';
+  if (p.status === 'HADIR') throw BadRequest(`${p.jemaat.namaLengkap} sudah hadir — tiket tidak bisa dibatalkan.`);
+  if (payment === 'LUNAS' || payment === 'MENUNGGU') {
+    throw BadRequest('Tiket yang sudah dibayar / menunggu verifikasi pembayaran dibatalkan lewat admin event.');
+  }
+  if (!p.event.isActive || !canCancelTicket(p.status, payment, eventStartsAt(p.event, tz), new Date())) {
+    throw BadRequest('Tiket tidak bisa dibatalkan karena event sudah dimulai.');
+  }
+
+  const updated = await prisma.eventParticipation.update({
+    where: { id: p.id },
+    data: { status: 'BATAL', cancelledAt: new Date() },
+    select: { id: true, status: true, cancelledAt: true },
+  });
+  await revokeEventRole(p.eventId, p.jemaatId).catch(() => 0);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'event_participation',
+    resourceId: p.id,
+    resourceLabel: `Batal tiket: ${p.jemaat.namaLengkap} @ ${p.event.judul}`,
+    metadata: { kind: 'event-ticket-self-cancel', previousStatus: p.status },
+  });
+  res.json({ success: true, data: updated });
 });

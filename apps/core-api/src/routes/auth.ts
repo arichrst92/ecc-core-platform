@@ -116,7 +116,7 @@ function isBypassNumber(noHp: string): boolean {
  * complete flow register (POST /auth/register).
  */
 authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
-  const { noHp, purpose } = requestOtpSchema.parse(req.body);
+  const { noHp, purpose, email: enrollEmail } = requestOtpSchema.parse(req.body);
 
   // APP REVIEW BYPASS — skip WA send + OtpVerification row (tidak perlu
   // karena verify handler juga skip DB lookup untuk nomor ini). Log audit.
@@ -132,7 +132,8 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     });
   }
 
-  // Jemaat pemilik nomor (purpose LOGIN) — untuk OTP cadangan lewat email.
+  // Penerima OTP cadangan lewat email: jemaat pemilik nomor (LOGIN) atau
+  // email yang diisi pendaftar (ENROLLMENT).
   let loginJemaat: { namaLengkap: string; email: string | null } | null = null;
   if (purpose === 'ENROLLMENT') {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
@@ -140,6 +141,14 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     // Tamu (pernah dibawa ke event/ibadah, tanpa akun) boleh mendaftar —
     // record tamunya di-upgrade jadi anggota di /auth/register.
     if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar — gunakan login OTP.');
+    // Email pendaftar (opsional) — untuk OTP cadangan lewat email.
+    if (enrollEmail) {
+      const owner = await prisma.jemaat.findUnique({ where: { email: enrollEmail }, select: { id: true, isTamu: true } });
+      if (owner && !owner.isTamu && owner.id !== existing?.id) {
+        throw Conflict('Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.');
+      }
+      loginJemaat = { namaLengkap: 'Calon jemaat', email: enrollEmail };
+    }
   } else if (purpose === 'ONBOARDING_ADD_NOHP') {
     // Onboarding — existing jemaat (via magic link) mau set noHp baru.
     // Cek noHp belum dipakai jemaat lain (unique constraint akan enforce juga).
@@ -184,7 +193,8 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   //   "always"            — selalu dikirim juga ke email (gateway antre/terblokir diam-diam)
   //   "off"               — nonaktif
   const emailMode = (process.env.OTP_EMAIL_COPY ?? 'fallback').toLowerCase();
-  const emailTo = purpose === 'LOGIN' && emailMode !== 'off' ? loginJemaat?.email ?? null : null;
+  const emailTo =
+    (purpose === 'LOGIN' || purpose === 'ENROLLMENT') && emailMode !== 'off' ? loginJemaat?.email ?? null : null;
   const EMAIL_NOTE =
     'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirim OTP ke email Anda.';
   const sendEmailCopy = async (): Promise<boolean> => {
@@ -393,6 +403,12 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
   const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
   if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar.');
   const upgradeTamu = existing?.isTamu ? existing : null;
+  if (input.email) {
+    const owner = await prisma.jemaat.findUnique({ where: { email: input.email }, select: { id: true } });
+    if (owner && owner.id !== upgradeTamu?.id) {
+      throw Conflict('Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.');
+    }
+  }
 
   // 2. Verify OTP enrollment sudah pernah usedAt dalam window 15 menit
   const enrollmentWindow = 15 * 60 * 1000; // 15 min

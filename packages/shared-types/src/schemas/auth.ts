@@ -8,6 +8,9 @@ export const requestOtpSchema = z
   .object({
     noHp: noHpSchema,
     purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE', 'ONBOARDING_ADD_NOHP']).default('LOGIN'),
+    // Opsional, khusus ENROLLMENT (pendaftaran): OTP ikut dikirim ke email ini
+    // bila WhatsApp antre/gagal (OTP_EMAIL_COPY). Email disimpan saat /auth/register.
+    email: z.string().trim().email().max(255).optional(),
   })
   .openapi('RequestOtpInput');
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;

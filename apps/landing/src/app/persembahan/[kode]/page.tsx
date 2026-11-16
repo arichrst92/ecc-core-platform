@@ -196,10 +196,21 @@ export default async function PersembahanCabangPage(
             {[
               L('Pilih peruntukan (perpuluhan, ucapan syukur, dsb).', 'Choose the purpose (tithe, thanksgiving, etc.).'),
               L('Transfer ke rekening di atas atau scan QRIS jika tersedia.', 'Transfer to the account above or scan the QRIS if available.'),
-              L(
-                `Simpan bukti transfer dan kirim ke bendahara / admin cabang ${cabang.nama} via WhatsApp untuk konfirmasi.`,
-                `Keep the transfer receipt and send it to the ${cabang.nama} treasurer / branch admin via WhatsApp for confirmation.`,
-              ),
+              <>
+                {L(
+                  `Simpan bukti transfer dan kirim ke bendahara / admin cabang ${cabang.nama} via WhatsApp untuk konfirmasi, atau ke ECC Global Finance di `,
+                  `Keep the transfer receipt and send it to the ${cabang.nama} treasurer / branch admin via WhatsApp for confirmation, or to ECC Global Finance at `,
+                )}
+                <a
+                  href="https://wa.me/6281111112181"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-brand-700 underline underline-offset-2 whitespace-nowrap"
+                >
+                  +62 811-1111-2181
+                </a>
+                .
+              </>,
             ].map((step, i) => (
               <li key={i} className="flex gap-3 text-sm text-neutral-700 leading-relaxed">
                 <span className="w-6 h-6 rounded-full bg-brand-grad text-white text-xs font-bold flex items-center justify-center shrink-0">

@@ -7,8 +7,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 
-const V = 300; // ukuran viewport crop (px)
-const OUT = 1000;
+const V = 300; // ukuran viewport crop (px) — persegi
+// Varian 'banner' (Announcement): 16:9, viewport 384×216, hasil 1280×720.
+const BANNER = { vw: 384, vh: 216, ow: 1280, oh: 720 };
 
 interface Props {
   file: File;
@@ -19,7 +20,7 @@ interface Props {
   /** Label tombol simpan (default "Simpan cover"). */
   saveLabel?: string;
   /** Pratinjau: 'worship' (album/player) atau 'avatar' (foto profil persegi & bulat). */
-  variant?: 'worship' | 'avatar';
+  variant?: 'worship' | 'avatar' | 'banner';
 }
 
 export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', saveLabel = 'Simpan cover', variant = 'worship' }: Props) {
@@ -30,6 +31,9 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const isBanner = variant === 'banner';
+  const VW = isBanner ? BANNER.vw : V;
+  const VH = isBanner ? BANNER.vh : V;
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -44,14 +48,14 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
     const swap = rot % 180 !== 0;
     const rw = swap ? img.naturalHeight : img.naturalWidth;
     const rh = swap ? img.naturalWidth : img.naturalHeight;
-    return { rw, rh, scale: (V / Math.min(rw, rh)) * zoom };
-  }, [img, rot, zoom]);
+    return { rw, rh, scale: Math.max(VW / rw, VH / rh) * zoom };
+  }, [img, rot, zoom, VW, VH]);
 
   const clamp = useCallback(
     (x: number, y: number) => {
       const { rw, rh, scale } = dims();
-      const mx = Math.max(0, (rw * scale - V) / 2);
-      const my = Math.max(0, (rh * scale - V) / 2);
+      const mx = Math.max(0, (rw * scale - VW) / 2);
+      const my = Math.max(0, (rh * scale - VH) / 2);
       return { x: Math.min(mx, Math.max(-mx, x)), y: Math.min(my, Math.max(-my, y)) };
     },
     [dims],
@@ -63,19 +67,21 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
     (size: number): HTMLCanvasElement | null => {
       if (!img) return null;
       const c = document.createElement('canvas');
-      c.width = c.height = size;
+      // size = lebar hasil; tinggi mengikuti rasio viewport.
+      c.width = size;
+      c.height = Math.round((size * VH) / VW);
       const ctx = c.getContext('2d')!;
-      const k = size / V;
+      const k = size / VW;
       const { scale } = dims();
       ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, size, size);
-      ctx.translate(size / 2 + pos.x * k, size / 2 + pos.y * k);
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.translate(c.width / 2 + pos.x * k, c.height / 2 + pos.y * k);
       ctx.rotate((rot * Math.PI) / 180);
       ctx.scale(scale * k, scale * k);
       ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       return c;
     },
-    [img, dims, pos, rot],
+    [img, dims, pos, rot, VW, VH],
   );
 
   useEffect(() => {
@@ -84,7 +90,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
   }, [render]);
 
   async function save() {
-    const c = render(OUT);
+    const c = render(isBanner ? BANNER.ow : 1000);
     if (!c) return;
     setSaving(true);
     const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.92));
@@ -111,7 +117,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
             <div>
               <div
                 className="relative mx-auto overflow-hidden rounded-lg bg-neutral-900 cursor-grab active:cursor-grabbing touch-none select-none"
-                style={{ width: V, height: V }}
+                style={{ width: VW, height: VH }}
                 onPointerDown={(e) => {
                   (e.target as HTMLElement).setPointerCapture(e.pointerId);
                   drag.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y };
@@ -173,9 +179,20 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                   <RotateCw className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-xs text-neutral-500 mt-1.5">Geser gambar untuk mengatur posisi. Rasio terkunci 1:1.</p>
+              <p className="text-xs text-neutral-500 mt-1.5">
+                Geser gambar untuk mengatur posisi. Rasio terkunci {isBanner ? '16:9' : '1:1'}.
+              </p>
             </div>
-            {variant === 'avatar' ? (
+            {isBanner ? (
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-neutral-600">Pratinjau</div>
+                <div>
+                  <div className="w-[200px] aspect-video rounded-xl bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                  <div className="text-[11px] text-neutral-500 mt-1">Popup app & email</div>
+                </div>
+                <div className="text-[11px] text-neutral-500">Disimpan 1280×720 (WebP). Juga dipakai sebagai pratinjau link WhatsApp.</div>
+              </div>
+            ) : variant === 'avatar' ? (
               <div className="space-y-3">
                 <div className="text-xs font-semibold text-neutral-600">Pratinjau</div>
                 <div>

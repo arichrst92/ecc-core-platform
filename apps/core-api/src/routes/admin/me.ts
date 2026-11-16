@@ -71,6 +71,7 @@ import { meVisitRouter } from './me-visit.js';
 import { meIbadahRouter } from './me-ibadah.js';
 import { meEventCheckinRouter } from './me-event-checkin.js';
 import { meEventTiketRouter } from './me-event-tiket.js';
+import { meAnnouncementRouter } from './me-announcement.js';
 import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
@@ -114,6 +115,7 @@ meRouter.use('/ibadah', meIbadahRouter);
 meRouter.use('/event-checkin', meEventCheckinRouter);
 // Tiket event saya (lintas event) — Reservasi Saya tab Event.
 meRouter.use('/event-tiket', meEventTiketRouter);
+meRouter.use('/announcements', meAnnouncementRouter);
 // Kritik & Saran saya → me-feedback.ts
 meRouter.use('/feedback', meFeedbackRouter);
 // Doa (prayer request) saya + tugas petugas doa → me-prayer.ts

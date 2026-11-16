@@ -236,6 +236,7 @@ model Jemaat {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
+  announcementRecipients       AnnouncementRecipient[]
   cabang                       CabangGereja                  @relation(fields: [cabangId], references: [id], onDelete: Restrict)
   jemaatRoles                  JemaatRole[]
   relasiAsal                   JemaatRelasi[]                @relation("RelasiAsal")
@@ -2192,6 +2193,7 @@ enum InAppNotifType {
   HOMECELL_ASISTEN_ASSIGNED
   MINISTRY_DUTY_ASSIGNED
   MINISTRY_DUTY_REMOVED
+  ANNOUNCEMENT
 
   @@map("in_app_notif_type")
 }
@@ -4326,4 +4328,66 @@ model CkidsMenuAccess {
   @@index([pelayananRoleId])
   @@index([roleId])
   @@map("ckids_menu_access")
+}
+
+// ============================================================
+// Announcement (Portal → Broadcast → Announcement)
+// ============================================================
+// Pengumuman ke jemaat: In App (popup sekali + daftar notifikasi), WhatsApp
+// (dikirim bertahap), Email. Penerima: semua jemaat atau saringan
+// cabang/area/homecell/jemaat, digabung OR / AND.
+model Announcement {
+  id             String    @id @default(uuid()) @db.Uuid
+  slug           String    @unique @db.VarChar(220)
+  judul          String    @db.VarChar(200)
+  isi            String    @db.Text
+  bannerUrl      String?   @map("banner_url") @db.Text
+  links          Json      @default("[]")
+  audienceMode   String    @default("ALL") @map("audience_mode") @db.VarChar(10)
+  combine        String    @default("OR") @db.VarChar(5)
+  cabangIds      String[]  @default([]) @map("cabang_ids") @db.Uuid
+  areaIds        String[]  @default([]) @map("area_ids") @db.Uuid
+  homecellIds    String[]  @default([]) @map("homecell_ids") @db.Uuid
+  jemaatIds      String[]  @default([]) @map("jemaat_ids") @db.Uuid
+  channels       String[]  @default(["IN_APP"]) @db.VarChar(10)
+  waProvider     String    @default("auto") @map("wa_provider") @db.VarChar(20)
+  status         String    @default("DRAFT") @db.VarChar(12)
+  scheduledAt    DateTime? @map("scheduled_at")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  recipientCount Int       @default(0) @map("recipient_count")
+  createdById    String?   @map("created_by_id") @db.Uuid
+  updatedById    String?   @map("updated_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  recipients AnnouncementRecipient[]
+
+  @@index([status, scheduledAt])
+  @@map("announcement")
+}
+
+model AnnouncementRecipient {
+  id             String    @id @default(uuid()) @db.Uuid
+  announcementId String    @map("announcement_id") @db.Uuid
+  jemaatId       String    @map("jemaat_id") @db.Uuid
+  inAppStatus    String?   @map("in_app_status") @db.VarChar(10)
+  waStatus       String?   @map("wa_status") @db.VarChar(10)
+  waError        String?   @map("wa_error") @db.Text
+  waAt           DateTime? @map("wa_at")
+  emailStatus    String?   @map("email_status") @db.VarChar(10)
+  emailError     String?   @map("email_error") @db.Text
+  emailAt        DateTime? @map("email_at")
+  readAt         DateTime? @map("read_at")
+  dismissedAt    DateTime? @map("dismissed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  jemaat       Jemaat       @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, jemaatId])
+  @@index([announcementId, waStatus])
+  @@index([announcementId, emailStatus])
+  @@index([jemaatId, dismissedAt])
+  @@map("announcement_recipient")
 }

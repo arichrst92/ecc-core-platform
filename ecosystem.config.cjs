@@ -83,6 +83,9 @@ const sharedEnv = {
   OTP_EXPIRES_SECONDS: process.env.OTP_EXPIRES_SECONDS,
   ONBOARDING_SKIP_NOHP_OTP: process.env.ONBOARDING_SKIP_NOHP_OTP,
   OTP_EMAIL_COPY: process.env.OTP_EMAIL_COPY,
+  // Announcement: jeda antar pesan WA (ms, default 4000) & alamat website untuk link/OG.
+  ANNOUNCEMENT_WA_DELAY_MS: process.env.ANNOUNCEMENT_WA_DELAY_MS,
+  PUBLIC_SITE_URL: process.env.PUBLIC_SITE_URL,
   OTP_MAX_ATTEMPTS: process.env.OTP_MAX_ATTEMPTS,
   OTP_RESEND_COOLDOWN_SECONDS: process.env.OTP_RESEND_COOLDOWN_SECONDS,
   FACE_MATCH_THRESHOLD: process.env.FACE_MATCH_THRESHOLD,

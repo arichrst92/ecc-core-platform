@@ -460,3 +460,28 @@ export async function testWaProvider(provider: WaProvider, noHpE164: string): Pr
     throw e;
   }
 }
+
+/**
+ * Kirim teks lewat provider pilihan (Announcement). 'auto' = urutan & fungsi
+ * di Portal (failover). Provider tertentu = hanya provider itu (tanpa failover),
+ * selama kredensialnya ada; saklar Portal tidak menghalangi pilihan eksplisit.
+ */
+export async function sendWhatsAppTextVia(
+  provider: 'auto' | WaTextProvider,
+  noHpE164: string,
+  message: string,
+): Promise<SendOtpResult> {
+  if (provider === 'auto') return sendWhatsAppText(noHpE164, message);
+  const target = noHpE164.replace(/^\+/, '');
+  if (!TEXT_SENDERS[provider].configured()) {
+    throw new Error(`WhatsApp gateway not configured: ${provider === 'fonnte' ? 'FONNTE_TOKEN' : 'STARSENDER_DEVICE_KEY'} belum diisi di .env`);
+  }
+  try {
+    const messageId = await TEXT_SENDERS[provider].send(target, appendSignature(message));
+    markOk(provider);
+    return { messageId, to: target, provider };
+  } catch (e) {
+    markErr(provider, (e as Error).message);
+    throw e;
+  }
+}

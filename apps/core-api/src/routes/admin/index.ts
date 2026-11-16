@@ -21,6 +21,7 @@ import { branchChangeRouter } from './branch-change.js';
 import { ministryRouter } from './ministry.js';
 import { itMinisterTeamRouter } from './it-minister-team.js';
 import { waConfigRouter } from './wa-config.js';
+import { announcementRouter } from './announcement.js';
 import { jemaatPublicRouter } from './jemaat-public.js';
 import { visitRouter } from './visit.js';
 import { localBusinessRouter } from './local-business.js';
@@ -83,6 +84,8 @@ adminRouter.use('/me', meRouter);
 adminRouter.use('/ministry', ministryRouter);
 adminRouter.use('/it-minister-team', itMinisterTeamRouter);
 adminRouter.use('/wa-config', waConfigRouter);
+// Broadcast → Announcement (menu 'announcement').
+adminRouter.use('/announcement', announcementRouter);
 
 adminRouter.use('/sinode', sinodeRouter);
 adminRouter.use('/cabang', cabangRouter);

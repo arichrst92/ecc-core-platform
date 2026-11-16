@@ -25,6 +25,7 @@ import { geocodeJemaatBatch } from './jemaat-geocode.js';
 import { applyNewComerPromotion } from './onboarding-roles.js';
 import { getConfig, renderTemplate } from './wa-notif.js';
 import { waAllowedForJemaat } from './comm-prefs.js';
+import { tickAnnouncements } from './announcement.js';
 import { logger } from './logger.js';
 import { flushApiMetrics } from './api-metrics.js';
 import { samplePresence } from './telemetry.js';
@@ -468,6 +469,17 @@ export function startScheduledJobs() {
   // Onboarding: New Comer → Jemaat Tetap setelah hadir ibadah N× (Portal → Onboarding Config).
   const promosiJob = wrap('new-comer-promotion', applyNewComerPromotion);
   const h13 = setInterval(() => void promosiJob(), 30 * 60_000);
+  // Announcement: kirim yang jatuh tempo + lanjutkan WA/email bertahap (tiap menit, tanpa log rutin).
+  const hAnn = setInterval(() => {
+    tickAnnouncements()
+      .then((r) => {
+        if ('materialized' in r && (r.materialized || r.wa.sent || r.wa.failed || r.email.sent || r.email.failed || r.completed)) {
+          logger.info({ job: 'announcement', result: r }, '📢 announcement tick');
+        }
+      })
+      .catch((err) => logger.error({ err }, 'announcement tick failed'));
+  }, 60_000);
+  hAnn.unref?.();
   // Tiket tidak dipakai → batal otomatis setelah self check-in ditutup
   // (30 menit setelah ibadah/event selesai). Cek tiap 10 menit.
   const noShowJob = wrap('auto-cancel-no-show', () =>

@@ -27,6 +27,7 @@ import {
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { hargaLabel, hitView, publicItemsOf, serializeItem } from '../lib/local-market.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
+import { parseLinks } from '../lib/announcement.js';
 import { generateOccurrences } from '../lib/ibadah-occurrences.js';
 
 export const publicUnauthRouter = Router();
@@ -385,6 +386,18 @@ publicUnauthRouter.get('/ibadah/:id/petugas', publicBrowseLimiter, async (req, r
     (a, b) => a.pelayanan.localeCompare(b.pelayanan) || b.level - a.level || a.nama.localeCompare(b.nama),
   );
   res.json({ success: true, data: out.map(({ level: _l, ...p }) => p) });
+});
+
+// GET /public/announcement/:slug — halaman publik pengumuman (eccchurch.global/pengumuman/:slug):
+// pratinjau link WhatsApp (OG = banner) & dibaca tanpa app. Hanya yang sudah dikirim.
+publicUnauthRouter.get('/announcement/:slug', publicBrowseLimiter, async (req, res) => {
+  const slug = String(req.params.slug ?? '').slice(0, 220);
+  const a = await prisma.announcement.findFirst({
+    where: { slug, status: { in: ['SENDING', 'SENT'] } },
+    select: { judul: true, isi: true, bannerUrl: true, links: true, startedAt: true, slug: true },
+  });
+  if (!a) throw NotFound('Pengumuman tidak ditemukan');
+  res.json({ success: true, data: { ...a, links: parseLinks(a.links), sentAt: a.startedAt } });
 });
 
 // GET /public/event?cabangId=&limit=&page=

@@ -314,6 +314,32 @@ export async function saveBusinessHero(businessId: string, buffer: Buffer): Prom
 }
 
 /**
+ * Banner Announcement — rasio 16:9 seperti sampul Local Market (crop tengah,
+ * 1280×720, webp). Nama file unik per unggahan supaya cache/OG ikut berganti.
+ */
+export async function saveAnnouncementBanner(announcementId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'content', 'announcement');
+  await ensureDir(dir);
+  const filename = `${announcementId}-${Date.now()}.webp`;
+  await sharp(assertRasterImage(buffer))
+    .rotate()
+    .resize({ width: 1280, height: 720, fit: 'cover', position: 'centre', withoutEnlargement: false })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return `${PUBLIC_UPLOADS_PREFIX}/content/announcement/${filename}`;
+}
+
+export async function deleteAnnouncementBanner(url: string | null | undefined): Promise<void> {
+  const m = /\/content\/announcement\/([A-Za-z0-9._-]+\.webp)/.exec(url ?? '');
+  if (!m) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, 'content', 'announcement', m[1]!));
+  } catch {
+    /* sudah tidak ada */
+  }
+}
+
+/**
  * Foto item katalog Local Market (2.4.7) — diseragamkan rasio 3:2
  * (crop tengah, 1200×800, webp). Nama file unik per unggahan.
  */

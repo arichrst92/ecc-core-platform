@@ -181,19 +181,42 @@ ${brandName}`;
 }
 
 /**
- * OTP login lewat email — cadangan saat WhatsApp OTP sedang antre/terganggu.
- * Kode sama dengan OTP yang diminta app (layar input OTP app tidak berubah).
+ * Kode OTP lewat email.
+ *   kind 'wa-fallback' (default) — cadangan saat WhatsApp OTP antre/terganggu.
+ *   kind 'login'   — masuk dengan email (Els App web).
+ *   kind 'signup'  — daftar dengan email.
+ *   kind 'verify'  — tambah / ubah email di profil.
+ *   kind 'claim'   — menyambungkan data jemaat lama.
  */
+export type OtpEmailKind = 'wa-fallback' | 'login' | 'signup' | 'verify' | 'claim';
+const OTP_EMAIL_COPY: Record<OtpEmailKind, { subject: string; header: string; note: string | null }> = {
+  'wa-fallback': {
+    subject: 'Kode OTP login ECC',
+    header: 'Kode OTP login aplikasi ECC',
+    note: 'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirimkan kode OTP Anda lewat email ini.',
+  },
+  login: { subject: 'Kode masuk Els App', header: 'Kode masuk Els App', note: null },
+  signup: { subject: 'Kode pendaftaran Els App', header: 'Kode pendaftaran Els App', note: null },
+  verify: { subject: 'Kode verifikasi email Els App', header: 'Verifikasi email Anda', note: null },
+  claim: {
+    subject: 'Kode menyambungkan data jemaat ECC',
+    header: 'Menyambungkan data jemaat Anda',
+    note: 'Seseorang mendaftar di Els App dan menyatakan data jemaat ini miliknya. Bila itu Anda, masukkan kode di aplikasi. Bila bukan, abaikan email ini — data Anda aman.',
+  },
+};
+
 export async function sendOtpEmail(args: {
   to: string;
   namaLengkap: string;
   otp: string;
   expiresInMinutes: number;
+  kind?: OtpEmailKind;
 }): Promise<void> {
   const brandName = process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community';
-  const subject = `Kode OTP login ECC: ${args.otp}`;
-  const note =
-    'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirimkan kode OTP Anda lewat email ini.';
+  const copy = OTP_EMAIL_COPY[args.kind ?? 'wa-fallback'];
+  const subject = `${copy.subject}: ${args.otp}`;
+  const note = copy.note;
+  const spamTip = 'Email ini masuk folder Spam / Promosi? Tandai "Bukan spam" agar email berikutnya masuk ke Inbox.';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -206,21 +229,24 @@ export async function sendOtpEmail(args: {
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
     <div style="background:linear-gradient(135deg,#F26522,#F5A623);padding:32px 32px 24px;color:white;">
       <h1 style="margin:0;font-size:24px;font-weight:700;">${brandName}</h1>
-      <p style="margin:8px 0 0;font-size:14px;opacity:0.9;">Kode OTP login aplikasi ECC</p>
+      <p style="margin:8px 0 0;font-size:14px;opacity:0.9;">${copy.header}</p>
     </div>
     <div style="padding:32px;">
       <p style="margin:0 0 16px;font-size:16px;">Halo <strong>${escapeHtml(args.namaLengkap)}</strong>,</p>
-      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
-        ${note}
-      </p>
+      ${
+        note
+          ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">${note}</p>`
+          : ''
+      }
       <p style="margin:0 0 8px;font-size:15px;color:#374151;">Masukkan kode berikut di aplikasi:</p>
       <div style="text-align:center;margin:20px 0 24px;">
         <span style="display:inline-block;padding:14px 28px;background:#FFF7ED;border:2px dashed #F26522;border-radius:10px;font-size:32px;font-weight:800;letter-spacing:8px;color:#C2410C;">${escapeHtml(args.otp)}</span>
       </div>
-      <p style="margin:0 0 24px;font-size:14px;color:#374151;">Kode berlaku ${args.expiresInMinutes} menit. Jangan bagikan kode ini ke siapa pun, termasuk yang mengaku petugas gereja.</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#374151;">Kode berlaku ${args.expiresInMinutes} menit. Jangan bagikan kode ini ke siapa pun, termasuk yang mengaku petugas gereja.</p>
+      <p style="margin:0 0 24px;font-size:12px;color:#6b7280;">${spamTip}</p>
       <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0;">
       <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-        Kalau Anda tidak sedang login ke aplikasi ECC, abaikan email ini — akun Anda aman.
+        Kalau Anda tidak sedang memakai aplikasi ECC, abaikan email ini — akun Anda aman.
       </p>
     </div>
     <div style="padding:16px 32px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb;">
@@ -233,13 +259,13 @@ export async function sendOtpEmail(args: {
 </html>`;
 
   const text = `Halo ${args.namaLengkap},
-
-${note}
-
+${note ? `\n${note}\n` : ''}
 Kode OTP Anda: ${args.otp}
 Berlaku ${args.expiresInMinutes} menit. Jangan bagikan kode ini ke siapa pun.
 
-Kalau Anda tidak sedang login ke aplikasi ECC, abaikan email ini.
+${spamTip}
+
+Kalau Anda tidak sedang memakai aplikasi ECC, abaikan email ini.
 
 --
 ${brandName}`;

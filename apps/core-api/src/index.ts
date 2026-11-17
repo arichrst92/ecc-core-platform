@@ -8,6 +8,7 @@ import { logger } from './lib/logger.js';
 import { startScheduledJobs } from './lib/scheduled-jobs.js';
 import { startWorshipElsaWorker } from './lib/worship-elsa.js';
 import { startWaRuntimeSync } from './lib/wa-runtime.js';
+import { startWaOtpHealth } from './lib/wa-otp-health.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
 // Default bind ke `0.0.0.0` (semua interfaces) supaya:
@@ -43,6 +44,7 @@ async function main() {
   startScheduledJobs();
   // Pengaturan WhatsApp/OTP dari Portal (app_config) → @ecc/auth.
   startWaRuntimeSync();
+  startWaOtpHealth();
   // Worker "Sinkronkan dengan Elsa" (ECC Worship, whisper.cpp).
   startWorshipElsaWorker();
   app.listen(PORT, HOST, () => {

@@ -29,6 +29,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { RegistrationDuplicates } from '@/components/jemaat/registration-duplicates';
 
 type Strategy = 'noHp' | 'email' | 'nameAndDob';
 
@@ -134,6 +135,8 @@ export default function JemaatDuplicatesPage() {
           Scan jemaat yang ter-duplikat berdasarkan No HP, Email, atau Nama+Tanggal Lahir.
         </p>
       </div>
+
+      <RegistrationDuplicates />
 
       {q.isLoading && <p className="text-sm text-neutral-500">Scanning…</p>}
       {q.isError && (

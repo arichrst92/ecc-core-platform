@@ -24,6 +24,12 @@ export interface WaGatewaySettings {
   otpEmailCopy: OtpEmailMode | null;
   /** null = ikuti ONBOARDING_SKIP_NOHP_OTP */
   onboardingSkipNoHpOtp: boolean | null;
+  /** Daftar dengan nomor HP boleh dapat salinan OTP lewat email (app versi lama). */
+  otpEnrollEmailLegacy: boolean;
+  /** Daftar dengan email (app versi baru). */
+  emailSignupEnabled: boolean;
+  /** Provider OTP diduga gagal bila N OTP berturut-turut tidak dipakai (0 = nonaktif). */
+  waSuspectThreshold: number;
 }
 
 const SELECT = {
@@ -32,6 +38,9 @@ const SELECT = {
   waFonnteUsage: true,
   otpEmailCopy: true,
   onboardingSkipNoHpOtp: true,
+  otpEnrollEmailLegacy: true,
+  emailSignupEnabled: true,
+  waSuspectThreshold: true,
 } as const;
 
 const DEFAULTS: WaGatewaySettings = {
@@ -40,6 +49,9 @@ const DEFAULTS: WaGatewaySettings = {
   waFonnteUsage: 'both',
   otpEmailCopy: null,
   onboardingSkipNoHpOtp: null,
+  otpEnrollEmailLegacy: true,
+  emailSignupEnabled: true,
+  waSuspectThreshold: 8,
 };
 
 let current: WaGatewaySettings = DEFAULTS;
@@ -95,6 +107,16 @@ export function waRuntimeSettings(): WaGatewaySettings {
 /** Mode OTP salinan email efektif (Portal → .env → fallback). */
 export function otpEmailMode(): OtpEmailMode {
   return current.otpEmailCopy ?? normMode(process.env.OTP_EMAIL_COPY) ?? 'fallback';
+}
+
+/** Pendaftaran dengan nomor HP boleh menerima salinan OTP lewat email (app lama). */
+export function enrollEmailLegacy(): boolean {
+  return current.otpEnrollEmailLegacy;
+}
+
+/** Daftar dengan email diizinkan. */
+export function emailSignupEnabled(): boolean {
+  return current.emailSignupEnabled;
 }
 
 /** Lewati langkah nomor HP + OTP saat onboarding (Portal → .env). */

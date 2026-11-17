@@ -1,6 +1,6 @@
 # Rencana Implementasi — Login & Daftar Dua Saluran (WhatsApp / Email)
 
-Status: rencana. Fase 0 sudah di-deploy; Fase 1–3 belum dikerjakan. Disusun 17 Nov 2026.
+Status: Fase 0 sudah di-deploy. Fase 1 sudah dikerjakan (lihat catatan 3.11), belum di-deploy. Fase 2–3 belum. Disusun 17 Nov 2026.
 Tujuan: jemaat tidak pernah buntu saat salah satu penyedia (WhatsApp / email) gangguan,
 tanpa menyimpan kontak yang belum terbukti milik jemaat.
 
@@ -164,6 +164,21 @@ lewat WhatsApp, server hanya mencocokkan nomor HP → akun baru terbuat, riwayat
 - Terima & catat header `X-App-Version` (log + statistik versi di Portal). Belum dipakai untuk logika.
 - Laporan error app: kenali pengguna lewat `jemaatId`, bukan nomor HP.
 - Cek sinkronisasi ShiftSoft: pencocokan memakai email juga, supaya akun tanpa nomor HP tidak terbuat ganda.
+
+### 3.11 Catatan implementasi Fase 1 (17 Nov 2026)
+- Kemiripan nama memakai `nameSimilarity` (sudah dipakai konsolidasi jemaat), **tanpa** `pg_trgm` —
+  kandidat disaring dulu lewat cabang + tanggal lahir, jadi cepat & tidak butuh ekstensi database.
+  Ambang: ditawarkan ke pendaftar ≥ 0,80 (dan unggul ≥ 0,10 dari kandidat kedua); dicatat untuk admin ≥ 0,70.
+- Tambah nomor yang milik **data tamu**: belum digabung otomatis (belum ada fungsi gabung data yang aman
+  untuk semua tabel). Server menolak dengan pesan "admin cabang akan menyatukan" dan mencatat kandidat ganda.
+- Kandidat ganda ditinjau di Portal → Jemaat → Cek Duplikat (bagian "Dari pendaftaran app").
+- Kode admin: Portal → detail jemaat → **Kode masuk sementara**. Bila kode aktif, `/auth/otp/request`
+  tidak mengirim OTP baru (app lama langsung ke layar input kode).
+- OTP yang juga terkirim ke email (mode Always) dicatat `provider = fonnte+email` / `resmi+email` dan
+  tidak dihitung untuk deteksi "diduga gagal". Deteksi paling efektif setelah mode OTP email = Fallback.
+- Statistik versi app (header `X-App-Version`) tampil di Gateway & OTP.
+- Migrasi: `20261205090000_otp_purpose_dual_channel`, `20261205090100_auth_dual_channel`
+  (email huruf kecil hanya untuk baris yang tidak bentrok — 3 email ganda tetap perlu dirapikan manual).
 
 ---
 

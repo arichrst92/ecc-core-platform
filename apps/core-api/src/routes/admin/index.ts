@@ -3,6 +3,7 @@ import { requireAuth } from '../../middleware/require-auth.js';
 import { sinodeRouter } from './sinode.js';
 import { cabangRouter } from './cabang.js';
 import { jemaatRouter } from './jemaat.js';
+import { jemaatDuplicateRouter } from './jemaat-duplicate.js';
 import { roleRouter } from './role.js';
 import { ibadahRouter } from './ibadah.js';
 import { keluargaRouter } from './keluarga.js';
@@ -94,6 +95,8 @@ adminRouter.use('/cabang', cabangRouter);
 adminRouter.use('/jemaat-public', jemaatPublicRouter);
 // Konsolidasi data jemaat dari spreadsheet (preview + apply, human check). Fulltimer only.
 adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
+// Kandidat akun ganda (pendaftar baru mirip data lama) — sebelum jemaatRouter.
+adminRouter.use('/jemaat-duplicate', jemaatDuplicateRouter);
 // Sertifikat jemaat (gambar/PDF) — sebelum jemaatRouter.
 adminRouter.use('/jemaat/:jemaatId/sertifikat', jemaatSertifikatRouter);
 // Resolusi tahunan jemaat (read-only) — sebelum jemaatRouter.

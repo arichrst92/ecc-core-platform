@@ -23,7 +23,7 @@ export const createJemaatSchema = z.object({
   namaLengkap: z.string().trim().min(2).max(255),
   noHp: noHpSchema,
 
-  email: emptyToUndefined(z.string().trim().email()),
+  email: emptyToUndefined(z.string().trim().toLowerCase().email()),
   tanggalLahir: emptyToUndefined(z.string().date()),
   jenisKelamin: emptyToUndefined(jenisKelaminSchema),
   alamat: emptyToUndefined(z.string().trim()),
@@ -41,7 +41,7 @@ export const updateJemaatSchema = z.object({
   cabangId: uuidSchema.optional(),
   namaLengkap: z.string().trim().min(2).max(255).optional(),
   noHp: emptyToUndefined(noHpSchema),
-  email: emptyToUndefined(z.string().trim().email()),
+  email: emptyToUndefined(z.string().trim().toLowerCase().email()),
   tanggalLahir: emptyToUndefined(z.string().date()),
   jenisKelamin: emptyToUndefined(jenisKelaminSchema),
   alamat: emptyToUndefined(z.string().trim()),

@@ -9,6 +9,7 @@ import { publicMonitorRouter } from './routes/public-monitor.js';
 import compression from 'compression';
 import morgan from 'morgan';
 import { apiMetricsMiddleware } from './lib/api-metrics.js';
+import { appVersionMiddleware } from './lib/app-version-stats.js';
 import swaggerUi from 'swagger-ui-express';
 
 import { errorHandler } from './middleware/error-handler.js';
@@ -92,6 +93,8 @@ export function createApp(): Express {
   app.use(morgan('dev'));
   // Latency & status per endpoint → menu Analitik (Performa API).
   app.use(apiMetricsMiddleware);
+  // Versi Els App (header X-App-Version) → Portal WhatsApp Config.
+  app.use(appVersionMiddleware);
 
   // ---------- Health & docs ----------
   app.get('/health', (_req: Request, res: Response) => {

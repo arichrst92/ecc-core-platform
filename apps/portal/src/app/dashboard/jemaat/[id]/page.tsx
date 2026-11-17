@@ -43,6 +43,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
 import { PurgePersonalDataButton } from '@/components/jemaat/purge-personal-data';
+import { LoginCodeButton } from '@/components/jemaat/login-code-button';
 import { ResolusiSection } from '@/components/jemaat/resolusi-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
@@ -69,6 +70,9 @@ interface Jemaat {
   kode: string | null;
   email: string | null;
   noHp: string | null;
+  emailVerifiedAt?: string | null;
+  noHpSource?: string | null;
+  emailSource?: string | null;
   tanggalLahir: string | null;
   jenisKelamin: 'L' | 'P' | null;
   alamat: string | null;
@@ -294,6 +298,7 @@ export default function JemaatDetailPage() {
           <FileText className="w-4 h-4" />
           Export PDF
         </button>
+        {!j.isTamu && !j.dataPurgedAt ? <LoginCodeButton jemaatId={j.id} nama={j.namaLengkap} disabled={!j.noHp && !j.email} /> : null}
         {!j.dataPurgedAt && <PurgePersonalDataButton jemaatId={j.id} nama={j.namaLengkap} />}
         </div>
       </div>
@@ -383,11 +388,13 @@ export default function JemaatDetailPage() {
             {j.noHp && (
               <Info icon={Phone} label="No HP">
                 {j.noHp}
+                <ContactBadge kind="noHp" source={j.noHpSource ?? null} verified={j.noHpSource !== 'GUARDIAN' && j.noHpSource !== 'ADMIN'} />
               </Info>
             )}
             {j.email && (
               <Info icon={Mail} label="Email">
                 {j.email}
+                <ContactBadge kind="email" source={j.emailSource ?? null} verified={!!j.emailVerifiedAt} />
               </Info>
             )}
             {j.tanggalLahir && (
@@ -2400,4 +2407,22 @@ function BusinessSection({ businesses }: { businesses: JemaatProfileData['busine
       ))}
     </HistoryCard>
   );
+}
+
+/** Status verifikasi kontak (login/daftar dua saluran). */
+function ContactBadge({ kind, source, verified }: { kind: 'noHp' | 'email'; source: string | null; verified: boolean }) {
+  const label =
+    source === 'GUARDIAN'
+      ? 'Diinput wali'
+      : source === 'ADMIN'
+        ? 'Diinput admin'
+        : verified
+          ? kind === 'noHp' && source !== 'SELF_VERIFIED'
+            ? null
+            : 'Terverifikasi'
+          : 'Belum terverifikasi';
+  if (!label) return null;
+  const cls =
+    label === 'Terverifikasi' ? 'bg-emerald-50 text-emerald-700' : label === 'Belum terverifikasi' ? 'bg-amber-50 text-amber-800' : 'bg-neutral-100 text-neutral-600';
+  return <span className={`ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full align-middle ${cls}`}>{label}</span>;
 }

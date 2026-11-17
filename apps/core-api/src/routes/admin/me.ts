@@ -43,6 +43,9 @@ import {
   deleteMyAccountSchema,
   changePhoneRequestSchema,
   changePhoneVerifySchema,
+  changeEmailRequestSchema,
+  changeEmailVerifySchema,
+  isDisposableEmail,
   meUpdateHomecellAreaSchema,
   PEKERJAAN_OPTIONS,
   PERNIKAHAN_OPTIONS,
@@ -50,6 +53,8 @@ import {
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
+import { assertOtpCooldown, consumeOtp, createOtp, otpTtlSeconds, setOtpProvider } from '../../lib/otp-store.js';
+import { sendOtpEmail } from '../../lib/sendgrid.js';
 import { otpRequestLimiter, authVerifyLimiter, familySearchLimiter } from '../../middleware/rate-limit.js';
 import { BadRequest, Conflict, Forbidden, NotFound, ServiceUnavailable, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -291,6 +296,20 @@ meRouter.patch('/', async (req, res) => {
   if (!before) throw NotFound('Jemaat tidak ditemukan');
   const input = selfEditJemaatSchema.parse(buangNilaiTetap(req.body, before as unknown as Record<string, unknown>));
 
+  // Kontak: akun dewasa tidak boleh kehilangan kontak terakhir (tidak bisa login lagi).
+  if (input.email === null && before.email && !before.noHp && !before.primaryGuardianId) {
+    throw BadRequest('Email adalah satu-satunya cara Anda masuk. Tambahkan nomor WhatsApp dulu sebelum menghapus email.');
+  }
+  // Email diubah lewat form biasa (app lama) → diterima, tapi belum terverifikasi.
+  const emailChanged = input.email !== undefined && (input.email ?? null) !== (before.email?.toLowerCase() ?? null);
+  if (emailChanged && input.email) {
+    const other = await prisma.jemaat.findFirst({
+      where: { email: { equals: input.email, mode: 'insensitive' }, NOT: { id: jemaatId } },
+      select: { id: true },
+    });
+    if (other) throw Conflict('Email sudah dipakai akun lain. Hubungi admin cabang kalau ini email Anda.');
+  }
+
   // Audit input 2026-11: pilihan pekerjaan & pernikahan harus dari daftar
   // (nilai lama yang sudah tersimpan tetap diterima), dan tanggal pernikahan
   // konsisten dengan status & tanggal lahir.
@@ -331,7 +350,9 @@ meRouter.patch('/', async (req, res) => {
 
   const data: Prisma.JemaatUpdateInput = {
     namaLengkap: input.namaLengkap,
-    email: input.email ?? undefined,
+    ...(emailChanged
+      ? { email: input.email ?? null, emailVerifiedAt: null, emailSource: input.email ? 'SELF' : null }
+      : {}),
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     jenisKelamin: input.jenisKelamin ?? undefined,
     alamat: input.alamat ?? undefined,
@@ -392,8 +413,19 @@ const PHONE_OTP_PURPOSE = 'ONBOARDING_ADD_NOHP' as const;
 async function assertPhoneFree(jemaatId: string, noHp: string) {
   const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { noHp: true } });
   if (me?.noHp === noHp) throw BadRequest('Nomor ini sudah menjadi nomor Anda.');
-  const other = await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true } });
+  const other = await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true, isTamu: true } });
   if (other && other.id !== jemaatId) {
+    // Data tamu dengan nomor ini → catat untuk disatukan admin (riwayat tamu tidak hilang).
+    if (other.isTamu) {
+      await prisma.duplicateCandidate
+        .upsert({
+          where: { newJemaatId_oldJemaatId: { newJemaatId: jemaatId, oldJemaatId: other.id } },
+          create: { newJemaatId: jemaatId, oldJemaatId: other.id, score: 1, reason: 'Nomor HP yang ingin ditambahkan tercatat sebagai data tamu' },
+          update: {},
+        })
+        .catch(() => undefined);
+      throw Conflict('Nomor ini tercatat sebagai data tamu. Admin cabang akan menyatukan data tamu dengan akun Anda — hubungi admin cabang.');
+    }
     throw Conflict('Nomor HP sudah dipakai jemaat lain. Hubungi admin gereja kalau ini nomor Anda.');
   }
 }
@@ -411,19 +443,10 @@ meRouter.post('/phone/request-otp', otpRequestLimiter, async (req, res) => {
   if (recent && Date.now() - recent.createdAt.getTime() < cooldown * 1000) {
     throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum meminta kode baru.`);
   }
-  const otp = generateOtp();
-  const otpRow = await prisma.otpVerification.create({
-    data: {
-      noHp,
-      kodeHash: await hashOtp(otp),
-      purpose: PHONE_OTP_PURPOSE,
-      expiresAt: getOtpExpiry(),
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    },
-  });
+  const { row: otpRow, otp } = await createOtp({ noHp }, PHONE_OTP_PURPOSE, { ttlSeconds: otpTtlSeconds('wa'), req, jemaatId });
   try {
-    await sendOtpViaWhatsApp(noHp, otp);
+    const sent = await sendOtpViaWhatsApp(noHp, otp);
+    if (sent.provider) await setOtpProvider(otpRow.id, sent.provider);
   } catch (e) {
     logger.error({ err: e, noHp }, '[me] gagal kirim OTP ganti no HP via WhatsApp');
     await prisma.otpVerification.delete({ where: { id: otpRow.id } }).catch(() => undefined);
@@ -462,7 +485,7 @@ meRouter.post('/phone/verify', authVerifyLimiter, async (req, res) => {
   const before = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { noHp: true, namaLengkap: true } });
   let updated;
   try {
-    updated = await prisma.jemaat.update({ where: { id: jemaatId }, data: { noHp }, select: { id: true, noHp: true } });
+    updated = await prisma.jemaat.update({ where: { id: jemaatId }, data: { noHp, noHpSource: 'SELF_VERIFIED' }, select: { id: true, noHp: true } });
   } catch {
     throw Conflict('Nomor HP sudah dipakai jemaat lain.');
   }
@@ -476,6 +499,78 @@ meRouter.post('/phone/verify', authVerifyLimiter, async (req, res) => {
     metadata: { kind: 'self-change-phone' },
   });
   res.json({ success: true, message: 'Nomor HP berhasil diganti. Gunakan nomor baru untuk login berikutnya.', data: updated });
+});
+
+// ============================================================
+//  Tambah / ubah email sendiri — OTP 6 digit ke email baru
+// ============================================================
+//   POST /admin/me/email/request-otp { email }
+//   POST /admin/me/email/verify      { email, kode }
+// Email yang sama dengan email sekarang tapi belum terverifikasi juga boleh
+// (verifikasi email lama).
+async function assertEmailFree(jemaatId: string, email: string) {
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { email: true, emailVerifiedAt: true } });
+  if (me?.email?.toLowerCase() === email && me.emailVerifiedAt) throw BadRequest('Email ini sudah menjadi email Anda dan sudah terverifikasi.');
+  const other = await prisma.jemaat.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' }, NOT: { id: jemaatId } },
+    select: { id: true, isTamu: true },
+  });
+  if (other) throw Conflict('Email sudah dipakai akun lain. Hubungi admin cabang kalau ini email Anda.');
+}
+
+meRouter.post('/email/request-otp', otpRequestLimiter, async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const { email } = changeEmailRequestSchema.parse(req.body ?? {});
+  if (isDisposableEmail(email)) throw BadRequest('Gunakan alamat email pribadi (bukan email sementara).');
+  await assertEmailFree(jemaatId, email);
+  await assertOtpCooldown({ email }, 'ADD_EMAIL');
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { namaLengkap: true } });
+  const ttl = otpTtlSeconds('email');
+  const { row, otp } = await createOtp({ email }, 'ADD_EMAIL', { ttlSeconds: ttl, req, jemaatId, provider: 'email' });
+  try {
+    await sendOtpEmail({ to: email, namaLengkap: me?.namaLengkap ?? 'Jemaat', otp, expiresInMinutes: Math.round(ttl / 60), kind: 'verify' });
+  } catch (err) {
+    logger.error({ err }, '[me] gagal kirim OTP email');
+    await prisma.otpVerification.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw ServiceUnavailable('Layanan email sedang gangguan. Coba lagi beberapa menit lagi.', 'EMAIL_UNAVAILABLE');
+  }
+  res.json({
+    success: true,
+    message: 'Kode verifikasi dikirim ke email. Bila tidak ada di Inbox, cek folder Spam / Promosi.',
+    data: { email, expiresIn: ttl },
+  });
+});
+
+meRouter.post('/email/verify', authVerifyLimiter, async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const { email, kode } = changeEmailVerifySchema.parse(req.body ?? {});
+  const { record } = await consumeOtp({ email }, 'ADD_EMAIL', kode);
+  if (record.jemaatId !== jemaatId) throw Unauthorized('Kode tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.');
+  await assertEmailFree(jemaatId, email).catch((e) => {
+    // "sudah terverifikasi" bukan masalah di tahap ini.
+    if ((e as { statusCode?: number }).statusCode === 409) throw e;
+  });
+  const before = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { email: true, namaLengkap: true } });
+  let updated;
+  try {
+    updated = await prisma.jemaat.update({
+      where: { id: jemaatId },
+      data: { email, emailVerifiedAt: new Date(), emailSource: 'SELF_VERIFIED' },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+  } catch {
+    throw Conflict('Email sudah dipakai akun lain.');
+  }
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'jemaat',
+    resourceId: jemaatId,
+    resourceLabel: `${before?.email ? 'Ganti' : 'Tambah'} email sendiri: ${before?.namaLengkap ?? ''}`,
+    before: { email: before?.email ?? null },
+    after: { email },
+    metadata: { kind: 'self-change-email' },
+  });
+  res.json({ success: true, message: 'Email berhasil diverifikasi.', data: updated });
 });
 
 meRouter.post('/foto', flexImageUpload(), async (req, res) => {
@@ -1266,6 +1361,7 @@ meRouter.post('/family/register-new', async (req, res) => {
       namaLengkap: input.namaLengkap,
       kode,
       noHp: input.noHp,
+      noHpSource: input.noHp ? 'GUARDIAN' : null,
       tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
       jenisKelamin: input.jenisKelamin ?? undefined,
       alamat: input.alamat,
@@ -1404,8 +1500,16 @@ meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
   };
   // noHp / email: optional + nullable. Kirim explicit `null` untuk clear,
   // skip key (undefined) untuk tidak ubah.
-  if (input.noHp !== undefined) data.noHp = input.noHp;
-  if (input.email !== undefined) data.email = input.email;
+  // Diisi wali (tanpa OTP) → ditandai GUARDIAN.
+  if (input.noHp !== undefined) {
+    data.noHp = input.noHp;
+    data.noHpSource = input.noHp ? 'GUARDIAN' : null;
+  }
+  if (input.email !== undefined) {
+    data.email = input.email;
+    data.emailVerifiedAt = null;
+    data.emailSource = input.email ? 'GUARDIAN' : null;
+  }
 
   const updated = await prisma.jemaat.update({ where: { id: targetId }, data });
 

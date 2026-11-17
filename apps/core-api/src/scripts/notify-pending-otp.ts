@@ -54,7 +54,7 @@ async function main() {
     where: { purpose: 'LOGIN', usedAt: null, createdAt: { gte: since } },
     select: { noHp: true, createdAt: true },
   });
-  for (const r of rows) note(r.noHp, r.createdAt);
+  for (const r of rows) if (r.noHp) note(r.noHp, r.createdAt);
 
   // 2) Log pm2: OTP gagal kirim (JSON pino per baris)
   const logFiles = [

@@ -35,6 +35,7 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     select: {
       id: true,
       noHp: true,
+      email: true,
       dataPurgedAt: true,
       user: { select: { id: true } },
       sertifikat: { select: { id: true } },
@@ -113,6 +114,9 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     // Bukti transfer
     await tx.eventParticipation.updateMany({ where: { jemaatId: j.id }, data: { buktiTransferUrl: null, catatan: null } });
     await tx.eventDonation.updateMany({ where: { participation: { jemaatId: j.id } }, data: { buktiTransferUrl: null } });
+    await tx.otpVerification.deleteMany({ where: { jemaatId: j.id } });
+    await tx.duplicateCandidate.deleteMany({ where: { OR: [{ newJemaatId: j.id }, { oldJemaatId: j.id }] } });
+    if (j.email) await tx.otpVerification.deleteMany({ where: { email: j.email } });
     if (j.noHp) {
       await tx.otpVerification.deleteMany({ where: { noHp: j.noHp } });
       await tx.faceTelemetryEvent.deleteMany({ where: { noHp: j.noHp } });

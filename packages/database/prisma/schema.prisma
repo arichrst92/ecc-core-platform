@@ -136,6 +136,11 @@ model Jemaat {
   // noHp opsional — anak balita / dependent yang di-register via parent
   // tidak punya nomor HP sendiri, account hanya bisa diakses via guardian.
   noHp                   String?       @unique @map("no_hp") @db.VarChar(20)
+  // Verifikasi kontak (login/daftar dua saluran, 2026-12). Sumber:
+  // SELF_VERIFIED (OTP saluran itu) | GUARDIAN (diisi wali) | ADMIN (Portal) | LEGACY (data lama).
+  emailVerifiedAt        DateTime?     @map("email_verified_at")
+  noHpSource             String?       @map("no_hp_source") @db.VarChar(16)
+  emailSource            String?       @map("email_source") @db.VarChar(16)
   tanggalLahir           DateTime?     @map("tanggal_lahir") @db.Date
   jenisKelamin           JenisKelamin? @map("jenis_kelamin")
   alamat                 String?       @db.Text
@@ -724,7 +729,15 @@ model PersonalAccessToken {
 
 model OtpVerification {
   id        String     @id @default(uuid()) @db.Uuid
-  noHp      String     @map("no_hp") @db.VarChar(20)
+  // Salah satu wajib: noHp (OTP WhatsApp) atau email (OTP email).
+  noHp      String?    @map("no_hp") @db.VarChar(20)
+  email     String?    @db.VarChar(255)
+  // Saluran yang benar-benar mengirim: resmi | fonnte | email | admin.
+  provider  String?    @db.VarChar(20)
+  // Jemaat sasaran (kode admin cabang / klaim data lama).
+  jemaatId  String?    @map("jemaat_id") @db.Uuid
+  // Admin pembuat kode (purpose ADMIN_CODE).
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
   kodeHash  String     @map("kode_hash") @db.VarChar(255) // hash bcrypt dari OTP
   purpose   OtpPurpose
   attempts  Int        @default(0)
@@ -735,6 +748,9 @@ model OtpVerification {
   createdAt DateTime   @default(now()) @map("created_at")
 
   @@index([noHp, purpose])
+  @@index([email, purpose])
+  @@index([provider, createdAt])
+  @@index([jemaatId, purpose])
   @@index([expiresAt])
   @@map("otp_verification")
 }
@@ -746,6 +762,13 @@ enum OtpPurpose {
   // Onboarding: existing jemaat (logged in via magic link) add/verify noHp
   // supaya bisa OTP-WA login di future. Handler check jemaat sudah authenticated.
   ONBOARDING_ADD_NOHP
+  // Login/daftar dua saluran (2026-12)
+  ENROLLMENT_EMAIL
+  LOGIN_EMAIL
+  ADD_EMAIL
+  ADD_NOHP
+  CLAIM_RECORD
+  ADMIN_CODE
 
   @@map("otp_purpose")
 }
@@ -2321,6 +2344,12 @@ model AppConfig {
   waFonnteUsage              String   @default("both") @map("wa_fonnte_usage") @db.VarChar(10)
   otpEmailCopy               String?  @map("otp_email_copy") @db.VarChar(10)
   onboardingSkipNoHpOtp      Boolean? @map("onboarding_skip_nohp_otp")
+  // Pendaftaran dengan nomor HP boleh dapat salinan OTP lewat email (app versi lama).
+  otpEnrollEmailLegacy       Boolean  @default(true) @map("otp_enroll_email_legacy")
+  // Daftar dengan email (app versi baru).
+  emailSignupEnabled         Boolean  @default(true) @map("email_signup_enabled")
+  // Provider OTP "diduga gagal" bila N OTP berturut-turut tidak dipakai.
+  waSuspectThreshold         Int      @default(8) @map("wa_suspect_threshold")
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")
@@ -4387,4 +4416,23 @@ model AnnouncementRecipient {
   @@index([announcementId, emailStatus])
   @@index([jemaatId, dismissedAt])
   @@map("announcement_recipient")
+}
+
+/// Kandidat akun ganda: pendaftar baru yang mirip data jemaat lama (nama mirip,
+/// tanggal lahir & cabang sama). Ditinjau admin di Portal → Konsolidasi Jemaat.
+model DuplicateCandidate {
+  id               String    @id @default(uuid()) @db.Uuid
+  newJemaatId      String    @map("new_jemaat_id") @db.Uuid
+  oldJemaatId      String    @map("old_jemaat_id") @db.Uuid
+  score            Float
+  reason           String    @db.VarChar(160)
+  // OPEN | MERGED | DISMISSED
+  status           String    @default("OPEN") @db.VarChar(12)
+  resolvedByUserId String?   @map("resolved_by_user_id") @db.Uuid
+  resolvedAt       DateTime? @map("resolved_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@unique([newJemaatId, oldJemaatId])
+  @@index([status, createdAt])
+  @@map("duplicate_candidate")
 }

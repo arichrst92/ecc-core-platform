@@ -18,6 +18,7 @@ import {
   isWhatsAppRegistered,
   sendWhatsAppText,
   testWaProvider,
+  waOtpSkip,
   waProviderHealth,
   waProviderStatus,
 } from '@ecc/auth';
@@ -32,6 +33,8 @@ import {
   waRuntimeSettings,
 } from '../../lib/wa-runtime.js';
 import { describeInvalidPhone, normalizePhoneNumber } from '@ecc/shared-types';
+import { otpChannelStats, tickWaOtpHealth, waOtpHealthState } from '../../lib/wa-otp-health.js';
+import { appVersionStats } from '../../lib/app-version-stats.js';
 
 export const waConfigRouter = Router();
 
@@ -78,6 +81,12 @@ async function gatewayView() {
     // Hasil kirim terakhir per provider (sejak server terakhir start).
     health: waProviderHealth(),
     fonnteDevice,
+    // Deteksi gagal diam-diam: provider yang sedang dilewati untuk OTP + statistik 1 jam.
+    otpHealth: waOtpHealthState(),
+    otpSkip: waOtpSkip(),
+    otpStats: await otpChannelStats().catch(() => ({})),
+    // Versi Els App yang memanggil API (sejak server start) — app lama = tanpa header.
+    appVersions: appVersionStats(),
     effective: {
       otpEmailCopy: otpEmailMode(),
       onboardingSkipNoHpOtp: skipNoHpOtp(),
@@ -100,6 +109,9 @@ const gatewaySchema = z
     waFonnteUsage: z.enum(WA_USAGES as [string, ...string[]]),
     otpEmailCopy: z.enum(OTP_EMAIL_MODES as [string, ...string[]]).nullable(),
     onboardingSkipNoHpOtp: z.boolean().nullable(),
+    otpEnrollEmailLegacy: z.boolean(),
+    emailSignupEnabled: z.boolean(),
+    waSuspectThreshold: z.number().int().min(0).max(50),
   })
   .partial();
 
@@ -109,6 +121,8 @@ waConfigRouter.patch('/gateway', async (req, res) => {
   const patch = gatewaySchema.parse(req.body ?? {});
   const before = { ...waRuntimeSettings() };
   const after = await saveWaRuntime(patch as Parameters<typeof saveWaRuntime>[0], req.user.sub ?? null);
+  // Saklar provider / ambang berubah → evaluasi ulang status OTP sekarang juga.
+  await tickWaOtpHealth(true);
   audit(req, {
     action: 'UPDATE',
     resource: 'wa_gateway_config',

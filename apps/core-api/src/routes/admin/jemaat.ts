@@ -7,7 +7,9 @@ import {
   updateJemaatSchema,
   paginationQuerySchema,
 } from '@ecc/shared-types';
-import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
+import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/errors.js';
+import { createOtp, maskEmail, otpTtlSeconds } from '../../lib/otp-store.js';
+import { requireMenu } from '../../middleware/require-menu.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { JUNK_LABEL, invalidateJunkCache, junkMap, junkSummary } from '../../lib/junk-data.js';
@@ -1746,6 +1748,9 @@ jemaatRouter.post('/', async (req, res) => {
     ...input,
     kode,
     email: input.email || null,
+    // Diisi admin Portal (tanpa OTP) → ditandai ADMIN.
+    emailSource: input.email ? 'ADMIN' : null,
+    noHpSource: input.noHp ? 'ADMIN' : null,
     tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
     tanggalBergabung: input.tanggalBergabung ? new Date(input.tanggalBergabung) : undefined,
     tanggalPernikahan: input.tanggalPernikahan ? new Date(input.tanggalPernikahan) : null,
@@ -1753,6 +1758,59 @@ jemaatRouter.post('/', async (req, res) => {
   const created = await prisma.jemaat.create({ data });
   audit(req, { action: 'CREATE', resource: 'jemaat', resourceId: created.id, resourceLabel: created.namaLengkap, after: created });
   res.status(201).json({ success: true, data: created });
+});
+
+/**
+ * POST /admin/jemaat/:id/login-code — "Kode masuk sementara" dari admin cabang.
+ * Jalan terakhir saat WhatsApp & email gangguan: 6 digit, 10 menit, sekali
+ * pakai. Jemaat memasukkannya di layar OTP biasa (nomor HP / email miliknya).
+ * Kode lama yang belum dipakai dibatalkan. Tercatat di audit log.
+ */
+jemaatRouter.post('/:id/login-code', requireMenu('jemaat', 'write'), async (req, res) => {
+  if (req.pat) throw Forbidden('Token API tidak boleh membuat kode masuk.');
+  const j = await prisma.jemaat.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, namaLengkap: true, noHp: true, email: true, isActive: true, isTamu: true, cabang: { select: { nama: true } } },
+  });
+  if (!j) throw NotFound('Jemaat tidak ditemukan');
+  if (!j.isActive || j.isTamu) throw BadRequest('Kode masuk hanya untuk anggota aktif.');
+  if (!j.noHp && !j.email) {
+    throw BadRequest('Jemaat ini belum punya nomor HP maupun email. Lengkapi salah satu dulu (dipakai untuk masuk).');
+  }
+  const now = new Date();
+  await prisma.otpVerification.updateMany({
+    where: { jemaatId: j.id, purpose: 'ADMIN_CODE', usedAt: null, expiresAt: { gt: now } },
+    data: { expiresAt: now },
+  });
+  const ttl = otpTtlSeconds('admin');
+  const { row, otp } = await createOtp(j.noHp ? { noHp: j.noHp } : { email: j.email! }, 'ADMIN_CODE', {
+    ttlSeconds: ttl,
+    req,
+    jemaatId: j.id,
+    createdByUserId: req.user?.sub ?? null,
+    provider: 'admin',
+  });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'login_code',
+    resourceId: j.id,
+    resourceLabel: `Kode masuk sementara untuk ${j.namaLengkap}`,
+    metadata: { kind: 'admin-login-code', otpId: row.id, expiresAt: row.expiresAt },
+  });
+  res.status(201).json({
+    success: true,
+    data: {
+      kode: otp,
+      expiresAt: row.expiresAt,
+      expiresInMinutes: Math.round(ttl / 60),
+      namaLengkap: j.namaLengkap,
+      // Jemaat masuk dengan pilihan ini di app, lalu memasukkan kode di layar OTP.
+      loginWith: j.noHp
+        ? { channel: 'whatsapp', label: `${j.noHp.slice(0, 5)}••••${j.noHp.slice(-3)}` }
+        : { channel: 'email', label: maskEmail(j.email!) },
+      alsoEmail: j.noHp && j.email ? maskEmail(j.email) : null,
+    },
+  });
 });
 
 jemaatRouter.patch('/:id', async (req, res) => {
@@ -1766,8 +1824,16 @@ jemaatRouter.patch('/:id', async (req, res) => {
   };
   const before = await prisma.jemaat.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
+  // Kontak yang diubah admin (tanpa OTP) → ditandai ADMIN; email jadi belum terverifikasi.
+  const contactMeta: Record<string, unknown> = {};
+  if (input.email !== undefined && (input.email || null) !== (before.email ?? null)) {
+    Object.assign(contactMeta, { emailSource: input.email ? 'ADMIN' : null, emailVerifiedAt: null });
+  }
+  if (input.noHp !== undefined && (input.noHp || null) !== (before.noHp ?? null)) {
+    contactMeta.noHpSource = input.noHp ? 'ADMIN' : null;
+  }
   // portalEditedAt → sync Shiftsoft tidak lagi menimpa data pribadi jemaat ini.
-  const updated = await prisma.jemaat.update({ where: { id: req.params.id }, data: { ...data, portalEditedAt: new Date() } });
+  const updated = await prisma.jemaat.update({ where: { id: req.params.id }, data: { ...data, ...contactMeta, portalEditedAt: new Date() } });
   invalidateJunkCache();
   audit(req, { action: 'UPDATE', resource: 'jemaat', resourceId: updated.id, resourceLabel: updated.namaLengkap, before, after: updated });
   res.json({ success: true, data: updated });

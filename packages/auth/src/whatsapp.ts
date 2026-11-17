@@ -73,6 +73,20 @@ const servesKind = (p: WaTextProvider, kind: 'otp' | 'notif') => {
 };
 const isDisabled = (p: WaProvider) => !!runtime.disabled?.includes(p);
 
+/**
+ * Provider yang dilewati KHUSUS untuk OTP karena terdeteksi bermasalah
+ * (device Fonnte terputus / OTP berturut-turut tidak pernah dipakai).
+ * Diisi core-api (lib/wa-otp-health). Nilai = alasan (tampil di Portal & log).
+ */
+let otpSkip: Partial<Record<WaProvider, string>> = {};
+export function setWaOtpSkip(skip: Partial<Record<WaProvider, string>>): void {
+  otpSkip = { ...skip };
+}
+export function waOtpSkip(): Partial<Record<WaProvider, string>> {
+  return { ...otpSkip };
+}
+const otpSkipped = (p: WaProvider) => !!otpSkip[p];
+
 /** Riwayat kirim terakhir per provider (memori proses) — status di Portal. */
 interface ProviderHealth {
   lastOkAt?: number;
@@ -248,8 +262,11 @@ export function waProviders(kind?: 'otp' | 'notif'): WaTextProvider[] {
 
 /** Urutan provider OTP: Resmi.ID (bila dikonfigurasi) lalu provider teks. */
 export function waOtpProviders(): WaProvider[] {
-  return [...(resmiConfigured() ? (['resmi'] as WaProvider[]) : []), ...waProviders('otp')];
+  return [...(resmiConfigured() ? (['resmi'] as WaProvider[]) : []), ...waProviders('otp')].filter((p) => !otpSkipped(p));
 }
+
+/** Awalan error bila semua provider OTP sedang dilewati (terputus / diduga gagal). */
+export const ALL_SKIPPED_PREFIX = 'Semua gateway WhatsApp OTP sedang dilewati — ';
 
 type Attempt = { provider: WaProvider; send: () => Promise<string> };
 
@@ -296,10 +313,14 @@ export async function sendOtpViaWhatsApp(noHpE164: string, otp: string): Promise
   const ttlSec = Number(process.env.OTP_EXPIRES_SECONDS ?? 300);
   const ttlLabel = ttlSec % 60 === 0 ? `${ttlSec / 60} menit` : `${ttlSec} detik`;
   const body = `*ECC Portal*\nKode OTP Anda: *${otp}*\n\nBerlaku ${ttlLabel}. Jangan bagikan kode ini ke siapapun.`;
-  const attempts: Attempt[] = [
+  const all: Attempt[] = [
     ...(resmiConfigured() ? [{ provider: 'resmi' as const, send: () => sendOtpViaResmi(target, otp) }] : []),
     ...textAttempts(target, appendSignature(body), 'otp'),
   ];
+  const attempts = all.filter((a) => !otpSkipped(a.provider));
+  if (all.length && !attempts.length) {
+    throw new Error(`${ALL_SKIPPED_PREFIX}${all.map((a) => `${a.provider}: ${otpSkip[a.provider]}`).join(' | ')}`);
+  }
   const { messageId, provider } = await runFailover(attempts);
   return { messageId, to: target, provider };
 }

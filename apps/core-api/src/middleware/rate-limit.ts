@@ -143,6 +143,13 @@ export const globalLimiter = makeLimiter('global', {
   limit: 3000,
 });
 
+/** Cari data lama saat daftar: 5 per nomor/email per jam (cegah mengintip data lewat coba-coba nama). */
+export const registerMatchLimiter = combo(
+  'register-match',
+  { windowMs: 60 * 60 * 1000, limit: 5 },
+  { windowMs: 60 * 60 * 1000, limit: 2500 },
+);
+
 /** Self-registration: 3 per nomor HP per jam (tetap wajib OTP); per IP longgar untuk pendaftaran massal di gereja. */
 export const registerLimiter = combo(
   'register',

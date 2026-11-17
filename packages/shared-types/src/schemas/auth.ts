@@ -3,6 +3,24 @@ import { namaOrangSchema, teksSchema, teksHurufSchema, tanggalLahirSchema, tangg
 import { consentAcceptSchema } from './consent.js';
 import { noHpSchema, uuidSchema } from './common.js';
 
+/** Email selalu disimpan & dicari dalam huruf kecil. */
+export const emailLowerSchema = z.string().trim().toLowerCase().email('Format email tidak valid').max(255);
+
+/** Domain email sekali pakai — ditolak saat daftar / tambah email. */
+export const DISPOSABLE_EMAIL_DOMAINS = [
+  'mailinator.com', 'guerrillamail.com', 'guerrillamail.net', 'sharklasers.com', '10minutemail.com',
+  '10minutemail.net', 'tempmail.com', 'temp-mail.org', 'temp-mail.io', 'tempmail.net', 'yopmail.com',
+  'yopmail.net', 'trashmail.com', 'getnada.com', 'nada.email', 'dispostable.com', 'maildrop.cc',
+  'throwawaymail.com', 'fakeinbox.com', 'mintemail.com', 'mohmal.com', 'emailondeck.com',
+  'tempinbox.com', 'mailnesia.com', 'mytemp.email', 'tempr.email', 'discard.email', 'spamgourmet.com',
+  'inboxkitten.com', 'mailcatch.com', 'burnermail.io', 'moakt.com', 'tmail.ws', 'tmpmail.org',
+  'tmpmail.net', 'emailfake.com', 'luxusmail.org', 'minuteinbox.com', '1secmail.com', '1secmail.net',
+];
+export function isDisposableEmail(email: string): boolean {
+  const domain = email.trim().toLowerCase().split('@')[1] ?? '';
+  return DISPOSABLE_EMAIL_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
 // ===== Request OTP =====
 export const requestOtpSchema = z
   .object({
@@ -10,7 +28,7 @@ export const requestOtpSchema = z
     purpose: z.enum(['LOGIN', 'ENROLLMENT', 'RESET_FACE', 'ONBOARDING_ADD_NOHP']).default('LOGIN'),
     // Opsional, khusus ENROLLMENT (pendaftaran): OTP ikut dikirim ke email ini
     // bila WhatsApp antre/gagal (OTP_EMAIL_COPY). Email disimpan saat /auth/register.
-    email: z.string().trim().email().max(255).optional(),
+    email: emailLowerSchema.optional(),
   })
   .openapi('RequestOtpInput');
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
@@ -24,6 +42,31 @@ export const verifyOtpSchema = z
   })
   .openapi('VerifyOtpInput');
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+
+// ===== OTP lewat email (daftar dengan email / login email di web) =====
+export const requestEmailOtpSchema = z
+  .object({
+    email: emailLowerSchema,
+    purpose: z.enum(['ENROLLMENT_EMAIL', 'LOGIN_EMAIL']),
+  })
+  .openapi('RequestEmailOtpInput');
+export type RequestEmailOtpInput = z.infer<typeof requestEmailOtpSchema>;
+
+export const verifyEmailOtpSchema = z
+  .object({
+    email: emailLowerSchema,
+    kode: z.string().trim().length(6, 'OTP harus 6 digit'),
+    purpose: z.enum(['ENROLLMENT_EMAIL', 'LOGIN_EMAIL']),
+  })
+  .openapi('VerifyEmailOtpInput');
+export type VerifyEmailOtpInput = z.infer<typeof verifyEmailOtpSchema>;
+
+// ===== Tambah / ubah email sendiri (OTP ke email baru) =====
+export const changeEmailRequestSchema = z.object({ email: emailLowerSchema });
+export const changeEmailVerifySchema = z.object({
+  email: emailLowerSchema,
+  kode: z.string().trim().regex(/^\d{4,8}$/, 'Kode OTP tidak valid'),
+});
 
 // ===== Face Login (shortcut, opsional) =====
 // 128-dim Float32 descriptor dari MobileFaceNet (native TFLite di mobile),
@@ -159,21 +202,24 @@ export type JenisJemaat = z.infer<typeof jenisJemaatSchema>;
 
 export const registerJemaatSchema = z
   .object({
-    noHp: noHpSchema,
+    // Wajib untuk daftar dengan WhatsApp (default, app lama). Daftar dengan
+    // email (otpChannel='email') tidak mengirim noHp.
+    noHp: noHpSchema.optional(),
+    otpChannel: z.enum(['whatsapp', 'email']).optional().default('whatsapp'),
+    // Klaim data lama (hasil /auth/register/match + OTP CLAIM_RECORD ke email data lama).
+    claimJemaatId: uuidSchema.optional(),
+    claimKode: z.string().trim().length(6).optional(),
     namaLengkap: namaOrangSchema(),
     jenisKelamin: z.enum(['L', 'P']),
     cabangId: uuidSchema,
     // Email — opsional, disarankan untuk recovery via magic link (module 24).
     // Kalau diisi, auto-save di jemaat.email. Verified implicit saat first
     // magic link use, jadi tidak butuh verification email di register flow.
-    email: z
-      .string()
-      .trim()
-      .email()
+    email: emailLowerSchema
       .optional()
       .openapi({
         example: 'jemaat@example.com',
-        description: 'Opsional — untuk recovery via magic link',
+        description: 'Opsional (daftar WhatsApp) / wajib (daftar email)',
       }),
     // Optional — user bisa lengkapi nanti via PATCH /admin/me.
     tanggalLahir: tanggalLahirSchema
@@ -201,8 +247,31 @@ export const registerJemaatSchema = z
     // kompatibilitas app lama; app lama diminta setuju di layar persetujuan).
     consent: consentAcceptSchema.optional(),
   })
+  .superRefine((v, ctx) => {
+    if (v.otpChannel === 'email' && !v.email) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Email wajib diisi.' });
+    if (v.otpChannel !== 'email' && !v.noHp) ctx.addIssue({ code: 'custom', path: ['noHp'], message: 'Nomor HP wajib diisi.' });
+  })
   .openapi('RegisterJemaatInput');
 export type RegisterJemaatInput = z.infer<typeof registerJemaatSchema>;
+
+// ===== Deteksi data lama saat daftar (POST /auth/register/match, /register/claim-otp) =====
+export const registerMatchSchema = z
+  .object({
+    otpChannel: z.enum(['whatsapp', 'email']).default('whatsapp'),
+    noHp: noHpSchema.optional(),
+    email: emailLowerSchema.optional(),
+    namaLengkap: namaOrangSchema(),
+    tanggalLahir: tanggalLahirSchema,
+    cabangId: uuidSchema,
+    // Hanya untuk /register/claim-otp
+    claimJemaatId: uuidSchema.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.otpChannel === 'email' && !v.email) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Email wajib diisi.' });
+    if (v.otpChannel !== 'email' && !v.noHp) ctx.addIssue({ code: 'custom', path: ['noHp'], message: 'Nomor HP wajib diisi.' });
+  })
+  .openapi('RegisterMatchInput');
+export type RegisterMatchInput = z.infer<typeof registerMatchSchema>;
 
 // ===== Self profile edit (PATCH /admin/me) =====
 // Field yang user boleh self-edit (subset dari updateJemaatSchema admin).
@@ -270,7 +339,7 @@ export const editDependentJemaatSchema = z
     email: z
       .preprocess(
         (v) => (v === '' || v === null ? null : v),
-        z.union([z.string().trim().email().max(255), z.null()]),
+        z.union([emailLowerSchema, z.null()]),
       )
       .optional(),
   })
@@ -292,7 +361,7 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
 /** POST /auth/email/request-magic-link */
 export const requestMagicLinkSchema = z
   .object({
-    email: z.string().trim().email().max(255),
+    email: emailLowerSchema,
   })
   .openapi('RequestMagicLinkInput');
 export type RequestMagicLinkInput = z.infer<typeof requestMagicLinkSchema>;
@@ -317,7 +386,7 @@ export const completeOnboardingSchema = z
     tanggalLahir: tanggalLahirSchema.optional(),
     alamat: teksSchema(500, 3).optional(),
     cabangId: uuidSchema.optional(),
-    email: z.string().trim().email().max(255).optional(),
+    email: emailLowerSchema.optional(),
     // Pilihan jenis jemaat (opsional) → role sesuai Onboarding Config. Default JEMAAT_TETAP.
     jenisJemaat: jenisJemaatSchema.optional(),
   })

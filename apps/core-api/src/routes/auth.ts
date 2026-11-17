@@ -29,11 +29,29 @@ import {
   requestLivenessNonceSchema,
   requestMagicLinkSchema,
   verifyMagicLinkSchema,
+  requestEmailOtpSchema,
+  verifyEmailOtpSchema,
+  registerMatchSchema,
   completeOnboardingSchema,
+  isDisposableEmail,
 } from '@ecc/shared-types';
 import { randomBytes } from 'node:crypto';
 import { sendMagicLinkEmail, sendOtpEmail } from '../lib/sendgrid.js';
-import { loadWaRuntime, otpEmailMode, skipNoHpOtp } from '../lib/wa-runtime.js';
+import { emailSignupEnabled, enrollEmailLegacy, loadWaRuntime, otpEmailMode, skipNoHpOtp } from '../lib/wa-runtime.js';
+import {
+  ENROLL_WINDOW_MS,
+  assertOtpCooldown,
+  consumeOtp,
+  createOtp,
+  findJemaatByEmail,
+  findVerifiedEnrollment,
+  otpTtlSeconds,
+  maskEmail,
+  maskName,
+  setOtpProvider,
+  type OtpTarget,
+} from '../lib/otp-store.js';
+import { findOldRecords, pickOffer, recordDuplicateCandidates } from '../lib/duplicate-candidate.js';
 import {
   issueLivenessNonce,
   consumeLivenessNonce,
@@ -48,6 +66,7 @@ import {
   authVerifyLimiter,
   refreshLimiter,
   registerLimiter,
+  registerMatchLimiter,
   cabangListLimiter,
   magicLinkLimiter,
   onboardingLimiter,
@@ -115,6 +134,11 @@ function isBypassNumber(noHp: string): boolean {
  * Untuk purpose=ENROLLMENT (self-registration mobile), skip lookup jemaat
  * — kita izinkan request OTP dari nomor belum terdaftar supaya bisa
  * complete flow register (POST /auth/register).
+ *
+ * Saluran pengirim dicatat di otp_verification.provider (resmi | fonnte |
+ * email) — dipakai lib/wa-otp-health untuk mendeteksi gateway yang gagal
+ * diam-diam. Salinan email untuk ENROLLMENT hanya bila saklar Portal
+ * "OTP daftar lewat email (app versi lama)" menyala.
  */
 authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   const { noHp, purpose, email: enrollEmail } = requestOtpSchema.parse(req.body);
@@ -133,22 +157,23 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     });
   }
 
+  await loadWaRuntime(); // pengaturan Portal (cache 30 dtk)
+
   // Penerima OTP cadangan lewat email: jemaat pemilik nomor (LOGIN) atau
-  // email yang diisi pendaftar (ENROLLMENT).
-  let loginJemaat: { namaLengkap: string; email: string | null } | null = null;
+  // email yang diisi pendaftar (ENROLLMENT, hanya app lama + saklar nyala).
+  let emailCopy: { namaLengkap: string; email: string | null } | null = null;
   if (purpose === 'ENROLLMENT') {
     // Cek jangan sampai noHp sudah terdaftar (cegah duplicate enrollment).
     const existing = await prisma.jemaat.findUnique({ where: { noHp } });
     // Tamu (pernah dibawa ke event/ibadah, tanpa akun) boleh mendaftar —
     // record tamunya di-upgrade jadi anggota di /auth/register.
     if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar — gunakan login OTP.');
-    // Email pendaftar (opsional) — untuk OTP cadangan lewat email.
     if (enrollEmail) {
-      const owner = await prisma.jemaat.findUnique({ where: { email: enrollEmail }, select: { id: true, isTamu: true } });
+      const owner = await findJemaatByEmail(enrollEmail);
       if (owner && !owner.isTamu && owner.id !== existing?.id) {
         throw Conflict('Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.');
       }
-      loginJemaat = { namaLengkap: 'Calon jemaat', email: enrollEmail };
+      if (enrollEmailLegacy()) emailCopy = { namaLengkap: 'Calon jemaat', email: enrollEmail };
     }
   } else if (purpose === 'ONBOARDING_ADD_NOHP') {
     // Onboarding — existing jemaat (via magic link) mau set noHp baru.
@@ -162,51 +187,45 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   } else {
     const jemaat = await prisma.jemaat.findUnique({ where: { noHp } });
     // Tamu belum punya akun → arahkan ke pendaftaran.
-    if (!jemaat || jemaat.isTamu) throw NotFound('Nomor HP belum terdaftar sebagai jemaat');
-    loginJemaat = jemaat;
+    if (!jemaat || jemaat.isTamu) {
+      throw NotFound('Nomor HP belum terdaftar sebagai jemaat. Kalau Anda mendaftar dengan email, pilih "Masuk dengan email".');
+    }
+    emailCopy = jemaat;
+    // Ada kode masuk dari admin cabang yang masih aktif → tidak perlu kirim OTP
+    // (app versi lama pun bisa lanjut ke layar input kode).
+    const adminCode = await prisma.otpVerification.findFirst({
+      where: { jemaatId: jemaat.id, purpose: 'ADMIN_CODE', usedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (adminCode) {
+      return res.json({
+        success: true,
+        message: 'Masukkan kode masuk dari admin cabang.',
+        data: { channel: 'admin' },
+      });
+    }
   }
 
-  const recent = await prisma.otpVerification.findFirst({
-    where: { noHp, purpose, usedAt: null, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: 'desc' },
-  });
-  const cooldown = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS ?? 60);
-  if (recent && Date.now() - recent.createdAt.getTime() < cooldown * 1000) {
-    throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum request OTP baru`);
-  }
-
-  const otp = generateOtp();
-  const kodeHash = await hashOtp(otp);
-
-  const otpRow = await prisma.otpVerification.create({
-    data: {
-      noHp,
-      kodeHash,
-      purpose,
-      expiresAt: getOtpExpiry(),
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    },
-  });
+  await assertOtpCooldown({ noHp }, purpose);
+  const { row: otpRow, otp } = await createOtp({ noHp }, purpose, { ttlSeconds: otpTtlSeconds('wa'), req });
 
   // OTP cadangan lewat email (login, jemaat punya email). OTP_EMAIL_COPY:
-  //   "fallback" (default) — hanya bila semua gateway WhatsApp gagal
+  //   "fallback" (default) — hanya bila semua gateway WhatsApp gagal / dilewati
   //   "always"            — selalu dikirim juga ke email (gateway antre/terblokir diam-diam)
   //   "off"               — nonaktif
-  await loadWaRuntime(); // pengaturan Portal (cache 30 dtk)
   const emailMode = otpEmailMode();
   const emailTo =
-    (purpose === 'LOGIN' || purpose === 'ENROLLMENT') && emailMode !== 'off' ? loginJemaat?.email ?? null : null;
+    (purpose === 'LOGIN' || purpose === 'ENROLLMENT') && emailMode !== 'off' ? emailCopy?.email ?? null : null;
   const EMAIL_NOTE =
     'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirim OTP ke email Anda.';
   const sendEmailCopy = async (): Promise<boolean> => {
-    if (!emailTo || !loginJemaat) return false;
+    if (!emailTo || !emailCopy) return false;
     try {
       await sendOtpEmail({
         to: emailTo,
-        namaLengkap: loginJemaat.namaLengkap,
+        namaLengkap: emailCopy.namaLengkap,
         otp,
-        expiresInMinutes: Math.max(1, Math.round(Number(process.env.OTP_EXPIRES_SECONDS ?? 300) / 60)),
+        expiresInMinutes: Math.max(1, Math.round(otpTtlSeconds('wa') / 60)),
       });
       logger.info({ noHp, purpose, mode: emailMode }, '[auth-otp] OTP dikirim juga lewat email');
       return true;
@@ -219,28 +238,36 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   // Mode "always": email dikirim bersamaan, tidak menunggu WhatsApp.
   const emailAlways = emailMode === 'always' ? sendEmailCopy() : null;
 
+  let waProvider: string | undefined;
   try {
-    await sendOtpViaWhatsApp(noHp, otp);
+    const sent = await sendOtpViaWhatsApp(noHp, otp);
+    waProvider = sent.provider;
+    if (waProvider) await setOtpProvider(otpRow.id, waProvider);
   } catch (e) {
     logger.error({ err: e, noHp, purpose }, '[auth-otp] gagal kirim OTP via WhatsApp');
-    // Semua gateway WhatsApp gagal → kode tetap berlaku bila terkirim ke email.
+    // Semua gateway WhatsApp gagal / dilewati → kode tetap berlaku bila terkirim ke email.
     const viaEmail = emailAlways ? await emailAlways : await sendEmailCopy();
     if (viaEmail) {
+      await setOtpProvider(otpRow.id, 'email');
       return res.json({ success: true, message: EMAIL_NOTE, data: { channel: 'email' } });
     }
-    // Gagal kirim (mis. perangkat WhatsApp Fonnte terputus): hapus OTP yang tidak
-    // pernah terkirim supaya user tidak tertahan cooldown "Mohon tunggu 60 detik",
-    // dan beri pesan yang jelas (bukan 500).
+    // Gagal kirim: hapus OTP yang tidak pernah terkirim supaya user tidak
+    // tertahan cooldown, dan beri pesan yang jelas (bukan 500).
     await prisma.otpVerification.delete({ where: { id: otpRow.id } }).catch(() => undefined);
     throw ServiceUnavailable(
       purpose === 'LOGIN'
-        ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, atau masuk dengan email.'
-        : 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.',
+        ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, masuk dengan email, atau minta kode masuk ke admin cabang.'
+        : purpose === 'ENROLLMENT'
+          ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, atau daftar dengan email.'
+          : 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.',
       'WHATSAPP_UNAVAILABLE',
     );
   }
 
   if (emailAlways && (await emailAlways)) {
+    // Kode juga terkirim ke email → pemakaian kode tidak membuktikan WhatsApp
+    // sampai (dikecualikan dari deteksi "diduga gagal").
+    if (waProvider) await setOtpProvider(otpRow.id, `${waProvider}+email`);
     return res.json({ success: true, message: `OTP telah dikirim via WhatsApp. ${EMAIL_NOTE}`, data: { channel: 'whatsapp+email' } });
   }
   res.json({ success: true, message: 'OTP telah dikirim via WhatsApp' });
@@ -251,14 +278,11 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
  *
  * Behavior per purpose:
  *   - LOGIN       → verify + langsung issue JWT (jemaat harus exist).
+ *                   Kode masuk dari admin cabang (ADMIN_CODE) juga diterima.
  *   - RESET_FACE  → verify + langsung issue JWT (jemaat harus exist, dia mau reset wajah).
  *   - ENROLLMENT  → verify saja (jemaat BELUM ada). Response cuma marker
- *                   `pendingRegistration=true` + masa berlaku 15 menit untuk
+ *                   `pendingRegistration=true` + masa berlaku 60 menit untuk
  *                   panggil /auth/register.
- *
- * Sebelumnya endpoint ini selalu panggil issueAuthResponse() yang lookup
- * jemaat by noHp dengan findUniqueOrThrow → untuk ENROLLMENT jadi error
- * "data tidak ditemukan" karena memang belum ada. Bug fix 2026-05-21c.
  */
 authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
   const { noHp, kode, purpose } = verifyOtpSchema.parse(req.body);
@@ -285,31 +309,18 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
     return res.json(await issueAuthResponse(noHp, req, 'OTP'));
   }
 
-  const record = await prisma.otpVerification.findFirst({
-    where: { noHp, purpose, usedAt: null, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!record) throw Unauthorized('OTP tidak ditemukan atau kadaluarsa');
-
-  const maxAttempts = Number(process.env.OTP_MAX_ATTEMPTS ?? 3);
-  if (record.attempts >= maxAttempts) throw Unauthorized('Terlalu banyak percobaan');
-
-  const ok = await verifyOtpHash(kode, record.kodeHash);
-  if (!ok) {
-    await prisma.otpVerification.update({
-      where: { id: record.id },
-      data: { attempts: { increment: 1 } },
-    });
-    throw Unauthorized('OTP salah');
+  // Kode admin cabang hanya untuk login jemaat yang sudah terdaftar.
+  const adminFor =
+    purpose === 'LOGIN'
+      ? (await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true, isTamu: true } }).then((j) => (j && !j.isTamu ? j.id : null)))
+      : null;
+  const { viaAdmin } = await consumeOtp({ noHp }, purpose, kode, { adminFor });
+  if (viaAdmin) {
+    logger.info({ noHp, ip: req.ip }, '[auth-otp] login dengan kode admin cabang');
   }
 
-  await prisma.otpVerification.update({
-    where: { id: record.id },
-    data: { usedAt: new Date() },
-  });
-
   // ENROLLMENT — jemaat belum ada. Jangan lookup, kembalikan marker saja.
-  // Mobile lanjut ke POST /auth/register dalam window 15 menit.
+  // Mobile lanjut ke POST /auth/register dalam window 60 menit.
   if (purpose === 'ENROLLMENT') {
     return res.json({
       success: true,
@@ -319,9 +330,8 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
         noHp,
         pendingRegistration: true,
         nextStep: 'POST /auth/register',
-        // Window di mana /auth/register akan accept verifikasi ini (matched
-        // dengan logic di endpoint register: 15 menit dari usedAt).
-        validForSeconds: 15 * 60,
+        // Window di mana /auth/register akan accept verifikasi ini.
+        validForSeconds: ENROLL_WINDOW_MS / 1000,
       },
       message: 'OTP terverifikasi. Lanjutkan ke /auth/register untuk menyelesaikan registrasi.',
     });
@@ -346,7 +356,7 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
     try {
       await prisma.jemaat.update({
         where: { id: jwtPayload.jemaatId },
-        data: { noHp },
+        data: { noHp, noHpSource: 'SELF_VERIFIED' },
       });
     } catch (err) {
       // P2002 = noHp collision (walau di request handler sudah check, race possible)
@@ -367,68 +377,95 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
   }
 
   // LOGIN / RESET_FACE — jemaat harus ada. Issue JWT seperti biasa.
+  if (viaAdmin) {
+    const j = await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true, namaLengkap: true } });
+    audit(req, {
+      action: 'LOGIN',
+      resource: 'jemaat',
+      resourceId: j?.id,
+      resourceLabel: `Login dengan kode admin cabang: ${j?.namaLengkap ?? noHp}`,
+      metadata: { kind: 'admin-code-login', channel: 'whatsapp' },
+    });
+  }
   return res.json(await issueAuthResponse(noHp, req, 'OTP'));
 });
 
 /**
  * POST /auth/register — self-registration jemaat baru (mobile app).
  *
- * Pre-requisite:
- *   1. User sudah request OTP dengan purpose=ENROLLMENT.
- *   2. User sudah verify OTP via /auth/otp/verify (purpose=ENROLLMENT) → record
- *      OtpVerification ditandai usedAt.
- *   3. Submit form data diri ke endpoint ini dengan noHp yang sama.
+ * Dua saluran:
+ *   - otpChannel='whatsapp' (default, app lama): noHp + OTP ENROLLMENT terverifikasi.
+ *   - otpChannel='email' (app baru): email + OTP ENROLLMENT_EMAIL terverifikasi.
+ * OTP harus terverifikasi ≤ 60 menit sebelumnya (lib/otp-store ENROLL_WINDOW_MS).
  *
- * Backend cek:
- *   - Ada OtpVerification record untuk (noHp, purpose=ENROLLMENT, usedAt != null)
- *     dalam 15 menit terakhir.
- *   - Jemaat dengan noHp tsb belum ada.
- *   - Cabang exist & active.
+ * Klaim data lama (claimJemaatId + claimKode): kode CLAIM_RECORD yang dikirim
+ * ke email data lama (lihat /auth/register/match). Kontak pendaftar
+ * disambungkan ke data lama — tidak ada akun baru.
  *
- * Side effect:
- *   - Create Jemaat baru (auto-active, auto-generated kode).
- *   - Create User row.
- *   - Auto-assign role sesuai Onboarding Config (Portal → App Settings).
- *   - Issue accessToken + refreshToken (langsung login).
+ * Pembuatan akun (jemaat, user, homecell, consent) dalam satu transaksi.
+ * Dipanggil ulang setelah sukses (respons sebelumnya tidak sampai) →
+ * sesi login dikembalikan, bukan "sudah terdaftar".
  *
- * Anti-abuse: registerLimiter (3/jam/IP). Note: tetap perlu OTP verified, jadi
- * cost-of-attack relatively tinggi (perlu nomor HP valid + OTP).
+ * Anti-abuse: registerLimiter (3/jam per nomor/email) + wajib OTP.
  */
 authRouter.post('/register', registerLimiter, async (req, res) => {
   const input = registerJemaatSchema.parse(req.body);
+  const viaEmail = input.otpChannel === 'email';
   // Batas usia (S&K 3.1 / PP Tunas) — dicek sebelum data apa pun dibuat.
   if (input.consent) {
     assertAgeAllowed(input.tanggalLahir ? new Date(input.tanggalLahir) : null, input.consent.ageGroup);
   }
-
-  // 1. Cek nomor belum terdaftar. Tamu (tanpa akun) → record-nya di-upgrade.
-  const existing = await prisma.jemaat.findUnique({ where: { noHp: input.noHp } });
-  if (existing && !existing.isTamu) throw Conflict('Nomor HP sudah terdaftar.');
-  const upgradeTamu = existing?.isTamu ? existing : null;
-  if (input.email) {
-    const owner = await prisma.jemaat.findUnique({ where: { email: input.email }, select: { id: true } });
-    if (owner && owner.id !== upgradeTamu?.id) {
-      throw Conflict('Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.');
-    }
+  await loadWaRuntime();
+  if (viaEmail) {
+    if (!emailSignupEnabled()) throw ServiceUnavailable('Pendaftaran dengan email sedang ditutup sementara. Silakan daftar dengan WhatsApp.', 'EMAIL_SIGNUP_DISABLED');
+    if (isDisposableEmail(input.email!)) throw BadRequest('Gunakan alamat email pribadi (bukan email sementara).');
   }
 
-  // 2. Verify OTP enrollment sudah pernah usedAt dalam window 15 menit
-  const enrollmentWindow = 15 * 60 * 1000; // 15 min
-  const otpRecord = await prisma.otpVerification.findFirst({
-    where: {
-      noHp: input.noHp,
-      purpose: 'ENROLLMENT',
-      usedAt: { gt: new Date(Date.now() - enrollmentWindow) },
-    },
-    orderBy: { usedAt: 'desc' },
-  });
+  // 1. OTP pendaftaran terverifikasi dalam 60 menit.
+  const target: OtpTarget = viaEmail ? { email: input.email! } : { noHp: input.noHp! };
+  const otpRecord = await findVerifiedEnrollment(target);
   if (!otpRecord) {
-    throw Unauthorized(
-      'OTP enrollment belum diverifikasi atau sudah expired. Silakan request OTP baru.',
+    throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa. Silakan minta OTP baru.');
+  }
+
+  // 2. Pemilik kontak saat ini. Tamu (tanpa akun) → record-nya di-upgrade.
+  const byPhone = input.noHp ? await prisma.jemaat.findUnique({ where: { noHp: input.noHp } }) : null;
+  const byEmail = input.email ? await findJemaatByEmail(input.email) : null;
+  const primary = viaEmail ? byEmail : byPhone;
+  if (primary && !primary.isTamu) {
+    // Respons pendaftaran sebelumnya tidak sampai ke app → kembalikan sesi.
+    if (primary.onboardedAt && primary.onboardedAt >= otpRecord.usedAt!) {
+      const again = await issueAuthResponseByJemaatId(primary.id, req, 'OTP');
+      return res.status(201).json({ ...again, meta: { kind: 'register', jemaatCreatedId: primary.id, repeated: true } });
+    }
+    throw Conflict(viaEmail ? 'Email sudah terdaftar — gunakan "Masuk dengan email".' : 'Nomor HP sudah terdaftar.');
+  }
+  const secondary = viaEmail ? byPhone : byEmail;
+  if (secondary && !secondary.isTamu && secondary.id !== primary?.id) {
+    throw Conflict(
+      viaEmail
+        ? 'Nomor HP sudah dipakai akun lain.'
+        : 'Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.',
     );
   }
+  let base: Awaited<ReturnType<typeof prisma.jemaat.findUnique>> = primary?.isTamu ? primary : null;
 
-  // 3. Validate cabang
+  // 3. Klaim data lama (bukti: kode ke email data lama).
+  let claimed = false;
+  if (input.claimJemaatId) {
+    // Hanya daftar WhatsApp: data lama tanpa nomor HP, kode dikirim ke email data lama.
+    if (viaEmail) throw BadRequest('Klaim data lama hanya untuk pendaftaran dengan WhatsApp.');
+    if (!input.claimKode) throw BadRequest('Kode verifikasi data lama wajib diisi.');
+    const old = await prisma.jemaat.findUnique({ where: { id: input.claimJemaatId } });
+    if (!old || !old.isActive || old.isTamu || !old.email) throw BadRequest('Data lama tidak ditemukan.');
+    if (old.noHp && old.noHp !== input.noHp) throw Conflict('Data lama sudah memakai nomor HP lain. Hubungi admin cabang.');
+    const { record } = await consumeOtp({ email: old.email }, 'CLAIM_RECORD', input.claimKode);
+    if (record.jemaatId !== old.id) throw Unauthorized('Kode verifikasi data lama tidak cocok.');
+    base = old;
+    claimed = true;
+  }
+
+  // 4. Validate cabang
   const cabang = await prisma.cabangGereja.findUnique({
     where: { id: input.cabangId },
     select: { id: true, nama: true, isActive: true },
@@ -437,39 +474,68 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     throw BadRequest('Cabang tidak valid atau nonaktif.');
   }
 
-  // 4. Generate kode jemaat unique (tamu yang di-upgrade memakai kode lamanya)
-  const kode = upgradeTamu?.kode ?? await generateUniqueKode(
+  // 5. Kode jemaat unik (data lama / tamu memakai kode lamanya).
+  const kode = base?.kode ?? await generateUniqueKode(
     async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
   );
 
-  // 5. Role otomatis (Onboarding Config) diberikan SETELAH akun dibuat — lihat 7b.
+  const now = new Date();
+  const contact: Prisma.JemaatUncheckedUpdateInput = viaEmail
+    ? { email: input.email!, emailVerifiedAt: now, emailSource: 'SELF_VERIFIED' }
+    : {
+        noHp: input.noHp!,
+        noHpSource: 'SELF_VERIFIED',
+        // Email opsional di daftar WhatsApp — belum terverifikasi.
+        ...(input.email && !(base?.email) ? { email: input.email, emailVerifiedAt: null, emailSource: 'SELF' } : {}),
+      };
+  if (claimed && base?.email) {
+    // Kode klaim dikirim ke email data lama → email itu terbukti.
+    Object.assign(contact, { emailVerifiedAt: base.emailVerifiedAt ?? now, emailSource: base.emailSource ?? 'SELF_VERIFIED' });
+  }
 
-  // 6. Create Jemaat — atau upgrade record tamu (riwayat event/ibadah tetap).
-  const jemaatData = {
+  // 6. Buat / perbarui akun dalam satu transaksi.
+  const { created, user } = await prisma.$transaction(async (tx) => {
+    const profile = {
       cabangId: cabang.id,
       namaLengkap: input.namaLengkap,
-      noHp: input.noHp,
-      // Email opsional (per module 24 — magic link recovery).
-      email: input.email ?? null,
       kode,
-      // tanggalLahir & alamat opsional — kalau tidak diisi, simpan NULL.
-      // User bisa lengkapi nanti via PATCH /admin/me.
-      tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : null,
+      // Data lama: field yang sudah terisi tidak ditimpa nilai kosong.
+      tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : base?.tanggalLahir ?? null,
       jenisKelamin: input.jenisKelamin,
-      alamat: input.alamat ?? null,
-      tanggalBergabung: new Date(),
+      alamat: input.alamat ?? base?.alamat ?? null,
+      tanggalBergabung: base?.tanggalBergabung ?? now,
       // Register lengkap = onboarded (skip wizard first login).
-      onboardedAt: new Date(),
+      onboardedAt: now,
       isActive: true,
-  };
-  const created = upgradeTamu
-    ? await prisma.jemaat.update({
-        where: { id: upgradeTamu.id },
-        data: { ...jemaatData, isTamu: false },
-      })
-    : await prisma.jemaat.create({ data: jemaatData });
+    };
+    const created = base
+      ? await tx.jemaat.update({
+          where: { id: base.id },
+          data: { ...profile, ...contact, isTamu: false } as Prisma.JemaatUncheckedUpdateInput,
+        })
+      : await tx.jemaat.create({ data: { ...profile, ...contact } as Prisma.JemaatUncheckedCreateInput });
 
-  // 7b. Role sesuai Portal → Onboarding Config (pilihan + "Semua pendaftar").
+    if (input.homecellId) {
+      const hc = await tx.homecell.findUnique({ where: { id: input.homecellId }, select: { id: true } });
+      const already = hc ? await tx.homecellMember.findFirst({ where: { homecellId: hc.id, jemaatId: created.id } }) : null;
+      if (hc && !already) {
+        await tx.homecellMember.create({ data: { homecellId: hc.id, jemaatId: created.id, isActive: true } });
+      }
+    }
+
+    const user =
+      (await tx.user.findUnique({ where: { jemaatId: created.id } })) ??
+      (await tx.user.create({ data: { jemaatId: created.id } }));
+
+    // Bukti persetujuan S&K + Kebijakan Privasi (kepatuhan no. 2)
+    if (input.consent) {
+      await recordConsent(tx, req, created.id, input.consent, 'REGISTER');
+    }
+    return { created, user };
+  });
+  await ensureNewMemberPrivacy(created.id);
+
+  // 7. Role sesuai Portal → Onboarding Config (pilihan + "Semua pendaftar").
   // Gagal → dicatat saja; pendaftaran tidak boleh terblokir karena role.
   try {
     await grantRegisterRoles(created.id, input.jenisJemaat === 'NEW_COMER' ? 'NEW_COMER' : 'JEMAAT_TETAP');
@@ -477,26 +543,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     logger.error({ err, jemaatId: created.id }, 'register: gagal memberi role onboarding (akun tetap dibuat)');
   }
 
-  // 7. Optional homecell membership
-  if (input.homecellId) {
-    const hc = await prisma.homecell.findUnique({ where: { id: input.homecellId } });
-    if (hc) {
-      await prisma.homecellMember.create({
-        data: { homecellId: hc.id, jemaatId: created.id, isActive: true },
-      });
-    }
-  }
-
-  // 8. Create User row (auth account)
-  const user = await prisma.user.create({ data: { jemaatId: created.id } });
-  await ensureNewMemberPrivacy(created.id);
-
-  // 8b. Bukti persetujuan S&K + Kebijakan Privasi (kepatuhan no. 2)
-  if (input.consent) {
-    await recordConsent(prisma, req, created.id, input.consent, 'REGISTER');
-  }
-
-  // 9. Optional foto profile (base64)
+  // 8. Optional foto profile (base64)
   if (input.fotoBase64) {
     try {
       const buf = Buffer.from(
@@ -510,21 +557,102 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     }
   }
 
+  // 9. Data lama tanpa email yang mirip → catat kandidat ganda untuk admin.
+  if (!claimed) {
+    void recordDuplicateCandidates(created.id).catch((err) =>
+      logger.warn({ err, jemaatId: created.id }, 'register: gagal mencatat kandidat ganda'),
+    );
+  }
+
   // 10. Audit
   audit(req, {
-    action: 'CREATE',
+    action: claimed ? 'UPDATE' : 'CREATE',
     resource: 'jemaat',
     resourceId: created.id,
-    resourceLabel: `Self-register: ${created.namaLengkap} (${cabang.nama})`,
-    metadata: { kind: 'self-onboard-mobile', noHp: input.noHp },
+    resourceLabel: `${claimed ? 'Klaim data lama' : 'Self-register'}: ${created.namaLengkap} (${cabang.nama})`,
+    metadata: {
+      kind: claimed ? 'claim-record' : 'self-onboard-mobile',
+      channel: viaEmail ? 'email' : 'whatsapp',
+      noHp: input.noHp ?? null,
+    },
   });
 
   // 11. Issue tokens — langsung login
-  const authResponse = await issueAuthResponse(input.noHp, req, 'OTP');
-  // augment metadata: tandai initial register
+  const authResponse = await issueAuthResponseByJemaatId(created.id, req, 'OTP');
   return res.status(201).json({
     ...authResponse,
-    meta: { kind: 'register', jemaatCreatedId: created.id, userCreatedId: user.id },
+    meta: { kind: claimed ? 'claim' : 'register', jemaatCreatedId: created.id, userCreatedId: user.id },
+  });
+});
+
+/**
+ * POST /auth/register/match — cari data jemaat lama yang mungkin milik pendaftar
+ * (dipanggil app baru setelah OTP pendaftaran terverifikasi & data diri diisi).
+ * Respons tersamarkan; maks 1 kandidat yang jelas unggul.
+ */
+authRouter.post('/register/match', registerMatchLimiter, async (req, res) => {
+  const input = registerMatchSchema.parse(req.body);
+  const viaEmail = input.otpChannel === 'email';
+  const verified = await findVerifiedEnrollment(viaEmail ? { email: input.email! } : { noHp: input.noHp! });
+  if (!verified) throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa.');
+  const list = await findOldRecords({
+    namaLengkap: input.namaLengkap,
+    tanggalLahir: new Date(input.tanggalLahir),
+    cabangId: input.cabangId,
+    channel: viaEmail ? 'email' : 'whatsapp',
+  });
+  const top = pickOffer(list);
+  if (!top) return res.json({ success: true, data: { match: null } });
+  const cabang = await prisma.cabangGereja.findUnique({ where: { id: input.cabangId }, select: { nama: true } });
+  // Klaim hanya lewat kode ke email data lama (daftar WhatsApp).
+  const canClaim = !viaEmail && !!top.email;
+  res.json({
+    success: true,
+    data: {
+      match: {
+        jemaatId: top.id,
+        namaMasked: maskName(top.namaLengkap),
+        cabang: cabang?.nama ?? null,
+        emailMasked: canClaim ? maskEmail(top.email!) : null,
+        canClaim,
+      },
+    },
+  });
+});
+
+/**
+ * POST /auth/register/claim-otp — kirim kode CLAIM_RECORD ke email data lama.
+ * Kandidat dihitung ulang dari data pendaftar (tidak bisa memakai id sembarang).
+ */
+authRouter.post('/register/claim-otp', registerMatchLimiter, async (req, res) => {
+  const input = registerMatchSchema.parse(req.body);
+  if (input.otpChannel === 'email') throw BadRequest('Klaim data lama hanya untuk pendaftaran dengan WhatsApp.');
+  if (!input.claimJemaatId) throw BadRequest('claimJemaatId wajib diisi.');
+  const verified = await findVerifiedEnrollment({ noHp: input.noHp! });
+  if (!verified) throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa.');
+  const top = pickOffer(
+    await findOldRecords({
+      namaLengkap: input.namaLengkap,
+      tanggalLahir: new Date(input.tanggalLahir),
+      cabangId: input.cabangId,
+      channel: 'whatsapp',
+    }),
+  );
+  if (!top || top.id !== input.claimJemaatId || !top.email) throw BadRequest('Data lama tidak ditemukan.');
+  await assertOtpCooldown({ email: top.email }, 'CLAIM_RECORD');
+  const ttl = otpTtlSeconds('email');
+  const { row, otp } = await createOtp({ email: top.email }, 'CLAIM_RECORD', { ttlSeconds: ttl, req, jemaatId: top.id, provider: 'email' });
+  try {
+    await sendOtpEmail({ to: top.email, namaLengkap: top.namaLengkap, otp, expiresInMinutes: Math.round(ttl / 60), kind: 'claim' });
+  } catch (err) {
+    logger.error({ err }, '[register-claim] gagal kirim kode');
+    await prisma.otpVerification.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw ServiceUnavailable('Layanan email sedang gangguan. Lanjutkan pendaftaran — admin cabang akan menyatukan data lama Anda.', 'EMAIL_UNAVAILABLE');
+  }
+  res.json({
+    success: true,
+    message: `Kode dikirim ke ${maskEmail(top.email)}. Bila tidak ada di Inbox, cek folder Spam / Promosi.`,
+    data: { emailMasked: maskEmail(top.email), expiresIn: ttl },
   });
 });
 
@@ -1183,7 +1311,11 @@ async function issueAuthResponseByEmail(email: string, req: Request) {
  * Issue JWT untuk jemaat yg belum punya noHp (magic link path, legacy).
  * Same output shape sebagai issueAuthResponse.
  */
-async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
+async function issueAuthResponseByJemaatId(
+  jemaatId: string,
+  req: Request,
+  method: 'OTP' | 'EMAIL_MAGIC_LINK' | 'EMAIL_OTP' | 'ADMIN_CODE' = 'EMAIL_MAGIC_LINK',
+) {
   const jemaat = await prisma.jemaat.findUniqueOrThrow({
     where: { id: jemaatId },
     include: {
@@ -1228,7 +1360,7 @@ async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
     resourceLabel: jemaat.namaLengkap,
     userId: user.id,
     userName: jemaat.namaLengkap,
-    metadata: { method: 'EMAIL_MAGIC_LINK', isFulltimer },
+    metadata: { method, isFulltimer },
   });
 
   const needsOnboarding = jemaat.onboardedAt == null;
@@ -1269,72 +1401,63 @@ async function issueAuthResponseByJemaatId(jemaatId: string, req: Request) {
 }
 
 /**
+ * Kirim magic link ke jemaat aktif. Throw EMAIL_UNAVAILABLE bila pengiriman
+ * gagal — server tahu email terdaftar & gagal terkirim, jadi jemaat diberi
+ * tahu (bukan disuruh menunggu email yang tidak pernah datang).
+ */
+async function sendMagicLinkFor(jemaat: { id: string; namaLengkap: string; email: string | null }, req: Request) {
+  const to = jemaat.email!;
+  // Generate token: 32-byte random → 64 char hex
+  const token = randomBytes(32).toString('hex');
+  const ttlMinutes = Number(process.env.MAGIC_LINK_TTL_MINUTES ?? 15);
+  const row = await prisma.magicLinkToken.create({
+    data: {
+      jemaatId: jemaat.id,
+      email: to,
+      token,
+      expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
+      requestedIp: req.ip ?? null,
+    },
+  });
+  // Email button HARUS pakai HTTPS supaya clickable di semua email client
+  // (custom URL scheme `ecc://` di-blokir sbg security risk di iOS Mail, Gmail
+  // web, Outlook, dsb). Portal `/auth/email/verify` page handle token → JWT,
+  // dan (kalau mobile UA) offer deeplink open app.
+  const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
+  const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
+  const magicLinkUrl = (webBase || mobileBase) + `?token=${token}`;
+  try {
+    await sendMagicLinkEmail({ to, namaLengkap: jemaat.namaLengkap, magicLinkUrl, expiresInMinutes: ttlMinutes });
+  } catch (err) {
+    logger.error({ err: (err as Error).message, jemaatId: jemaat.id }, '[magic-link] Email send failed');
+    await prisma.magicLinkToken.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw ServiceUnavailable(
+      'Layanan email sedang gangguan, link login belum bisa dikirim. Coba masuk dengan OTP WhatsApp, atau coba lagi beberapa menit lagi.',
+      'EMAIL_UNAVAILABLE',
+    );
+  }
+  audit(req, {
+    action: 'CREATE',
+    resource: 'magic_link_token',
+    resourceLabel: `Magic link requested for ${jemaat.namaLengkap}`,
+    metadata: { email: to },
+  });
+}
+
+/**
  * POST /auth/email/request-magic-link
  * Body: { email }
- * Generic response — TIDAK leak apakah email exists (anti-enumeration).
- * Rate limit 5/jam/IP.
+ * Email tidak terdaftar → respons umum (tidak membocorkan data).
+ * Email terdaftar tapi gagal terkirim → 503 EMAIL_UNAVAILABLE.
+ * Pencarian email tidak peka huruf besar/kecil. Rate limit 5/jam per email.
  */
 authRouter.post('/email/request-magic-link', magicLinkLimiter, async (req, res) => {
   const { email } = requestMagicLinkSchema.parse(req.body);
-
-  // Lookup jemaat by email — kalau tidak ada, tetap return sukses (no leak).
-  const jemaat = await prisma.jemaat.findUnique({
-    where: { email },
-    select: { id: true, namaLengkap: true, isActive: true },
-  });
-
-  if (jemaat && jemaat.isActive) {
-    // Generate token: 32-byte random → 64 char hex
-    const token = randomBytes(32).toString('hex');
-    const ttlMinutes = Number(process.env.MAGIC_LINK_TTL_MINUTES ?? 15);
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
-
-    await prisma.magicLinkToken.create({
-      data: {
-        jemaatId: jemaat.id,
-        email,
-        token,
-        expiresAt,
-        requestedIp: req.ip ?? null,
-      },
-    });
-
-    // Construct URL — mobile deeplink priority, fallback web
-    // Email button HARUS pakai HTTPS supaya clickable di semua email client
-    // (custom URL scheme `ecc://` di-blokir sbg security risk di iOS Mail, Gmail
-    // web, Outlook, dsb). Portal `/auth/email/verify` page handle token → JWT,
-    // dan (kalau mobile UA) offer deeplink open app.
-    const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
-    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
-    const magicLinkUrl = (webBase || mobileBase) + `?token=${token}`;
-
-    // Send email — non-blocking-ish (still await, but silent-fail wrapped)
-    try {
-      await sendMagicLinkEmail({
-        to: email,
-        namaLengkap: jemaat.namaLengkap,
-        magicLinkUrl,
-        expiresInMinutes: ttlMinutes,
-      });
-    } catch (err) {
-      // Log tapi jangan expose ke user (already generic response)
-      logger.error(
-        { err: (err as Error).message, jemaatId: jemaat.id },
-        '[magic-link] Email send failed',
-      );
-    }
-
-    audit(req, {
-      action: 'CREATE',
-      resource: 'magic_link_token',
-      resourceLabel: `Magic link requested for ${jemaat.namaLengkap}`,
-      metadata: { email },
-    });
-  }
-
+  const jemaat = await findJemaatByEmail(email);
+  if (jemaat && jemaat.isActive && !jemaat.isTamu) await sendMagicLinkFor(jemaat, req);
   res.json({
     success: true,
-    message: 'Kalau email terdaftar, link login sudah dikirim. Cek inbox Anda.',
+    message: 'Kalau email terdaftar, link login sudah dikirim. Cek inbox Anda — bila tidak ada, cek juga folder Spam / Promosi.',
   });
 });
 
@@ -1368,6 +1491,11 @@ authRouter.post('/email/verify-magic-link', authVerifyLimiter, async (req, res) 
     data: { usedAt: new Date() },
   });
 
+  // Link di email dipakai → email terbukti milik jemaat.
+  await prisma.jemaat
+    .updateMany({ where: { id: record.jemaatId, email: record.email, emailVerifiedAt: null }, data: { emailVerifiedAt: new Date() } })
+    .catch(() => undefined);
+
   const authResponse = await issueAuthResponseByJemaatId(record.jemaatId, req);
   return res.json(authResponse);
 });
@@ -1378,41 +1506,107 @@ authRouter.post('/email/verify-magic-link', authVerifyLimiter, async (req, res) 
  */
 authRouter.post('/email/resend-magic-link', magicLinkLimiter, async (req, res) => {
   const { email } = requestMagicLinkSchema.parse(req.body);
-  // Delegate ke handler yg sama — re-implement inline karena tidak bisa
-  // re-call middleware chain. Same logic ringkas.
-  const jemaat = await prisma.jemaat.findUnique({
-    where: { email },
-    select: { id: true, namaLengkap: true, isActive: true },
+  const jemaat = await findJemaatByEmail(email);
+  if (jemaat && jemaat.isActive && !jemaat.isTamu) await sendMagicLinkFor(jemaat, req);
+  res.json({
+    success: true,
+    message: 'Link login baru sudah dikirim. Cek inbox Anda — bila tidak ada, cek juga folder Spam / Promosi.',
   });
-  if (jemaat && jemaat.isActive) {
-    const token = randomBytes(32).toString('hex');
-    const ttlMinutes = Number(process.env.MAGIC_LINK_TTL_MINUTES ?? 15);
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
-    await prisma.magicLinkToken.create({
-      data: { jemaatId: jemaat.id, email, token, expiresAt, requestedIp: req.ip ?? null },
-    });
-    // Email button HARUS pakai HTTPS supaya clickable di semua email client
-    // (custom URL scheme `ecc://` di-blokir sbg security risk di iOS Mail, Gmail
-    // web, Outlook, dsb). Portal `/auth/email/verify` page handle token → JWT,
-    // dan (kalau mobile UA) offer deeplink open app.
-    const webBase = process.env.EMAIL_MAGIC_LINK_WEB_URL || '';
-    const mobileBase = process.env.EMAIL_MAGIC_LINK_MOBILE_URL || '';
-    const magicLinkUrl = (webBase || mobileBase) + `?token=${token}`;
-    try {
-      await sendMagicLinkEmail({
-        to: email,
-        namaLengkap: jemaat.namaLengkap,
-        magicLinkUrl,
-        expiresInMinutes: ttlMinutes,
-      });
-    } catch (err) {
-      logger.error({ err: (err as Error).message }, '[magic-link resend] Email send failed');
+});
+
+/**
+ * POST /auth/email-otp/request — kode OTP 6 digit lewat email.
+ *   ENROLLMENT_EMAIL — daftar dengan email (email belum dipakai anggota).
+ *   LOGIN_EMAIL      — masuk dengan email di Els App web (pengganti magic link).
+ * LOGIN_EMAIL untuk email tak terdaftar dijawab umum (tidak membocorkan data).
+ */
+authRouter.post('/email-otp/request', otpRequestLimiter, async (req, res) => {
+  const { email, purpose } = requestEmailOtpSchema.parse(req.body);
+  await loadWaRuntime();
+  let nama = 'Calon jemaat';
+  let jemaatId: string | null = null;
+  if (purpose === 'ENROLLMENT_EMAIL') {
+    if (!emailSignupEnabled()) {
+      throw ServiceUnavailable('Pendaftaran dengan email sedang ditutup sementara. Silakan daftar dengan WhatsApp.', 'EMAIL_SIGNUP_DISABLED');
     }
+    if (isDisposableEmail(email)) throw BadRequest('Gunakan alamat email pribadi (bukan email sementara).');
+    const owner = await findJemaatByEmail(email);
+    if (owner && !owner.isTamu) throw Conflict('Email sudah terdaftar — gunakan "Masuk dengan email" di halaman login.');
+  } else {
+    const j = await findJemaatByEmail(email);
+    if (!j || !j.isActive || j.isTamu) {
+      return res.json({ success: true, message: 'Kalau email terdaftar, kode OTP sudah dikirim.', data: { channel: 'email' } });
+    }
+    nama = j.namaLengkap;
+    jemaatId = j.id;
+    const adminCode = await prisma.otpVerification.findFirst({
+      where: { jemaatId: j.id, purpose: 'ADMIN_CODE', usedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (adminCode) {
+      return res.json({ success: true, message: 'Masukkan kode masuk dari admin cabang.', data: { channel: 'admin' } });
+    }
+  }
+  await assertOtpCooldown({ email }, purpose);
+  const ttl = otpTtlSeconds('email');
+  const { row, otp } = await createOtp({ email }, purpose, { ttlSeconds: ttl, req, jemaatId, provider: 'email' });
+  try {
+    await sendOtpEmail({
+      to: email,
+      namaLengkap: nama,
+      otp,
+      expiresInMinutes: Math.round(ttl / 60),
+      kind: purpose === 'ENROLLMENT_EMAIL' ? 'signup' : 'login',
+    });
+  } catch (err) {
+    logger.error({ err, purpose }, '[email-otp] gagal kirim');
+    await prisma.otpVerification.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw ServiceUnavailable(
+      purpose === 'ENROLLMENT_EMAIL'
+        ? 'Layanan email sedang gangguan. Coba lagi beberapa menit lagi, atau daftar dengan WhatsApp.'
+        : 'Layanan email sedang gangguan. Coba lagi beberapa menit lagi, atau masuk dengan OTP WhatsApp.',
+      'EMAIL_UNAVAILABLE',
+    );
   }
   res.json({
     success: true,
-    message: 'Link login baru sudah dikirim. Cek inbox Anda.',
+    message: 'Kode OTP sudah dikirim ke email Anda. Bila tidak ada di Inbox, cek folder Spam / Promosi.',
+    data: { channel: 'email', expiresIn: ttl },
   });
+});
+
+/**
+ * POST /auth/email-otp/verify
+ *   LOGIN_EMAIL      → sesi login (kode admin cabang juga diterima).
+ *   ENROLLMENT_EMAIL → penanda; lanjut POST /auth/register (otpChannel='email') ≤ 60 menit.
+ */
+authRouter.post('/email-otp/verify', authVerifyLimiter, async (req, res) => {
+  const { email, kode, purpose } = verifyEmailOtpSchema.parse(req.body);
+  if (purpose === 'ENROLLMENT_EMAIL') {
+    await consumeOtp({ email }, purpose, kode);
+    return res.json({
+      success: true,
+      data: { otpVerified: true, purpose, email, pendingRegistration: true, nextStep: 'POST /auth/register', validForSeconds: ENROLL_WINDOW_MS / 1000 },
+      message: 'OTP terverifikasi. Lanjutkan ke /auth/register.',
+    });
+  }
+  const j = await findJemaatByEmail(email);
+  if (!j || j.isTamu) throw Unauthorized('OTP tidak ditemukan atau kadaluarsa');
+  const { viaAdmin } = await consumeOtp({ email }, purpose, kode, { adminFor: j.id });
+  // Kode ke email terpakai → email terbukti milik jemaat.
+  if (!viaAdmin && !j.emailVerifiedAt) {
+    await prisma.jemaat.update({ where: { id: j.id }, data: { emailVerifiedAt: new Date() } }).catch(() => undefined);
+  }
+  if (viaAdmin) {
+    audit(req, {
+      action: 'LOGIN',
+      resource: 'jemaat',
+      resourceId: j.id,
+      resourceLabel: `Login dengan kode admin cabang: ${j.namaLengkap}`,
+      metadata: { kind: 'admin-code-login', channel: 'email' },
+    });
+  }
+  return res.json(await issueAuthResponseByJemaatId(j.id, req, viaAdmin ? 'ADMIN_CODE' : 'EMAIL_OTP'));
 });
 
 /**
@@ -1436,7 +1630,7 @@ authRouter.post(
 
     const existing = await prisma.jemaat.findUnique({
       where: { id: req.user.jemaatId },
-      select: { id: true, onboardedAt: true, namaLengkap: true },
+      select: { id: true, onboardedAt: true, namaLengkap: true, email: true },
     });
     if (!existing) throw NotFound('Jemaat tidak ditemukan');
 
@@ -1451,7 +1645,12 @@ authRouter.post(
     if (input.tanggalLahir !== undefined) updateData.tanggalLahir = new Date(input.tanggalLahir);
     if (input.alamat !== undefined) updateData.alamat = input.alamat;
     if (input.cabangId !== undefined) updateData.cabangId = input.cabangId;
-    if (input.email !== undefined) updateData.email = input.email;
+    if (input.email !== undefined && input.email !== existing.email?.toLowerCase()) {
+      // Email baru diketik sendiri (belum lewat OTP) → belum terverifikasi.
+      updateData.email = input.email;
+      updateData.emailVerifiedAt = null;
+      updateData.emailSource = 'SELF';
+    }
 
     // Tandai onboarded secara atomik: hanya satu permintaan yang "menang" bila
     // tombol ditekan dua kali / request terkirim ulang → role tidak dobel.

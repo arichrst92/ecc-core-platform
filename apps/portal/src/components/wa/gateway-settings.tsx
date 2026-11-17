@@ -9,7 +9,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
-import { KeyRound, Loader2, Mail, Router, Send, UserCheck } from 'lucide-react';
+import { AlertTriangle, Gauge, KeyRound, Loader2, Mail, MailPlus, Router, Send, UserCheck, UserPlus } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type EmailMode = 'fallback' | 'always' | 'off';
@@ -22,6 +22,9 @@ interface Settings {
   waFonnteUsage: Usage;
   otpEmailCopy: EmailMode | null;
   onboardingSkipNoHpOtp: boolean | null;
+  otpEnrollEmailLegacy: boolean;
+  emailSignupEnabled: boolean;
+  waSuspectThreshold: number;
 }
 interface Gateway {
   settings: Settings;
@@ -31,6 +34,15 @@ interface Gateway {
   };
   health: Record<ProviderKey, { state: 'ok' | 'error' | 'unknown'; lastOkAt: string | null; lastErrAt: string | null; lastErr: string | null }>;
   fonnteDevice: { connected: boolean; device: string | null; error?: string } | null;
+  otpHealth: {
+    fonnteDevice: { connected: boolean | null; device: string | null; checkedAt: string | null; error: string | null };
+    suspect: Record<ProviderKey, { since: string | null; until: string | null; streak: number } | null>;
+  };
+  /** Provider yang sedang dilewati untuk OTP → alasannya. */
+  otpSkip: Partial<Record<ProviderKey, string>>;
+  /** OTP 1 jam terakhir per saluran (resmi | fonnte | email | admin). */
+  otpStats: Record<string, { sent: number; used: number }>;
+  appVersions?: { version: string; requests: number; lastSeen: string }[];
   effective: { otpEmailCopy: EmailMode; onboardingSkipNoHpOtp: boolean };
   env: { otpEmailCopy: string | null; onboardingSkipNoHpOtp: string | null };
 }
@@ -152,10 +164,22 @@ export function GatewaySettings() {
     } else if (h.state === 'ok') pill = <StatusPill tone="green">Connect</StatusPill>;
     else if (h.state === 'error') pill = <StatusPill tone="red" title={h.lastErr ?? undefined}>Disconnect / gagal</StatusPill>;
     else pill = <StatusPill tone="gray">Belum dicek — tekan Tes</StatusPill>;
+    const skip = d.otpSkip?.[key];
+    const stat = d.otpStats?.[key];
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         {pill}
         {!st.enabled ? <StatusPill tone="amber">Dimatikan</StatusPill> : null}
+        {skip ? (
+          <StatusPill tone="red" title={d.otpHealth?.suspect?.[key]?.until ? `Dicoba lagi ${jam(d.otpHealth.suspect[key]!.until!)}` : undefined}>
+            Dilewati untuk OTP — {skip}
+          </StatusPill>
+        ) : null}
+        {stat ? (
+          <span className="text-[11px] text-neutral-500">
+            OTP 1 jam: {stat.sent} terkirim · {stat.used} dipakai
+          </span>
+        ) : null}
         {last ? <span className="text-[11px] text-neutral-500">{last}</span> : null}
         {h.state === 'error' && h.lastErr ? <span className="w-full text-[11px] text-red-600 break-words">{h.lastErr}</span> : null}
       </div>
@@ -246,6 +270,19 @@ export function GatewaySettings() {
         {busy ? <Loader2 className="w-4 h-4 animate-spin text-neutral-400" /> : null}
       </div>
 
+      {Object.keys(d.otpSkip ?? {}).length ? (
+        <div className="px-5 py-3 bg-red-50 border-b border-red-100 text-xs text-red-800 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            <b>OTP WhatsApp sedang dialihkan.</b>{' '}
+            {Object.entries(d.otpSkip)
+              .map(([k, why]) => `${k === 'resmi' ? 'Resmi.ID' : 'Fonnte'}: ${why}`)
+              .join(' · ')}
+            . Jemaat yang punya email menerima OTP lewat email; yang tidak punya bisa diberi kode masuk sementara dari halaman jemaat.
+          </span>
+        </div>
+      ) : null}
+
       <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-700 space-y-1">
         <div>
           <b>Urutan OTP:</b> {otpChain.length ? otpChain.join(' → ') : <span className="text-red-600 font-semibold">tidak ada provider aktif</span>}
@@ -295,6 +332,62 @@ export function GatewaySettings() {
           </div>
         </div>
 
+        {/* Deteksi gagal diam-diam */}
+        <div className="flex flex-wrap items-center gap-3 py-3">
+          <Gauge className="w-4 h-4 text-neutral-500" />
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-semibold text-neutral-900">Deteksi OTP tidak sampai</div>
+            <p className="text-xs text-neutral-500">
+              Bila sejumlah OTP berturut-turut dari satu provider tidak dipakai jemaat dalam 5 menit, provider itu dilewati 15 menit
+              untuk OTP (lalu dicoba lagi). 0 = nonaktif.
+            </p>
+          </div>
+          <select
+            value={String(d.settings.waSuspectThreshold ?? 8)}
+            disabled={busy}
+            onChange={(e) => save.mutate({ waSuspectThreshold: Number(e.target.value) })}
+            className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+          >
+            {[0, 5, 8, 10, 15, 20].map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? 'Nonaktif' : `${n} OTP tidak dipakai`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Daftar dengan email */}
+        <div className="flex flex-wrap items-center gap-3 py-3">
+          <MailPlus className="w-4 h-4 text-neutral-500" />
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-semibold text-neutral-900">Daftar dengan email</div>
+            <p className="text-xs text-neutral-500">Pendaftar app versi terbaru bisa memilih daftar lewat OTP email. Matikan sementara bila layanan email bermasalah.</p>
+          </div>
+          <Toggle on={d.settings.emailSignupEnabled} disabled={busy} onChange={(v) => save.mutate({ emailSignupEnabled: v })} />
+        </div>
+
+        {/* Salinan OTP daftar (app lama) */}
+        <div className="flex flex-wrap items-center gap-3 py-3">
+          <UserPlus className="w-4 h-4 text-neutral-500" />
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-semibold text-neutral-900">OTP daftar lewat email (app versi lama)</div>
+            <p className="text-xs text-neutral-500">
+              Pendaftar dengan nomor HP di app versi lama ikut menerima kode lewat email yang diisinya bila WhatsApp gagal. Matikan setelah app
+              versi terbaru tersedia di store — daftar dengan nomor HP lalu hanya lewat WhatsApp.
+            </p>
+          </div>
+          <Toggle on={d.settings.otpEnrollEmailLegacy} disabled={busy} onChange={(v) => save.mutate({ otpEnrollEmailLegacy: v })} />
+        </div>
+        {d.appVersions?.length ? (
+          <div className="pb-3 -mt-1 pl-7 text-[11px] text-neutral-500">
+            Versi app yang aktif (sejak server terakhir start):{' '}
+            {d.appVersions
+              .slice(0, 6)
+              .map((v) => `${v.version} (${v.requests.toLocaleString('id-ID')} req)`)
+              .join(' · ')}
+          </div>
+        ) : null}
+
         {/* Onboarding skip */}
         <div className="flex flex-wrap items-center gap-3 py-3">
           <UserCheck className="w-4 h-4 text-neutral-500" />
@@ -320,7 +413,8 @@ export function GatewaySettings() {
       <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-[11px] text-amber-900 flex items-start gap-2">
         <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span>
-          Mematikan provider tidak menghapus kredensialnya. Kalau semua provider WhatsApp dimatikan, OTP hanya terkirim lewat email (bila diaktifkan).
+          Mematikan provider tidak menghapus kredensialnya. Kalau semua provider WhatsApp dimatikan / dilewati, OTP hanya terkirim lewat email (bila
+          diaktifkan) — jemaat tanpa email bisa diberi kode masuk sementara dari halaman jemaat.
         </span>
       </div>
     </div>

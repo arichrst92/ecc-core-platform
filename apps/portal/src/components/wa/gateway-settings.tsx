@@ -336,10 +336,11 @@ export function GatewaySettings() {
         <div className="flex flex-wrap items-center gap-3 py-3">
           <Gauge className="w-4 h-4 text-neutral-500" />
           <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-neutral-900">Deteksi OTP tidak sampai</div>
+            <div className="font-semibold text-neutral-900">Alihkan OTP bila WhatsApp tidak sampai</div>
             <p className="text-xs text-neutral-500">
-              Bila sejumlah OTP berturut-turut dari satu provider tidak dipakai jemaat dalam 5 menit, provider itu dilewati 15 menit
-              untuk OTP (lalu dicoba lagi). 0 = nonaktif.
+              Kadang provider bilang &ldquo;terkirim&rdquo; padahal WhatsApp tidak sampai ke HP jemaat. Bila sejumlah kode OTP berturut-turut
+              tidak pernah dimasukkan jemaat, provider itu tidak dipakai untuk OTP selama 15 menit — kode dikirim ke email jemaat dan admin
+              diberi tahu. Setelah itu dicoba lagi otomatis.
             </p>
           </div>
           <select
@@ -350,7 +351,7 @@ export function GatewaySettings() {
           >
             {[0, 5, 8, 10, 15, 20].map((n) => (
               <option key={n} value={n}>
-                {n === 0 ? 'Nonaktif' : `${n} OTP tidak dipakai`}
+                {n === 0 ? 'Jangan alihkan' : `Setelah ${n} kode tidak dipakai`}
               </option>
             ))}
           </select>
@@ -360,8 +361,11 @@ export function GatewaySettings() {
         <div className="flex flex-wrap items-center gap-3 py-3">
           <MailPlus className="w-4 h-4 text-neutral-500" />
           <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-neutral-900">Daftar dengan email</div>
-            <p className="text-xs text-neutral-500">Pendaftar app versi terbaru bisa memilih daftar lewat OTP email. Matikan sementara bila layanan email bermasalah.</p>
+            <div className="font-semibold text-neutral-900">Izinkan daftar dengan email (app baru)</div>
+            <p className="text-xs text-neutral-500">
+              Di app versi terbaru, pendaftar bisa memilih &ldquo;Daftar dengan email&rdquo; selain WhatsApp. App yang sekarang dipakai jemaat
+              tidak terpengaruh. Matikan sementara hanya bila layanan email bermasalah.
+            </p>
           </div>
           <Toggle on={d.settings.emailSignupEnabled} disabled={busy} onChange={(v) => save.mutate({ emailSignupEnabled: v })} />
         </div>
@@ -370,10 +374,10 @@ export function GatewaySettings() {
         <div className="flex flex-wrap items-center gap-3 py-3">
           <UserPlus className="w-4 h-4 text-neutral-500" />
           <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-neutral-900">OTP daftar lewat email (app versi lama)</div>
+            <div className="font-semibold text-neutral-900">Kirim kode daftar ke email bila WhatsApp gagal (app lama)</div>
             <p className="text-xs text-neutral-500">
-              Pendaftar dengan nomor HP di app versi lama ikut menerima kode lewat email yang diisinya bila WhatsApp gagal. Matikan setelah app
-              versi terbaru tersedia di store — daftar dengan nomor HP lalu hanya lewat WhatsApp.
+              Untuk app yang sekarang dipakai jemaat: pendaftar dengan nomor HP ikut menerima kode di email yang diisinya bila WhatsApp gagal.
+              Biarkan menyala sampai app versi terbaru tersedia di store, lalu matikan — daftar dengan nomor HP jadi hanya lewat WhatsApp.
             </p>
           </div>
           <Toggle on={d.settings.otpEnrollEmailLegacy} disabled={busy} onChange={(v) => save.mutate({ otpEnrollEmailLegacy: v })} />

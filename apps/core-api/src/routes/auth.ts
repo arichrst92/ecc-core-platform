@@ -434,7 +434,16 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
   const primary = viaEmail ? byEmail : byPhone;
   if (primary && !primary.isTamu) {
     // Respons pendaftaran sebelumnya tidak sampai ke app → kembalikan sesi.
-    if (primary.onboardedAt && primary.onboardedAt >= otpRecord.usedAt!) {
+    // Hanya untuk perangkat yang sama (IP & user-agent sama dengan saat minta OTP)
+    // dan ≤ 10 menit setelah akun dibuat — supaya orang lain yang mengetahui
+    // nomor/email tidak bisa memakai jendela pendaftaran untuk masuk ke akun itu.
+    const sameDevice = !!otpRecord.ipAddress && otpRecord.ipAddress === req.ip && (otpRecord.userAgent ?? '') === (req.get('user-agent') ?? '');
+    if (
+      sameDevice &&
+      primary.onboardedAt &&
+      primary.onboardedAt >= otpRecord.usedAt! &&
+      Date.now() - primary.onboardedAt.getTime() < 10 * 60_000
+    ) {
       const again = await issueAuthResponseByJemaatId(primary.id, req, 'OTP');
       return res.status(201).json({ ...again, meta: { kind: 'register', jemaatCreatedId: primary.id, repeated: true } });
     }

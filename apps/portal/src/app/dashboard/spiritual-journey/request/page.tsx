@@ -60,16 +60,24 @@ const fmt = (d: string) =>
 export default function SpiritualJourneyRequestPage() {
   const [status, setStatus] = usePersistentState<Status | ''>('sj-request:status', 'PENDING');
   const [search, setSearch] = usePersistentState('sj-request:search', '');
+  const [cabangId, setCabangId] = usePersistentState('sj-request:cabang', '');
   const [page, setPage] = usePersistentState('sj-request:page', 1);
   const [openId, setOpenId] = useState<string | null>(null);
   const dq = useDebounce(search, 300);
 
+  const cabangQ = useQuery({
+    queryKey: ['cabang', 'options'],
+    queryFn: async () =>
+      (await apiClient.get<{ data: { id: string; nama: string }[] }>('/admin/cabang', { params: { limit: 100, sortBy: 'nama', sortOrder: 'asc' } })).data.data,
+    staleTime: 5 * 60_000,
+  });
+
   const q = useQuery({
-    queryKey: ['spiritual-journey-request', 'list', status, dq, page],
+    queryKey: ['spiritual-journey-request', 'list', status, dq, cabangId, page],
     queryFn: async () =>
       (
         await apiClient.get<{ data: RequestRow[]; meta: { total: number; totalPages: number } }>('/admin/spiritual-journey-request', {
-          params: { status: status || undefined, search: dq || undefined, page, limit: 25 },
+          params: { status: status || undefined, search: dq || undefined, cabangId: cabangId || undefined, page, limit: 25 },
         })
       ).data,
   });
@@ -106,6 +114,22 @@ export default function SpiritualJourneyRequestPage() {
             {s ? STATUS_LABEL[s].label : 'Semua'}
           </button>
         ))}
+        <select
+          value={cabangId}
+          onChange={(e) => {
+            setCabangId(e.target.value);
+            setPage(1);
+          }}
+          aria-label="Filter cabang"
+          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500"
+        >
+          <option value="">Semua cabang</option>
+          {(cabangQ.data ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nama}
+            </option>
+          ))}
+        </select>
         <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input

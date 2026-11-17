@@ -298,12 +298,12 @@ export default function AnnouncementEditPage() {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <Link href="/dashboard/announcement" className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800 mb-3">
         <ArrowLeft className="w-4 h-4" /> Announcement
       </Link>
-      <div className="flex items-center justify-between gap-3 mb-5">
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2 min-w-0">
           <BellRing className="w-6 h-6 text-brand-500" /> {id ? (readOnly ? 'Detail announcement' : 'Ubah announcement') : 'Announcement baru'}
         </h1>
         {a ? <AnnouncementStatusBadge a={a} /> : null}
@@ -311,6 +311,9 @@ export default function AnnouncementEditPage() {
 
       {readOnly && a ? <Report a={a} /> : null}
 
+      {/* Lebar penuh: layar lebar = 2 kolom (konten | penerima & pengiriman); HP / tablet = bertumpuk. */}
+      <div className="grid gap-x-5 grid-cols-1 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start">
+      <div className="min-w-0">
       {/* Banner */}
       <Card title="Banner gambar (opsional)">
         <div className="grid sm:grid-cols-[260px_minmax(0,1fr)] gap-4 items-start">
@@ -393,14 +396,14 @@ export default function AnnouncementEditPage() {
           <div className="text-sm font-medium text-neutral-700 mb-1">Tombol link (opsional)</div>
           <p className="text-xs text-neutral-500 mb-2">Jadi tombol di app & email; di WhatsApp ditulis "Label: URL" di bawah pesan.</p>
           {f.links.map((l, i) => (
-            <div key={i} className="flex gap-2 mb-2">
+            <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 mb-2">
               <input
                 value={l.label}
                 disabled={readOnly}
                 maxLength={60}
                 onChange={(e) => set('links', f.links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
                 placeholder="Reservasi sekarang"
-                className="w-44 px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full sm:w-44 sm:shrink-0 px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
               />
               <input
                 value={l.url}
@@ -424,6 +427,8 @@ export default function AnnouncementEditPage() {
         </div>
       </Card>
 
+      </div>
+      <div className="min-w-0">
       {/* Penerima */}
       <Card title="Penerima">
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -464,8 +469,8 @@ export default function AnnouncementEditPage() {
             ['Punya nomor WA', p?.withWa],
             ['Punya email', p?.withEmail],
           ].map(([label, v]) => (
-            <div key={label as string} className="bg-neutral-50 rounded-lg px-3 py-2">
-              <div className="text-xs text-neutral-500">{label}</div>
+            <div key={label as string} className="bg-neutral-50 rounded-lg px-2.5 sm:px-3 py-2 min-w-0">
+              <div className="text-[11px] sm:text-xs text-neutral-500 truncate">{label}</div>
               <div className="text-lg font-bold text-neutral-900">{preview.isFetching && v === undefined ? '…' : (v as number | undefined)?.toLocaleString('id-ID') ?? '—'}</div>
             </div>
           ))}
@@ -495,7 +500,7 @@ export default function AnnouncementEditPage() {
 
       {/* Kanal */}
       <Card title="Kanal">
-        <div className="grid sm:grid-cols-3 gap-2">
+        <div className="grid sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3 gap-2">
           {(
             [
               ['IN_APP', 'In App', Smartphone, 'Popup + daftar notifikasi'],
@@ -556,7 +561,7 @@ export default function AnnouncementEditPage() {
             ) : null}
             {sendMode === 'schedule' ? <span className="text-xs text-neutral-500">Zona waktu perangkat Anda.</span> : null}
           </div>
-          <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-neutral-100">
+          <div className="flex flex-wrap justify-end gap-2 mt-5 pt-4 border-t border-neutral-100">
             <button type="button" onClick={() => saveDraft.mutate()} disabled={saveDraft.isPending} className="h-9 px-4 rounded-lg border border-neutral-300 text-sm font-medium hover:bg-neutral-50">
               {saveDraft.isPending ? 'Menyimpan…' : 'Simpan draft'}
             </button>
@@ -577,6 +582,8 @@ export default function AnnouncementEditPage() {
           </div>
         </Card>
       ) : null}
+      </div>
+      </div>
 
       {cropFile ? (
         <CoverCropper
@@ -659,7 +666,7 @@ function Report({ a }: { a: AnnouncementItem }) {
           Halaman publik <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
         {stat('Penerima', a.recipientCount)}
         {ch.has('IN_APP') ? stat('Dibaca di app', a.stats.read) : null}
         {ch.has('WHATSAPP') ? stat('WA terkirim', a.stats.wa.sent, 'text-emerald-700') : null}

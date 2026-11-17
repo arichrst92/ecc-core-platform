@@ -71,29 +71,19 @@ export const SECTIONS: Section[] = [
         title: 'Login pertama kali',
         items: [
           'Buka portal di browser (Chrome/Safari/Firefox terbaru direkomendasikan).',
-          'Masukkan nomor HP Anda dalam format internasional (mis. +6281234567890).',
-          'Klik "Kirim OTP" → Anda akan menerima 6 digit kode via WhatsApp dalam beberapa detik.',
-          'Masukkan kode OTP dan klik Masuk.',
-          'Selesai. Session aktif 7 hari (auto-refresh selama masih aktif chat/klik).',
+          'Pilih tab WhatsApp atau Email.',
+          'WhatsApp: masukkan nomor HP (0812… atau +65 9123…) → Kirim kode. Email: masukkan email yang tercatat di profil jemaat Anda → Kirim kode.',
+          'Masukkan kode 6 digit dan klik Masuk. Kode email berlaku 10 menit — bila tidak ada di Inbox, cek folder Spam / Promosi.',
+          'Selesai. Sesi tetap aktif saat browser dibuka lagi (token diperbarui otomatis).',
         ],
       },
       {
         kind: 'tip',
-        text: 'Kalau OTP tidak datang dalam 1 menit, pastikan WhatsApp Anda aktif. Bisa request OTP baru setelah cooldown 60 detik. Alternatif backup: magic link email — cek di halaman login → "Login via Email".',
-      },
-      {
-        kind: 'steps',
-        title: 'Login backup via magic link email',
-        items: [
-          'Di halaman login, klik "Login via Email" (link kecil di bawah form OTP).',
-          'Masukkan email yang terdaftar di jemaat profile Anda.',
-          'Cek inbox — Anda akan terima email dgn tombol "Masuk ke ECC" (link berlaku 15 menit).',
-          'Klik tombol → auto login tanpa OTP. Cocok kalau WhatsApp OTP tidak sampai.',
-        ],
+        text: 'WhatsApp sedang gangguan? Server otomatis mengirim kode ke email Anda (bila terdaftar) dan halaman login memberi tahu. Bila kode tidak bisa terkirim sama sekali, muncul tombol "Masuk dengan email". Jalan terakhir: minta "Kode masuk sementara" ke admin cabang (Portal → detail jemaat) — ketik di kolom kode yang sama. Login yang sama berlaku untuk CKids (ckids.eccchurch.global).',
       },
       {
         kind: 'bullet',
-        title: 'Struktur navigasi sidebar',
+        title: 'Struktur navigasi (dock bawah)',
         items: [
           'Dashboard (Elsa) — AI chat untuk tanya data ECC (jemaat, ibadah, event, homecell, tamu, doa, ulasan, dll)',
           'Map View — peta cabang, Zona, homecell, dan sebaran jemaat',
@@ -114,7 +104,7 @@ export const SECTIONS: Section[] = [
       },
       {
         kind: 'tip',
-        text: 'Setiap grup di sidebar bisa di-collapse dengan klik header-nya. State collapse tersimpan otomatis di browser.',
+        text: 'Navigasi ada di dock bawah: klik ikon grup untuk membuka menunya. Badge merah di ikon grup & menu = jumlah request yang menunggu tindakan (Spiritual Journey, Tamu tanpa petugas follow-up, Prayer Request baru, Permintaan Volunteer, Kritik & Saran baru, kandidat akun ganda, bukti transfer event). Arahkan kursor ke ikon grup untuk rinciannya; klik angka di menu untuk langsung ke halaman yang perlu diproses. Diperbarui tiap 60 detik & setelah setiap aksi.',
       },
     ],
   },
@@ -325,6 +315,10 @@ export const SECTIONS: Section[] = [
         text: 'Siapa yang bisa memproses: Fulltimer (semua ministry) dan leader ministry — anggota aktif dengan peran level 5 ke atas (mis. Leader, Co-Leader) — hanya untuk ministry yang dia pimpin. Leader juga bisa memproses langsung dari Els App.',
       },
       {
+        kind: 'warning',
+        text: 'Pendaftaran per cabang (detail Pelayanan → Pendaftaran per cabang): jemaat hanya bisa bergabung di cabang berstatus "Buka pendaftaran". Status "Belum dibuka" (bawaan) dan "Tutup" tidak menampilkan tombol Gabung di app. Buka pendaftaran untuk cabang yang sedang menerima anggota.',
+      },
+      {
         kind: 'steps',
         title: 'Check-in kehadiran via scan QR',
         items: [
@@ -413,7 +407,15 @@ export const SECTIONS: Section[] = [
           'Sync Shiftsoft tidak lagi menimpa jemaat yang sudah onboarding di app, pernah diubah admin di Portal, atau ditandai "Bukan junk" (hanya mengisi kolom yang masih kosong); jemaat nonaktif dilewati.',
           'Cek Duplikat: temukan jemaat dengan no HP / email / nama + tanggal lahir yang sama.',
           'Detail jemaat: QR card, tombol kontak WhatsApp/Email, riwayat homecell, event, ibadah, group, visit, local market, indikator keaktifan 3 bulan, dan Export PDF profil.',
+          'Foto profil: klik foto di header detail jemaat (atau bagian Foto profil di Edit Profil) → pilih gambar → geser / zoom / putar → Simpan foto. Foto langsung tersimpan dan tampil di Els App. Bisa juga dihapus.',
+          'Status kontak: label Terverifikasi / Belum terverifikasi / Diinput wali / Diinput admin di samping no HP & email. Kontak yang diubah admin ditandai "Diinput admin".',
+          'Kode masuk sementara: tombol di detail jemaat untuk jemaat yang tidak menerima OTP — 6 digit, berlaku 10 menit, sekali pakai, tercatat di Audit Log.',
+          'Zona yang dipimpin: Zone Leader / Pastor zona tampil di kartu "Zona yang dipimpin" walau bukan anggota homecell.',
         ],
+      },
+      {
+        kind: 'warning',
+        text: 'Mengubah, membuat, mengimpor, dan mengganti foto jemaat wajib akses menu Jemaat level tulis; menghapus / hapus data permanen wajib level hapus (Role Access). Tanpa akses, Portal menampilkan "tidak punya akses".',
       },
       {
         kind: 'tip',
@@ -513,14 +515,31 @@ export const SECTIONS: Section[] = [
       },
       {
         kind: 'steps',
-        title: 'Approve donation event (multi-payment)',
+        title: 'Verifikasi pembayaran event (berbayar & sukarela)',
         items: [
-          'Buka detail event → section Donation Tracker.',
-          'List semua donation per participation. Status PENDING menunggu verifikasi bukti transfer.',
-          'Klik bukti transfer untuk preview image, verifikasi manual ke statement bank.',
-          'Klik Approve → status SUKSES, otomatis update total terkumpul.',
-          'Donation di-track per row (bukan akumulasi), supaya audit clear.',
+          'Buka detail event → bagian Pembayaran (badge merah di menu Event = bukti transfer yang menunggu).',
+          'Setiap baris = satu pembayaran / pemberian sukarela. Status "Menunggu Verifikasi" berarti bukti sudah diunggah.',
+          'Klik bukti transfer untuk melihat gambar, cocokkan dengan mutasi rekening.',
+          'Klik Setujui → status Lunas, peserta bisa self check-in dan tiketnya tertulis "Lunas".',
+          'Pemberian sukarela tambahan (dari website) tercatat per baris sendiri supaya audit jelas.',
         ],
+      },
+      {
+        kind: 'bullet',
+        title: 'Aturan event (berlaku untuk app, website & Portal)',
+        items: [
+          'Tipe bayar: Gratis (hijau) · Sukarela (biru, dulu "donasi / nominal bebas") · Berbayar nominal tetap (kuning).',
+          'Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.',
+          'Hanya event aktif & sudah dipublikasikan yang bisa didaftari jemaat. Jemaat hanya bisa mendaftarkan diri, keluarga, dan tamunya.',
+          'Berbayar wajib lunas sebelum check-in. Sukarela wajib lunas hanya bila ada nominal minimum; tanpa minimum, peserta boleh hadir walau belum memberi.',
+          'Tidak hadir: tiket yang belum dibayar dibatalkan otomatis 30 menit setelah event selesai. Peserta yang sudah membayar / menunggu verifikasi TIDAK dibatalkan.',
+          'Syarat ikut event & info pembayaran (rekening, QRIS) tampil di detail event app.',
+          'Deskripsi event mendukung markdown (tebal, poin, judul, tautan) — tampil rapi di app.',
+        ],
+      },
+      {
+        kind: 'warning',
+        text: 'Membuat / mengubah / menghapus event, melihat & mengubah peserta, menyetujui pembayaran, dan mengatur petugas wajib akses menu Event (tulis; hapus untuk menghapus). Beri akses lewat Role Access ke staf pengelola peserta.',
       },
       {
         kind: 'paragraph',
@@ -856,6 +875,43 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'pembaruan-nov-2026',
+    title: 'Pembaruan Portal — November 2026',
+    icon: Sparkles,
+    summary: 'Ringkasan perubahan terbaru: login, badge request, Group, Local Market, Announcement, Analitik.',
+    content: [
+      {
+        kind: 'bullet',
+        title: 'Yang baru di Portal',
+        items: [
+          'Login Portal & CKids: tab WhatsApp | Email (kode 6 digit), info otomatis saat WhatsApp gangguan; latar login bermotif kain; logo ECC Church.',
+          'Badge request menunggu di dock (grup & menu tujuan) — lihat bagian Memulai.',
+          'Group: tampilan kartu seperti Local Market (gambar 16:9 utuh, PIC, anggota, jadwal, Public/Private). Gambar group diunggah lewat crop 16:9.',
+          'Local Market: gambar sampul tampil sesuai rasio 16:9 (tidak terpotong) di kartu & detail.',
+          'Jemaat: ganti / hapus foto dengan crop; Cek Duplikat menampilkan kandidat akun ganda dari pendaftaran.',
+          'Announcement: halaman detail lebar penuh — 2 kolom di layar lebar (konten | penerima & pengiriman), bertumpuk di HP.',
+          'Spiritual Journey → Request: saringan cabang.',
+          'WhatsApp Config → Saluran notifikasi: atur per jenis notifikasi In-app / WhatsApp / Email / Email bila tanpa WA. Gateway & OTP: statistik OTP & versi app aktif.',
+          'Analitik App: rute penghubung tidak dihitung dobel, kiriman ulang dari app tidak dobel, kiriman analitik tidak masuk "total request"; nama halaman lengkap.',
+          'Pelayanan → Pendaftaran per cabang: status bawaan kini "Belum dibuka" (lihat Service).',
+          'Istilah "donasi" diganti "pemberian sukarela" di Portal, app, dan website.',
+        ],
+      },
+      {
+        kind: 'bullet',
+        title: 'Els App 2.4.9 (untuk menjawab pertanyaan jemaat)',
+        items: [
+          'Daftar dengan WhatsApp atau email; kontak terverifikasi di Edit Profil; pengingat lengkapi kontak.',
+          'Menu bawah: Beranda · Resolusi · Reservasi · CKids · Profil. Event dibuka dari Beranda / Quick Access.',
+          'Beranda: carousel homecell yang dipimpin + Zona yang dipimpin / digembalakan (ringkasan homecell, anggota, bertemu 7 hari, perlu perhatian); 6 event mendatang.',
+          'Kalender: ulang tahun anggota homecell, zona, rekan ministry (mengikuti Privasi) + pertemuan homecell.',
+          'Catatan saya: bisa menyisipkan gambar dari kamera / galeri.',
+          'Ibadah online diberi label Online di daftar; petugas pelayanan dikelompokkan per ministry.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'profile',
     title: 'Profil & Keamanan',
     icon: Shield,
@@ -865,7 +921,7 @@ export const SECTIONS: Section[] = [
         kind: 'menu-card',
         href: '/dashboard/profile',
         label: 'Profil & Keamanan',
-        description: 'Foto avatar + info role + metode login (OTP WA + magic link email) + sign out session.',
+        description: 'Foto avatar + info role + metode login (kode WhatsApp / email) + sign out session.',
       },
       {
         kind: 'steps',
@@ -880,8 +936,9 @@ export const SECTIONS: Section[] = [
         kind: 'bullet',
         title: 'Metode login',
         items: [
-          'OTP WhatsApp — metode primer, kode 6-digit dikirim ke no HP terdaftar (Fonnte gateway).',
-          'Magic link email — backup kalau WA OTP tidak sampai, link 15-menit dikirim via SendGrid.',
+          'Kode WhatsApp — kode 6 digit ke no HP terdaftar (Resmi.ID → Fonnte).',
+          'Kode email — kode 6 digit ke email profil (berlaku 10 menit); dipakai otomatis saat WhatsApp gangguan.',
+          'Kode masuk sementara dari admin cabang — jalan terakhir saat WhatsApp & email sama-sama gangguan.',
         ],
       },
       {

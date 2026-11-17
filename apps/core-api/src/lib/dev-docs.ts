@@ -177,12 +177,15 @@ function parseModule(file: string): SourceModule | null {
       schemas.push({ name, where: p[2]!, source: source.trim() });
     }
     const menuM = /requireMenu\(\s*['"]([\w:-]+)['"](?:\s*,\s*['"](\w+)['"])?/.exec(body) ?? /requireMenuP\(\s*req\s*,\s*['"]([\w:-]+)['"](?:\s*,\s*['"](\w+)['"])?/.exec(body);
+    // routes/admin/event.ts: guard ringkas `W('read'|'write'|'delete')` = menu Event.
+    const wM = /^\w+\.\w+\(\s*['"][^'"]+['"]\s*,\s*W\(\s*(?:['"](\w+)['"])?\s*\)/.exec(body.trimStart());
+    const menuFromW = wM && /event\.ts$/.test(file) ? `event (${wM[1] ?? 'write'})` : null;
     routes.push({
       method: m[2]!.toUpperCase(),
       subpath: m[3]! === '/' ? '' : m[3]!,
       comment,
       schemas,
-      menu: menuM ? `${menuM[1]}${menuM[2] ? ` (${menuM[2]})` : ''}` : null,
+      menu: menuFromW ?? (menuM ? `${menuM[1]}${menuM[2] ? ` (${menuM[2]})` : ''}` : null),
     });
   });
   return { file, header, routes };
@@ -491,6 +494,9 @@ Uji token: \`GET /admin/me\` → profil pemilik token.
 - Data pribadi jemaat (No HP, email, alamat, tanggal lahir) hanya dipakai untuk tugas yang diminta; jangan dikirim ke layanan lain.
 - Bila ragu tentang pemetaan field / data mana yang dimaksud → tanyakan, jangan menebak.
 - Hormati 403: artinya pemilik token tidak punya akses menu itu — jangan mencoba endpoint lain untuk mengakalinya.
+- Pengelolaan event (buat/ubah/hapus event, daftar peserta, setujui pembayaran, petugas) wajib menu **Event** (tulis / hapus); mengubah, membuat, atau mengimpor jemaat dan foto jemaat wajib menu **Jemaat** (tulis), menghapus wajib **Jemaat** (hapus).
+- Pendaftaran event untuk orang lain hanya oleh pengelola event; event harus aktif & terbit, dan pendaftaran online ditutup saat event mulai.
+- Ringkasan pekerjaan admin yang menunggu: \`GET /admin/pending-counts\` (hanya menu yang boleh dibaca).
 
 ## 5. Contoh
 

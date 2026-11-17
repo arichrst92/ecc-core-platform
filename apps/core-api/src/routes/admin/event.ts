@@ -48,7 +48,9 @@ import {
 import { idOrSlugWhere } from '../../lib/id-or-slug.js';
 import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
-import { requireMenuP } from '../../middleware/require-menu.js';
+import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
+import { lockEventParam } from '../../lib/event-lock.js';
+import { paymentOkForCheckin } from '../../lib/event-payment.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import {
@@ -203,6 +205,21 @@ async function ensureUniqueSlug(base: string, excludeId?: string): Promise<strin
 // ============================================================
 //  Event CRUD
 // ============================================================
+
+/**
+ * RBAC endpoint pengelolaan event (Portal). Fulltimer selalu lolos; selain itu
+ * wajib akses menu "Event". Endpoint jemaat (daftar diri/keluarga, batal,
+ * unggah bukti miliknya, check-in) memakai pemeriksaan kepemilikan sendiri.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- `any` menjaga inferensi :param Express di handler berikutnya.
+const W = (level: 'read' | 'write' | 'delete' = 'write'): any => (req: import('express').Request, _res: unknown, next: (e?: unknown) => void) => {
+  requireMenuP(req, 'event', level).then(() => next(), next);
+};
+/** Pengelola event (Fulltimer / akses menu Event tulis). */
+async function isEventManager(req: import('express').Request): Promise<boolean> {
+  if (!req.user) return false;
+  return !!req.user.isFulltimer || (await hasMenuAccessFor(req.user, 'event', 'write'));
+}
 
 eventRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
@@ -473,7 +490,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
   });
 });
 
-eventRouter.post('/', async (req, res) => {
+eventRouter.post('/', W(), async (req, res) => {
   if (!req.user) throw BadRequest('User tidak terautentikasi');
 
   // Verify author exists. JWT bisa stale kalau user terhapus dari DB (mis.
@@ -671,7 +688,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
   res.status(201).json({ success: true, data: created });
 });
 
-eventRouter.patch('/:id', async (req, res) => {
+eventRouter.patch('/:id', W(), async (req, res) => {
   const input = updateEventSchema.parse(req.body);
   const before = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Event tidak ditemukan');
@@ -768,7 +785,7 @@ eventRouter.patch('/:id', async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-eventRouter.delete('/:id', async (req, res) => {
+eventRouter.delete('/:id', W('delete'), async (req, res) => {
   const before = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Event tidak ditemukan');
   await prisma.event.delete({ where: { id: before.id } });
@@ -789,7 +806,7 @@ eventRouter.delete('/:id', async (req, res) => {
 //  Image uploads — hero + QRIS
 // ============================================================
 
-eventRouter.post('/:id/hero', flexImageUpload(), async (req, res) => {
+eventRouter.post('/:id/hero', W(), flexImageUpload(), async (req, res) => {
   if (!req.file) throw BadRequest('File foto wajib (field name: foto)');
   const item = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!item) throw NotFound('Event tidak ditemukan');
@@ -810,7 +827,7 @@ eventRouter.post('/:id/hero', flexImageUpload(), async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-eventRouter.delete('/:id/hero', async (req, res) => {
+eventRouter.delete('/:id/hero', W(), async (req, res) => {
   const item = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!item) throw NotFound('Event tidak ditemukan');
   await deleteContentHero('event', item.id);
@@ -818,7 +835,7 @@ eventRouter.delete('/:id/hero', async (req, res) => {
   res.status(204).end();
 });
 
-eventRouter.post('/:id/qris', flexImageUpload(), async (req, res) => {
+eventRouter.post('/:id/qris', W(), flexImageUpload(), async (req, res) => {
   if (!req.file) throw BadRequest('File foto wajib (field name: foto)');
   const item = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!item) throw NotFound('Event tidak ditemukan');
@@ -839,7 +856,7 @@ eventRouter.post('/:id/qris', flexImageUpload(), async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-eventRouter.delete('/:id/qris', async (req, res) => {
+eventRouter.delete('/:id/qris', W(), async (req, res) => {
   const item = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!item) throw NotFound('Event tidak ditemukan');
   await deleteEventQris(item.id);
@@ -859,7 +876,7 @@ eventRouter.delete('/:id/qris', async (req, res) => {
 // ============================================================
 
 // List peserta per event
-eventRouter.get('/:id/peserta', async (req, res) => {
+eventRouter.get('/:id/peserta', W('read'), async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');
 
@@ -913,7 +930,7 @@ eventRouter.get('/:id/peserta', async (req, res) => {
 //     ke upload bukti kalau status DAFTAR di event berbayar).
 //
 // Quota check: skip kalau existing non-BATAL (slot sudah ke-counted).
-eventRouter.post('/:id/peserta', async (req, res) => {
+eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { id: req.params.id },
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
@@ -930,6 +947,14 @@ eventRouter.post('/:id/peserta', async (req, res) => {
   }
 
   const input = registerEventParticipationSchema.parse(req.body);
+
+  // Jemaat (bukan pengelola event) hanya boleh mendaftarkan diri & keluarga,
+  // dan hanya ke event aktif yang sudah dipublikasikan.
+  if (!(await isEventManager(req))) {
+    if (!event.isActive || !event.isPublished) throw BadRequest('Event ini belum dibuka untuk pendaftaran.');
+    const familyIds = await getFamilyJemaatIds(req.user!.jemaatId);
+    if (!familyIds.has(input.jemaatId)) throw Forbidden('Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.');
+  }
 
   // Lookup existing dulu sebelum quota check — kalau user sudah terdaftar
   // (non-BATAL), tidak makan slot baru. Untuk BATAL, akan reactivate jadi
@@ -1006,6 +1031,13 @@ eventRouter.post('/:id/peserta', async (req, res) => {
         nominalBayar: nominalBayar ?? null,
         catatan: input.catatan,
         cancelledAt: null,
+        cancelReason: null,
+        registeredAt: new Date(),
+        // Daftar ulang → mulai dari nol (sama dengan pendaftaran keluarga).
+        buktiTransferUrl: null,
+        paidAt: null,
+        approvedAt: null,
+        approvedBy: null,
       },
       include: { jemaat: { select: { namaLengkap: true } } },
     });
@@ -1088,7 +1120,7 @@ eventRouter.post('/:id/peserta', async (req, res) => {
  * Quota check di awal — kalau slot tersisa < jumlah request, tetap proceed
  * tapi sebagian akan gagal dengan code QUOTA_FULL.
  */
-eventRouter.post('/:id/peserta/batch', async (req, res) => {
+eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
   const input = batchRegisterEventParticipationSchema.parse(req.body);
   const event = await prisma.event.findUnique({
     where: { id: req.params.id },
@@ -1128,7 +1160,9 @@ eventRouter.post('/:id/peserta/batch', async (req, res) => {
   const uniqueIds = [...new Set(input.jemaatIds)];
 
   // Auth guard: jemaat (non-Fulltimer) hanya boleh mendaftarkan diri sendiri
-  // + keluarga. Sebelumnya tidak dicek — user login bisa daftarkan jemaat lain.
+  // + keluarga, dan hanya ke event aktif yang sudah dipublikasikan.
+  if (!event.isPublished && !(await isEventManager(req))) throw BadRequest('Event ini belum dibuka untuk pendaftaran.');
+  if (!event.isActive) throw BadRequest('Event ini sudah tidak aktif.');
   if (req.user && !req.user.isFulltimer) {
     const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
     const outsider = uniqueIds.find((id) => !familyIds.has(id));
@@ -1685,7 +1719,7 @@ async function ensureParticipation(eventId: string, jemaatId: string) {
 }
 
 // List semua donations event (admin view). Paginated, dengan info jemaat.
-eventRouter.get('/:id/donations', async (req, res) => {
+eventRouter.get('/:id/donations', W('read'), async (req, res) => {
   const event = await resolveEventByIdOrSlug(req.params.id);
 
   const q = paginationQuerySchema.parse(req.query);
@@ -1953,7 +1987,7 @@ eventRouter.param('donationId', (req, _res, next, id: string) => {
   next();
 });
 
-eventRouter.get('/:id/donations/:donationId', async (req, res) => {
+eventRouter.get('/:id/donations/:donationId', W('read'), async (req, res) => {
   const event = await resolveEventByIdOrSlug(req.params.id);
   const donation = await prisma.eventDonation.findUnique({
     where: { id: req.params.donationId },
@@ -1977,7 +2011,7 @@ eventRouter.get('/:id/donations/:donationId', async (req, res) => {
 });
 
 // Update donation (admin: status / nominal / catatan)
-eventRouter.patch('/:id/donations/:donationId', async (req, res) => {
+eventRouter.patch('/:id/donations/:donationId', W(), async (req, res) => {
   const event = await resolveEventByIdOrSlug(req.params.id);
   const before = await prisma.eventDonation.findUnique({
     where: { id: req.params.donationId },
@@ -2062,6 +2096,12 @@ eventRouter.post(
     if (!before || before.participation.eventId !== event.id) {
       throw NotFound('Donation tidak ditemukan');
     }
+    // Hanya pengelola event atau pemilik pembayaran (diri / keluarga).
+    if (!(await isEventManager(req))) {
+      const owner = await prisma.eventParticipation.findUnique({ where: { id: before.participationId }, select: { jemaatId: true } });
+      const familyIds = await getFamilyJemaatIds(req.user!.jemaatId);
+      if (!owner || !familyIds.has(owner.jemaatId)) throw Forbidden('Anda tidak berhak mengunggah bukti untuk pembayaran ini.');
+    }
 
     const buktiTransferUrl = await saveEventDonationBukti(before.id, req.file.buffer);
     // Auto-set ke MENUNGGU_VERIFIKASI kalau sebelumnya batal/draft
@@ -2085,7 +2125,7 @@ eventRouter.post(
 );
 
 // Approve shortcut — set status BAYAR
-eventRouter.post('/:id/donations/:donationId/approve', async (req, res) => {
+eventRouter.post('/:id/donations/:donationId/approve', W(), async (req, res) => {
   // Baris sintetis (virt-<participationId>) = pembayaran dari data partisipasi
   // lama tanpa row donation → approve partisipasinya langsung.
   if (req.params.donationId.startsWith(VIRT_PREFIX)) {
@@ -2191,7 +2231,7 @@ eventRouter.delete('/:id/donations/:donationId', async (req, res) => {
 });
 
 // Update partisipasi (status, nominal, catatan)
-eventRouter.patch('/:id/peserta/:participationId', async (req, res) => {
+eventRouter.patch('/:id/peserta/:participationId', W(), async (req, res) => {
   const before = await prisma.eventParticipation.findUnique({
     where: { id: req.params.participationId },
     include: {
@@ -2257,7 +2297,7 @@ eventRouter.patch('/:id/peserta/:participationId', async (req, res) => {
 });
 
 // Hapus partisipasi
-eventRouter.delete('/:id/peserta/:participationId', async (req, res) => {
+eventRouter.delete('/:id/peserta/:participationId', W('delete'), async (req, res) => {
   const before = await prisma.eventParticipation.findUnique({
     where: { id: req.params.participationId },
     include: { event: { select: { id: true, judul: true } }, jemaat: { select: { namaLengkap: true } } },
@@ -2316,6 +2356,11 @@ eventRouter.post(
       }
     }
 
+    if (before.status === 'BATAL') {
+      throw BadRequest('Pendaftaran ini sudah dibatalkan. Daftar ulang dulu sebelum mengunggah bukti.');
+    }
+    const evPay = await prisma.event.findUnique({ where: { id: before.eventId }, select: { tipeBayar: true } });
+    if (evPay?.tipeBayar === 'GRATIS') throw BadRequest('Event ini gratis — tidak perlu bukti transfer.');
     const buktiTransferUrl = await saveEventBuktiTransfer(before.id, req.file.buffer);
     // Naikkan ke MENUNGGU_VERIFIKASI kalau belum BAYAR / HADIR
     const nextStatus =
@@ -2416,7 +2461,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
   }
 
   // Untuk event berbayar, wajib sudah BAYAR — kecuali admin force.
-  if (event.tipeBayar !== 'GRATIS' && partisipasi.status !== 'BAYAR' && !input.force) {
+  if (!paymentOkForCheckin(event, partisipasi.status) && !input.force) {
     throw Conflict(
       `${jemaat.namaLengkap} belum melakukan pembayaran (status: ${partisipasi.status}). ` +
         `Approve bukti transfer dulu, atau kirim ulang dengan force=true untuk override.`,
@@ -2634,7 +2679,7 @@ async function approveParticipation(req: import('express').Request, eventId: str
   return updated;
 }
 
-eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
+eventRouter.post('/:id/peserta/:participationId/approve', W(), async (req, res) => {
   const updated = await approveParticipation(req, req.params.id, req.params.participationId);
   res.json({ success: true, data: updated });
 });
@@ -2646,7 +2691,7 @@ eventRouter.post('/:id/peserta/:participationId/approve', async (req, res) => {
 // `canScanAttendance` yang menentukan siapa yang berwenang scan QR di hari H.
 
 // List pelayanan + petugas-nya untuk satu event
-eventRouter.get('/:id/pelayanan', async (req, res) => {
+eventRouter.get('/:id/pelayanan', W('read'), async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');
   const data = await prisma.eventPelayanan.findMany({
@@ -2673,7 +2718,7 @@ eventRouter.get('/:id/pelayanan', async (req, res) => {
 });
 
 // Link Pelayanan ke event
-eventRouter.post('/:id/pelayanan', async (req, res) => {
+eventRouter.post('/:id/pelayanan', W(), async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');
   const input = linkEventPelayananSchema.parse(req.body);
@@ -2692,7 +2737,7 @@ eventRouter.post('/:id/pelayanan', async (req, res) => {
 });
 
 // Unlink Pelayanan (cascade petugas)
-eventRouter.delete('/:id/pelayanan/:linkId', async (req, res) => {
+eventRouter.delete('/:id/pelayanan/:linkId', W(), async (req, res) => {
   const before = await prisma.eventPelayanan.findUnique({
     where: { id: req.params.linkId },
     include: { pelayanan: { select: { nama: true } }, event: { select: { judul: true } } },
@@ -2712,7 +2757,7 @@ eventRouter.delete('/:id/pelayanan/:linkId', async (req, res) => {
 });
 
 // Assign volunteer (petugas) ke link pelayanan
-eventRouter.post('/:id/pelayanan/:linkId/petugas', async (req, res) => {
+eventRouter.post('/:id/pelayanan/:linkId/petugas', W(), async (req, res) => {
   const link = await prisma.eventPelayanan.findUnique({
     where: { id: req.params.linkId },
     include: {
@@ -2758,7 +2803,7 @@ eventRouter.post('/:id/pelayanan/:linkId/petugas', async (req, res) => {
 });
 
 // Update volunteer (role / canScanAttendance / catatan)
-eventRouter.patch('/:id/pelayanan/:linkId/petugas/:petugasId', async (req, res) => {
+eventRouter.patch('/:id/pelayanan/:linkId/petugas/:petugasId', W(), async (req, res) => {
   const before = await prisma.eventPelayananPetugas.findUnique({
     where: { id: req.params.petugasId },
     include: {
@@ -2807,7 +2852,7 @@ eventRouter.patch('/:id/pelayanan/:linkId/petugas/:petugasId', async (req, res) 
 });
 
 // Hapus volunteer
-eventRouter.delete('/:id/pelayanan/:linkId/petugas/:petugasId', async (req, res) => {
+eventRouter.delete('/:id/pelayanan/:linkId/petugas/:petugasId', W(), async (req, res) => {
   const before = await prisma.eventPelayananPetugas.findUnique({
     where: { id: req.params.petugasId },
     include: {

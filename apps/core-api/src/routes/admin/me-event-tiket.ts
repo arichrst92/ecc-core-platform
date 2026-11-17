@@ -19,6 +19,7 @@ import { tzOr } from '../../lib/tz.js';
 import { eventStartsAt } from '../../lib/event-time.js';
 import { revokeEventRole } from '../../lib/event-role.js';
 import { audit } from '../../lib/audit.js';
+import { paymentStatusOf } from '../../lib/event-payment.js';
 
 export const meEventTiketRouter = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -116,14 +117,8 @@ meEventTiketRouter.get('/', async (req, res) => {
       // check-in tetap di Mendatang sampai jendela self check-in tutup (+30 menit).
       const endAt = win.closesAt ? new Date(win.closesAt).getTime() - CLOSE_AFTER_MIN * 60_000 : null;
       const finished = endAt != null && now.getTime() > endAt && (r.status === 'HADIR' || r.status === 'BATAL' || ended);
-      const paid = ev.tipeBayar === 'GRATIS';
-      const payment: 'GRATIS' | 'LUNAS' | 'MENUNGGU' | 'BELUM_BAYAR' = paid
-        ? 'GRATIS'
-        : r.status === 'BAYAR' || r.status === 'HADIR'
-          ? 'LUNAS'
-          : r.donations.some((d) => d.status === 'MENUNGGU_VERIFIKASI')
-            ? 'MENUNGGU'
-            : 'BELUM_BAYAR';
+      // Bukti di partisipasi juga dihitung "menunggu"; sukarela tanpa minimum = tidak wajib bayar.
+      const payment = paymentStatusOf(ev, r);
       const totalBayar = r.donations.filter((d) => d.status === 'BAYAR').reduce((a, d) => a + Number(d.nominalBayar), 0);
       const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventStartsAt(ev, tz), now);
       const relasi = r.jemaat.id === u.jemaatId ? null : (fam.get(r.jemaat.id) ?? (r.jemaat.isTamu ? 'Tamu' : null));
@@ -202,7 +197,7 @@ meEventTiketRouter.post('/:id/cancel', async (req, res) => {
       jemaat: { select: { namaLengkap: true } },
       donations: { select: { status: true } },
       event: {
-        select: { judul: true, isActive: true, tipeBayar: true, tanggalMulai: true, jamMulai: true, cabang: { select: { timezone: true } } },
+        select: { judul: true, isActive: true, tipeBayar: true, nominal: true, tanggalMulai: true, jamMulai: true, cabang: { select: { timezone: true } } },
       },
     },
   });
@@ -214,14 +209,7 @@ meEventTiketRouter.post('/:id/cancel', async (req, res) => {
   if (p.status === 'BATAL') return res.json({ success: true, data: { id: p.id, status: p.status }, meta: { alreadyCancelled: true } });
 
   const tz = tzOr(p.event.cabang?.timezone);
-  const payment: 'GRATIS' | 'LUNAS' | 'MENUNGGU' | 'BELUM_BAYAR' =
-    p.event.tipeBayar === 'GRATIS'
-      ? 'GRATIS'
-      : p.status === 'BAYAR' || p.status === 'HADIR'
-        ? 'LUNAS'
-        : p.donations.some((d) => d.status === 'MENUNGGU_VERIFIKASI')
-          ? 'MENUNGGU'
-          : 'BELUM_BAYAR';
+  const payment = paymentStatusOf(p.event, p);
   if (p.status === 'HADIR') throw BadRequest(`${p.jemaat.namaLengkap} sudah hadir — tiket tidak bisa dibatalkan.`);
   if (payment === 'LUNAS' || payment === 'MENUNGGU') {
     throw BadRequest('Tiket yang sudah dibayar / menunggu verifikasi pembayaran dibatalkan lewat admin event.');

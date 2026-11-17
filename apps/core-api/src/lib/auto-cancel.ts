@@ -7,8 +7,10 @@
  * self check-in, jadi tiket tidak boleh dibatalkan lebih awal.
  *
  *   - Reservasi ibadah  : RESERVE → CANCEL (cancelReason = NO_SHOW)
- *   - Partisipasi event : DAFTAR / MENUNGGU_VERIFIKASI / BAYAR → BATAL (NO_SHOW),
- *                         hanya event yang mencatat kehadiran (butuhKehadiran).
+ *   - Partisipasi event : DAFTAR → BATAL (NO_SHOW), hanya event yang mencatat
+ *                         kehadiran (butuhKehadiran). Peserta yang sudah membayar /
+ *                         menunggu verifikasi TIDAK dibatalkan — catatan pembayarannya
+ *                         tetap utuh (laporan keuangan, tiket "Lunas").
  *
  * Petugas tetap bisa check-in tiket yang sudah dibatalkan (scan kode / ubah
  * status di portal) bila ternyata jemaat hadir.
@@ -70,7 +72,7 @@ export async function autoCancelNoShowEvent(now = new Date()): Promise<number> {
         { tanggalSelesai: { lte: addDays(now, 1) } },
         { tanggalSelesai: null, tanggalMulai: { lte: addDays(now, 1) } },
       ],
-      partisipasi: { some: { status: { in: ['DAFTAR', 'MENUNGGU_VERIFIKASI', 'BAYAR'] } } },
+      partisipasi: { some: { status: 'DAFTAR' } },
     },
     select: {
       id: true,
@@ -88,7 +90,7 @@ export async function autoCancelNoShowEvent(now = new Date()): Promise<number> {
     const endDay = calendarDateOf(ev.tanggalSelesai ?? ev.tanggalMulai, tz);
     if (now <= closesAt(endDay, ev.jamMulai, ev.jamSelesai, tz, !!ev.tanggalSelesai)) continue;
     const res = await prisma.eventParticipation.updateMany({
-      where: { eventId: ev.id, status: { in: ['DAFTAR', 'MENUNGGU_VERIFIKASI', 'BAYAR'] } },
+      where: { eventId: ev.id, status: 'DAFTAR' },
       data: { status: 'BATAL', cancelledAt: now, cancelReason: NO_SHOW },
     });
     total += res.count;

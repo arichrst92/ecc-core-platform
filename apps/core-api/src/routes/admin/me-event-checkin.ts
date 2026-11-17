@@ -27,6 +27,7 @@ import {
   venuePoint,
 } from '../../lib/self-checkin.js';
 import { tzOr } from '../../lib/tz.js';
+import { paymentOkForCheckin } from '../../lib/event-payment.js';
 
 export const meEventCheckinRouter = Router();
 
@@ -47,6 +48,7 @@ async function loadEvent(eventId: string) {
       lokasi: true,
       isActive: true,
       tipeBayar: true,
+      nominal: true,
       butuhKehadiran: true,
       allowSelfCheckin: true,
       tanggalMulai: true,
@@ -65,7 +67,7 @@ async function loadEvent(eventId: string) {
 }
 
 /** Saya + keluarga yang terdaftar (bukan BATAL) di event ini. */
-async function registeredMembers(jemaatId: string, event: { id: string; tipeBayar: string }) {
+async function registeredMembers(jemaatId: string, event: { id: string; tipeBayar: string; nominal?: unknown }) {
   const fam = await familyOf(jemaatId);
   const ids = [jemaatId, ...fam.keys()];
   const parts = await prisma.eventParticipation.findMany({
@@ -77,7 +79,6 @@ async function registeredMembers(jemaatId: string, event: { id: string; tipeBaya
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true } },
     },
   });
-  const paid = event.tipeBayar === 'GRATIS';
   return parts
     .filter((p) => p.jemaat.isActive)
     .sort((a, b) => (a.jemaat.id === jemaatId ? -1 : b.jemaat.id === jemaatId ? 1 : a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap)))
@@ -93,9 +94,8 @@ async function registeredMembers(jemaatId: string, event: { id: string; tipeBaya
         relasi: p.jemaat.id === jemaatId ? null : (fam.get(p.jemaat.id) ?? null),
         status: (p.status === 'HADIR' ? 'JOIN' : 'NONE') as 'JOIN' | 'NONE',
         checkedInAt: p.attendedAt,
-        // Event berbayar: belum lunas → tidak bisa self check-in.
-        disabledReason:
-          !paid && p.status !== 'BAYAR' && p.status !== 'HADIR' ? 'Pembayaran belum terverifikasi' : null,
+        // Wajib bayar (berbayar / sukarela dengan minimum) & belum lunas → tidak bisa self check-in.
+        disabledReason: paymentOkForCheckin(event, p.status) ? null : 'Pembayaran belum terverifikasi',
       },
     }));
 }

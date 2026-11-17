@@ -91,6 +91,8 @@ import { notDiscoverableByPhone, privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
 import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
 import { tzOr } from '../../lib/tz.js';
+import { getLastMeetingMap } from '../../lib/homecell-last-attendance.js';
+import { todayWib } from '../../lib/last-attendance.js';
 import { canCancelCheckin, canCancelReservasi } from '../../lib/reservasi-window.js';
 import { ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
@@ -894,20 +896,62 @@ meRouter.get('/homecell-area-managed', async (req, res) => {
     where: { isActive: true, OR: [{ picJemaatId: jemaatId }, { pastors: { some: { jemaatId } } }] },
     include: {
       cabang: { select: { id: true, nama: true } },
+      picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
       _count: { select: { homecells: true } },
     },
     orderBy: { nama: 'asc' },
   });
+  const stats = await zoneStats(data.map((a) => a.id));
   res.json({
     success: true,
-    data: data.map((r) => ({
+    data: data.map(({ picJemaat, ...r }) => ({
       ...r,
       homecellCount: r._count.homecells,
       // 2.4.6: app membedakan PIC (boleh ubah zona) dan pastor (lihat saja).
       myRole: r.picJemaatId === jemaatId ? 'PIC' : 'PASTOR',
+      // 2.4.9: kartu zona di Beranda (field baru — app lama mengabaikan).
+      zoneLeader: picJemaat,
+      stats: stats.get(r.id) ?? { homecells: 0, members: 0, met7: 0, notMet14: 0, noSchedule: 0 },
     })),
   });
 });
+
+/**
+ * Ringkasan zona untuk kartu Beranda (homecell aktif saja):
+ *   homecells  jumlah homecell aktif
+ *   members    anggota aktif di homecell-homecell tsb
+ *   met7       homecell yang bertemu (ada kehadiran) dalam 7 hari terakhir
+ *   notMet14   homecell yang belum bertemu > 14 hari (atau belum pernah)
+ *   noSchedule homecell tanpa jadwal pertemuan mendatang
+ */
+async function zoneStats(areaIds: string[]) {
+  const out = new Map<string, { homecells: number; members: number; met7: number; notMet14: number; noSchedule: number }>();
+  if (!areaIds.length) return out;
+  const hcs = await prisma.homecell.findMany({
+    where: { areaId: { in: areaIds }, isActive: true },
+    select: { id: true, areaId: true, _count: { select: { members: { where: { isActive: true } } } } },
+  });
+  const ids = hcs.map((h) => h.id);
+  const today = todayWib();
+  const [lastMap, upcoming] = await Promise.all([
+    getLastMeetingMap(ids),
+    ids.length
+      ? prisma.homecellSchedule.groupBy({ by: ['homecellId'], where: { homecellId: { in: ids }, tanggal: { gte: today } } })
+      : Promise.resolve([] as { homecellId: string }[]),
+  ]);
+  const hasUpcoming = new Set(upcoming.map((u) => u.homecellId));
+  for (const id of areaIds) out.set(id, { homecells: 0, members: 0, met7: 0, notMet14: 0, noSchedule: 0 });
+  for (const h of hcs) {
+    const s = out.get(h.areaId)!;
+    s.homecells++;
+    s.members += h._count.members;
+    const ago = lastMap.get(h.id)?.lastMeetingDaysAgo ?? null;
+    if (ago !== null && ago <= 6) s.met7++;
+    if (ago === null || ago > 14) s.notMet14++;
+    if (!hasUpcoming.has(h.id)) s.noSchedule++;
+  }
+  return out;
+}
 
 /**
  * Zona saya (2.4.6) — zona dari homecell yang saya ikuti (anggota aktif / PIC

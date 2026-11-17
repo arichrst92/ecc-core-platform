@@ -523,7 +523,7 @@ interface PendaftaranRow {
 
 const STATUS_PEND: Record<PendaftaranRow['status'], { label: string; cls: string }> = {
   BUKA: { label: 'Buka pendaftaran', cls: 'bg-emerald-100 text-emerald-800' },
-  MENERIMA: { label: 'Menerima (default)', cls: 'bg-neutral-100 text-neutral-600' },
+  MENERIMA: { label: 'Belum dibuka', cls: 'bg-neutral-100 text-neutral-600' },
   TUTUP: { label: 'Tutup', cls: 'bg-red-100 text-red-700' },
 };
 
@@ -562,13 +562,17 @@ function PendaftaranPanel({ pelayananId }: { pelayananId: string }) {
         <span className="font-semibold text-neutral-900">
           Pendaftaran per cabang
           <span className="ml-2 text-xs font-normal text-neutral-500">
-            {nBuka} buka · {nTutup} tutup · {rows.length - nBuka - nTutup} default
+            {nBuka} buka · {nTutup} tutup · {rows.length - nBuka - nTutup} belum dibuka
           </span>
         </span>
         {open ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
       </button>
       {open ? (
         <div className="border-t border-neutral-100 divide-y divide-neutral-100">
+          <p className="px-4 py-2 text-xs text-neutral-500 bg-neutral-50">
+            Jemaat hanya bisa mendaftar di cabang yang statusnya <b>Buka pendaftaran</b>. Cabang yang belum dibuka atau ditutup tidak
+            menampilkan tombol Gabung di app.
+          </p>
           {rows.map((r) => (
             <div key={r.cabangId} className="px-4 py-2.5 flex flex-wrap items-center gap-2">
               <span className="font-medium text-neutral-900 w-40">{r.cabangNama}</span>

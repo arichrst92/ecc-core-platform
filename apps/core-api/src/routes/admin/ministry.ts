@@ -185,8 +185,9 @@ ministryRouter.get('/', async (req, res) => {
     avatars: m.jemaatPelayanan.map((jp) => ({ id: jp.jemaat.id, namaLengkap: jp.jemaat.namaLengkap, fotoUrl: jp.jemaat.fotoUrl })),
     memberCount: m._count.jemaatPelayanan,
     pendingRequestCount: pendingByMinistry.get(m.id) ?? 0,
-    // Menerima pendaftaran dari cabang saya (app lama memakai field ini untuk tombol Gabung).
-    isOpen: infoOrDefault(pendMap, m.id, myCabangId, m.isActive)?.status !== 'TUTUP' && m.isActive,
+    // Tombol Gabung (app lama & baru): hanya bila cabang saya MEMBUKA pendaftaran
+    // (2026-12) — tanpa pengaturan = belum dibuka.
+    isOpen: infoOrDefault(pendMap, m.id, myCabangId, m.isActive)?.status === 'BUKA' && m.isActive,
     leader: m.jemaatPelayanan[0]
       ? {
           jemaat: m.jemaatPelayanan[0].jemaat,
@@ -383,8 +384,8 @@ ministryRouter.get('/:id', async (req, res) => {
       deskripsi: item.deskripsi,
       ikon: item.ikon,
       warna: item.warna,
-      // Menerima pendaftaran dari cabang saya (app lama: tombol Gabung).
-      isOpen: item.isActive && myPend?.status !== 'TUTUP',
+      // Tombol Gabung: hanya bila cabang saya membuka pendaftaran (2026-12).
+      isOpen: item.isActive && myPend?.status === 'BUKA',
       pendaftaran: myPend,
       // Hitung orang unik — satu jemaat bisa punya beberapa role di pelayanan yang sama.
       memberCount: new Set(item.jemaatPelayanan.map((jp) => jp.jemaat.id)).size,
@@ -459,8 +460,16 @@ ministryRouter.post('/:id/join', async (req, res) => {
           select: { isOpen: true, tutupOtomatis: true },
         })
       : null;
-    if (resolveStatus(row) === 'TUTUP') {
-      throw new ApiError(403, 'PENDAFTARAN_TUTUP', `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} sedang ditutup.`);
+    // Hanya cabang yang MEMBUKA pendaftaran (tanpa pengaturan = belum dibuka).
+    const st = resolveStatus(row);
+    if (st !== 'BUKA') {
+      throw new ApiError(
+        403,
+        'PENDAFTARAN_TUTUP',
+        st === 'TUTUP'
+          ? `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} sedang ditutup.`
+          : `Pendaftaran ${ministry.nama} di ${pem?.cabang.nama ?? 'cabang Anda'} belum dibuka. Hubungi koordinator pelayanan di cabang Anda.`,
+      );
     }
   }
   if (ministry.roles.length === 0) {

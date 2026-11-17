@@ -1,8 +1,11 @@
 /**
  * Status pendaftaran pelayanan per cabang (lihat model PelayananPendaftaran).
  *
- *   - Tanpa baris            → MENERIMA (perilaku lama), tanpa badge.
+ *   - Tanpa baris            → MENERIMA = "belum dibuka" (2026-12: request ditolak,
+ *                              tombol Gabung tidak tampil). Nama nilai dipertahankan
+ *                              supaya app lama tetap bisa membaca.
  *   - isOpen=true            → BUKA (badge "Buka pendaftaran"), sampai tutupOtomatis lewat.
+ *                              Hanya status ini yang menerima pendaftaran.
  *   - isOpen=false / lewat   → TUTUP (request baru ditolak).
  * Pelayanan nonaktif selalu TUTUP. Patokan = cabang jemaat yang mendaftar.
  */

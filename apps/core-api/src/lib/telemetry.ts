@@ -22,6 +22,8 @@ const routeSchema = z
 
 export const telemetrySchema = z.object({
   installId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+  /** ID kiriman (app ≥ 2.4.9). Kiriman ulang dengan ID sama tidak dihitung dua kali. */
+  batchId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
   platform: z.enum(PLATFORMS),
   appVersion: z.string().max(20).optional(),
   mode: z.enum(['login', 'tamu']),
@@ -99,8 +101,30 @@ export function presenceHistory(n = 30) {
 
 // ------------------------------------------------------------------ ingest
 
+/**
+ * Kiriman yang sudah disimpan (installId:batchId → waktu). App mengirim ulang
+ * batch yang sama bila jawaban server tidak sampai (jaringan putus setelah
+ * server menyimpan) → tanpa ini kunjungan terhitung dua kali. Cukup di memori:
+ * core-api 1 proses; app mengulang dalam hitungan menit–jam.
+ */
+const seenBatches = new Map<string, number>();
+const SEEN_TTL_MS = 48 * 3_600_000;
+const SEEN_MAX = 200_000;
+let seenInserts = 0;
+function pruneSeen(now: number) {
+  if (++seenInserts % 1000 !== 0 && seenBatches.size <= SEEN_MAX) return;
+  // Map berurutan sesuai waktu masuk → hapus dari yang tertua.
+  for (const [k, t] of seenBatches) {
+    if (now - t <= SEEN_TTL_MS && seenBatches.size <= SEEN_MAX) break;
+    seenBatches.delete(k);
+  }
+}
+
 export async function ingestTelemetry(input: TelemetryInput) {
   touchPresence(input.installId, { route: input.route ?? null, platform: input.platform, mode: input.mode });
+
+  const batchKey = input.batchId ? `${input.installId}:${input.batchId}` : null;
+  if (batchKey && seenBatches.has(batchKey)) return; // kiriman ulang — sudah dihitung
 
   // Kunjungan halaman — tambahkan ke baris harian (satu INSERT … ON CONFLICT per baris).
   const today = new Date();
@@ -117,6 +141,12 @@ export async function ingestTelemetry(input: TelemetryInput) {
         mode = EXCLUDED.mode,
         platform = EXCLUDED.platform,
         app_version = COALESCE(EXCLUDED.app_version, page_view_daily.app_version)`;
+  }
+
+  if (batchKey) {
+    const now = Date.now();
+    seenBatches.set(batchKey, now);
+    pruneSeen(now);
   }
 
   for (const a of input.api) {

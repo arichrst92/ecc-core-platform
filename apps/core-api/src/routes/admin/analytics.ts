@@ -38,6 +38,32 @@ function filterOf(req: Request) {
 }
 type F = ReturnType<typeof filterOf>;
 
+/**
+ * Rute "penghubung" (deep link / tautan lama) yang langsung dialihkan ke layar
+ * aslinya — tercatat sebagai kunjungan kedua untuk satu buka halaman, jadi
+ * tidak dihitung (data lama pun ikut bersih).
+ */
+const REDIRECT_ROUTES = [
+  '/news/[id]',
+  '/renungan/[id]',
+  '/event/[id]/pembayaran',
+  '/local-market/[id]',
+  '/local-market/[id]/item/[itemId]',
+  '/worship/song/[id]',
+];
+/** Rute berbeda untuk layar yang sama → digabung jadi satu baris. */
+const ROUTE_ALIAS: Record<string, string> = {
+  '/resolution': '/resolusi', // tab menu bawah (2.4.9) = halaman Resolusi
+};
+
+/** page_view_daily dengan rute kanonik & tanpa rute penghubung. Pakai: FROM ${PV} pv */
+const canonRoute = Prisma.sql`CASE route ${Prisma.join(
+  Object.entries(ROUTE_ALIAS).map(([a, c]) => Prisma.sql`WHEN ${a} THEN ${c}`),
+  ' ',
+)} ELSE route END`;
+const PV = Prisma.sql`(SELECT date, install_id, ${canonRoute} AS route, platform, mode, views, duration_sec
+  FROM page_view_daily WHERE route NOT IN (${Prisma.join(REDIRECT_ROUTES)}))`;
+
 /** Kondisi WHERE untuk page_view_daily (tanpa rentang tanggal). */
 function pvFilter(f: F) {
   const parts: Prisma.Sql[] = [];
@@ -60,25 +86,25 @@ export async function computePageSummary(f: F) {
   const [cur] = await prisma.$queryRaw<{ users: bigint; views: bigint; dur: bigint; userdays: bigint }[]>`
     SELECT COUNT(DISTINCT install_id) AS users, COALESCE(SUM(views),0) AS views, COALESCE(SUM(duration_sec),0) AS dur,
            COUNT(DISTINCT (install_id, date)) AS userdays
-    FROM page_view_daily WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w}`;
+    FROM ${PV} pv WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w}`;
   const [prev] = await prisma.$queryRaw<{ users: bigint }[]>`
-    SELECT COUNT(DISTINCT install_id) AS users FROM page_view_daily
+    SELECT COUNT(DISTINCT install_id) AS users FROM ${PV} pv
     WHERE date BETWEEN ${prevStart}::date AND ${prevEnd}::date ${w}`;
   const byMode = await prisma.$queryRaw<{ mode: string; dur: bigint; userdays: bigint }[]>`
     SELECT mode, COALESCE(SUM(duration_sec),0) AS dur, COUNT(DISTINCT (install_id, date)) AS userdays
-    FROM page_view_daily WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY mode`;
+    FROM ${PV} pv WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY mode`;
   const byPlatform = await prisma.$queryRaw<{ platform: string; users: bigint }[]>`
     SELECT platform, COUNT(DISTINCT install_id) AS users
-    FROM page_view_daily WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY platform`;
+    FROM ${PV} pv WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY platform`;
   // Retensi app: perangkat yang kembali (hari lain) dalam 7 hari setelah kunjungan pertamanya di periode.
   const [ret] = await prisma.$queryRaw<{ eligible: bigint; returned: bigint }[]>`
     WITH firsts AS (
-      SELECT install_id, MIN(date) AS d0 FROM page_view_daily
+      SELECT install_id, MIN(date) AS d0 FROM ${PV} pv
       WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY install_id
     )
     SELECT COUNT(*) FILTER (WHERE d0 <= ${addDays(f.end, -7)}::date) AS eligible,
            COUNT(*) FILTER (WHERE d0 <= ${addDays(f.end, -7)}::date AND EXISTS (
-             SELECT 1 FROM page_view_daily p WHERE p.install_id = firsts.install_id
+             SELECT 1 FROM ${PV} p WHERE p.install_id = firsts.install_id
                AND p.date > firsts.d0 AND p.date <= firsts.d0 + 7)) AS returned
     FROM firsts`;
 
@@ -94,7 +120,7 @@ export async function computePageSummary(f: F) {
 
   return {
       activeUsers: users,
-      activeUsersDeltaPct: n(prev?.users) ? Math.round(((users - n(prev?.users)) / n(prev?.users)) * 100) : null,
+      activeUsersDeltaPct: f.periode !== 'today' && n(prev?.users) ? Math.round(((users - n(prev?.users)) / n(prev?.users)) * 100) : null,
       views: n(cur?.views),
       return7: n(ret?.eligible) ? Math.round((n(ret?.returned) / n(ret?.eligible)) * 100) : null,
       avgSessionSec: avg(cur ? [{ dur: cur.dur, userdays: cur.userdays }] : []),
@@ -115,17 +141,17 @@ export async function computePages(f: F) {
   const w = pvFilter(f);
   const rows = await prisma.$queryRaw<{ route: string; views: bigint; visitors: bigint; dur: bigint }[]>`
     SELECT route, SUM(views) AS views, COUNT(DISTINCT install_id) AS visitors, SUM(duration_sec) AS dur
-    FROM page_view_daily WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w}
+    FROM ${PV} pv WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w}
     GROUP BY route ORDER BY views DESC LIMIT 200`;
   const ret = await prisma.$queryRaw<{ route: string; e7: bigint; r7: bigint; e30: bigint; r30: bigint }[]>`
     WITH firsts AS (
-      SELECT route, install_id, MIN(date) AS d0 FROM page_view_daily
+      SELECT route, install_id, MIN(date) AS d0 FROM ${PV} pv
       WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY route, install_id
     ), flagged AS (
       SELECT f.route, f.d0,
-        EXISTS (SELECT 1 FROM page_view_daily p WHERE p.route = f.route AND p.install_id = f.install_id
+        EXISTS (SELECT 1 FROM ${PV} p WHERE p.route = f.route AND p.install_id = f.install_id
                 AND p.date > f.d0 AND p.date <= f.d0 + 7) AS back7,
-        EXISTS (SELECT 1 FROM page_view_daily p WHERE p.route = f.route AND p.install_id = f.install_id
+        EXISTS (SELECT 1 FROM ${PV} p WHERE p.route = f.route AND p.install_id = f.install_id
                 AND p.date > f.d0 AND p.date <= f.d0 + 30) AS back30
       FROM firsts f
     )
@@ -166,9 +192,10 @@ analyticsRouter.get('/pages', async (req, res) => {
 analyticsRouter.get('/pages/detail', async (req, res) => {
   const f = filterOf(req);
   const w = pvFilter(f);
-  const route = typeof req.query.route === 'string' ? req.query.route.slice(0, 160) : '/';
+  const rawRoute = typeof req.query.route === 'string' ? req.query.route.slice(0, 160) : '/';
+  const route = ROUTE_ALIAS[rawRoute] ?? rawRoute;
   const daily = await prisma.$queryRaw<{ date: Date; visitors: bigint }[]>`
-    SELECT date, COUNT(DISTINCT install_id) AS visitors FROM page_view_daily
+    SELECT date, COUNT(DISTINCT install_id) AS visitors FROM ${PV} pv
     WHERE route = ${route} AND date BETWEEN ${f.start}::date AND ${f.end}::date ${w}
     GROUP BY date ORDER BY date`;
   const byDate = new Map(daily.map((d) => [ymd(d.date), n(d.visitors)]));
@@ -178,7 +205,7 @@ analyticsRouter.get('/pages/detail', async (req, res) => {
   const cohortStart = addDays(f.end, -41);
   const coh = await prisma.$queryRaw<{ wk: Date; k: number; users: bigint }[]>`
     WITH v AS (
-      SELECT install_id, date_trunc('week', date)::date AS wk FROM page_view_daily
+      SELECT install_id, date_trunc('week', date)::date AS wk FROM ${PV} pv
       WHERE route = ${route} AND date BETWEEN ${cohortStart}::date AND ${f.end}::date ${w}
       GROUP BY install_id, date_trunc('week', date)
     ), firsts AS (SELECT install_id, MIN(wk) AS c FROM v GROUP BY install_id)
@@ -238,7 +265,16 @@ analyticsRouter.get('/live', (_req, res) => {
 
 /** Alur penting → pola endpoint (method + route ternormalisasi). */
 const FLOWS: { key: string; label: string; match: [string, string][]; note?: string }[] = [
-  { key: 'login', label: 'Login (OTP)', match: [['POST', '/auth/otp/verify']], note: '4xx (kode salah) tidak dihitung gagal' },
+  {
+    key: 'login',
+    label: 'Login (OTP / email)',
+    match: [
+      ['POST', '/auth/otp/verify'],
+      ['POST', '/auth/email-otp/verify'],
+      ['POST', '/auth/email/verify-magic-link'],
+    ],
+    note: '4xx (kode salah) tidak dihitung gagal',
+  },
   {
     key: 'checkin',
     label: 'Check-in ibadah',
@@ -445,7 +481,7 @@ analyticsRouter.get('/export', async (req, res) => {
     computePages(f),
     computeApiPerformance(f),
     prisma.$queryRaw<{ date: Date; users: bigint; views: bigint }[]>`
-      SELECT date, COUNT(DISTINCT install_id) AS users, SUM(views) AS views FROM page_view_daily
+      SELECT date, COUNT(DISTINCT install_id) AS users, SUM(views) AS views FROM ${PV} pv
       WHERE date BETWEEN ${f.start}::date AND ${f.end}::date ${w} GROUP BY date ORDER BY date`,
   ]);
   const byDate = new Map(daily.map((d) => [ymd(d.date), d]));

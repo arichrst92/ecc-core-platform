@@ -163,7 +163,9 @@ export async function flushApiMetrics(all = false) {
 }
 
 /** Path yang tidak diukur: streaming/unduhan panjang, upload, file statis, health. */
-const SKIP = [/^\/worship-media/, /^\/upload/, /^\/uploads/, /^\/health/, /^\/docs/, /^\/favicon/];
+// /telemetry: kiriman analitik app tiap 30 dtk per perangkat — bukan aktivitas
+// jemaat; kalau dihitung, "total request" & "request/menit" membengkak.
+const SKIP = [/^\/worship-media/, /^\/upload/, /^\/uploads/, /^\/health/, /^\/docs/, /^\/favicon/, /^\/telemetry/];
 
 /** Middleware: ukur waktu proses setiap request API (dipasang sebelum router). */
 export const apiMetricsMiddleware: RequestHandler = (req, res, next) => {

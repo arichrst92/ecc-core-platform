@@ -97,7 +97,7 @@ export function WebActionPanel({
     setMessage(null);
     const amount = Number(donasiNominal);
     if (!Number.isFinite(amount) || amount < MIN_BEBAS) {
-      setMessage({ type: 'err', text: L(`Nominal donasi minimal Rp ${rupiah(MIN_BEBAS)}.`, `Minimum donation is Rp ${rupiah(MIN_BEBAS)}.`) });
+      setMessage({ type: 'err', text: L(`Nominal sukarela minimal Rp ${rupiah(MIN_BEBAS)}.`, `Minimum voluntary amount is Rp ${rupiah(MIN_BEBAS)}.`) });
       return;
     }
     if (!donasiFile) {

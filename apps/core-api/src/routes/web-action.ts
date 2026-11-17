@@ -323,7 +323,14 @@ webActionRouter.post('/event/:eventId/donations', requireWebSession, flexImageUp
     },
     select: { id: true },
   });
-  const buktiTransferUrl = await saveEventDonationBukti(created.id, req.file.buffer);
+  // Simpan file gagal → hapus baris supaya tidak ada pembayaran tanpa bukti.
+  let buktiTransferUrl: string;
+  try {
+    buktiTransferUrl = await saveEventDonationBukti(created.id, req.file.buffer);
+  } catch (e) {
+    await prisma.eventDonation.delete({ where: { id: created.id } }).catch(() => undefined);
+    throw e;
+  }
   const donation = await prisma.eventDonation.update({
     where: { id: created.id },
     data: { buktiTransferUrl },

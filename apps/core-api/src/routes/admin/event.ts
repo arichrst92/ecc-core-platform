@@ -217,7 +217,8 @@ const W = (level: 'read' | 'write' | 'delete' = 'write'): any => (req: import('e
 };
 /** Pengelola event (Fulltimer / akses menu Event tulis). */
 async function isEventManager(req: import('express').Request): Promise<boolean> {
-  if (!req.user) return false;
+  // Sesi tautan web (pembayaran) selalu level jemaat.
+  if (!req.user || (req as { webAction?: unknown }).webAction) return false;
   return !!req.user.isFulltimer || (await hasMenuAccessFor(req.user, 'event', 'write'));
 }
 
@@ -936,8 +937,9 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
-  // Pendaftaran online dari app ditutup saat event dimulai → walk-in di lokasi.
-  if (isMobileClient(req)) {
+  // Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di
+  // lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan.
+  if (!(await isEventManager(req))) {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
@@ -1127,8 +1129,9 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
-  // Pendaftaran online dari app ditutup saat event dimulai → walk-in di lokasi.
-  if (isMobileClient(req)) {
+  // Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di
+  // lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan.
+  if (!(await isEventManager(req))) {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;

@@ -3,6 +3,7 @@ import { requireAuth } from '../../middleware/require-auth.js';
 import { sinodeRouter } from './sinode.js';
 import { cabangRouter } from './cabang.js';
 import { jemaatRouter } from './jemaat.js';
+import { pendingCountsRouter } from './pending-counts.js';
 import { jemaatDuplicateRouter } from './jemaat-duplicate.js';
 import { roleRouter } from './role.js';
 import { ibadahRouter } from './ibadah.js';
@@ -87,6 +88,8 @@ adminRouter.use('/it-minister-team', itMinisterTeamRouter);
 adminRouter.use('/wa-config', waConfigRouter);
 // Broadcast → Announcement (menu 'announcement').
 adminRouter.use('/announcement', announcementRouter);
+// Badge menu Portal — jumlah request menunggu tindakan admin.
+adminRouter.use('/pending-counts', pendingCountsRouter);
 
 adminRouter.use('/sinode', sinodeRouter);
 adminRouter.use('/cabang', cabangRouter);

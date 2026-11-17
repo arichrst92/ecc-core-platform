@@ -80,6 +80,7 @@ import {
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
 import { useAuthStore } from '@/lib/auth-store';
+import { PENDING_META, badgeText, usePendingCounts, type PendingCounts, type PendingKey } from '@/lib/pending-counts';
 
 interface NavItem {
   href: string;
@@ -88,6 +89,8 @@ interface NavItem {
   menuKey?: string;
   /** External URL (open in new tab). Kalau true, href boleh https:// */
   external?: boolean;
+  /** Badge request menunggu tindakan (GET /admin/pending-counts). */
+  badge?: PendingKey;
 }
 
 interface NavGroup {
@@ -123,7 +126,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, menuKey: 'ibadah' },
       { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, menuKey: 'kategori-ibadah' },
       { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan' },
-      { href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', icon: UserPlus, menuKey: 'ministry-join-requests' },
+      { href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', icon: UserPlus, menuKey: 'ministry-join-requests', badge: 'volunteer' },
       { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
       { href: '/dashboard/laporan-ibadah', label: 'Laporan Ibadah', icon: BarChart3, menuKey: 'laporan-ibadah' },
     ],
@@ -132,13 +135,13 @@ const GROUPS: NavGroup[] = [
     label: 'People',
     icon: Users,
     items: [
-      { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, menuKey: 'jemaat' },
+      { href: '/dashboard/jemaat', label: 'Jemaat', icon: Users, menuKey: 'jemaat', badge: 'jemaatDuplicate' },
       { href: '/dashboard/role', label: 'Role Jemaat', icon: Shield, menuKey: 'role-jemaat' },
       { href: '/dashboard/tipe-relasi', label: 'Relasi Jemaat', icon: Heart, menuKey: 'tipe-relasi' },
-      { href: '/dashboard/feedback', label: 'Kritik & Saran', icon: MessageSquareText, menuKey: 'feedback' },
-      { href: '/dashboard/prayer-request', label: 'Prayer Request', icon: HandHeart, menuKey: 'prayer-request' },
+      { href: '/dashboard/feedback', label: 'Kritik & Saran', icon: MessageSquareText, menuKey: 'feedback', badge: 'feedback' },
+      { href: '/dashboard/prayer-request', label: 'Prayer Request', icon: HandHeart, menuKey: 'prayer-request', badge: 'prayer' },
       { href: '/dashboard/bible365', label: 'Bible 365', icon: BookOpen, menuKey: 'bible365' },
-      { href: '/dashboard/tamu', label: 'Tamu', icon: Contact, menuKey: 'tamu' },
+      { href: '/dashboard/tamu', label: 'Tamu', icon: Contact, menuKey: 'tamu', badge: 'tamu' },
     ],
   },
   {
@@ -154,10 +157,10 @@ const GROUPS: NavGroup[] = [
     label: 'Movement',
     icon: Megaphone,
     items: [
-      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event' },
+      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event', badge: 'eventPayment' },
       { href: '/dashboard/laporan-event', label: 'Laporan Event', icon: BarChart3, menuKey: 'laporan-event' },
       { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
-      { href: '/dashboard/spiritual-journey', label: 'Spiritual Journey', icon: Footprints, menuKey: 'spiritual-journey' },
+      { href: '/dashboard/spiritual-journey', label: 'Spiritual Journey', icon: Footprints, menuKey: 'spiritual-journey', badge: 'sjRequest' },
       { href: '/dashboard/local-business', label: 'Local Market', icon: Store, menuKey: 'local-business' },
     ],
   },
@@ -279,6 +282,9 @@ export function BottomDock() {
     setOpenGroup(null);
   }, [pathname]);
 
+  // Badge request menunggu tindakan (grup + menu tujuan).
+  const pending = usePendingCounts();
+
   // Filter groups berdasarkan menuAccess
   const visibleGroups = GROUPS.map((g) => {
     const filteredItems = g.items.filter((item) => {
@@ -348,6 +354,7 @@ export function BottomDock() {
             open={openGroup === g.label}
             active={isGroupActive(g)}
             pathname={pathname}
+            pending={pending}
             onToggle={() => setOpenGroup((prev) => (prev === g.label ? null : g.label))}
             onNavigate={(href, external) => {
               setOpenGroup(null);
@@ -434,6 +441,7 @@ function DockGroup({
   open,
   active,
   pathname,
+  pending,
   onToggle,
   onNavigate,
 }: {
@@ -441,10 +449,17 @@ function DockGroup({
   open: boolean;
   active: boolean;
   pathname: string | null;
+  pending: PendingCounts;
   onToggle: () => void;
   onNavigate: (href: string, external?: boolean) => void;
 }) {
   const Icon = group.icon;
+  const countOf = (item: NavItem) => (item.badge ? pending[item.badge] ?? 0 : 0);
+  const groupTotal = group.items.reduce((n, it) => n + countOf(it), 0);
+  const groupTitle = group.items
+    .filter((it) => countOf(it) > 0)
+    .map((it) => `${countOf(it)} ${PENDING_META[it.badge as PendingKey].label}`)
+    .join('\n');
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ left: number; bottom: number } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -498,22 +513,36 @@ function DockGroup({
         {group.items.map((item) => {
           const ItemIcon = item.icon;
           const isActive = isItemActive(pathname, item.href);
+          const n = countOf(item);
+          const meta = item.badge ? PENDING_META[item.badge] : null;
           return (
-            <button
+            <div
               key={item.href}
-              type="button"
-              onClick={() => onNavigate(item.href, item.external)}
               className={clsx(
-                'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors',
-                isActive
-                  ? 'bg-brand-50 text-brand-700 font-medium'
-                  : 'text-neutral-700 hover:bg-neutral-50',
+                'w-full flex items-center gap-2 pr-2 text-sm transition-colors',
+                isActive ? 'bg-brand-50 text-brand-700 font-medium' : 'text-neutral-700 hover:bg-neutral-50',
               )}
             >
-              <ItemIcon className="w-4 h-4 shrink-0" />
-              <span className="flex-1 text-left">{item.label}</span>
-              {isActive && <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
-            </button>
+              <button
+                type="button"
+                onClick={() => onNavigate(item.href, item.external)}
+                className="flex-1 min-w-0 flex items-center gap-3 pl-3 py-2 text-left"
+              >
+                <ItemIcon className="w-4 h-4 shrink-0" />
+                <span className="flex-1 truncate">{item.label}</span>
+                {isActive && !n ? <span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> : null}
+              </button>
+              {n > 0 && meta ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(meta.target)}
+                  title={`${n} ${meta.label} — buka`}
+                  className="shrink-0 min-w-[22px] h-5 px-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold leading-5 text-center"
+                >
+                  {badgeText(n)}
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>
@@ -529,6 +558,7 @@ function DockGroup({
           ref={buttonRef}
           type="button"
           onClick={onToggle}
+          title={groupTitle || undefined}
           className={clsx(
             'flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl shrink-0',
             'transition-all duration-200 ease-out',
@@ -543,6 +573,14 @@ function DockGroup({
         >
           <Icon className="w-5 h-5 md:w-6 md:h-6" />
         </button>
+        {groupTotal > 0 ? (
+          <span
+            className="pointer-events-none absolute -top-1 right-0 md:-right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-5 text-center ring-2 ring-white"
+            aria-label={`${groupTotal} menunggu tindakan`}
+          >
+            {badgeText(groupTotal)}
+          </span>
+        ) : null}
 
         {/* Label di bawah icon */}
         <span

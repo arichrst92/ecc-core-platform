@@ -47,7 +47,7 @@ export const ministryRouter = Router();
  */
 type ApprovalScope = 'ALL' | Map<string, Set<string>>;
 
-async function approvalScope(req: Request): Promise<ApprovalScope> {
+export async function approvalScope(req: Request): Promise<ApprovalScope> {
   if (!req.user) return new Map();
   // Fulltimer bebas mengelola semua HANYA di Portal. Di app, Fulltimer pun
   // mengikuti otoritas yang diberikan (cabang & pelayanan tertentu).
@@ -75,7 +75,7 @@ function managedIdsOf(scope: ApprovalScope): 'ALL' | Set<string> {
 }
 
 /** Filter Prisma request join sesuai otoritas (pelayanan + cabang pemohon). */
-function scopeRequestWhere(scope: ApprovalScope, pelayananId?: string) {
+export function scopeRequestWhere(scope: ApprovalScope, pelayananId?: string) {
   if (scope === 'ALL') return pelayananId ? { pelayananId } : {};
   const entries = [...scope.entries()].filter(([pid]) => !pelayananId || pid === pelayananId);
   if (!entries.length) return { id: '00000000-0000-0000-0000-000000000000' };

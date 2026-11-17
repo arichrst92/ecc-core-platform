@@ -5,7 +5,7 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'ECC Portal — Master Data',
   description: 'Portal manajemen master data gereja & sinode ECC',
-  icons: { icon: '/logo-ecc.webp' },
+  icons: { icon: '/logo-ecc-church-square.webp' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -270,7 +270,7 @@ export function Sidebar() {
   return (
     <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
       <div className="p-6 flex items-center gap-3">
-        <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} />
+        <Image src="/logo-ecc-church.webp" alt="ECC Church" width={27} height={36} style={{ width: 'auto', height: 36 }} />
         <div>
           <div className="font-bold text-neutral-900">ECC Portal</div>
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">Master Data</div>

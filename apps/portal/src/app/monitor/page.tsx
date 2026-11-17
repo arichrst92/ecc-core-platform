@@ -207,7 +207,7 @@ function CodeScreen({ T, langSwitch, onUnlocked }: { T: MonitorText; langSwitch:
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 p-6">
         <div className="flex items-center gap-3 mb-5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-ecc.webp" alt="ECC" className="w-10 h-10 rounded-lg" />
+          <img src="/logo-ecc-church.webp" alt="ECC Church" className="h-10 w-auto" />
           <div>
             <div className="font-bold text-lg">{T.appTitle}</div>
             <div className="text-xs text-neutral-400">{T.appSub}</div>

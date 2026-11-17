@@ -324,7 +324,7 @@ export function BottomDock() {
           className="group flex flex-col items-center gap-1 shrink-0"
         >
           <div className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl hover:bg-neutral-100 transition group-hover:scale-110 group-hover:-translate-y-0.5 duration-200 ease-out">
-            <Image src="/logo-ecc.webp" alt="ECC" width={36} height={36} className="rounded md:w-9 md:h-9" />
+            <Image src="/logo-ecc-church.webp" alt="ECC Church" width={27} height={36} className="h-8 w-auto md:h-9" />
           </div>
           <span className="text-[10px] leading-tight font-medium max-w-[76px] text-center truncate text-neutral-600 group-hover:text-brand-600 transition-colors">
             ECC

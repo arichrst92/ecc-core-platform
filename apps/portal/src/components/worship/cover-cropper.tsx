@@ -21,9 +21,11 @@ interface Props {
   saveLabel?: string;
   /** Pratinjau: 'worship' (album/player) atau 'avatar' (foto profil persegi & bulat). */
   variant?: 'worship' | 'avatar' | 'banner' | 'profile';
+  /** Keterangan pratinjau varian banner (default: Announcement). */
+  bannerNote?: { label: string; detail: string };
 }
 
-export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', saveLabel = 'Simpan cover', variant = 'worship' }: Props) {
+export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', saveLabel = 'Simpan cover', variant = 'worship', bannerNote }: Props) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rot, setRot] = useState(0);
@@ -196,9 +198,9 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                 <div className="text-xs font-semibold text-neutral-600">Pratinjau</div>
                 <div>
                   <div className="w-[200px] aspect-video rounded-xl bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
-                  <div className="text-[11px] text-neutral-500 mt-1">Popup app & email</div>
+                  <div className="text-[11px] text-neutral-500 mt-1">{bannerNote?.label ?? 'Popup app & email'}</div>
                 </div>
-                <div className="text-[11px] text-neutral-500">Disimpan 1280×720 (WebP). Juga dipakai sebagai pratinjau link WhatsApp.</div>
+                <div className="text-[11px] text-neutral-500">{bannerNote?.detail ?? 'Disimpan 1280×720 (WebP). Juga dipakai sebagai pratinjau link WhatsApp.'}</div>
               </div>
             ) : variant === 'profile' ? (
               <div className="space-y-3">

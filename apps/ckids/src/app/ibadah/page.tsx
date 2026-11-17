@@ -120,8 +120,8 @@ function ScannerContent() {
     <main className="max-w-lg mx-auto p-3 sm:p-4">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
-            <ScanLine className="w-5 h-5" /> Scanner Ibadah
+          <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
+            Scanner Ibadah
           </h1>
           <p className="text-xs text-neutral-500 mt-0.5">
             Scan QR jemaat / search nama → pilih ibadah + action.

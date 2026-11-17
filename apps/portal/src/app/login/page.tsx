@@ -145,12 +145,12 @@ export default function LoginPage() {
     router.push(next && next.startsWith('/') ? next : '/dashboard');
   }
 
-  if (checkingSession) return <div className="min-h-screen fabric-cream" />;
+  if (checkingSession) return <div className="min-h-screen fabric-login" />;
 
   const target = method === 'whatsapp' ? noHp : email;
 
   return (
-    <div className="min-h-screen flex items-center justify-center fabric-cream px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center fabric-login px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Image src="/logo-ecc-church.webp" alt="ECC Church" width={89} height={120} className="mx-auto h-28 w-auto" priority />

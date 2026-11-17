@@ -362,10 +362,10 @@ function BusinessCard({
           <img
             src={`${apiBase}${b.heroImageUrl}`}
             alt={b.nama}
-            className="w-full h-32 object-cover bg-neutral-100"
+            className="w-full aspect-video object-cover bg-neutral-100"
           />
         ) : (
-          <div className="w-full h-32 bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
+          <div className="w-full aspect-video bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
             <Store className="w-8 h-8 text-brand-400" />
           </div>
         )}
@@ -470,7 +470,7 @@ function DetailModal({
             <img
               src={`${apiBase}${b.heroImageUrl}`}
               alt={b.nama}
-              className="w-full h-44 object-cover rounded-t-2xl"
+              className="w-full aspect-video shrink-0 object-cover rounded-t-2xl bg-neutral-100"
             />
           )}
           <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100 gap-3">

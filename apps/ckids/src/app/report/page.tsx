@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, BarChart3, Users, Gift, Award } from 'lucide-react';
+import { Loader2, Users, Gift, Award } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
@@ -67,8 +67,8 @@ function ReportContent() {
   return (
     <main className="max-w-6xl mx-auto p-4 space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <BarChart3 className="w-5 h-5" /> Report Hari Ini — {cabangNama}
+        <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
+          Report Hari Ini — {cabangNama}
         </h1>
         <p className="text-sm text-neutral-500">
           {new Date(q.data.date).toLocaleDateString('id-ID', {

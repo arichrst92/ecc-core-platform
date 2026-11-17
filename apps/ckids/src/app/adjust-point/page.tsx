@@ -2,17 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Award,
-  Loader2,
-  Search,
-  Plus,
-  Minus,
-  AlertTriangle,
-  RotateCcw,
-  User,
-  ScanLine,
-} from 'lucide-react';
+import { Loader2, Search, Plus, Minus, AlertTriangle, RotateCcw, User, ScanLine } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { JemaatSuggestions } from '@/components/jemaat-suggestions';
@@ -131,8 +121,8 @@ function AdjustPointContent() {
   return (
     <main className="max-w-lg mx-auto p-3 sm:p-4">
       <div className="mb-4">
-        <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
-          <Award className="w-5 h-5 text-brand-500" /> Adjust Point Manual
+        <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
+          Adjust Point Manual
         </h1>
         <p className="text-xs sm:text-sm text-neutral-500">
           {cabangNama} · Scan QR anak → input point tambah/kurang → submit.

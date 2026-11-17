@@ -5,8 +5,24 @@
 html,
 body {
   min-height: 100%;
-  background: #fff7ed;
   color: #171717;
+  /* Motif kain (sama dengan Portal & website) di atas krem → pink lembut. */
+  background-color: #fff7ed;
+  background-image: url('/textures/fabric.png'), linear-gradient(160deg, #fff7ed 0%, #fdf2f8 55%, #fce7f3 100%);
+  background-size: 190px, 100% 100%;
+  background-repeat: repeat, no-repeat;
+  background-attachment: fixed, fixed;
+  background-blend-mode: overlay, normal;
+}
+
+/* Bidang login / layar penuh yang ikut memakai motif kain. */
+.fabric-bg {
+  background-color: #fff7ed;
+  background-image: url('/textures/fabric.png'), linear-gradient(160deg, #fff7ed 0%, #ffedd5 50%, #fce7f3 100%);
+  background-size: 190px, 100% 100%;
+  background-repeat: repeat, no-repeat;
+  background-attachment: fixed, fixed;
+  background-blend-mode: overlay, normal;
 }
 
 /* Floating BottomNav (semua ukuran layar) — body diberi ruang bawah setinggi

@@ -123,14 +123,14 @@ export default function LoginPage() {
   });
 
   if (checkingSession) {
-    return <div className="min-h-screen bg-gradient-to-br from-brand-50 via-kids-50 to-white" />;
+    return <div className="min-h-screen fabric-bg" />;
   }
 
   const target = method === 'whatsapp' ? noHp : email;
   const canSend = method === 'whatsapp' ? !!noHp.trim() : email.trim().length > 5;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-brand-50 via-kids-50 to-white p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center fabric-bg p-4">
       <div className="bg-white border border-neutral-200 rounded-2xl shadow-xl w-full max-w-sm p-6 sm:p-8 space-y-6">
         <div className="text-center">
           <Image src="/logo-ckids.webp" alt="CKids — Creative Kids" width={150} height={150} className="mx-auto" priority />

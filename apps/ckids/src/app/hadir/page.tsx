@@ -2,17 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Loader2,
-  ClipboardList,
-  RefreshCw,
-  Users,
-  CheckCircle2,
-  Clock,
-  Baby,
-  Search,
-  LogOut as LogOutIcon,
-} from 'lucide-react';
+import { Loader2, RefreshCw, Users, CheckCircle2, Clock, Baby, Search, LogOut as LogOutIcon } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useCabangStore } from '@/lib/cabang-store';
 import { Header, AuthGuard } from '@/components/header';
@@ -136,8 +126,8 @@ function HadirContent() {
     <main className="max-w-6xl mx-auto p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-neutral-900 flex items-center gap-2">
-            <ClipboardList className="w-5 h-5" /> Daftar Hadir Hari Ini
+          <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
+            Daftar Hadir Hari Ini
           </h1>
           <p className="text-xs text-neutral-500">
             {cabangNama} · ibadah anak · auto-refresh 15s

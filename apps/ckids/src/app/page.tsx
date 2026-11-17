@@ -103,7 +103,7 @@ function GiftStallContent() {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-neutral-900">
-              🎁 Katalog Hadiah — {cabangNama}
+              Katalog Hadiah — {cabangNama}
             </h1>
             <p className="text-xs sm:text-sm text-neutral-500">
               {filtered ? `${list.length} dari ${all.length} hadiah` : 'Klik hadiah untuk redeem / add stock / edit.'}

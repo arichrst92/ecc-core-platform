@@ -29,6 +29,16 @@
   background-blend-mode: multiply, normal !important;
 }
 
+/* Latar login bermotif kain — tenunan terlihat jelas (overlay di atas krem → peach). */
+.fabric-login {
+  background-color: #ffedd5;
+  background-image: var(--fabric), linear-gradient(160deg, #fff7ed 0%, #ffedd5 45%, #fed7aa 100%) !important;
+  background-size: var(--fabric-size), 100% 100% !important;
+  background-repeat: repeat, no-repeat !important;
+  background-attachment: fixed, fixed;
+  background-blend-mode: overlay, normal !important;
+}
+
 html,
 body {
   background-color: var(--color-bg);

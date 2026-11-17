@@ -143,6 +143,11 @@ export interface ResourceConfig<T = Record<string, unknown>> {
   virtualChunkSize?: number;
   /** Tinggi container virtual scroll (default '70vh'). */
   virtualHeight?: string | number;
+  /**
+   * Tampilan kartu (grid) menggantikan tabel — mis. Group seperti Local Market.
+   * Hanya untuk mode pagination klasik.
+   */
+  gridCard?: (row: T, actions: { onEdit: () => void; onDelete: () => void }) => React.ReactNode;
 }
 
 export interface PaginatedResponse<T> {

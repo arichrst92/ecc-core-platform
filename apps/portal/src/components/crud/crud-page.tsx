@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Plus, Search } from 'lucide-react';
+import { Loader2, Plus, Search } from 'lucide-react';
 import { DataTable } from './data-table';
 import { VirtualDataTable } from './virtual-data-table';
 import { FormModal } from './form-modal';
@@ -145,6 +145,17 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
           onEdit={(row) => setEditing(row)}
           onDelete={(row) => setDeleting(row)}
         />
+      ) : config.gridCard ? (
+        <CardGrid<T>
+          rows={list.data?.data ?? []}
+          loading={list.isLoading}
+          render={(row) => config.gridCard!(row, { onEdit: () => setEditing(row), onDelete: () => setDeleting(row) })}
+          page={list.data?.meta.page ?? 1}
+          totalPages={list.data?.meta.totalPages ?? 1}
+          total={list.data?.meta.total ?? 0}
+          emptyText={`Belum ada ${config.labelPlural ?? config.label}.`}
+          onPageChange={setPage}
+        />
       ) : (
         <DataTable<T>
           data={list.data?.data ?? []}
@@ -214,5 +225,71 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
         }}
       />
     </div>
+  );
+}
+
+/** Grid kartu + paginasi (config.gridCard). */
+function CardGrid<T extends { id: string }>({
+  rows,
+  loading,
+  render,
+  page,
+  totalPages,
+  total,
+  emptyText,
+  onPageChange,
+}: {
+  rows: T[];
+  loading: boolean;
+  render: (row: T) => React.ReactNode;
+  page: number;
+  totalPages: number;
+  total: number;
+  emptyText: string;
+  onPageChange: (p: number) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+  if (!rows.length) {
+    return <div className="bg-white border border-neutral-200 rounded-xl text-center py-16 text-sm text-neutral-400 italic">{emptyText}</div>;
+  }
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {rows.map((r) => (
+          <div key={r.id} className="min-w-0">
+            {render(r)}
+          </div>
+        ))}
+      </div>
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between mt-4 text-xs text-neutral-500">
+          <div>
+            Halaman {page} dari {totalPages} · {total} total
+          </div>
+          <div className="flex gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              className="px-3 py-1 border border-neutral-300 rounded disabled:opacity-50 hover:bg-neutral-50 bg-white"
+            >
+              ←
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+              className="px-3 py-1 border border-neutral-300 rounded disabled:opacity-50 hover:bg-neutral-50 bg-white"
+            >
+              →
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

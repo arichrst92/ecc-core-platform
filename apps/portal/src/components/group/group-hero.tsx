@@ -1,11 +1,13 @@
 'use client';
 
 /**
- * Hero image group. Hanya PIC group yang boleh ganti/hapus
- * (kalau group belum punya PIC: admin fulltimer).
+ * Hero image group — rasio 16:9 (sama dengan app), tidak terpotong.
+ * Ganti gambar: pilih file → crop 16:9 → unggah. Hanya PIC group yang boleh
+ * ganti/hapus (kalau group belum punya PIC: admin fulltimer).
  * API: POST/DELETE /admin/group/:id/hero
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { CoverCropper } from '@/components/worship/cover-cropper';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, Loader2, Trash2, UsersRound } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -30,12 +32,13 @@ export function GroupHero({
   const user = useAuthStore((s) => s.user);
   const canEdit = !!user && (picJemaatId ? picJemaatId === user.jemaatId : user.isFulltimer);
   const ref = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['group', 'detail', groupId] });
 
   const uploadMut = useMutation({
-    mutationFn: async (f: File) => {
+    mutationFn: async (f: Blob) => {
       const fd = new FormData();
-      fd.append('file', f);
+      fd.append('file', f, 'hero.jpg');
       return apiClient.post(`/admin/group/${groupId}/hero`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120_000,
@@ -43,6 +46,7 @@ export function GroupHero({
     },
     onSuccess: () => {
       toast.success('Gambar group diperbarui');
+      setFile(null);
       refresh();
     },
     onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal upload gambar'),
@@ -60,7 +64,7 @@ export function GroupHero({
   if (!heroImageUrl && !canEdit) return null;
 
   return (
-    <div className="relative w-full h-48 md:h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-brand-400 to-brand-600">
+    <div className="relative w-full max-w-3xl aspect-video rounded-2xl overflow-hidden bg-gradient-to-br from-brand-400 to-brand-600">
       {heroImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={href(heroImageUrl)} alt={nama} className="w-full h-full object-cover" />
@@ -81,7 +85,7 @@ export function GroupHero({
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) uploadMut.mutate(f);
+              if (f) setFile(f);
               e.target.value = '';
             }}
           />
@@ -104,6 +108,19 @@ export function GroupHero({
           </button>
         </div>
       )}
+      {file ? (
+        <CoverCropper
+          file={file}
+          variant="banner"
+          title="Gambar group (16:9)"
+          saveLabel="Simpan gambar"
+          bannerNote={{ label: 'Kartu & halaman group', detail: 'Rasio 16:9 — sama dengan tampilan di Els App.' }}
+          onCancel={() => !uploadMut.isPending && setFile(null)}
+          onDone={async (blob) => {
+            await uploadMut.mutateAsync(blob).catch(() => {});
+          }}
+        />
+      ) : null}
     </div>
   );
 }

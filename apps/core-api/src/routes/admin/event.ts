@@ -407,6 +407,33 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
     });
   }
 
+  // Tim pelayanan event (petugas tiap pelayanan) — tampil di detail event app,
+  // bentuk sama dengan petugas di detail ibadah.
+  const petugasRows = await prisma.eventPelayananPetugas.findMany({
+    where: { eventPelayanan: { eventId: item.id }, jemaat: { isActive: true } },
+    select: {
+      id: true,
+      pelayananRole: { select: { nama: true, level: true } },
+      jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
+      eventPelayanan: { select: { pelayanan: { select: { nama: true, ikon: true, warna: true } } } },
+    },
+  });
+  const petugas = petugasRows
+    .map((p) => ({
+      id: p.id,
+      pelayananNama: p.eventPelayanan.pelayanan.nama,
+      pelayananIkon: p.eventPelayanan.pelayanan.ikon,
+      pelayananWarna: p.eventPelayanan.pelayanan.warna,
+      role: p.pelayananRole.nama,
+      level: p.pelayananRole.level,
+      jemaat: p.jemaat,
+    }))
+    .sort(
+      (a, b) =>
+        a.pelayananNama.localeCompare(b.pelayananNama) || b.level - a.level || a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap),
+    )
+    .map(({ level: _l, ...r }) => r);
+
   // App mobile: lokasi / jam yang dikosongkan admin dikirim sebagai "-" supaya
   // detail event menampilkan "-" (berlaku juga untuk app versi lama). Portal
   // tetap menerima nilai asli (null) agar form edit tidak ikut terisi "-".
@@ -423,6 +450,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       ...item,
       ...mobileDisplay,
       pesertaCount: item._count.partisipasi,
+      petugas,
       // Batas pendaftaran online (countdown di app) = saat event dimulai;
       // setelah itu registrasi walk-in di lokasi.
       registrationClosesAt: eventStartsAt(item, tzOr(item.cabang?.timezone)).toISOString(),

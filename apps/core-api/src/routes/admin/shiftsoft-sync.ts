@@ -485,7 +485,7 @@ shiftsoftSyncRouter.post('/preview-jemaat', async (req, res) => {
     if (existingIds.has(u.ID)) continue; // yang sudah exist tidak perlu cek collision
     const noHp = u.Phone1 ? shiftsoft.normalizePhone(u.Phone1) : null;
     if (noHp) candidateNoHps.push(noHp);
-    const email = shiftsoft.cleanString(u.Email);
+    const email = shiftsoft.cleanString(u.Email)?.trim().toLowerCase() ?? null;
     if (email) candidateEmails.push(email);
   }
   const [collidingByNoHp, collidingByEmail] = await Promise.all([
@@ -497,13 +497,13 @@ shiftsoftSyncRouter.post('/preview-jemaat', async (req, res) => {
       : Promise.resolve([]),
     candidateEmails.length > 0
       ? prisma.jemaat.findMany({
-          where: { email: { in: [...new Set(candidateEmails)] } },
+          where: { email: { in: [...new Set(candidateEmails)], mode: 'insensitive' } },
           select: { id: true, namaLengkap: true, email: true },
         })
       : Promise.resolve([]),
   ]);
   const noHpMap = new Map(collidingByNoHp.map((j) => [j.noHp!, { id: j.id, nama: j.namaLengkap }]));
-  const emailMap = new Map(collidingByEmail.map((j) => [j.email!, { id: j.id, nama: j.namaLengkap }]));
+  const emailMap = new Map(collidingByEmail.map((j) => [j.email!.toLowerCase(), { id: j.id, nama: j.namaLengkap }]));
 
   // Kategorisasi user list ke exist / new_ / redundant.
   const exist: PreviewRecord[] = [];
@@ -512,7 +512,7 @@ shiftsoftSyncRouter.post('/preview-jemaat', async (req, res) => {
 
   for (const u of users) {
     const noHp = u.Phone1 ? shiftsoft.normalizePhone(u.Phone1) : null;
-    const email = shiftsoft.cleanString(u.Email);
+    const email = shiftsoft.cleanString(u.Email)?.trim().toLowerCase() ?? null;
     const rec: PreviewRecord = {
       legacyId: u.ID,
       namaLengkap: shiftsoft.cleanString(u.Name) ?? '(tanpa nama)',

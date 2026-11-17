@@ -1,6 +1,6 @@
 # Rencana Implementasi — Login & Daftar Dua Saluran (WhatsApp / Email)
 
-Status: Fase 0 & 1 sudah di-deploy. Fase 2 (app) sudah dikerjakan di kode, menunggu build & review store. Fase 3 belum. Disusun 17 Nov 2026.
+Status: Fase 0 & 1 sudah di-deploy. Fase 2 (app) menunggu build & review store. Fase 3 sudah dikerjakan di kode (lihat 5a). Disusun 17 Nov 2026.
 Tujuan: jemaat tidak pernah buntu saat salah satu penyedia (WhatsApp / email) gangguan,
 tanpa menyimpan kontak yang belum terbukti milik jemaat.
 
@@ -234,6 +234,18 @@ lewat WhatsApp, server hanya mencocokkan nomor HP → akun baru terbuat, riwayat
 - Email notifikasi dikirim lewat antrean bertahap (seperti Announcement) supaya kuota aman.
 - Jenis yang tercakup: pengingat ibadah & event H-1, check-in event, doa, keluarga, group,
   ministry, homecell, pindah cabang, ulang tahun, dan lain-lain yang ada di `wa_notification_config`.
+
+### 5a. Catatan implementasi Fase 3 (17 Nov 2026)
+- Tidak merombak ± 40 titik kode: saluran diterapkan di `createNotification` / `createNotificationBatch`
+  (in-app bisa dimatikan + email ikut dikirim dari judul & isi notifikasi in-app) dan di job pengingat
+  H-1 / ulang tahun (`notifyScheduled`). WhatsApp tetap lewat `wa_notification_config.is_enabled`.
+- Tabel `notification_channel_config` (tanpa baris = default katalog `lib/notif-channels.ts` = perilaku lama:
+  in-app seperti sebelumnya, pengingat/ucapan in-app mati, email mati). `notification_dedup` mencegah
+  pengingat in-app/email terkirim ganda.
+- Jenis in-app baru: `IBADAH_REMINDER`, `EVENT_REMINDER`, `BIRTHDAY_GREETING` (app lama menampilkan ikon lonceng).
+- Email lewat antrean bertahap (`NOTIF_EMAIL_DELAY_MS`, default 1,5 dtk; maks antrean `NOTIF_EMAIL_MAX_QUEUE`),
+  tombol "Buka di Els App" ke `ELSAPP_WEB_URL` + actionUrl, menghormati preferensi pesan jemaat.
+- Portal: WhatsApp Config → **Saluran notifikasi** (tabel jenis × In-app / WhatsApp / Email / Email bila tanpa WA).
 
 ---
 

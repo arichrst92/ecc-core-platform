@@ -64,7 +64,8 @@ export function mapLegacyUserToJemaat(
 
   // Email @shiftsoft.org = email palsu bawaan Shiftsoft → abaikan.
   const emailRaw = cleanString(u.Email);
-  const email = emailRaw && /@([a-z0-9-]+\.)*shiftsoft\.org$/i.test(emailRaw.trim()) ? null : emailRaw;
+  // Email disimpan huruf kecil (2026-12) supaya cocok dengan login & cek ganda.
+  const email = emailRaw && /@([a-z0-9-]+\.)*shiftsoft\.org$/i.test(emailRaw.trim()) ? null : emailRaw?.trim().toLowerCase() ?? null;
   const noHpRaw = cleanString(u.Phone1);
   const noHp = noHpRaw ? normalizePhone(noHpRaw) : null;
   if (noHpRaw && !noHp) {

@@ -2217,6 +2217,10 @@ enum InAppNotifType {
   MINISTRY_DUTY_ASSIGNED
   MINISTRY_DUTY_REMOVED
   ANNOUNCEMENT
+  // Pengingat & ucapan di feed app (saluran notifikasi per jenis, 2026-12)
+  IBADAH_REMINDER
+  EVENT_REMINDER
+  BIRTHDAY_GREETING
 
   @@map("in_app_notif_type")
 }
@@ -4435,4 +4439,29 @@ model DuplicateCandidate {
   @@unique([newJemaatId, oldJemaatId])
   @@index([status, createdAt])
   @@map("duplicate_candidate")
+}
+
+/// Saluran per jenis notifikasi (Portal → WhatsApp Config → Saluran notifikasi).
+/// WhatsApp tetap diatur di wa_notification_config.is_enabled. Baris tidak ada =
+/// default katalog (lib/notif-channels.ts) — perilaku lama.
+model NotificationChannelConfig {
+  type             String   @id @db.VarChar(64)
+  inApp            Boolean  @map("in_app")
+  email            Boolean  @default(false)
+  /// Kirim email bila jemaat tidak punya nomor WhatsApp.
+  waFallbackEmail  Boolean  @default(false) @map("wa_fallback_email")
+  updatedByUserId  String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_channel_config")
+}
+
+/// Penanda "sudah dikirim" untuk notifikasi terjadwal (in-app / email) agar
+/// tidak terkirim ganda saat job berjalan ulang.
+model NotificationDedup {
+  dedupKey  String   @id @map("dedup_key") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("notification_dedup")
 }

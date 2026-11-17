@@ -35,6 +35,8 @@ import {
 import { describeInvalidPhone, normalizePhoneNumber } from '@ecc/shared-types';
 import { otpChannelStats, tickWaOtpHealth, waOtpHealthState } from '../../lib/wa-otp-health.js';
 import { appVersionStats } from '../../lib/app-version-stats.js';
+import { catalogByKey, listNotifChannels, saveNotifChannel } from '../../lib/notif-channels.js';
+import { notifEmailQueueSize } from '../../lib/notif-email.js';
 
 export const waConfigRouter = Router();
 
@@ -157,6 +159,52 @@ waConfigRouter.post('/gateway/test', async (req, res) => {
   } catch (err) {
     res.json({ success: true, data: { ok: false, provider, error: (err as Error).message, gateway: await gatewayView() } });
   }
+});
+
+/**
+ * Saluran notifikasi per jenis (In-app / WhatsApp / Email).
+ *   GET   /admin/wa-config/channels
+ *   PATCH /admin/wa-config/channels/:key { inApp?, email?, waFallbackEmail?, whatsapp? }
+ * WhatsApp = wa_notification_config.is_enabled (butuh template terisi).
+ */
+waConfigRouter.get('/channels', async (_req, res) => {
+  res.json({ success: true, data: await listNotifChannels(), meta: { emailQueue: notifEmailQueueSize() } });
+});
+
+waConfigRouter.patch('/channels/:key', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const key = String(req.params.key);
+  const item = catalogByKey(key);
+  if (!item) throw NotFound('Jenis notifikasi tidak dikenal');
+  const patch = z
+    .object({ inApp: z.boolean(), email: z.boolean(), waFallbackEmail: z.boolean(), whatsapp: z.boolean() })
+    .partial()
+    .parse(req.body ?? {});
+  const before = (await listNotifChannels()).find((r) => r.key === key);
+  if (patch.inApp !== undefined && !item.inAppType) throw BadRequest('Jenis ini tidak punya notifikasi in-app.');
+  if ((patch.email || patch.waFallbackEmail) && !item.inAppType) throw BadRequest('Jenis ini belum mendukung email.');
+  if (patch.inApp !== undefined || patch.email !== undefined || patch.waFallbackEmail !== undefined) {
+    const { whatsapp: _w, ...ch } = patch;
+    await saveNotifChannel(key, ch, req.user.sub ?? null);
+  }
+  if (patch.whatsapp !== undefined) {
+    if (!item.waType) throw BadRequest('Jenis ini tidak punya pesan WhatsApp.');
+    const row = await prisma.waNotificationConfig.findUnique({ where: { type: item.waType } });
+    if (!row) throw BadRequest('Template WhatsApp untuk jenis ini belum ada.');
+    if (patch.whatsapp && !row.template.trim()) throw BadRequest('Isi template WhatsApp dulu sebelum menyalakan.');
+    await prisma.waNotificationConfig.update({ where: { type: item.waType }, data: { isEnabled: patch.whatsapp, updatedById: req.user.sub ?? null } });
+    invalidateWaConfigCache(item.waType);
+  }
+  const after = (await listNotifChannels()).find((r) => r.key === key);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'notification_channel',
+    resourceId: key,
+    resourceLabel: `Saluran notifikasi: ${item.label}`,
+    before,
+    after,
+  });
+  res.json({ success: true, data: after });
 });
 
 waConfigRouter.get('/:type', async (req, res) => {

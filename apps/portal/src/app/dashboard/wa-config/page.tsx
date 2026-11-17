@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { GatewaySettings } from '@/components/wa/gateway-settings';
+import { NotificationChannels } from '@/components/wa/notification-channels';
 
 interface WaConfig {
   id: string;
@@ -80,6 +81,8 @@ export default function WaConfigPage() {
       </div>
 
       <GatewaySettings />
+
+      <NotificationChannels />
 
       <DeviceStatus />
 

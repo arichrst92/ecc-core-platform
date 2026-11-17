@@ -14,6 +14,8 @@
  */
 import { prisma } from '@ecc/database';
 import { logger } from './logger.js';
+import { channelsForInAppType, claimDedup } from './notif-channels.js';
+import { notifyByEmail } from './notif-email.js';
 
 export type InAppNotifType =
   | 'CKIDS_CHECKIN'
@@ -59,7 +61,10 @@ export type InAppNotifType =
   | 'BUSINESS_PARTNER_REMOVED'
   | 'HOMECELL_ASISTEN_ASSIGNED'
   | 'MINISTRY_DUTY_ASSIGNED'
-  | 'MINISTRY_DUTY_REMOVED';
+  | 'MINISTRY_DUTY_REMOVED'
+  | 'IBADAH_REMINDER'
+  | 'EVENT_REMINDER'
+  | 'BIRTHDAY_GREETING';
 
 interface CreateNotifArgs {
   jemaatId: string;
@@ -74,6 +79,21 @@ interface CreateNotifArgs {
  * Insert 1 notification row. Fire-and-forget — don't await di caller kritis.
  */
 export async function createNotification(args: CreateNotifArgs): Promise<void> {
+  // Saluran per jenis (Portal → Saluran notifikasi): in-app bisa dimatikan,
+  // email ikut dikirim bila diaktifkan. Default = perilaku lama.
+  const ch = await channelsForInAppType(args.type);
+  if (ch.key && (ch.email || ch.waFallbackEmail)) {
+    void notifyByEmail({
+      jemaatIds: [args.jemaatId],
+      key: ch.key,
+      always: ch.email,
+      waFallback: ch.waFallbackEmail,
+      title: args.title,
+      body: args.body,
+      actionUrl: args.actionUrl,
+    }).catch((e) => logger.warn({ err: (e as Error).message }, '[notification] email gagal diantrekan'));
+  }
+  if (!ch.inApp) return;
   try {
     await prisma.notification.create({
       data: {
@@ -104,6 +124,19 @@ export async function createNotificationBatch(
   args: Omit<CreateNotifArgs, 'jemaatId'>,
 ): Promise<void> {
   if (recipients.length === 0) return;
+  const ch = await channelsForInAppType(args.type);
+  if (ch.key && (ch.email || ch.waFallbackEmail)) {
+    void notifyByEmail({
+      jemaatIds: recipients,
+      key: ch.key,
+      always: ch.email,
+      waFallback: ch.waFallbackEmail,
+      title: args.title,
+      body: args.body,
+      actionUrl: args.actionUrl,
+    }).catch((e) => logger.warn({ err: (e as Error).message }, '[notification] email gagal diantrekan'));
+  }
+  if (!ch.inApp) return;
   try {
     await prisma.notification.createMany({
       data: recipients.map((jemaatId) => ({
@@ -165,4 +198,49 @@ export async function resolveGuardianJemaatIds(anakId: string): Promise<string[]
   }
 
   return Array.from(ids);
+}
+
+/**
+ * Notifikasi dari job terjadwal (pengingat H-1, ulang tahun) ke saluran
+ * in-app / email sesuai Portal → Saluran notifikasi. Sekali per dedupKey
+ * (job bisa berjalan beberapa kali dalam jendela kirim). WhatsApp tetap
+ * dikirim terpisah oleh job lewat sendWaOnce.
+ */
+export async function notifyScheduled(args: {
+  key: string;
+  inAppType: InAppNotifType;
+  jemaatId: string;
+  dedupKey: string;
+  title: string;
+  body: string;
+  actionUrl?: string;
+  channels: { inApp: boolean; email: boolean; waFallbackEmail: boolean };
+}): Promise<void> {
+  const { channels: ch } = args;
+  if (ch.inApp && (await claimDedup(`inapp:${args.dedupKey}`))) {
+    try {
+      await prisma.notification.create({
+        data: {
+          jemaatId: args.jemaatId,
+          type: args.inAppType as never,
+          title: args.title,
+          body: args.body,
+          actionUrl: args.actionUrl ?? null,
+        },
+      });
+    } catch (e) {
+      logger.error({ err: e instanceof Error ? e.message : String(e) }, '[notification] notifyScheduled in-app gagal');
+    }
+  }
+  if ((ch.email || ch.waFallbackEmail) && (await claimDedup(`email:${args.dedupKey}`))) {
+    await notifyByEmail({
+      jemaatIds: [args.jemaatId],
+      key: args.key,
+      always: ch.email,
+      waFallback: ch.waFallbackEmail,
+      title: args.title,
+      body: args.body,
+      actionUrl: args.actionUrl,
+    }).catch((e) => logger.warn({ err: (e as Error).message }, '[notification] notifyScheduled email gagal'));
+  }
 }

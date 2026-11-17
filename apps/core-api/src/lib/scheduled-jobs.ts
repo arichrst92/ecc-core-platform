@@ -25,6 +25,8 @@ import { geocodeJemaatBatch } from './jemaat-geocode.js';
 import { applyNewComerPromotion } from './onboarding-roles.js';
 import { getConfig, renderTemplate } from './wa-notif.js';
 import { waAllowedForJemaat } from './comm-prefs.js';
+import { channelsFor } from './notif-channels.js';
+import { notifyScheduled } from './notification.js';
 import { tickAnnouncements } from './announcement.js';
 import { logger } from './logger.js';
 import { flushApiMetrics } from './api-metrics.js';
@@ -122,7 +124,10 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
   const tomorrowIso = tomorrow.toISOString().slice(0, 10);
 
   const cfg = await getConfig('IBADAH_REMINDER_H1');
-  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
+  // Saluran per jenis (Portal): WhatsApp (wa_notification_config) + in-app/email.
+  const ch = await channelsFor('IBADAH_REMINDER_H1');
+  const waOn = !!cfg?.isEnabled && !!cfg.template.trim();
+  if (!waOn && !ch.inApp && !ch.email && !ch.waFallbackEmail) return { sent: 0, failed: 0, skipped: 0 };
 
   const reservasis = await prisma.reservasi.findMany({
     where: {
@@ -153,7 +158,23 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
   let skipped = 0;
 
   for (const r of reservasis) {
-    if (!r.jemaat.isActive || !r.jemaat.noHp || !(await waAllowedForJemaat(r.jemaatId, 'IBADAH_REMINDER_H1'))) {
+    if (!r.jemaat.isActive) {
+      skipped++;
+      continue;
+    }
+    const tanggalLabel = new Date(r.tanggalIbadah).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    const groupPrefix = `IBADAH_REMINDER:${r.ibadahId}:${tomorrowIso}:`;
+    await notifyScheduled({
+      key: 'IBADAH_REMINDER_H1',
+      inAppType: 'IBADAH_REMINDER',
+      jemaatId: r.jemaatId,
+      dedupKey: `${groupPrefix}${r.jemaatId}`,
+      title: 'Pengingat ibadah besok',
+      body: `${r.ibadah.nama} (${r.ibadah.cabang.nama}) — ${tanggalLabel}, ${jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone)}. Lokasi: ${r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-')}.`,
+      actionUrl: '/my-reservasi',
+      channels: ch,
+    });
+    if (!waOn || !cfg || !r.jemaat.noHp || !(await waAllowedForJemaat(r.jemaatId, 'IBADAH_REMINDER_H1'))) {
       skipped++;
       continue;
     }
@@ -170,7 +191,6 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
       jam: jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone),
       lokasi: r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-'),
     });
-    const groupPrefix = `IBADAH_REMINDER:${r.ibadahId}:${tomorrowIso}:`;
     const outcome = await sendWaOnce({
       dedupKey: `${groupPrefix}${r.jemaatId}`,
       type: 'IBADAH_REMINDER',
@@ -200,7 +220,9 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
   const dayAfter = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
 
   const cfg = await getConfig('EVENT_REMINDER_H1');
-  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
+  const ch = await channelsFor('EVENT_REMINDER_H1');
+  const waOn = !!cfg?.isEnabled && !!cfg.template.trim();
+  if (!waOn && !ch.inApp && !ch.email && !ch.waFallbackEmail) return { sent: 0, failed: 0, skipped: 0 };
 
   // Event punya tanggalMulai DateTime. Ambil jendela ±1 hari lalu saring
   // berdasarkan TANGGAL KALENDER di zona cabang event (event lama bisa
@@ -238,7 +260,7 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
   let skipped = 0;
 
   for (const p of participations) {
-    if (!p.jemaat.isActive || !p.jemaat.noHp || !(await waAllowedForJemaat(p.jemaatId, 'EVENT_REMINDER_H1'))) {
+    if (!p.jemaat.isActive) {
       skipped++;
       continue;
     }
@@ -249,13 +271,27 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
       month: 'long',
       timeZone: 'UTC',
     })}, ${jamWithZone(p.event.jamMulai, p.event.jamSelesai, p.event.cabang?.timezone)}`;
+    const groupPrefix = `EVENT_REMINDER:${p.eventId}:${tomorrowIso}:`;
+    await notifyScheduled({
+      key: 'EVENT_REMINDER_H1',
+      inAppType: 'EVENT_REMINDER',
+      jemaatId: p.jemaatId,
+      dedupKey: `${groupPrefix}${p.jemaatId}`,
+      title: 'Pengingat event besok',
+      body: `${p.event.judul} — ${eventTime}. Lokasi: ${p.event.lokasi ?? '-'}.`,
+      actionUrl: `/event/${p.eventId}`,
+      channels: ch,
+    });
+    if (!waOn || !cfg || !p.jemaat.noHp || !(await waAllowedForJemaat(p.jemaatId, 'EVENT_REMINDER_H1'))) {
+      skipped++;
+      continue;
+    }
     const message = renderTemplate(cfg.template, {
       nama: p.jemaat.namaLengkap,
       event_judul: p.event.judul,
       tanggal: eventTime,
       lokasi: p.event.lokasi ?? '-',
     });
-    const groupPrefix = `EVENT_REMINDER:${p.eventId}:${tomorrowIso}:`;
     const outcome = await sendWaOnce({
       dedupKey: `${groupPrefix}${p.jemaatId}`,
       type: 'EVENT_REMINDER',
@@ -303,7 +339,10 @@ async function dispatchBirthdayGreetingsInner(): Promise<{
   skipped: number;
 }> {
   const cfg = await getConfig('BIRTHDAY_GREETING');
-  if (!cfg || !cfg.isEnabled) return { sent: 0, failed: 0, skipped: 0 };
+  const ch = await channelsFor('BIRTHDAY_GREETING');
+  const waOn = !!cfg?.isEnabled && !!cfg.template.trim();
+  const otherOn = ch.inApp || ch.email || ch.waFallbackEmail;
+  if (!waOn && !otherOn) return { sent: 0, failed: 0, skipped: 0 };
 
   const today = new Date();
   const month = today.getMonth() + 1; // JS 0-indexed
@@ -317,7 +356,7 @@ async function dispatchBirthdayGreetingsInner(): Promise<{
     FROM jemaat
     WHERE is_active = true
       AND tanggal_lahir IS NOT NULL
-      AND no_hp IS NOT NULL
+      AND (no_hp IS NOT NULL OR ${otherOn})
       AND EXTRACT(MONTH FROM tanggal_lahir) = ${month}
       AND EXTRACT(DAY FROM tanggal_lahir) = ${day}
   `;
@@ -326,7 +365,22 @@ async function dispatchBirthdayGreetingsInner(): Promise<{
   let failed = 0;
   let skipped = 0;
   for (const r of rows) {
-    if (!r.no_hp || !r.tanggal_lahir) {
+    if (!r.tanggal_lahir) {
+      skipped++;
+      continue;
+    }
+    if (otherOn) {
+      await notifyScheduled({
+        key: 'BIRTHDAY_GREETING',
+        inAppType: 'BIRTHDAY_GREETING',
+        jemaatId: r.id,
+        dedupKey: `BIRTHDAY_${r.id}_${today.getFullYear()}`,
+        title: `Selamat ulang tahun, ${r.nama_lengkap}!`,
+        body: 'Keluarga besar ECC mengucapkan selamat ulang tahun. Kiranya Tuhan memberkati Anda di tahun yang baru ini.',
+        channels: ch,
+      });
+    }
+    if (!waOn || !cfg || !r.no_hp) {
       skipped++;
       continue;
     }

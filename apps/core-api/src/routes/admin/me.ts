@@ -424,7 +424,7 @@ async function assertPhoneFree(jemaatId: string, noHp: string) {
           update: {},
         })
         .catch(() => undefined);
-      throw Conflict('Nomor ini tercatat sebagai data tamu. Admin cabang akan menyatukan data tamu dengan akun Anda — hubungi admin cabang.');
+      throw Conflict('Nomor ini tercatat sebagai data tamu. Hubungi admin cabang untuk menyatukan data tamu tersebut dengan akun Anda.');
     }
     throw Conflict('Nomor HP sudah dipakai jemaat lain. Hubungi admin gereja kalau ini nomor Anda.');
   }

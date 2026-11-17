@@ -32,7 +32,7 @@ export async function assertOtpCooldown(target: OtpTarget, purpose: OtpPurpose):
     select: { createdAt: true },
   });
   if (recent && Date.now() - recent.createdAt.getTime() < cooldown * 1000) {
-    throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum request OTP baru`);
+    throw BadRequest(`Mohon tunggu ${cooldown} detik sebelum meminta kode baru.`);
   }
 }
 
@@ -99,14 +99,14 @@ export async function consumeOtp(
     }
     if (adminCodes.length && !record) {
       await prisma.otpVerification.updateMany({ where: { id: { in: adminCodes.map((a) => a.id) } }, data: { attempts: { increment: 1 } } });
-      throw Unauthorized('OTP salah');
+      throw Unauthorized('Kode salah.');
     }
   }
 
-  if (!record) throw Unauthorized('OTP tidak ditemukan atau kadaluarsa');
-  if (record.attempts >= maxAttempts) throw Unauthorized('Terlalu banyak percobaan');
+  if (!record) throw Unauthorized('Kode tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.');
+  if (record.attempts >= maxAttempts) throw Unauthorized('Terlalu banyak percobaan salah. Minta kode baru.');
   await prisma.otpVerification.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
-  throw Unauthorized('OTP salah');
+  throw Unauthorized('Kode salah.');
 }
 
 /** OTP pendaftaran (nomor HP / email) yang terverifikasi dalam jendela 60 menit. */

@@ -191,9 +191,9 @@ ${brandName}`;
 export type OtpEmailKind = 'wa-fallback' | 'login' | 'signup' | 'verify' | 'claim';
 const OTP_EMAIL_COPY: Record<OtpEmailKind, { subject: string; header: string; note: string | null }> = {
   'wa-fallback': {
-    subject: 'Kode OTP login ECC',
-    header: 'Kode OTP login aplikasi ECC',
-    note: 'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirimkan kode OTP Anda lewat email ini.',
+    subject: 'Kode OTP Els App',
+    header: 'Kode OTP aplikasi ECC (Els App)',
+    note: 'Pengiriman OTP lewat WhatsApp sedang terganggu. Untuk mempercepat proses, kami kirimkan kode OTP Anda lewat email ini.',
   },
   login: { subject: 'Kode masuk Els App', header: 'Kode masuk Els App', note: null },
   signup: { subject: 'Kode pendaftaran Els App', header: 'Kode pendaftaran Els App', note: null },

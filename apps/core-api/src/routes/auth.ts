@@ -218,7 +218,7 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
   const emailTo =
     (purpose === 'LOGIN' || purpose === 'ENROLLMENT') && emailMode !== 'off' ? emailCopy?.email ?? null : null;
   const EMAIL_NOTE =
-    'Pengiriman OTP lewat WhatsApp sedang dalam antrean. Untuk mempercepat proses, kami kirim OTP ke email Anda.';
+    'Pengiriman OTP lewat WhatsApp sedang terganggu. Untuk mempercepat proses, kode OTP juga kami kirim ke email Anda — cek juga folder Spam / Promosi.';
   const sendEmailCopy = async (): Promise<boolean> => {
     if (!emailTo || !emailCopy) return false;
     try {
@@ -260,7 +260,9 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
       purpose === 'LOGIN'
         ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, masuk dengan email, atau minta kode masuk ke admin cabang.'
         : purpose === 'ENROLLMENT'
-          ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi, atau daftar dengan email.'
+          ? enrollEmailLegacy()
+            ? 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Isi email Anda agar kode dikirim ke email, atau coba lagi beberapa menit lagi.'
+            : 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.'
           : 'Kode OTP belum bisa dikirim lewat WhatsApp saat ini. Coba lagi beberapa menit lagi.',
       'WHATSAPP_UNAVAILABLE',
     );
@@ -335,7 +337,7 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
         // Window di mana /auth/register akan accept verifikasi ini.
         validForSeconds: ENROLL_WINDOW_MS / 1000,
       },
-      message: 'OTP terverifikasi. Lanjutkan ke /auth/register untuk menyelesaikan registrasi.',
+      message: 'Kode terverifikasi. Lanjutkan isi data diri.',
     });
   }
 
@@ -427,7 +429,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
   const target: OtpTarget = viaEmail ? { email: input.email! } : { noHp: input.noHp! };
   const otpRecord = await findVerifiedEnrollment(target);
   if (!otpRecord) {
-    throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa. Silakan minta OTP baru.');
+    throw Unauthorized('Waktu pendaftaran habis atau kode belum diverifikasi. Silakan ulang pendaftaran dan minta kode baru.');
   }
 
   // 2. Pemilik kontak saat ini. Tamu (tanpa akun) → record-nya di-upgrade.
@@ -449,7 +451,9 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
       const again = await issueAuthResponseByJemaatId(primary.id, req, 'OTP');
       return res.status(201).json({ ...again, meta: { kind: 'register', jemaatCreatedId: primary.id, repeated: true } });
     }
-    throw Conflict(viaEmail ? 'Email sudah terdaftar — gunakan "Masuk dengan email".' : 'Nomor HP sudah terdaftar.');
+    throw Conflict(
+      viaEmail ? 'Email sudah terdaftar — gunakan "Masuk dengan email".' : 'Nomor HP sudah terdaftar — silakan masuk dengan OTP WhatsApp.',
+    );
   }
   const secondary = viaEmail ? byPhone : byEmail;
   if (secondary && !secondary.isTamu && secondary.id !== primary?.id) {
@@ -605,7 +609,7 @@ authRouter.post('/register/match', registerMatchLimiter, async (req, res) => {
   const input = registerMatchSchema.parse(req.body);
   const viaEmail = input.otpChannel === 'email';
   const verified = await findVerifiedEnrollment(viaEmail ? { email: input.email! } : { noHp: input.noHp! });
-  if (!verified) throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa.');
+  if (!verified) throw Unauthorized('Waktu pendaftaran habis atau kode belum diverifikasi. Silakan ulang pendaftaran.');
   const list = await findOldRecords({
     namaLengkap: input.namaLengkap,
     tanggalLahir: new Date(input.tanggalLahir),
@@ -640,7 +644,7 @@ authRouter.post('/register/claim-otp', registerMatchLimiter, async (req, res) =>
   if (input.otpChannel === 'email') throw BadRequest('Klaim data lama hanya untuk pendaftaran dengan WhatsApp.');
   if (!input.claimJemaatId) throw BadRequest('claimJemaatId wajib diisi.');
   const verified = await findVerifiedEnrollment({ noHp: input.noHp! });
-  if (!verified) throw Unauthorized('OTP pendaftaran belum diverifikasi atau sudah kedaluwarsa.');
+  if (!verified) throw Unauthorized('Waktu pendaftaran habis atau kode belum diverifikasi. Silakan ulang pendaftaran.');
   const top = pickOffer(
     await findOldRecords({
       namaLengkap: input.namaLengkap,
@@ -1490,10 +1494,10 @@ authRouter.post('/email/verify-magic-link', authVerifyLimiter, async (req, res) 
       usedAt: true,
     },
   });
-  if (!record) throw Unauthorized('Link tidak valid atau sudah kadaluarsa');
-  if (record.usedAt) throw Unauthorized('Link sudah dipakai');
+  if (!record) throw Unauthorized('Link tidak valid atau sudah kedaluwarsa. Minta link baru.');
+  if (record.usedAt) throw Unauthorized('Link sudah pernah dipakai. Minta link baru.');
   if (record.expiresAt < new Date()) {
-    throw Unauthorized('Link sudah kadaluarsa. Request baru.');
+    throw Unauthorized('Link sudah kedaluwarsa. Minta link baru.');
   }
 
   // Mark used (one-time)
@@ -1598,11 +1602,11 @@ authRouter.post('/email-otp/verify', authVerifyLimiter, async (req, res) => {
     return res.json({
       success: true,
       data: { otpVerified: true, purpose, email, pendingRegistration: true, nextStep: 'POST /auth/register', validForSeconds: ENROLL_WINDOW_MS / 1000 },
-      message: 'OTP terverifikasi. Lanjutkan ke /auth/register.',
+      message: 'Kode terverifikasi. Lanjutkan isi data diri.',
     });
   }
   const j = await findJemaatByEmail(email);
-  if (!j || j.isTamu) throw Unauthorized('OTP tidak ditemukan atau kadaluarsa');
+  if (!j || j.isTamu) throw Unauthorized('Kode OTP tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.');
   const { viaAdmin } = await consumeOtp({ email }, purpose, kode, { adminFor: j.id });
   // Kode ke email terpakai → email terbukti milik jemaat.
   if (!viaAdmin && !j.emailVerifiedAt) {

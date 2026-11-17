@@ -1,6 +1,6 @@
 # Rencana Implementasi — Login & Daftar Dua Saluran (WhatsApp / Email)
 
-Status: Fase 0 sudah di-deploy. Fase 1 sudah dikerjakan (lihat catatan 3.11), belum di-deploy. Fase 2–3 belum. Disusun 17 Nov 2026.
+Status: Fase 0 & 1 sudah di-deploy. Fase 2 (app) sudah dikerjakan di kode, menunggu build & review store. Fase 3 belum. Disusun 17 Nov 2026.
 Tujuan: jemaat tidak pernah buntu saat salah satu penyedia (WhatsApp / email) gangguan,
 tanpa menyimpan kontak yang belum terbukti milik jemaat.
 
@@ -208,6 +208,11 @@ lewat WhatsApp, server hanya mencocokkan nomor HP → akun baru terbuat, riwayat
 - Hint bila salah satu kosong: *"Email / nomor WhatsApp Anda masih kosong. Lengkapi agar tetap bisa
   masuk saat penyedia layanan gangguan."* Versi ringkas di Beranda, bisa ditutup.
 - Onboarding: langkah tambah nomor HP jadi opsional (bisa dilewati).
+
+### 4.3a Catatan implementasi Fase 2 (17 Nov 2026)
+- Hint lengkapi kontak tampil di Profil & Edit Profil. Versi Beranda belum dipasang (ada perubahan
+  lain yang belum di-commit di layar Beranda) — bisa ditambahkan di rilis berikutnya.
+- Header `X-App-Version` = `<versi>/<platform>` (mis. `2.4.9/ios`).
 
 ### 4.4 Perbaikan kecil
 - Ministry → "Chat koordinator": sembunyikan bila koordinator tanpa nomor.

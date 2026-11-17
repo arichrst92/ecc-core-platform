@@ -5,11 +5,12 @@ import { saveProfilePhoto, deleteProfilePhoto } from '../lib/storage.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { flexImageUpload } from '../lib/image-upload.js';
+import { requireMenu } from '../middleware/require-menu.js';
 
 /**
  * Endpoint upload foto profil.
  *
- * - POST /upload/jemaat/:jemaatId/foto  (siapa saja yang login)
+ * - POST /upload/jemaat/:jemaatId/foto  (Portal: akses menu Jemaat tulis)
  * - POST /upload/user/me/foto           (User itself — avatar login)
  * - DELETE versi untuk masing-masing
  *
@@ -22,8 +23,9 @@ export const uploadRouter = Router();
 uploadRouter.use(requireAuth);
 
 // ===== Jemaat profile photo =====
-// Sebelumnya Fulltimer-only; sekarang siapa saja yang login bisa upload.
-uploadRouter.post('/jemaat/:jemaatId/foto', flexImageUpload(), async (req, res) => {
+// Wajib akses menu Jemaat (tulis) — sebelumnya siapa saja yang login (termasuk
+// token app jemaat) bisa mengganti foto jemaat lain.
+uploadRouter.post('/jemaat/:jemaatId/foto', requireMenu('jemaat', 'write'), flexImageUpload(), async (req, res) => {
   if (!req.file) {
     throw BadRequest(
       'File foto wajib. Kirim sebagai multipart/form-data dengan field name "foto" (atau "file" / "image").',
@@ -49,17 +51,18 @@ uploadRouter.post('/jemaat/:jemaatId/foto', flexImageUpload(), async (req, res) 
   res.json({ success: true, data: updated });
 });
 
-uploadRouter.delete('/jemaat/:jemaatId/foto', async (req, res) => {
-  await deleteProfilePhoto('jemaat', req.params.jemaatId);
+uploadRouter.delete('/jemaat/:jemaatId/foto', requireMenu('jemaat', 'write'), async (req, res) => {
+  const jemaatId = req.params.jemaatId ?? '';
+  await deleteProfilePhoto('jemaat', jemaatId);
   const updated = await prisma.jemaat.update({
-    where: { id: req.params.jemaatId },
+    where: { id: jemaatId },
     data: { fotoUrl: null },
     select: { namaLengkap: true },
   });
   audit(req, {
     action: 'UPLOAD_PHOTO',
     resource: 'jemaat',
-    resourceId: req.params.jemaatId,
+    resourceId: jemaatId,
     resourceLabel: updated.namaLengkap,
     metadata: { kind: 'jemaat-profile-delete' },
   });

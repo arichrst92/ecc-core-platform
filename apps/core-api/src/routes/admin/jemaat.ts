@@ -14,6 +14,8 @@ import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { JUNK_LABEL, invalidateJunkCache, junkMap, junkSummary } from '../../lib/junk-data.js';
 import { audit } from '../../lib/audit.js';
+import { flexImageUpload } from '../../lib/image-upload.js';
+import { deleteProfilePhoto, saveProfilePhoto } from '../../lib/storage.js';
 import {
   parseCsv,
   validateRows,
@@ -838,7 +840,7 @@ jemaatRouter.get('/junk-summary', async (_req, res) => {
 });
 
 // POST /admin/jemaat/:id/bukan-junk → tidak ditandai lagi (dan dilewati sync Shiftsoft)
-jemaatRouter.post('/:id/bukan-junk', async (req, res) => {
+jemaatRouter.post('/:id/bukan-junk', requireMenu('jemaat', 'write'), async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const j = await prisma.jemaat.findUnique({ where: { id }, select: { id: true, namaLengkap: true } });
   if (!j) throw NotFound('Jemaat tidak ditemukan');
@@ -1770,7 +1772,7 @@ jemaatRouter.get('/:id/export', async (req, res) => {
   res.send(html);
 });
 
-jemaatRouter.post('/', async (req, res) => {
+jemaatRouter.post('/', requireMenu('jemaat', 'write'), async (req, res) => {
   const input = createJemaatSchema.parse(req.body);
   const kode = await generateUniqueKodeJemaat();
   const data = {
@@ -1842,7 +1844,7 @@ jemaatRouter.post('/:id/login-code', requireMenu('jemaat', 'write'), async (req,
   });
 });
 
-jemaatRouter.patch('/:id', async (req, res) => {
+jemaatRouter.patch('/:id', requireMenu('jemaat', 'write'), async (req, res) => {
   const input = updateJemaatSchema.parse(req.body);
   const data = {
     ...input,
@@ -1868,10 +1870,41 @@ jemaatRouter.patch('/:id', async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+/**
+ * Foto profil jemaat dari Portal (Edit profil → Ganti foto). Portal memotong
+ * 1:1 di browser; server mengonversi ke WebP (maks 800 px) — sama dengan foto
+ * yang diunggah jemaat sendiri dari app, jadi langsung tampil di Els App.
+ */
+jemaatRouter.post('/:id/foto', requireMenu('jemaat', 'write'), flexImageUpload(), async (req, res) => {
+  if (!req.file) throw BadRequest('File foto wajib (multipart/form-data, field "foto").');
+  const j = await prisma.jemaat.findUnique({ where: { id: req.params.id }, select: { id: true, namaLengkap: true, fotoUrl: true, dataPurgedAt: true } });
+  if (!j) throw NotFound('Jemaat tidak ditemukan');
+  if (j.dataPurgedAt) throw BadRequest('Data pribadi jemaat ini sudah dihapus permanen.');
+  const fotoUrl = await saveProfilePhoto('jemaat', j.id, req.file.buffer);
+  const updated = await prisma.jemaat.update({ where: { id: j.id }, data: { fotoUrl }, select: { id: true, fotoUrl: true } });
+  audit(req, {
+    action: 'UPLOAD_PHOTO',
+    resource: 'jemaat',
+    resourceId: j.id,
+    resourceLabel: j.namaLengkap,
+    metadata: { kind: 'admin-foto-portal', size: req.file.size, replaced: !!j.fotoUrl },
+  });
+  res.json({ success: true, data: updated });
+});
+
+jemaatRouter.delete('/:id/foto', requireMenu('jemaat', 'write'), async (req, res) => {
+  const j = await prisma.jemaat.findUnique({ where: { id: req.params.id }, select: { id: true, namaLengkap: true } });
+  if (!j) throw NotFound('Jemaat tidak ditemukan');
+  await deleteProfilePhoto('jemaat', j.id);
+  await prisma.jemaat.update({ where: { id: j.id }, data: { fotoUrl: null } });
+  audit(req, { action: 'UPLOAD_PHOTO', resource: 'jemaat', resourceId: j.id, resourceLabel: j.namaLengkap, metadata: { kind: 'admin-foto-portal-delete' } });
+  res.json({ success: true, data: { id: j.id, fotoUrl: null } });
+});
+
 // Kepatuhan no. 5 — hapus/samarkan data pribadi permanen atas permintaan
 // jemaat (Kebijakan Privasi Bag. 10). Baris tetap ada supaya statistik
 // kehadiran historis tidak berubah; nama/kontak/foto/catatan dihapus.
-jemaatRouter.post('/:id/purge', async (req, res) => {
+jemaatRouter.post('/:id/purge', requireMenu('jemaat', 'delete'), async (req, res) => {
   const body = z.object({ confirmText: z.literal('HAPUS PERMANEN'), reason: z.string().trim().min(3).max(300) }).parse(req.body ?? {});
   const before = await prisma.jemaat.findUnique({ where: { id: req.params.id }, select: { id: true, namaLengkap: true, kode: true, dataPurgedAt: true } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
@@ -1887,7 +1920,7 @@ jemaatRouter.post('/:id/purge', async (req, res) => {
   res.json({ success: true, data: { purged: true } });
 });
 
-jemaatRouter.delete('/:id', async (req, res) => {
+jemaatRouter.delete('/:id', requireMenu('jemaat', 'delete'), async (req, res) => {
   const before = await prisma.jemaat.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Jemaat tidak ditemukan');
   await prisma.jemaat.delete({ where: { id: req.params.id } });
@@ -1914,7 +1947,7 @@ jemaatRouter.get('/import/template', (_req, res) => {
  * Tidak insert apapun ke DB. Frontend bisa display preview table dan biarkan user
  * fix/turunkan errors sebelum commit.
  */
-jemaatRouter.post('/import/preview', csvUpload.single('file'), async (req, res) => {
+jemaatRouter.post('/import/preview', requireMenu('jemaat', 'write'), csvUpload.single('file'), async (req, res) => {
   if (!req.file) throw BadRequest('File CSV wajib (field name: file)');
 
   let parseResult;
@@ -1937,7 +1970,7 @@ jemaatRouter.post('/import/preview', csvUpload.single('file'), async (req, res) 
  * Body opsional: `skipErrors=true` (default true) untuk insert hanya yang valid;
  * jika `false`, satu error apa pun rollback semuanya.
  */
-jemaatRouter.post('/import/commit', csvUpload.single('file'), async (req, res) => {
+jemaatRouter.post('/import/commit', requireMenu('jemaat', 'write'), csvUpload.single('file'), async (req, res) => {
   if (!req.file) throw BadRequest('File CSV wajib (field name: file)');
   const skipErrors = req.body.skipErrors !== 'false';
 

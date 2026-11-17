@@ -20,7 +20,7 @@ interface Props {
   /** Label tombol simpan (default "Simpan cover"). */
   saveLabel?: string;
   /** Pratinjau: 'worship' (album/player) atau 'avatar' (foto profil persegi & bulat). */
-  variant?: 'worship' | 'avatar' | 'banner';
+  variant?: 'worship' | 'avatar' | 'banner' | 'profile';
 }
 
 export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', saveLabel = 'Simpan cover', variant = 'worship' }: Props) {
@@ -30,6 +30,8 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Browser tidak bisa membaca file (mis. HEIC di Chrome/Windows). */
+  const [loadError, setLoadError] = useState(false);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const isBanner = variant === 'banner';
   const VW = isBanner ? BANNER.vw : V;
@@ -39,6 +41,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
     const url = URL.createObjectURL(file);
     const im = new Image();
     im.onload = () => setImg(im);
+    im.onerror = () => setLoadError(true);
     im.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
@@ -109,7 +112,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl pointer-events-auto">
           <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">{title}</h2>
-            <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-neutral-100" disabled={saving}>
+            <button type="button" onClick={onCancel} className="p-1.5 rounded-lg hover:bg-neutral-100" disabled={saving}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -144,6 +147,10 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                       transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) rotate(${rot}deg) scale(${scale})`,
                     }}
                   />
+                ) : loadError ? (
+                  <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white/90">
+                    Gambar tidak bisa dibuka di browser ini. Gunakan JPG, PNG, atau WebP (foto HEIC dari iPhone: ubah dulu ke JPG).
+                  </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Loader2 className="w-5 h-5 animate-spin text-white" />
@@ -172,6 +179,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                 />
                 <ZoomIn className="w-4 h-4" />
                 <button
+                  type="button"
                   onClick={() => setRot((r) => (r + 90) % 360)}
                   className="ml-1 p-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50"
                   title="Putar 90°"
@@ -191,6 +199,25 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                   <div className="text-[11px] text-neutral-500 mt-1">Popup app & email</div>
                 </div>
                 <div className="text-[11px] text-neutral-500">Disimpan 1280×720 (WebP). Juga dipakai sebagai pratinjau link WhatsApp.</div>
+              </div>
+            ) : variant === 'profile' ? (
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-neutral-600">Pratinjau</div>
+                <div>
+                  <div className="w-[120px] h-[120px] rounded-full bg-neutral-200 bg-cover bg-center border-2 border-neutral-200" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                  <div className="text-[11px] text-neutral-500 mt-1">Profil (Els App &amp; Portal)</div>
+                </div>
+                <div className="flex items-end gap-3">
+                  <div>
+                    <div className="w-10 h-10 rounded-full bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                    <div className="text-[11px] text-neutral-500 mt-1">Daftar</div>
+                  </div>
+                  <div>
+                    <div className="w-8 h-8 rounded-full bg-neutral-200 bg-cover bg-center" style={{ backgroundImage: preview ? `url(${preview})` : undefined }} />
+                    <div className="text-[11px] text-neutral-500 mt-1">Kecil</div>
+                  </div>
+                </div>
+                <div className="text-[11px] text-neutral-500">Pastikan wajah di tengah lingkaran. Disimpan persegi (WebP, maks 800 px).</div>
               </div>
             ) : variant === 'avatar' ? (
               <div className="space-y-3">
@@ -227,10 +254,11 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
             )}
           </div>
           <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
-            <button onClick={onCancel} disabled={saving} className="h-9 px-4 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
+            <button type="button" onClick={onCancel} disabled={saving} className="h-9 px-4 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
               Batal
             </button>
             <button
+              type="button"
               onClick={save}
               disabled={!img || saving}
               className="flex items-center gap-2 h-9 px-4 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"

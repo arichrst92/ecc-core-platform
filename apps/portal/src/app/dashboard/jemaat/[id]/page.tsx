@@ -44,6 +44,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { SertifikatSection } from '@/components/jemaat/sertifikat-section';
 import { PurgePersonalDataButton } from '@/components/jemaat/purge-personal-data';
 import { LoginCodeButton } from '@/components/jemaat/login-code-button';
+import { JemaatFotoEditor } from '@/components/jemaat/jemaat-foto-editor';
 import { ResolusiSection } from '@/components/jemaat/resolusi-section';
 import { FormModal } from '@/components/crud/form-modal';
 import { buildJemaatResource } from '@/lib/resources/jemaat-config';
@@ -305,18 +306,13 @@ export default function JemaatDetailPage() {
 
       {/* Profile header */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6 flex flex-col sm:flex-row items-stretch sm:items-start gap-4 sm:gap-5">
-        {j.fotoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`${apiBase}${j.fotoUrl}`}
-            alt={j.namaLengkap}
-            className="w-24 h-24 rounded-full object-cover border-2 border-neutral-200 mx-auto sm:mx-0 shrink-0"
-          />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center mx-auto sm:mx-0 shrink-0">
-            <UserIcon className="w-10 h-10" />
-          </div>
-        )}
+        <JemaatFotoEditor
+          jemaatId={j.id}
+          nama={j.namaLengkap}
+          fotoUrl={j.fotoUrl}
+          apiBase={apiBase}
+          readOnly={!!j.dataPurgedAt}
+        />
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2 flex-wrap">
             {j.namaLengkap}
@@ -667,6 +663,18 @@ export default function JemaatDetailPage() {
         fields={jemaatConfig.fields}
         defaultValues={j as unknown as Record<string, unknown>}
         isEdit
+        intro={
+          !j.dataPurgedAt ? (
+            <div className="flex items-center gap-4 pb-4 border-b border-neutral-100">
+              <JemaatFotoEditor jemaatId={j.id} nama={j.namaLengkap} fotoUrl={j.fotoUrl} apiBase={apiBase} className="" />
+              <div className="text-xs text-neutral-500 leading-relaxed">
+                <div className="text-sm font-medium text-neutral-800">Foto profil</div>
+                Klik foto untuk mengganti — bisa digeser, di-zoom, dan diputar sebelum disimpan.
+                Foto langsung tersimpan (tidak menunggu tombol Simpan Perubahan) dan tampil juga di Els App.
+              </div>
+            </div>
+          ) : undefined
+        }
         loading={updateProfileMut.isPending}
         onSubmit={async (values) => {
           await updateProfileMut.mutateAsync(values as Record<string, unknown>);

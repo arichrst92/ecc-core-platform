@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, type ReactNode } from 'react';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
@@ -20,6 +20,8 @@ interface Props<T> {
   loading?: boolean;
   /** Untuk edit mode — sembunyikan field createOnly */
   isEdit?: boolean;
+  /** Konten tambahan di atas field (mis. foto profil yang tersimpan terpisah). */
+  intro?: ReactNode;
 }
 
 /**
@@ -86,6 +88,7 @@ export function FormModal<T extends Record<string, unknown>>({
   onSubmit,
   loading,
   isEdit,
+  intro,
 }: Props<T>) {
   const initial = useMemo(
     () => normalizeFormValues(fields, defaultValues as Record<string, unknown> | undefined),
@@ -152,6 +155,7 @@ export function FormModal<T extends Record<string, unknown>>({
               className="overflow-y-auto"
             >
               <div className="p-6 space-y-4">
+                {intro}
                 {visibleFields.map((field) => (
                   <ConditionalField key={field.name} field={field} />
                 ))}

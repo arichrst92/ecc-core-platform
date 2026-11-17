@@ -2,15 +2,14 @@
 
 /**
  * Portal → WhatsApp Config → "Gateway & OTP".
- * Saklar provider WhatsApp (Fonnte, StarSender, Resmi.ID untuk OTP), urutan
- * Fonnte/StarSender, OTP salinan email, dan lewati verifikasi nomor HP saat
- * onboarding — tanpa ubah .env / restart. Kredensial tetap di .env.
+ * Saklar provider WhatsApp (Resmi.ID untuk OTP, Fonnte), OTP salinan email,
+ * dan lewati verifikasi nomor HP saat onboarding — tanpa ubah .env / restart. Kredensial tetap di .env.
  * API: GET/PATCH /admin/wa-config/gateway
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
-import { ArrowDownUp, KeyRound, Loader2, Mail, Router, Send, UserCheck } from 'lucide-react';
+import { KeyRound, Loader2, Mail, Router, Send, UserCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type EmailMode = 'fallback' | 'always' | 'off';
@@ -18,30 +17,25 @@ type EmailMode = 'fallback' | 'always' | 'off';
 type Usage = 'otp' | 'notif' | 'both';
 const USAGE_LABEL: Record<Usage, string> = { both: 'OTP & notifikasi', otp: 'OTP saja', notif: 'Notifikasi saja (non-OTP)' };
 interface Settings {
-  waProviderOrder: 'fonnte,starsender' | 'starsender,fonnte' | null;
   waFonnteEnabled: boolean;
-  waStarsenderEnabled: boolean;
   waResmiOtpEnabled: boolean;
   waFonnteUsage: Usage;
-  waStarsenderUsage: Usage;
   otpEmailCopy: EmailMode | null;
   onboardingSkipNoHpOtp: boolean | null;
 }
 interface Gateway {
   settings: Settings;
   providers: {
-    order: string;
     fonnte: { configured: boolean; enabled: boolean; usage: Usage };
-    starsender: { configured: boolean; enabled: boolean; usage: Usage };
     resmi: { configured: boolean; enabled: boolean; template: string | null; lang: string; usage: Usage };
   };
   health: Record<ProviderKey, { state: 'ok' | 'error' | 'unknown'; lastOkAt: string | null; lastErrAt: string | null; lastErr: string | null }>;
   fonnteDevice: { connected: boolean; device: string | null; error?: string } | null;
-  effective: { order: string; otpEmailCopy: EmailMode; onboardingSkipNoHpOtp: boolean };
-  env: { waProviderOrder: string | null; otpEmailCopy: string | null; onboardingSkipNoHpOtp: string | null };
+  effective: { otpEmailCopy: EmailMode; onboardingSkipNoHpOtp: boolean };
+  env: { otpEmailCopy: string | null; onboardingSkipNoHpOtp: string | null };
 }
 
-type ProviderKey = 'resmi' | 'fonnte' | 'starsender';
+type ProviderKey = 'resmi' | 'fonnte';
 const KEY = ['wa-config', 'gateway'];
 const jam = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -131,16 +125,14 @@ export function GatewaySettings() {
   if (!d) return <div className="bg-white border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-600">Gagal memuat pengaturan gateway.</div>;
 
   const p = d.providers;
-  // Rantai per jenis pesan — prioritas tetap, provider di luar fungsinya dilewati.
-  const live = (k: 'fonnte' | 'starsender') => p[k].configured && p[k].enabled;
-  const serves = (k: 'fonnte' | 'starsender', kind: 'otp' | 'notif') => p[k].usage === 'both' || p[k].usage === kind;
-  const NAME = { fonnte: 'Fonnte', starsender: 'StarSender' } as const;
-  const orderKeys = d.effective.order.split(',').filter((k): k is 'fonnte' | 'starsender' => k === 'fonnte' || k === 'starsender');
+  // Rantai per jenis pesan — Fonnte dilewati bila bukan fungsinya.
+  const fonnteLive = p.fonnte.configured && p.fonnte.enabled;
+  const fonnteServes = (kind: 'otp' | 'notif') => p.fonnte.usage === 'both' || p.fonnte.usage === kind;
   const otpChain = [
     p.resmi.configured && p.resmi.enabled ? 'Resmi.ID' : null,
-    ...orderKeys.map((k) => (live(k) && serves(k, 'otp') ? NAME[k] : null)),
+    fonnteLive && fonnteServes('otp') ? 'Fonnte' : null,
   ].filter(Boolean) as string[];
-  const notifChain = orderKeys.filter((k) => live(k) && serves(k, 'notif')).map((k) => NAME[k]);
+  const notifChain = fonnteLive && fonnteServes('notif') ? ['Fonnte'] : [];
 
   /** Status koneksi: Fonnte dari API perangkat; lainnya dari hasil kirim terakhir / tes. */
   const statusOf = (key: ProviderKey, st: { configured: boolean; enabled: boolean }) => {
@@ -176,7 +168,7 @@ export function GatewaySettings() {
     title: string,
     sub: string,
     st: { configured: boolean; enabled: boolean },
-    field: 'waFonnteEnabled' | 'waStarsenderEnabled' | 'waResmiOtpEnabled',
+    field: 'waFonnteEnabled' | 'waResmiOtpEnabled',
     envHint: string,
   ) => (
     <div key={key} className="flex items-start gap-3 py-3">
@@ -194,11 +186,9 @@ export function GatewaySettings() {
             </span>
           ) : (
             <select
-              value={(key === 'fonnte' ? d.settings.waFonnteUsage : d.settings.waStarsenderUsage) ?? 'both'}
+              value={d.settings.waFonnteUsage ?? 'both'}
               disabled={busy}
-              onChange={(e) =>
-                save.mutate({ [key === 'fonnte' ? 'waFonnteUsage' : 'waStarsenderUsage']: e.target.value as Usage } as Partial<Settings>)
-              }
+              onChange={(e) => save.mutate({ waFonnteUsage: e.target.value as Usage })}
               className="px-2 py-1 border border-neutral-300 rounded-md text-xs"
             >
               {(['both', 'otp', 'notif'] as Usage[]).map((u) => (
@@ -228,9 +218,8 @@ export function GatewaySettings() {
     </div>
   );
 
-  // Prioritas: Resmi.ID (OTP) → urutan Fonnte/StarSender.
-  const textOrder = d.effective.order.split(',').filter((k): k is 'fonnte' | 'starsender' => k === 'fonnte' || k === 'starsender');
-  const rows: [ProviderKey, string, string, { configured: boolean; enabled: boolean }, 'waFonnteEnabled' | 'waStarsenderEnabled' | 'waResmiOtpEnabled', string][] = [
+  // Prioritas: Resmi.ID (OTP) → Fonnte.
+  const rows: [ProviderKey, string, string, { configured: boolean; enabled: boolean }, 'waFonnteEnabled' | 'waResmiOtpEnabled', string][] = [
     [
       'resmi',
       'Resmi.ID (WABA resmi)',
@@ -239,12 +228,7 @@ export function GatewaySettings() {
       'waResmiOtpEnabled',
       'RESMI_API_KEY, RESMI_PHONE_ID, RESMI_OTP_TEMPLATE',
     ],
-    ...textOrder.map(
-      (k) =>
-        (k === 'fonnte'
-          ? ['fonnte', 'Fonnte', 'Non-official (teks bebas).', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN']
-          : ['starsender', 'StarSender', 'Non-official (teks bebas).', p.starsender, 'waStarsenderEnabled', 'STARSENDER_DEVICE_KEY']) as (typeof rows)[number],
-    ),
+    ['fonnte', 'Fonnte', 'Non-official (teks bebas). Cadangan OTP & semua notifikasi.', p.fonnte, 'waFonnteEnabled', 'FONNTE_TOKEN'],
   ];
 
   return (
@@ -275,25 +259,6 @@ export function GatewaySettings() {
 
       <div className="px-5 divide-y divide-neutral-100">
         {rows.map(([key, title, sub, st, field, env], i) => providerRow(i + 1, key, title, sub, st, field, env))}
-
-        {/* Urutan */}
-        <div className="flex flex-wrap items-center gap-3 py-3">
-          <ArrowDownUp className="w-4 h-4 text-neutral-500" />
-          <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-neutral-900">Urutan Fonnte / StarSender (setelah Resmi.ID)</div>
-            <p className="text-xs text-neutral-500">Yang pertama dipakai; yang kedua otomatis jadi cadangan.</p>
-          </div>
-          <select
-            value={d.settings.waProviderOrder ?? ''}
-            disabled={busy}
-            onChange={(e) => save.mutate({ waProviderOrder: (e.target.value || null) as Settings['waProviderOrder'] })}
-            className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-          >
-            <option value="">Ikuti .env ({d.env.waProviderOrder ?? 'fonnte,starsender'})</option>
-            <option value="fonnte,starsender">Fonnte → StarSender</option>
-            <option value="starsender,fonnte">StarSender → Fonnte</option>
-          </select>
-        </div>
 
         {/* OTP email */}
         <div className="py-3">

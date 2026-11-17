@@ -1,7 +1,7 @@
 /**
  * Pengaturan WhatsApp & OTP dari Portal (WhatsApp Config → Gateway & OTP),
  * disimpan di app_config. Kredensial tetap di .env; di sini saklar & pilihan:
- *   - provider aktif (Fonnte / StarSender / Resmi.ID OTP) + urutan Fonnte/StarSender
+ *   - provider aktif (Resmi.ID untuk OTP, Fonnte) + fungsi Fonnte
  *   - OTP salinan email: fallback | always | off
  *   - lewati verifikasi nomor HP saat onboarding (magic link)
  * Nilai NULL = ikuti .env. Di-cache di memori (dimuat saat start, tiap 30 detik,
@@ -13,18 +13,13 @@ import { logger } from './logger.js';
 
 export type OtpEmailMode = 'fallback' | 'always' | 'off';
 export const OTP_EMAIL_MODES: OtpEmailMode[] = ['fallback', 'always', 'off'];
-export const WA_ORDERS = ['fonnte,starsender', 'starsender,fonnte'] as const;
 export const WA_USAGES: WaUsage[] = ['otp', 'notif', 'both'];
 
 export interface WaGatewaySettings {
-  /** null = ikuti WA_PROVIDER_ORDER */
-  waProviderOrder: string | null;
   waFonnteEnabled: boolean;
-  waStarsenderEnabled: boolean;
   waResmiOtpEnabled: boolean;
   /** Fungsi provider: otp | notif | both (prioritas tetap). */
   waFonnteUsage: WaUsage;
-  waStarsenderUsage: WaUsage;
   /** null = ikuti OTP_EMAIL_COPY */
   otpEmailCopy: OtpEmailMode | null;
   /** null = ikuti ONBOARDING_SKIP_NOHP_OTP */
@@ -32,23 +27,17 @@ export interface WaGatewaySettings {
 }
 
 const SELECT = {
-  waProviderOrder: true,
   waFonnteEnabled: true,
-  waStarsenderEnabled: true,
   waResmiOtpEnabled: true,
   waFonnteUsage: true,
-  waStarsenderUsage: true,
   otpEmailCopy: true,
   onboardingSkipNoHpOtp: true,
 } as const;
 
 const DEFAULTS: WaGatewaySettings = {
-  waProviderOrder: null,
   waFonnteEnabled: true,
-  waStarsenderEnabled: true,
   waResmiOtpEnabled: true,
   waFonnteUsage: 'both',
-  waStarsenderUsage: 'both',
   otpEmailCopy: null,
   onboardingSkipNoHpOtp: null,
 };
@@ -62,13 +51,8 @@ function apply(s: WaGatewaySettings) {
   loadedAt = Date.now();
   const disabled: WaProvider[] = [];
   if (!s.waFonnteEnabled) disabled.push('fonnte');
-  if (!s.waStarsenderEnabled) disabled.push('starsender');
   if (!s.waResmiOtpEnabled) disabled.push('resmi');
-  setWaRuntimeConfig({
-    order: s.waProviderOrder,
-    disabled,
-    usage: { fonnte: s.waFonnteUsage, starsender: s.waStarsenderUsage },
-  });
+  setWaRuntimeConfig({ disabled, usage: { fonnte: s.waFonnteUsage } });
 }
 
 const normUsage = (v: string | null | undefined): WaUsage =>
@@ -87,9 +71,7 @@ export async function loadWaRuntime(force = false): Promise<WaGatewaySettings> {
         ? {
             ...row,
             otpEmailCopy: normMode(row.otpEmailCopy),
-            waProviderOrder: row.waProviderOrder || null,
             waFonnteUsage: normUsage(row.waFonnteUsage),
-            waStarsenderUsage: normUsage(row.waStarsenderUsage),
           }
         : DEFAULTS,
     );

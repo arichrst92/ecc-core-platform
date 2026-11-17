@@ -24,7 +24,6 @@ import {
 import { z } from 'zod';
 import {
   OTP_EMAIL_MODES,
-  WA_ORDERS,
   WA_USAGES,
   loadWaRuntime,
   otpEmailMode,
@@ -80,12 +79,10 @@ async function gatewayView() {
     health: waProviderHealth(),
     fonnteDevice,
     effective: {
-      order: st.order,
       otpEmailCopy: otpEmailMode(),
       onboardingSkipNoHpOtp: skipNoHpOtp(),
     },
     env: {
-      waProviderOrder: process.env.WA_PROVIDER_ORDER || null,
       otpEmailCopy: process.env.OTP_EMAIL_COPY || null,
       onboardingSkipNoHpOtp: process.env.ONBOARDING_SKIP_NOHP_OTP || null,
     },
@@ -98,12 +95,9 @@ waConfigRouter.get('/gateway', async (_req, res) => {
 
 const gatewaySchema = z
   .object({
-    waProviderOrder: z.enum(WA_ORDERS).nullable(),
     waFonnteEnabled: z.boolean(),
-    waStarsenderEnabled: z.boolean(),
     waResmiOtpEnabled: z.boolean(),
     waFonnteUsage: z.enum(WA_USAGES as [string, ...string[]]),
-    waStarsenderUsage: z.enum(WA_USAGES as [string, ...string[]]),
     otpEmailCopy: z.enum(OTP_EMAIL_MODES as [string, ...string[]]).nullable(),
     onboardingSkipNoHpOtp: z.boolean().nullable(),
   })
@@ -133,7 +127,7 @@ waConfigRouter.patch('/gateway', async (req, res) => {
  */
 waConfigRouter.post('/gateway/test', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  const provider = z.enum(['resmi', 'fonnte', 'starsender']).parse(req.body?.provider);
+  const provider = z.enum(['resmi', 'fonnte']).parse(req.body?.provider);
   let noHp: string | null = null;
   if (typeof req.body?.noHp === 'string' && req.body.noHp.trim()) {
     noHp = normalizePhoneNumber(req.body.noHp);

@@ -53,7 +53,7 @@ const bodySchema = z
     isi: z.string().trim().min(1, 'Isi pesan wajib diisi').max(10_000),
     links: z.array(linkSchema).max(5).default([]),
     channels: z.array(z.enum(['IN_APP', 'WHATSAPP', 'EMAIL'])).min(1, 'Pilih minimal satu kanal').default(['IN_APP']),
-    waProvider: z.enum(['auto', 'fonnte', 'starsender']).default('auto'),
+    waProvider: z.enum(['auto', 'fonnte']).default('auto'),
   })
   .merge(audienceSchema);
 

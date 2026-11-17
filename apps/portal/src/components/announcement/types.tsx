@@ -26,7 +26,7 @@ export interface AnnouncementItem {
   homecellIds: string[];
   jemaatIds: string[];
   channels: AnnouncementChannel[];
-  waProvider: 'auto' | 'fonnte' | 'starsender';
+  waProvider: 'auto' | 'fonnte';
   status: AnnouncementStatus;
   scheduledAt: string | null;
   startedAt: string | null;

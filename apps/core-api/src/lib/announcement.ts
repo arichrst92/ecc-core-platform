@@ -242,7 +242,7 @@ async function sendWa(
   a: { id: string; judul: string; isi: string; bannerUrl: string | null; slug: string; links: unknown; waProvider: string },
   deadline: number,
 ) {
-  const provider = a.waProvider === 'fonnte' || a.waProvider === 'starsender' ? a.waProvider : 'auto';
+  const provider = a.waProvider === 'fonnte' ? 'fonnte' : 'auto';
   const message = waMessage(a);
   let sent = 0;
   let failed = 0;

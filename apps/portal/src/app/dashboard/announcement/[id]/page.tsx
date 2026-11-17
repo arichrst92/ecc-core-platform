@@ -51,7 +51,7 @@ interface Form {
   homecellIds: string[];
   jemaatIds: string[];
   channels: AnnouncementChannel[];
-  waProvider: 'auto' | 'fonnte' | 'starsender';
+  waProvider: 'auto' | 'fonnte';
 }
 const EMPTY: Form = {
   judul: '',
@@ -529,7 +529,6 @@ export default function AnnouncementEditPage() {
               >
                 <option value="auto">Otomatis (sesuai Gateway & OTP)</option>
                 <option value="fonnte">Fonnte</option>
-                <option value="starsender">StarSender</option>
               </select>
             </div>
             <p className="text-xs text-neutral-500 flex gap-1.5">

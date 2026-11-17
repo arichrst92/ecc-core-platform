@@ -34,7 +34,7 @@ type NotifType = Prisma.NotificationLogCreateInput['type'];
 
 /** Kegagalan pasti = pesan jelas TIDAK terkirim → aman dicoba lagi. */
 export function isDefiniteFailure(message: string): boolean {
-  // Semua provider (Fonnte + StarSender) gagal → pasti bila tiap alasannya pasti.
+  // Semua provider (Resmi.ID + Fonnte) gagal → pasti bila tiap alasannya pasti.
   if (message.startsWith(ALL_FAILED_PREFIX)) {
     return message.slice(ALL_FAILED_PREFIX.length).split(' | ').every((m) => isDefiniteFailure(m));
   }
@@ -42,9 +42,6 @@ export function isDefiniteFailure(message: string): boolean {
     message.startsWith('Fonnte error:') ||
     /^Fonnte send failed \(4\d\d\)/.test(message) ||
     message.startsWith('Fonnte not configured') ||
-    message.startsWith('StarSender error:') ||
-    /^StarSender send failed \(4\d\d\)/.test(message) ||
-    message.startsWith('StarSender not configured') ||
     message.startsWith('Resmi error:') ||
     message.startsWith('Resmi not configured') ||
     message.startsWith('WhatsApp gateway not configured')

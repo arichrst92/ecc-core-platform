@@ -1228,7 +1228,7 @@ async function selfCopyExtras(jemaatId: string): Promise<{ html: string }> {
         }
         <div class="info-row" style="margin-top:6px"><div class="lbl">Pesan WhatsApp &amp; email</div><div class="val">Pengingat: ${yn(privacy?.waReminders)} · Ucapan ulang tahun: ${yn(privacy?.waGreetings)} · Info aktivitas: ${yn(privacy?.waUpdates)}</div></div>
         <div class="info-row"><div class="lbl">Status kontak</div><div class="val">Nomor HP: ${kontak?.noHp ? escapeHtml(sumber(kontak.noHpSource)) : 'tidak ada'} · Email: ${kontak?.email ? (kontak.emailVerifiedAt ? 'terverifikasi' : escapeHtml(sumber(kontak.emailSource))) : 'tidak ada'}</div></div>
-        <div class="info-row"><div class="lbl">Bisa ditemukan lewat no HP</div><div class="val">${privacy?.discoverableByPhone === false ? 'Tidak' : 'Ya'}</div></div>
+        <div class="info-row"><div class="lbl">Bisa dicari lewat no HP / email</div><div class="val">${privacy?.discoverableByPhone === false ? 'Tidak' : 'Ya'}</div></div>
       </section>
 
       <section>

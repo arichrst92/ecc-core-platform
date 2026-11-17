@@ -87,7 +87,7 @@ import { meExportRouter } from './me-export.js';
 import { meCommPrefsRouter } from './me-comm-prefs.js';
 import { meReviewRouter } from './me-review.js';
 import { meSpiritualJourneyRouter } from './me-spiritual-journey.js';
-import { privacyGate } from '../../lib/privacy.js';
+import { notDiscoverableByPhone, privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
 import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
 import { tzOr } from '../../lib/tz.js';
@@ -1282,7 +1282,7 @@ meRouter.get('/family/search', familySearchLimiter, async (req, res) => {
     if (q.length < 3) throw BadRequest('Ketik minimal 3 huruf nama.');
     where = { namaLengkap: { contains: q, mode: 'insensitive' } };
   }
-  const [rows, linked] = await Promise.all([
+  const [found, linked] = await Promise.all([
     prisma.jemaat.findMany({
       where: { ...where, isActive: true, isTamu: false, id: { not: jemaatId } },
       orderBy: { namaLengkap: 'asc' },
@@ -1291,6 +1291,10 @@ meRouter.get('/family/search', familySearchLimiter, async (req, res) => {
     }),
     prisma.jemaatRelasi.findMany({ where: { jemaatId }, select: { jemaatTerkaitId: true } }),
   ]);
+  // Privasi → "Bisa dicari lewat nomor HP atau email": yang mematikannya tidak
+  // muncul saat dicari dengan nomor HP / email (tetap bisa lewat nama atau kode).
+  const hidden = mode === 'nama' ? new Set<string>() : await notDiscoverableByPhone(found.map((r) => r.id));
+  const rows = found.filter((r) => !hidden.has(r.id));
   const sudah = new Set(linked.map((l) => l.jemaatTerkaitId));
   const pend = await prisma.familyLinkRequest.findMany({
     where: { requesterId: jemaatId, status: 'PENDING', targetId: { in: rows.map((r) => r.id) } },

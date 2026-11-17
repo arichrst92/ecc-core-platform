@@ -1,6 +1,6 @@
 # Rencana Implementasi — Login & Daftar Dua Saluran (WhatsApp / Email)
 
-Status: rencana, belum dikerjakan (kecuali Fase 0). Disusun 17 Nov 2026.
+Status: rencana. Fase 0 sudah di-deploy; Fase 1–3 belum dikerjakan. Disusun 17 Nov 2026.
 Tujuan: jemaat tidak pernah buntu saat salah satu penyedia (WhatsApp / email) gangguan,
 tanpa menyimpan kontak yang belum terbukti milik jemaat.
 
@@ -26,7 +26,20 @@ tanpa menyimpan kontak yang belum terbukti milik jemaat.
 
 ---
 
-## 2. Fase 0 — Hapus StarSender (selesai di kode, menunggu deploy)
+## 1a. Data produksi (17 Nov 2026)
+
+| | Jumlah |
+|---|---|
+| Anggota aktif | 7.255 |
+| Hanya WhatsApp (tanpa email) | 2.044 |
+| Dewasa tanpa nomor HP | 2.557 — 2.171 punya email & belum pernah login, 342 tanpa email & belum pernah login, **44 aktif via magic link** |
+| Tanpa kontak sama sekali | 495 — 153 punya wali, 309 dewasa & 33 anak tanpa wali (data impor, belum pernah login) |
+| Email ganda (beda huruf besar/kecil) | 3 |
+
+Kesimpulan: kelompok paling rentan saat WhatsApp gangguan = 2.044 jemaat hanya-WhatsApp.
+Risiko terbesar berikutnya = akun ganda dari ± 2.500 data impor tanpa nomor HP (lihat 3.9).
+
+## 2. Fase 0 — Hapus StarSender (sudah di-deploy 17 Nov 2026)
 
 - `packages/auth/src/whatsapp.ts`: provider StarSender & urutan provider dihapus. OTP: Resmi.ID → Fonnte. Notifikasi: Fonnte.
 - `wa-runtime`, `wa-config`, `wa-dispatch`, `server-health`, Announcement: referensi StarSender dihapus.
@@ -57,7 +70,7 @@ untuk app versi lama. Perilaku baru yang mengubah alur lama diatur saklar Portal
 ### 3.2 Infrastruktur OTP email
 - `otp_verification`: `no_hp` jadi nullable, tambah `email` (VARCHAR 255, nullable) + indeks `(email, purpose)`.
   Constraint: salah satu `no_hp` / `email` wajib terisi.
-- Enum `otp_purpose` tambah: `ENROLLMENT_EMAIL`, `LOGIN_EMAIL` (web), `ADD_EMAIL`, `ADD_NOHP`.
+- Enum `otp_purpose` tambah: `ENROLLMENT_EMAIL`, `LOGIN_EMAIL` (web), `ADD_EMAIL`, `ADD_NOHP`, `CLAIM_RECORD`, `ADMIN_CODE`.
   (Migrasi `ADD VALUE` di file terpisah, seperti migrasi Announcement.)
 - Endpoint baru:
   - `POST /auth/email-otp/request` { email, purpose: ENROLLMENT_EMAIL | LOGIN_EMAIL }
@@ -118,7 +131,36 @@ untuk app versi lama. Perilaku baru yang mengubah alur lama diatur saklar Portal
 - `/auth/otp/request` LOGIN untuk nomor tak terdaftar: pesan ditambah
   "Daftar dengan email? Pilih *Masuk dengan email*."
 
-### 3.9 Lain-lain server
+### 3.9 Deteksi data lama saat daftar (cegah akun ganda)
+
+Latar (data produksi 17 Nov 2026): ± 2.500 data jemaat dewasa hasil impor belum punya nomor HP
+dan belum pernah login (2.171 punya email, 342 tanpa email sama sekali). Saat orangnya daftar sendiri
+lewat WhatsApp, server hanya mencocokkan nomor HP → akun baru terbuat, riwayat data lama tertinggal.
+
+- Endpoint baru `POST /auth/register/match` (dipanggil app setelah OTP terverifikasi + data diri diisi,
+  sebelum `/auth/register`). Mencari kandidat di cabang yang dipilih:
+  `is_active`, bukan tamu, `no_hp IS NULL` (daftar WA) atau `email IS NULL` (daftar email),
+  belum punya akun yang pernah login, **tanggal lahir sama** dan **nama mirip**
+  (normalisasi huruf kecil, tanpa gelar/tanda baca; trigram similarity ≥ 0,6 — `pg_trgm`).
+  Bila tanggal lahir tidak diisi pendaftar → tidak dicari (terlalu banyak salah cocok).
+- Respons hanya berisi data tersamarkan: inisial nama (`Ke**** N********`), cabang,
+  ada/tidaknya email (`k*****@gmail.com`). Maks 1 kandidat (yang paling mirip); >1 kandidat setara → dianggap tidak ada.
+- Alur:
+  - **Kandidat punya email** → app menawarkan "Ya, ini saya": server kirim OTP (purpose `CLAIM_RECORD`)
+    ke email data lama. Kode benar → nomor HP / email pendaftar **disambungkan ke data lama**
+    (`/auth/register` dengan `claimJemaatId` + bukti OTP), data diri yang kosong dilengkapi, sesi login diberikan.
+    Tidak ada akun baru.
+  - **Kandidat tanpa email** → pendaftaran tetap jalan (akun baru) dan dicatat sebagai
+    **kandidat ganda** (tabel `duplicate_candidate`: jemaat baru, jemaat lama, skor, status) untuk ditinjau
+    admin di Portal → Konsolidasi Jemaat (gabung / abaikan).
+  - **"Bukan saya"** → pendaftaran jalan seperti biasa; tidak dicatat.
+- Tidak pernah menyambung otomatis tanpa bukti (kode email atau keputusan admin).
+- Batas: 5 pencarian per jam per nomor/email pendaftar (cegah orang mengintip data lewat coba-coba nama).
+- Audit log untuk setiap klaim berhasil (`kind: 'claim-record'`).
+- App versi lama tidak memanggil `/register/match` → perilaku lama (akun baru); tetap tercatat kandidat
+  ganda lewat pengecekan yang sama di `/auth/register` (tanpa menghalangi pendaftaran).
+
+### 3.10 Lain-lain server
 - Terima & catat header `X-App-Version` (log + statistik versi di Portal). Belum dipakai untuk logika.
 - Laporan error app: kenali pengguna lewat `jemaatId`, bukan nomor HP.
 - Cek sinkronisasi ShiftSoft: pencocokan memakai email juga, supaya akun tanpa nomor HP tidak terbuat ganda.
@@ -131,6 +173,11 @@ untuk app versi lama. Perilaku baru yang mengubah alur lama diatur saklar Portal
 - Layar pilih saluran: **Daftar dengan WhatsApp** / **Daftar dengan email**.
 - Email: input email → OTP email (kotak cek spam, masa berlaku 10 menit) → data diri → selesai.
 - Saluran gangguan (`WHATSAPP_UNAVAILABLE` / `EMAIL_UNAVAILABLE`) → saran pindah saluran.
+- Setelah data diri diisi: panggil `/auth/register/match` (3.9). Bila ada kandidat → layar
+  *"Kami menemukan data atas nama Ke\*\*\*\* N\*\*\*\*\*\*\*\* di ECC [cabang]. Apakah ini Anda?"*
+  → "Ya, ini saya" (OTP ke email data lama, tersamarkan, dengan hint cek spam) / "Bukan saya".
+  Kandidat tanpa email → info singkat "Admin cabang akan menyatukan data lama Anda".
+- Tanggal lahir di form daftar: dianjurkan diisi (dipakai untuk menemukan data lama).
 - Perbaikan bug: timer 60 menit tidak memunculkan alert berulang; setelah waktu habis
   `reset()` + `router.dismissTo('/(auth)/signup')` (tumpukan layar bersih).
 
@@ -178,7 +225,9 @@ untuk app versi lama. Perilaku baru yang mengubah alur lama diatur saklar Portal
 4. `…_contact_verification` — `jemaat.email_verified_at`, `no_hp_source`, `email_source` + backfill.
 5. `…_email_lowercase` — setelah cek ganda bersih.
 6. `…_app_config_auth_flags` — saklar Portal (3.4, 3.1 ambang).
-7. (Fase 3) `…_notification_channel_config`.
+7. `…_duplicate_candidate` — `CREATE EXTENSION IF NOT EXISTS pg_trgm`, indeks trigram nama jemaat,
+   tabel `duplicate_candidate` (3.9).
+8. (Fase 3) `…_notification_channel_config`.
 
 Semua tambahan / pengisian data. Tidak ada kolom yang masih dibaca kode lama yang dihapus.
 
@@ -221,6 +270,9 @@ dengan skema baru (kecuali Fase 0 yang menghapus kolom StarSender — kode lama 
   email gagal kirim → pesan gangguan.
 - **Daftar:** jendela 60 menit; panggilan ulang setelah sukses → sesi; transaksi gagal di tengah → tidak ada data sisa.
 - **Kode admin:** dibuat di Portal → dipakai di app baru & app lama → sekali pakai → audit tercatat.
+- **Data lama:** nama mirip + tanggal lahir sama → kandidat muncul (tersamarkan); klaim lewat OTP email
+  → nomor tersambung ke data lama, tidak ada akun baru; kandidat tanpa email → tercatat di Portal;
+  dua kandidat setara → tidak ditampilkan; batas pencarian; app lama → tetap tercatat kandidat ganda.
 - **Kontak:** tambah nomor milik tamu → riwayat tergabung; milik anggota lain → ditolak; hapus kontak terakhir → ditolak.
 - **App lama:** daftar, login, ubah email, ubah nomor tetap berjalan dengan API baru.
 - **Notifikasi tanpa nomor:** pengingat, Announcement, doa, keluarga → dilewati (Fase 1) / ke email (Fase 3).
@@ -234,7 +286,8 @@ dengan skema baru (kecuali Fase 0 yang menghapus kolom StarSender — kode lama 
    atau siapkan penyedia email cadangan.
 2. **DNS domain pengirim:** SPF, DKIM, DMARC benar (cek di SendGrid → Sender Authentication).
 3. **Angka dampak** (query di VPS): jumlah anggota, dewasa tanpa nomor HP, tanpa email, hanya WhatsApp.
-4. **Cek ganda email** (query di 3.5) sebelum migrasi huruf kecil.
+4. **Cek ganda email** (query di 3.5) sebelum migrasi huruf kecil. Hasil 17 Nov 2026: 3 email ganda
+   (2 tampak orang yang sama → konsolidasi; 1 dipakai dua orang berbeda → salah satu diganti/dikosongkan).
 
 ---
 
@@ -248,3 +301,5 @@ dengan skema baru (kecuali Fase 0 yang menghapus kolom StarSender — kode lama 
 | Magic link bermasalah di perangkat tertentu | Uji lintas perangkat; web memakai OTP email; kode admin sebagai jalan terakhir. |
 | Penyalahgunaan kode admin | Hanya role berwenang per cabang, 10 menit, sekali pakai, audit. |
 | Saklar app lama lupa dimatikan | Masuk checklist rilis langkah 4. |
+| Salah cocok data lama (orang lain bernama mirip) | Wajib tanggal lahir sama + cabang sama; klaim butuh kode ke email data lama; tanpa email → keputusan admin. |
+| Mengintip data lewat pencarian nama | Respons tersamarkan, maks 1 kandidat, batas 5 pencarian/jam. |

@@ -101,7 +101,7 @@ export function WebActionPanel({
       return;
     }
     if (!donasiFile) {
-      setMessage({ type: 'err', text: L('Pilih foto bukti transfer donasi.', 'Choose a photo of the donation transfer receipt.') });
+      setMessage({ type: 'err', text: L('Pilih foto bukti transfer pemberian sukarela.', 'Choose a photo of the voluntary gift transfer receipt.') });
       return;
     }
     setDonasiBusy(true);
@@ -112,13 +112,13 @@ export function WebActionPanel({
     const r = await call(`event/${eventId}/donations`, { method: 'POST', body: fd });
     setDonasiBusy(false);
     if (!r.ok) {
-      setMessage({ type: 'err', text: r.json?.error?.message ?? L('Donasi gagal dikirim.', 'Failed to send donation.') });
+      setMessage({ type: 'err', text: r.json?.error?.message ?? L('Pemberian sukarela gagal dikirim.', 'Failed to send voluntary gift.') });
       return;
     }
     setDonasiNominal('');
     setDonasiFile(null);
     await refreshDonations();
-    setMessage({ type: 'ok', text: L('Terima kasih! Donasi Anda terkirim dan menunggu verifikasi admin.', 'Thank you! Your donation was sent and is awaiting admin verification.') });
+    setMessage({ type: 'ok', text: L('Terima kasih! Pemberian sukarela Anda terkirim dan menunggu verifikasi admin.', 'Thank you! Your voluntary gift was sent and is awaiting admin verification.') });
   }
 
   function toggle(id: string) {
@@ -327,7 +327,7 @@ export function WebActionPanel({
         {isBebas && participations.length > 0 && (
           <section className="border-t border-neutral-100 pt-5">
             <h3 className="text-sm font-semibold text-neutral-900 mb-1 flex items-center gap-1.5">
-              <HandHeart className="w-4 h-4 text-orange-500" /> 3. {L('Donasi lagi', 'Give again')}
+              <HandHeart className="w-4 h-4 text-orange-500" /> 3. {L('Beri sukarela lagi', 'Give again')}
             </h3>
             <p className="text-xs text-neutral-500 mb-3">
               {L(
@@ -355,7 +355,7 @@ export function WebActionPanel({
               </label>
             )}
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">{L('Nominal donasi', 'Donation amount')} (min Rp {rupiah(MIN_BEBAS)})</span>
+              <span className="text-xs font-medium text-neutral-600">{L('Nominal sukarela', 'Voluntary amount')} (min Rp {rupiah(MIN_BEBAS)})</span>
               <div className="mt-1 flex items-center border border-neutral-300 rounded-lg overflow-hidden">
                 <span className="px-3 text-sm text-neutral-500 bg-neutral-50 py-2">Rp</span>
                 <input
@@ -392,12 +392,12 @@ export function WebActionPanel({
               className="mt-3 w-full py-3 rounded-xl bg-brand-grad text-white font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {donasiBusy && <Loader2 className="w-4 h-4 animate-spin" />}
-              {L('Kirim donasi', 'Send donation')}
+              {L('Kirim pemberian', 'Send gift')}
             </button>
 
             {donations.length > 0 && (
               <div className="mt-4 space-y-2">
-                <p className="text-xs font-semibold text-neutral-700">{L('Riwayat donasi tambahan', 'Additional donation history')}</p>
+                <p className="text-xs font-semibold text-neutral-700">{L('Riwayat pemberian sukarela tambahan', 'Additional voluntary gift history')}</p>
                 {donations.map((d) => {
                   const st = statusOf(d.status);
                   return (

@@ -67,7 +67,7 @@ export function DuplicateEventButton({
                 <ul className="list-disc pl-5 space-y-1 text-neutral-600">
                   <li>Semua isi & pengaturan disalin persis (tanggal, lokasi, biaya, kuota, gambar, syarat role, pelayanan & petugas).</li>
                   <li>Salinan berstatus <b>Draft (belum publish)</b> dengan judul berakhiran “(Salinan)”.</li>
-                  <li>Peserta, donasi, dan statistik tidak ikut disalin.</li>
+                  <li>Peserta, pemberian sukarela, dan statistik tidak ikut disalin.</li>
                 </ul>
               </div>
               <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">

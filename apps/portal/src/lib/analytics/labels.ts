@@ -6,7 +6,7 @@ const LABELS: Record<string, string> = {
   '/event/[id]/register': 'Event — daftar',
   '/event/[id]/payment': 'Event — pembayaran',
   '/event/[id]/pembayaran': 'Event — pembayaran',
-  '/event/[id]/donate': 'Event — donasi',
+  '/event/[id]/donate': 'Event — pemberian sukarela',
   '/reservasi': 'Tiket (Reservasi)',
   '/my-reservasi': 'Reservasi saya',
   '/tiket': 'Tiket — tampilan penuh',

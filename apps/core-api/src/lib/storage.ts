@@ -565,3 +565,42 @@ export async function saveWebsitePastorPhoto(buffer: Buffer): Promise<string> {
     .toFile(path.join(dir, filename));
   return `${PUBLIC_UPLOADS_PREFIX}/website/pastors/${filename}`;
 }
+
+// =====================================================
+//  Gambar Catatan saya (2.4.9) — pribadi, nama file acak 128-bit (tidak
+//  bisa ditebak) di folder per jemaat. Layout: catatan/{jemaat-uuid}/{hex32}.webp
+// =====================================================
+
+export const CATATAN_IMG_RE = /\/uploads\/catatan\/([0-9a-f-]{36})\/([0-9a-f]{32})\.webp/;
+
+export async function saveCatatanImage(jemaatId: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'catatan', jemaatId);
+  await ensureDir(dir);
+  const filename = `${crypto.randomBytes(16).toString('hex')}.webp`;
+  await sharp(assertRasterImage(buffer))
+    .rotate()
+    .resize({ width: MAX_DIM_HERO, height: MAX_DIM_HERO, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(path.join(dir, filename));
+  return `${PUBLIC_UPLOADS_PREFIX}/catatan/${jemaatId}/${filename}`;
+}
+
+/** Jumlah gambar catatan milik jemaat (batas penyimpanan). */
+export async function countCatatanImages(jemaatId: string): Promise<number> {
+  try {
+    return (await fs.readdir(path.join(UPLOADS_DIR, 'catatan', jemaatId))).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Hapus satu gambar catatan — hanya bila URL milik jemaat ini. */
+export async function deleteCatatanImage(jemaatId: string, url: string): Promise<void> {
+  const m = CATATAN_IMG_RE.exec(url);
+  if (!m || m[1] !== jemaatId) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, 'catatan', jemaatId, `${m[2]}.webp`));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}

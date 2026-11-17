@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 /**
  * Penghapusan / penyamaran data pribadi (kepatuhan no. 5 & 14).
  *
@@ -19,6 +21,7 @@ import {
   deleteEventDonationBukti,
   deleteProfilePhoto,
   deleteSertifikatFile,
+  UPLOADS_DIR,
 } from './storage.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -129,6 +132,8 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
   const files: Promise<unknown>[] = [deleteProfilePhoto('jemaat', j.id)];
   if (j.user) files.push(deleteProfilePhoto('user', j.user.id));
   for (const s of j.sertifikat) files.push(deleteSertifikatFile(j.id, s.id));
+  // Gambar Catatan saya (2.4.9) — seluruh folder milik jemaat ini.
+  files.push(fs.rm(path.join(UPLOADS_DIR, 'catatan', j.id), { recursive: true, force: true }));
   for (const p of j.eventPartisipasi) {
     if (p.buktiTransferUrl) files.push(deleteEventBuktiTransfer(p.id));
     for (const d of p.donations) if (d.buktiTransferUrl) files.push(deleteEventDonationBukti(d.id));

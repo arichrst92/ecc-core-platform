@@ -53,6 +53,7 @@ import {
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
+import { nameSimilarity } from '../../lib/jemaat-consolidation.js';
 import { assertOtpCooldown, consumeOtp, createOtp, otpTtlSeconds, setOtpProvider } from '../../lib/otp-store.js';
 import { sendOtpEmail } from '../../lib/sendgrid.js';
 import { otpRequestLimiter, authVerifyLimiter, familySearchLimiter } from '../../middleware/rate-limit.js';
@@ -1336,42 +1337,69 @@ meRouter.post('/family/register-new', async (req, res) => {
   });
   if (!cabang?.isActive) throw BadRequest('Cabang tidak valid.');
 
+  // Nomor HP milik data tamu (pernah dibawa ke event/ibadah) dengan nama mirip →
+  // data tamu itu yang dijadikan anggota (riwayatnya tetap), bukan akun baru.
+  let tamuBase: { id: string; kode: string | null } | null = null;
   if (input.noHp) {
     const existing = await prisma.jemaat.findUnique({
       where: { noHp: input.noHp },
-      select: { isActive: true },
+      select: { id: true, isActive: true, isTamu: true, namaLengkap: true, kode: true },
     });
-    if (existing) {
+    if (existing?.isTamu) {
+      const sama = Math.max(nameSimilarity(input.namaLengkap, existing.namaLengkap), nameSimilarity(existing.namaLengkap, input.namaLengkap));
+      if (sama < 0.7) {
+        throw Conflict('Nomor HP ini tercatat sebagai data tamu atas nama lain. Periksa kembali nomornya, atau hubungi admin cabang.');
+      }
+      tamuBase = { id: existing.id, kode: existing.kode };
+    } else if (existing) {
       if (!existing.isActive) {
         throw Conflict(
           'Nomor HP sudah terdaftar tapi statusnya nonaktif. Hubungi admin cabang untuk reaktivasi.',
         );
       }
-      throw Conflict('Nomor HP sudah terdaftar — gunakan link-by-phone.');
+      throw Conflict('Nomor HP sudah terdaftar sebagai jemaat — hubungkan lewat Tambah Keluarga → cari dengan nomor HP.');
     }
   }
+  if (input.email) {
+    if (isDisposableEmail(input.email)) throw BadRequest('Gunakan alamat email pribadi (bukan email sementara).');
+    const owner = await prisma.jemaat.findFirst({
+      where: { email: { equals: input.email, mode: 'insensitive' }, NOT: tamuBase ? { id: tamuBase.id } : undefined },
+      select: { id: true },
+    });
+    if (owner) throw Conflict('Email sudah dipakai jemaat lain — hubungkan lewat Tambah Keluarga → cari, atau gunakan email lain.');
+  }
 
-  const kode = await generateUniqueKode(
-    async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })),
-  );
-
-  const created = await prisma.jemaat.create({
-    data: {
-      cabangId,
-      namaLengkap: input.namaLengkap,
-      kode,
-      noHp: input.noHp,
-      noHpSource: input.noHp ? 'GUARDIAN' : null,
-      tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
-      jenisKelamin: input.jenisKelamin ?? undefined,
-      alamat: input.alamat,
-      tanggalBergabung: new Date(),
-      primaryGuardianId: input.noHp ? null : jemaatId, // dependent kalau no noHp
-      registeredViaJemaatId: jemaatId,
-      isActive: true,
-    },
-    select: { id: true, namaLengkap: true, kode: true, noHp: true },
-  });
+  const kode =
+    tamuBase?.kode ??
+    (await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } }))));
+  // Punya nomor HP atau email → anggota penuh (bisa masuk sendiri). Tanpa
+  // keduanya → tanggungan (dikelola wali).
+  const bisaMasuk = !!(input.noHp || input.email);
+  const jemaatData = {
+    cabangId,
+    namaLengkap: input.namaLengkap,
+    kode,
+    noHp: input.noHp,
+    noHpSource: input.noHp ? 'GUARDIAN' : null,
+    // Data tamu: email lamanya tidak ditimpa kosong.
+    ...(input.email ? { email: input.email, emailSource: 'GUARDIAN', emailVerifiedAt: null } : {}),
+    tanggalLahir: input.tanggalLahir ? new Date(input.tanggalLahir) : undefined,
+    jenisKelamin: input.jenisKelamin ?? undefined,
+    alamat: input.alamat,
+    primaryGuardianId: bisaMasuk ? null : jemaatId,
+    registeredViaJemaatId: jemaatId,
+    isActive: true,
+  };
+  const created = tamuBase
+    ? await prisma.jemaat.update({
+        where: { id: tamuBase.id },
+        data: { ...jemaatData, isTamu: false },
+        select: { id: true, namaLengkap: true, kode: true, noHp: true },
+      })
+    : await prisma.jemaat.create({
+        data: { ...jemaatData, tanggalBergabung: new Date() },
+        select: { id: true, namaLengkap: true, kode: true, noHp: true },
+      });
 
   const link = await upsertJemaatRelasi(jemaatId, created.id, input);
 
@@ -1382,7 +1410,8 @@ meRouter.post('/family/register-new', async (req, res) => {
     resourceLabel: `Family register-new: ${created.namaLengkap} via ${me.namaLengkap}`,
     metadata: {
       kind: 'family-register-new',
-      dependent: !input.noHp,
+      dependent: !(input.noHp || input.email),
+      fromTamu: !!tamuBase,
       tipe: link.tipeRelasi.nama,
     },
   });
@@ -1471,24 +1500,31 @@ meRouter.patch('/family/:jemaatId/profile', async (req, res) => {
   // Skip kalau value sama dengan existing (no-op update).
   if (input.noHp !== undefined && input.noHp !== null && input.noHp !== before.noHp) {
     const conflict = await prisma.jemaat.findFirst({
-      where: { noHp: input.noHp, isActive: true, NOT: { id: targetId } },
-      select: { id: true, namaLengkap: true },
+      where: { noHp: input.noHp, NOT: { id: targetId } },
+      select: { id: true, namaLengkap: true, isTamu: true },
     });
+    if (conflict?.isTamu) {
+      // Catat untuk admin (Portal → Cek Duplikat) supaya data tamu disatukan.
+      await prisma.duplicateCandidate
+        .upsert({
+          where: { newJemaatId_oldJemaatId: { newJemaatId: targetId, oldJemaatId: conflict.id } },
+          create: { newJemaatId: targetId, oldJemaatId: conflict.id, score: 1, reason: 'Nomor HP yang diisi wali tercatat sebagai data tamu' },
+          update: {},
+        })
+        .catch(() => undefined);
+      throw Conflict('Nomor HP ini tercatat sebagai data tamu. Hubungi admin cabang untuk menyatukan data tamu tersebut dengan anggota keluarga Anda.');
+    }
     if (conflict) {
-      throw Conflict(
-        `Nomor HP ${input.noHp} sudah terdaftar di akun jemaat lain (${conflict.namaLengkap}).`,
-      );
+      throw Conflict(`Nomor HP ${input.noHp} sudah terdaftar di akun jemaat lain.`);
     }
   }
   if (input.email !== undefined && input.email !== null && input.email !== before.email) {
     const conflict = await prisma.jemaat.findFirst({
-      where: { email: input.email, isActive: true, NOT: { id: targetId } },
-      select: { id: true, namaLengkap: true },
+      where: { email: { equals: input.email, mode: 'insensitive' }, NOT: { id: targetId } },
+      select: { id: true },
     });
     if (conflict) {
-      throw Conflict(
-        `Email ${input.email} sudah terdaftar di akun jemaat lain (${conflict.namaLengkap}).`,
-      );
+      throw Conflict(`Email ${input.email} sudah terdaftar di akun jemaat lain.`);
     }
   }
 

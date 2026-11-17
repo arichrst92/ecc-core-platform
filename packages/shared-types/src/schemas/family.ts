@@ -113,6 +113,9 @@ export const registerFamilyNewSchema = z
     tipeRelasiId: uuidSchema.optional(),
     cabangId: uuidSchema.optional(),
     noHp: emptyToUndefined(noHpSchema),
+    // Opsional (2026-12): anggota keluarga dewasa tanpa WhatsApp bisa masuk
+    // sendiri lewat email. Ditandai "diinput wali" sampai diverifikasi.
+    email: emptyToUndefined(z.string().trim().toLowerCase().email('Format email tidak valid').max(255)),
     tanggalLahir: emptyToUndefined(tanggalLahirSchema),
     jenisKelamin: emptyToUndefined(z.enum(['L', 'P'])),
     alamat: emptyToUndefined(teksSchema(500, 3)),

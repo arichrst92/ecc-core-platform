@@ -381,6 +381,16 @@ authRouter.post('/otp/verify', authVerifyLimiter, async (req, res) => {
   }
 
   // LOGIN / RESET_FACE — jemaat harus ada. Issue JWT seperti biasa.
+  // Kode OTP WhatsApp dipakai → nomor terbukti milik jemaat (mis. nomor yang
+  // dulu diisi wali / admin jadi "Terverifikasi").
+  if (!viaAdmin) {
+    await prisma.jemaat
+      .updateMany({ where: { noHp, NOT: { noHpSource: 'SELF_VERIFIED' } }, data: { noHpSource: 'SELF_VERIFIED' } })
+      .catch(() => undefined);
+    await prisma.jemaat
+      .updateMany({ where: { noHp, noHpSource: null }, data: { noHpSource: 'SELF_VERIFIED' } })
+      .catch(() => undefined);
+  }
   if (viaAdmin) {
     const j = await prisma.jemaat.findUnique({ where: { noHp }, select: { id: true, namaLengkap: true } });
     audit(req, {
@@ -1510,6 +1520,12 @@ authRouter.post('/email/verify-magic-link', authVerifyLimiter, async (req, res) 
   await prisma.jemaat
     .updateMany({ where: { id: record.jemaatId, email: record.email, emailVerifiedAt: null }, data: { emailVerifiedAt: new Date() } })
     .catch(() => undefined);
+  await prisma.jemaat
+    .updateMany({
+      where: { id: record.jemaatId, email: record.email, OR: [{ emailSource: null }, { NOT: { emailSource: 'SELF_VERIFIED' } }] },
+      data: { emailSource: 'SELF_VERIFIED' },
+    })
+    .catch(() => undefined);
 
   const authResponse = await issueAuthResponseByJemaatId(record.jemaatId, req);
   return res.json(authResponse);
@@ -1609,8 +1625,10 @@ authRouter.post('/email-otp/verify', authVerifyLimiter, async (req, res) => {
   if (!j || j.isTamu) throw Unauthorized('Kode OTP tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.');
   const { viaAdmin } = await consumeOtp({ email }, purpose, kode, { adminFor: j.id });
   // Kode ke email terpakai → email terbukti milik jemaat.
-  if (!viaAdmin && !j.emailVerifiedAt) {
-    await prisma.jemaat.update({ where: { id: j.id }, data: { emailVerifiedAt: new Date() } }).catch(() => undefined);
+  if (!viaAdmin && (!j.emailVerifiedAt || j.emailSource !== 'SELF_VERIFIED')) {
+    await prisma.jemaat
+      .update({ where: { id: j.id }, data: { emailVerifiedAt: j.emailVerifiedAt ?? new Date(), emailSource: 'SELF_VERIFIED' } })
+      .catch(() => undefined);
   }
   if (viaAdmin) {
     audit(req, {

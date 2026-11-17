@@ -1205,12 +1205,15 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
  * Bible 365 dan ringkasan hak.
  */
 async function selfCopyExtras(jemaatId: string): Promise<{ html: string }> {
-  const [consents, privacy, prayers, plans] = await Promise.all([
+  const [consents, privacy, prayers, plans, kontak] = await Promise.all([
     prisma.userConsent.findMany({ where: { jemaatId }, orderBy: { acceptedAt: 'desc' }, take: 10 }),
     prisma.jemaatPrivacy.findUnique({ where: { jemaatId }, select: { discoverableByPhone: true, waReminders: true, waGreetings: true, waUpdates: true } }),
     prisma.prayerRequest.findMany({ where: { jemaatId }, orderBy: { createdAt: 'desc' }, take: 50, select: { createdAt: true, kategori: true, isi: true, status: true, isAnonim: true } }),
     prisma.bible365Plan.findMany({ where: { jemaatId }, orderBy: { startDate: 'desc' }, select: { putaran: true, startDate: true, status: true, _count: { select: { readings: true, notes: true } } } }),
+    prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { noHp: true, email: true, emailVerifiedAt: true, noHpSource: true, emailSource: true } }),
   ]);
+  const sumber = (s: string | null | undefined) =>
+    s === 'GUARDIAN' ? 'diinput wali' : s === 'ADMIN' ? 'diinput admin' : s === 'SELF_VERIFIED' ? 'terverifikasi dengan kode' : s === 'SELF' ? 'diisi sendiri, belum terverifikasi' : 'data lama';
   const t = (d: Date) => d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   const yn = (b: boolean | undefined) => (b === false ? 'Mati' : 'Aktif');
   const html = `
@@ -1223,7 +1226,8 @@ async function selfCopyExtras(jemaatId: string): Promise<{ html: string }> {
           </tbody></table>`
             : '<p class="empty">Belum ada persetujuan tercatat.</p>'
         }
-        <div class="info-row" style="margin-top:6px"><div class="lbl">Pesan WhatsApp</div><div class="val">Pengingat: ${yn(privacy?.waReminders)} · Ucapan ulang tahun: ${yn(privacy?.waGreetings)} · Info aktivitas: ${yn(privacy?.waUpdates)}</div></div>
+        <div class="info-row" style="margin-top:6px"><div class="lbl">Pesan WhatsApp &amp; email</div><div class="val">Pengingat: ${yn(privacy?.waReminders)} · Ucapan ulang tahun: ${yn(privacy?.waGreetings)} · Info aktivitas: ${yn(privacy?.waUpdates)}</div></div>
+        <div class="info-row"><div class="lbl">Status kontak</div><div class="val">Nomor HP: ${kontak?.noHp ? escapeHtml(sumber(kontak.noHpSource)) : 'tidak ada'} · Email: ${kontak?.email ? (kontak.emailVerifiedAt ? 'terverifikasi' : escapeHtml(sumber(kontak.emailSource))) : 'tidak ada'}</div></div>
         <div class="info-row"><div class="lbl">Bisa ditemukan lewat no HP</div><div class="val">${privacy?.discoverableByPhone === false ? 'Tidak' : 'Ya'}</div></div>
       </section>
 
@@ -1253,7 +1257,7 @@ async function selfCopyExtras(jemaatId: string): Promise<{ html: string }> {
         <h3>Hak Anda atas data ini</h3>
         <div style="font-size:9.5px;line-height:1.5">
           Dokumen ini adalah salinan data pribadi Anda di Els App (UU PDP Indonesia, PDPA Malaysia, Privacy Act Australia).
-          Ubah data di <b>Profil → Ubah Profil</b>; atur siapa yang bisa melihat & pesan WhatsApp di <b>Pengaturan → Privasi</b>;
+          Ubah data di <b>Profil → Ubah Profil</b>; atur siapa yang bisa melihat & pesan WhatsApp/email di <b>Pengaturan → Privasi</b>;
           minta koreksi, salinan lengkap, atau <b>penghapusan permanen</b> ke <b>privacy@eccchurch.global</b> (dijawab paling lambat 3×24 jam).
           Simpan dokumen ini dengan aman — berisi data pribadi.
         </div>

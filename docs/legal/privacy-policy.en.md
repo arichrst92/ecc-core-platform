@@ -35,7 +35,7 @@ Users in Malaysia can read this policy in **Bahasa Melayu** and **English**.
 ### 2.1 Information you provide
 | Type | Examples | Required? |
 |---|---|---|
-| Identity & contact | Full name, mobile number (WhatsApp), email, gender, date of birth, address, church branch | Name, mobile number and branch are required; others are optional |
+| Identity & contact | Full name, mobile number (WhatsApp), email, gender, date of birth, address, church branch | Name and branch are required, plus a **mobile number (WhatsApp) or email** (either one) to sign in; others are optional. We record whether a contact has been verified with a code, and who entered it (you, a guardian, or an admin) |
 | Photos | Profile photo, family photos | Optional |
 | Family | Spouse, children, parents and basic details of family members you add | Optional |
 | Ministry & community | Homecell, group and ministry team membership, serving schedules | Depends on participation |
@@ -46,7 +46,7 @@ Users in Malaysia can read this policy in **Bahasa Melayu** and **English**.
 
 ### 2.2 Information recorded when you use our services
 - **Attendance & reservations:** service reservations, check-ins (swipe, QR scan or by an usher), event and homecell attendance, CKids pickup codes.
-- **Account & security:** time and method of login (WhatsApp OTP or email link), login sessions, admin activity logs (audit log).
+- **Account & security:** time and method of login (WhatsApp OTP code, email code or link, or a temporary sign-in code from a branch admin), login sessions, admin activity logs (audit log).
 - **Anonymous analytics:** screens opened, time on screen, app response times, device type (iOS/Android/web) and app version. This uses a **random per-device code** and is **not linked** to your name, number or account. You can turn it off in **Settings → Privacy**.
 - **Error reports:** technical information when the app has a problem (version, device, error message) so we can fix it.
 
@@ -86,7 +86,8 @@ This information is processed only with your **explicit consent**, is visible on
 | Providing the app | Login, reservations & tickets, check-in, family, homecell, CKids, Bible 365, ECC Worship |
 | Ministry & pastoral care | Member records, guest follow-up, homecell & area reports, serving schedules |
 | Child safety | CKids pickup codes, ensuring children are collected by their parent/guardian |
-| Communication | OTP codes, service/event reminders, birthday greetings, church announcements (WhatsApp/email) |
+| Communication | OTP codes, service/event reminders, birthday greetings, church announcements, activity notifications — in the app, via WhatsApp and/or email according to church settings and your choices |
+| Preventing duplicate accounts | When you sign up, we match your name, date of birth and branch against existing member records. If similar, you only see a masked name and can connect the old record via a code sent to that record's email; otherwise a branch admin reviews the possible duplicate |
 | Security & abuse prevention | Activity logs, detecting suspicious access |
 | Improving the service | Anonymous analytics and error reports |
 | Legal obligations | Responding to lawful requests and record-keeping obligations |
@@ -141,8 +142,9 @@ We share only what is necessary with these service providers:
 | Provider | Data | Purpose | Location |
 |---|---|---|---|
 | ECC's server/hosting provider | All app data | Storage & operations | Indonesia |
+| Resmi.ID (official WhatsApp Business API, Meta) | Mobile number, OTP code | Sending WhatsApp OTP codes | Indonesia (Meta infrastructure: global) |
 | Fonnte (WhatsApp messaging service) | Mobile number, message content | OTP & WhatsApp notifications | Indonesia |
-| SendGrid (Twilio Inc.) | Email address | Login links & notifications | United States |
+| SendGrid (Twilio Inc.) | Email address, name, message content | Email OTP codes & login links, notifications & announcements | United States |
 | Anthropic (AI assistant "Elsa" in the admin Portal) | Admin questions and church data relevant to the question | Helping admins prepare information & reports | United States |
 | Apple App Store / Google Play | Download & device data under their policies | App distribution | Global |
 | IDEA (developer) | Limited technical access | App maintenance & support | Indonesia |
@@ -163,7 +165,7 @@ We may also disclose information where **required by law** or requested by a law
 | **Delete your data / account** | Settings → **Delete Account** (account deactivated), or request **permanent deletion** at privacy@eccchurch.global |
 | **Withdraw consent** | Settings → Privacy (e.g. analytics), or email us |
 | **Control who sees your data** | Settings → **Privacy** |
-| **Stop non-essential WhatsApp/email** (reminders, greetings, announcements) | Settings → Privacy → **WhatsApp messages**, or email privacy@eccchurch.global; security messages (OTP) are still sent |
+| **Stop non-essential WhatsApp/email** (reminders, greetings, announcements) | Settings → Privacy → **WhatsApp & email messages**, or email privacy@eccchurch.global; security messages (OTP codes & login links) are still sent |
 | **Object or complain** | See Section 14 |
 
 **Response times:** we respond **within 3×24 hours** for users in Indonesia as required by the PDP Law, within **21 days** for access requests in Malaysia, and within **30 days** in Australia. We may need to verify your identity first.
@@ -187,7 +189,7 @@ We may also disclose information where **required by law** or requested by a law
 ## 12. Security
 
 - Encrypted connections (HTTPS/TLS).
-- Password-free login via WhatsApp OTP or email link; short-lived sessions with secure token refresh.
+- Password-free login via WhatsApp OTP code, email code or link; new contacts are verified with a code sent to that WhatsApp/email; temporary sign-in codes from a branch admin are for emergencies only, valid for 10 minutes, single-use and recorded in the audit log; short-lived sessions with secure token refresh.
 - Role-based access (*Role Access*) — people only see what their role requires.
 - Activity logs for every admin change.
 - Login rate limiting and system monitoring.

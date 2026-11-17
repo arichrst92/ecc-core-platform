@@ -35,7 +35,7 @@ Pengguna di Malaysia dapat membaca versi **Bahasa Melayu** dan **English** dari 
 ### 2.1 Data yang Anda berikan
 | Jenis data | Contoh | Wajib? |
 |---|---|---|
-| Identitas & kontak | Nama lengkap, nomor HP (WhatsApp), email, jenis kelamin, tanggal lahir, alamat, cabang gereja | Nama, no HP, cabang wajib; lainnya opsional |
+| Identitas & kontak | Nama lengkap, nomor HP (WhatsApp), email, jenis kelamin, tanggal lahir, alamat, cabang gereja | Nama dan cabang wajib, serta **nomor HP (WhatsApp) atau email** (salah satu) untuk login; lainnya opsional. Kami mencatat apakah kontak sudah diverifikasi dengan kode, dan siapa yang mengisinya (Anda, wali, atau admin) |
 | Foto | Foto profil, foto keluarga | Opsional |
 | Keluarga | Pasangan, anak, orang tua, dan data dasar anggota keluarga yang Anda tambahkan | Opsional |
 | Pelayanan & komunitas | Keanggotaan homecell, group, tim pelayanan, jadwal pelayanan | Sesuai keikutsertaan |
@@ -46,7 +46,7 @@ Pengguna di Malaysia dapat membaca versi **Bahasa Melayu** dan **English** dari 
 
 ### 2.2 Data yang tercatat saat Anda memakai layanan
 - **Kehadiran & reservasi:** reservasi ibadah, check-in (geser, scan QR, atau petugas), kehadiran event & homecell, kode jemput anak CKids.
-- **Akun & keamanan:** waktu dan cara login (WhatsApp OTP atau tautan email), sesi login, catatan aktivitas admin (audit log).
+- **Akun & keamanan:** waktu dan cara login (kode OTP WhatsApp, kode atau tautan email, atau kode masuk sementara dari admin cabang), sesi login, catatan aktivitas admin (audit log).
 - **Analitik anonim:** halaman yang dibuka, lama di halaman, waktu respons aplikasi, jenis perangkat (iOS/Android/web), dan versi aplikasi. Data ini memakai **kode acak per perangkat** dan **tidak terhubung** dengan nama, nomor HP, atau akun Anda. Anda bisa mematikannya di **Pengaturan → Privasi**.
 - **Laporan error:** informasi teknis saat aplikasi mengalami gangguan (versi, perangkat, pesan error) untuk perbaikan.
 
@@ -86,7 +86,8 @@ Data ini hanya diproses dengan **persetujuan eksplisit** Anda, hanya dapat dilih
 | Menjalankan layanan aplikasi | Login, reservasi & tiket, check-in, keluarga, homecell, CKids, Bible 365, ECC Worship |
 | Pelayanan & penggembalaan | Pendataan jemaat, tindak lanjut tamu, laporan homecell & area, jadwal pelayanan |
 | Keamanan anak | Kode jemput CKids, memastikan anak dijemput oleh orang tua/wali |
-| Komunikasi | Kode OTP, pengingat ibadah/event, ucapan ulang tahun, pengumuman gereja (WhatsApp/email) |
+| Komunikasi | Kode OTP, pengingat ibadah/event, ucapan ulang tahun, pengumuman gereja, notifikasi aktivitas — lewat aplikasi, WhatsApp, dan/atau email sesuai pengaturan gereja dan pilihan Anda |
+| Mencegah akun ganda | Saat Anda mendaftar, kami mencocokkan nama, tanggal lahir, dan cabang dengan data jemaat yang sudah ada. Bila mirip, Anda hanya melihat nama tersamarkan dan dapat menyambungkan data lama lewat kode ke email data tersebut; bila tidak, admin cabang meninjau kemungkinan data ganda |
 | Keamanan & pencegahan penyalahgunaan | Catatan aktivitas, deteksi akses mencurigakan |
 | Perbaikan layanan | Analitik anonim dan laporan error |
 | Kewajiban hukum | Memenuhi permintaan otoritas yang sah dan kewajiban pencatatan |
@@ -141,8 +142,9 @@ Kami hanya membagikan data seperlunya kepada penyedia layanan berikut:
 | Penyedia | Data | Tujuan | Lokasi |
 |---|---|---|---|
 | Penyedia server/hosting ECC | Seluruh data aplikasi | Penyimpanan & operasional | Indonesia |
+| Resmi.ID (WhatsApp Business API resmi, Meta) | Nomor HP, kode OTP | Pengiriman kode OTP WhatsApp | Indonesia (infrastruktur Meta: global) |
 | Fonnte (layanan pengiriman WhatsApp) | Nomor HP, isi pesan | OTP & notifikasi WhatsApp | Indonesia |
-| SendGrid (Twilio Inc.) | Alamat email | Email tautan login & notifikasi | Amerika Serikat |
+| SendGrid (Twilio Inc.) | Alamat email, nama, isi pesan | Kode OTP & tautan login email, notifikasi & pengumuman | Amerika Serikat |
 | Anthropic (asisten AI "Elsa" di Portal admin) | Pertanyaan admin & data gereja yang relevan dengan pertanyaan | Membantu admin menyusun informasi & laporan | Amerika Serikat |
 | Apple App Store / Google Play | Data unduhan & perangkat sesuai kebijakan mereka | Distribusi aplikasi | Global |
 | IDEA (pengembang) | Akses teknis terbatas | Pemeliharaan & dukungan aplikasi | Indonesia |
@@ -163,7 +165,7 @@ Kami juga dapat mengungkapkan data bila **diwajibkan oleh hukum** atau atas perm
 | **Menghapus data / akun** | Pengaturan → **Hapus Akun** (akun dinonaktifkan), atau minta **penghapusan permanen** ke privacy@eccchurch.global |
 | **Menarik persetujuan** | Pengaturan → Privasi (mis. analitik), atau email kami |
 | **Membatasi siapa yang melihat data** | Pengaturan → **Privasi** |
-| **Berhenti menerima pesan WhatsApp/email non-wajib** (pengingat, ucapan, pengumuman) | Pengaturan → Privasi → **Pesan WhatsApp**, atau email privacy@eccchurch.global; pesan keamanan (OTP) tetap dikirim |
+| **Berhenti menerima pesan WhatsApp/email non-wajib** (pengingat, ucapan, pengumuman) | Pengaturan → Privasi → **Pesan WhatsApp & email**, atau email privacy@eccchurch.global; pesan keamanan (kode OTP & tautan login) tetap dikirim |
 | **Mengajukan keberatan atau keluhan** | Lihat Bagian 14 |
 
 **Batas waktu tanggapan:** kami akan menanggapi permintaan **paling lambat 3×24 jam** untuk pengguna di Indonesia sesuai UU PDP, **21 hari** untuk permintaan akses di Malaysia, dan **30 hari** di Australia. Kami dapat meminta verifikasi identitas sebelum memproses permintaan.
@@ -187,7 +189,7 @@ Kami juga dapat mengungkapkan data bila **diwajibkan oleh hukum** atau atas perm
 ## 12. Keamanan data
 
 - Koneksi terenkripsi (HTTPS/TLS).
-- Login tanpa kata sandi melalui OTP WhatsApp atau tautan email; sesi login berumur pendek dengan pembaruan token yang aman.
+- Login tanpa kata sandi melalui kode OTP WhatsApp, kode atau tautan email; kontak baru diverifikasi dengan kode ke WhatsApp/email tersebut; kode masuk sementara dari admin cabang hanya untuk keadaan darurat, berlaku 10 menit, sekali pakai, dan tercatat di audit log; sesi login berumur pendek dengan pembaruan token yang aman.
 - Akses berdasarkan peran (*Role Access*) — setiap orang hanya melihat yang diperlukan untuk tugasnya.
 - Catatan aktivitas untuk setiap perubahan data oleh admin.
 - Pembatasan percobaan login dan pemantauan sistem.

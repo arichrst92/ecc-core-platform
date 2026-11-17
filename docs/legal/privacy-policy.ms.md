@@ -29,7 +29,7 @@ Notis ini dikeluarkan oleh **Elshaddai Creative Community** ("ECC", "kami", "ger
 
 | Jenis | Contoh | Wajib? |
 |---|---|---|
-| Identiti & hubungan | Nama penuh, nombor telefon (WhatsApp), e-mel, jantina, tarikh lahir, alamat, cawangan gereja | Nama, nombor telefon dan cawangan wajib; selebihnya pilihan |
+| Identiti & hubungan | Nama penuh, nombor telefon (WhatsApp), e-mel, jantina, tarikh lahir, alamat, cawangan gereja | Nama dan cawangan wajib, serta **nombor telefon (WhatsApp) atau e-mel** (salah satu) untuk log masuk; selebihnya pilihan |
 | Gambar | Gambar profil, gambar keluarga | Pilihan |
 | Keluarga | Pasangan, anak, ibu bapa dan butiran asas ahli keluarga yang anda tambah | Pilihan |
 | Pelayanan & komuniti | Keahlian homecell, kumpulan dan pasukan pelayanan, jadual pelayanan | Mengikut penyertaan |
@@ -58,11 +58,11 @@ Kami mengendalikan data berikut dengan lebih ketat dan hanya dengan **persetujua
 
 ## 4. Tujuan pemprosesan
 
-Menyediakan aplikasi (log masuk, tempahan, daftar masuk, keluarga, homecell, CKids, Bible 365, ECC Worship); pelayanan dan penggembalaan; keselamatan kanak-kanak; komunikasi (OTP, peringatan, ucapan hari lahir, pengumuman melalui WhatsApp/e-mel); keselamatan sistem; penambahbaikan perkhidmatan melalui analitik tanpa nama; dan pematuhan undang-undang.
+Menyediakan aplikasi (log masuk, tempahan, daftar masuk, keluarga, homecell, CKids, Bible 365, ECC Worship); pelayanan dan penggembalaan; keselamatan kanak-kanak; komunikasi (OTP, peringatan, ucapan hari lahir, pengumuman melalui aplikasi, WhatsApp dan/atau e-mel); mengelakkan akaun berganda (padanan nama, tarikh lahir dan cawangan semasa pendaftaran — nama dipaparkan secara tersamar); keselamatan sistem; penambahbaikan perkhidmatan melalui analitik tanpa nama; dan pematuhan undang-undang.
 
 Kami **tidak** menjual data, memaparkan iklan, menjejak anda merentas aplikasi lain, atau membuat keputusan automatik yang memberi kesan ketara kepada anda.
 
-**Pemasaran langsung:** anda berhak meminta kami berhenti menghantar mesej yang bukan wajib (peringatan, ucapan, pengumuman) melalui **Settings → Privacy → WhatsApp messages** dalam aplikasi, atau dengan menghubungi privacy@eccchurch.global atau pentadbir cawangan.
+**Pemasaran langsung:** anda berhak meminta kami berhenti menghantar mesej yang bukan wajib (peringatan, ucapan, pengumuman) melalui **Settings → Privacy → WhatsApp & email messages** dalam aplikasi, atau dengan menghubungi privacy@eccchurch.global atau pentadbir cawangan.
 
 ---
 
@@ -74,7 +74,7 @@ Kami **tidak** menjual data, memaparkan iklan, menjejak anda merentas aplikasi l
 - **Pentadbir & sepenuh masa gereja** — mengikut kebenaran peranan; setiap akses direkodkan.
 - **Skrin monitor & laporan** — hanya **jumlah agregat**.
 
-**Pembekal perkhidmatan:** penyedia pelayan ECC (Indonesia); Fonnte (WhatsApp, Indonesia); SendGrid / Twilio Inc. (e-mel, Amerika Syarikat); Anthropic (pembantu AI "Elsa" dalam Portal pentadbir, Amerika Syarikat); Apple App Store / Google Play; IDEA (pembangun, Indonesia).
+**Pembekal perkhidmatan:** penyedia pelayan ECC (Indonesia); Resmi.ID (WhatsApp Business API rasmi Meta, kod OTP, Indonesia); Fonnte (WhatsApp, Indonesia); SendGrid / Twilio Inc. (e-mel, Amerika Syarikat); Anthropic (pembantu AI "Elsa" dalam Portal pentadbir, Amerika Syarikat); Apple App Store / Google Play; IDEA (pembangun, Indonesia).
 
 ---
 
@@ -104,7 +104,7 @@ Apabila anda mendaftarkan **tetamu**, pastikan mereka **mengetahui dan bersetuju
 | Pembetulan data | Profil / Ubah Profil / Keluarga |
 | **Kemudahalihan data** | Settings → Privacy → **Download my data** (PDF), atau e-mel privacy@eccchurch.global |
 | Menarik balik persetujuan / memadam akaun | Tetapan → Privasi atau **Padam Akaun**, atau minta pemadaman kekal melalui e-mel |
-| Menghalang pemprosesan bagi pemasaran langsung | Settings → Privacy → **WhatsApp messages**, e-mel kami atau hubungi pentadbir cawangan |
+| Menghalang pemprosesan bagi pemasaran langsung | Settings → Privacy → **WhatsApp & email messages**, e-mel kami atau hubungi pentadbir cawangan |
 | Mengawal siapa melihat data | Tetapan → **Privasi** |
 
 ---

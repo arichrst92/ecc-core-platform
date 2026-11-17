@@ -1145,9 +1145,34 @@ jemaatRouter.get('/:id/profile', async (req, res) => {
     };
   });
 
+  // Zona yang dipimpin (Zone Leader / Pastor) — sering bukan anggota homecell
+  // mana pun, jadi tidak terlihat di kartu Homecell.
+  const zonaRows = await prisma.homecellArea.findMany({
+    where: { OR: [{ picJemaatId: jemaatId }, { pastors: { some: { jemaatId } } }] },
+    select: {
+      id: true,
+      nama: true,
+      isActive: true,
+      picJemaatId: true,
+      cabang: { select: { nama: true } },
+      pastors: { where: { jemaatId }, select: { id: true } },
+      _count: { select: { homecells: { where: { isActive: true } } } },
+    },
+    orderBy: { nama: 'asc' },
+  });
+  const zonas = zonaRows.map((z) => ({
+    id: z.id,
+    nama: z.nama,
+    cabang: z.cabang.nama,
+    isActive: z.isActive,
+    peran: [z.picJemaatId === jemaatId ? 'ZONE_LEADER' : null, z.pastors.length ? 'PASTOR' : null].filter(Boolean) as ('ZONE_LEADER' | 'PASTOR')[],
+    homecellAktif: z._count.homecells,
+  }));
+
   res.json({
     success: true,
     data: {
+      zonas,
       homecells: homecellsWithAttendance,
       events,
       ibadah: reservasi,

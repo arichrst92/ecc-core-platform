@@ -1663,6 +1663,15 @@ function formatDate(iso: string | null | undefined, withTime = false): string {
 }
 
 interface JemaatProfileData {
+  /** Zona yang dipimpin sebagai Zone Leader / Pastor. */
+  zonas?: Array<{
+    id: string;
+    nama: string;
+    cabang: string;
+    isActive: boolean;
+    peran: ('ZONE_LEADER' | 'PASTOR')[];
+    homecellAktif: number;
+  }>;
   homecells: Array<{
     id: string;
     tanggalBergabung: string;
@@ -1796,6 +1805,7 @@ function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
     <>
       <ActivityIndicator activity={d.activity} />
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {d.zonas?.length ? <ZonaSection zonas={d.zonas} /> : null}
         <HomecellSection homecells={d.homecells} />
         <GroupSection groups={d.groups} />
         <EventHistorySection events={d.events} />
@@ -2129,6 +2139,39 @@ function HistoryCard({
         )}
       </div>
     </section>
+  );
+}
+
+function ZonaSection({ zonas }: { zonas: NonNullable<JemaatProfileData['zonas']> }) {
+  return (
+    <HistoryCard title="Zona yang dipimpin" icon={HomeIcon} count={zonas.length} emptyLabel="Tidak memimpin zona" color="from-orange-500 to-orange-600">
+      {zonas.map((z) => (
+        <div key={z.id} className="px-5 py-3 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <Link
+              href={`/dashboard/homecell-area?search=${encodeURIComponent(z.nama)}`}
+              className="font-medium text-neutral-900 hover:text-brand-600 hover:underline flex items-center gap-1"
+            >
+              {z.nama}
+              <ExternalLink className="w-3 h-3 opacity-50" />
+            </Link>
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {z.peran.map((p) => (
+                <span key={p} className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-800">
+                  {p === 'ZONE_LEADER' ? 'Zone Leader (PIC)' : 'Pastor zona'}
+                </span>
+              ))}
+              {!z.isActive ? <span className="inline-block text-[10px] italic text-neutral-400">Zona nonaktif</span> : null}
+            </div>
+            <div className="text-xs text-neutral-500 mt-0.5">{z.cabang}</div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-sm font-bold text-orange-700">{z.homecellAktif}</div>
+            <div className="text-[10px] text-neutral-500 uppercase tracking-wide">Homecell</div>
+          </div>
+        </div>
+      ))}
+    </HistoryCard>
   );
 }
 

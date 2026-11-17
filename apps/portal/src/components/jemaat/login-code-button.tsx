@@ -106,8 +106,8 @@ export function LoginCodeButton({ jemaatId, nama, disabled }: { jemaatId: string
                     </p>
                   ) : (
                     <p>
-                      Buka Els App (versi terbaru) → <b>Masuk dengan email</b> → isi email <b>{code.loginWith.label}</b> → pilih{' '}
-                      <i>Dapat kode dari admin cabang?</i> → masukkan kode di atas.
+                      Buka Els App (versi terbaru) → <b>Masuk dengan Email</b> → isi email <b>{code.loginWith.label}</b> → tekan Kirim → ketuk{' '}
+                      <i>Sudah diberi kode masuk oleh admin cabang?</i> → masukkan kode di atas.
                     </p>
                   )}
                   {code.alsoEmail ? <p className="text-neutral-500">Bisa juga lewat email {code.alsoEmail} (app versi terbaru).</p> : null}

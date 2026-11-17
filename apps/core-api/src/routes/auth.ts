@@ -52,6 +52,7 @@ import {
   type OtpTarget,
 } from '../lib/otp-store.js';
 import { findOldRecords, pickOffer, recordDuplicateCandidates } from '../lib/duplicate-candidate.js';
+import { noteWaOtpFailure } from '../lib/wa-otp-health.js';
 import {
   issueLivenessNonce,
   consumeLivenessNonce,
@@ -247,6 +248,7 @@ authRouter.post('/otp/request', otpRequestLimiter, async (req, res) => {
     logger.error({ err: e, noHp, purpose }, '[auth-otp] gagal kirim OTP via WhatsApp');
     // Semua gateway WhatsApp gagal / dilewati → kode tetap berlaku bila terkirim ke email.
     const viaEmail = emailAlways ? await emailAlways : await sendEmailCopy();
+    noteWaOtpFailure((e as Error).message, viaEmail ? 'email' : 'none');
     if (viaEmail) {
       await setOtpProvider(otpRow.id, 'email');
       return res.json({ success: true, message: EMAIL_NOTE, data: { channel: 'email' } });

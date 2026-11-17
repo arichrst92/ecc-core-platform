@@ -102,6 +102,7 @@ async function checkDevice(now: number) {
     return;
   }
   const before = device.connected;
+  const firstCheck = device.checkedAt === null;
   try {
     const d = await getFonnteDevice();
     device = { connected: d.connected, number: d.device ? `+${d.device.replace(/^\+/, '')}` : null, checkedAt: now, error: null };
@@ -109,7 +110,11 @@ async function checkDevice(now: number) {
     // API Fonnte tidak bisa dihubungi → status tidak diketahui (tidak dilewati).
     device = { ...device, connected: null, checkedAt: now, error: (err as Error).message.slice(0, 200) };
   }
-  if (before !== null && device.connected !== null && before !== device.connected) {
+  // Peringatan saat status berubah, atau saat pengecekan pertama (server baru
+  // start) mendapati device sudah terputus.
+  const changed = before !== null && device.connected !== null && before !== device.connected;
+  const startDisconnected = firstCheck && device.connected === false;
+  if (changed || startDisconnected) {
     logger.warn({ connected: device.connected }, '[wa-otp-health] status device Fonnte berubah');
     void alertAdmins(
       device.connected ? 'Device Fonnte tersambung kembali' : 'Device Fonnte TERPUTUS — OTP dialihkan',
@@ -182,6 +187,27 @@ export async function tickWaOtpHealth(force = false): Promise<void> {
     applySkip();
     running = false;
   }
+}
+
+/**
+ * Dipanggil /auth/otp/request saat semua gateway WhatsApp gagal / dilewati
+ * dan OTP dialihkan ke email (atau tidak terkirim sama sekali). Admin diberi
+ * tahu maksimal sekali per jam supaya tahu ada gangguan.
+ */
+let lastAllFailedAlert = 0;
+export function noteWaOtpFailure(reason: string, fallback: 'email' | 'none'): void {
+  const now = Date.now();
+  if (now - lastAllFailedAlert < 60 * 60_000) return;
+  lastAllFailedAlert = now;
+  void alertAdmins(
+    fallback === 'email' ? 'OTP WhatsApp gagal — dialihkan ke email' : 'OTP WhatsApp gagal — jemaat tidak menerima kode',
+    `<p>Kode OTP tidak bisa dikirim lewat WhatsApp.${
+      fallback === 'email'
+        ? ' Jemaat yang punya email menerima kode lewat email.'
+        : ' Jemaat ini tidak punya email, jadi tidak menerima kode — bisa diberi <b>kode masuk sementara</b> dari halaman jemaat di Portal.'
+    }</p><p style="font-size:12px;color:#6b7280">Penyebab: ${reason.replace(/</g, '&lt;').slice(0, 500)}</p>
+<p>Email ini dikirim maksimal sekali per jam selama gangguan berlangsung.</p>`,
+  );
 }
 
 /** Status untuk Portal (Gateway & OTP). */

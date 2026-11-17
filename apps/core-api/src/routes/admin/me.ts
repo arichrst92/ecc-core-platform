@@ -954,6 +954,155 @@ async function zoneStats(areaIds: string[]) {
 }
 
 /**
+ * Kalender (2.4.9) — data tambahan untuk layar Kalender app:
+ *   GET /admin/me/calendar-extra?from=YYYY-MM-DD&to=YYYY-MM-DD   (maks 62 hari)
+ *
+ *   birthdays : ulang tahun (berulang tiap tahun) dari
+ *               - anggota & PIC homecell yang saya ikuti / pimpin   (source HOMECELL)
+ *               - anggota homecell di zona yang saya pimpin / gembalakan (ZONA)
+ *               - rekan pelayanan (ministry) di cabang home saya   (MINISTRY)
+ *               Mengikuti Privasi jemaat: "Ulang tahun" harus boleh dilihat;
+ *               usia hanya bila "Tanggal lahir" juga boleh dilihat.
+ *               Keluarga tidak dikirim (app sudah punya dari /family).
+ *   meetings  : pertemuan homecell saya + homecell di zona saya dalam rentang.
+ */
+const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
+meRouter.get('/calendar-extra', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const q = req.query as Record<string, string | undefined>;
+  if (!q.from || !q.to || !ymdRe.test(q.from) || !ymdRe.test(q.to)) throw BadRequest('from & to wajib (YYYY-MM-DD).');
+  const from = new Date(`${q.from}T00:00:00.000Z`);
+  const to = new Date(`${q.to}T00:00:00.000Z`);
+  if (to < from || to.getTime() - from.getTime() > 62 * 86_400_000) throw BadRequest('Rentang maksimal 62 hari.');
+
+  const [me, memberOf, ledHc, ledAreas, myMinistries] = await Promise.all([
+    prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true } }),
+    prisma.homecellMember.findMany({
+      where: { jemaatId, isActive: true, homecell: { isActive: true } },
+      select: { homecellId: true },
+    }),
+    prisma.homecell.findMany({ where: { picJemaatId: jemaatId, isActive: true }, select: { id: true } }),
+    prisma.homecellArea.findMany({
+      where: { isActive: true, OR: [{ picJemaatId: jemaatId }, { pastors: { some: { jemaatId } } }] },
+      select: { id: true },
+    }),
+    prisma.jemaatPelayanan.findMany({
+      where: { jemaatId, isActive: true, pelayanan: { isActive: true } },
+      select: { pelayananId: true, pelayanan: { select: { nama: true } } },
+    }),
+  ]);
+
+  const myHcIds = [...new Set([...memberOf.map((m) => m.homecellId), ...ledHc.map((h) => h.id)])];
+  const zoneHc = ledAreas.length
+    ? await prisma.homecell.findMany({ where: { areaId: { in: ledAreas.map((a) => a.id) }, isActive: true }, select: { id: true } })
+    : [];
+  const zoneHcIds = zoneHc.map((h) => h.id).filter((id) => !myHcIds.includes(id));
+  const allHcIds = [...myHcIds, ...zoneHcIds];
+
+  const personSel = { id: true, namaLengkap: true, fotoUrl: true, tanggalLahir: true } as const;
+  const activePerson = { isActive: true, isTamu: false, dataPurgedAt: null, tanggalLahir: { not: null } } as const;
+  const [hcRows, ministryRows, meetings] = await Promise.all([
+    allHcIds.length
+      ? prisma.homecell.findMany({
+          where: { id: { in: allHcIds } },
+          select: {
+            id: true,
+            nama: true,
+            picJemaat: { select: personSel },
+            members: { where: { isActive: true, jemaat: activePerson }, select: { jemaat: { select: personSel } } },
+          },
+        })
+      : Promise.resolve([]),
+    myMinistries.length && me?.cabangId
+      ? prisma.jemaatPelayanan.findMany({
+          where: {
+            pelayananId: { in: myMinistries.map((m) => m.pelayananId) },
+            isActive: true,
+            jemaat: { ...activePerson, cabangId: me.cabangId },
+          },
+          select: { pelayanan: { select: { nama: true } }, jemaat: { select: personSel } },
+        })
+      : Promise.resolve([]),
+    allHcIds.length
+      ? prisma.homecellSchedule.findMany({
+          where: { homecellId: { in: allHcIds }, tanggal: { gte: from, lte: to } },
+          orderBy: [{ tanggal: 'asc' }, { jamMulai: 'asc' }],
+          select: { id: true, tanggal: true, jamMulai: true, jamSelesai: true, lokasi: true, homecell: { select: { id: true, nama: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  // Kumpulkan orang + sumber (satu orang bisa dari beberapa sumber).
+  type P = { id: string; namaLengkap: string; fotoUrl: string | null; tanggalLahir: Date | null };
+  const people = new Map<string, { p: P; sources: Set<string>; context: Set<string> }>();
+  const addP = (p: P | null | undefined, source: string, context: string) => {
+    if (!p || p.id === jemaatId || !p.tanggalLahir) return;
+    const cur = people.get(p.id) ?? { p, sources: new Set<string>(), context: new Set<string>() };
+    cur.sources.add(source);
+    cur.context.add(context);
+    people.set(p.id, cur);
+  };
+  const zoneSet = new Set(zoneHcIds);
+  for (const h of hcRows) {
+    const src = zoneSet.has(h.id) ? 'ZONA' : 'HOMECELL';
+    addP(h.picJemaat, src, h.nama);
+    for (const m of h.members) addP(m.jemaat, src, h.nama);
+  }
+  for (const r of ministryRows) addP(r.jemaat, 'MINISTRY', r.pelayanan.nama);
+
+  // Rentang tanggal (bulan-hari) yang diminta → set "MM-DD" + tahunnya.
+  const wanted = new Map<string, string>(); // MM-DD → YYYY-MM-DD
+  for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86_400_000)) {
+    wanted.set(d.toISOString().slice(5, 10), d.toISOString().slice(0, 10));
+  }
+  // Lahir 29 Februari → dirayakan 28 Februari di tahun bukan kabisat.
+  const mdOf = (d: Date) => {
+    const md = d.toISOString().slice(5, 10);
+    return md === '02-29' && !wanted.has(md) ? '02-28' : md;
+  };
+  const candidates = [...people.values()].filter((x) => wanted.has(mdOf(x.p.tanggalLahir!)));
+  const gate = await privacyGate(jemaatId, candidates.map((x) => x.p.id));
+
+  const birthdays = candidates
+    .filter((x) => gate.can(x.p.id, 'ulangTahun'))
+    .map((x) => {
+      const lahir = x.p.tanggalLahir!;
+      const date = wanted.get(mdOf(lahir))!;
+      const age = Number(date.slice(0, 4)) - lahir.getUTCFullYear();
+      // Prioritas sumber untuk label: HOMECELL > ZONA > MINISTRY.
+      const order = ['HOMECELL', 'ZONA', 'MINISTRY'];
+      return {
+        jemaatId: x.p.id,
+        nama: x.p.namaLengkap,
+        fotoUrl: x.p.fotoUrl,
+        date,
+        age: gate.can(x.p.id, 'tanggalLahir') && age > 0 ? age : null,
+        source: order.find((o) => x.sources.has(o))!,
+        context: [...x.context].slice(0, 2).join(', '),
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.nama.localeCompare(b.nama));
+
+  res.json({
+    success: true,
+    data: {
+      birthdays,
+      meetings: meetings.map((m) => ({
+        id: m.id,
+        date: m.tanggal.toISOString().slice(0, 10),
+        jamMulai: m.jamMulai,
+        jamSelesai: m.jamSelesai,
+        lokasi: m.lokasi,
+        homecellId: m.homecell.id,
+        homecellNama: m.homecell.nama,
+        scope: zoneSet.has(m.homecell.id) ? 'ZONA' : 'MINE',
+        canManage: ledHc.some((h) => h.id === m.homecell.id),
+      })),
+    },
+  });
+});
+
+/**
  * Zona saya (2.4.6) — zona dari homecell yang saya ikuti (anggota aktif / PIC
  * homecell), untuk SEMUA jemaat. Hanya lihat: nama, cabang, PIC, pastor, dan
  * daftar homecell aktif di zona itu.

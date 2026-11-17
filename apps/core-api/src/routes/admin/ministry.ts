@@ -1179,6 +1179,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
               select: {
                 id: true,
                 jemaatId: true,
+                canScanAttendance: true,
                 pelayananRole: { select: { id: true, nama: true, level: true } },
                 jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
               },
@@ -1197,10 +1198,17 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     }),
   ]);
   const cancelled = new Set(cancelledRows.map((c) => `${c.ibadahId}:${ymdUtc(c.tanggalIbadah)}`));
-  const strip = (r: { id: string; jemaat: { id: string; namaLengkap: string; fotoUrl: string | null }; pelayananRole: { id: string; nama: string; level: number } }) => ({
+  const strip = (r: {
+    id: string;
+    canScanAttendance: boolean;
+    jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
+    pelayananRole: { id: string; nama: string; level: number };
+  }) => ({
     id: r.id,
     jemaat: r.jemaat,
     role: r.pelayananRole,
+    // Akses scan check-in (absensi) di ibadah / event ini.
+    canScanAttendance: r.canScanAttendance,
   });
 
   const ibadah: unknown[] = [];
@@ -1247,7 +1255,13 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
   });
 });
 
-const petugasInput = z.array(z.object({ jemaatId: z.string().uuid(), pelayananRoleId: z.string().uuid() })).max(60);
+// canScanAttendance opsional (app 2.4.9+): tidak dikirim (app lama) → hak scan yang
+// sudah ada dipertahankan; dikirim → mengikuti pilihan pengatur jadwal.
+const petugasInput = z
+  .array(z.object({ jemaatId: z.string().uuid(), pelayananRoleId: z.string().uuid(), canScanAttendance: z.boolean().optional() }))
+  .max(60);
+const scanFor = (p: { jemaatId: string; canScanAttendance?: boolean }, existing: Set<string>) =>
+  p.canScanAttendance ?? existing.has(p.jemaatId);
 
 /** Validasi petugas: anggota aktif pelayanan + role milik pelayanan. Dedup per jemaat. */
 async function validatePetugas(pelayananId: string, list: z.infer<typeof petugasInput>) {
@@ -1351,7 +1365,7 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
           jemaatId: p.jemaatId,
           pelayananRoleId: p.pelayananRoleId,
           tanggalIbadah: body.scope === 'DEFAULT' ? null : tgl,
-          canScanAttendance: scanOf.has(p.jemaatId),
+          canScanAttendance: scanFor(p, scanOf),
         })),
       });
     }
@@ -1407,7 +1421,7 @@ ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
         eventPelayananId: link.id,
         jemaatId: p.jemaatId,
         pelayananRoleId: p.pelayananRoleId,
-        canScanAttendance: scanOf.has(p.jemaatId),
+        canScanAttendance: scanFor(p, scanOf),
       })),
     }),
   ]);

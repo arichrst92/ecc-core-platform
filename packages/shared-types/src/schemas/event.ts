@@ -127,6 +127,8 @@ export const createEventSchema = z
 
     quotaPeserta: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+    // Grup sesi (opsional): kode sama di beberapa event → jemaat hanya bisa ikut satu.
+    grupSesi: z.string().trim().max(80).nullable().optional(),
 
     // Apakah event butuh absensi pada hari H (admin scan QR kode jemaat).
     butuhKehadiran: z.boolean().default(false),
@@ -201,6 +203,8 @@ export const updateEventSchema = z
     bankAtasNama: emptyToUndefined(z.string().trim().max(255)),
     quotaPeserta: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+    // '' / null = lepas dari grup sesi.
+    grupSesi: z.string().trim().max(80).nullable().optional(),
     butuhKehadiran: z.boolean().optional(),
     allowSelfCheckin: z.boolean().optional(),
     allowReview: z.boolean().optional(),

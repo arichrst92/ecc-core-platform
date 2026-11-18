@@ -27,6 +27,8 @@ export type EventFormValues = {
   bankNomor?: string;
   bankAtasNama?: string;
   quotaPeserta?: number | string;
+  /** Grup sesi: kode sama di beberapa event → jemaat hanya bisa ikut satu. */
+  grupSesi?: string | null;
   tags?: string[];
   butuhKehadiran?: boolean;
   /** Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran). */
@@ -188,6 +190,7 @@ export function EventFormModal({
         bankNomor: (dv.bankNomor as string) ?? '',
         bankAtasNama: (dv.bankAtasNama as string) ?? '',
         quotaPeserta: (dv.quotaPeserta as number | string | undefined) ?? '',
+        grupSesi: (dv.grupSesi as string | null | undefined) ?? '',
         tags: (dv.tags as string[]) ?? [],
         butuhKehadiran: (dv.butuhKehadiran as boolean) ?? false,
         allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
@@ -258,6 +261,8 @@ export function EventFormModal({
       bankNomor: values.bankNomor || undefined,
       bankAtasNama: values.bankAtasNama || undefined,
       quotaPeserta: values.quotaPeserta === '' ? undefined : values.quotaPeserta,
+      // '' → null (lepas dari grup) saat edit; undefined saat create kosong.
+      grupSesi: values.grupSesi ? values.grupSesi : isEdit ? null : undefined,
     };
     if (roleConfigReady) {
       payload.roleRequirements = reqs.filter((r) => r.roleId);
@@ -267,6 +272,22 @@ export function EventFormModal({
     }
     onSubmit(payload).catch(() => {});
   }
+
+  // Grup sesi yang sedang dipakai (saran isian + daftar event di grup yang sama).
+  const grupQ = useQuery({
+    queryKey: ['event', 'grup-sesi'],
+    enabled: open,
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: { kode: string; events: { id: string; judul: string; jamMulai: string | null; tanggalMulai: string; cabang: string | null }[] }[];
+        }>('/admin/event/grup-sesi')
+      ).data.data,
+  });
+  const grupKode = (values.grupSesi ?? '').trim().toLowerCase().replace(/\s+/g, '-');
+  const grupLain = grupKode
+    ? (grupQ.data?.find((g) => g.kode === grupKode)?.events ?? []).filter((e) => e.id !== editId)
+    : [];
 
   const needNominal = values.tipeBayar === 'NOMINAL_TETAP';
   const showNominalOptional = values.tipeBayar === 'NOMINAL_BEBAS';
@@ -517,6 +538,46 @@ export function EventFormModal({
                     className={inputCls}
                   />
                 </Field>
+              </div>
+              <div className="mt-3">
+                <Field
+                  label="Grup sesi (opsional)"
+                  helper="Isi kode yang sama di beberapa event (mis. 3 sesi Natal) → satu jemaat hanya bisa daftar di salah satunya. Kosongkan = tanpa batasan."
+                >
+                  <input
+                    value={values.grupSesi ?? ''}
+                    onChange={(e) => patch({ grupSesi: e.target.value })}
+                    list="grup-sesi-options"
+                    maxLength={80}
+                    placeholder="mis. natal-profam-bandung-2026"
+                    className={inputCls}
+                  />
+                  <datalist id="grup-sesi-options">
+                    {(grupQ.data ?? []).map((g) => (
+                      <option key={g.kode} value={g.kode}>
+                        {g.events.map((e) => e.judul).join(' · ')}
+                      </option>
+                    ))}
+                  </datalist>
+                </Field>
+                {grupKode && (
+                  <p className="mt-1.5 text-xs text-neutral-600">
+                    {grupLain.length ? (
+                      <>
+                        Satu grup dengan:{' '}
+                        {grupLain.map((e, i) => (
+                          <span key={e.id}>
+                            {i ? ', ' : ''}
+                            <strong>{e.judul}</strong>
+                            {e.jamMulai ? ` (${e.jamMulai})` : ''}
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      <>Grup baru — isi kode yang sama persis (<code>{grupKode}</code>) di event sesi lainnya.</>
+                    )}
+                  </p>
+                )}
               </div>
             </Section>
 

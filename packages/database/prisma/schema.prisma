@@ -1532,6 +1532,9 @@ model Event {
   // Quota & tags
   quotaPeserta Int?     @map("quota_peserta")
   tags         String[] @default([])
+  // Grup sesi: event dengan kode sama (mis. 3 sesi Natal di hari yang sama)
+  // → satu jemaat hanya boleh punya satu pendaftaran aktif di antara event itu.
+  grupSesi     String?  @map("grup_sesi") @db.VarChar(80)
 
   // Apakah event butuh absensi pada hari H. Kalau true → admin bisa scan QR
   // kode jemaat untuk set partisipasi ke HADIR. Kalau false → cukup partisipasi
@@ -1583,6 +1586,7 @@ model Event {
   @@index([sinodeId])
   @@index([tanggalMulai])
   @@index([isPublished, publishedAt])
+  @@index([grupSesi])
   @@map("event")
 }
 

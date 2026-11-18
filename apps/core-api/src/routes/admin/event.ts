@@ -53,6 +53,7 @@ import { lockEventParam } from '../../lib/event-lock.js';
 import { paymentOkForCheckin } from '../../lib/event-payment.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import {
   assertEventEligible,
   isEligible,
@@ -357,6 +358,28 @@ eventRouter.get('/', async (req, res) => {
   });
 });
 
+// GET /admin/event/grup-sesi — kode grup sesi yang sedang dipakai (event yang
+// belum lewat) + daftar event-nya. Untuk saran isian di form event Portal.
+eventRouter.get('/grup-sesi', W('read'), async (_req, res) => {
+  const cutoff = todayInTz(DEFAULT_TZ);
+  const rows = await prisma.event.findMany({
+    where: {
+      grupSesi: { not: null },
+      isActive: true,
+      OR: [{ tanggalSelesai: { gte: cutoff } }, { tanggalSelesai: null, tanggalMulai: { gte: cutoff } }],
+    },
+    orderBy: [{ tanggalMulai: 'asc' }, { jamMulai: 'asc' }],
+    select: { id: true, judul: true, jamMulai: true, tanggalMulai: true, grupSesi: true, cabang: { select: { nama: true } } },
+  });
+  const groups = new Map<string, { kode: string; events: { id: string; judul: string; jamMulai: string | null; tanggalMulai: Date; cabang: string | null }[] }>();
+  for (const r of rows) {
+    const g = groups.get(r.grupSesi!) ?? { kode: r.grupSesi!, events: [] };
+    g.events.push({ id: r.id, judul: r.judul, jamMulai: r.jamMulai, tanggalMulai: r.tanggalMulai, cabang: r.cabang?.nama ?? null });
+    groups.set(r.grupSesi!, g);
+  }
+  res.json({ success: true, data: [...groups.values()] });
+});
+
 // Detail by id atau slug.
 // Note: pakai helper `idOrSlugWhere` supaya tidak crash Postgres saat key
 // adalah slug — kalau langsung `OR: [{id: key}, {slug: key}]` dan key bukan
@@ -570,6 +593,7 @@ eventRouter.post('/', W(), async (req, res) => {
       bankNomor: input.bankNomor,
       bankAtasNama: input.bankAtasNama,
       quotaPeserta: input.quotaPeserta ?? null,
+      grupSesi: normGrupSesi(input.grupSesi) ?? null,
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
       allowSelfCheckin: input.allowSelfCheckin ?? false,
@@ -645,6 +669,8 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
         bankNomor: src.bankNomor,
         bankAtasNama: src.bankAtasNama,
         quotaPeserta: src.quotaPeserta,
+        // Duplikat sesi (mis. Service 1 → Service 2) tetap di grup yang sama.
+        grupSesi: src.grupSesi,
         tags: src.tags,
         butuhKehadiran: src.butuhKehadiran,
         allowReview: src.allowReview,
@@ -744,6 +770,7 @@ eventRouter.patch('/:id', W(), async (req, res) => {
     bankNomor: input.bankNomor,
     bankAtasNama: input.bankAtasNama,
     quotaPeserta: input.quotaPeserta,
+    grupSesi: normGrupSesi(input.grupSesi),
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
     allowSelfCheckin: input.allowSelfCheckin,
@@ -1013,6 +1040,19 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
   // Syarat role event (salah satu cocok). Berlaku juga untuk admin.
   await assertEventEligible(event.id, input.jemaatId);
 
+  // Grup sesi: sudah terdaftar aktif di sesi lain dalam grup yang sama → tolak.
+  if (event.grupSesi) {
+    await lockGrupSesi(event.grupSesi, res);
+    const c = await sesiConflict(event, input.jemaatId);
+    if (c) {
+      const nm =
+        input.jemaatId === req.user?.jemaatId
+          ? 'Anda'
+          : (await prisma.jemaat.findUnique({ where: { id: input.jemaatId }, select: { namaLengkap: true } }))?.namaLengkap;
+      throw sesiError(c, nm);
+    }
+  }
+
   // Quota guard — applies untuk new registration & reactivate BATAL.
   if (event.quotaPeserta != null && event._count.partisipasi >= event.quotaPeserta) {
     throw Conflict(
@@ -1149,6 +1189,9 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
     }
   }
 
+  // Grup sesi: proses bergantian dengan pendaftaran ke sesi lain dalam grup.
+  await lockGrupSesi(event.grupSesi, res);
+
   const currentCount = event._count.partisipasi;
   const slotsLeft = event.quotaPeserta == null ? Infinity : event.quotaPeserta - currentCount;
 
@@ -1204,6 +1247,12 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
           continue;
         }
         throw e;
+      }
+      // Grup sesi: anggota yang sudah terdaftar di sesi lain → gagal (per orang).
+      const sesi = await sesiConflict(event, jemaatId);
+      if (sesi) {
+        failed.push({ jemaatId, error: { code: 'SESSION_CONFLICT', message: sesiMessage(sesi) } });
+        continue;
       }
       // Cek existing (per backend-request-batch-reactivate-batal.md 2026-08-31):
       // BATAL → reactivate. Active status → reject as ALREADY_REGISTERED.
@@ -1718,6 +1767,11 @@ async function ensureParticipation(eventId: string, jemaatId: string) {
   });
   if (existing) return existing;
   await assertEventEligible(eventId, jemaatId);
+  const ev = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, grupSesi: true } });
+  if (ev?.grupSesi) {
+    const c = await sesiConflict(ev, jemaatId);
+    if (c) throw sesiError(c);
+  }
   const created = await prisma.eventParticipation.create({
     data: {
       eventId,
@@ -2247,7 +2301,7 @@ eventRouter.patch('/:id/peserta/:participationId', W(), async (req, res) => {
   const before = await prisma.eventParticipation.findUnique({
     where: { id: req.params.participationId },
     include: {
-      event: { select: { id: true, judul: true, butuhKehadiran: true } },
+      event: { select: { id: true, judul: true, butuhKehadiran: true, grupSesi: true } },
       jemaat: { select: { namaLengkap: true } },
     },
   });
@@ -2256,6 +2310,11 @@ eventRouter.patch('/:id/peserta/:participationId', W(), async (req, res) => {
   }
 
   const input = updateEventParticipationSchema.parse(req.body);
+  // Mengaktifkan kembali pendaftaran BATAL → patuhi grup sesi.
+  if (before.status === 'BATAL' && input.status && input.status !== 'BATAL' && before.event.grupSesi) {
+    const c = await sesiConflict(before.event, before.jemaatId);
+    if (c) throw sesiError(c, before.jemaat.namaLengkap);
+  }
   // approver relasi ke Jemaat — pakai jemaatId. Verify exist (cegah P2025).
   const approverJemaatId = await resolveApproverJemaatId(req);
 

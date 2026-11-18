@@ -231,6 +231,17 @@ export default function EventDetailPage() {
     onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal approve'),
   });
 
+  // Tolak bukti bayar → kembali "Daftar" + notifikasi alasan ke jemaat (unggah ulang).
+  const rejectMut = useMutation({
+    mutationFn: async ({ id, alasan }: { id: string; alasan: string }) =>
+      apiClient.post(`/admin/event/${eventId}/peserta/${id}/reject-payment`, { alasan }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['event', eventId, 'peserta'] });
+      toast.success('Bukti ditolak — jemaat diminta unggah ulang');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal menolak bukti'),
+  });
+
   const deletePesertaMut = useMutation({
     mutationFn: async (id: string) =>
       apiClient.delete(`/admin/event/${eventId}/peserta/${id}`),
@@ -574,6 +585,10 @@ export default function EventDetailPage() {
                   apiBase={apiBase}
                   isPaid={isPaid}
                   onApprove={() => approveMut.mutate(p.id)}
+                  onReject={() => {
+                    const alasan = window.prompt('Alasan bukti ditolak (dikirim ke jemaat):', 'Bukti transfer tidak terbaca / nominal tidak sesuai');
+                    if (alasan && alasan.trim().length >= 3) rejectMut.mutate({ id: p.id, alasan: alasan.trim() });
+                  }}
                   onChangeStatus={(status) =>
                     updatePesertaMut.mutate({ id: p.id, body: { status } })
                   }
@@ -676,6 +691,7 @@ function PesertaRow({
   isPaid,
   eventId,
   onApprove,
+  onReject,
   onChangeStatus,
   onDelete,
 }: {
@@ -684,6 +700,7 @@ function PesertaRow({
   isPaid: boolean;
   eventId: string;
   onApprove: () => void;
+  onReject: () => void;
   onChangeStatus: (status: ParticipationStatus) => void;
   onDelete: () => void;
 }) {
@@ -796,6 +813,15 @@ function PesertaRow({
             className="px-2 py-1 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded inline-flex items-center gap-1"
           >
             <Check className="w-3 h-3" /> Approve
+          </button>
+        )}
+        {isPaid && p.status === 'MENUNGGU_VERIFIKASI' && (
+          <button
+            onClick={onReject}
+            className="px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded"
+            title="Tolak bukti — jemaat diminta unggah ulang"
+          >
+            Tolak bukti
           </button>
         )}
         {p.status !== 'HADIR' && p.status !== 'BATAL' && (

@@ -2250,6 +2250,9 @@ enum InAppNotifType {
   EVENT_REMINDER
   BIRTHDAY_GREETING
   HOMECELL_MATERIAL
+  // Event: bukti bayar ditolak admin / pendaftaran dibatalkan admin (2026-11)
+  EVENT_PAYMENT_REJECTED
+  EVENT_CANCELLED_BY_ADMIN
 
   @@map("in_app_notif_type")
 }

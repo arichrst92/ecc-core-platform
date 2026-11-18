@@ -50,7 +50,7 @@ import { getFamilyJemaatIds } from '../../lib/family-relation.js';
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { lockEventParam } from '../../lib/event-lock.js';
-import { paymentOkForCheckin } from '../../lib/event-payment.js';
+import { paymentOkForCheckin, paymentStatusOf, selfCancelBlockedReason } from '../../lib/event-payment.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { assertScanOpen, eventScanWindow } from '../../lib/scan-window.js';
@@ -1498,6 +1498,28 @@ eventRouter.get('/:idOrSlug/peserta/me', async (req, res) => {
 // Soft cancel: row tidak di-hard-delete supaya audit + history utuh.
 // Slot kuota otomatis kembali available karena quota guard di POST /peserta
 // filter `status: { not: 'BATAL' }`.
+/** Aturan batal oleh jemaat (sama dengan tiket di app): 400 CANCEL_NOT_ALLOWED. */
+async function assertSelfCancelAllowed(participationId: string, nama: string) {
+  const p = await prisma.eventParticipation.findUnique({
+    where: { id: participationId },
+    select: {
+      status: true,
+      donations: { select: { status: true } },
+      event: { select: { tipeBayar: true, nominal: true, tanggalMulai: true, jamMulai: true, isActive: true, cabang: { select: { timezone: true } } } },
+    },
+  });
+  if (!p) return;
+  const reason = selfCancelBlockedReason(
+    p.status,
+    paymentStatusOf(p.event, p),
+    eventStartsAt(p.event, tzOr(p.event.cabang?.timezone)),
+    new Date(),
+    nama,
+  );
+  // Kode khusus (bukan BAD_REQUEST) supaya app lama menampilkan pesan ini apa adanya.
+  if (reason) throw new ApiError(400, 'CANCEL_NOT_ALLOWED', reason);
+}
+
 eventRouter.delete('/:id/peserta/me', async (req, res) => {
   if (!req.user) throw Unauthorized();
   const jemaatId = req.user.jemaatId;
@@ -1529,6 +1551,8 @@ eventRouter.delete('/:id/peserta/me', async (req, res) => {
       meta: { alreadyCancelled: true },
     });
   }
+  // Sudah bayar / menunggu verifikasi / event sudah mulai → lewat admin.
+  await assertSelfCancelAllowed(existing.id, existing.jemaat.namaLengkap);
 
   const cancelled = await prisma.eventParticipation.update({
     where: { id: existing.id },
@@ -1740,6 +1764,8 @@ eventRouter.post('/:idOrSlug/peserta/:participationId/self-cancel', async (req, 
       meta: { alreadyCancelled: true },
     });
   }
+  // Sudah bayar / menunggu verifikasi / event sudah mulai → lewat admin.
+  await assertSelfCancelAllowed(existing.id, existing.jemaat.namaLengkap);
 
   const cancelled = await prisma.eventParticipation.update({
     where: { id: existing.id },
@@ -2391,6 +2417,17 @@ eventRouter.patch('/:id/peserta/:participationId', W(), async (req, res) => {
   if (input.status && input.status !== before.status) {
     await syncEventRoleForStatus(before.event, before.jemaatId, input.status);
   }
+  // Dibatalkan admin → beri tahu jemaat (sebelumnya diam-diam; tiket hilang begitu saja).
+  if (input.status === 'BATAL' && before.status !== 'BATAL') {
+    void createNotification({
+      jemaatId: before.jemaatId,
+      type: 'EVENT_CANCELLED_BY_ADMIN',
+      title: `Pendaftaran dibatalkan: ${before.event.judul}`,
+      body: `Pendaftaran ${before.jemaat.namaLengkap} di event "${before.event.judul}" dibatalkan oleh admin event. Hubungi admin bila ada pertanyaan.`,
+      actionUrl: `/event/${before.eventId}`,
+      metadata: { eventId: before.eventId, participationId: before.id },
+    });
+  }
   res.json({ success: true, data: updated });
 });
 
@@ -2549,8 +2586,12 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     where: { eventId_jemaatId: { eventId: event.id, jemaatId: jemaat.id } },
   });
   if (!partisipasi) {
+    // Grup sesi: mungkin datang ke sesi yang salah → sebutkan sesinya.
+    const lain = event.grupSesi ? await sesiConflict(event, jemaat.id) : null;
     throw BadRequest(
-      `${jemaat.namaLengkap} belum terdaftar sebagai peserta event "${event.judul}".`,
+      lain
+        ? `${jemaat.namaLengkap} terdaftar di sesi lain: "${lain.judul}"${lain.jamMulai ? ` pukul ${lain.jamMulai}` : ''} — bukan sesi ini.`
+        : `${jemaat.namaLengkap} belum terdaftar sebagai peserta event "${event.judul}".`,
     );
   }
   if (partisipasi.status === 'BATAL') {
@@ -2799,6 +2840,43 @@ async function approveParticipation(req: import('express').Request, eventId: str
 
 eventRouter.post('/:id/peserta/:participationId/approve', W(), async (req, res) => {
   const updated = await approveParticipation(req, req.params.id, req.params.participationId);
+  res.json({ success: true, data: updated });
+});
+
+// Tolak bukti bayar (2026-11): status kembali "Daftar" (belum bayar), bukti
+// dihapus dari tiket, jemaat diberi tahu alasannya & diminta unggah ulang.
+// Sebelumnya admin hanya bisa Approve atau Batalkan seluruh pendaftaran.
+eventRouter.post('/:id/peserta/:participationId/reject-payment', W(), async (req, res) => {
+  const { alasan } = z.object({ alasan: z.string().trim().min(3, 'Tulis alasan penolakan (min. 3 karakter).').max(300) }).parse(req.body ?? {});
+  const before = await prisma.eventParticipation.findUnique({
+    where: { id: req.params.participationId ?? '' },
+    include: { jemaat: { select: { namaLengkap: true } }, event: { select: { judul: true } } },
+  });
+  if (!before || before.eventId !== req.params.id) throw NotFound('Partisipasi tidak ditemukan');
+  if (before.status !== 'MENUNGGU_VERIFIKASI') {
+    throw BadRequest('Hanya bukti yang sedang menunggu verifikasi yang bisa ditolak.');
+  }
+  const updated = await prisma.eventParticipation.update({
+    where: { id: before.id },
+    data: { status: 'DAFTAR', buktiTransferUrl: null, paidAt: null, approvedAt: null, approver: { disconnect: true } },
+  });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'event_participation',
+    resourceId: before.id,
+    resourceLabel: `tolak bukti ${before.jemaat.namaLengkap} @ ${before.event.judul}: ${alasan}`,
+    before,
+    after: updated,
+    metadata: { kind: 'event-reject-payment', alasan },
+  });
+  void createNotification({
+    jemaatId: before.jemaatId,
+    type: 'EVENT_PAYMENT_REJECTED',
+    title: `Bukti pembayaran ditolak: ${before.event.judul}`,
+    body: `Alasan: ${alasan}. Silakan unggah ulang bukti pembayaran dari halaman event.`,
+    actionUrl: `/event/${before.eventId}`,
+    metadata: { eventId: before.eventId, participationId: before.id, alasan },
+  });
   res.json({ success: true, data: updated });
 });
 

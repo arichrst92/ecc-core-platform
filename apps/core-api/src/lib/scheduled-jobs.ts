@@ -233,6 +233,8 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
       event: {
         tanggalMulai: { gte: new Date(tomorrow.getTime() - 24 * 60 * 60 * 1000), lt: new Date(dayAfter.getTime() + 24 * 60 * 60 * 1000) },
         isPublished: true,
+        // Event yang dinonaktifkan/dibatalkan admin tidak diingatkan.
+        isActive: true,
       },
       status: { in: ['DAFTAR', 'BAYAR', 'MENUNGGU_VERIFIKASI'] },
     },

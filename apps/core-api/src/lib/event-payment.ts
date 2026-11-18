@@ -33,3 +33,23 @@ export function paymentStatusOf(e: Ev, p: Part): PaymentStatus {
 export function paymentOkForCheckin(e: Ev, status: string): boolean {
   return !requiresPayment(e) || status === 'BAYAR' || status === 'HADIR';
 }
+
+/**
+ * Boleh dibatalkan sendiri oleh jemaat (tiket / detail event): belum hadir,
+ * belum ada uang (gratis / belum bayar — yang lunas atau menunggu verifikasi
+ * dibatalkan lewat admin), dan event belum dimulai. null = boleh; selain itu pesan.
+ */
+export function selfCancelBlockedReason(
+  status: string,
+  payment: PaymentStatus,
+  startsAt: Date,
+  now: Date = new Date(),
+  nama?: string,
+): string | null {
+  if (status === 'HADIR') return `${nama ?? 'Peserta'} sudah hadir — tidak bisa dibatalkan. Hubungi admin event bila keliru.`;
+  if (payment === 'LUNAS' || payment === 'MENUNGGU' || status === 'BAYAR') {
+    return 'Pendaftaran yang sudah dibayar / menunggu verifikasi pembayaran dibatalkan lewat admin event (untuk pengembalian dana).';
+  }
+  if (now >= startsAt) return 'Pendaftaran tidak bisa dibatalkan karena event sudah dimulai.';
+  return null;
+}

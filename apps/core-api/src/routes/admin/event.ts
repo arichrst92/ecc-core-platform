@@ -1227,6 +1227,8 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
   }
 
   let acceptedSoFar = 0;
+  // Penolakan grup sesi (untuk pesan utuh bila semua yang dipilih ditolak).
+  const sesiFails: { jemaatId: string; judul: string; jamMulai: string | null }[] = [];
   for (const jemaatId of uniqueIds) {
     try {
       // Quota guard per row (live count berdasarkan slotsLeft - acceptedSoFar)
@@ -1252,6 +1254,7 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
       const sesi = await sesiConflict(event, jemaatId);
       if (sesi) {
         failed.push({ jemaatId, error: { code: 'SESSION_CONFLICT', message: sesiMessage(sesi) } });
+        sesiFails.push({ jemaatId, judul: sesi.judul, jamMulai: sesi.jamMulai });
         continue;
       }
       // Cek existing (per backend-request-batch-reactivate-batal.md 2026-08-31):
@@ -1323,6 +1326,29 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       failed.push({ jemaatId, error: { code: 'INTERNAL', message: msg } });
     }
+  }
+
+  // Semua yang dipilih ditolak karena sudah punya sesi lain → tolak utuh dengan
+  // satu pesan jelas (app & website menampilkannya langsung, bukan "Sebagian berhasil").
+  // Kode CONFLICT supaya app lama menampilkan pesan apa adanya + memuat ulang data.
+  if (successful.length === 0 && failed.length > 0 && sesiFails.length === failed.length) {
+    const jam = (x: { jamMulai: string | null }) => (x.jamMulai ? ` pukul ${x.jamMulai}` : '');
+    let message: string;
+    if (sesiFails.length === 1) {
+      const f = sesiFails[0]!;
+      const self = f.jemaatId === req.user?.jemaatId;
+      const nm = self
+        ? 'Anda'
+        : (await prisma.jemaat.findUnique({ where: { id: f.jemaatId }, select: { namaLengkap: true } }))?.namaLengkap ?? 'Peserta ini';
+      message = `${nm} sudah terdaftar di sesi lain: "${f.judul}"${jam(f)}. Satu orang hanya bisa ikut satu sesi — batalkan dulu bila ingin pindah sesi.`;
+    } else {
+      const names = new Map(
+        (await prisma.jemaat.findMany({ where: { id: { in: sesiFails.map((f) => f.jemaatId) } }, select: { id: true, namaLengkap: true } })).map((j) => [j.id, j.namaLengkap]),
+      );
+      const lines = sesiFails.map((f) => `• ${f.jemaatId === req.user?.jemaatId ? 'Anda' : (names.get(f.jemaatId) ?? 'Peserta')}: "${f.judul}"${jam(f)}`);
+      message = `Semua yang dipilih sudah terdaftar di sesi lain:\n${lines.join('\n')}\nSatu orang hanya bisa ikut satu sesi — batalkan dulu bila ingin pindah sesi.`;
+    }
+    throw new ApiError(409, 'CONFLICT', message, { reason: 'SESSION_CONFLICT', failed });
   }
 
   audit(req, {

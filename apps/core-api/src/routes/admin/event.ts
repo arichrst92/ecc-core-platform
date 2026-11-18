@@ -29,7 +29,7 @@ import {
   paginationQuerySchema,
 } from '@ecc/shared-types';
 import { ApiError, BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
-import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { resolveTamu, tamuInputSchema, scanTamuInfo } from '../../lib/tamu.js';
 import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo.js';
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
@@ -2548,11 +2548,14 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     );
   }
 
+  // Tamu? → badge Tamu + kategori + pengundang di layar hasil scan.
+  const tamu = await scanTamuInfo(jemaat.id, partisipasi.invitedByJemaatId);
+
   // Idempotent: sudah HADIR → return data tanpa update
   if (partisipasi.status === 'HADIR') {
     return res.json({
       success: true,
-      data: { ...partisipasi, jemaat },
+      data: { ...partisipasi, jemaat, tamu },
       meta: { alreadyCheckedIn: true },
     });
   }
@@ -2602,7 +2605,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     judul: event.judul,
   });
 
-  res.json({ success: true, data: updated, meta: { alreadyCheckedIn: false } });
+  res.json({ success: true, data: { ...updated, tamu }, meta: { alreadyCheckedIn: false } });
 });
 
 // ============================================================

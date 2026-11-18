@@ -15,7 +15,7 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
-import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { resolveTamu, tamuInputSchema, scanTamuInfo } from '../../lib/tamu.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import {
@@ -735,7 +735,9 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         ? `Jemaat dgn kode ${parsed.kode.toUpperCase()} tidak ditemukan`
         : 'Jemaat tidak ditemukan',
     );
-  }
+  }  // Tamu? → layar hasil scan petugas menampilkan badge Tamu + kategori + pengundang.
+  const tamu = await scanTamuInfo(jemaat.id);
+
   if (!jemaat.isActive) throw BadRequest('Jemaat tidak aktif');
   const jemaatId = jemaat.id;
 
@@ -773,7 +775,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       if (existing.status === 'JOIN') {
         return res.json({
           success: true,
-          data: { reservasi: existing, jemaat, ibadahNama: ibadah.nama },
+          data: { tamu, reservasi: existing, jemaat, ibadahNama: ibadah.nama },
           message: `Sudah check-in sebelumnya (${existing.joinedAt?.toISOString()})`,
         });
       }
@@ -808,7 +810,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       }
       return res.json({
         success: true,
-        data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
+        data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
         message: pickupCode
           ? `Check-in berhasil. Kode jemput: ${pickupCode}`
           : 'Check-in berhasil',
@@ -849,7 +851,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     }
     return res.status(201).json({
       success: true,
-      data: { reservasi: created, jemaat, ibadahNama: ibadah.nama, pickupCode },
+      data: { tamu, reservasi: created, jemaat, ibadahNama: ibadah.nama, pickupCode },
       message: pickupCode
         ? `Check-in berhasil. Kode jemput: ${pickupCode}`
         : 'Check-in berhasil',
@@ -885,7 +887,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     });
     return res.json({
       success: true,
-      data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama },
       message: 'Checkout berhasil',
     });
   }
@@ -918,7 +920,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     void notifyKidsPickup(jemaat.id, jemaat.namaLengkap, ibadah.nama, updated.id);
     return res.json({
       success: true,
-      data: { reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama },
       message: `Anak ${jemaat.namaLengkap} berhasil di-pickup`,
     });
   }

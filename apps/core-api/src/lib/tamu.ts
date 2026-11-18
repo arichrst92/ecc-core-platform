@@ -107,3 +107,29 @@ export async function myTamuIds(inviterId: string): Promise<string[]> {
   const rows = await prisma.jemaatTamu.findMany({ where: { inviterId }, select: { tamuId: true } });
   return rows.map((r) => r.tamuId);
 }
+
+/**
+ * Info tamu untuk layar hasil scan petugas (ibadah & event): null = bukan tamu.
+ * Pengundang = yang mendaftarkan di tiket ini, atau pengundang pertama.
+ */
+export async function scanTamuInfo(
+  jemaatId: string,
+  invitedById?: string | null,
+): Promise<{ kategori: TamuKategori; kategoriLabel: string; pengundang: string | null } | null> {
+  const j = await prisma.jemaat.findUnique({
+    where: { id: jemaatId },
+    select: {
+      isTamu: true,
+      tamuKategori: true,
+      diundangSebagaiTamu: { orderBy: { createdAt: 'asc' }, take: 1, select: { inviter: { select: { namaLengkap: true } } } },
+    },
+  });
+  if (!j?.isTamu) return null;
+  let pengundang: string | null = null;
+  if (invitedById) {
+    pengundang = (await prisma.jemaat.findUnique({ where: { id: invitedById }, select: { namaLengkap: true } }))?.namaLengkap ?? null;
+  }
+  pengundang ??= j.diundangSebagaiTamu[0]?.inviter.namaLengkap ?? null;
+  const kategori = normKategori(j.tamuKategori);
+  return { kategori, kategoriLabel: TAMU_KATEGORI_LABEL[kategori], pengundang };
+}

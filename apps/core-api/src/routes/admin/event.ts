@@ -300,15 +300,24 @@ eventRouter.get('/', async (req, res) => {
     ? { AND: [baseWhere, periode === 'upcoming' ? upcomingWhere : pastWhere] }
     : baseWhere;
 
+  // App (tab Event, Beranda, Kalender) memakai jendela from/to tanpa `limit` →
+  // dulu kena limit bawaan 20 + urut terjauh dulu, sehingga event TERDEKAT
+  // terpotong bila total event semua cabang > 20 (app menyaring cabang di HP).
+  // Jendela tanggal sudah membatasi data → halaman pertama selalu memuat
+  // sampai 500 event (Beranda app minta limit 30 lalu menyaring cabang di HP),
+  // diurutkan dari yang terdekat. Portal (pakai `periode`) tidak berubah.
+  const windowed = !!(fromDate || toEndOfDay) && !periode;
+  const take = windowed && q.page === 1 ? Math.max(q.limit, 500) : q.limit;
+  const ascending = periode === 'upcoming' || windowed;
+
   const [rows, total, upcomingCount, pastCount] = await Promise.all([
     prisma.event.findMany({
       where: listWhere,
-      skip: (q.page - 1) * q.limit,
-      take: q.limit,
-      orderBy:
-        periode === 'upcoming'
-          ? [{ tanggalMulai: 'asc' }, { createdAt: 'desc' }]
-          : [{ tanggalMulai: 'desc' }, { createdAt: 'desc' }],
+      skip: (q.page - 1) * take,
+      take,
+      orderBy: ascending
+        ? [{ tanggalMulai: 'asc' }, { jamMulai: 'asc' }, { createdAt: 'desc' }]
+        : [{ tanggalMulai: 'desc' }, { createdAt: 'desc' }],
       include: {
         sinode: { select: { id: true, nama: true } },
         cabang: { select: { id: true, nama: true, timezone: true } },
@@ -340,9 +349,9 @@ eventRouter.get('/', async (req, res) => {
     data,
     meta: {
       page: q.page,
-      limit: q.limit,
+      limit: take,
       total,
-      totalPages: Math.ceil(total / q.limit),
+      totalPages: Math.ceil(total / take),
       ...(periode ? { counts: { upcoming: upcomingCount, past: pastCount } } : {}),
     },
   });

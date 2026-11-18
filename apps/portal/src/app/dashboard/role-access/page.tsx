@@ -29,11 +29,20 @@ interface MenuAccessRow {
   canDelete: boolean;
 }
 
+interface StatusRow {
+  id: string;
+  nama: string;
+  isActive: boolean;
+  canAccessPortal: boolean | null;
+  menuAccesses: MenuAccessRow[];
+}
+
 interface SubRoleRow {
   id: string;
   nama: string;
   canAccessPortal: boolean | null;
   menuAccesses: MenuAccessRow[];
+  statuses?: StatusRow[];
 }
 
 interface RoleRow {
@@ -50,6 +59,8 @@ interface MatrixResponse {
 }
 
 type Level = 'canRead' | 'canWrite' | 'canDelete';
+type Levels = { canRead: boolean; canWrite: boolean; canDelete: boolean };
+type Target = 'role' | 'sub' | 'status';
 
 // ============== Page ==============
 
@@ -109,6 +120,32 @@ export default function RoleAccessPage() {
       toast.error(err.response?.data?.error?.message ?? 'Gagal update'),
   });
 
+  // Status portal toggle (nullable: null = inherit dari sub-role → role)
+  const statusPortalMut = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean | null }) =>
+      apiClient.patch(`/admin/role/status/${id}/access/portal`, { canAccessPortal: value }),
+    onSuccess: () => {
+      toast.success('Akses portal Status diperbarui');
+      invalidateAfterEdit();
+    },
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal update'),
+  });
+
+  // Menu access — Status-level
+  const statusMenuMut = useMutation({
+    mutationFn: async (input: { statusId: string; menuKey: string } & Levels) =>
+      apiClient.put(`/admin/role/status/${input.statusId}/access/menu`, {
+        menuKey: input.menuKey,
+        canRead: input.canRead,
+        canWrite: input.canWrite,
+        canDelete: input.canDelete,
+      }),
+    onSuccess: invalidateAfterEdit,
+    onError: (err: any) =>
+      toast.error(err.response?.data?.error?.message ?? 'Gagal update menu access'),
+  });
+
   // Menu access — Role-level
   const roleMenuMut = useMutation({
     mutationFn: async (input: {
@@ -151,11 +188,13 @@ export default function RoleAccessPage() {
 
   // Buka / tutup SEMUA menu sekaligus (Role-level atau SubRole-level)
   const bulkMut = useMutation({
-    mutationFn: async (input: { target: 'role' | 'sub'; id: string; grant: boolean }) =>
+    mutationFn: async (input: { target: Target; id: string; grant: boolean }) =>
       apiClient.put(
         input.target === 'role'
           ? `/admin/role/${input.id}/access/menu/all`
-          : `/admin/role/sub/${input.id}/access/menu/all`,
+          : input.target === 'sub'
+            ? `/admin/role/sub/${input.id}/access/menu/all`
+            : `/admin/role/status/${input.id}/access/menu/all`,
         { grant: input.grant },
       ),
     onSuccess: (_res, input) => {
@@ -190,7 +229,7 @@ export default function RoleAccessPage() {
         Role Access
       </h1>
       <p className="text-neutral-500 mt-1 mb-6">
-        Atur wewenang akses portal + menu per Role / Sub-Role. SubRole-level meng-override Role-level.
+        Atur wewenang akses portal + menu per Role / Sub-Role / Status. Status meng-override Sub-Role, Sub-Role meng-override Role.
       </p>
 
       <div className="text-xs text-neutral-600 bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex gap-2">
@@ -199,7 +238,9 @@ export default function RoleAccessPage() {
           <strong>Cara kerja:</strong> User butuh minimal satu Role/SubRole dengan{' '}
           <strong>Akses Portal = Ya</strong> untuk login. Setelah masuk, sidebar
           hanya menampilkan menu dengan <strong>Read = ✓</strong>. SubRole bisa override
-          akses Role parent-nya (untuk Portal: ✓/✗/inherit; untuk Menu: snapshot per row).
+          akses Role parent-nya, dan <strong>Status</strong> bisa override Sub-Role-nya (untuk Portal:
+          ✓/✗/inherit; untuk Menu: snapshot per row). Status hanya berlaku untuk jemaat yang role-nya
+          diberi status tersebut.
         </div>
       </div>
 
@@ -223,6 +264,10 @@ export default function RoleAccessPage() {
             }
             onSubMenuChange={(subId, menuKey, levels) =>
               subMenuMut.mutate({ subRoleId: subId, menuKey, ...levels })
+            }
+            onStatusTogglePortal={(statusId, value) => statusPortalMut.mutate({ id: statusId, value })}
+            onStatusMenuChange={(statusId, menuKey, levels) =>
+              statusMenuMut.mutate({ statusId, menuKey, ...levels })
             }
             onBulk={(target, id, grant) => bulkMut.mutate({ target, id, grant })}
             bulkPending={bulkMut.isPending}
@@ -272,6 +317,8 @@ function RoleCard({
   onSubTogglePortal,
   onRoleMenuChange,
   onSubMenuChange,
+  onStatusTogglePortal,
+  onStatusMenuChange,
   onBulk,
   bulkPending,
   currentUserJemaatId: _currentUserJemaatId,
@@ -292,14 +339,32 @@ function RoleCard({
     menuKey: string,
     levels: { canRead: boolean; canWrite: boolean; canDelete: boolean },
   ) => void;
-  onBulk: (target: 'role' | 'sub', id: string, grant: boolean) => void;
+  onStatusTogglePortal: (statusId: string, value: boolean | null) => void;
+  onStatusMenuChange: (statusId: string, menuKey: string, levels: Levels) => void;
+  onBulk: (target: Target, id: string, grant: boolean) => void;
   bulkPending: boolean;
   currentUserJemaatId?: string;
 }) {
-  const [activeSubRole, setActiveSubRole] = useState<string | null>(null);
+  const [activeSubRole, setActiveSubRoleRaw] = useState<string | null>(null);
+  const [activeStatusId, setActiveStatusId] = useState<string | null>(null);
+  const setActiveSubRole = (id: string | null) => {
+    setActiveSubRoleRaw(id);
+    setActiveStatusId(null);
+  };
   const activeSub = activeSubRole ? role.subRoles.find((s) => s.id === activeSubRole) : undefined;
-  const contextRows = activeSub ? activeSub.menuAccesses : role.menuAccesses;
-  const contextName = activeSub ? `${role.nama} → ${activeSub.nama}` : `${role.nama} (Role-level)`;
+  const statuses = activeSub?.statuses ?? [];
+  const activeStatus = activeStatusId ? statuses.find((x) => x.id === activeStatusId) : undefined;
+  const contextRows = activeStatus
+    ? activeStatus.menuAccesses
+    : activeSub
+      ? activeSub.menuAccesses
+      : role.menuAccesses;
+  const contextName = activeStatus
+    ? `${role.nama} → ${activeSub!.nama} → ${activeStatus.nama}`
+    : activeSub
+      ? `${role.nama} → ${activeSub.nama}`
+      : `${role.nama} (Role-level)`;
+  const subPortalEffective = activeSub ? (activeSub.canAccessPortal ?? role.canAccessPortal) : role.canAccessPortal;
   const fullCount = menuCatalog.filter((m) => {
     const a = accessRowFor(contextRows, m.key);
     return a.canRead && a.canWrite && a.canDelete;
@@ -310,7 +375,8 @@ function RoleCard({
       ? `Buka SEMUA akses menu (Read, Write, Delete — ${menuCatalog.length} menu) untuk ${contextName}?`
       : `Tutup SEMUA akses menu untuk ${contextName}?`;
     if (!confirm(msg)) return;
-    onBulk(activeSub ? 'sub' : 'role', activeSub ? activeSub.id : role.id, grant);
+    if (activeStatus) onBulk('status', activeStatus.id, grant);
+    else onBulk(activeSub ? 'sub' : 'role', activeSub ? activeSub.id : role.id, grant);
   }
 
   const totalAccessibleMenus = menuCatalog.filter((m) => {
@@ -379,12 +445,58 @@ function RoleCard({
             ))}
           </div>
 
+          {/* Status selector (level ketiga) — muncul saat sub-role dipilih */}
+          {activeSub && (
+            <div className="flex items-center gap-2 flex-wrap pl-3 border-l-2 border-brand-200">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Status</span>
+              <button
+                onClick={() => setActiveStatusId(null)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-full border ${
+                  activeStatusId === null
+                    ? 'bg-brand-100 border-brand-300 text-brand-800'
+                    : 'border-neutral-300 hover:bg-neutral-50 text-neutral-700'
+                }`}
+              >
+                Sub-role-level (semua status)
+              </button>
+              {statuses.map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setActiveStatusId(st.id)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-full border ${
+                    activeStatusId === st.id
+                      ? 'bg-brand-100 border-brand-300 text-brand-800'
+                      : 'border-neutral-300 hover:bg-neutral-50 text-neutral-700'
+                  } ${st.isActive ? '' : 'opacity-60'}`}
+                  title={st.isActive ? undefined : 'Status nonaktif — aksesnya tidak dipakai'}
+                >
+                  {st.nama}
+                  {!st.isActive && <span className="ml-1 text-[10px] text-neutral-500">(nonaktif)</span>}
+                  {(st.canAccessPortal !== null || st.menuAccesses.length > 0) && (
+                    <span className="ml-1 text-[10px] text-amber-600">⚙</span>
+                  )}
+                </button>
+              ))}
+              {statuses.length === 0 && (
+                <span className="text-xs text-neutral-400">Sub-role ini belum punya status.</span>
+              )}
+            </div>
+          )}
+
           {/* Active context info */}
-          {activeSubRole && (
+          {activeSubRole && !activeStatus && (
             <SubRolePortalCard
               subRole={role.subRoles.find((s) => s.id === activeSubRole)!}
               roleDefault={role.canAccessPortal}
               onChange={(v) => onSubTogglePortal(activeSubRole, v)}
+            />
+          )}
+          {activeStatus && (
+            <SubRolePortalCard
+              subRole={activeStatus}
+              roleDefault={subPortalEffective}
+              inheritLabel="Sub-Role"
+              onChange={(v) => onStatusTogglePortal(activeStatus.id, v)}
             />
           )}
 
@@ -438,20 +550,12 @@ function RoleCard({
                       <MenuRow
                         key={m.key}
                         menu={m}
-                        activeSubRole={activeSubRole}
-                        roleRow={accessRowFor(role.menuAccesses, m.key)}
-                        subRow={
-                          activeSubRole
-                            ? accessRowFor(
-                                role.subRoles.find((s) => s.id === activeSubRole)!.menuAccesses,
-                                m.key,
-                              )
-                            : null
-                        }
-                        onRoleChange={(levels) => onRoleMenuChange(m.key, levels)}
-                        onSubChange={(levels) =>
-                          activeSubRole && onSubMenuChange(activeSubRole, m.key, levels)
-                        }
+                        cur={accessRowFor(contextRows, m.key)}
+                        onChange={(levels) => {
+                          if (activeStatus) onStatusMenuChange(activeStatus.id, m.key, levels);
+                          else if (activeSub) onSubMenuChange(activeSub.id, m.key, levels);
+                          else onRoleMenuChange(m.key, levels);
+                        }}
                       />
                     ))}
                   </>
@@ -468,10 +572,12 @@ function RoleCard({
 function SubRolePortalCard({
   subRole,
   roleDefault,
+  inheritLabel = 'Role',
   onChange,
 }: {
-  subRole: SubRoleRow;
+  subRole: { nama: string; canAccessPortal: boolean | null };
   roleDefault: boolean;
+  inheritLabel?: string;
   onChange: (value: boolean | null) => void;
 }) {
   const effective = subRole.canAccessPortal ?? roleDefault;
@@ -486,7 +592,7 @@ function SubRolePortalCard({
             <span className="text-neutral-500 font-semibold">Tidak</span>
           )}
           {subRole.canAccessPortal === null && (
-            <span className="ml-1 text-neutral-500">(inherit Role: {roleDefault ? 'Ya' : 'Tidak'})</span>
+            <span className="ml-1 text-neutral-500">(inherit {inheritLabel}: {roleDefault ? 'Ya' : 'Tidak'})</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -531,30 +637,21 @@ function SubRolePortalCard({
 
 function MenuRow({
   menu,
-  activeSubRole,
-  roleRow,
-  subRow,
-  onRoleChange,
-  onSubChange,
+  cur,
+  onChange: emit,
 }: {
   menu: MenuItem;
-  activeSubRole: string | null;
-  roleRow: { canRead: boolean; canWrite: boolean; canDelete: boolean };
-  subRow: { canRead: boolean; canWrite: boolean; canDelete: boolean } | null;
-  onRoleChange: (l: { canRead: boolean; canWrite: boolean; canDelete: boolean }) => void;
-  onSubChange: (l: { canRead: boolean; canWrite: boolean; canDelete: boolean }) => void;
+  /** Akses di level yang sedang diedit (Role / Sub-Role / Status). */
+  cur: Levels;
+  onChange: (l: Levels) => void;
 }) {
-  // Which level we're editing
-  const isSubMode = activeSubRole !== null;
-  const cur = isSubMode ? subRow! : roleRow;
   const onChange = (level: Level, value: boolean) => {
     const next = { ...cur, [level]: value };
     // Saat user enable Write/Delete, auto-enable Read juga (lebih intuitif).
     if (level !== 'canRead' && value && !next.canRead) {
       next.canRead = true;
     }
-    if (isSubMode) onSubChange(next);
-    else onRoleChange(next);
+    emit(next);
   };
 
   return (

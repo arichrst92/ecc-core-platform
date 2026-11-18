@@ -10,7 +10,9 @@ import { useState } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Contact, Loader2, MessageCircle, Plus, Search, StickyNote, UserCheck, X } from 'lucide-react';
+import { Contact, Loader2, MessageCircle, Plus, Search, StickyNote, Trash2, UserCheck, X } from 'lucide-react';
+import { hasMenuAccess } from '@ecc/shared-types';
+import { useAuthStore } from '@/lib/auth-store';
 import { AddGuestModal } from '@/components/tamu/add-guest-modal';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -98,6 +100,8 @@ export default function TamuPage() {
   const [sumber, setSumber] = usePersistentState('tamu:sumber', '');
   const [kategori, setKategori] = usePersistentState<Kategori | ''>('tamu:kategori', '');
   const [adding, setAdding] = useState(false);
+  const user = useAuthStore((st) => st.user);
+  const canDelete = !!user && (user.isFulltimer || hasMenuAccess(user.menuAccess ?? {}, 'tamu', 'delete'));
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
 
@@ -137,6 +141,28 @@ export default function TamuPage() {
     },
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menyimpan'),
   });
+
+  // Hapus dari daftar tamu. Riwayat kehadiran tetap tersimpan (lihat API).
+  const remove = useMutation({
+    mutationFn: async (id: string) => (await apiClient.delete<{ data: { mode: string } }>(`/admin/tamu/${id}`)).data.data,
+    onSuccess: (d) => {
+      toast.success(
+        d.mode === 'deleted'
+          ? 'Tamu dihapus'
+          : d.mode === 'unlinked'
+            ? 'Dilepas dari daftar tamu (akun jemaat tidak berubah)'
+            : 'Tamu dihapus dari daftar — riwayat kehadiran tetap tersimpan',
+      );
+      qc.invalidateQueries({ queryKey: ['tamu'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Gagal menghapus'),
+  });
+  function confirmRemove(t: Tamu) {
+    const msg = !t.isTamu
+      ? `Lepaskan ${t.namaLengkap} dari daftar tamu?\n\nIa sudah punya akun jemaat — akunnya tidak dihapus. Tautan pengundang, homecell, status & catatan follow-up dihapus.`
+      : `Hapus tamu ${t.namaLengkap}?\n\nTautan pengundang, homecell, status & catatan follow-up ikut dihapus. Riwayat kehadiran (bila ada) tetap tersimpan untuk laporan. Bila tamu ini dicatat lagi nanti, ia akan muncul kembali.`;
+    if (confirm(msg)) remove.mutate(t.id);
+  }
 
   const meta = q.data?.meta;
   const rows = q.data?.data ?? [];
@@ -408,7 +434,7 @@ export default function TamuPage() {
                       {t.followupBy ? 'Ganti' : 'Tugaskan'}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => setNoteFor(t)}
                       className="p-1.5 rounded text-neutral-400 hover:text-brand-600 hover:bg-neutral-100"
@@ -416,6 +442,21 @@ export default function TamuPage() {
                     >
                       <StickyNote className="w-4 h-4" />
                     </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => confirmRemove(t)}
+                        disabled={remove.isPending && remove.variables === t.id}
+                        className="p-1.5 rounded text-neutral-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        title={t.isTamu ? 'Hapus tamu' : 'Lepas dari daftar tamu'}
+                        aria-label={t.isTamu ? 'Hapus tamu' : 'Lepas dari daftar tamu'}
+                      >
+                        {remove.isPending && remove.variables === t.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

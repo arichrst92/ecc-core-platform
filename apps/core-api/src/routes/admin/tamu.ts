@@ -37,11 +37,12 @@ export const tamuRouter = Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function assertAccess(req: Request, level: 'read' | 'write') {
+async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
   if (!req.user) throw Unauthorized();
   if (req.user.isFulltimer) return;
   const m = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess['tamu'];
-  if (!(level === 'read' ? m?.canRead : m?.canWrite)) throw Forbidden('Anda tidak punya akses ke menu Tamu.');
+  const ok = level === 'read' ? m?.canRead : level === 'write' ? m?.canWrite : m?.canDelete;
+  if (!ok) throw Forbidden('Anda tidak punya akses ke menu Tamu.');
 }
 
 /** Tambah tamu: menu Tamu (tulis) atau petugas CKids (menu gift-stall). */
@@ -62,6 +63,8 @@ async function loadTamu(req: Request) {
   const sumber = typeof req.query.sumber === 'string' ? req.query.sumber : '';
   const where: Prisma.JemaatWhereInput = {
     OR: [{ isTamu: true }, { diundangSebagaiTamu: { some: {} } }, { tamuHomecell: { some: {} } }],
+    // Tamu yang dihapus (dinonaktifkan karena punya riwayat) tidak tampil.
+    NOT: { isTamu: true, isActive: false },
     ...(sumber === 'homecell' ? { tamuHomecell: { some: {} } } : {}),
     ...(cabangId ? { cabangId } : {}),
     ...(fu === 'none' ? { tamuFollowupById: null } : UUID_RE.test(fu) ? { tamuFollowupById: fu } : {}),
@@ -552,6 +555,79 @@ tamuRouter.patch('/:id', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated });
+});
+
+// ============================================================
+//  DELETE /admin/tamu/:id — hapus dari daftar tamu (menu Tamu: hapus)
+// ============================================================
+// Riwayat kehadiran (reservasi, event, homecell) TIDAK ikut dihapus supaya
+// laporan & statistik ibadah tetap benar:
+//   - Tamu tanpa akun & tanpa riwayat → data tamu dihapus permanen.
+//   - Tamu yang punya riwayat → dinonaktifkan + tautan pengundang/homecell dilepas
+//     (hilang dari daftar Portal & "Tamu Saya"; dicatat ulang → aktif lagi).
+//   - Jemaat terdaftar yang tercatat sebagai tamu → hanya dilepas dari daftar tamu;
+//     akunnya tidak berubah.
+tamuRouter.delete('/:id', async (req, res) => {
+  await assertAccess(req, 'delete');
+  if (!UUID_RE.test(req.params.id)) throw NotFound('Tamu tidak ditemukan');
+  const t = await prisma.jemaat.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      namaLengkap: true,
+      isTamu: true,
+      tamuStatus: true,
+      tamuKategori: true,
+      user: { select: { id: true } },
+      _count: {
+        select: {
+          diundangSebagaiTamu: true,
+          tamuHomecell: true,
+          reservasi: true,
+          eventPartisipasi: true,
+          tamuHomecellHadir: true,
+        },
+      },
+    },
+  });
+  if (!t) throw NotFound('Tamu tidak ditemukan');
+  const c = t._count;
+  if (!t.isTamu && c.diundangSebagaiTamu === 0 && c.tamuHomecell === 0) throw NotFound('Tamu tidak ditemukan');
+
+  const hasHistory = c.reservasi > 0 || c.eventPartisipasi > 0 || c.tamuHomecellHadir > 0;
+  let mode: 'deleted' | 'deactivated' | 'unlinked';
+  if (t.isTamu && !t.user && !hasHistory) {
+    await prisma.jemaat.delete({ where: { id: t.id } });
+    mode = 'deleted';
+  } else {
+    await prisma.$transaction([
+      prisma.jemaatTamu.deleteMany({ where: { tamuId: t.id } }),
+      prisma.homecellTamu.deleteMany({ where: { tamuId: t.id } }),
+      prisma.jemaat.update({
+        where: { id: t.id },
+        data: {
+          tamuStatus: null,
+          tamuStatusUpdatedAt: null,
+          tamuStatusUpdatedById: null,
+          tamuCatatan: null,
+          tamuFollowupById: null,
+          tamuFollowupAt: null,
+          ...(t.isTamu ? { isActive: false, deactivatedAt: new Date() } : {}),
+        },
+      }),
+    ]);
+    mode = t.isTamu ? 'deactivated' : 'unlinked';
+  }
+  audit(req, {
+    action: 'DELETE',
+    resource: 'tamu',
+    resourceId: t.id,
+    resourceLabel: `Hapus tamu ${t.namaLengkap} (${
+      mode === 'deleted' ? 'dihapus permanen' : mode === 'deactivated' ? 'dinonaktifkan, riwayat disimpan' : 'dilepas dari daftar tamu'
+    })`,
+    metadata: { mode, ...c },
+  });
+  res.json({ success: true, data: { id: t.id, mode } });
 });
 
 // ============================================================

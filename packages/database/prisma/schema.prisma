@@ -440,12 +440,15 @@ model SubRoleStatus {
   subRoleId String   @map("sub_role_id") @db.Uuid
   nama      String   @db.VarChar(100)
   deskripsi String?  @db.Text
+  // Override per Status. NULL = inherit dari SubRole → Role.
+  canAccessPortal Boolean? @map("can_access_portal")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   subRole     SubRole      @relation(fields: [subRoleId], references: [id], onDelete: Cascade)
   jemaatRoles JemaatRole[]
+  menuAccesses SubRoleStatusMenuAccess[]
   eventRequirements EventRoleRequirement[]
   onboardingRules   OnboardingRoleRule[]
   eventGrants       Event[]                @relation("EventGrantSubRoleStatus")
@@ -1814,6 +1817,24 @@ model SubRoleMenuAccess {
   @@unique([subRoleId, menuKey])
   @@index([subRoleId])
   @@map("sub_role_menu_access")
+}
+
+// Akses menu level Status (override SubRole → Role untuk menuKey yang sama).
+model SubRoleStatusMenuAccess {
+  id              String   @id @default(uuid()) @db.Uuid
+  subRoleStatusId String   @map("sub_role_status_id") @db.Uuid
+  menuKey         String   @map("menu_key") @db.VarChar(50)
+  canRead         Boolean  @default(true) @map("can_read")
+  canWrite        Boolean  @default(false) @map("can_write")
+  canDelete       Boolean  @default(false) @map("can_delete")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  subRoleStatus SubRoleStatus @relation(fields: [subRoleStatusId], references: [id], onDelete: Cascade)
+
+  @@unique([subRoleStatusId, menuKey])
+  @@index([subRoleStatusId])
+  @@map("sub_role_status_menu_access")
 }
 
 model EventPelayananPetugas {

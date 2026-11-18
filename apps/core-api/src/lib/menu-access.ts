@@ -3,14 +3,14 @@
  *
  * Algoritma:
  *   1. Ambil semua JemaatRole(jemaatId, isActive=true) → list (roleId, subRoleId).
- *   2. Untuk setiap pasangan, cari SubRoleMenuAccess(subRoleId, menuKey).
- *      Kalau ada → pakai itu (override Role-level).
- *      Else → fallback ke RoleMenuAccess(roleId, menuKey).
+ *   2. Untuk setiap JemaatRole, akses per menuKey diambil dari level paling
+ *      spesifik yang punya baris: Status (SubRoleStatusMenuAccess) → SubRole
+ *      (SubRoleMenuAccess) → Role (RoleMenuAccess).
  *   3. Union semua akses dari semua role user: kalau ANY grant true,
  *      pakai true (permissive union per level).
  *
  * Untuk login gate: hitung `canAccessPortal` = ada minimal satu role/sub
- * dengan canAccessPortal=true. SubRole override (NULL = inherit Role).
+ * dengan canAccessPortal=true. Override Status → SubRole → Role (NULL = inherit).
  */
 import { prisma } from '@ecc/database';
 import type { ResolvedMenuAccess, MenuAccessLevels } from '@ecc/shared-types';
@@ -37,6 +37,9 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
       subRole: {
         include: { menuAccesses: true },
       },
+      subRoleStatus: {
+        include: { menuAccesses: true },
+      },
     },
   });
 
@@ -47,11 +50,20 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
     return { canAccessPortal: false, menuAccess: ckids };
   }
 
-  // Resolve canAccessPortal: SubRole override (kalau non-null) > Role.
+  // Status aktif saja yang ikut menentukan akses (status nonaktif = diabaikan).
+  const statusOf = (jr: (typeof jemaatRoles)[number]) => (jr.subRoleStatus?.isActive ? jr.subRoleStatus : null);
+
+  // Resolve canAccessPortal: Status override > SubRole override > Role (NULL = inherit).
   let canAccessPortal = false;
   for (const jr of jemaatRoles) {
+    const statusFlag = statusOf(jr)?.canAccessPortal;
     const subFlag = jr.subRole?.canAccessPortal;
-    const effective = subFlag !== null && subFlag !== undefined ? subFlag : jr.role.canAccessPortal;
+    const effective =
+      statusFlag !== null && statusFlag !== undefined
+        ? statusFlag
+        : subFlag !== null && subFlag !== undefined
+          ? subFlag
+          : jr.role.canAccessPortal;
     if (effective) {
       canAccessPortal = true;
       break;
@@ -87,6 +99,17 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
           canRead: sa.canRead,
           canWrite: sa.canWrite,
           canDelete: sa.canDelete,
+        };
+      }
+    }
+    // Status-level OVERRIDE SubRole/Role untuk menuKey yang sama.
+    const st = statusOf(jr);
+    if (st) {
+      for (const xa of st.menuAccesses) {
+        perRole[xa.menuKey] = {
+          canRead: xa.canRead,
+          canWrite: xa.canWrite,
+          canDelete: xa.canDelete,
         };
       }
     }

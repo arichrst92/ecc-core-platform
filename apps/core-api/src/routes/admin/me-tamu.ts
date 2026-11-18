@@ -13,7 +13,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { kategoriKey, memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
 
 export const meTamuRouter = Router();
@@ -57,6 +57,7 @@ meTamuRouter.get('/', async (req, res) => {
       const { tamuStatus: _s, tamuFollowupBy, tamuFollowupAt, ...tamu } = r.tamu;
       return {
         ...tamu,
+        tamuKategori: kategoriKey(tamu.tamuKategori),
         addedAt: r.createdAt,
         status,
         statusLabel: TAMU_STATUS_LABEL[status],

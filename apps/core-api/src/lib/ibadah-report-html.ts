@@ -160,7 +160,7 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
         .slice(0, 40)
         .map(
           (g: { namaLengkap: string; noHp: string | null; isBaru: boolean; kunjungan: number; kunjunganTerakhir: string; inviters: string[]; walkIn: boolean; kategori?: string }) =>
-            `<tr><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${esc(({ VISITOR: 'Visitor saja', NEW_COMER: 'New Comer', BELUM: 'Belum ditentukan' } as Record<string, string>)[g.kategori ?? 'BELUM'] ?? '')}</td><td>${g.isBaru ? '<b style="color:#15803d">Baru</b>' : 'Berulang'}</td><td class="r">${g.kunjungan}</td><td>${fmtTgl(
+            `<tr><td>${esc(g.namaLengkap)}</td><td>${esc(g.noHp ?? '')}</td><td>${esc(g.kategori === 'NEW_COMER' ? 'New Comer' : 'Visitor')}</td><td>${g.isBaru ? '<b style="color:#15803d">Baru</b>' : 'Berulang'}</td><td class="r">${g.kunjungan}</td><td>${fmtTgl(
               g.kunjunganTerakhir,
             )}</td><td>${esc(g.walkIn && !g.inviters.length ? 'Walk-in' : g.inviters.join(', '))}</td></tr>`,
         )

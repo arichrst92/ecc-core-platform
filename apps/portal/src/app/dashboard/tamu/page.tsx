@@ -21,13 +21,12 @@ import { ExportButtons, selectCls, useCabangOptions } from '@/components/report/
 import { todayYmd } from '@/lib/dates';
 
 type Status = 'DIUNDANG' | 'TERLIBAT' | 'FOLLOWUP' | 'TERDAFTAR';
-type Kategori = 'VISITOR' | 'NEW_COMER' | 'BELUM';
-const KATEGORI_ORDER: Kategori[] = ['NEW_COMER', 'VISITOR', 'BELUM'];
-const KATEGORI_LABEL: Record<Kategori, string> = { NEW_COMER: 'New Comer', VISITOR: 'Visitor saja', BELUM: 'Belum ditentukan' };
+type Kategori = 'VISITOR' | 'NEW_COMER';
+const KATEGORI_ORDER: Kategori[] = ['NEW_COMER', 'VISITOR'];
+const KATEGORI_LABEL: Record<Kategori, string> = { NEW_COMER: 'New Comer', VISITOR: 'Visitor' };
 const KATEGORI_STYLE: Record<Kategori, string> = {
   NEW_COMER: 'bg-emerald-100 text-emerald-800',
   VISITOR: 'bg-sky-100 text-sky-800',
-  BELUM: 'bg-neutral-100 text-neutral-600',
 };
 
 interface Tamu {
@@ -98,7 +97,9 @@ export default function TamuPage() {
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
   const [followupBy, setFollowupBy] = usePersistentState('tamu:followupBy', '');
   const [sumber, setSumber] = usePersistentState('tamu:sumber', '');
-  const [kategori, setKategori] = usePersistentState<Kategori | ''>('tamu:kategori', '');
+  const [kategoriRaw, setKategori] = usePersistentState<Kategori | ''>('tamu:kategori', '');
+  // Filter lama "Belum ditentukan" yang tersimpan di browser → Semua kategori.
+  const kategori: Kategori | '' = (KATEGORI_ORDER as string[]).includes(kategoriRaw) ? kategoriRaw : '';
   const [adding, setAdding] = useState(false);
   const user = useAuthStore((st) => st.user);
   const canDelete = !!user && (user.isFulltimer || hasMenuAccess(user.menuAccess ?? {}, 'tamu', 'delete'));

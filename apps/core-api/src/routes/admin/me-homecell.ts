@@ -28,7 +28,7 @@ import {
 import { Router, type Request } from 'express';
 import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
 import { createReportToken, REPORT_LINK_TTL_SEC } from '../../lib/report-link.js';
-import { memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { kategoriKey, memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
 import { apiBase } from '../../lib/worship.js';
 import { privacyGate } from '../../lib/privacy.js';
@@ -789,6 +789,7 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
       const { tamuStatus: _s, ...tamu } = r.tamu;
       return {
         ...tamu,
+        tamuKategori: kategoriKey(tamu.tamuKategori),
         catatan: r.catatan,
         addedAt: r.createdAt,
         addedBy: r.addedBy,

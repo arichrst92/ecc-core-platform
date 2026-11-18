@@ -54,7 +54,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
   jemaat: {
     prismaKey: 'jemaat',
     description:
-      'Master data jemaat (church member). Full profile: nama, no HP, cabang, tanggal lahir, alamat. Tamu (belum jemaat) = isTamu true; tamuKategori NEW_COMER | VISITOR | null (belum ditentukan); tamuStatus = status follow-up tamu.',
+      'Master data jemaat (church member). Full profile: nama, no HP, cabang, tanggal lahir, alamat. Tamu (belum jemaat) = isTamu true; tamuKategori NEW_COMER | VISITOR (null pada data lama = VISITOR); tamuStatus = status follow-up tamu.',
     excludeFields: [],
     allowedInclude: [
       'cabang',

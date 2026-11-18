@@ -762,7 +762,7 @@ export const SECTIONS: Section[] = [
         title: 'Tamu',
         items: [
           'Tamu = orang yang belum menjadi jemaat (dicatat lewat app: Tamu saya, usher walk-in, homecell, visit dengan tamu, atau mode tamu → minta bergabung homecell).',
-          'Kategori tamu: New Comer (berpotensi berjemaat), Visitor (hanya berkunjung), atau Belum ditentukan — bisa diubah admin di Portal → Tamu.',
+          'Kategori tamu: New Comer (berpotensi berjemaat) atau Visitor (hanya berkunjung; bawaan bila tidak dipilih) — bisa diubah admin di Portal → Tamu.',
           'Status follow-up & petugas follow-up diatur di halaman Tamu. Laporan ibadah/event/cabang/area memecah tamu per kategori.',
         ],
       },

@@ -147,7 +147,7 @@ async function loadTamu(req: Request) {
   });
 }
 
-const KATEGORI_KEYS = ['VISITOR', 'NEW_COMER', 'BELUM'] as const;
+const KATEGORI_KEYS = ['VISITOR', 'NEW_COMER'] as const;
 /** Saring kategori (?kategori=VISITOR|NEW_COMER|BELUM). */
 function byKategori<T extends { kategori: string }>(req: Request, rows: T[]): T[] {
   const k = typeof req.query.kategori === 'string' ? req.query.kategori : '';
@@ -691,9 +691,8 @@ ${summaryCards([
   [TAMU_STATUS_LABEL.TERLIBAT, count('TERLIBAT')],
   [TAMU_STATUS_LABEL.FOLLOWUP, count('FOLLOWUP')],
   [TAMU_STATUS_LABEL.TERDAFTAR, count('TERDAFTAR')],
-  ['Visitor saja', rows.filter((x) => x.kategori === 'VISITOR').length],
+  ['Visitor', rows.filter((x) => x.kategori === 'VISITOR').length],
   ['New Comer', rows.filter((x) => x.kategori === 'NEW_COMER').length],
-  ['Kategori belum ditentukan', rows.filter((x) => x.kategori === 'BELUM').length],
 ])}
 <h2>Daftar tamu (${rows.length})</h2>
 <table><thead><tr><th>Tamu</th><th>Diundang oleh</th><th>Kehadiran</th><th>Status</th><th>Difollow-up oleh</th><th>Catatan</th></tr></thead><tbody>${rows

@@ -349,7 +349,7 @@ CONTOH:
 CATATAN noHp: Field noHp di DB pakai format E.164 internasional (+62..., +65..., +61..., dll). User bisa tulis "08...", "62...", "+62..." atau nomor luar negeri dengan kode negara — backend auto-normalize sebelum query. Contoh filter valid semua: { noHp: "081234567890" }, { noHp: { contains: "0812" } }, { noHp: "+6281234567890" }.
 
 CATATAN FITUR (data terbaru):
-- Tamu = jemaat dgn isTamu true. Kategori tamu: jemaat.tamuKategori (NEW_COMER / VISITOR / null = belum ditentukan). "Tamu saya" → jemaat_tamu; tamu homecell → homecell_tamu.
+- Tamu = jemaat dgn isTamu true. Kategori tamu: jemaat.tamuKategori (NEW_COMER / VISITOR; null pada data lama = VISITOR). "Tamu saya" → jemaat_tamu; tamu homecell → homecell_tamu.
 - Prayer request → prayer_request (isi doa pribadi, tidak tersedia). Petugas doa = role (prayer_petugas_role) ATAU anggota ministry (prayer_petugas_pelayanan).
 - Ulasan ibadah/event → service_review (rating 1–5). Ibadah/event dgn allowReview false = ulasan dimatikan.
 - Urutan tampil ibadah di app = ibadah.urutan (kecil dulu).

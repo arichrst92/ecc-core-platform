@@ -482,8 +482,7 @@ reportRouter.get('/ibadah/export', async (req, res) => {
       ['Tamu baru', ins.tamu.baru, '', ''],
       ['Tamu berulang', ins.tamu.berulang, '', ''],
       ['Tamu New Comer', d.summary.tamuKategori.NEW_COMER, '', ''],
-      ['Tamu Visitor saja', d.summary.tamuKategori.VISITOR, '', ''],
-      ['Tamu kategori belum ditentukan', d.summary.tamuKategori.BELUM, '', ''],
+      ['Tamu Visitor', d.summary.tamuKategori.VISITOR, '', ''],
       ['Okupansi rata-rata (%)', d.summary.okupansi.rataOkupansi ?? '', '', ''],
       [],
       ['JANGKAUAN JEMAAT', 'Jemaat'],
@@ -703,7 +702,7 @@ reportRouter.get('/event', async (req, res) => {
   res.json({ success: true, data: await eventReportData(req) });
 });
 
-const KATEGORI_LABEL: Record<string, string> = { VISITOR: 'Visitor saja', NEW_COMER: 'New Comer', BELUM: 'Belum ditentukan' };
+const KATEGORI_LABEL: Record<string, string> = { VISITOR: 'Visitor', NEW_COMER: 'New Comer' };
 
 const STATUS_LABEL: Record<string, string> = {
   DAFTAR: 'Daftar',
@@ -755,7 +754,7 @@ ${summaryCards([
   ['Tamu hadir', s.tamuHadir],
   ['Tamu unik', s.tamuUnik],
   ['Tamu New Comer', s.tamuKategori.NEW_COMER],
-  ['Tamu Visitor saja', s.tamuKategori.VISITOR],
+  ['Tamu Visitor', s.tamuKategori.VISITOR],
   ['Rating', d.reviews.overall.avg != null ? `${d.reviews.overall.avg} ★ (${d.reviews.overall.count})` : '—'],
 ])}
 ${methodLine(s.methods)}

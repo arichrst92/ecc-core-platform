@@ -12,30 +12,32 @@ import { ApiError } from './errors.js';
 import { generateUniqueKode } from './kode-reservasi.js';
 
 // ------------------------------------------------------------ kategori tamu
-/** VISITOR = berkunjung saja · NEW_COMER = orang baru · BELUM = belum ditentukan (disimpan NULL). */
+/**
+ * Hanya dua kategori: VISITOR (berkunjung) · NEW_COMER (orang baru).
+ * "Belum ditentukan" dihapus (2026-11): data lama & app lama yang masih
+ * mengirim 'BELUM' / tanpa kategori → dianggap VISITOR.
+ */
 export const TAMU_KATEGORI = ['VISITOR', 'NEW_COMER'] as const;
 export type TamuKategori = (typeof TAMU_KATEGORI)[number];
-export const TAMU_KATEGORI_LABEL: Record<TamuKategori | 'BELUM', string> = {
-  VISITOR: 'Visitor saja',
+export const TAMU_KATEGORI_LABEL: Record<TamuKategori, string> = {
+  VISITOR: 'Visitor',
   NEW_COMER: 'New Comer',
-  BELUM: 'Belum ditentukan',
 };
-/** Input kategori dari form (app/portal). Tidak dikirim (app lama) = belum ditentukan. */
+/** Input kategori dari form (app/portal). 'BELUM' masih diterima dari app lama (= Visitor). */
 export const tamuKategoriInput = z.enum(['VISITOR', 'NEW_COMER', 'BELUM']).optional();
-export const normKategori = (v: string | null | undefined): TamuKategori | null =>
-  v === 'VISITOR' || v === 'NEW_COMER' ? v : null;
-export const kategoriKey = (v: string | null | undefined): TamuKategori | 'BELUM' => normKategori(v) ?? 'BELUM';
+/** Kategori yang disimpan: NEW_COMER, selain itu VISITOR. */
+export const normKategori = (v: string | null | undefined): TamuKategori => (v === 'NEW_COMER' ? 'NEW_COMER' : 'VISITOR');
+export const kategoriKey = normKategori;
 
 /**
- * Kategori baru untuk tamu yang sudah ada: isi bila masih kosong; NEW_COMER
- * boleh menaikkan VISITOR. Tidak pernah menurunkan NEW_COMER → VISITOR dan
- * tidak mengosongkan (itu hanya lewat admin Portal).
+ * Kategori baru untuk tamu yang sudah ada: isi bila masih kosong (default
+ * Visitor); NEW_COMER boleh menaikkan VISITOR. Tidak pernah menurunkan
+ * NEW_COMER → VISITOR (itu hanya lewat admin Portal). undefined = tidak berubah.
  */
-export function mergeKategori(current: string | null | undefined, incoming: string | null | undefined): TamuKategori | null | undefined {
-  const inc = normKategori(incoming);
-  if (!inc) return undefined;
-  const cur = normKategori(current);
-  if (!cur || (cur === 'VISITOR' && inc === 'NEW_COMER')) return inc;
+export function mergeKategori(current: string | null | undefined, incoming: string | null | undefined): TamuKategori | undefined {
+  const cur = current === 'VISITOR' || current === 'NEW_COMER' ? current : null;
+  if (!cur) return normKategori(incoming);
+  if (cur === 'VISITOR' && incoming === 'NEW_COMER') return 'NEW_COMER';
   return undefined;
 }
 

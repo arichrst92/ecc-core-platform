@@ -313,7 +313,7 @@ export async function buildIbadahMonitor(q: { ibadahId?: string | null; cabangId
         walkIn: guests.filter((r) => r.guestSource === 'WALK_IN').length,
         homecell: guests.filter((r) => r.jemaat._count.tamuHomecell > 0).length,
         newComer: guests.filter((r) => r.jemaat.tamuKategori === 'NEW_COMER').length,
-        visitor: guests.filter((r) => r.jemaat.tamuKategori === 'VISITOR').length,
+        visitor: guests.filter((r) => r.jemaat.tamuKategori !== 'NEW_COMER').length,
         pertamaKali: hadir.filter((r) => !pernahSet.has(r.jemaatId)).length,
       },
       lastWeek,

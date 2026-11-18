@@ -201,7 +201,7 @@ export async function buildEventMonitor(eventId: string | null | undefined, lang
       diundang: guests.filter((r) => r.guestSource === 'DIUNDANG').length,
       walkIn: guests.filter((r) => r.guestSource === 'WALK_IN').length,
       newComer: guests.filter((r) => r.jemaat.tamuKategori === 'NEW_COMER').length,
-      visitor: guests.filter((r) => r.jemaat.tamuKategori === 'VISITOR').length,
+      visitor: guests.filter((r) => r.jemaat.tamuKategori !== 'NEW_COMER').length,
       pertamaKali: hadir.filter((r) => !pernah.has(r.jemaatId)).length,
     },
     app,

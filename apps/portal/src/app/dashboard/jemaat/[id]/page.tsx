@@ -326,7 +326,7 @@ export default function JemaatDetailPage() {
             ) : null}
             {j.isTamu ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600" title="Kategori tamu — ubah di menu Tamu">
-                {j.tamuKategori === 'NEW_COMER' ? 'New Comer' : j.tamuKategori === 'VISITOR' ? 'Visitor saja' : 'Kategori belum ditentukan'}
+                {j.tamuKategori === 'NEW_COMER' ? 'New Comer' : 'Visitor'}
               </span>
             ) : null}
           </h1>

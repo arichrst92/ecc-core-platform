@@ -27,14 +27,12 @@ export const isGuestRow = (r: { guestSource: string | null; jemaat: { isTamu: bo
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Kategori tamu (Visitor / New Comer / belum ditentukan) — dihitung per orang unik. */
-export type GuestKategori = 'VISITOR' | 'NEW_COMER' | 'BELUM';
-export const guestKategori = (v: string | null | undefined): GuestKategori =>
-  v === 'VISITOR' || v === 'NEW_COMER' ? v : 'BELUM';
+/** Kategori tamu (Visitor / New Comer) — dihitung per orang unik. Tanpa kategori = Visitor. */
+export type GuestKategori = 'VISITOR' | 'NEW_COMER';
+export const guestKategori = (v: string | null | undefined): GuestKategori => (v === 'NEW_COMER' ? 'NEW_COMER' : 'VISITOR');
 export const countKategori = (guests: { kategori: GuestKategori }[]): Record<GuestKategori, number> => ({
   VISITOR: guests.filter((g) => g.kategori === 'VISITOR').length,
   NEW_COMER: guests.filter((g) => g.kategori === 'NEW_COMER').length,
-  BELUM: guests.filter((g) => g.kategori === 'BELUM').length,
 });
 
 /** Senin (YYYY-MM-DD) dari minggu tanggal kalender `d` (UTC midnight). */

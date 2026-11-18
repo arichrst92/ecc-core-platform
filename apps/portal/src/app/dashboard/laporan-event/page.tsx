@@ -40,7 +40,7 @@ interface EventReport {
     tamuTerdaftar: number;
     tamuHadir: number;
     tamuUnik: number;
-    tamuKategori?: { VISITOR: number; NEW_COMER: number; BELUM: number };
+    tamuKategori?: { VISITOR: number; NEW_COMER: number; BELUM?: number };
     methods: MethodCount;
   };
   events: {
@@ -71,14 +71,13 @@ interface EventReport {
     status: string;
     inviter: string | null;
     walkIn: boolean;
-    kategori?: 'VISITOR' | 'NEW_COMER' | 'BELUM';
+    kategori?: 'VISITOR' | 'NEW_COMER';
   }[];
 }
 
 const KATEGORI_TAMU: Record<string, { label: string; cls: string }> = {
   NEW_COMER: { label: 'New Comer', cls: 'bg-emerald-100 text-emerald-800' },
-  VISITOR: { label: 'Visitor saja', cls: 'bg-sky-100 text-sky-800' },
-  BELUM: { label: 'Belum ditentukan', cls: 'bg-neutral-100 text-neutral-600' },
+  VISITOR: { label: 'Visitor', cls: 'bg-sky-100 text-sky-800' },
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -259,8 +258,8 @@ export default function LaporanEventPage() {
                       </td>
                       <td className="px-4 py-2 text-neutral-600">{g.noHp ?? '—'}</td>
                       <td className="px-4 py-2">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${KATEGORI_TAMU[g.kategori ?? 'BELUM']!.cls}`}>
-                          {KATEGORI_TAMU[g.kategori ?? 'BELUM']!.label}
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${KATEGORI_TAMU[g.kategori ?? 'VISITOR']!.cls}`}>
+                          {KATEGORI_TAMU[g.kategori ?? 'VISITOR']!.label}
                         </span>
                       </td>
                       <td className="px-4 py-2">{STATUS_LABEL[g.status] ?? g.status}</td>

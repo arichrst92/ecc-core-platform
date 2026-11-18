@@ -126,14 +126,14 @@ describe('kategori tamu', () => {
       { ibadahId: 'A', tanggalIbadah: d('2026-10-11'), checkinMethod: 'SELF', guestSource: 'DIUNDANG', invitedByJemaatId: 'j1', jemaat: t('c', null) },
     ];
     const r = buildIbadahReport([], rows, new Map(), d('2026-10-01'));
-    expect(r.summary.tamuKategori).toEqual({ VISITOR: 1, NEW_COMER: 1, BELUM: 1 });
-    expect(r.guests.find((g) => g.id === 'c')!.kategori).toBe('BELUM');
+    expect(r.summary.tamuKategori).toEqual({ VISITOR: 2, NEW_COMER: 1 });
+    expect(r.guests.find((g) => g.id === 'c')!.kategori).toBe('VISITOR');
   });
   it('event: tamu unik per kategori', () => {
     const r = buildEventReport(['E'], [
       { eventId: 'E', status: 'HADIR', checkinMethod: 'SCAN', guestSource: 'WALK_IN', invitedByJemaatId: null, jemaat: t('a', 'VISITOR') },
       { eventId: 'E', status: 'DAFTAR', checkinMethod: null, guestSource: 'DIUNDANG', invitedByJemaatId: 'j', jemaat: t('b', 'NEW_COMER') },
     ]);
-    expect(r.summary.tamuKategori).toEqual({ VISITOR: 1, NEW_COMER: 1, BELUM: 0 });
+    expect(r.summary.tamuKategori).toEqual({ VISITOR: 1, NEW_COMER: 1 });
   });
 });

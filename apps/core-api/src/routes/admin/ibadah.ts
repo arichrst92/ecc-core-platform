@@ -18,6 +18,9 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
 import { occurrenceStart } from '../../lib/reservasi-window.js';
 import { tzOr } from '../../lib/tz.js';
+import { assertScanOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { scanAccess } from '../../lib/scan-access.js';
+import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 
 export const ibadahRouter = Router();
 
@@ -647,11 +650,17 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
   const input = ibadahCheckinSchema.parse(req.body);
 
   // Resolve tanggal — default hari ini (UTC midnight, biar match @db.Date)
+  // Tanggal = tanggal SERVER di zona cabang (2026-11). Petugas tidak bisa
+  // memilih tanggal lain; admin Kehadiran/Fulltimer boleh (koreksi).
+  const isAdmin = (await scanAccess(req)).admin;
+  const win = await ibadahScanWindow(ibadah.id);
   let tanggalDate: Date;
-  if (input.tanggalIbadah) {
+  if (input.tanggalIbadah && isAdmin) {
     tanggalDate = parseTanggal(input.tanggalIbadah);
   } else {
-    tanggalDate = todayAsUtcMidnight();
+    tanggalDate = win?.tanggal ?? todayAsUtcMidnight();
+    // Check-in 30 menit sebelum s.d. 30 menit setelah ibadah dimulai.
+    assertScanOpen(win, isAdmin);
   }
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
 
@@ -681,15 +690,23 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
   }
 
   // Lookup jemaat by kode
-  const jemaat = await prisma.jemaat.findUnique({
+  const jemaatRow = await prisma.jemaat.findUnique({
     where: { kode: input.kode },
-    select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true },
+    select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true, tanggalLahir: true },
   });
-  if (!jemaat) {
+  if (!jemaatRow) {
     throw NotFound(`Kode jemaat "${input.kode}" tidak ditemukan.`);
   }
+  const { tanggalLahir, ...jemaat } = jemaatRow;
   if (!jemaat.isActive) {
     throw BadRequest(`Jemaat "${jemaat.namaLengkap}" sudah nonaktif — tidak bisa check-in.`);
+  }
+  // Ibadah anak: tolak bila usia (tanggal lahir terisi) di atas batas.
+  if (ibadah.isKidsIbadah) {
+    const age = ageYears(tanggalLahir, new Date(), win?.tz);
+    if (age !== null && age > KIDS_MAX_AGE) {
+      throw BadRequest(`${jemaat.namaLengkap} berusia ${age} tahun — ibadah anak hanya untuk usia ${KIDS_MAX_AGE} tahun ke bawah.`);
+    }
   }
 
   // Cari reservasi existing

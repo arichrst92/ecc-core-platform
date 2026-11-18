@@ -17,7 +17,9 @@ import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { resolveTamu, tamuInputSchema, scanTamuInfo } from '../../lib/tamu.js';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { assertCanScanIbadah, requireAnyScanner, requireCkidsPoint } from '../../lib/scan-access.js';
+import { assertCanScanIbadah, requireAnyScanner, requireCkidsPoint, scanAccess } from '../../lib/scan-access.js';
+import { assertScanOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import {
@@ -290,7 +292,16 @@ reservasiRouter.post('/checkin', requireAnyScanner, async (req, res) => {
       ibadah: { select: { nama: true, isKidsIbadah: true } },
     },
   });
-  if (item) await assertCanScanIbadah(req, item.ibadahId, item.ibadah.nama);
+  if (item) {
+    await assertCanScanIbadah(req, item.ibadahId, item.ibadah.nama);
+    if (!(await scanAccess(req)).admin) {
+      const win = await ibadahScanWindow(item.ibadahId);
+      if (win && item.tanggalIbadah.getTime() !== win.tanggal.getTime()) {
+        throw BadRequest(`Tiket ini untuk tanggal ${item.tanggalIbadah.toISOString().slice(0, 10)}, bukan ibadah hari ini.`);
+      }
+      assertScanOpen(win, false);
+    }
+  }
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
   // Reservasi yang dibatalkan jemaat tetap bisa check-in kalau ternyata datang.
   if (item.status === 'JOIN') {
@@ -740,22 +751,23 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
 
   // Resolve jemaat via jemaatId (UUID) atau kode (8-char QR scan).
   // Schema refine sudah guarantee exactly one is present.
-  const jemaat = parsed.jemaatId
+  const jemaatRow = parsed.jemaatId
     ? await prisma.jemaat.findUnique({
         where: { id: parsed.jemaatId },
-        select: { id: true, namaLengkap: true, isActive: true, kode: true },
+        select: { id: true, namaLengkap: true, isActive: true, kode: true, fotoUrl: true, tanggalLahir: true },
       })
     : await prisma.jemaat.findUnique({
         where: { kode: (parsed.kode as string).toUpperCase() },
-        select: { id: true, namaLengkap: true, isActive: true, kode: true },
+        select: { id: true, namaLengkap: true, isActive: true, kode: true, fotoUrl: true, tanggalLahir: true },
       });
-  if (!jemaat) {
+  if (!jemaatRow) {
     throw NotFound(
       parsed.kode
         ? `Jemaat dgn kode ${parsed.kode.toUpperCase()} tidak ditemukan`
         : 'Jemaat tidak ditemukan',
     );
   }
+  const { tanggalLahir, ...jemaat } = jemaatRow;
   // Tamu? → layar hasil scan petugas menampilkan badge Tamu + kategori + pengundang.
   const tamu = await scanTamuInfo(jemaat.id);
 
@@ -775,8 +787,23 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
   if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
   await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
-  const tanggal = new Date(tanggalIbadah);
+  // Tanggal = tanggal SERVER di zona cabang (bukan jam HP petugas). Admin
+  // Kehadiran/Fulltimer (Portal) boleh memakai tanggal yang dikirim (koreksi).
+  const isAdmin = (await scanAccess(req)).admin;
+  const win = await ibadahScanWindow(ibadah.id);
+  const tanggal = isAdmin || !win ? new Date(tanggalIbadah) : win.tanggal;
   const now = new Date();
+  if (action === 'checkin') {
+    // Check-in 30 menit sebelum s.d. 30 menit setelah ibadah dimulai.
+    if (!isAdmin) assertScanOpen(win, false);
+    // Ibadah anak: tolak bila usia (tanggal lahir terisi) di atas batas.
+    if (ibadah.isKidsIbadah) {
+      const age = ageYears(tanggalLahir, now, win?.tz);
+      if (age !== null && age > KIDS_MAX_AGE) {
+        throw BadRequest(`${jemaat.namaLengkap} berusia ${age} tahun — ibadah anak hanya untuk usia ${KIDS_MAX_AGE} tahun ke bawah.`);
+      }
+    }
+  }
 
   // Lookup existing reservasi untuk (jemaat, ibadah, tanggal).
   const existing = await prisma.reservasi.findUnique({
@@ -1092,9 +1119,13 @@ reservasiRouter.post('/walk-in-guest', requireAnyScanner, async (req, res) => {
   if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
   if (ibadah.isKidsIbadah) throw BadRequest('Ibadah anak tidak menerima tamu walk-in — gunakan meja CKids.');
   await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
+  // Tanggal server (zona cabang) + jendela check-in, kecuali admin Kehadiran.
+  const isAdmin = (await scanAccess(req)).admin;
+  const win = await ibadahScanWindow(ibadah.id);
+  if (!isAdmin) assertScanOpen(win, false);
 
   const { tamu, created, member } = await resolveTamu(input, ibadah.cabangId);
-  const tanggal = new Date(`${input.tanggalIbadah}T00:00:00.000Z`);
+  const tanggal = isAdmin || !win ? new Date(`${input.tanggalIbadah}T00:00:00.000Z`) : win.tanggal;
   const now = new Date();
   const existing = await prisma.reservasi.findUnique({
     where: { jemaatId_ibadahId_tanggalIbadah: { jemaatId: tamu.id, ibadahId: ibadah.id, tanggalIbadah: tanggal } },

@@ -53,6 +53,7 @@ import { lockEventParam } from '../../lib/event-lock.js';
 import { paymentOkForCheckin } from '../../lib/event-payment.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
+import { assertScanOpen, eventScanWindow } from '../../lib/scan-window.js';
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import {
   assertEventEligible,
@@ -2523,6 +2524,16 @@ eventRouter.post('/:id/checkin', async (req, res) => {
 
   const input = eventCheckinSchema.parse(req.body);
 
+  // Check-in 30 menit sebelum s.d. 30 menit setelah event dimulai (jam server,
+  // zona cabang). Pengelola event / Fulltimer boleh di luar jendela.
+  {
+    const cab = event.cabangId
+      ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
+      : null;
+    const bypass = !!req.user?.isFulltimer || (await isEventManager(req));
+    assertScanOpen(eventScanWindow(event, tzOr(cab?.timezone)), bypass);
+  }
+
   const jemaat = await prisma.jemaat.findUnique({
     where: { kode: input.kode },
     select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true },
@@ -2640,6 +2651,13 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
       select: { id: true },
     });
     if (!ok) throw Forbidden('Anda tidak berwenang mencatat kehadiran di event ini.');
+  }
+  // Jendela check-in yang sama dengan scan (30 menit sebelum s.d. 30 menit setelah mulai).
+  {
+    const cab = event.cabangId
+      ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
+      : null;
+    assertScanOpen(eventScanWindow(event, tzOr(cab?.timezone)), !!req.user.isFulltimer || (await isEventManager(req)));
   }
   const input = walkInGuestSchema.parse(req.body ?? {});
   const paid = event.tipeBayar !== 'GRATIS';

@@ -16,6 +16,8 @@ import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { resolveTamu, tamuInputSchema, scanTamuInfo } from '../../lib/tamu.js';
+import { requireMenu } from '../../middleware/require-menu.js';
+import { assertCanScanIbadah, requireAnyScanner, requireCkidsPoint } from '../../lib/scan-access.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import {
@@ -24,6 +26,14 @@ import {
 } from '../../lib/notification.js';
 
 export const reservasiRouter = Router();
+
+// Hak akses (audit scan 2026-11 — sebelumnya cukup login):
+//   - Kelola data reservasi (list, ubah, hapus, buat manual) → Role Access "Kehadiran".
+//   - Scan (check-in / checkout / pickup / walk-in) → petugas scan ibadah itu,
+//     petugas CKids (ibadah anak), atau admin Kehadiran / Fulltimer.
+const kRead = requireMenu('kehadiran', 'read');
+const kWrite = requireMenu('kehadiran', 'write');
+const kDelete = requireMenu('kehadiran', 'delete');
 const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ===== List dengan filter =====
@@ -52,7 +62,7 @@ function reservasiWhere(req: { query: Record<string, unknown> }, search?: string
   return where;
 }
 
-reservasiRouter.get('/', async (req, res) => {
+reservasiRouter.get('/', kRead, async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
   const status =
     typeof req.query.status === 'string' && ['RESERVE', 'JOIN', 'CANCEL'].includes(req.query.status)
@@ -86,7 +96,7 @@ reservasiRouter.get('/', async (req, res) => {
 // GET /admin/reservasi/summary?ibadahId=&tanggal=&search=
 // Jumlah per status + tamu yang hadir, dengan filter yang sama seperti list
 // (tanpa filter status).
-reservasiRouter.get('/summary', async (req, res) => {
+reservasiRouter.get('/summary', kRead, async (req, res) => {
   const search = typeof req.query.search === 'string' ? req.query.search : undefined;
   const where = reservasiWhere(req, search);
   const tamuWhere: Prisma.ReservasiWhereInput = {
@@ -115,9 +125,9 @@ reservasiRouter.get('/summary', async (req, res) => {
 
 // ===== Get by kode (lookup utility) =====
 
-reservasiRouter.get('/by-kode/:kode', async (req, res) => {
+reservasiRouter.get('/by-kode/:kode', requireAnyScanner, async (req, res) => {
   const item = await prisma.reservasi.findUnique({
-    where: { kode: req.params.kode.toUpperCase() },
+    where: { kode: (req.params.kode ?? '').toUpperCase() },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
       ibadah: { select: { id: true, nama: true, jamMulai: true, jamSelesai: true } },
@@ -131,8 +141,13 @@ reservasiRouter.get('/by-kode/:kode', async (req, res) => {
 
 // Path literal (mis. /by-kode, /role, /today) didaftarkan SETELAH route :param ini;
 // non-UUID diteruskan ke route berikutnya supaya tidak jadi query UUID invalid (P2023).
-reservasiRouter.get('/:id', async (req, res, next) => {
-  if (!UUID_PARAM.test(req.params.id)) return next(); // mis. /today, /active-today
+reservasiRouter.get(
+  '/:id',
+  // Non-UUID (mis. /today, /active-today, /kids-reserved) → lewati route ini
+  // SEBELUM cek akses Kehadiran, supaya petugas CKids / scanner tidak tertolak.
+  (req, _res, next) => (UUID_PARAM.test(req.params.id ?? '') ? next() : next('route')),
+  kRead,
+  async (req, res) => {
   const item = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
     include: {
@@ -142,11 +157,12 @@ reservasiRouter.get('/:id', async (req, res, next) => {
   });
   if (!item) throw NotFound('Reservasi tidak ditemukan');
   res.json({ success: true, data: item });
-});
+  },
+);
 
 // ===== Create =====
 
-reservasiRouter.post('/', async (req, res) => {
+reservasiRouter.post('/', kWrite, async (req, res) => {
   const input = createReservasiSchema.parse(req.body);
 
   const kode = await generateUniqueKode(async (k) => {
@@ -187,7 +203,7 @@ reservasiRouter.post('/', async (req, res) => {
 
 // ===== Bulk Reserve =====
 
-reservasiRouter.post('/bulk', async (req, res) => {
+reservasiRouter.post('/bulk', kWrite, async (req, res) => {
   const input = bulkReserveSchema.parse(req.body);
   const created: { id: string; kode: string; jemaatId: string }[] = [];
   const skipped: { jemaatId: string; reason: string }[] = [];
@@ -229,7 +245,7 @@ reservasiRouter.post('/bulk', async (req, res) => {
 
 // ===== Update Status (admin manual) =====
 
-reservasiRouter.patch('/:id/status', async (req, res) => {
+reservasiRouter.patch('/:id/status', kWrite, async (req, res) => {
   const input = updateReservasiStatusSchema.parse(req.body);
   const before = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
@@ -265,7 +281,7 @@ reservasiRouter.patch('/:id/status', async (req, res) => {
 
 // ===== Check-in by kode (admin scanner — sama logic dengan public mobile) =====
 
-reservasiRouter.post('/checkin', async (req, res) => {
+reservasiRouter.post('/checkin', requireAnyScanner, async (req, res) => {
   const { kode } = checkinByKodeSchema.parse(req.body);
   const item = await prisma.reservasi.findUnique({
     where: { kode: kode.toUpperCase() },
@@ -274,6 +290,7 @@ reservasiRouter.post('/checkin', async (req, res) => {
       ibadah: { select: { nama: true, isKidsIbadah: true } },
     },
   });
+  if (item) await assertCanScanIbadah(req, item.ibadahId, item.ibadah.nama);
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
   // Reservasi yang dibatalkan jemaat tetap bisa check-in kalau ternyata datang.
   if (item.status === 'JOIN') {
@@ -345,7 +362,7 @@ reservasiRouter.post('/checkin', async (req, res) => {
 //   - Status must be JOIN (sudah check-in)
 //   - checkedOutAt must be null (belum di-checkout)
 // Idempotent: sudah checkout return success dengan pesan info.
-reservasiRouter.post('/checkout', async (req, res) => {
+reservasiRouter.post('/checkout', requireAnyScanner, async (req, res) => {
   const { kode } = checkoutByKodeSchema.parse(req.body);
   const item = await prisma.reservasi.findUnique({
     where: { kode: kode.toUpperCase() },
@@ -354,6 +371,7 @@ reservasiRouter.post('/checkout', async (req, res) => {
       ibadah: { select: { nama: true, requiresCheckout: true } },
     },
   });
+  if (item) await assertCanScanIbadah(req, item.ibadahId, item.ibadah.nama);
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
   if (!item.ibadah.requiresCheckout) {
     throw BadRequest('Ibadah ini tidak require checkout — skip aja.');
@@ -400,7 +418,7 @@ reservasiRouter.post('/checkout', async (req, res) => {
 //   - Reservasi belum di-pickup (pickedUpAt IS NULL)
 //   - Reservasi status JOIN (sudah check-in)
 //   - Ibadah must isKidsIbadah=true
-reservasiRouter.post('/pickup', async (req, res) => {
+reservasiRouter.post('/pickup', requireAnyScanner, async (req, res) => {
   const { pickupCode, kodeReservasi, pickedUpByJemaatId } = pickupByKodeSchema.parse(req.body);
 
   // Lookup by pickupCode. Kalau kodeReservasi dikirim, extra validation
@@ -446,6 +464,8 @@ reservasiRouter.post('/pickup', async (req, res) => {
       `Multiple match untuk kode ${pickupCode}. Scan QR anak juga untuk disambiguate.`,
     );
   }
+
+  await assertCanScanIbadah(req, target.ibadahId, target.ibadah.nama);
 
   // Validate pickedUpByJemaatId exist kalau dikirim.
   if (pickedUpByJemaatId) {
@@ -495,7 +515,7 @@ reservasiRouter.post('/pickup', async (req, res) => {
 //   - Ibadah.isKidsIbadah = true
 //   - Belum pernah di-award point untuk reservasi ini (idempotent guard via
 //     source=KEHADIRAN_KIDS + referenceId=reservasiId)
-reservasiRouter.post('/award-point', async (req, res) => {
+reservasiRouter.post('/award-point', requireCkidsPoint, async (req, res) => {
   const { reservasiId, amount, note } = awardPointSchema.parse(req.body);
   const adminId = req.user?.jemaatId;
   if (!adminId) throw BadRequest('Admin tidak punya jemaatId');
@@ -577,7 +597,7 @@ reservasiRouter.post('/award-point', async (req, res) => {
 //
 // Untuk halaman /hadir di ckids — admin monitor siapa saja yg sudah check-in
 // hari ini di cabang tsb, plus status checkout/pickup.
-reservasiRouter.get('/today', async (req, res) => {
+reservasiRouter.get('/today', requireAnyScanner, async (req, res) => {
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : '';
   if (!cabangId) throw BadRequest('cabangId required');
   // ?kids=1 → hanya ibadah anak (halaman Daftar Hadir CKids).
@@ -632,7 +652,7 @@ reservasiRouter.get('/today', async (req, res) => {
 //     - checkout: reservasi status=JOIN + ibadah.requiresCheckout + belum checkedOut
 //     - pickup:   reservasi status=JOIN + ibadah.isKidsIbadah + belum pickedUp
 //     - none:     semua reservasi status=JOIN hari ini
-reservasiRouter.get('/active-today', async (req, res) => {
+reservasiRouter.get('/active-today', requireAnyScanner, async (req, res) => {
   const jemaatId = typeof req.query.jemaatId === 'string' ? req.query.jemaatId : '';
   const mode = typeof req.query.mode === 'string' ? req.query.mode : '';
   if (!jemaatId) throw BadRequest('jemaatId required');
@@ -678,7 +698,7 @@ reservasiRouter.get('/active-today', async (req, res) => {
 // Dipakai meja CKids: anak yang sudah reservasi langsung terpilih ibadahnya
 // (tidak perlu pilih ibadah lagi). Mengembalikan RESERVE & JOIN (JOIN supaya
 // meja tahu anak sudah check-in).
-reservasiRouter.get('/kids-reserved', async (req, res) => {
+reservasiRouter.get('/kids-reserved', requireAnyScanner, async (req, res) => {
   const jemaatId = typeof req.query.jemaatId === 'string' ? req.query.jemaatId : '';
   const tanggal = typeof req.query.tanggal === 'string' ? req.query.tanggal : '';
   if (!/^[0-9a-f-]{36}$/i.test(jemaatId)) throw BadRequest('jemaatId required');
@@ -713,7 +733,7 @@ reservasiRouter.get('/kids-reserved', async (req, res) => {
 //   - checkout: cari Reservasi existing → set checkedOutAt.
 //   - pickup: cari kids Reservasi → set pickedUpAt (skip validate pickup code
 //     karena admin verify secara fisik lewat scan QR anak).
-reservasiRouter.post('/walk-in', async (req, res) => {
+reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
   const parsed = walkInReservasiSchema.parse(req.body);
   const { ibadahId, tanggalIbadah, action } = parsed;
   const adminId = req.user?.sub;
@@ -735,7 +755,8 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         ? `Jemaat dgn kode ${parsed.kode.toUpperCase()} tidak ditemukan`
         : 'Jemaat tidak ditemukan',
     );
-  }  // Tamu? → layar hasil scan petugas menampilkan badge Tamu + kategori + pengundang.
+  }
+  // Tamu? → layar hasil scan petugas menampilkan badge Tamu + kategori + pengundang.
   const tamu = await scanTamuInfo(jemaat.id);
 
   if (!jemaat.isActive) throw BadRequest('Jemaat tidak aktif');
@@ -752,6 +773,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     },
   });
   if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
+  await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
   const tanggal = new Date(tanggalIbadah);
   const now = new Date();
@@ -776,6 +798,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
         return res.json({
           success: true,
           data: { tamu, reservasi: existing, jemaat, ibadahNama: ibadah.nama },
+          meta: { alreadyDone: true, walkIn: false },
           message: `Sudah check-in sebelumnya (${existing.joinedAt?.toISOString()})`,
         });
       }
@@ -811,6 +834,8 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       return res.json({
         success: true,
         data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
+        // Sudah reservasi sebelumnya → bukan walk-in.
+        meta: { alreadyDone: false, walkIn: false },
         message: pickupCode
           ? `Check-in berhasil. Kode jemput: ${pickupCode}`
           : 'Check-in berhasil',
@@ -852,6 +877,8 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     return res.status(201).json({
       success: true,
       data: { tamu, reservasi: created, jemaat, ibadahNama: ibadah.nama, pickupCode },
+      // Tanpa reservasi sebelumnya → walk-in.
+      meta: { alreadyDone: false, walkIn: true },
       message: pickupCode
         ? `Check-in berhasil. Kode jemput: ${pickupCode}`
         : 'Check-in berhasil',
@@ -866,9 +893,11 @@ reservasiRouter.post('/walk-in', async (req, res) => {
       throw BadRequest('Ibadah ini tidak require checkout');
     }
     if (existing.checkedOutAt) {
+      // Bentuk data sama dengan respons sukses (app scanner membaca data.jemaat).
       return res.json({
         success: true,
-        data: existing,
+        data: { tamu, reservasi: existing, jemaat, ibadahNama: ibadah.nama },
+        meta: { alreadyDone: true },
         message: `Sudah checkout sebelumnya (${existing.checkedOutAt.toISOString()})`,
       });
     }
@@ -888,6 +917,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     return res.json({
       success: true,
       data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      meta: { alreadyDone: false },
       message: 'Checkout berhasil',
     });
   }
@@ -900,7 +930,8 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     if (existing.pickedUpAt) {
       return res.json({
         success: true,
-        data: existing,
+        data: { tamu, reservasi: existing, jemaat, ibadahNama: ibadah.nama },
+        meta: { alreadyDone: true },
         message: `Sudah di-pickup sebelumnya (${existing.pickedUpAt.toISOString()})`,
       });
     }
@@ -921,6 +952,7 @@ reservasiRouter.post('/walk-in', async (req, res) => {
     return res.json({
       success: true,
       data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama },
+      meta: { alreadyDone: false },
       message: `Anak ${jemaat.namaLengkap} berhasil di-pickup`,
     });
   }
@@ -1023,7 +1055,7 @@ export async function generateUniquePickupCode(
 
 // ===== Delete =====
 
-reservasiRouter.delete('/:id', async (req, res) => {
+reservasiRouter.delete('/:id', kDelete, async (req, res) => {
   const before = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
     include: { jemaat: { select: { namaLengkap: true } }, ibadah: { select: { nama: true } } },
@@ -1051,7 +1083,7 @@ const walkInGuestIbadahSchema = tamuInputSchema.extend({
   tanggalIbadah: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD'),
 });
 
-reservasiRouter.post('/walk-in-guest', async (req, res) => {
+reservasiRouter.post('/walk-in-guest', requireAnyScanner, async (req, res) => {
   const input = walkInGuestIbadahSchema.parse(req.body ?? {});
   const ibadah = await prisma.ibadah.findUnique({
     where: { id: input.ibadahId },
@@ -1059,6 +1091,7 @@ reservasiRouter.post('/walk-in-guest', async (req, res) => {
   });
   if (!ibadah || !ibadah.isActive) throw BadRequest('Ibadah tidak valid / tidak aktif');
   if (ibadah.isKidsIbadah) throw BadRequest('Ibadah anak tidak menerima tamu walk-in — gunakan meja CKids.');
+  await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
   const { tamu, created, member } = await resolveTamu(input, ibadah.cabangId);
   const tanggal = new Date(`${input.tanggalIbadah}T00:00:00.000Z`);

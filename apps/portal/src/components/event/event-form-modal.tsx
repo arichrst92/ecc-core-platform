@@ -228,6 +228,18 @@ export function EventFormModal({
     },
   });
 
+  // Grup sesi yang sedang dipakai (saran isian + daftar event di grup yang sama).
+  // Hook HARUS sebelum `if (!open) return null` (urutan hook tetap — React #310).
+  const grupQ = useQuery({
+    queryKey: ['event', 'grup-sesi'],
+    enabled: open,
+    queryFn: async () =>
+      (
+        await apiClient.get<{
+          data: { kode: string; events: { id: string; judul: string; jamMulai: string | null; tanggalMulai: string; cabang: string | null }[] }[];
+        }>('/admin/event/grup-sesi')
+      ).data.data,
+  });
   if (!open) return null;
 
   function patch(p: Partial<EventFormValues>) {
@@ -273,17 +285,6 @@ export function EventFormModal({
     onSubmit(payload).catch(() => {});
   }
 
-  // Grup sesi yang sedang dipakai (saran isian + daftar event di grup yang sama).
-  const grupQ = useQuery({
-    queryKey: ['event', 'grup-sesi'],
-    enabled: open,
-    queryFn: async () =>
-      (
-        await apiClient.get<{
-          data: { kode: string; events: { id: string; judul: string; jamMulai: string | null; tanggalMulai: string; cabang: string | null }[] }[];
-        }>('/admin/event/grup-sesi')
-      ).data.data,
-  });
   const grupKode = (values.grupSesi ?? '').trim().toLowerCase().replace(/\s+/g, '-');
   const grupLain = grupKode
     ? (grupQ.data?.find((g) => g.kode === grupKode)?.events ?? []).filter((e) => e.id !== editId)

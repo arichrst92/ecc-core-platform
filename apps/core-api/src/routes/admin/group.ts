@@ -30,6 +30,7 @@
 import { Router } from 'express';
 import { OPEN_GATE, privacyGate } from '../../lib/privacy.js';
 import { isMobileClient } from '../../lib/client-kind.js';
+import { hasMenuAccessFor } from '../../middleware/require-menu.js';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createGroupSchema,
@@ -366,12 +367,22 @@ groupRouter.get('/:id', async (req, res) => {
     ...j,
     noHp: gate.can(j.id, 'noHp') ? j.noHp : null,
   });
+  // Daftar anggota hanya untuk anggota aktif, PIC, Fulltimer, dan admin menu
+  // Group di Portal. Orang lain (mis. melihat group publik sebelum bergabung)
+  // hanya melihat JUMLAH anggota. App memakai `members` untuk "apakah saya
+  // anggota" — tetap benar karena non-anggota memang bukan anggota.
+  const isActiveMember = rest.members.some((m) => m.jemaat.id === requester.jemaatId);
+  const canSeeMembers =
+    isPicOrAdmin ||
+    isActiveMember ||
+    (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'read')));
   res.json({
     success: true,
     data: {
       ...rest,
       picJemaat: rest.picJemaat ? hp(rest.picJemaat) : null,
-      members: rest.members.map((m) => ({ ...m, jemaat: hp(m.jemaat) })),
+      members: canSeeMembers ? rest.members.map((m) => ({ ...m, jemaat: hp(m.jemaat) })) : [],
+      membersHidden: !canSeeMembers,
       memberCount: _count.members,
       joinCode: isPicOrAdmin ? group.joinCode : null,
       // Status join user: permintaan menunggu persetujuan PIC (kalau ada).

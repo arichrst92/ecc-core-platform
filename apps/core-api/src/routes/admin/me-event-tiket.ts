@@ -14,9 +14,9 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
-import { CLOSE_AFTER_MIN, eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { tzOr } from '../../lib/tz.js';
-import { eventStartsAt } from '../../lib/event-time.js';
+import { eventEndsAt, eventStartsAt } from '../../lib/event-time.js';
 import { revokeEventRole } from '../../lib/event-role.js';
 import { audit } from '../../lib/audit.js';
 import { paymentStatusOf } from '../../lib/event-payment.js';
@@ -115,7 +115,8 @@ meEventTiketRouter.get('/', async (req, res) => {
       const ended = !!win.closesAt && now > new Date(win.closesAt);
       // Tab: pindah ke Riwayat begitu event SELESAI (jam selesai). Yang belum
       // check-in tetap di Mendatang sampai jendela self check-in tutup (+30 menit).
-      const endAt = win.closesAt ? new Date(win.closesAt).getTime() - CLOSE_AFTER_MIN * 60_000 : null;
+      // Jendela check-in kini ±30 menit dari MULAI → waktu selesai dihitung terpisah.
+      const endAt = eventEndsAt(ev, tz).getTime();
       const finished = endAt != null && now.getTime() > endAt && (r.status === 'HADIR' || r.status === 'BATAL' || ended);
       // Bukti di partisipasi juga dihitung "menunggu"; sukarela tanpa minimum = tidak wajib bayar.
       const payment = paymentStatusOf(ev, r);

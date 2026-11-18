@@ -1,6 +1,8 @@
 /**
  * Jendela scan check-in petugas (2026-11):
- *   - Dibuka 30 menit SEBELUM ibadah/event dimulai, ditutup 30 menit SETELAH dimulai.
+ *   - Check-in RESERVASI / pendaftaran: 30 menit SEBELUM s.d. 30 menit SETELAH mulai.
+ *   - WALK-IN (datang tanpa reservasi / tamu baru): dibuka 30 menit sebelum mulai
+ *     dan tetap bisa sampai akhir hari ibadah/event (terlambat tetap bisa dicatat).
  *   - Tanggal = tanggal SERVER di zona waktu cabang (bukan jam HP petugas).
  *   - Admin Kehadiran / pengelola event / Fulltimer boleh di luar jendela (koreksi Portal).
  * Checkout & jemput anak tidak dibatasi jendela ini.
@@ -25,6 +27,8 @@ export type ScanWindow = {
   closes: Date;
   /** null = boleh scan sekarang. */
   closedReason: string | null;
+  /** LATE = lewat 30 menit setelah mulai di hari yang sama → hanya walk-in. */
+  phase: 'NOT_TODAY' | 'CANCELLED' | 'TOO_EARLY' | 'OPEN' | 'LATE' | 'ENDED';
 };
 
 function windowAround(day: Date, jamMulai: string | null, tz: string, now: Date) {
@@ -61,18 +65,23 @@ export async function ibadahScanWindow(ibadahId: string, now: Date = new Date())
   const today = todayInTz(tz, now);
   const { opens, closes, start } = windowAround(today, ib.jamMulai, tz, now);
   let closedReason: string | null = null;
+  let phase: ScanWindow['phase'] = 'OPEN';
   if (generateOccurrences(ib, today, today).length === 0) {
+    phase = 'NOT_TODAY';
     closedReason = `Hari ini tidak ada jadwal ibadah "${ib.nama}".`;
   } else if (
     await prisma.ibadahOccurrenceStatus.findFirst({ where: { ibadahId, tanggalIbadah: today, status: 'CANCELLED' }, select: { id: true } })
   ) {
+    phase = 'CANCELLED';
     closedReason = `Ibadah "${ib.nama}" hari ini dibatalkan.`;
   } else if (now < opens) {
+    phase = 'TOO_EARLY';
     closedReason = `Check-in dibuka ${SCAN_BEFORE_MIN} menit sebelum ibadah dimulai (mulai pukul ${hhmm(opens, tz)}).`;
   } else if (now > closes) {
-    closedReason = `Check-in sudah ditutup — hanya sampai ${SCAN_AFTER_MIN} menit setelah ibadah dimulai${start ? ` (pukul ${hhmm(closes, tz)})` : ''}.`;
+    phase = 'LATE';
+    closedReason = `Check-in reservasi sudah ditutup — hanya sampai ${SCAN_AFTER_MIN} menit setelah ibadah dimulai${start ? ` (pukul ${hhmm(closes, tz)})` : ''}. Gunakan walk-in untuk yang datang terlambat.`;
   }
-  return { tanggal: today, tz, opens, closes, closedReason };
+  return { tanggal: today, tz, opens, closes, closedReason, phase };
 }
 
 /** Jendela scan event hari ini (event beberapa hari → tiap hari pada jam mulai). */
@@ -87,16 +96,28 @@ export function eventScanWindow(
   const day = today < first ? first : today > last ? last : today;
   const { opens, closes, start } = windowAround(day, ev.jamMulai, tz, now);
   let closedReason: string | null = null;
+  let phase: ScanWindow['phase'] = 'OPEN';
   if (today < first || now < opens) {
+    phase = 'TOO_EARLY';
     closedReason = `Check-in dibuka ${SCAN_BEFORE_MIN} menit sebelum event dimulai (${opens.toLocaleDateString('id-ID', { timeZone: tz, day: 'numeric', month: 'short' })} pukul ${hhmm(opens, tz)}).`;
-  } else if (today > last || now > closes) {
-    closedReason = `Check-in sudah ditutup — hanya sampai ${SCAN_AFTER_MIN} menit setelah event dimulai${start ? ` (pukul ${hhmm(closes, tz)})` : ''}.`;
+  } else if (today > last) {
+    phase = 'ENDED';
+    closedReason = 'Event sudah selesai — check-in ditutup.';
+  } else if (now > closes) {
+    phase = 'LATE';
+    closedReason = `Check-in peserta terdaftar sudah ditutup — hanya sampai ${SCAN_AFTER_MIN} menit setelah event dimulai${start ? ` (pukul ${hhmm(closes, tz)})` : ''}. Gunakan walk-in untuk yang datang terlambat.`;
   }
-  return { tanggal: today, tz, opens, closes, closedReason };
+  return { tanggal: today, tz, opens, closes, closedReason, phase };
 }
 
-/** Lempar 400 CHECKIN_CLOSED bila di luar jendela (kecuali `bypass`). */
+/** Check-in reservasi / peserta terdaftar: lempar 400 CHECKIN_CLOSED di luar ±30 menit (kecuali `bypass`). */
 export function assertScanOpen(w: ScanWindow | null, bypass: boolean): void {
   if (!w || bypass || !w.closedReason) return;
   throw new ApiError(400, 'CHECKIN_CLOSED', w.closedReason);
+}
+
+/** Walk-in (tanpa reservasi / tamu baru): boleh sejak 30 menit sebelum mulai s.d. akhir hari. */
+export function assertWalkInOpen(w: ScanWindow | null, bypass: boolean): void {
+  if (!w || bypass || w.phase === 'OPEN' || w.phase === 'LATE') return;
+  throw new ApiError(400, 'CHECKIN_CLOSED', w.closedReason ?? 'Check-in ditutup.');
 }

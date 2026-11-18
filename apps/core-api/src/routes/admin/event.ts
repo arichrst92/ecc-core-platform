@@ -53,7 +53,7 @@ import { lockEventParam } from '../../lib/event-lock.js';
 import { paymentOkForCheckin, paymentStatusOf, selfCancelBlockedReason } from '../../lib/event-payment.js';
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
-import { assertScanOpen, eventScanWindow } from '../../lib/scan-window.js';
+import { assertWalkInOpen, eventScanWindow } from '../../lib/scan-window.js';
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import {
   assertEventEligible,
@@ -2561,14 +2561,18 @@ eventRouter.post('/:id/checkin', async (req, res) => {
 
   const input = eventCheckinSchema.parse(req.body);
 
-  // Check-in 30 menit sebelum s.d. 30 menit setelah event dimulai (jam server,
-  // zona cabang). Pengelola event / Fulltimer boleh di luar jendela.
+  // Petugas: dibuka 30 menit sebelum event dimulai s.d. akhir hari event (jam
+  // server, zona cabang). Lewat 30 menit setelah mulai = terlambat → dicatat
+  // sebagai walk-in. Pengelola event / Fulltimer boleh kapan saja.
+  let late = false;
   {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
     const bypass = !!req.user?.isFulltimer || (await isEventManager(req));
-    assertScanOpen(eventScanWindow(event, tzOr(cab?.timezone)), bypass);
+    const win = eventScanWindow(event, tzOr(cab?.timezone));
+    assertWalkInOpen(win, bypass);
+    late = !bypass && win.phase === 'LATE';
   }
 
   const jemaat = await prisma.jemaat.findUnique({
@@ -2626,7 +2630,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     data: {
       status: 'HADIR',
       attendedAt: now,
-      checkinMethod: 'SCAN',
+      checkinMethod: late ? 'WALK_IN' : 'SCAN',
     },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
@@ -2657,7 +2661,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     judul: event.judul,
   });
 
-  res.json({ success: true, data: { ...updated, tamu }, meta: { alreadyCheckedIn: false } });
+  res.json({ success: true, data: { ...updated, tamu }, meta: { alreadyCheckedIn: false, walkIn: late, late } });
 });
 
 // ============================================================
@@ -2698,7 +2702,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    assertScanOpen(eventScanWindow(event, tzOr(cab?.timezone)), !!req.user.isFulltimer || (await isEventManager(req)));
+    assertWalkInOpen(eventScanWindow(event, tzOr(cab?.timezone)), !!req.user.isFulltimer || (await isEventManager(req)));
   }
   const input = walkInGuestSchema.parse(req.body ?? {});
   const paid = event.tipeBayar !== 'GRATIS';

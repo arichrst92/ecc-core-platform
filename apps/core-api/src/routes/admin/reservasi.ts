@@ -18,7 +18,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { resolveTamu, tamuInputSchema, scanTamuInfo } from '../../lib/tamu.js';
 import { requireMenu } from '../../middleware/require-menu.js';
 import { assertCanScanIbadah, requireAnyScanner, requireCkidsPoint, scanAccess } from '../../lib/scan-access.js';
-import { assertScanOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 import { z } from 'zod';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
@@ -299,7 +299,8 @@ reservasiRouter.post('/checkin', requireAnyScanner, async (req, res) => {
       if (win && item.tanggalIbadah.getTime() !== win.tanggal.getTime()) {
         throw BadRequest(`Tiket ini untuk tanggal ${item.tanggalIbadah.toISOString().slice(0, 10)}, bukan ibadah hari ini.`);
       }
-      assertScanOpen(win, false);
+      // Mulai 30 menit sebelum ibadah s.d. akhir hari (terlambat = tetap dicatat).
+      assertWalkInOpen(win, false);
     }
   }
   if (!item) throw NotFound('Kode reservasi tidak ditemukan');
@@ -793,9 +794,11 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
   const win = await ibadahScanWindow(ibadah.id);
   const tanggal = isAdmin || !win ? new Date(tanggalIbadah) : win.tanggal;
   const now = new Date();
+  // Lewat 30 menit setelah mulai → tetap dicatat petugas sebagai walk-in (terlambat).
+  const late = !isAdmin && win?.phase === 'LATE';
   if (action === 'checkin') {
-    // Check-in 30 menit sebelum s.d. 30 menit setelah ibadah dimulai.
-    if (!isAdmin) assertScanOpen(win, false);
+    // Petugas: dibuka 30 menit sebelum ibadah s.d. akhir hari ibadah.
+    if (!isAdmin) assertWalkInOpen(win, false);
     // Ibadah anak: tolak bila usia (tanggal lahir terisi) di atas batas.
     if (ibadah.isKidsIbadah) {
       const age = ageYears(tanggalLahir, now, win?.tz);
@@ -841,7 +844,7 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
           joinedAt: now,
           cancelledAt: null,
           checkedInBy: adminId,
-          checkinMethod: parsed.via === 'search' ? 'MANUAL' : 'SCAN',
+          checkinMethod: late ? 'WALK_IN' : parsed.via === 'search' ? 'MANUAL' : 'SCAN',
           pickupCode,
         },
       });
@@ -861,8 +864,8 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
       return res.json({
         success: true,
         data: { tamu, reservasi: updated, jemaat, ibadahNama: ibadah.nama, pickupCode },
-        // Sudah reservasi sebelumnya → bukan walk-in.
-        meta: { alreadyDone: false, walkIn: false },
+        // Sudah reservasi sebelumnya → bukan walk-in (kecuali datang terlambat).
+        meta: { alreadyDone: false, walkIn: late, late },
         message: pickupCode
           ? `Check-in berhasil. Kode jemput: ${pickupCode}`
           : 'Check-in berhasil',
@@ -1122,7 +1125,7 @@ reservasiRouter.post('/walk-in-guest', requireAnyScanner, async (req, res) => {
   // Tanggal server (zona cabang) + jendela check-in, kecuali admin Kehadiran.
   const isAdmin = (await scanAccess(req)).admin;
   const win = await ibadahScanWindow(ibadah.id);
-  if (!isAdmin) assertScanOpen(win, false);
+  if (!isAdmin) assertWalkInOpen(win, false);
 
   const { tamu, created, member } = await resolveTamu(input, ibadah.cabangId);
   const tanggal = isAdmin || !win ? new Date(`${input.tanggalIbadah}T00:00:00.000Z`) : win.tanggal;

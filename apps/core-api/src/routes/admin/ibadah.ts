@@ -18,7 +18,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
 import { occurrenceStart } from '../../lib/reservasi-window.js';
 import { tzOr } from '../../lib/tz.js';
-import { assertScanOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
 import { scanAccess } from '../../lib/scan-access.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 
@@ -659,8 +659,9 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
     tanggalDate = parseTanggal(input.tanggalIbadah);
   } else {
     tanggalDate = win?.tanggal ?? todayAsUtcMidnight();
-    // Check-in 30 menit sebelum s.d. 30 menit setelah ibadah dimulai.
-    assertScanOpen(win, isAdmin);
+    // Petugas: dibuka 30 menit sebelum ibadah s.d. akhir hari ibadah
+    // (lewat 30 menit setelah mulai = terlambat, tetap dicatat sebagai walk-in).
+    assertWalkInOpen(win, isAdmin);
   }
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
 

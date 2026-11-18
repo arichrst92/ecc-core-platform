@@ -85,6 +85,7 @@ model CabangGereja {
   prayerRequests PrayerRequest[]
   pelayananApprovers PelayananApprover[]
   pelayananPendaftaran PelayananPendaftaran[]
+  homecellMaterials    HomecellMaterialCabang[]
 
   @@unique([sinodeId, kode])
   @@index([sinodeId])
@@ -362,6 +363,8 @@ model Jemaat {
   resolusi                     Resolusi[]                    @relation("ResolusiOwner")
   bible365Plans                Bible365Plan[]                @relation("Bible365Owner")
   catatanSaya                  CatatanSaya[]                 @relation("CatatanSayaOwner")
+  homecellMaterialsDibuat      HomecellMaterial[]            @relation("HomecellMaterialCreator")
+  homecellMaterialDownloads    HomecellMaterialDownload[]
   // ECC Worship (2026-10-20)
   worshipFavorites             WorshipFavorite[]             @relation("WorshipFavoriteJemaat")
 
@@ -2246,6 +2249,7 @@ enum InAppNotifType {
   IBADAH_REMINDER
   EVENT_REMINDER
   BIRTHDAY_GREETING
+  HOMECELL_MATERIAL
 
   @@map("in_app_notif_type")
 }
@@ -4489,4 +4493,67 @@ model NotificationDedup {
 
   @@index([createdAt])
   @@map("notification_dedup")
+}
+
+// ============================================================
+// Homecell Material (Portal → Community → Homecell Material, 2026-11)
+// ============================================================
+// Materi pertemuan homecell dari kantor pusat / cabang. Diunduh di app oleh
+// Pastor zona, Zone Leader (PIC zona), PIC homecell, dan Asisten — lewat kartu
+// homecell / zona di Beranda. Tanpa baris cabang = semua cabang.
+model HomecellMaterial {
+  id            String    @id @default(uuid()) @db.Uuid
+  judul         String    @db.VarChar(200)
+  keterangan    String?   @db.Text
+  fileUrl       String    @map("file_url") @db.Text
+  fileMime      String    @map("file_mime") @db.VarChar(120)
+  fileName      String?   @map("file_name") @db.VarChar(255)
+  fileSize      Int       @map("file_size")
+  // Tampil di app mulai tanggal ini (sebelumnya = Terjadwal); "Minggu ini" =
+  // hari ini di antara berlakuMulai..berlakuSampai. Tetap bisa diunduh selamanya.
+  berlakuMulai  DateTime  @map("berlaku_mulai") @db.Date
+  berlakuSampai DateTime? @map("berlaku_sampai") @db.Date
+  isPublished   Boolean   @default(false) @map("is_published")
+  // Notifikasi in-app ke pemimpin saat materi mulai tampil (sekali).
+  notifyLeaders Boolean   @default(true) @map("notify_leaders")
+  notifiedAt    DateTime? @map("notified_at")
+  createdById   String?   @map("created_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  createdBy Jemaat?                    @relation("HomecellMaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  cabangs   HomecellMaterialCabang[]
+  downloads HomecellMaterialDownload[]
+
+  @@index([isPublished, berlakuMulai])
+  @@map("homecell_material")
+}
+
+model HomecellMaterialCabang {
+  materialId String @map("material_id") @db.Uuid
+  cabangId   String @map("cabang_id") @db.Uuid
+
+  material HomecellMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  cabang   CabangGereja     @relation(fields: [cabangId], references: [id], onDelete: Cascade)
+
+  @@id([materialId, cabangId])
+  @@index([cabangId])
+  @@map("homecell_material_cabang")
+}
+
+// Siapa yang sudah membuka materi (penanda "Baru" di app + jumlah unduhan).
+model HomecellMaterialDownload {
+  id         String   @id @default(uuid()) @db.Uuid
+  materialId String   @map("material_id") @db.Uuid
+  jemaatId   String   @map("jemaat_id") @db.Uuid
+  count      Int      @default(1)
+  firstAt    DateTime @default(now()) @map("first_at")
+  lastAt     DateTime @default(now()) @map("last_at")
+
+  material HomecellMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  jemaat   Jemaat           @relation(fields: [jemaatId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, jemaatId])
+  @@index([jemaatId])
+  @@map("homecell_material_download")
 }

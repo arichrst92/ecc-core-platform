@@ -53,6 +53,7 @@ import {
   type FamilyRole,
 } from '@ecc/shared-types';
 import { generateOtp, getOtpExpiry, hashOtp, sendOtpViaWhatsApp, verifyOtpHash } from '@ecc/auth';
+import { meHomecellMaterialRouter } from './homecell-material.js';
 import { nameSimilarity } from '../../lib/jemaat-consolidation.js';
 import { assertOtpCooldown, consumeOtp, createOtp, otpTtlSeconds, setOtpProvider } from '../../lib/otp-store.js';
 import { sendOtpEmail } from '../../lib/sendgrid.js';
@@ -111,6 +112,8 @@ export const meRouter = Router();
 meRouter.use('/visits', meVisitRouter);
 // Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
 meRouter.use('/homecell', meHomecellRouter);
+// Materi homecell dari Portal — Pastor zona, Zone Leader, PIC, Asisten.
+meRouter.use('/homecell-material', meHomecellMaterialRouter);
 meRouter.use('/privacy', mePrivacyRouter);
 meRouter.use('/consent', meConsentRouter);
 meRouter.use('/export', meExportRouter);

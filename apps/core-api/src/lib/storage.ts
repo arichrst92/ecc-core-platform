@@ -505,6 +505,25 @@ export async function deleteHomecellMaterial(fileUrl: string): Promise<void> {
   }
 }
 
+/** Homecell Material (Portal) → /uploads/homecell-material/{id}-{rand}.{ext} (nama tak tertebak). */
+export async function saveHomecellMaterialFile(id: string, ext: string, buffer: Buffer): Promise<string> {
+  const dir = path.join(UPLOADS_DIR, 'homecell-material');
+  await ensureDir(dir);
+  const filename = `${id}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return `${PUBLIC_UPLOADS_PREFIX}/homecell-material/${filename}`;
+}
+
+export async function deleteHomecellMaterialFile(fileUrl: string): Promise<void> {
+  const rel = fileUrl.replace(/\?.*$/, '').replace(new RegExp(`^${PUBLIC_UPLOADS_PREFIX}/`), '');
+  if (!rel.startsWith('homecell-material/') || rel.includes('..')) return;
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, rel));
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
 /** File group (materi/dokumen) → /uploads/group-file/{groupId}/{fileId}.{ext} */
 export async function saveGroupFile(
   groupId: string,

@@ -32,6 +32,7 @@ import { logger } from './logger.js';
 import { flushApiMetrics } from './api-metrics.js';
 import { samplePresence } from './telemetry.js';
 import { autoCancelNoShowEvent, autoCancelNoShowReservasi } from './auto-cancel.js';
+import { dispatchHomecellMaterialNotifications } from './homecell-material.js';
 
 // ===== Intervals =====
 const REFRESH_TOKEN_INTERVAL_MS = 6 * 60 * 60 * 1000;       // 6 jam
@@ -545,7 +546,10 @@ export function startScheduledJobs() {
   const g1 = setTimeout(() => void noShowJob(), STARTUP_DELAY_MS + 60_000);
   g1.unref?.();
   const h14 = setInterval(() => void noShowJob(), 10 * 60_000);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14]) {
+  // Homecell Material terjadwal → notifikasi in-app saat mulai tampil.
+  const materialJob = wrap('homecell-material-notif', dispatchHomecellMaterialNotifications);
+  const h15 = setInterval(() => void materialJob(), 30 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15]) {
     h.unref?.();
     intervalHandles.push(h);
   }

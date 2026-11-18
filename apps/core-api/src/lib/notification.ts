@@ -64,7 +64,8 @@ export type InAppNotifType =
   | 'MINISTRY_DUTY_REMOVED'
   | 'IBADAH_REMINDER'
   | 'EVENT_REMINDER'
-  | 'BIRTHDAY_GREETING';
+  | 'BIRTHDAY_GREETING'
+  | 'HOMECELL_MATERIAL';
 
 interface CreateNotifArgs {
   jemaatId: string;

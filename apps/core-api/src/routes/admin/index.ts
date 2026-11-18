@@ -48,6 +48,7 @@ import { reportRouter } from './report.js';
 import { spiritualJourneyRouter } from './spiritual-journey.js';
 import { spiritualJourneyRequestRouter } from './spiritual-journey-request.js';
 import { tamuRouter } from './tamu.js';
+import { homecellMaterialRouter } from './homecell-material.js';
 import { shiftsoftSyncRouter } from './shiftsoft-sync.js';
 import { hadiahRouter } from './hadiah.js';
 import { giftStallRouter } from './gift-stall.js';
@@ -127,6 +128,8 @@ adminRouter.use('/reservasi', reservasiRouter);
 adminRouter.use('/news', createKontenRouter('NEWS'));
 adminRouter.use('/renungan', createKontenRouter('RENUNGAN'));
 adminRouter.use('/homecell-area', homecellAreaRouter);
+// Community → Homecell Material (materi pertemuan untuk pemimpin homecell).
+adminRouter.use('/homecell-material', homecellMaterialRouter);
 adminRouter.use('/homecell', homecellRouter);
 // Group (module 23 — generic grouping, terpisah dari Homecell).
 // Support hierarchy N-level + public/private + invitation join code.

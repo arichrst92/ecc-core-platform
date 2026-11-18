@@ -54,7 +54,7 @@ import {
   CloudUpload,
   ClipboardList,
   UserCheck,
-  Download,
+  Download, Library
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -123,6 +123,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/dashboard/homecell-area', label: 'Zona', icon: MapPin, menuKey: 'homecell-area' },
       { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell' },
+      { href: '/dashboard/homecell-material', label: 'Homecell Material', icon: Library, menuKey: 'homecell-material' },
       { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group' },
     ],
   },

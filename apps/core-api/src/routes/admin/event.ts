@@ -57,6 +57,7 @@ import { assertWalkInOpen, eventScanWindow } from '../../lib/scan-window.js';
 import {
   notifyTugasUpdated,
   parseTugas,
+  refreshTugasNames,
   resolveTugas,
   tugasBodyInput,
   tugasDbValue,
@@ -2923,7 +2924,10 @@ eventRouter.get('/:id/pelayanan', W('read'), async (req, res) => {
       },
     },
   });
-  res.json({ success: true, data });
+  // 2.5.0 — tugas dinormalisasi + nama terkini dari master.
+  const out = data.map((l) => ({ ...l, petugas: l.petugas.map((p) => ({ ...p, tugas: parseTugas(p.tugas) })) }));
+  await refreshTugasNames(out.flatMap((l) => l.petugas.map((p) => p.tugas)));
+  res.json({ success: true, data: out });
 });
 
 // Link Pelayanan ke event

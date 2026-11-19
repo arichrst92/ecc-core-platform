@@ -31,6 +31,7 @@ import { privacyGate } from '../../lib/privacy.js';
 import {
   listTugasOptions,
   parseTugas,
+  refreshTugasNames,
   resolveTugas,
   tugasDbValue,
   tugasLabel,
@@ -1232,6 +1233,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     }),
   ]);
   const cancelled = new Set(cancelledRows.map((c) => `${c.ibadahId}:${ymdUtc(c.tanggalIbadah)}`));
+  const tugasBag: TugasEntry[][] = [];
   const strip = (r: {
     id: string;
     canScanAttendance: boolean;
@@ -1245,7 +1247,11 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     // Akses scan check-in (absensi) di ibadah / event ini.
     canScanAttendance: r.canScanAttendance,
     // 2.5.0 — bagian/tugas yang ditetapkan koordinator.
-    tugas: parseTugas(r.tugas),
+    tugas: (() => {
+      const t = parseTugas(r.tugas);
+      tugasBag.push(t);
+      return t;
+    })(),
   });
 
   const ibadah: unknown[] = [];
@@ -1270,6 +1276,15 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     }
   }
   ibadah.sort((a: any, b: any) => (a.tanggal + a.jamMulai).localeCompare(b.tanggal + b.jamMulai));
+  const events = eventRows.map((e) => ({
+    eventId: e.id,
+    judul: e.judul,
+    tanggalMulai: e.tanggalMulai,
+    tanggalSelesai: e.tanggalSelesai,
+    jamMulai: e.jamMulai,
+    petugas: (e.pelayanan[0]?.petugas ?? []).map(strip),
+  }));
+  await refreshTugasNames(tugasBag);
 
   res.json({
     success: true,
@@ -1278,14 +1293,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
       cabang: cabangList,
       cabangId,
       ibadah,
-      events: eventRows.map((e) => ({
-        eventId: e.id,
-        judul: e.judul,
-        tanggalMulai: e.tanggalMulai,
-        tanggalSelesai: e.tanggalSelesai,
-        jamMulai: e.jamMulai,
-        petugas: (e.pelayanan[0]?.petugas ?? []).map(strip),
-      })),
+      events,
       // Anggota aktif pelayanan (semua cabang; app menampilkan cabang ini lebih dulu).
       members: members.map((m) => ({ jemaat: m.jemaat, role: m.pelayananRole })),
     },

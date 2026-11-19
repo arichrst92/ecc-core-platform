@@ -33,7 +33,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { CheckinModal } from '@/components/checkin-modal';
 import { parseYmd } from '@/lib/dates';
 import { BulkPelayananPicker, linkAll } from '@/components/pelayanan/bulk-pelayanan-picker';
-import { TugasEditModal, tugasText, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
+import { TugasEditModal, tugasText, useTugasKategori, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
 
 interface Ibadah {
   id: string;
@@ -481,6 +481,9 @@ function PelayananLinkCard({
   );
   const [deletingPetugas, setDeletingPetugas] = useState<PetugasItem | null>(null);
   const [tugasFor, setTugasFor] = useState<PetugasItem | null>(null);
+  // Tombol tugas hanya muncul bila pelayanan ini sudah punya kategori tugas.
+  const tugasOpts = useTugasKategori(expanded ? link.pelayanan.id : null);
+  const canTugas = (p: PetugasItem) => (tugasOpts.data?.length ?? 0) > 0 || !!p.tugas?.length;
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -620,7 +623,7 @@ function PelayananLinkCard({
                         p={p}
                         apiBase={apiBase}
                         onDelete={() => setDeletingPetugas(p)}
-                        onTugas={() => setTugasFor(p)}
+                        onTugas={canTugas(p) ? () => setTugasFor(p) : undefined}
                         onToggleScan={() =>
                           toggleScanMut.mutate({
                             id: p.id,
@@ -663,7 +666,7 @@ function PelayananLinkCard({
                           p={p}
                           apiBase={apiBase}
                           onDelete={() => setDeletingPetugas(p)}
-                          onTugas={() => setTugasFor(p)}
+                          onTugas={canTugas(p) ? () => setTugasFor(p) : undefined}
                         />
                       ))}
                     </div>

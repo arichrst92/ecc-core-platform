@@ -21,6 +21,7 @@ import {
   listTugasOptions,
   notifyTugasUpdated,
   parseTugas,
+  refreshTugasNames,
   resolveTugas,
   tugasBodyInput,
   tugasDbValue,
@@ -598,7 +599,7 @@ pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'read');
   const tanggalStr = typeof req.query.tanggal === 'string' ? req.query.tanggal : undefined;
 
-  const all = await prisma.ibadahPelayananPetugas.findMany({
+  const rows = await prisma.ibadahPelayananPetugas.findMany({
     where: { ibadahPelayananId: req.params.id },
     orderBy: [{ pelayananRole: { level: 'desc' } }, { jemaat: { namaLengkap: 'asc' } }],
     include: {
@@ -606,6 +607,9 @@ pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
       pelayananRole: { select: { id: true, nama: true, level: true } },
     },
   });
+  // 2.5.0 — tugas dinormalisasi + nama terkini dari master.
+  const all = rows.map((r) => ({ ...r, tugas: parseTugas(r.tugas) }));
+  await refreshTugasNames(all.map((r) => r.tugas));
 
   if (!tanggalStr) {
     res.json({ success: true, data: all });
@@ -655,7 +659,21 @@ pelayananRouter.post('/petugas', async (req, res) => {
     catatan: input.catatan,
     tanggalIbadah: input.tanggalIbadah ? new Date(input.tanggalIbadah) : null,
     canScanAttendance: input.canScanAttendance ?? false,
-    tugas: tugasDbValue(tugasIn ? await resolveTugas(link.pelayananId, tugasIn) : null),
+    // Override tanggal tanpa pilihan tugas → warisi tugas dari susunan default.
+    tugas: tugasDbValue(
+      tugasIn !== undefined
+        ? await resolveTugas(link.pelayananId, tugasIn ?? [])
+        : input.tanggalIbadah
+          ? parseTugas(
+              (
+                await prisma.ibadahPelayananPetugas.findFirst({
+                  where: { ibadahPelayananId: link.id, jemaatId: input.jemaatId, tanggalIbadah: null },
+                  select: { tugas: true },
+                })
+              )?.tugas,
+            )
+          : null,
+    ),
   };
 
   const created = await prisma.ibadahPelayananPetugas.create({

@@ -21,7 +21,7 @@ import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { BulkPelayananPicker, linkAll } from '@/components/pelayanan/bulk-pelayanan-picker';
-import { TugasEditModal, tugasText, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
+import { TugasEditModal, tugasText, useTugasKategori, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
 
 // ============== Types ==============
 
@@ -264,6 +264,8 @@ function PelayananCard({
   const [addVolunteerOpen, setAddVolunteerOpen] = useState(false);
   const [deletingVolunteer, setDeletingVolunteer] = useState<Volunteer | null>(null);
   const [tugasFor, setTugasFor] = useState<Volunteer | null>(null);
+  // Tombol tugas hanya muncul bila pelayanan ini sudah punya kategori tugas.
+  const tugasOpts = useTugasKategori(expanded ? link.pelayanan.id : null);
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -367,7 +369,7 @@ function PelayananCard({
                   }
                   togglePending={toggleScannerMut.isPending}
                   onDelete={() => setDeletingVolunteer(p)}
-                  onTugas={() => setTugasFor(p)}
+                  onTugas={(tugasOpts.data?.length ?? 0) > 0 || p.tugas?.length ? () => setTugasFor(p) : undefined}
                 />
               ))}
             </div>
@@ -427,7 +429,7 @@ function VolunteerRow({
   onToggleScanner: () => void;
   togglePending: boolean;
   onDelete: () => void;
-  onTugas: () => void;
+  onTugas?: () => void;
 }) {
   return (
     <div
@@ -467,13 +469,15 @@ function VolunteerRow({
             </span>
           )}
         </div>
-        <button
-          onClick={onTugas}
-          className={`block mt-0.5 text-left text-xs ${v.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
-          title="Atur tugas"
-        >
-          {v.tugas?.length ? `Tugas: ${tugasText(v.tugas)}` : '+ Atur tugas'}
-        </button>
+        {onTugas ? (
+          <button
+            onClick={onTugas}
+            className={`block mt-0.5 text-left text-xs ${v.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
+            title="Atur tugas"
+          >
+            {v.tugas?.length ? `Tugas: ${tugasText(v.tugas)}` : '+ Atur tugas'}
+          </button>
+        ) : null}
         {v.catatan && (
           <div className="text-xs text-neutral-500 italic mt-0.5">{v.catatan}</div>
         )}

@@ -153,3 +153,34 @@ export async function notifyTugasUpdated(opts: {
     metadata: { ministryId: opts.ministryId, kind: 'tugas' },
   }).catch(() => {});
 }
+
+/**
+ * Ganti nama di snapshot dengan nama terkini dari master (kalau kategori/tugas
+ * di-rename di Portal). Entri yang master-nya sudah dihapus tetap memakai
+ * snapshot. Memodifikasi array secara langsung.
+ */
+export async function refreshTugasNames(lists: TugasEntry[][]): Promise<void> {
+  const kIds = new Set<string>();
+  const tIds = new Set<string>();
+  for (const l of lists)
+    for (const e of l) {
+      kIds.add(e.kategoriId);
+      if (e.tugasId) tIds.add(e.tugasId);
+    }
+  if (!kIds.size) return;
+  const [ks, ts] = await Promise.all([
+    prisma.pelayananTugasKategori.findMany({ where: { id: { in: [...kIds] } }, select: { id: true, nama: true, ikon: true } }),
+    tIds.size ? prisma.pelayananTugas.findMany({ where: { id: { in: [...tIds] } }, select: { id: true, nama: true } }) : [],
+  ]);
+  const kMap = new Map(ks.map((k) => [k.id, k]));
+  const tMap = new Map(ts.map((t) => [t.id, t.nama]));
+  for (const l of lists)
+    for (const e of l) {
+      const k = kMap.get(e.kategoriId);
+      if (k) {
+        e.kategori = k.nama;
+        e.ikon = k.ikon ?? null;
+      }
+      if (e.tugasId && tMap.has(e.tugasId)) e.tugas = tMap.get(e.tugasId)!;
+    }
+}

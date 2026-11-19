@@ -104,7 +104,7 @@ import { meResolusiRouter } from './me-resolusi.js';
 import { meBible365Router } from './me-bible365.js';
 import { meCatatanRouter } from './me-catatan.js';
 import { meWorshipRouter } from './me-worship.js';
-import { parseTugas, type TugasEntry } from '../../lib/pelayanan-tugas.js';
+import { parseTugas, refreshTugasNames, type TugasEntry } from '../../lib/pelayanan-tugas.js';
 
 export const meRouter = Router();
 
@@ -2628,6 +2628,11 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     catatan: r.catatan,
     tugas: parseTugas(r.tugas),
   }));
+
+  await refreshTugasNames([
+    ...teamDuties.flatMap((d) => [d.tugas, ...d.coServants.map((c) => c.tugas)]),
+    ...events.map((e) => e.tugas),
+  ]);
 
   res.json({ success: true, data: { assignments: allAssignments, events } });
 });

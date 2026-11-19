@@ -28,6 +28,7 @@ import {
   countEntity,
   groupByEntity,
 } from '../../lib/elsa-query.js';
+import { kbIndex, listGuides, readGuide, searchGuides } from '../../lib/elsa-kb.js';
 
 export const elsaRouter = Router();
 elsaRouter.use(requireFulltimer);
@@ -86,6 +87,28 @@ elsaRouter.get('/health', (_req, res) => {
 // ============================================================
 
 const TOOLS: ElsaTool[] = [
+  {
+    name: 'cari_panduan',
+    description:
+      'Cari di PANDUAN RESMI ECC (workflow, aturan, tampilan app & Portal, pesan error, troubleshooting lapangan). WAJIB dipakai untuk pertanyaan "bagaimana / kenapa / tidak bisa / error / di mana menunya / aturannya apa". Return bagian panduan paling relevan.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Kata kunci kasus dalam BAHASA INDONESIA (panduan berbahasa Indonesia, terjemahkan bila user memakai bahasa lain), mis. "scan ditolak check-in ditutup", "koordinator tidak bisa atur jadwal".' },
+        limit: { type: 'integer', description: 'Jumlah bagian (default 4, max 8).' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'baca_panduan',
+    description: 'Baca satu panduan utuh berdasarkan id (lihat daftar PANDUAN di system prompt). Pakai bila butuh gambaran lengkap satu fitur.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Id panduan, mis. "checkin-scan", "event", "pelayanan".' } },
+      required: ['id'],
+    },
+  },
   {
     name: 'list_entities',
     description:
@@ -190,6 +213,18 @@ const TOOLS: ElsaTool[] = [
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   try {
     switch (name) {
+      case 'cari_panduan': {
+        const query = String(input.query ?? '').trim();
+        if (!query) return JSON.stringify({ error: 'query required' });
+        return JSON.stringify(searchGuides(query, typeof input.limit === 'number' ? input.limit : 4));
+      }
+
+      case 'baca_panduan': {
+        const id = String(input.id ?? '').trim();
+        if (!id) return JSON.stringify({ error: 'id required', available: listGuides().map((g) => g.id) });
+        return JSON.stringify(readGuide(id));
+      }
+
       case 'list_entities':
         return JSON.stringify(listEntities());
 
@@ -446,7 +481,52 @@ Rules:
 - Label concise (< 40 chars)
 - Place block STRICTLY on the last line, alone`;
 
-  return base + actionsGuide;
+  return base + narasumberGuide(lang) + actionsGuide;
+}
+
+/** Peran narasumber lapangan: panduan resmi + diagnosis dengan data. */
+function narasumberGuide(lang: 'id' | 'en'): string {
+  const today = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+  const index = kbIndex() || '(panduan belum tersedia di server)';
+  return lang === 'id'
+    ? `
+
+PERAN NARASUMBER LAPANGAN:
+Selain menjawab data, kamu adalah narasumber operasional untuk admin & fulltimer ECC yang sedang kesulitan di lapangan (hari H ibadah/event, scan, pendaftaran, pelayanan, homecell, dll). Waktu server sekarang: ${today} (WIB). Jam ibadah/event selalu memakai zona waktu cabang.
+
+PANDUAN RESMI (pakai tools cari_panduan / baca_panduan):
+${index}
+
+CARA MENJAWAB:
+1. Pertanyaan cara / alur / aturan / kenapa / tidak bisa / pesan error / letak menu → WAJIB cari_panduan dulu (atau baca_panduan bila topiknya jelas). Jawab sesuai panduan; JANGAN mengarang aturan, nama menu, atau angka.
+2. Kasus nyata (menyebut orang, ibadah/event, tanggal, atau pesan error) → setelah panduan, CEK DATA dengan query_entity/count_entity (hanya baca) mengikuti bagian "Diagnosis" di panduan, untuk memastikan penyebabnya (mis. hak scan petugas, jadwal & jam ibadah, status reservasi/pendaftaran/pembayaran, otoritas koordinator).
+3. Bila informasi kurang, tanyakan maksimal 2 hal terpenting (mis. nama/kode jemaat, ibadah/event & tanggal, pesan error persis, versi app).
+4. Format jawaban kasus, ringkas: **Penyebab** → **Solusi** (langkah bernomor, sebut menu Portal / layar app persis) → **Siapa yang bisa melakukan**. Tambahkan tombol navigate ke halaman Portal terkait bila berguna.
+5. Aturan yang sengaja membatasi (batas usia CKids, batas batal event, jendela check-in) dijelaskan alasannya + jalur resminya; jangan menyarankan cara mengakali.
+6. Bila panduan & data tidak cukup, katakan jujur dan sarankan menghubungi tim IT (aksi contact_admin).`
+    : `
+
+FIELD SUPPORT ROLE:
+Besides data questions, you are the operational go-to for ECC admins & fulltimers facing problems in the field (service/event day, scanning, registration, ministry, homecell, etc.). Current server time: ${today} (WIB). Service/event times always use the branch time zone.
+
+OFFICIAL GUIDES (written in Indonesian; use tools cari_panduan / baca_panduan):
+${index}
+
+HOW TO ANSWER:
+1. How-to / workflow / rules / why / can't / error message / where-is-the-menu questions → ALWAYS call cari_panduan first (or baca_panduan if the topic is clear). Answer from the guide; NEVER invent rules, menu names, or numbers. Keep Portal/app menu names as written (Indonesian) when referring to them.
+2. Real cases (a person, service/event, date, or error message) → after the guide, CHECK DATA with query_entity/count_entity (read-only) following the guide's "Diagnosis" section to confirm the cause.
+3. If information is missing, ask at most 2 key things (member name/code, service/event & date, exact error message, app version).
+4. Case answer format, concise: **Cause** → **Fix** (numbered steps, exact Portal menu / app screen) → **Who can do it**. Add a navigate button to the relevant Portal page when useful.
+5. Intentional limits (CKids age limit, event cancellation limits, check-in window) — explain the reason and the official path; never suggest workarounds.
+6. If guides & data aren't enough, say so honestly and suggest contacting the IT team (contact_admin action).`;
 }
 
 function languageLockMessage(lang: 'id' | 'en'): string {
@@ -503,6 +583,8 @@ elsaRouter.post('/chat', chatLimiter, async (req, res) => {
       messages: trimmedMessages as ElsaMessage[],
       tools: TOOLS,
       toolExecutor: executeTool,
+      // Panduan + beberapa query data untuk diagnosis kasus lapangan.
+      maxIterations: 12,
       langLockMessage: languageLockMessage(input.lang),
     });
 

@@ -135,9 +135,69 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
   },
   reservasi: {
     prismaKey: 'reservasi',
-    description: 'Reservasi/kehadiran ibadah per jemaat per tanggal. Status: RESERVE/JOIN/CANCEL.',
+    description: 'Reservasi/kehadiran ibadah per jemaat per tanggal. Status: RESERVE (terdaftar) / JOIN (hadir) / CANCEL (batal; cancelReason NO_SHOW = batal otomatis). checkinMethod: SCAN / MANUAL / WALK_IN / SELF.',
     allowedInclude: ['jemaat', 'ibadah'],
-    keyFields: ['id', 'jemaatId', 'ibadahId', 'tanggalIbadah', 'status', 'joinedAt', 'checkedOutAt', 'pickedUpAt', 'pickupCode'],
+    keyFields: ['id', 'jemaatId', 'ibadahId', 'tanggalIbadah', 'status', 'kode', 'joinedAt', 'checkinMethod', 'cancelledAt', 'cancelReason', 'checkedOutAt', 'pickedUpAt', 'pickupCode'],
+  },
+  // ===== Petugas & jadwal pelayanan (untuk diagnosis lapangan) =====
+  ibadah_pelayanan: {
+    prismaKey: 'ibadahPelayanan',
+    description: 'Link ibadah ↔ pelayanan (pelayanan yang melayani di ibadah itu). Petugasnya di ibadah_pelayanan_petugas.',
+    allowedInclude: ['ibadah', 'pelayanan', 'petugas'],
+    keyFields: ['id', 'ibadahId', 'pelayananId'],
+  },
+  ibadah_pelayanan_petugas: {
+    prismaKey: 'ibadahPelayananPetugas',
+    description:
+      'Petugas pelayanan di ibadah. tanggalIbadah NULL = susunan tetap (default tiap jadwal); isi = susunan khusus tanggal itu (menggantikan default untuk tanggal tsb). canScanAttendance = boleh scan check-in ibadah itu. tugas = bagian/tugas (Kategori → Tugas, JSON).',
+    allowedInclude: ['ibadahPelayanan', 'jemaat', 'pelayananRole'],
+    keyFields: ['id', 'ibadahPelayananId', 'jemaatId', 'pelayananRoleId', 'tanggalIbadah', 'canScanAttendance', 'tugas', 'catatan'],
+  },
+  event_pelayanan: {
+    prismaKey: 'eventPelayanan',
+    description: 'Link event ↔ pelayanan. Petugasnya di event_pelayanan_petugas.',
+    allowedInclude: ['event', 'pelayanan', 'petugas'],
+    keyFields: ['id', 'eventId', 'pelayananId'],
+  },
+  event_pelayanan_petugas: {
+    prismaKey: 'eventPelayananPetugas',
+    description: 'Petugas/volunteer pelayanan di event. canScanAttendance = boleh scan check-in event itu. tugas = bagian/tugas (JSON).',
+    allowedInclude: ['eventPelayanan', 'jemaat', 'pelayananRole'],
+    keyFields: ['id', 'eventPelayananId', 'jemaatId', 'pelayananRoleId', 'canScanAttendance', 'tugas', 'catatan'],
+  },
+  ibadah_occurrence_status: {
+    prismaKey: 'ibadahOccurrenceStatus',
+    description: 'Tanggal ibadah yang DITIADAKAN (status CANCELLED) beserta catatan alasannya.',
+    allowedInclude: ['ibadah'],
+    keyFields: ['id', 'ibadahId', 'tanggalIbadah', 'status', 'catatan', 'createdAt'],
+  },
+  pelayanan_tugas_kategori: {
+    prismaKey: 'pelayananTugasKategori',
+    description: 'Master kategori tugas petugas per pelayanan (mis. Sound, Lighting). isActive false = dinonaktifkan.',
+    allowedInclude: ['pelayanan', 'tugas'],
+    keyFields: ['id', 'pelayananId', 'nama', 'ikon', 'urutan', 'isActive'],
+  },
+  pelayanan_tugas: {
+    prismaKey: 'pelayananTugas',
+    description: 'Master tugas di dalam kategori tugas pelayanan (mis. Sound › Mixer).',
+    allowedInclude: ['kategori'],
+    keyFields: ['id', 'kategoriId', 'nama', 'urutan', 'isActive'],
+  },
+  event_donation: {
+    prismaKey: 'eventDonation',
+    description:
+      'Pembayaran / pemberian sukarela peserta event (bukti transfer). Status: MENUNGGU_VERIFIKASI (menunggu admin), BAYAR (disetujui/lunas), BATAL. tambahan = pemberian tambahan dari website.',
+    allowedInclude: ['participation'],
+    keyFields: ['id', 'participationId', 'nominalBayar', 'status', 'paidAt', 'approvedAt', 'tambahan', 'createdAt'],
+    excludeFields: ['buktiTransferUrl'],
+  },
+  homecell_material: {
+    prismaKey: 'homecellMaterial',
+    description:
+      'Materi homecell (file) untuk Pastor zona, Zone Leader, PIC & Asisten homecell. Tampil di app bila isPublished dan berlaku (berlakuMulai ≤ hari ini ≤ berlakuSampai/kosong) untuk cabang yang dipilih.',
+    allowedInclude: ['cabangs', 'createdBy'],
+    keyFields: ['id', 'judul', 'berlakuMulai', 'berlakuSampai', 'isPublished', 'notifyLeaders', 'notifiedAt', 'createdAt'],
+    excludeFields: ['fileUrl'],
   },
   // ===== Community =====
   homecell_area: {

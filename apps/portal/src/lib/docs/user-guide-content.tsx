@@ -120,11 +120,27 @@ export const SECTIONS: Section[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Elsa punya akses ke 56 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
+        text: 'Elsa punya akses ke 65 entity database ECC via 5 dynamic tools (list_entities / describe_entity / query_entity / count_entity / groupby_entity) — bisa cover hampir semua modul portal.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Narasumber lapangan (November 2026): Elsa juga membaca PANDUAN RESMI tiap fitur — alur kerja, aturan, letak menu app & Portal, arti pesan error, dan troubleshooting (check-in & scan, ibadah, event & pembayaran, pelayanan & jadwal petugas, homecell & zona, group, CKids, akun & login, jemaat & keluarga, doa & notifikasi, Local Market, versi app). Untuk kasus nyata, Elsa mencocokkan panduan lalu memeriksa data (hanya baca: jadwal & jam ibadah, hak scan petugas, status reservasi/pendaftaran/pembayaran, otoritas koordinator, dll.) dan menjawab dengan format Penyebab → Solusi → Siapa yang bisa.',
       },
       {
         kind: 'bullet',
-        title: '56 entity yang bisa di-query',
+        title: 'Contoh pertanyaan lapangan',
+        items: [
+          '"Usher di Ibadah Raya 2 tidak bisa scan, kenapa?"',
+          '"Jemaat Budi ditolak check-in, pesannya check-in reservasi sudah ditutup"',
+          '"Koordinator Multimedia Bandung tidak bisa atur jadwal"',
+          '"Peserta mau pindah sesi Natal, sudah bayar — bagaimana?"',
+          '"Anak 14 tahun ditolak di meja CKids"',
+          '"Materi homecell tidak muncul di HP PIC"',
+        ],
+      },
+      {
+        kind: 'bullet',
+        title: '65 entity yang bisa di-query',
         items: [
           'Gereja: sinode, cabang (termasuk zona waktu & link Google Maps)',
           'People: jemaat (termasuk tamu & kategori tamu), role, jemaat_role, tipe_relasi, jemaat_relasi, jemaat_sertifikat, feedback (Kritik & Saran)',
@@ -138,6 +154,8 @@ export const SECTIONS: Section[] = [
           'Peta: jemaat_geocode (hasil pemetaan alamat jemaat)',
           'CKids: hadiah_katalog, jemaat_point_balance, point_transaction, hadiah_redeem',
           'Pengaturan & sistem: onboarding_role_rule, notification, branch_change_request',
+          'Petugas & jadwal: ibadah_pelayanan, ibadah_pelayanan_petugas, event_pelayanan, event_pelayanan_petugas, ibadah_occurrence_status (tanggal ditiadakan), pelayanan_tugas_kategori, pelayanan_tugas',
+          'Pembayaran event & materi: event_donation (status bukti transfer), homecell_material',
         ],
       },
       {

@@ -1,0 +1,57 @@
+---
+id: portal-navigasi
+title: Peta Menu Portal & Layar App (alamat halaman)
+tags: menu, portal, navigasi, dock, sidebar, halaman, url, alamat, dimana, letak, badge, akses cepat, quick access, tab bawah, profil, beranda
+summary: Daftar menu Portal beserta alamat halamannya (untuk tombol navigasi) dan letak fitur di app (Beranda, Akses Cepat, Profil, tab bawah).
+---
+
+# Peta Menu Portal & Layar App
+
+## Portal (dock bawah → grup → menu)
+| Grup | Menu | Alamat |
+|---|---|---|
+| — | Dashboard (Elsa) | /dashboard |
+| — | Map View | /dashboard/map |
+| — | User Guide | /dashboard/user-guide |
+| Gereja | Gereja (Sinode), Cabang Gereja | /dashboard/sinode, /dashboard/cabang |
+| Service | Ibadah | /dashboard/ibadah (detail /dashboard/ibadah/<id>) |
+| Service | Kategori Ibadah | /dashboard/kategori-ibadah |
+| Service | Pelayanan (+ Kategori & tugas di detail) | /dashboard/pelayanan (detail /dashboard/pelayanan/<id>) |
+| Service | Role Pelayanan | /dashboard/pelayanan-role |
+| Service | Permintaan Volunteer | /dashboard/pelayanan/join-requests |
+| Service | Kehadiran | /dashboard/kehadiran |
+| Service | Laporan Ibadah | /dashboard/laporan-ibadah |
+| People | Jemaat (Cek Duplikat, Import) | /dashboard/jemaat, /dashboard/jemaat/duplicates, /dashboard/jemaat/import |
+| People | Role Jemaat, Relasi Jemaat | /dashboard/role, /dashboard/tipe-relasi |
+| People | Kritik & Saran | /dashboard/feedback |
+| People | Tamu | /dashboard/tamu |
+| People | Prayer Request | /dashboard/prayer-request |
+| People | Bible 365 | /dashboard/bible365 |
+| Community | Zona | /dashboard/homecell-area |
+| Community | Homecell | /dashboard/homecell |
+| Community | Homecell Material | /dashboard/homecell-material |
+| Community | Group | /dashboard/group |
+| Movement | Event (detail: peserta, pembayaran, pelayanan & volunteer) | /dashboard/event (detail /dashboard/event/<id>) |
+| Movement | Laporan Event | /dashboard/laporan-event |
+| Movement | Visit | /dashboard/visit |
+| Movement | Spiritual Journey | /dashboard/spiritual-journey |
+| Movement | Local Market | /dashboard/local-business |
+| Broadcast | News, Renungan, ECC Worship, Announcement | /dashboard/news, /dashboard/renungan, /dashboard/worship, /dashboard/announcement |
+| CKids | Katalog Hadiah, Data Anak, Akses CKids | /dashboard/hadiah, /dashboard/data-anak, /dashboard/ckids-access |
+| Website | Konten Website | /dashboard/website |
+| App Settings | Legal Docs, App Versions, Maintenance Mode, Onboarding Config | /dashboard/legal, /dashboard/app-version, /dashboard/maintenance-mode, /dashboard/onboarding-config |
+| Developer Tools | Role Access, Audit Log, Server Health, WhatsApp Notif Config, Maintenance, Analitik App, Diagnostics, Shiftsoft Sync | /dashboard/role-access, /dashboard/audit-log, /dashboard/server-health, /dashboard/wa-config, /dashboard/maintenance, /dashboard/analitik, /dashboard/diagnostics, /dashboard/shiftsoft-sync |
+| — | Profil & Keamanan | /dashboard/profile |
+
+- **Badge merah** di dock = request menunggu tindakan (Spiritual Journey, Tamu tanpa petugas follow-up, Prayer Request baru, Permintaan Volunteer, Kritik & Saran baru, kandidat akun ganda, bukti transfer event). Diperbarui tiap 60 detik.
+- Klik nama di tabel = halaman detail; ikon pensil = ubah cepat.
+- **Audit Log** = sumber kebenaran "siapa mengubah apa, kapan" (filter aksi, resource, tanggal).
+- **CKids web**: https://ckids.eccchurch.global
+
+## App (Els App)
+- **Tab bawah (2.4.9)**: Beranda · Resolusi · Reservasi · CKids (bila punya anak ≤13) · Profil. Event dibuka dari Beranda / Akses Cepat. Mode tamu: tab terbatas.
+- **Ikon kanan atas Beranda**: Mode Scanner (petugas), Kartu QR, Notifikasi.
+- **Akses Cepat (16)**: Ibadah, Event, Beri, Berita, Renungan, Alkitab, Doa, Worship, Keluarga, Tamu, Group, Homecell, Ministry, Zona, Visit, Local Market.
+- **Profil**: Edit Profil, Spiritual Journey, Group Saya, Cari Group, Reservasi Ibadah, Tamu Saya, Catatan saya, Prayer Request Saya, Pelayanan (Jadwal Pelayanan Saya), Mode Scanner, Usaha Saya, Kirim Kritik & Saran, Pengaturan (Privasi, Bahasa, Tampilan, Cek pembaruan, Keluar, Hapus akun), ikon target = Resolusi Tahunan.
+- **Beranda**: cabang aktif (ketuk untuk cabang lain), kartu Homecell Anda / carousel homecell & zona yang dipimpin, Ibadah Hari Ini, renungan, 6 event mendatang, berita, kalender ulang tahun (mengikuti privasi).
+- Tarik layar ke bawah untuk memuat ulang data.

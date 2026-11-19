@@ -1,0 +1,155 @@
+/**
+ * 2.5.0 — Bagian / tugas petugas pelayanan (Kategori → Tugas).
+ *
+ * Disimpan sebagai snapshot JSON di baris petugas (IbadahPelayananPetugas.tugas
+ * / EventPelayananPetugas.tugas) supaya jadwal lama tetap terbaca walau master
+ * kategori/tugas diganti nama atau dinonaktifkan.
+ *
+ * Aturan pilihan:
+ *  - boleh lebih dari satu entri (multi tugas),
+ *  - boleh kategori saja (tugasId = null),
+ *  - boleh kosong (null) = belum ditentukan.
+ */
+import { prisma, Prisma } from '@ecc/database';
+import { z } from 'zod';
+import { BadRequest } from './errors.js';
+
+export type TugasEntry = {
+  kategoriId: string;
+  kategori: string;
+  ikon: string | null;
+  tugasId: string | null;
+  tugas: string | null;
+};
+
+export const MAX_TUGAS = 12;
+
+/** Input dari app / Portal — hanya id; nama diambil dari master. */
+export const tugasPilihanInput = z
+  .array(z.object({ kategoriId: z.string().uuid(), tugasId: z.string().uuid().nullish() }))
+  .max(MAX_TUGAS);
+export type TugasPilihan = z.infer<typeof tugasPilihanInput>;
+
+/** Baca kolom JSON → array entri yang valid (data rusak diabaikan). */
+export function parseTugas(raw: unknown): TugasEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TugasEntry[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.kategoriId !== 'string' || typeof o.kategori !== 'string') continue;
+    out.push({
+      kategoriId: o.kategoriId,
+      kategori: o.kategori,
+      ikon: typeof o.ikon === 'string' ? o.ikon : null,
+      tugasId: typeof o.tugasId === 'string' ? o.tugasId : null,
+      tugas: typeof o.tugas === 'string' ? o.tugas : null,
+    });
+  }
+  return out;
+}
+
+/** Tanda tangan untuk deteksi perubahan (urutan tidak berpengaruh). */
+export function tugasSig(raw: unknown): string {
+  return parseTugas(raw)
+    .map((t) => `${t.kategoriId}:${t.tugasId ?? ''}`)
+    .sort()
+    .join('|');
+}
+
+/** "Sound › Mixer, Multimedia" — untuk teks notifikasi. */
+export function tugasLabel(raw: unknown): string {
+  return parseTugas(raw)
+    .map((t) => (t.tugas ? `${t.kategori} › ${t.tugas}` : t.kategori))
+    .join(', ');
+}
+
+/** Nilai untuk kolom Prisma Json? (null → DbNull). */
+export function tugasDbValue(list: TugasEntry[] | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  return list && list.length ? (list as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+}
+
+/** Daftar pilihan aktif untuk satu pelayanan (dipakai app & Portal). */
+export async function listTugasOptions(pelayananId: string, opts: { includeInactive?: boolean } = {}) {
+  const active = opts.includeInactive ? {} : { isActive: true };
+  const rows = await prisma.pelayananTugasKategori.findMany({
+    where: { pelayananId, ...active },
+    orderBy: [{ urutan: 'asc' }, { nama: 'asc' }],
+    select: {
+      id: true,
+      nama: true,
+      ikon: true,
+      urutan: true,
+      isActive: true,
+      tugas: {
+        where: active,
+        orderBy: [{ urutan: 'asc' }, { nama: 'asc' }],
+        select: { id: true, nama: true, urutan: true, isActive: true },
+      },
+    },
+  });
+  return rows;
+}
+
+/**
+ * Validasi pilihan (harus milik pelayanan ini & aktif) lalu ubah jadi snapshot.
+ * Entri ganda dibuang; kategori-saja + tugas di kategori yang sama tetap boleh,
+ * tapi kategori-saja dibuang kalau tugas di kategori itu sudah dipilih.
+ * Entri yang sama dengan nilai lama (`keep`) diterima walau master-nya sudah
+ * nonaktif, supaya menyimpan ulang jadwal tidak gagal.
+ */
+export async function resolveTugas(
+  pelayananId: string,
+  input: TugasPilihan,
+  keep: TugasEntry[] = [],
+): Promise<TugasEntry[]> {
+  if (!input.length) return [];
+  const kategori = await prisma.pelayananTugasKategori.findMany({
+    where: { pelayananId, id: { in: [...new Set(input.map((i) => i.kategoriId))] } },
+    select: { id: true, nama: true, ikon: true, isActive: true, tugas: { select: { id: true, nama: true, isActive: true } } },
+  });
+  const kMap = new Map(kategori.map((k) => [k.id, k]));
+  const keepKey = new Set(keep.map((k) => `${k.kategoriId}:${k.tugasId ?? ''}`));
+  const seen = new Set<string>();
+  const out: TugasEntry[] = [];
+  for (const i of input) {
+    const key = `${i.kategoriId}:${i.tugasId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const k = kMap.get(i.kategoriId);
+    if (!k) throw BadRequest('Kategori tugas tidak ditemukan di pelayanan ini.');
+    let tugas: { id: string; nama: string; isActive: boolean } | null = null;
+    if (i.tugasId) {
+      tugas = k.tugas.find((t) => t.id === i.tugasId) ?? null;
+      if (!tugas) throw BadRequest('Tugas tidak ditemukan di kategori tersebut.');
+    }
+    const inactive = !k.isActive || (tugas && !tugas.isActive);
+    if (inactive && !keepKey.has(key)) throw BadRequest(`Pilihan "${tugas?.nama ?? k.nama}" sudah tidak aktif.`);
+    out.push({ kategoriId: k.id, kategori: k.nama, ikon: k.ikon ?? null, tugasId: tugas?.id ?? null, tugas: tugas?.nama ?? null });
+  }
+  const withTugas = new Set(out.filter((o) => o.tugasId).map((o) => o.kategoriId));
+  return out.filter((o) => o.tugasId || !withTugas.has(o.kategoriId));
+}
+
+/** Input opsional `tugas` di body Portal (field lain di-parse skema masing-masing). */
+export const tugasBodyInput = z.object({ tugas: tugasPilihanInput.nullish() });
+
+/** Notifikasi in-app ke petugas ketika tugasnya diubah (Portal / app). */
+export async function notifyTugasUpdated(opts: {
+  jemaatId: string;
+  ministry: string;
+  ministryId: string;
+  label: string;
+  tugas: unknown;
+}) {
+  const { createNotification } = await import('./notification.js');
+  const lbl = tugasLabel(opts.tugas);
+  await createNotification({
+    jemaatId: opts.jemaatId,
+    type: 'MINISTRY_DUTY_ASSIGNED',
+    title: `Tugas pelayanan ${opts.ministry} diperbarui`,
+    body: lbl ? `${opts.label} — tugas Anda: ${lbl}.` : `${opts.label} — tugas Anda belum ditentukan.`,
+    actionUrl: '/profile/my-service',
+    metadata: { ministryId: opts.ministryId, kind: 'tugas' },
+  }).catch(() => {});
+}

@@ -17,6 +17,15 @@ import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
+import {
+  listTugasOptions,
+  notifyTugasUpdated,
+  parseTugas,
+  resolveTugas,
+  tugasBodyInput,
+  tugasDbValue,
+  tugasSig,
+} from '../../lib/pelayanan-tugas.js';
 
 export const pelayananRouter = Router();
 const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -624,6 +633,7 @@ pelayananRouter.get('/ibadah-link/:id/petugas', async (req, res) => {
 pelayananRouter.post('/petugas', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'write');
   const input = assignPetugasSchema.parse(req.body);
+  const tugasIn = tugasBodyInput.parse(req.body ?? {}).tugas;
 
   // Validasi: pelayananRoleId harus belong ke pelayanan dari ibadahPelayanan
   const link = await prisma.ibadahPelayanan.findUnique({
@@ -645,6 +655,7 @@ pelayananRouter.post('/petugas', async (req, res) => {
     catatan: input.catatan,
     tanggalIbadah: input.tanggalIbadah ? new Date(input.tanggalIbadah) : null,
     canScanAttendance: input.canScanAttendance ?? false,
+    tugas: tugasDbValue(tugasIn ? await resolveTugas(link.pelayananId, tugasIn) : null),
   };
 
   const created = await prisma.ibadahPelayananPetugas.create({
@@ -670,12 +681,13 @@ pelayananRouter.post('/petugas', async (req, res) => {
 pelayananRouter.patch('/petugas/:id', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'write');
   const input = updatePetugasSchema.parse(req.body);
+  const tugasIn = tugasBodyInput.parse(req.body ?? {}).tugas;
   const before = await prisma.ibadahPelayananPetugas.findUnique({
     where: { id: req.params.id },
     include: {
       jemaat: { select: { namaLengkap: true } },
       ibadahPelayanan: {
-        include: { pelayanan: { select: { id: true, nama: true } } },
+        include: { pelayanan: { select: { id: true, nama: true } }, ibadah: { select: { nama: true } } },
       },
     },
   });
@@ -688,10 +700,25 @@ pelayananRouter.patch('/petugas/:id', async (req, res) => {
     }
   }
 
+  // tugas: undefined = tidak diubah; null/[] = dikosongkan.
+  const tugasNew =
+    tugasIn === undefined
+      ? undefined
+      : await resolveTugas(before.ibadahPelayanan.pelayananId, tugasIn ?? [], parseTugas(before.tugas));
   const updated = await prisma.ibadahPelayananPetugas.update({
     where: { id: req.params.id },
-    data: input,
+    data: { ...input, ...(tugasNew !== undefined ? { tugas: tugasDbValue(tugasNew) } : {}) },
   });
+  if (tugasNew !== undefined && tugasSig(before.tugas) !== tugasSig(tugasNew)) {
+    const tgl = before.tanggalIbadah ? `, ${before.tanggalIbadah.toISOString().slice(0, 10)}` : '';
+    void notifyTugasUpdated({
+      jemaatId: before.jemaatId,
+      ministry: before.ibadahPelayanan.pelayanan.nama,
+      ministryId: before.ibadahPelayanan.pelayanan.id,
+      label: `${before.ibadahPelayanan.ibadah.nama}${tgl}`,
+      tugas: tugasNew,
+    });
+  }
   audit(req, {
     action: 'UPDATE',
     resource: 'ibadah_pelayanan_petugas',
@@ -846,4 +873,156 @@ pelayananRouter.post('/:id/penugasan', async (req, res) => {
     metadata: { ibadahIds: input.ibadahIds, eventIds: input.eventIds, ibadahCount, eventCount },
   });
   res.json({ success: true, data: { action: input.action, ibadah: ibadahCount, event: eventCount } });
+});
+
+// ============================================================
+//  2.5.0 — Master bagian/tugas petugas (Kategori → Tugas) per pelayanan.
+//   GET    /admin/pelayanan/:id/tugas-kategori            (termasuk nonaktif)
+//   POST   /admin/pelayanan/:id/tugas-kategori            { nama, ikon?, urutan? }
+//   PATCH  /admin/pelayanan/tugas-kategori/:kid           { nama?, ikon?, urutan?, isActive? }
+//   DELETE /admin/pelayanan/tugas-kategori/:kid           → nonaktif (soft)
+//   POST   /admin/pelayanan/tugas-kategori/:kid/tugas     { nama, urutan? }
+//   PATCH  /admin/pelayanan/tugas-item/:tid               { nama?, urutan?, isActive? }
+//   DELETE /admin/pelayanan/tugas-item/:tid               → nonaktif (soft)
+//  Hapus = nonaktif supaya jadwal lama (snapshot) tetap utuh; nama yang sama
+//  bisa diaktifkan lagi.
+// ============================================================
+
+const kategoriBody = z.object({
+  nama: z.string().trim().min(1).max(60),
+  ikon: z.string().trim().max(40).nullish(),
+  urutan: z.number().int().min(0).max(999).optional(),
+});
+const tugasItemBody = z.object({ nama: z.string().trim().min(1).max(80), urutan: z.number().int().min(0).max(999).optional() });
+const isUniqueErr = (e: unknown) => (e as { code?: string })?.code === 'P2002';
+
+pelayananRouter.get('/:id/tugas-kategori', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
+  const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan');
+  const includeInactive = req.query.all === '1' || req.query.all === 'true';
+  res.json({ success: true, data: await listTugasOptions(pel.id, { includeInactive }) });
+});
+
+pelayananRouter.post('/:id/tugas-kategori', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const input = kategoriBody.parse(req.body ?? {});
+  const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true, nama: true } });
+  if (!pel) throw NotFound('Pelayanan tidak ditemukan');
+  const existing = await prisma.pelayananTugasKategori.findUnique({
+    where: { pelayananId_nama: { pelayananId: pel.id, nama: input.nama } },
+  });
+  if (existing?.isActive) throw Conflict(`Kategori "${input.nama}" sudah ada.`);
+  const urutan = input.urutan ?? (await prisma.pelayananTugasKategori.count({ where: { pelayananId: pel.id } }));
+  const row = existing
+    ? await prisma.pelayananTugasKategori.update({
+        where: { id: existing.id },
+        data: { isActive: true, ikon: input.ikon ?? existing.ikon, urutan },
+      })
+    : await prisma.pelayananTugasKategori.create({
+        data: { pelayananId: pel.id, nama: input.nama, ikon: input.ikon ?? null, urutan },
+      });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'pelayanan_tugas_kategori',
+    resourceId: row.id,
+    resourceLabel: `Kategori tugas ${pel.nama}: ${row.nama}`,
+    after: row,
+  });
+  res.status(201).json({ success: true, data: row });
+});
+
+pelayananRouter.patch('/tugas-kategori/:kid', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const input = kategoriBody.partial().extend({ isActive: z.boolean().optional() }).parse(req.body ?? {});
+  const before = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid } });
+  if (!before) throw NotFound('Kategori tidak ditemukan');
+  try {
+    const row = await prisma.pelayananTugasKategori.update({ where: { id: before.id }, data: input });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'pelayanan_tugas_kategori',
+      resourceId: row.id,
+      resourceLabel: `Kategori tugas: ${row.nama}`,
+      before,
+      after: row,
+    });
+    res.json({ success: true, data: row });
+  } catch (e) {
+    if (isUniqueErr(e)) throw Conflict(`Kategori "${input.nama}" sudah ada.`);
+    throw e;
+  }
+});
+
+pelayananRouter.delete('/tugas-kategori/:kid', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const before = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid } });
+  if (!before) throw NotFound('Kategori tidak ditemukan');
+  await prisma.pelayananTugasKategori.update({ where: { id: before.id }, data: { isActive: false } });
+  audit(req, {
+    action: 'DELETE',
+    resource: 'pelayanan_tugas_kategori',
+    resourceId: before.id,
+    resourceLabel: `Kategori tugas: ${before.nama} (nonaktif)`,
+    before,
+  });
+  res.json({ success: true, data: { ok: true } });
+});
+
+pelayananRouter.post('/tugas-kategori/:kid/tugas', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const input = tugasItemBody.parse(req.body ?? {});
+  const kat = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid }, select: { id: true, nama: true } });
+  if (!kat) throw NotFound('Kategori tidak ditemukan');
+  const existing = await prisma.pelayananTugas.findUnique({ where: { kategoriId_nama: { kategoriId: kat.id, nama: input.nama } } });
+  if (existing?.isActive) throw Conflict(`Tugas "${input.nama}" sudah ada di ${kat.nama}.`);
+  const urutan = input.urutan ?? (await prisma.pelayananTugas.count({ where: { kategoriId: kat.id } }));
+  const row = existing
+    ? await prisma.pelayananTugas.update({ where: { id: existing.id }, data: { isActive: true, urutan } })
+    : await prisma.pelayananTugas.create({ data: { kategoriId: kat.id, nama: input.nama, urutan } });
+  audit(req, {
+    action: 'CREATE',
+    resource: 'pelayanan_tugas',
+    resourceId: row.id,
+    resourceLabel: `Tugas ${kat.nama} › ${row.nama}`,
+    after: row,
+  });
+  res.status(201).json({ success: true, data: row });
+});
+
+pelayananRouter.patch('/tugas-item/:tid', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const input = tugasItemBody.partial().extend({ isActive: z.boolean().optional() }).parse(req.body ?? {});
+  const before = await prisma.pelayananTugas.findUnique({ where: { id: req.params.tid } });
+  if (!before) throw NotFound('Tugas tidak ditemukan');
+  try {
+    const row = await prisma.pelayananTugas.update({ where: { id: before.id }, data: input });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'pelayanan_tugas',
+      resourceId: row.id,
+      resourceLabel: `Tugas: ${row.nama}`,
+      before,
+      after: row,
+    });
+    res.json({ success: true, data: row });
+  } catch (e) {
+    if (isUniqueErr(e)) throw Conflict(`Tugas "${input.nama}" sudah ada.`);
+    throw e;
+  }
+});
+
+pelayananRouter.delete('/tugas-item/:tid', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const before = await prisma.pelayananTugas.findUnique({ where: { id: req.params.tid } });
+  if (!before) throw NotFound('Tugas tidak ditemukan');
+  await prisma.pelayananTugas.update({ where: { id: before.id }, data: { isActive: false } });
+  audit(req, {
+    action: 'DELETE',
+    resource: 'pelayanan_tugas',
+    resourceId: before.id,
+    resourceLabel: `Tugas: ${before.nama} (nonaktif)`,
+    before,
+  });
+  res.json({ success: true, data: { ok: true } });
 });

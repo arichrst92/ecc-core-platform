@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Building2, ChevronDown, ChevronUp, Loader2, Search, ShieldCheck, UserMinus, UserPlus, X } from 'lucide-react';
 import { useCabangOptions } from '@/components/report/report-ui';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
+import { TugasKategoriPanel } from '@/components/pelayanan/tugas-kategori-panel';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media-url';
@@ -162,6 +163,7 @@ export default function PelayananDetailPage() {
       </div>
 
       {pel ? <PendaftaranPanel pelayananId={pel.id} /> : null}
+      {pel ? <TugasKategoriPanel pelayananId={pel.id} /> : null}
 
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[220px]">

@@ -33,6 +33,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { CheckinModal } from '@/components/checkin-modal';
 import { parseYmd } from '@/lib/dates';
 import { BulkPelayananPicker, linkAll } from '@/components/pelayanan/bulk-pelayanan-picker';
+import { TugasEditModal, tugasText, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
 
 interface Ibadah {
   id: string;
@@ -72,6 +73,8 @@ interface PetugasItem {
   tanggalIbadah: string | null;
   // Apakah petugas ini berwenang scan QR kode jemaat untuk check-in.
   canScanAttendance: boolean;
+  /** 2.5.0 — bagian/tugas (Kategori → Tugas). */
+  tugas?: TugasEntry[] | null;
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
   pelayananRole: { id: string; nama: string; level: number };
 }
@@ -477,6 +480,7 @@ function PelayananLinkCard({
     initialFocusTanggal,
   );
   const [deletingPetugas, setDeletingPetugas] = useState<PetugasItem | null>(null);
+  const [tugasFor, setTugasFor] = useState<PetugasItem | null>(null);
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -616,6 +620,7 @@ function PelayananLinkCard({
                         p={p}
                         apiBase={apiBase}
                         onDelete={() => setDeletingPetugas(p)}
+                        onTugas={() => setTugasFor(p)}
                         onToggleScan={() =>
                           toggleScanMut.mutate({
                             id: p.id,
@@ -658,6 +663,7 @@ function PelayananLinkCard({
                           p={p}
                           apiBase={apiBase}
                           onDelete={() => setDeletingPetugas(p)}
+                          onTugas={() => setTugasFor(p)}
                         />
                       ))}
                     </div>
@@ -686,6 +692,17 @@ function PelayananLinkCard({
         />
       )}
 
+      {tugasFor ? (
+        <TugasEditModal
+          pelayananId={link.pelayanan.id}
+          nama={tugasFor.jemaat.namaLengkap}
+          initial={tugasFor.tugas}
+          patchUrl={`/admin/pelayanan/petugas/${tugasFor.id}`}
+          invalidateKey={['petugas', link.id]}
+          onClose={() => setTugasFor(null)}
+        />
+      ) : null}
+
       <ConfirmDelete
         open={!!deletingPetugas}
         loading={deletePetugasMut.isPending}
@@ -710,12 +727,14 @@ function PetugasRow({
   p,
   apiBase,
   onDelete,
+  onTugas,
   onToggleScan,
   togglePending,
 }: {
   p: PetugasItem;
   apiBase: string;
   onDelete: () => void;
+  onTugas?: () => void;
   onToggleScan?: () => void;
   togglePending?: boolean;
 }) {
@@ -766,6 +785,15 @@ function PetugasRow({
         <span className={`inline-block mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${roleColor}`}>
           {p.pelayananRole.nama}
         </span>
+        {onTugas ? (
+          <button
+            onClick={onTugas}
+            className={`block mt-0.5 text-left text-xs ${p.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
+            title="Atur tugas"
+          >
+            {p.tugas?.length ? `Tugas: ${tugasText(p.tugas)}` : '+ Atur tugas'}
+          </button>
+        ) : null}
         {p.catatan && <span className="text-xs text-neutral-500 italic block mt-0.5">{p.catatan}</span>}
       </div>
       {onToggleScan && (

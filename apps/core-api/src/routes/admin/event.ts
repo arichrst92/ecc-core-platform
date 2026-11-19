@@ -54,6 +54,14 @@ import { paymentOkForCheckin, paymentStatusOf, selfCancelBlockedReason } from '.
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { assertWalkInOpen, eventScanWindow } from '../../lib/scan-window.js';
+import {
+  notifyTugasUpdated,
+  parseTugas,
+  resolveTugas,
+  tugasBodyInput,
+  tugasDbValue,
+  tugasSig,
+} from '../../lib/pelayanan-tugas.js';
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import {
   assertEventEligible,
@@ -707,6 +715,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
             pelayananRoleId: p.pelayananRoleId,
             canScanAttendance: p.canScanAttendance,
             catatan: p.catatan,
+            tugas: tugasDbValue(parseTugas(p.tugas)),
           })),
           skipDuplicates: true,
         });
@@ -2969,6 +2978,7 @@ eventRouter.post('/:id/pelayanan/:linkId/petugas', W(), async (req, res) => {
     throw NotFound('Tautan pelayanan event tidak ditemukan');
   }
   const input = assignEventVolunteerSchema.parse(req.body);
+  const tugasIn = tugasBodyInput.parse(req.body ?? {}).tugas;
 
   // Validate role belongs to pelayanan
   const role = await prisma.pelayananRole.findUnique({
@@ -2986,6 +2996,7 @@ eventRouter.post('/:id/pelayanan/:linkId/petugas', W(), async (req, res) => {
       pelayananRoleId: input.pelayananRoleId,
       canScanAttendance: input.canScanAttendance ?? false,
       catatan: input.catatan,
+      tugas: tugasDbValue(tugasIn ? await resolveTugas(link.pelayananId, tugasIn) : null),
     },
     include: {
       jemaat: { select: { namaLengkap: true } },
@@ -3024,6 +3035,7 @@ eventRouter.patch('/:id/pelayanan/:linkId/petugas/:petugasId', W(), async (req, 
     throw NotFound('Petugas event tidak ditemukan');
   }
   const input = updateEventVolunteerSchema.parse(req.body);
+  const tugasIn = tugasBodyInput.parse(req.body ?? {}).tugas;
 
   if (input.pelayananRoleId) {
     const role = await prisma.pelayananRole.findUnique({
@@ -3036,10 +3048,23 @@ eventRouter.patch('/:id/pelayanan/:linkId/petugas/:petugasId', W(), async (req, 
     }
   }
 
+  const tugasNew =
+    tugasIn === undefined
+      ? undefined
+      : await resolveTugas(before.eventPelayanan.pelayananId, tugasIn ?? [], parseTugas(before.tugas));
   const updated = await prisma.eventPelayananPetugas.update({
     where: { id: before.id },
-    data: input,
+    data: { ...input, ...(tugasNew !== undefined ? { tugas: tugasDbValue(tugasNew) } : {}) },
   });
+  if (tugasNew !== undefined && tugasSig(before.tugas) !== tugasSig(tugasNew)) {
+    void notifyTugasUpdated({
+      jemaatId: before.jemaatId,
+      ministry: before.eventPelayanan.pelayanan.nama,
+      ministryId: before.eventPelayanan.pelayanan.id,
+      label: before.eventPelayanan.event.judul,
+      tugas: tugasNew,
+    });
+  }
   audit(req, {
     action: 'UPDATE',
     resource: 'event_pelayanan_petugas',

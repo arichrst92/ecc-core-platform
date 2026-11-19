@@ -28,6 +28,16 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { isMobileClient } from '../../lib/client-kind.js';
 import { privacyGate } from '../../lib/privacy.js';
+import {
+  listTugasOptions,
+  parseTugas,
+  resolveTugas,
+  tugasDbValue,
+  tugasLabel,
+  tugasPilihanInput,
+  tugasSig,
+  type TugasEntry,
+} from '../../lib/pelayanan-tugas.js';
 import { infoOrDefault, pendaftaranForCabang, resolveStatus } from '../../lib/pelayanan-pendaftaran.js';
 import {
   canManageMinistry,
@@ -1112,6 +1122,7 @@ const petugasSelect = {
   jemaatId: true,
   tanggalIbadah: true,
   canScanAttendance: true,
+  tugas: true,
   pelayananRole: { select: { id: true, nama: true, level: true } },
   jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
 } as const;
@@ -1135,14 +1146,27 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
   });
   if (!pel) throw NotFound('Pelayanan tidak ditemukan.');
 
-  const cabangList = await prisma.cabangGereja.findMany({
-    where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
-    orderBy: { nama: 'asc' },
-    select: { id: true, nama: true },
-  });
+  const [cabangList, tugasKategori] = await Promise.all([
+    prisma.cabangGereja.findMany({
+      where: { isActive: true, ...(allowed === 'ALL' ? {} : { id: { in: allowed } }) },
+      orderBy: { nama: 'asc' },
+      select: { id: true, nama: true },
+    }),
+    listTugasOptions(pel.id),
+  ]);
+  // 2.5.0 — pilihan bagian/tugas (Kategori → Tugas) untuk pengatur jadwal.
+  const pelayanan = {
+    ...pel,
+    tugasKategori: tugasKategori.map((k) => ({
+      id: k.id,
+      nama: k.nama,
+      ikon: k.ikon,
+      tugas: k.tugas.map((t) => ({ id: t.id, nama: t.nama })),
+    })),
+  };
   const cabangId = q.cabangId ?? cabangList[0]?.id;
   if (!cabangId) {
-    res.json({ success: true, data: { pelayanan: pel, cabang: cabangList, cabangId: null, ibadah: [], events: [], members: [] } });
+    res.json({ success: true, data: { pelayanan, cabang: cabangList, cabangId: null, ibadah: [], events: [], members: [] } });
     return;
   }
   assertCabangAllowed(allowed, cabangId);
@@ -1189,6 +1213,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
                 id: true,
                 jemaatId: true,
                 canScanAttendance: true,
+                tugas: true,
                 pelayananRole: { select: { id: true, nama: true, level: true } },
                 jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
               },
@@ -1210,6 +1235,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
   const strip = (r: {
     id: string;
     canScanAttendance: boolean;
+    tugas: unknown;
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
     pelayananRole: { id: string; nama: string; level: number };
   }) => ({
@@ -1218,6 +1244,8 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
     role: r.pelayananRole,
     // Akses scan check-in (absensi) di ibadah / event ini.
     canScanAttendance: r.canScanAttendance,
+    // 2.5.0 — bagian/tugas yang ditetapkan koordinator.
+    tugas: parseTugas(r.tugas),
   });
 
   const ibadah: unknown[] = [];
@@ -1246,7 +1274,7 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
   res.json({
     success: true,
     data: {
-      pelayanan: pel,
+      pelayanan,
       cabang: cabangList,
       cabangId,
       ibadah,
@@ -1266,11 +1294,56 @@ ministryRouter.get('/:id/jadwal', async (req, res) => {
 
 // canScanAttendance opsional (app 2.4.9+): tidak dikirim (app lama) → hak scan yang
 // sudah ada dipertahankan; dikirim → mengikuti pilihan pengatur jadwal.
+// tugas opsional (app 2.5.0+): tidak dikirim → tugas lama dipertahankan;
+// null / [] → dikosongkan; isi → divalidasi & disimpan sebagai snapshot.
 const petugasInput = z
-  .array(z.object({ jemaatId: z.string().uuid(), pelayananRoleId: z.string().uuid(), canScanAttendance: z.boolean().optional() }))
+  .array(
+    z.object({
+      jemaatId: z.string().uuid(),
+      pelayananRoleId: z.string().uuid(),
+      canScanAttendance: z.boolean().optional(),
+      tugas: tugasPilihanInput.nullish(),
+    }),
+  )
   .max(60);
 const scanFor = (p: { jemaatId: string; canScanAttendance?: boolean }, existing: Set<string>) =>
   p.canScanAttendance ?? existing.has(p.jemaatId);
+
+/** Tentukan tugas tiap petugas: dari input, atau pertahankan nilai lama. */
+async function resolvePetugasTugas(
+  pelayananId: string,
+  list: z.infer<typeof petugasInput>,
+  existing: Map<string, TugasEntry[]>,
+): Promise<Map<string, TugasEntry[]>> {
+  const out = new Map<string, TugasEntry[]>();
+  for (const p of list) {
+    const old = existing.get(p.jemaatId) ?? [];
+    out.set(p.jemaatId, p.tugas === undefined ? old : await resolveTugas(pelayananId, p.tugas ?? [], old));
+  }
+  return out;
+}
+
+/** Notifikasi "tugas diperbarui" untuk petugas yang tetap terjadwal tapi tugasnya berubah. */
+function notifyTugasChanges(
+  before: Map<string, TugasEntry[]>,
+  after: Map<string, TugasEntry[]>,
+  self: string,
+  ctx: { ministry: string; label: string; ministryId: string },
+) {
+  for (const [id, now] of after) {
+    if (id === self || !before.has(id)) continue;
+    if (tugasSig(before.get(id)) === tugasSig(now)) continue;
+    const lbl = tugasLabel(now);
+    void createNotification({
+      jemaatId: id,
+      type: 'MINISTRY_DUTY_ASSIGNED',
+      title: `Tugas pelayanan ${ctx.ministry} diperbarui`,
+      body: lbl ? `${ctx.label} — tugas Anda: ${lbl}.` : `${ctx.label} — tugas Anda belum ditentukan.`,
+      actionUrl: '/profile/my-service',
+      metadata: { ministryId: ctx.ministryId, kind: 'tugas' },
+    });
+  }
+}
 
 /** Validasi petugas: anggota aktif pelayanan + role milik pelayanan. Dedup per jemaat. */
 async function validatePetugas(pelayananId: string, list: z.infer<typeof petugasInput>) {
@@ -1299,16 +1372,18 @@ function notifyDutyChanges(
   after: string[],
   self: string,
   ctx: { ministry: string; label: string; ministryId: string },
+  tugasOf?: Map<string, TugasEntry[]>,
 ) {
   const b = new Set(before);
   const a = new Set(after);
   for (const id of a) {
     if (b.has(id) || id === self) continue;
+    const lbl = tugasLabel(tugasOf?.get(id));
     void createNotification({
       jemaatId: id,
       type: 'MINISTRY_DUTY_ASSIGNED',
       title: `Jadwal pelayanan ${ctx.ministry}`,
-      body: `Anda dijadwalkan melayani: ${ctx.label}. Lihat di Jadwal Pelayanan Saya.`,
+      body: `Anda dijadwalkan melayani: ${ctx.label}${lbl ? ` (tugas: ${lbl})` : ''}. Lihat di Jadwal Pelayanan Saya.`,
       actionUrl: '/profile/my-service',
       metadata: { ministryId: ctx.ministryId },
     });
@@ -1346,7 +1421,7 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
       id: true,
       pelayanan: { select: { nama: true } },
       ibadah: { select: { nama: true, jamMulai: true, cabangId: true } },
-      petugas: { select: { jemaatId: true, tanggalIbadah: true, canScanAttendance: true } },
+      petugas: { select: { jemaatId: true, tanggalIbadah: true, canScanAttendance: true, tugas: true } },
     },
   });
   if (!link) throw NotFound('Pelayanan ini belum terhubung ke ibadah tersebut.');
@@ -1358,6 +1433,11 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
   // Pertahankan hak scan yang sudah diberikan admin di Portal.
   const scanOf = new Set(link.petugas.filter((p) => p.canScanAttendance).map((p) => p.jemaatId));
   const list = body.scope === 'RESET' ? [] : await validatePetugas(req.params.id, body.petugas);
+  // Tugas lama per jemaat: utamakan baris di susunan yang sedang diubah.
+  const scopeRows = body.scope === 'DEFAULT' ? defaults : overrides.length ? overrides : defaults;
+  const tugasMap = (rows: typeof link.petugas) => new Map(rows.map((p) => [p.jemaatId, parseTugas(p.tugas)]));
+  const oldTugas = new Map([...tugasMap(link.petugas), ...tugasMap(scopeRows)]);
+  const newTugas = await resolvePetugasTugas(req.params.id, list, oldTugas);
 
   await prisma.$transaction(async (tx) => {
     if (body.scope === 'DEFAULT') {
@@ -1375,6 +1455,7 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
           pelayananRoleId: p.pelayananRoleId,
           tanggalIbadah: body.scope === 'DEFAULT' ? null : tgl,
           canScanAttendance: scanFor(p, scanOf),
+          tugas: tugasDbValue(newTugas.get(p.jemaatId) ?? null),
         })),
       });
     }
@@ -1391,7 +1472,17 @@ ministryRouter.put('/:id/jadwal/ibadah/:ibadahId', async (req, res) => {
     effectiveAfter,
     req.user.jemaatId,
     { ministry: link.pelayanan.nama, label, ministryId: req.params.id },
+    newTugas,
   );
+  if (body.scope !== 'RESET') {
+    const beforeIds = new Set(body.scope === 'DEFAULT' ? defaults.map((p) => p.jemaatId) : effectiveBefore);
+    notifyTugasChanges(
+      new Map([...tugasMap(scopeRows)].filter(([id]) => beforeIds.has(id))),
+      newTugas,
+      req.user.jemaatId,
+      { ministry: link.pelayanan.nama, label, ministryId: req.params.id },
+    );
+  }
   audit(req, {
     action: 'UPDATE',
     resource: 'ibadah_pelayanan_petugas',
@@ -1419,9 +1510,11 @@ ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
     where: { eventId_pelayananId: { eventId: event.id, pelayananId: req.params.id } },
     create: { eventId: event.id, pelayananId: req.params.id },
     update: {},
-    select: { id: true, petugas: { select: { jemaatId: true, canScanAttendance: true } } },
+    select: { id: true, petugas: { select: { jemaatId: true, canScanAttendance: true, tugas: true } } },
   });
   const before = link.petugas.map((p) => p.jemaatId);
+  const oldTugas = new Map(link.petugas.map((p) => [p.jemaatId, parseTugas(p.tugas)]));
+  const newTugas = await resolvePetugasTugas(req.params.id, list, oldTugas);
   const scanOf = new Set(link.petugas.filter((p) => p.canScanAttendance).map((p) => p.jemaatId));
   await prisma.$transaction([
     prisma.eventPelayananPetugas.deleteMany({ where: { eventPelayananId: link.id } }),
@@ -1431,11 +1524,14 @@ ministryRouter.put('/:id/jadwal/event/:eventId', async (req, res) => {
         jemaatId: p.jemaatId,
         pelayananRoleId: p.pelayananRoleId,
         canScanAttendance: scanFor(p, scanOf),
+        tugas: tugasDbValue(newTugas.get(p.jemaatId) ?? null),
       })),
     }),
   ]);
   const label = `${event.judul}, ${fmtTanggalId(ymdUtc(event.tanggalMulai))}`;
-  notifyDutyChanges(before, list.map((p) => p.jemaatId), req.user.jemaatId, { ministry: pel.nama, label, ministryId: req.params.id });
+  const nctx = { ministry: pel.nama, label, ministryId: req.params.id };
+  notifyDutyChanges(before, list.map((p) => p.jemaatId), req.user.jemaatId, nctx, newTugas);
+  notifyTugasChanges(oldTugas, newTugas, req.user.jemaatId, nctx);
   audit(req, {
     action: 'UPDATE',
     resource: 'event_pelayanan_petugas',

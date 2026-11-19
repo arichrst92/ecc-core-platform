@@ -21,6 +21,7 @@ import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { BulkPelayananPicker, linkAll } from '@/components/pelayanan/bulk-pelayanan-picker';
+import { TugasEditModal, tugasText, type TugasEntry } from '@/components/pelayanan/tugas-kategori-panel';
 
 // ============== Types ==============
 
@@ -36,6 +37,8 @@ interface Volunteer {
   id: string;
   canScanAttendance: boolean;
   catatan: string | null;
+  /** 2.5.0 — bagian/tugas (Kategori → Tugas). */
+  tugas?: TugasEntry[] | null;
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
   pelayananRole: { id: string; nama: string; level: number };
 }
@@ -260,6 +263,7 @@ function PelayananCard({
   const [expanded, setExpanded] = useState(true);
   const [addVolunteerOpen, setAddVolunteerOpen] = useState(false);
   const [deletingVolunteer, setDeletingVolunteer] = useState<Volunteer | null>(null);
+  const [tugasFor, setTugasFor] = useState<Volunteer | null>(null);
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -363,6 +367,7 @@ function PelayananCard({
                   }
                   togglePending={toggleScannerMut.isPending}
                   onDelete={() => setDeletingVolunteer(p)}
+                  onTugas={() => setTugasFor(p)}
                 />
               ))}
             </div>
@@ -384,6 +389,17 @@ function PelayananCard({
         />
       )}
 
+      {tugasFor ? (
+        <TugasEditModal
+          pelayananId={link.pelayanan.id}
+          nama={tugasFor.jemaat.namaLengkap}
+          initial={tugasFor.tugas}
+          patchUrl={`/admin/event/${eventId}/pelayanan/${link.id}/petugas/${tugasFor.id}`}
+          invalidateKey={['event', eventId, 'pelayanan']}
+          onClose={() => setTugasFor(null)}
+        />
+      ) : null}
+
       <ConfirmDelete
         open={!!deletingVolunteer}
         loading={deleteVolunteerMut.isPending}
@@ -404,12 +420,14 @@ function VolunteerRow({
   onToggleScanner,
   togglePending,
   onDelete,
+  onTugas,
 }: {
   v: Volunteer;
   apiBase: string;
   onToggleScanner: () => void;
   togglePending: boolean;
   onDelete: () => void;
+  onTugas: () => void;
 }) {
   return (
     <div
@@ -449,6 +467,13 @@ function VolunteerRow({
             </span>
           )}
         </div>
+        <button
+          onClick={onTugas}
+          className={`block mt-0.5 text-left text-xs ${v.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
+          title="Atur tugas"
+        >
+          {v.tugas?.length ? `Tugas: ${tugasText(v.tugas)}` : '+ Atur tugas'}
+        </button>
         {v.catatan && (
           <div className="text-xs text-neutral-500 italic mt-0.5">{v.catatan}</div>
         )}

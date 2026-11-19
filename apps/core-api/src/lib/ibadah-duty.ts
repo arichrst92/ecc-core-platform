@@ -7,12 +7,15 @@
  * kalau tidak → petugas default (tanggalIbadah = null).
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
+import { parseTugas, type TugasEntry } from './pelayanan-tugas.js';
 
 export interface DutyRow {
   id: string;
   jemaatId: string;
   tanggalIbadah: Date | null;
   catatan: string | null;
+  /** 2.5.0 — kolom JSON bagian/tugas. */
+  tugas?: unknown;
   role: { nama: string; level: number };
   jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
 }
@@ -48,7 +51,9 @@ export interface IbadahDuty {
   posisi: string;
   posisiLevel: number;
   notes: string | null;
-  coServants: { jemaatId: string; namaLengkap: string; fotoUrl: string | null; posisi: string }[];
+  /** 2.5.0 — bagian/tugas saya. */
+  tugas: TugasEntry[];
+  coServants: { jemaatId: string; namaLengkap: string; fotoUrl: string | null; posisi: string; tugas: TugasEntry[] }[];
   source: 'TIM_IBADAH';
 }
 
@@ -87,9 +92,16 @@ export function resolveIbadahDuties(
         posisi: mine.role.nama,
         posisiLevel: mine.role.level,
         notes: mine.catatan,
+        tugas: parseTugas(mine.tugas),
         coServants: rows
           .filter((r) => r.jemaatId !== me)
-          .map((r) => ({ jemaatId: r.jemaatId, namaLengkap: r.jemaat.namaLengkap, fotoUrl: r.jemaat.fotoUrl, posisi: r.role.nama })),
+          .map((r) => ({
+            jemaatId: r.jemaatId,
+            namaLengkap: r.jemaat.namaLengkap,
+            fotoUrl: r.jemaat.fotoUrl,
+            posisi: r.role.nama,
+            tugas: parseTugas(r.tugas),
+          })),
         source: 'TIM_IBADAH',
       });
     }

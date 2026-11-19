@@ -104,6 +104,7 @@ import { meResolusiRouter } from './me-resolusi.js';
 import { meBible365Router } from './me-bible365.js';
 import { meCatatanRouter } from './me-catatan.js';
 import { meWorshipRouter } from './me-worship.js';
+import { parseTugas, type TugasEntry } from '../../lib/pelayanan-tugas.js';
 
 export const meRouter = Router();
 
@@ -2483,11 +2484,13 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     posisi: r.pelayananRole.nama,
     posisiLevel: r.pelayananRole.level,
     notes: r.notes,
+    tugas: [] as TugasEntry[],
     coServants: r.schedule.assignments.map((c) => ({
       jemaatId: c.jemaatId,
       namaLengkap: c.jemaat.namaLengkap,
       fotoUrl: c.jemaat.fotoUrl,
       posisi: c.pelayananRole.nama,
+      tugas: [] as TugasEntry[],
     })),
     source: 'ROSTER' as const,
   }));
@@ -2520,6 +2523,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
           jemaatId: true,
           tanggalIbadah: true,
           catatan: true,
+          tugas: true,
           pelayananRole: { select: { nama: true, level: true } },
           jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
         },
@@ -2552,6 +2556,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
           jemaatId: p.jemaatId,
           tanggalIbadah: p.tanggalIbadah,
           catatan: p.catatan,
+          tugas: p.tugas,
           role: p.pelayananRole,
           jemaat: p.jemaat,
         })),
@@ -2621,6 +2626,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     posisiLevel: r.pelayananRole.level,
     canScanAttendance: r.canScanAttendance,
     catatan: r.catatan,
+    tugas: parseTugas(r.tugas),
   }));
 
   res.json({ success: true, data: { assignments: allAssignments, events } });

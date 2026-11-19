@@ -904,8 +904,46 @@ model Pelayanan {
   approvers       PelayananApprover[]
   pendaftaran     PelayananPendaftaran[]
   ckidsAccess     CkidsMenuAccess[]
+  tugasKategori   PelayananTugasKategori[]
 
   @@map("pelayanan")
+}
+
+// 2.5.0 — Pilihan "bagian / tugas" petugas per pelayanan (dua tingkat:
+// Kategori → Tugas). Dikelola di Portal; dipilih koordinator saat menyusun
+// jadwal. Hapus = nonaktif (soft) supaya jadwal lama tetap terbaca.
+model PelayananTugasKategori {
+  id          String   @id @default(uuid()) @db.Uuid
+  pelayananId String   @map("pelayanan_id") @db.Uuid
+  nama        String   @db.VarChar(60)
+  ikon        String?  @db.VarChar(40)
+  urutan      Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  pelayanan Pelayanan        @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  tugas     PelayananTugas[]
+
+  @@unique([pelayananId, nama])
+  @@index([pelayananId])
+  @@map("pelayanan_tugas_kategori")
+}
+
+model PelayananTugas {
+  id         String   @id @default(uuid()) @db.Uuid
+  kategoriId String   @map("kategori_id") @db.Uuid
+  nama       String   @db.VarChar(80)
+  urutan     Int      @default(0)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  kategori PelayananTugasKategori @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
+
+  @@unique([kategoriId, nama])
+  @@index([kategoriId])
+  @@map("pelayanan_tugas")
 }
 
 model PelayananRole {
@@ -1419,6 +1457,9 @@ model IbadahPelayananPetugas {
   // dia boleh scan (tidak peduli tanggalIbadah).
   canScanAttendance Boolean   @default(false) @map("can_scan_attendance")
   catatan           String?   @db.Text
+  // 2.5.0 — bagian/tugas: [{ kategoriId, kategori, ikon, tugasId|null, tugas|null }]
+  // (snapshot nama). NULL / [] = belum ditentukan.
+  tugas             Json?
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
@@ -1853,6 +1894,8 @@ model EventPelayananPetugas {
   // POST /admin/event/:id/checkin untuk scan QR jemaat.
   canScanAttendance Boolean  @default(false) @map("can_scan_attendance")
   catatan           String?  @db.Text
+  // 2.5.0 — bagian/tugas (format sama dengan IbadahPelayananPetugas.tugas).
+  tugas             Json?
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

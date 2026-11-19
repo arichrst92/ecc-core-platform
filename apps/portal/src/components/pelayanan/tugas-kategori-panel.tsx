@@ -44,9 +44,19 @@ export function useTugasKategori(pelayananId: string | null | undefined, all = f
   });
 }
 
-export function TugasKategoriPanel({ pelayananId, warna }: { pelayananId: string; warna?: string | null }) {
+export function TugasKategoriPanel({
+  pelayananId,
+  warna,
+  embedded = false,
+}: {
+  pelayananId: string;
+  warna?: string | null;
+  /** true = selalu terbuka (tab Tugas petugas di detail pelayanan). */
+  embedded?: boolean;
+}) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpen] = useState(false);
+  const open = embedded || openState;
   const [showInactive, setShowInactive] = useState(false);
   const [newKat, setNewKat] = useState('');
   const [newTugas, setNewTugas] = useState<Record<string, string>>({});
@@ -121,14 +131,21 @@ export function TugasKategoriPanel({ pelayananId, warna }: { pelayananId: string
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl">
-      <button onClick={() => setOpen((x) => !x)} className="w-full flex items-center justify-between px-4 py-3">
+      <button
+        onClick={() => !embedded && setOpen((x) => !x)}
+        className={`w-full flex items-center justify-between px-4 py-3 ${embedded ? 'cursor-default' : ''}`}
+      >
         <span className="font-semibold text-neutral-900">
           Kategori &amp; tugas petugas
           <span className="ml-2 text-xs font-normal text-neutral-500">
             {activeKat.length} kategori · {nTugas} tugas
           </span>
         </span>
-        {open ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
+        {embedded ? null : open ? (
+          <ChevronUp className="w-4 h-4 text-neutral-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-neutral-400" />
+        )}
       </button>
       {open ? (
         <div className="border-t border-neutral-100">

@@ -57,7 +57,16 @@ const HARI: Record<string, string> = {
 const JADWAL: Record<string, string> = { WEEKLY: 'Setiap', BIWEEKLY: 'Dua minggu sekali', MONTHLY: 'Bulanan', ONCE: 'Sekali' };
 const tgl = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-export function PenugasanModal({ pelayananId, onClose }: { pelayananId: string; onClose: () => void }) {
+export function PenugasanModal({
+  pelayananId,
+  onClose,
+  embedded = false,
+}: {
+  pelayananId: string;
+  onClose?: () => void;
+  /** true = tampil di dalam halaman (tab Penugasan detail pelayanan), bukan pop-up. */
+  embedded?: boolean;
+}) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('ibadah');
   const [q, setQ] = useState('');
@@ -165,12 +174,20 @@ export function PenugasanModal({ pelayananId, onClose }: { pelayananId: string; 
   const linkedCount = (t: Tab) => (t === 'ibadah' ? data?.ibadah : data?.events)?.filter((x) => x.linked).length ?? 0;
   const totalCount = (t: Tab) => (t === 'ibadah' ? data?.ibadah : data?.events)?.length ?? 0;
 
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl h-[88vh] flex flex-col pointer-events-auto">
+  const body = (
+        <div
+          className={
+            embedded
+              ? 'bg-white border border-neutral-200 rounded-xl w-full h-[70vh] min-h-[480px] flex flex-col'
+              : 'bg-white rounded-2xl shadow-xl w-full max-w-3xl h-[88vh] flex flex-col pointer-events-auto'
+          }
+        >
           {/* Header */}
+          {embedded ? (
+            <div className="px-6 py-3 border-b border-neutral-100 text-sm text-neutral-600">
+              Pilih ibadah / event tempat pelayanan ini bertugas. Petugas per tanggal diatur di detail ibadah / event, atau oleh koordinator di app.
+            </div>
+          ) : (
           <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2 min-w-0">
               {data ? <PelayananIcon ikon={data.pelayanan.ikon} warna={data.pelayanan.warna} size={28} /> : null}
@@ -180,6 +197,7 @@ export function PenugasanModal({ pelayananId, onClose }: { pelayananId: string; 
               <X className="w-4 h-4" />
             </button>
           </div>
+          )}
 
           {/* Tab + filter */}
           <div className="px-6 pt-4 space-y-3 border-b border-neutral-100 pb-3">
@@ -348,7 +366,12 @@ export function PenugasanModal({ pelayananId, onClose }: { pelayananId: string; 
             )}
           </div>
         </div>
-      </div>
+  );
+  if (embedded) return body;
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">{body}</div>
     </>
   );
 }

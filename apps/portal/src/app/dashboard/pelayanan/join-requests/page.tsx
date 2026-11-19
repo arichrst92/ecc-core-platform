@@ -90,6 +90,7 @@ function JoinRequestsContent() {
   const qc = useQueryClient();
   const selected = params.get('pelayananId') ?? '';
   const [rejecting, setRejecting] = useState<JoinRequest | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const q = useQuery({
     queryKey: ['ministry-join-requests', 'all'],
@@ -110,6 +111,8 @@ function JoinRequestsContent() {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['ministry-join-requests'] });
+    // Anggota & statistik pelayanan ikut berubah setelah disetujui.
+    qc.invalidateQueries({ queryKey: ['pelayanan'] });
   };
 
   const approve = useMutation({
@@ -148,24 +151,49 @@ function JoinRequestsContent() {
   });
 
   const totalPending = allRequests.length;
+  const selectedMinistry = ministries.find((m) => m.id === selected);
+  // Chip: yang punya permintaan dulu; yang kosong disembunyikan kecuali "tampilkan semua".
+  const chipMinistries = [...ministries]
+    .filter((m) => showAll || m.pendingRequestCount > 0 || m.id === selected)
+    .sort((a, b) => b.pendingRequestCount - a.pendingRequestCount || a.nama.localeCompare(b.nama, 'id'));
+  const hiddenCount = ministries.length - chipMinistries.length;
 
   return (
     <div>
-      <Link
-        href="/dashboard/pelayanan"
-        className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-700 mb-3"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" /> Master Pelayanan
-      </Link>
+      <div className="flex items-center gap-1 text-xs text-neutral-500 mb-3">
+        <Link href="/dashboard/pelayanan" className="inline-flex items-center gap-1 hover:text-neutral-700">
+          <ArrowLeft className="w-3.5 h-3.5" /> Pelayanan
+        </Link>
+        {selectedMinistry ? (
+          <>
+            <span>/</span>
+            <Link href={`/dashboard/pelayanan/${selectedMinistry.id}`} className="hover:text-neutral-700">
+              {selectedMinistry.nama}
+            </Link>
+          </>
+        ) : null}
+        <span>/ Permintaan Volunteer</span>
+      </div>
 
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-          <UserPlus className="w-6 h-6" />
-          Permintaan Volunteer
-        </h1>
-        <p className="text-neutral-500 mt-1 text-sm">
-          Jemaat yang mengajukan bergabung ke ministry. Setujui dengan memilih peran, atau tolak.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+            <UserPlus className="w-6 h-6" />
+            Permintaan Volunteer{selectedMinistry ? ` · ${selectedMinistry.nama}` : ''}
+          </h1>
+          <p className="text-neutral-500 mt-1 text-sm">
+            Jemaat yang mengajukan bergabung ke pelayanan. Pilih peran lalu <b>Setujui</b>, atau <b>Tolak</b> dengan alasan (opsional).
+            Pemohon mendapat notifikasi.
+          </p>
+        </div>
+        {selectedMinistry ? (
+          <Link
+            href={`/dashboard/pelayanan/${selectedMinistry.id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            Kelola pelayanan ini
+          </Link>
+        ) : null}
       </div>
 
       {q.isLoading && (
@@ -182,7 +210,7 @@ function JoinRequestsContent() {
 
       {q.data && !q.data.canManageAny && (
         <div className="bg-white border border-neutral-200 rounded-xl p-10 text-center text-sm text-neutral-500">
-          Anda bukan leader ministry mana pun, jadi tidak ada permintaan yang bisa dikelola.
+          Anda belum menjadi koordinator (otoritas approval) pelayanan mana pun, jadi tidak ada permintaan yang bisa dikelola.
         </div>
       )}
 
@@ -191,7 +219,7 @@ function JoinRequestsContent() {
           {/* Filter chip per ministry */}
           <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
             <Chip active={!selected} onClick={() => selectMinistry('')} label="Semua" count={totalPending} />
-            {ministries.map((m) => (
+            {chipMinistries.map((m) => (
               <Chip
                 key={m.id}
                 active={selected === m.id}
@@ -200,6 +228,15 @@ function JoinRequestsContent() {
                 count={m.pendingRequestCount}
               />
             ))}
+            {hiddenCount > 0 || showAll ? (
+              <button
+                type="button"
+                onClick={() => setShowAll((x) => !x)}
+                className="shrink-0 px-3 py-1.5 rounded-full text-sm text-neutral-500 hover:text-neutral-800"
+              >
+                {showAll ? 'Sembunyikan yang kosong' : `+${hiddenCount} pelayanan tanpa permintaan`}
+              </button>
+            ) : null}
           </div>
 
           {requests.length === 0 ? (

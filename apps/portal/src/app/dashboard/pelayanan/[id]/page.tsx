@@ -1,18 +1,38 @@
 'use client';
 
 /**
- * Detail Pelayanan — anggota aktif dikelompokkan per cabang gereja, cari &
- * saring, ubah role, keluarkan, dan tambah anggota (cari nama / kode / no HP).
+ * Detail Pelayanan — header ringkas (statistik, permintaan menunggu) + tab:
+ *   Anggota · Peran · Tugas petugas · Pendaftaran & koordinator · Penugasan.
+ * Tab tersimpan di URL (?tab=) supaya bisa dibuka langsung lewat link.
  * API: /admin/pelayanan/:id/members, /:id/candidates, /assign
  */
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Building2, ChevronDown, ChevronUp, Loader2, Search, ShieldCheck, UserMinus, UserPlus, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  CalendarCheck,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  ClipboardList,
+  Crown,
+  Loader2,
+  Pencil,
+  Search,
+  ShieldCheck,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
 import { useCabangOptions } from '@/components/report/report-ui';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { TugasKategoriPanel } from '@/components/pelayanan/tugas-kategori-panel';
+import { PenugasanModal } from '@/components/pelayanan/penugasan-modal';
+import { EditPelayananModal, RoleManager, usePendingJoinCounts } from '@/components/pelayanan/pelayanan-manage';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media-url';
@@ -70,35 +90,67 @@ function Avatar({ nama, foto }: { nama: string; foto: string | null }) {
   );
 }
 
+type TabKey = 'anggota' | 'peran' | 'tugas' | 'pendaftaran' | 'penugasan';
+const TABS: { key: TabKey; label: string; icon: typeof Users; hint: string }[] = [
+  { key: 'anggota', label: 'Anggota', icon: Users, hint: 'Daftar anggota per cabang, ubah peran, koordinator, keluarkan' },
+  { key: 'peran', label: 'Peran', icon: Crown, hint: 'Peran & level dalam pelayanan' },
+  { key: 'tugas', label: 'Tugas petugas', icon: ClipboardList, hint: 'Kategori → Tugas yang dipilih saat menyusun jadwal' },
+  { key: 'pendaftaran', label: 'Pendaftaran & koordinator', icon: ShieldCheck, hint: 'Buka/tutup pendaftaran per cabang & siapa koordinatornya' },
+  { key: 'penugasan', label: 'Penugasan', icon: CalendarCheck, hint: 'Ibadah & event tempat pelayanan ini bertugas' },
+];
+
 export default function PelayananDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <PelayananDetail />
+    </Suspense>
+  );
+}
+
+function PelayananDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const sp = useSearchParams();
   const qc = useQueryClient();
+  const tabParam = sp.get('tab') as TabKey | null;
+  const tab: TabKey = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : 'anggota';
+  const setTab = (t: TabKey) => router.replace(`/dashboard/pelayanan/${id}?tab=${t}`, { scroll: false });
+
   const [search, setSearch] = usePersistentState(`pelayanan:${id}:search`, '');
   const [cabangId, setCabangId] = usePersistentState(`pelayanan:${id}:cabang`, '');
   const [roleId, setRoleId] = usePersistentState(`pelayanan:${id}:role`, '');
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
   const [authFor, setAuthFor] = useState<Member | null>(null);
   const dq = useDebounce(search, 300);
   const KEY = ['pelayanan', id, 'members'];
+  const fetchMembers = async (s: string) =>
+    (await apiClient.get<{ data: MembersResp }>(`/admin/pelayanan/${id}/members`, { params: { search: s || undefined } })).data.data;
 
-  const q = useQuery({
-    queryKey: [...KEY, dq],
-    queryFn: async () =>
-      (await apiClient.get<{ data: MembersResp }>(`/admin/pelayanan/${id}/members`, { params: { search: dq || undefined } })).data.data,
-    placeholderData: (p) => p,
-  });
-  const pel = q.data?.pelayanan;
-  const all = q.data?.members ?? [];
+  // Semua anggota (untuk statistik, peran, koordinator) + hasil pencarian (tab Anggota).
+  const allQ = useQuery({ queryKey: [...KEY, ''], queryFn: () => fetchMembers('') });
+  const q = useQuery({ queryKey: [...KEY, dq], queryFn: () => fetchMembers(dq), placeholderData: (p) => p, enabled: !!dq });
+  const pending = usePendingJoinCounts().byId.get(id) ?? 0;
+  const pel = allQ.data?.pelayanan;
+  const everyone = allQ.data?.members ?? [];
+  const all = (dq ? q.data?.members : everyone) ?? [];
+
+  const stats = useMemo(() => {
+    const cabang = new Set(everyone.map((m) => m.jemaat.cabang.id));
+    const byRole = new Map<string, number>();
+    for (const m of everyone) byRole.set(m.pelayananRole.id, (byRole.get(m.pelayananRole.id) ?? 0) + 1);
+    const koordinator = everyone.filter((m) => m.approvalCabang?.length);
+    return { cabang: cabang.size, byRole, koordinator };
+  }, [everyone]);
 
   // Opsi cabang dari anggota yang ada.
   const cabangOpts = useMemo(() => {
     const m = new Map<string, string>();
-    for (const x of all) m.set(x.jemaat.cabang.id, x.jemaat.cabang.nama);
+    for (const x of everyone) m.set(x.jemaat.cabang.id, x.jemaat.cabang.nama);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'id'));
-  }, [all]);
+  }, [everyone]);
 
   const filtered = all.filter((m) => (!cabangId || m.jemaat.cabang.id === cabangId) && (!roleId || m.pelayananRole.id === roleId));
   // Kelompok per cabang; di dalamnya urut level role (tinggi dulu) lalu nama.
@@ -116,14 +168,19 @@ export default function PelayananDetailPage() {
     return [...g.values()].sort((a, b) => a.cabang.nama.localeCompare(b.cabang.nama, 'id'));
   }, [filtered]);
 
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: KEY });
+    void qc.invalidateQueries({ queryKey: ['pelayanan', 'tree'] });
+  };
+
   const changeRole = useMutation({
     mutationFn: async ({ assignId, pelayananRoleId }: { assignId: string; pelayananRoleId: string }) =>
       apiClient.patch(`/admin/pelayanan/assign/${assignId}`, { pelayananRoleId }),
     onSuccess: () => {
-      toast.success('Role diperbarui');
-      void qc.invalidateQueries({ queryKey: KEY });
+      toast.success('Peran diperbarui');
+      refresh();
     },
-    onError: (e) => toast.error(errMsg(e, 'Gagal mengubah role')),
+    onError: (e) => toast.error(errMsg(e, 'Gagal mengubah peran')),
   });
   const remove = useMutation({
     mutationFn: async (m: Member) =>
@@ -131,153 +188,279 @@ export default function PelayananDetailPage() {
     onSuccess: () => {
       toast.success(`${removing?.jemaat.namaLengkap ?? 'Anggota'} dikeluarkan dari pelayanan`);
       setRemoving(null);
-      void qc.invalidateQueries({ queryKey: KEY });
-      void qc.invalidateQueries({ queryKey: ['pelayanan', 'tree'] });
+      refresh();
     },
     onError: (e) => toast.error(errMsg(e, 'Gagal mengeluarkan')),
   });
 
+  const tagline = pel?.deskripsi?.split('\n')[0]?.trim();
+  const tabCount: Partial<Record<TabKey, number>> = {
+    anggota: everyone.length,
+    peran: pel?.roles.length,
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3 flex-wrap">
-        <button onClick={() => router.push('/dashboard/pelayanan')} className="p-2 rounded-lg hover:bg-neutral-100" aria-label="Kembali">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 min-w-[200px]">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <PelayananIcon ikon={pel?.ikon} warna={pel?.warna} size={32} /> {pel?.nama ?? '…'}
-          </h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
-            {pel?.deskripsi ? `${pel.deskripsi} · ` : ''}
-            {all.length.toLocaleString('id-ID')} anggota aktif{dq ? ' (sesuai pencarian)' : ''} · {cabangOpts.length} cabang
-          </p>
+      {/* Header */}
+      <div className="bg-white border border-neutral-200 rounded-xl p-4">
+        <div className="flex items-start gap-3 flex-wrap">
+          <Link href="/dashboard/pelayanan" className="p-2 -ml-1 rounded-lg hover:bg-neutral-100" aria-label="Kembali ke daftar pelayanan">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <PelayananIcon ikon={pel?.ikon} warna={pel?.warna} size={48} />
+          <div className="flex-1 min-w-[220px]">
+            <div className="text-xs text-neutral-500">
+              <Link href="/dashboard/pelayanan" className="hover:underline">
+                Pelayanan
+              </Link>{' '}
+              / {pel?.nama ?? '…'}
+            </div>
+            <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+              {pel?.nama ?? '…'}
+              {pel && !pel.isActive ? (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-neutral-200 text-neutral-600">Nonaktif</span>
+              ) : null}
+            </h1>
+            {tagline ? <p className="text-sm text-neutral-500 mt-0.5">{tagline}</p> : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditing(true)}
+              disabled={!pel}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+              title="Ubah nama, deskripsi, ikon, warna & status aktif"
+            >
+              <Pencil className="w-4 h-4" /> Ubah
+            </button>
+            <button
+              onClick={() => setAdding(true)}
+              disabled={!pel?.roles.length}
+              title={pel && !pel.roles.length ? 'Tambahkan peran dulu di tab Peran' : undefined}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg"
+            >
+              <UserPlus className="w-4 h-4" /> Tambah Anggota
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setAdding(true)}
-          disabled={!pel?.roles.length}
-          title={pel && !pel.roles.length ? 'Tambahkan role pelayanan dulu di halaman Pelayanan' : undefined}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg"
-        >
-          <UserPlus className="w-4 h-4" /> Tambah Anggota
-        </button>
-      </div>
-
-      {pel ? <PendaftaranPanel pelayananId={pel.id} /> : null}
-      {pel ? <TugasKategoriPanel pelayananId={pel.id} warna={pel.warna} /> : null}
-
-      <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama, kode, atau no HP anggota…"
-            className="w-full pl-9 pr-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+          <Stat label="Anggota aktif" value={everyone.length} onClick={() => setTab('anggota')} />
+          <Stat label="Cabang" value={stats.cabang} onClick={() => setTab('anggota')} />
+          <Stat label="Peran" value={pel?.roles.length ?? 0} onClick={() => setTab('peran')} />
+          <Stat
+            label="Koordinator"
+            value={stats.koordinator.length}
+            warn={everyone.length > 0 && stats.koordinator.length === 0 ? 'Belum ada' : undefined}
+            onClick={() => setTab('pendaftaran')}
           />
         </div>
-        <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white">
-          <option value="">Semua cabang</option>
-          {cabangOpts.map(([cid, nama]) => (
-            <option key={cid} value={cid}>
-              {nama}
-            </option>
-          ))}
-        </select>
-        <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white">
-          <option value="">Semua role</option>
-          {(pel?.roles ?? []).map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.nama}
-            </option>
-          ))}
-        </select>
+        {pending > 0 ? (
+          <Link
+            href={`/dashboard/pelayanan/join-requests?pelayananId=${id}`}
+            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 hover:bg-amber-100"
+          >
+            <UserPlus className="w-4 h-4" />
+            <b>{pending}</b> permintaan bergabung menunggu persetujuan
+            <span className="ml-auto inline-flex items-center gap-0.5 font-semibold">
+              Tinjau <ChevronRight className="w-4 h-4" />
+            </span>
+          </Link>
+        ) : null}
       </div>
 
-      {q.isLoading ? (
+      {/* Tab */}
+      <div className="border-b border-neutral-200 flex gap-1 overflow-x-auto" role="tablist">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const on = tab === t.key;
+          const n = tabCount[t.key];
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t.key)}
+              title={t.hint}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${
+                on ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {t.label}
+              {n != null ? <span className={`text-xs ${on ? 'text-brand-600' : 'text-neutral-400'}`}>{n}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-neutral-500 -mt-2">{TABS.find((t) => t.key === tab)?.hint}</p>
+
+      {allQ.isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
         </div>
-      ) : q.isError ? (
-        <div className="py-12 text-center text-sm text-red-600">Gagal memuat anggota pelayanan.</div>
-      ) : groups.length === 0 ? (
-        <div className="bg-white border border-dashed border-neutral-300 rounded-xl p-12 text-center text-sm text-neutral-500">
-          {all.length ? 'Tidak ada anggota yang cocok dengan saringan.' : 'Belum ada anggota. Klik Tambah Anggota.'}
+      ) : allQ.isError || !pel ? (
+        <div className="py-12 text-center text-sm text-red-600">Gagal memuat pelayanan.</div>
+      ) : tab === 'peran' ? (
+        <RoleManager pelayananId={pel.id} roles={pel.roles} memberCountByRole={stats.byRole} onChanged={refresh} />
+      ) : tab === 'tugas' ? (
+        <TugasKategoriPanel pelayananId={pel.id} warna={pel.warna} embedded />
+      ) : tab === 'pendaftaran' ? (
+        <div className="space-y-4">
+          <PendaftaranPanel pelayananId={pel.id} embedded />
+          <KoordinatorPanel members={everyone} onAtur={setAuthFor} onGoAnggota={() => setTab('anggota')} />
         </div>
+      ) : tab === 'penugasan' ? (
+        <PenugasanModal pelayananId={pel.id} embedded />
       ) : (
-        <div className="space-y-3">
-          {groups.map((g) => {
-            const isClosed = closed[g.cabang.id];
-            return (
-              <div key={g.cabang.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setClosed((c) => ({ ...c, [g.cabang.id]: !c[g.cabang.id] }))}
-                  className="w-full flex items-center justify-between px-4 py-2.5 bg-neutral-50 border-b border-neutral-100"
-                >
-                  <span className="font-semibold text-neutral-900 inline-flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-brand-500" /> {g.cabang.nama}
-                    <span className="text-xs font-medium text-neutral-500">({g.list.length})</span>
-                  </span>
-                  {isClosed ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
-                </button>
-                {isClosed ? null : (
-                  <div className="divide-y divide-neutral-100">
-                    {g.list.map((m) => (
-                      <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50">
-                        <Avatar nama={m.jemaat.namaLengkap} foto={m.jemaat.fotoUrl} />
-                        <div className="flex-1 min-w-0">
-                          <Link href={`/dashboard/jemaat/${m.jemaat.id}`} className="font-medium text-brand-600 hover:underline truncate block">
-                            {m.jemaat.namaLengkap}
-                          </Link>
-                          {m.approvalCabang?.length ? (
-                            <div className="text-[11px] text-emerald-700 inline-flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" /> Approval: {m.approvalCabang.map((c) => c.nama).join(', ')}
+        <>
+          <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari nama, kode, atau no HP anggota…"
+                className="w-full pl-9 pr-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white">
+              <option value="">Semua cabang</option>
+              {cabangOpts.map(([cid, nama]) => (
+                <option key={cid} value={cid}>
+                  {nama}
+                </option>
+              ))}
+            </select>
+            <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white">
+              <option value="">Semua peran</option>
+              {pel.roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nama}
+                </option>
+              ))}
+            </select>
+            {search || cabangId || roleId ? (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setCabangId('');
+                  setRoleId('');
+                }}
+                className="text-xs text-neutral-500 hover:text-neutral-800 px-2"
+              >
+                Reset
+              </button>
+            ) : null}
+            <span className="w-full text-[11px] text-neutral-500 inline-flex items-center gap-3">
+              <span className="inline-flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> = atur koordinator (otoritas approval per cabang)
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <UserMinus className="w-3.5 h-3.5" /> = keluarkan (riwayat tetap tersimpan)
+              </span>
+            </span>
+          </div>
+
+          {dq && q.isFetching && !q.data ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="bg-white border border-dashed border-neutral-300 rounded-xl p-12 text-center text-sm text-neutral-500">
+              {everyone.length ? 'Tidak ada anggota yang cocok dengan saringan.' : 'Belum ada anggota. Klik Tambah Anggota.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {groups.map((g) => {
+                const isClosed = closed[g.cabang.id];
+                return (
+                  <div key={g.cabang.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setClosed((c) => ({ ...c, [g.cabang.id]: !c[g.cabang.id] }))}
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-neutral-50 border-b border-neutral-100"
+                    >
+                      <span className="font-semibold text-neutral-900 inline-flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-brand-500" /> {g.cabang.nama}
+                        <span className="text-xs font-medium text-neutral-500">({g.list.length})</span>
+                      </span>
+                      {isClosed ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
+                    </button>
+                    {isClosed ? null : (
+                      <div className="divide-y divide-neutral-100">
+                        {g.list.map((m) => (
+                          <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50">
+                            <Avatar nama={m.jemaat.namaLengkap} foto={m.jemaat.fotoUrl} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Link href={`/dashboard/jemaat/${m.jemaat.id}`} className="font-medium text-brand-600 hover:underline truncate">
+                                  {m.jemaat.namaLengkap}
+                                </Link>
+                                {m.approvalCabang?.length ? (
+                                  <span
+                                    className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800"
+                                    title={`Koordinator untuk: ${m.approvalCabang.map((c) => c.nama).join(', ')}`}
+                                  >
+                                    Koordinator · {m.approvalCabang.map((c) => c.nama).join(', ')}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-xs text-neutral-500 truncate">
+                                {[m.jemaat.kode, m.jemaat.noHp, `sejak ${new Date(m.tanggalMulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
                             </div>
-                          ) : null}
-                          <div className="text-xs text-neutral-500 truncate">
-                            {[m.jemaat.kode, m.jemaat.noHp, `sejak ${new Date(m.tanggalMulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`]
-                              .filter(Boolean)
-                              .join(' · ')}
+                            <select
+                              value={m.pelayananRole.id}
+                              onChange={(e) => changeRole.mutate({ assignId: m.id, pelayananRoleId: e.target.value })}
+                              disabled={changeRole.isPending}
+                              className="px-2 py-1 border border-neutral-300 rounded-lg text-xs bg-white max-w-[150px]"
+                              title="Ubah peran"
+                            >
+                              {pel.roles.some((r) => r.id === m.pelayananRole.id) ? null : (
+                                <option value={m.pelayananRole.id}>{m.pelayananRole.nama}</option>
+                              )}
+                              {pel.roles.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.nama}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setAuthFor(m)}
+                              className={`p-1.5 rounded hover:bg-emerald-50 ${m.approvalCabang?.length ? 'text-emerald-600' : 'text-neutral-400'} hover:text-emerald-700`}
+                              title="Atur koordinator (otoritas approval per cabang)"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setRemoving(m)}
+                              className="p-1.5 rounded hover:bg-red-50 text-neutral-400 hover:text-red-600"
+                              title="Keluarkan dari pelayanan"
+                            >
+                              <UserMinus className="w-4 h-4" />
+                            </button>
                           </div>
-                        </div>
-                        <select
-                          value={m.pelayananRole.id}
-                          onChange={(e) => changeRole.mutate({ assignId: m.id, pelayananRoleId: e.target.value })}
-                          disabled={changeRole.isPending}
-                          className="px-2 py-1 border border-neutral-300 rounded-lg text-xs bg-white max-w-[150px]"
-                          title="Ubah role"
-                        >
-                          {(pel?.roles ?? []).some((r) => r.id === m.pelayananRole.id) ? null : (
-                            <option value={m.pelayananRole.id}>{m.pelayananRole.nama}</option>
-                          )}
-                          {(pel?.roles ?? []).map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.nama}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => setAuthFor(m)}
-                          className={`p-1.5 rounded hover:bg-emerald-50 ${m.approvalCabang?.length ? 'text-emerald-600' : 'text-neutral-400'} hover:text-emerald-700`}
-                          title="Otoritas approval request bergabung"
-                        >
-                          <ShieldCheck className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setRemoving(m)}
-                          className="p-1.5 rounded hover:bg-red-50 text-neutral-400 hover:text-red-600"
-                          title="Keluarkan dari pelayanan"
-                        >
-                          <UserMinus className="w-4 h-4" />
-                        </button>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
+
+      {editing && pel ? (
+        <EditPelayananModal
+          pelayanan={pel}
+          onClose={() => setEditing(false)}
+          onSuccess={() => {
+            setEditing(false);
+            refresh();
+          }}
+        />
+      ) : null}
 
       {authFor && pel ? (
         <ApprovalModal pelayananId={pel.id} pelayananNama={pel.nama} member={authFor} onClose={() => setAuthFor(null)} />
@@ -295,7 +478,7 @@ export default function PelayananDetailPage() {
               <h3 className="font-semibold text-neutral-900">Keluarkan dari pelayanan?</h3>
               <p className="text-sm text-neutral-600 mt-1">
                 <b>{removing.jemaat.namaLengkap}</b> dikeluarkan dari <b>{pel?.nama}</b>. Riwayat keanggotaan tetap tersimpan
-                (tanggal selesai hari ini).
+                (tanggal selesai hari ini). Bila ia koordinator, otoritasnya ikut dicabut.
               </p>
               <div className="flex justify-end gap-2 mt-4">
                 <button onClick={() => setRemoving(null)} disabled={remove.isPending} className="px-3 py-1.5 rounded-lg text-sm hover:bg-neutral-100">
@@ -314,6 +497,83 @@ export default function PelayananDetailPage() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function Stat({ label, value, warn, onClick }: { label: string; value: number; warn?: string; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} className="text-left rounded-lg border border-neutral-200 px-3 py-2 hover:bg-neutral-50">
+      <div className="text-xl font-bold text-neutral-900">{value.toLocaleString('id-ID')}</div>
+      <div className="text-xs text-neutral-500">
+        {label}
+        {warn ? <span className="ml-1 font-semibold text-amber-700">· {warn}</span> : null}
+      </div>
+    </button>
+  );
+}
+
+/** Ringkasan koordinator per cabang (cabang anggota tanpa koordinator ditandai). */
+function KoordinatorPanel({
+  members,
+  onAtur,
+  onGoAnggota,
+}: {
+  members: Member[];
+  onAtur: (m: Member) => void;
+  onGoAnggota: () => void;
+}) {
+  const rows = useMemo(() => {
+    const map = new Map<string, { nama: string; koordinator: Member[]; anggota: number }>();
+    for (const m of members) {
+      const c = m.jemaat.cabang;
+      const e = map.get(c.id) ?? { nama: c.nama, koordinator: [], anggota: 0 };
+      e.anggota++;
+      map.set(c.id, e);
+    }
+    for (const m of members)
+      for (const c of m.approvalCabang ?? []) {
+        const e = map.get(c.id) ?? { nama: c.nama, koordinator: [], anggota: 0 };
+        e.koordinator.push(m);
+        map.set(c.id, e);
+      }
+    return [...map.entries()].sort((a, b) => a[1].nama.localeCompare(b[1].nama, 'id'));
+  }, [members]);
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl">
+      <div className="px-4 py-3 border-b border-neutral-100">
+        <div className="font-semibold text-neutral-900">Koordinator per cabang</div>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Koordinator menyetujui permintaan bergabung dari jemaat cabangnya, membuka/menutup pendaftaran, dan mengatur jadwal petugas dari app.
+          Tambah koordinator: tab <button onClick={onGoAnggota} className="text-brand-600 hover:underline">Anggota</button> → ikon perisai.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-neutral-500">Belum ada anggota.</p>
+      ) : (
+        <div className="divide-y divide-neutral-100">
+          {rows.map(([cid, r]) => (
+            <div key={cid} className="px-4 py-2.5 flex flex-wrap items-center gap-2">
+              <span className="font-medium text-neutral-900 w-40">{r.nama}</span>
+              <span className="text-xs text-neutral-500 w-24">{r.anggota} anggota</span>
+              {r.koordinator.length ? (
+                r.koordinator.map((k) => (
+                  <button
+                    key={k.id}
+                    onClick={() => onAtur(k)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                    title="Ubah cabang otoritas"
+                  >
+                    <ShieldCheck className="w-3 h-3" /> {k.jemaat.namaLengkap}
+                  </button>
+                ))
+              ) : (
+                <span className="text-xs font-semibold text-amber-700">Belum ada koordinator — permintaan bergabung dari cabang ini hanya bisa diproses admin di Portal</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -533,9 +793,10 @@ const STATUS_PEND: Record<PendaftaranRow['status'], { label: string; cls: string
  * Buka / tutup pendaftaran per cabang (badge "Buka pendaftaran" di app; ditutup
  * → tombol Gabung hilang & request baru ditolak untuk jemaat cabang tsb).
  */
-function PendaftaranPanel({ pelayananId }: { pelayananId: string }) {
+function PendaftaranPanel({ pelayananId, embedded = false }: { pelayananId: string; embedded?: boolean }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpen] = useState(false);
+  const open = embedded || openState;
   const [edit, setEdit] = useState<PendaftaranRow | null>(null);
   const [catatan, setCatatan] = useState('');
   const [tutup, setTutup] = useState('');
@@ -560,14 +821,14 @@ function PendaftaranPanel({ pelayananId }: { pelayananId: string }) {
   const nTutup = rows.filter((r) => r.status === 'TUTUP').length;
   return (
     <div className="bg-white border border-neutral-200 rounded-xl">
-      <button onClick={() => setOpen((x) => !x)} className="w-full flex items-center justify-between px-4 py-3">
+      <button onClick={() => !embedded && setOpen((x) => !x)} className={`w-full flex items-center justify-between px-4 py-3 ${embedded ? 'cursor-default' : ''}`}>
         <span className="font-semibold text-neutral-900">
           Pendaftaran per cabang
           <span className="ml-2 text-xs font-normal text-neutral-500">
             {nBuka} buka · {nTutup} tutup · {rows.length - nBuka - nTutup} belum dibuka
           </span>
         </span>
-        {open ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
+        {embedded ? null : open ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
       </button>
       {open ? (
         <div className="border-t border-neutral-100 divide-y divide-neutral-100">

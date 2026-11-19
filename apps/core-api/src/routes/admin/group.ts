@@ -374,10 +374,13 @@ groupRouter.get('/:id', async (req, res) => {
   // hanya melihat JUMLAH anggota. App memakai `members` untuk "apakah saya
   // anggota" — tetap benar karena non-anggota memang bukan anggota.
   const isActiveMember = rest.members.some((m) => m.jemaat.id === requester.jemaatId);
-  const canSeeMembers =
-    isPicOrAdmin ||
-    isActiveMember ||
-    (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'read')));
+  const isPic = group.picJemaatId === requester.jemaatId;
+  // App: HANYA anggota aktif & PIC (Fulltimer yang bukan anggota juga tidak
+  // melihat — pengelolaan anggota oleh Fulltimer lewat Portal).
+  // Portal: anggota, PIC, Fulltimer, atau admin menu Group.
+  const canSeeMembers = isMobileClient(req)
+    ? isActiveMember || isPic
+    : isPicOrAdmin || isActiveMember || (await hasMenuAccessFor(req.user, 'group', 'read'));
   res.json({
     success: true,
     data: {

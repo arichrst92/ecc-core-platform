@@ -12,11 +12,13 @@ import {
   assignPetugasSchema,
   updatePetugasSchema,
   paginationQuerySchema,
+  PELAYANAN_IKON,
 } from '@ecc/shared-types';
-import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
+import { NotFound, BadRequest, Conflict, Forbidden } from '../../lib/errors.js';
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
+import { isMobileClient } from '../../lib/client-kind.js';
 import {
   listTugasOptions,
   notifyTugasUpdated,
@@ -908,11 +910,17 @@ pelayananRouter.post('/:id/penugasan', async (req, res) => {
 
 const kategoriBody = z.object({
   nama: z.string().trim().min(1).max(60),
-  ikon: z.string().trim().max(40).nullish(),
+  // Ikon dari daftar terkurasi yang sama dengan ikon pelayanan (Portal & app).
+  ikon: z.enum(PELAYANAN_IKON).nullish(),
   urutan: z.number().int().min(0).max(999).optional(),
 });
+const urutanBody = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
 const tugasItemBody = z.object({ nama: z.string().trim().min(1).max(80), urutan: z.number().int().min(0).max(999).optional() });
 const isUniqueErr = (e: unknown) => (e as { code?: string })?.code === 'P2002';
+/** Tambah / ubah / hapus master tugas hanya dari Portal (app cukup memilih). */
+const portalOnly = (req: Parameters<typeof isMobileClient>[0]) => {
+  if (isMobileClient(req)) throw Forbidden('Kategori & tugas hanya dapat diubah melalui Portal.');
+};
 
 pelayananRouter.get('/:id/tugas-kategori', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
@@ -924,6 +932,7 @@ pelayananRouter.get('/:id/tugas-kategori', async (req, res) => {
 
 pelayananRouter.post('/:id/tugas-kategori', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
   const input = kategoriBody.parse(req.body ?? {});
   const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true, nama: true } });
   if (!pel) throw NotFound('Pelayanan tidak ditemukan');
@@ -952,6 +961,7 @@ pelayananRouter.post('/:id/tugas-kategori', async (req, res) => {
 
 pelayananRouter.patch('/tugas-kategori/:kid', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
   const input = kategoriBody.partial().extend({ isActive: z.boolean().optional() }).parse(req.body ?? {});
   const before = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid } });
   if (!before) throw NotFound('Kategori tidak ditemukan');
@@ -974,6 +984,7 @@ pelayananRouter.patch('/tugas-kategori/:kid', async (req, res) => {
 
 pelayananRouter.delete('/tugas-kategori/:kid', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
   const before = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid } });
   if (!before) throw NotFound('Kategori tidak ditemukan');
   await prisma.pelayananTugasKategori.update({ where: { id: before.id }, data: { isActive: false } });
@@ -989,6 +1000,7 @@ pelayananRouter.delete('/tugas-kategori/:kid', async (req, res) => {
 
 pelayananRouter.post('/tugas-kategori/:kid/tugas', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
   const input = tugasItemBody.parse(req.body ?? {});
   const kat = await prisma.pelayananTugasKategori.findUnique({ where: { id: req.params.kid }, select: { id: true, nama: true } });
   if (!kat) throw NotFound('Kategori tidak ditemukan');
@@ -1010,9 +1022,22 @@ pelayananRouter.post('/tugas-kategori/:kid/tugas', async (req, res) => {
 
 pelayananRouter.patch('/tugas-item/:tid', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
-  const input = tugasItemBody.partial().extend({ isActive: z.boolean().optional() }).parse(req.body ?? {});
-  const before = await prisma.pelayananTugas.findUnique({ where: { id: req.params.tid } });
+  portalOnly(req);
+  const input = tugasItemBody
+    .partial()
+    .extend({ isActive: z.boolean().optional(), kategoriId: z.string().uuid().optional() })
+    .parse(req.body ?? {});
+  const before = await prisma.pelayananTugas.findUnique({
+    where: { id: req.params.tid },
+    include: { kategori: { select: { pelayananId: true } } },
+  });
   if (!before) throw NotFound('Tugas tidak ditemukan');
+  // Pindah kategori: harus kategori di pelayanan yang sama; taruh di urutan terakhir.
+  if (input.kategoriId && input.kategoriId !== before.kategoriId) {
+    const dest = await prisma.pelayananTugasKategori.findUnique({ where: { id: input.kategoriId }, select: { pelayananId: true, nama: true } });
+    if (!dest || dest.pelayananId !== before.kategori.pelayananId) throw BadRequest('Kategori tujuan tidak ditemukan di pelayanan ini.');
+    if (input.urutan === undefined) input.urutan = await prisma.pelayananTugas.count({ where: { kategoriId: input.kategoriId } });
+  }
   try {
     const row = await prisma.pelayananTugas.update({ where: { id: before.id }, data: input });
     audit(req, {
@@ -1025,13 +1050,14 @@ pelayananRouter.patch('/tugas-item/:tid', async (req, res) => {
     });
     res.json({ success: true, data: row });
   } catch (e) {
-    if (isUniqueErr(e)) throw Conflict(`Tugas "${input.nama}" sudah ada.`);
+    if (isUniqueErr(e)) throw Conflict(`Tugas "${input.nama ?? before.nama}" sudah ada di kategori tujuan.`);
     throw e;
   }
 });
 
 pelayananRouter.delete('/tugas-item/:tid', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
   const before = await prisma.pelayananTugas.findUnique({ where: { id: req.params.tid } });
   if (!before) throw NotFound('Tugas tidak ditemukan');
   await prisma.pelayananTugas.update({ where: { id: before.id }, data: { isActive: false } });
@@ -1042,5 +1068,26 @@ pelayananRouter.delete('/tugas-item/:tid', async (req, res) => {
     resourceLabel: `Tugas: ${before.nama} (nonaktif)`,
     before,
   });
+  res.json({ success: true, data: { ok: true } });
+});
+
+// Atur urutan: kirim seluruh id dalam urutan baru (yang tidak dikirim tidak diubah).
+pelayananRouter.put('/:id/tugas-kategori/urutan', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
+  const { ids } = urutanBody.parse(req.body ?? {});
+  const rows = await prisma.pelayananTugasKategori.findMany({ where: { pelayananId: req.params.id, id: { in: ids } }, select: { id: true } });
+  if (rows.length !== new Set(ids).size) throw BadRequest('Ada kategori yang bukan milik pelayanan ini.');
+  await prisma.$transaction(ids.map((id, i) => prisma.pelayananTugasKategori.update({ where: { id }, data: { urutan: i } })));
+  res.json({ success: true, data: { ok: true } });
+});
+
+pelayananRouter.put('/tugas-kategori/:kid/urutan', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  portalOnly(req);
+  const { ids } = urutanBody.parse(req.body ?? {});
+  const rows = await prisma.pelayananTugas.findMany({ where: { kategoriId: req.params.kid, id: { in: ids } }, select: { id: true } });
+  if (rows.length !== new Set(ids).size) throw BadRequest('Ada tugas yang bukan milik kategori ini.');
+  await prisma.$transaction(ids.map((id, i) => prisma.pelayananTugas.update({ where: { id }, data: { urutan: i } })));
   res.json({ success: true, data: { ok: true } });
 });

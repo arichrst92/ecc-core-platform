@@ -163,7 +163,7 @@ export default function PelayananDetailPage() {
       </div>
 
       {pel ? <PendaftaranPanel pelayananId={pel.id} /> : null}
-      {pel ? <TugasKategoriPanel pelayananId={pel.id} /> : null}
+      {pel ? <TugasKategoriPanel pelayananId={pel.id} warna={pel.warna} /> : null}
 
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[220px]">

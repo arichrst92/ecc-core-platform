@@ -52,7 +52,8 @@ export function parseTugas(raw: unknown): TugasEntry[] {
 /** Tanda tangan untuk deteksi perubahan (urutan tidak berpengaruh). */
 export function tugasSig(raw: unknown): string {
   return parseTugas(raw)
-    .map((t) => `${t.kategoriId}:${t.tugasId ?? ''}`)
+    // Tugas dikenali dari id-nya saja (tetap sama walau dipindah kategori).
+    .map((t) => (t.tugasId ? `t:${t.tugasId}` : `k:${t.kategoriId}`))
     .sort()
     .join('|');
 }
@@ -104,25 +105,33 @@ export async function resolveTugas(
   keep: TugasEntry[] = [],
 ): Promise<TugasEntry[]> {
   if (!input.length) return [];
+  // Semua kategori pelayanan ini (jumlahnya kecil) — tugas dicari lintas kategori
+  // supaya tugas yang sudah DIPINDAH kategori tetap terbaca dari jadwal lama.
   const kategori = await prisma.pelayananTugasKategori.findMany({
-    where: { pelayananId, id: { in: [...new Set(input.map((i) => i.kategoriId))] } },
+    where: { pelayananId },
     select: { id: true, nama: true, ikon: true, isActive: true, tugas: { select: { id: true, nama: true, isActive: true } } },
   });
   const kMap = new Map(kategori.map((k) => [k.id, k]));
-  const keepKey = new Set(keep.map((k) => `${k.kategoriId}:${k.tugasId ?? ''}`));
+  const tMap = new Map(kategori.flatMap((k) => k.tugas.map((t) => [t.id, { t, k }] as const)));
+  // Nilai lama: tugas dikenali dari id tugas; kategori-saja dari id kategori.
+  const keepKey = new Set(keep.map((k) => (k.tugasId ? `t:${k.tugasId}` : `k:${k.kategoriId}`)));
   const seen = new Set<string>();
   const out: TugasEntry[] = [];
   for (const i of input) {
-    const key = `${i.kategoriId}:${i.tugasId ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const k = kMap.get(i.kategoriId);
-    if (!k) throw BadRequest('Kategori tugas tidak ditemukan di pelayanan ini.');
+    let k: (typeof kategori)[number] | undefined;
     let tugas: { id: string; nama: string; isActive: boolean } | null = null;
     if (i.tugasId) {
-      tugas = k.tugas.find((t) => t.id === i.tugasId) ?? null;
-      if (!tugas) throw BadRequest('Tugas tidak ditemukan di kategori tersebut.');
+      const hit = tMap.get(i.tugasId);
+      if (!hit) throw BadRequest('Tugas tidak ditemukan di pelayanan ini.');
+      tugas = hit.t;
+      k = hit.k;
+    } else {
+      k = kMap.get(i.kategoriId);
+      if (!k) throw BadRequest('Kategori tugas tidak ditemukan di pelayanan ini.');
     }
+    const key = tugas ? `t:${tugas.id}` : `k:${k.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const inactive = !k.isActive || (tugas && !tugas.isActive);
     if (inactive && !keepKey.has(key)) throw BadRequest(`Pilihan "${tugas?.nama ?? k.nama}" sudah tidak aktif.`);
     out.push({ kategoriId: k.id, kategori: k.nama, ikon: k.ikon ?? null, tugasId: tugas?.id ?? null, tugas: tugas?.nama ?? null });
@@ -170,17 +179,25 @@ export async function refreshTugasNames(lists: TugasEntry[][]): Promise<void> {
   if (!kIds.size) return;
   const [ks, ts] = await Promise.all([
     prisma.pelayananTugasKategori.findMany({ where: { id: { in: [...kIds] } }, select: { id: true, nama: true, ikon: true } }),
-    tIds.size ? prisma.pelayananTugas.findMany({ where: { id: { in: [...tIds] } }, select: { id: true, nama: true } }) : [],
+    tIds.size
+      ? prisma.pelayananTugas.findMany({
+          where: { id: { in: [...tIds] } },
+          select: { id: true, nama: true, kategori: { select: { id: true, nama: true, ikon: true } } },
+        })
+      : [],
   ]);
   const kMap = new Map(ks.map((k) => [k.id, k]));
-  const tMap = new Map(ts.map((t) => [t.id, t.nama]));
+  const tMap = new Map(ts.map((t) => [t.id, t]));
   for (const l of lists)
     for (const e of l) {
-      const k = kMap.get(e.kategoriId);
+      const t = e.tugasId ? tMap.get(e.tugasId) : undefined;
+      // Tugas yang dipindah ke kategori lain → ikut kategori terkininya.
+      const k = t ? t.kategori : kMap.get(e.kategoriId);
       if (k) {
+        e.kategoriId = k.id;
         e.kategori = k.nama;
         e.ikon = k.ikon ?? null;
       }
-      if (e.tugasId && tMap.has(e.tugasId)) e.tugas = tMap.get(e.tugasId)!;
+      if (t) e.tugas = t.nama;
     }
 }

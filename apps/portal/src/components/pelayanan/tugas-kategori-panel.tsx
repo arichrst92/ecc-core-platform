@@ -7,7 +7,9 @@
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, Eye, EyeOff, Loader2, Pencil, Plus, RotateCcw, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Loader2, Pencil, Plus, RotateCcw, X } from 'lucide-react';
+import { PELAYANAN_IKON } from '@ecc/shared-types';
+import { PELAYANAN_ICON_MAP, PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
@@ -42,32 +44,57 @@ export function useTugasKategori(pelayananId: string | null | undefined, all = f
   });
 }
 
-export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
+export function TugasKategoriPanel({ pelayananId, warna }: { pelayananId: string; warna?: string | null }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [newKat, setNewKat] = useState('');
   const [newTugas, setNewTugas] = useState<Record<string, string>>({});
+  const [iconFor, setIconFor] = useState<string | null>(null);
   const q = useTugasKategori(pelayananId, true);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['pelayanan', pelayananId, 'tugas-kategori'] });
 
   const mut = useMutation({
-    mutationFn: async (a: { method: 'post' | 'patch' | 'delete'; url: string; body?: unknown; ok: string }) => {
+    mutationFn: async (a: { method: 'post' | 'patch' | 'put' | 'delete'; url: string; body?: unknown; ok?: string }) => {
       if (a.method === 'delete') await apiClient.delete(a.url);
       else await apiClient[a.method](a.url, a.body);
       return a.ok;
     },
     onSuccess: (ok) => {
-      toast.success(ok);
+      if (ok) toast.success(ok);
       void invalidate();
     },
-    onError: (e) => toast.error(errMsg(e, 'Gagal menyimpan')),
+    onError: (e) => {
+      toast.error(errMsg(e, 'Gagal menyimpan'));
+      void invalidate();
+    },
   });
 
   const rows = q.data ?? [];
   const activeKat = rows.filter((k) => k.isActive !== false);
   const nTugas = activeKat.reduce((n, k) => n + k.tugas.filter((t) => t.isActive !== false).length, 0);
   const visible = showInactive ? rows : activeKat;
+
+  /** Tukar posisi `id` dengan tetangga terlihat (dir -1 naik, +1 turun); kirim urutan lengkap. */
+  const move = (full: { id: string }[], shown: { id: string }[], id: string, dir: -1 | 1, url: string) => {
+    const si = shown.findIndex((x) => x.id === id);
+    const other = shown[si + dir];
+    if (!other) return;
+    const ids = full.map((x) => x.id);
+    const a = ids.indexOf(id);
+    const b = ids.indexOf(other.id);
+    [ids[a], ids[b]] = [ids[b]!, ids[a]!];
+    // Optimistic: urutkan cache dulu supaya tidak "lompat".
+    qc.setQueryData<TugasKategori[]>(['pelayanan', pelayananId, 'tugas-kategori', 'all'], (old) => {
+      if (!old) return old;
+      const order = new Map(ids.map((x, i) => [x, i]));
+      const sortBy = <T extends { id: string }>(l: T[]) =>
+        order.has(l[0]?.id ?? '') ? [...l].sort((p, q2) => (order.get(p.id) ?? 0) - (order.get(q2.id) ?? 0)) : l;
+      const top = sortBy(old);
+      return top.map((k) => ({ ...k, tugas: sortBy(k.tugas) }));
+    });
+    mut.mutate({ method: 'put', url, body: { ids } });
+  };
 
   const addKat = () => {
     const nama = newKat.trim();
@@ -85,12 +112,12 @@ export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
       { onSuccess: () => setNewTugas((m) => ({ ...m, [k.id]: '' })) },
     );
   };
-  const rename = (kind: 'kategori' | 'tugas', id: string, cur: string) => {
-    const nama = window.prompt(kind === 'kategori' ? 'Nama kategori' : 'Nama tugas', cur)?.trim();
-    if (!nama || nama === cur) return;
+  const rename = (kind: 'kategori' | 'tugas', id: string, nama: string) => {
     const url = kind === 'kategori' ? `/admin/pelayanan/tugas-kategori/${id}` : `/admin/pelayanan/tugas-item/${id}`;
     mut.mutate({ method: 'patch', url, body: { nama }, ok: 'Nama diperbarui' });
   };
+
+  const iconBtn = 'p-1 rounded hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent';
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl">
@@ -107,8 +134,8 @@ export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
         <div className="border-t border-neutral-100">
           <div className="px-4 py-2 text-xs text-neutral-500 bg-neutral-50 flex flex-wrap items-center gap-2">
             <span className="flex-1 min-w-[240px]">
-              Pilihan bagian yang ditetapkan koordinator untuk tiap petugas di jadwal ibadah / event. Petugas boleh punya lebih dari satu
-              tugas, cukup kategori saja, atau dikosongkan.
+              Pilihan bagian yang ditetapkan koordinator untuk tiap petugas di jadwal ibadah / event. Klik nama untuk mengubah, panah untuk
+              mengatur urutan, ikon untuk menggantinya.
             </span>
             <button
               onClick={() => setShowInactive((x) => !x)}
@@ -125,18 +152,68 @@ export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
           ) : (
             <div className="divide-y divide-neutral-100">
               {visible.length === 0 ? <p className="px-4 py-4 text-sm text-neutral-500">Belum ada kategori.</p> : null}
-              {visible.map((k) => {
+              {visible.map((k, ki) => {
                 const inactive = k.isActive === false;
                 const tugas = showInactive ? k.tugas : k.tugas.filter((t) => t.isActive !== false);
+                const moveTargets = activeKat.filter((x) => x.id !== k.id);
                 return (
                   <div key={k.id} className={`px-4 py-3 space-y-2 ${inactive ? 'opacity-60' : ''}`}>
+                    {/* Header kategori */}
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-neutral-900">{k.nama}</span>
+                      <div className="flex flex-col">
+                        <button
+                          className={iconBtn}
+                          disabled={ki === 0 || mut.isPending}
+                          onClick={() => move(rows, visible, k.id, -1, `/admin/pelayanan/${pelayananId}/tugas-kategori/urutan`)}
+                          title="Naikkan"
+                        >
+                          <ArrowUp className="w-3 h-3 text-neutral-500" />
+                        </button>
+                        <button
+                          className={iconBtn}
+                          disabled={ki === visible.length - 1 || mut.isPending}
+                          onClick={() => move(rows, visible, k.id, 1, `/admin/pelayanan/${pelayananId}/tugas-kategori/urutan`)}
+                          title="Turunkan"
+                        >
+                          <ArrowDown className="w-3 h-3 text-neutral-500" />
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <button
+                          onClick={() => setIconFor(iconFor === k.id ? null : k.id)}
+                          className="rounded-lg ring-offset-1 hover:ring-2 hover:ring-brand-300"
+                          title="Ganti ikon"
+                          disabled={inactive}
+                        >
+                          {k.ikon ? (
+                            <PelayananIcon ikon={k.ikon} warna={warna} size={28} />
+                          ) : (
+                            <span className="w-7 h-7 rounded-lg border border-dashed border-neutral-300 flex items-center justify-center text-neutral-400">
+                              <ImagePlus className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                        </button>
+                        {iconFor === k.id ? (
+                          <IconGrid
+                            value={k.ikon}
+                            warna={warna}
+                            onClose={() => setIconFor(null)}
+                            onPick={(ikon) => {
+                              setIconFor(null);
+                              mut.mutate({ method: 'patch', url: `/admin/pelayanan/tugas-kategori/${k.id}`, body: { ikon }, ok: 'Ikon diperbarui' });
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <InlineName
+                        value={k.nama}
+                        maxLength={60}
+                        disabled={inactive}
+                        className="font-semibold text-neutral-900"
+                        onSave={(nama) => rename('kategori', k.id, nama)}
+                      />
                       {inactive ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">nonaktif</span> : null}
                       <span className="flex-1" />
-                      <button onClick={() => rename('kategori', k.id, k.nama)} className="p-1.5 rounded hover:bg-neutral-100" title="Ganti nama">
-                        <Pencil className="w-3.5 h-3.5 text-neutral-500" />
-                      </button>
                       {inactive ? (
                         <button
                           onClick={() =>
@@ -160,60 +237,98 @@ export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
                         </button>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {tugas.map((t) => {
+
+                    {/* Daftar tugas */}
+                    <div className="ml-14 space-y-1">
+                      {tugas.map((t, ti) => {
                         const tIn = t.isActive === false;
+                        const kUrl = `/admin/pelayanan/tugas-kategori/${k.id}/urutan`;
                         return (
-                          <span
-                            key={t.id}
-                            className={`inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full border text-xs ${
-                              tIn ? 'border-dashed border-neutral-300 text-neutral-400' : 'border-neutral-200 bg-neutral-50 text-neutral-700'
-                            }`}
-                          >
-                            <button onClick={() => rename('tugas', t.id, t.nama)} title="Ganti nama">
-                              {t.nama}
+                          <div key={t.id} className={`flex items-center gap-1.5 group ${tIn ? 'opacity-60' : ''}`}>
+                            <button className={iconBtn} disabled={ti === 0 || mut.isPending} onClick={() => move(k.tugas, tugas, t.id, -1, kUrl)} title="Naikkan">
+                              <ArrowUp className="w-3 h-3 text-neutral-500" />
                             </button>
+                            <button
+                              className={iconBtn}
+                              disabled={ti === tugas.length - 1 || mut.isPending}
+                              onClick={() => move(k.tugas, tugas, t.id, 1, kUrl)}
+                              title="Turunkan"
+                            >
+                              <ArrowDown className="w-3 h-3 text-neutral-500" />
+                            </button>
+                            <span className="text-neutral-300">•</span>
+                            <InlineName
+                              value={t.nama}
+                              maxLength={80}
+                              disabled={tIn}
+                              className={`text-sm ${tIn ? 'text-neutral-400 line-through' : 'text-neutral-800'}`}
+                              onSave={(nama) => rename('tugas', t.id, nama)}
+                            />
+                            <span className="flex-1" />
+                            {!tIn && moveTargets.length ? (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const dest = moveTargets.find((x) => x.id === e.target.value);
+                                  if (!dest) return;
+                                  mut.mutate({
+                                    method: 'patch',
+                                    url: `/admin/pelayanan/tugas-item/${t.id}`,
+                                    body: { kategoriId: dest.id },
+                                    ok: `"${t.nama}" dipindah ke ${dest.nama}`,
+                                  });
+                                }}
+                                className="text-xs border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white text-neutral-600 opacity-60 group-hover:opacity-100"
+                                title="Pindah ke kategori lain"
+                              >
+                                <option value="">Pindah ke…</option>
+                                {moveTargets.map((x) => (
+                                  <option key={x.id} value={x.id}>
+                                    {x.nama}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
                             {tIn ? (
                               <button
                                 onClick={() =>
                                   mut.mutate({ method: 'patch', url: `/admin/pelayanan/tugas-item/${t.id}`, body: { isActive: true }, ok: 'Tugas diaktifkan' })
                                 }
-                                className="p-0.5 rounded-full hover:bg-neutral-200"
+                                className="p-1 rounded hover:bg-neutral-100"
                                 title="Aktifkan lagi"
                               >
-                                <RotateCcw className="w-3 h-3 text-emerald-600" />
+                                <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
                               </button>
                             ) : (
                               <button
                                 onClick={() => mut.mutate({ method: 'delete', url: `/admin/pelayanan/tugas-item/${t.id}`, ok: 'Tugas dinonaktifkan' })}
-                                className="p-0.5 rounded-full hover:bg-red-100"
+                                className="p-1 rounded hover:bg-red-50"
                                 title="Nonaktifkan"
                               >
-                                <X className="w-3 h-3 text-red-500" />
+                                <X className="w-3.5 h-3.5 text-red-500" />
                               </button>
                             )}
-                          </span>
+                          </div>
                         );
                       })}
                       {!inactive ? (
-                        <span className="inline-flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 pt-1">
                           <input
                             value={newTugas[k.id] ?? ''}
                             onChange={(e) => setNewTugas((m) => ({ ...m, [k.id]: e.target.value }))}
                             onKeyDown={(e) => e.key === 'Enter' && addTugas(k)}
                             placeholder="Tugas baru…"
                             maxLength={80}
-                            className="w-36 px-2 py-0.5 border border-neutral-300 rounded-full text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                            className="w-56 px-2.5 py-1 border border-neutral-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500"
                           />
                           <button
                             onClick={() => addTugas(k)}
                             disabled={!newTugas[k.id]?.trim() || mut.isPending}
-                            className="p-1 rounded-full bg-brand-500 text-white disabled:opacity-40"
-                            title="Tambah tugas"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-brand-500 text-white disabled:opacity-40"
                           >
-                            <Plus className="w-3 h-3" />
+                            <Plus className="w-3 h-3" /> Tugas
                           </button>
-                        </span>
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -241,6 +356,99 @@ export function TugasKategoriPanel({ pelayananId }: { pelayananId: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Nama yang bisa diedit langsung: klik → input; Enter/klik luar = simpan, Esc = batal. */
+function InlineName({
+  value,
+  onSave,
+  maxLength,
+  disabled,
+  className = '',
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  maxLength: number;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [edit, setEdit] = useState(false);
+  const [v, setV] = useState(value);
+  const commit = () => {
+    const nama = v.trim();
+    setEdit(false);
+    if (nama && nama !== value) onSave(nama);
+    else setV(value);
+  };
+  if (edit)
+    return (
+      <input
+        autoFocus
+        value={v}
+        maxLength={maxLength}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') {
+            setV(value);
+            setEdit(false);
+          }
+        }}
+        className={`px-1.5 py-0.5 border border-brand-400 rounded-md outline-none focus:ring-2 focus:ring-brand-300 min-w-[160px] ${className}`}
+      />
+    );
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        setV(value);
+        setEdit(true);
+      }}
+      className={`inline-flex items-center gap-1 rounded-md px-1 -mx-1 hover:bg-neutral-100 disabled:hover:bg-transparent text-left ${className}`}
+      title={disabled ? undefined : 'Klik untuk mengubah nama'}
+    >
+      {value}
+      {!disabled ? <Pencil className="w-3 h-3 text-neutral-300" /> : null}
+    </button>
+  );
+}
+
+/** Pilihan ikon (daftar sama dengan ikon pelayanan). */
+function IconGrid({
+  value,
+  warna,
+  onPick,
+  onClose,
+}: {
+  value: string | null;
+  warna?: string | null;
+  onPick: (ikon: string | null) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute left-0 top-9 z-40 w-[296px] bg-white border border-neutral-200 rounded-xl shadow-lg p-2">
+        <div className="grid grid-cols-8 gap-1">
+          {PELAYANAN_IKON.map((ik) => (
+            <button
+              key={ik}
+              onClick={() => onPick(ik)}
+              className={`p-0.5 rounded-lg ${value === ik ? 'ring-2 ring-brand-500' : 'hover:bg-neutral-100'}`}
+              title={ik}
+            >
+              <PelayananIcon ikon={ik} warna={warna} size={28} />
+            </button>
+          ))}
+        </div>
+        <button onClick={() => onPick(null)} className="mt-2 w-full text-xs text-neutral-600 py-1 rounded-md hover:bg-neutral-100">
+          Tanpa ikon
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -298,10 +506,16 @@ export function TugasPicker({
             key={k.id}
             type="button"
             onClick={() => toggleKat(k.id)}
-            className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${
               katOn(k.id) ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-neutral-300 text-neutral-700 hover:bg-neutral-50'
             }`}
           >
+            {k.ikon && PELAYANAN_ICON_MAP[k.ikon]
+              ? (() => {
+                  const I = PELAYANAN_ICON_MAP[k.ikon]!;
+                  return <I className="w-3.5 h-3.5" />;
+                })()
+              : null}
             {k.nama}
           </button>
         ))}

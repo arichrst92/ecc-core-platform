@@ -59,6 +59,7 @@ import {
   parseTugas,
   refreshTugasNames,
   resolveTugas,
+  tugasVisiblePelayanan,
   tugasBodyInput,
   tugasDbValue,
   tugasSig,
@@ -473,11 +474,25 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
     where: { eventPelayanan: { eventId: item.id }, jemaat: { isActive: true } },
     select: {
       id: true,
+      jemaatId: true,
+      tugas: true,
       pelayananRole: { select: { nama: true, level: true } },
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
-      eventPelayanan: { select: { pelayanan: { select: { nama: true, ikon: true, warna: true } } } },
+      eventPelayanan: { select: { pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } } } },
     },
   });
+  // 2.5.0 — tugas hanya untuk petugas pelayanan itu (dan rekannya) & koordinatornya.
+  const viewer = req.user?.jemaatId ?? null;
+  const byPel = new Map<string, string[]>();
+  for (const p of petugasRows) {
+    const k = p.eventPelayanan.pelayanan.id;
+    byPel.set(k, [...(byPel.get(k) ?? []), p.jemaatId]);
+  }
+  const tugasFor = await tugasVisiblePelayanan(
+    viewer,
+    [...byPel].map(([pelayananId, jemaatIds]) => ({ pelayananId, jemaatIds })),
+    item.cabangId,
+  );
   const petugas = petugasRows
     .map((p) => ({
       id: p.id,
@@ -487,12 +502,15 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       role: p.pelayananRole.nama,
       level: p.pelayananRole.level,
       jemaat: p.jemaat,
+      ...(tugasFor.has(p.eventPelayanan.pelayanan.id) ? { tugas: parseTugas(p.tugas) } : {}),
+      ...(viewer && p.jemaatId === viewer ? { isMe: true } : {}),
     }))
     .sort(
       (a, b) =>
         a.pelayananNama.localeCompare(b.pelayananNama) || b.level - a.level || a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap),
     )
     .map(({ level: _l, ...r }) => r);
+  await refreshTugasNames(petugas.flatMap((p) => (p.tugas ? [p.tugas] : [])));
 
   // App mobile: lokasi / jam yang dikosongkan admin dikirim sebagai "-" supaya
   // detail event menampilkan "-" (berlaku juga untuk app versi lama). Portal

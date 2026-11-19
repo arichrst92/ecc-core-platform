@@ -52,7 +52,8 @@ Menandai **bagian** tiap petugas (mis. Sound › Mixer, Multimedia › Kamera 1)
 - Nonaktif = tidak bisa dipilih untuk jadwal baru, tapi jadwal lama tetap menampilkannya. Ganti nama/pindah kategori langsung tercermin di jadwal yang sudah tersimpan.
 - **Memilih tugas**: koordinator di app (Atur jadwal → baris petugas → "Atur tugas ▾": langkah 1 kategori, langkah 2 tugas) atau admin di Portal (baris petugas → "+ Atur tugas"). Boleh **lebih dari satu**, **kategori saja**, atau **kosong**.
 - Tombol tugas hanya muncul bila pelayanan sudah punya kategori.
-- Siapa yang melihat: petugas sendiri (kotak "Tugas Anda" di Jadwal Pelayanan Saya & Beranda), rekan di jadwal yang sama, koordinator & Portal. **Kartu tim publik** (detail ibadah/event) hanya menampilkan peran.
+- Siapa yang melihat: petugas sendiri (kotak "Tugas Anda" di Jadwal Pelayanan Saya & Beranda), rekan di jadwal yang sama, koordinator & Portal.
+- **Kartu Tim Pelayanan di detail ibadah/event (app 2.5.0)**: tugas tampil di bawah peran (ikon papan klip) **hanya** bagi petugas pelayanan itu di jadwal tsb (dirinya ditandai "(Anda)") dan koordinator pelayanan itu untuk cabang ibadah/event. Jemaat lain — termasuk Fulltimer yang bukan petugas/koordinator — hanya melihat peran. Ibadah memakai susunan tanggal yang dibuka (?tanggal).
 - Notifikasi in-app: petugas baru dijadwalkan → tugas ikut disebut; tugas diubah → "Tugas pelayanan … diperbarui".
 - App lama (<2.5.0) tidak mengirim tugas → tugas yang ada tetap dipertahankan saat app lama menyimpan jadwal.
 

@@ -21,6 +21,7 @@ import { tzOr } from '../../lib/tz.js';
 import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
 import { scanAccess } from '../../lib/scan-access.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
+import { parseTugas, refreshTugasNames, tugasVisiblePelayanan, type TugasEntry } from '../../lib/pelayanan-tugas.js';
 
 export const ibadahRouter = Router();
 
@@ -288,8 +289,12 @@ ibadahRouter.get('/:id', async (req, res) => {
     pelayananWarna: string | null;
     role: string;
     jemaat: { id: string; namaLengkap: string; fotoUrl: string | null };
+    /** 2.5.0 — hanya untuk petugas pelayanan itu & koordinatornya. */
+    tugas?: TugasEntry[];
+    isMe?: boolean;
   };
   const petugas: PetugasOut[] = [];
+  const resolved: { link: (typeof item.ibadahPelayanan)[number]; rows: (typeof item.ibadahPelayanan)[number]['petugas'] }[] = [];
   for (const link of item.ibadahPelayanan) {
     let rows = link.petugas.filter((p) => p.jemaat.isActive);
     if (tanggalDate) {
@@ -308,6 +313,16 @@ ibadahRouter.get('/:id', async (req, res) => {
     } else {
       rows = rows.filter((p) => p.tanggalIbadah === null);
     }
+    resolved.push({ link, rows });
+  }
+  const viewer = req.user?.jemaatId ?? null;
+  const tugasFor = await tugasVisiblePelayanan(
+    viewer,
+    resolved.map((r) => ({ pelayananId: r.link.pelayanan.id, jemaatIds: r.rows.map((p) => p.jemaatId) })),
+    item.cabangId,
+  );
+  for (const { link, rows } of resolved) {
+    const showTugas = tugasFor.has(link.pelayanan.id);
     for (const p of rows) {
       petugas.push({
         id: p.id,
@@ -320,9 +335,12 @@ ibadahRouter.get('/:id', async (req, res) => {
           namaLengkap: p.jemaat.namaLengkap,
           fotoUrl: p.jemaat.fotoUrl,
         },
+        ...(showTugas ? { tugas: parseTugas(p.tugas) } : {}),
+        ...(viewer && p.jemaatId === viewer ? { isMe: true } : {}),
       });
     }
   }
+  await refreshTugasNames(petugas.flatMap((p) => (p.tugas ? [p.tugas] : [])));
 
   // Sort: by pelayanan nama (alphabetical) lalu role level DESC (Leader dulu),
   // lalu nama jemaat. Lebih natural untuk display.

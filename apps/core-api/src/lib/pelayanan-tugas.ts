@@ -201,3 +201,28 @@ export async function refreshTugasNames(lists: TugasEntry[][]): Promise<void> {
       if (t) e.tugas = t.nama;
     }
 }
+
+/**
+ * Kartu tim di detail ibadah/event (app): tugas hanya terlihat oleh petugas
+ * di pelayanan itu (dia & rekannya) dan koordinator pelayanan tsb untuk cabang
+ * ibadah/event. Jemaat lain cukup melihat peran. Return: pelayananId yang
+ * tugasnya boleh ditampilkan ke viewer.
+ */
+export async function tugasVisiblePelayanan(
+  viewerJemaatId: string | null | undefined,
+  links: { pelayananId: string; jemaatIds: string[] }[],
+  cabangId: string | null | undefined,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!viewerJemaatId || !links.length) return out;
+  for (const l of links) if (l.jemaatIds.includes(viewerJemaatId)) out.add(l.pelayananId);
+  const rest = links.map((l) => l.pelayananId).filter((id) => !out.has(id));
+  if (rest.length && cabangId) {
+    const koord = await prisma.pelayananApprover.findMany({
+      where: { jemaatId: viewerJemaatId, cabangId, pelayananId: { in: rest } },
+      select: { pelayananId: true },
+    });
+    for (const k of koord) out.add(k.pelayananId);
+  }
+  return out;
+}

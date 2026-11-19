@@ -134,13 +134,20 @@ export const groupResource: ResourceConfig<Group> = {
       key: 'nama',
       label: 'Nama Group',
       render: (_v, row) => (
-        <Link
-          href={`/dashboard/group/${row.id}`}
-          className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
-        >
-          <Eye className="w-3.5 h-3.5 shrink-0" />
-          {row.nama}
-        </Link>
+        <div className="min-w-0">
+          <Link
+            href={`/dashboard/group/${row.id}`}
+            className="flex items-center gap-1.5 text-brand-600 hover:underline font-medium"
+          >
+            <Eye className="w-3.5 h-3.5 shrink-0" />
+            {row.nama}
+          </Link>
+          {row.parent ? (
+            <Link href={`/dashboard/group/${row.parent.id}`} className="block text-xs text-neutral-500 hover:underline truncate pl-5">
+              ↳ {row.parent.nama}
+            </Link>
+          ) : null}
+        </div>
       ),
     },
     {
@@ -228,8 +235,19 @@ export const groupResource: ResourceConfig<Group> = {
       name: 'parentId',
       label: 'Parent Group (opsional)',
       type: 'relation',
-      relation: { endpoint: '/admin/group?limit=100', labelKey: 'nama' },
-      helperText: 'Kalau group ini bagian dari group lain (nested hierarchy).',
+      // ~500 group → cari (dropdown lama hanya memuat 100 group pertama).
+      relation: {
+        endpoint: '/admin/group',
+        labelKey: 'nama',
+        searchable: true,
+        excludeSelf: true,
+        formatLabel: (i) => {
+          const cab = (i.cabang as { nama?: string } | null | undefined)?.nama;
+          return cab ? `${String(i.nama)} · ${cab}` : String(i.nama);
+        },
+      },
+      multiSource: 'parent',
+      helperText: 'Kalau group ini bagian dari group lain (nested hierarchy). Ketik nama group untuk mencari.',
     },
     {
       name: 'picJemaatId',

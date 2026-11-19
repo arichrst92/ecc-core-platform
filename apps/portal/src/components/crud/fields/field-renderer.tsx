@@ -54,7 +54,7 @@ export function FieldRenderer({ field }: Props) {
             ))}
           </select>
         ) : field.type === 'relation' ? (
-          <RelationSelect field={field} />
+          field.relation?.searchable ? <RelationSearchPicker field={field} /> : <RelationSelect field={field} />
         ) : field.type === 'jemaat-single' ? (
           <JemaatSinglePicker field={field} />
         ) : field.type === 'jemaat-multi' ? (
@@ -435,6 +435,108 @@ interface JemaatHit {
 }
 
 /** Pilih satu jemaat (mis. PIC) — cari nama, no HP, email, atau kode. Boleh dikosongkan. */
+/** Relation dengan kotak cari (untuk data > 100, mis. parent group). */
+function RelationSearchPicker({ field }: { field: FieldConfig }) {
+  const { setValue, watch, getValues } = useFormContext();
+  const rel = field.relation!;
+  const labelKey = rel.labelKey ?? 'nama';
+  const valueKey = rel.valueKey ?? 'id';
+  const fmt = (i: Record<string, unknown>) => (rel.formatLabel ? rel.formatLabel(i) : String(i[labelKey] ?? ''));
+  const value = (watch(field.name) as string | null | undefined) || '';
+  const selfId = getValues('id') as string | undefined;
+  const [label, setLabel] = useState<string>('');
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<Record<string, unknown>[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const src = field.multiSource ? (getValues(field.multiSource) as Record<string, unknown> | null | undefined) : undefined;
+    if (src && src[labelKey]) setLabel(fmt(src));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits([]);
+      return;
+    }
+    let alive = true;
+    setBusy(true);
+    const tm = setTimeout(async () => {
+      try {
+        const res = await apiClient.get<{ data: Record<string, unknown>[] }>(rel.endpoint, { params: { search: term, limit: 20 } });
+        const list = Array.isArray(res.data.data) ? res.data.data : [];
+        if (alive) setHits(rel.excludeSelf && selfId ? list.filter((i) => String(i[valueKey]) !== selfId) : list);
+      } catch {
+        if (alive) setHits([]);
+      } finally {
+        if (alive) setBusy(false);
+      }
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(tm);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  return (
+    <div className="mt-1" onClick={(e) => e.preventDefault()}>
+      {value ? (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border border-brand-200 bg-brand-50 rounded-lg mb-2">
+          <span className="text-sm font-medium text-brand-800 truncate">{label || '(data saat ini)'}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setValue(field.name, '', { shouldDirty: true });
+              setLabel('');
+            }}
+            className="p-0.5 rounded hover:bg-brand-100 text-brand-700"
+            aria-label="Kosongkan"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : null}
+      <div className="relative">
+        <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          placeholder={field.placeholder ?? 'Ketik minimal 2 huruf untuk mencari…'}
+          className="w-full pl-9 pr-9 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+        />
+        {busy && <Loader2 className="w-4 h-4 animate-spin text-neutral-400 absolute right-3 top-1/2 -translate-y-1/2" />}
+      </div>
+      {q.trim().length >= 2 && !busy && (
+        <div className="mt-1 border border-neutral-200 rounded-lg bg-white shadow-sm max-h-56 overflow-y-auto">
+          {hits.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-neutral-500">Tidak ada yang cocok.</div>
+          ) : (
+            hits.map((i) => (
+              <button
+                key={String(i[valueKey])}
+                type="button"
+                onClick={() => {
+                  setValue(field.name, String(i[valueKey]), { shouldDirty: true });
+                  setLabel(fmt(i));
+                  setQ('');
+                  setHits([]);
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm text-neutral-900"
+              >
+                {fmt(i)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JemaatSinglePicker({ field }: { field: FieldConfig }) {
   const { setValue, watch, getValues } = useFormContext();
   const value = (watch(field.name) as string | null | undefined) || '';

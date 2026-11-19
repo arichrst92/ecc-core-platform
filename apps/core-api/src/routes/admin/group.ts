@@ -109,6 +109,8 @@ groupRouter.get('/', async (req, res) => {
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
       include: {
         cabang: { select: { id: true, nama: true, kode: true } },
+        // Untuk form edit Portal (label parent group terpilih).
+        parent: { select: { id: true, nama: true } },
         picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
         _count: { select: { members: { where: { isActive: true } }, children: true } },
       },

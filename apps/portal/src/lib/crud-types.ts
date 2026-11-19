@@ -55,6 +55,13 @@ export interface RelationConfig {
   labelKey: string;
   /** Optional: format custom label, mis. (item) => `${item.nama} (${item.kode})` */
   formatLabel?: (item: Record<string, unknown>) => string;
+  /**
+   * Data banyak (> 100): tampilkan kotak cari (query `search`) alih-alih
+   * dropdown. Label awal diambil dari `multiSource` di row (objek { id, <labelKey> }).
+   */
+  searchable?: boolean;
+  /** Sembunyikan row yang sedang diedit dari pilihan (mis. parent group ≠ dirinya). */
+  excludeSelf?: boolean;
 }
 
 export interface ImageUploadConfig {

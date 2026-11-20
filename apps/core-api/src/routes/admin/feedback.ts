@@ -25,7 +25,6 @@ const STATUS = ['BARU', 'DIPROSES', 'SELESAI'] as const;
 
 async function assertAccess(req: Request, level: 'read' | 'write') {
   if (!req.user) throw Unauthorized();
-  if (req.user.isFulltimer) return req.user;
   const access = await resolveJemaatAccess(req.user.jemaatId);
   const m = access.menuAccess['feedback'];
   const ok = level === 'read' ? m?.canRead : m?.canWrite;

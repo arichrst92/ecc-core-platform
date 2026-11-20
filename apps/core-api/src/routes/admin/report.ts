@@ -44,7 +44,6 @@ const PERIOD_LABEL: Record<string, string> = {
 
 async function assertAccess(req: Request, menuKey: string) {
   if (!req.user) throw Unauthorized();
-  if (req.user.isFulltimer) return;
   const access = await resolveJemaatAccess(req.user.jemaatId);
   if (!access.menuAccess[menuKey]?.canRead) throw Forbidden('Anda tidak punya akses ke laporan ini.');
 }

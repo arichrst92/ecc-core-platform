@@ -39,7 +39,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
   if (!req.user) throw Unauthorized();
-  if (req.user.isFulltimer) return;
   const m = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess['tamu'];
   const ok = level === 'read' ? m?.canRead : level === 'write' ? m?.canWrite : m?.canDelete;
   if (!ok) throw Forbidden('Anda tidak punya akses ke menu Tamu.');
@@ -48,7 +47,6 @@ async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
 /** Tambah tamu: menu Tamu (tulis) atau petugas CKids (menu gift-stall). */
 async function assertAddGuestAccess(req: Request) {
   if (!req.user) throw Unauthorized();
-  if (req.user.isFulltimer) return;
   const acc = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess;
   if (acc['tamu']?.canWrite || acc['gift-stall']?.canRead || acc['ckids:scanner']?.canRead) return;
   throw Forbidden('Anda tidak punya akses untuk menambah tamu.');

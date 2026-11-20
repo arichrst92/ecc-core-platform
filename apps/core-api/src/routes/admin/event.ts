@@ -227,11 +227,11 @@ async function ensureUniqueSlug(base: string, excludeId?: string): Promise<strin
 const W = (level: 'read' | 'write' | 'delete' = 'write'): any => (req: import('express').Request, _res: unknown, next: (e?: unknown) => void) => {
   requireMenuP(req, 'event', level).then(() => next(), next);
 };
-/** Pengelola event (Fulltimer / akses menu Event tulis). */
+/** Pengelola event = Role Access menu Event (tulis). Berlaku juga untuk Fulltimer. */
 async function isEventManager(req: import('express').Request): Promise<boolean> {
   // Sesi tautan web (pembayaran) selalu level jemaat.
   if (!req.user || (req as { webAction?: unknown }).webAction) return false;
-  return !!req.user.isFulltimer || (await hasMenuAccessFor(req.user, 'event', 'write'));
+  return hasMenuAccessFor(req.user, 'event', 'write');
 }
 
 eventRouter.get('/', async (req, res) => {
@@ -1247,7 +1247,7 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
   // + keluarga, dan hanya ke event aktif yang sudah dipublikasikan.
   if (!event.isPublished && !(await isEventManager(req))) throw BadRequest('Event ini belum dibuka untuk pendaftaran.');
   if (!event.isActive) throw BadRequest('Event ini sudah tidak aktif.');
-  if (req.user && !req.user.isFulltimer) {
+  if (req.user && !(await isEventManager(req))) {
     const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
     const outsider = uniqueIds.find((id) => !familyIds.has(id));
     if (outsider) {
@@ -2512,7 +2512,7 @@ eventRouter.post(
     // Auth guard (per backend-request-family-participation-list.md 2026-08-31):
     // admin (Fulltimer) allowed always; jemaat user allowed only kalau
     // participation-nya di family set.
-    if (req.user && !req.user.isFulltimer) {
+    if (req.user && !(await isEventManager(req))) {
       const familyIds = await getFamilyJemaatIds(req.user.jemaatId);
       if (!familyIds.has(before.jemaatId)) {
         throw Forbidden('Anda tidak berhak upload bukti untuk partisipasi ini.');
@@ -2597,7 +2597,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    const bypass = !!req.user?.isFulltimer || (await isEventManager(req));
+    const bypass = await isEventManager(req);
     const win = eventScanWindow(event, tzOr(cab?.timezone));
     assertWalkInOpen(win, bypass);
     late = !bypass && win.phase === 'LATE';
@@ -2718,7 +2718,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
     select: { jemaatId: true },
   });
   if (!caller) throw Forbidden('User tidak terkait jemaat');
-  if (!req.user.isFulltimer) {
+  if (!(await isEventManager(req))) {
     const ok = await prisma.eventPelayananPetugas.findFirst({
       where: { jemaatId: caller.jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
       select: { id: true },
@@ -2730,7 +2730,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    assertWalkInOpen(eventScanWindow(event, tzOr(cab?.timezone)), !!req.user.isFulltimer || (await isEventManager(req)));
+    assertWalkInOpen(eventScanWindow(event, tzOr(cab?.timezone)), await isEventManager(req));
   }
   const input = walkInGuestSchema.parse(req.body ?? {});
   const paid = event.tipeBayar !== 'GRATIS';

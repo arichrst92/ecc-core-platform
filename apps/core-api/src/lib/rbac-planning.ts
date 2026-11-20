@@ -7,6 +7,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { prisma } from '@ecc/database';
 import { Forbidden, Unauthorized } from './errors.js';
+import { hasMenuAccessFor, levelForMethod } from '../middleware/require-menu.js';
 
 /** Simple in-memory cache: jemaatId → isITMember expires in 60s. */
 const CACHE_TTL_MS = 60_000;
@@ -44,9 +45,13 @@ export async function requireItTeam(
   next: NextFunction,
 ): Promise<void> {
   if (!req.user) return next(Unauthorized());
-  const ok = await isItTeamMember(req.user.jemaatId);
+  // Anggota aktif IT Minister Team, atau diberi Role Access menu "Ticketing Tools"
+  // (planning-backlog) — Fulltimer termasuk lewat Role Access.
+  const ok =
+    (await isItTeamMember(req.user.jemaatId)) ||
+    (await hasMenuAccessFor(req.user, 'planning-backlog', levelForMethod(req.method)));
   if (!ok) {
-    return next(Forbidden('Fitur ini hanya untuk IT Minister Team.'));
+    return next(Forbidden('Fitur ini hanya untuk IT Minister Team atau yang diberi akses Ticketing Tools.'));
   }
   next();
 }

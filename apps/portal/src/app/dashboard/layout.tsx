@@ -1,4 +1,5 @@
 import { BottomDock } from '@/components/bottom-dock';
+import { MenuGate } from '@/components/menu-gate';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className="flex-1 min-w-0 p-3 sm:p-6 overflow-auto"
         style={{ paddingBottom: 'calc(var(--dock-space, 8rem) + env(safe-area-inset-bottom, 0px))' }}
       >
-        {children}
+        <MenuGate>{children}</MenuGate>
       </main>
       <BottomDock />
     </div>

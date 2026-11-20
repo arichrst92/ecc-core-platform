@@ -61,9 +61,30 @@ import { jemaatSertifikatRouter } from './jemaat-sertifikat.js';
 import { apiTokenRouter } from './api-token.js';
 import { devDocsRouter } from './dev-docs.js';
 import { Forbidden } from '../../lib/errors.js';
-import { fullGuard, isReadMethod, menuGuard, writeGuard } from '../../middleware/require-menu.js';
+import { fullGuard, hasMenuAccessFor, isReadMethod, menuGuard, writeGuard } from '../../middleware/require-menu.js';
+import { isItTeamMember } from '../../lib/rbac-planning.js';
+import { Unauthorized } from '../../lib/errors.js';
+import type { RequestHandler } from 'express';
 
 export const adminRouter = Router();
+
+/**
+ * Team IT Minister: ubah = Role Access menu Team IT Minister. Lihat daftar =
+ * menu Team IT Minister / Ticketing Tools, atau anggota tim (dipakai Ticketing
+ * Tools untuk memilih assignee). GET /me (cek keanggotaan sendiri) terbuka.
+ */
+const itMinisterTeamGuard: RequestHandler = (req, _res, next) => {
+  if (!req.user) return next(Unauthorized());
+  if (!isReadMethod(req.method)) return menuGuard(() => ({ menus: ['it-minister-team'] }))(req, _res, next);
+  if (req.path === '/me') return next();
+  Promise.all([
+    hasMenuAccessFor(req.user, 'it-minister-team'),
+    hasMenuAccessFor(req.user, 'planning-backlog'),
+    isItTeamMember(req.user.jemaatId),
+  ])
+    .then((r) => (r.some(Boolean) ? next() : next(Forbidden('Anda tidak punya akses ke menu ini (it-minister-team).'))))
+    .catch(next);
+};
 
 // Semua /admin/* wajib JWT. Sebelumnya juga requireFulltimer, tapi gate
 // itu dicabut — semua role yang punya akun valid bisa akses portal.
@@ -86,7 +107,7 @@ adminRouter.use('/me', meRouter);
 
 // Ministry (Pelayanan) — mobile-friendly read-only. Patch 2026-05-22.
 adminRouter.use('/ministry', ministryRouter);
-adminRouter.use('/it-minister-team', writeGuard('it-minister-team'), itMinisterTeamRouter);
+adminRouter.use('/it-minister-team', itMinisterTeamGuard, itMinisterTeamRouter);
 adminRouter.use('/wa-config', fullGuard('wa-config'), waConfigRouter);
 // Broadcast → Announcement (menu 'announcement').
 adminRouter.use('/announcement', announcementRouter);
@@ -160,12 +181,13 @@ adminRouter.use('/app-version', writeGuard('app-version'), appVersionRouter);
 adminRouter.use('/maintenance', fullGuard('maintenance'), maintenanceRouter);
 adminRouter.use('/server-health', fullGuard('server-health'), serverHealthRouter);
 adminRouter.use('/maintenance-mode', writeGuard('maintenance-mode'), maintenanceModeRouter);
-adminRouter.use('/credential', credentialRouter);
+// Credential: Role Access menu + master password (lapis ganda, di router).
+adminRouter.use('/credential', fullGuard('credential'), credentialRouter);
 adminRouter.use('/diagnostics', diagnosticsAdminRouter);
 adminRouter.use('/website-content', fullGuard('website-content'), websiteContentRouter);
 // Shiftsoft Sync (Developer Tools) — trigger + monitor migration script async.
 // Fulltimer-only (guard di dalam router).
-adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
+adminRouter.use('/shiftsoft-sync', fullGuard('shiftsoft-sync'), shiftsoftSyncRouter);
 // CKids (Modul 28) — Hadiah katalog master + Gift Stall (redeem POS).
 adminRouter.use('/hadiah', hadiahRouter);
 adminRouter.use('/gift-stall', giftStallRouter);

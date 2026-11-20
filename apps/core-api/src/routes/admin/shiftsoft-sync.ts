@@ -23,14 +23,13 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import { prisma, shiftsoft } from '@ecc/database';
-import { requireFulltimer } from '../../middleware/require-auth.js';
 import { BadRequest, NotFound, Forbidden } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 
 export const shiftsoftSyncRouter = Router();
 
 // Guard: semua endpoint di router ini butuh Fulltimer.
-shiftsoftSyncRouter.use(requireFulltimer);
+// Akses lewat Role Access menu 'shiftsoft-sync' (dipasang di routes/admin/index.ts; Fulltimer lolos).
 
 // ============================================================
 //  Tenant registry — duplikat dari packages/database/prisma/scripts/

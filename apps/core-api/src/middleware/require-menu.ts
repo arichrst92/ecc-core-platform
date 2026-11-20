@@ -89,3 +89,48 @@ export function requireCkids(menus: string[] | 'any', opts: { manage?: boolean; 
       .catch(next);
   };
 }
+
+// ============================================================
+//  menuGuard — penjaga Role Access per router (dipasang di routes/admin/index.ts).
+//  Resolver menentukan menu & level per request; return null = terbuka (cukup
+//  login), mis. bacaan master data yang dipakai app jemaat. Fulltimer lolos.
+//  Level bawaan per method: GET/HEAD → read, DELETE → delete, lainnya → write.
+// ============================================================
+
+export type MenuLevel = 'read' | 'write' | 'delete';
+export type GuardDecision = { menus: string[]; level?: MenuLevel } | null;
+
+export function levelForMethod(method: string): MenuLevel {
+  const m = method.toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return 'read';
+  if (m === 'DELETE') return 'delete';
+  return 'write';
+}
+
+export function isReadMethod(method: string): boolean {
+  return levelForMethod(method) === 'read';
+}
+
+export function menuGuard(resolve: (req: import('express').Request) => GuardDecision): RequestHandler {
+  return (req, _res, next) => {
+    if (!req.user) throw Unauthorized();
+    const d = resolve(req);
+    if (!d || req.user.isFulltimer) return next();
+    const level = d.level ?? levelForMethod(req.method);
+    resolveJemaatAccess(req.user.jemaatId)
+      .then((access) => {
+        const ok = d.menus.some((k) => {
+          const m = access.menuAccess[k];
+          return level === 'read' ? m?.canRead : level === 'write' ? m?.canWrite : m?.canDelete;
+        });
+        if (!ok) return next(Forbidden(`Anda tidak punya akses ke menu ini (${d.menus.join(' / ')}).`));
+        next();
+      })
+      .catch(next);
+  };
+}
+
+/** Bacaan terbuka (cukup login), perubahan wajib akses menu. */
+export const writeGuard = (...menus: string[]) => menuGuard((req) => (isReadMethod(req.method) ? null : { menus }));
+/** Seluruh endpoint (baca & ubah) wajib akses menu. */
+export const fullGuard = (...menus: string[]) => menuGuard(() => ({ menus }));

@@ -61,6 +61,7 @@ import { jemaatSertifikatRouter } from './jemaat-sertifikat.js';
 import { apiTokenRouter } from './api-token.js';
 import { devDocsRouter } from './dev-docs.js';
 import { Forbidden } from '../../lib/errors.js';
+import { fullGuard, isReadMethod, menuGuard, writeGuard } from '../../middleware/require-menu.js';
 
 export const adminRouter = Router();
 
@@ -85,15 +86,15 @@ adminRouter.use('/me', meRouter);
 
 // Ministry (Pelayanan) — mobile-friendly read-only. Patch 2026-05-22.
 adminRouter.use('/ministry', ministryRouter);
-adminRouter.use('/it-minister-team', itMinisterTeamRouter);
-adminRouter.use('/wa-config', waConfigRouter);
+adminRouter.use('/it-minister-team', writeGuard('it-minister-team'), itMinisterTeamRouter);
+adminRouter.use('/wa-config', fullGuard('wa-config'), waConfigRouter);
 // Broadcast → Announcement (menu 'announcement').
 adminRouter.use('/announcement', announcementRouter);
 // Badge menu Portal — jumlah request menunggu tindakan admin.
 adminRouter.use('/pending-counts', pendingCountsRouter);
 
-adminRouter.use('/sinode', sinodeRouter);
-adminRouter.use('/cabang', cabangRouter);
+adminRouter.use('/sinode', writeGuard('sinode'), sinodeRouter);
+adminRouter.use('/cabang', writeGuard('cabang'), cabangRouter);
 // Public profile (mobile tap-to-view) — HARUS sebelum /jemaat agar tidak
 // kepecet ke jemaatRouter (which is admin-CRUD). Patch 2026-05-22.
 adminRouter.use('/jemaat-public', jemaatPublicRouter);
@@ -102,7 +103,7 @@ adminRouter.use('/jemaat-consolidation', jemaatConsolidationRouter);
 // Kandidat akun ganda (pendaftar baru mirip data lama) — sebelum jemaatRouter.
 adminRouter.use('/jemaat-duplicate', jemaatDuplicateRouter);
 // Sertifikat jemaat (gambar/PDF) — sebelum jemaatRouter.
-adminRouter.use('/jemaat/:jemaatId/sertifikat', jemaatSertifikatRouter);
+adminRouter.use('/jemaat/:jemaatId/sertifikat', fullGuard('jemaat', 'spiritual-journey'), jemaatSertifikatRouter);
 // Resolusi tahunan jemaat (read-only) — sebelum jemaatRouter.
 adminRouter.use('/jemaat/:jemaatId/resolusi', jemaatResolusiRouter);
 adminRouter.use('/jemaat', jemaatRouter);
@@ -120,13 +121,28 @@ adminRouter.use('/report', reportRouter);
 adminRouter.use('/spiritual-journey-request', spiritualJourneyRequestRouter);
 adminRouter.use('/spiritual-journey', spiritualJourneyRouter);
 adminRouter.use('/tamu', tamuRouter);
-adminRouter.use('/role', roleRouter);
-adminRouter.use('/ibadah', ibadahRouter);
-adminRouter.use('/keluarga', keluargaRouter);
+adminRouter.use('/role', menuGuard((req) => {
+    // Pengaturan akses (Role Access) = menu role-access; penugasan role ke jemaat
+    // dari detail jemaat; daftar role (GET /) terbuka untuk filter halaman Portal.
+    if (req.path.includes('/access')) return { menus: ['role-access'] };
+    if (req.path.startsWith('/assign')) return { menus: ['jemaat', 'role-jemaat'] };
+    return isReadMethod(req.method) ? null : { menus: ['role-jemaat'] };
+  }), roleRouter);
+adminRouter.use('/ibadah', menuGuard((req) => {
+    // Scan check-in punya pengecekan sendiri (petugas scan / admin Kehadiran).
+    if (/^\/[^/]+\/checkin(\/stats)?$/.test(req.path)) return null;
+    if (req.path.startsWith('/kategori')) return isReadMethod(req.method) ? null : { menus: ['kategori-ibadah'] };
+    if (isReadMethod(req.method)) return null; // jadwal & detail dipakai app jemaat
+    return { menus: ['ibadah'] };
+  }), ibadahRouter);
+adminRouter.use('/keluarga', menuGuard((req) => {
+    if (req.path.startsWith('/tipe')) return isReadMethod(req.method) ? null : { menus: ['tipe-relasi'] };
+    return { menus: ['jemaat'] }; // relasi keluarga dikelola admin di detail jemaat
+  }), keluargaRouter);
 adminRouter.use('/pelayanan', pelayananRouter);
 adminRouter.use('/reservasi', reservasiRouter);
-adminRouter.use('/news', createKontenRouter('NEWS'));
-adminRouter.use('/renungan', createKontenRouter('RENUNGAN'));
+adminRouter.use('/news', writeGuard('news'), createKontenRouter('NEWS'));
+adminRouter.use('/renungan', writeGuard('renungan'), createKontenRouter('RENUNGAN'));
 adminRouter.use('/homecell-area', homecellAreaRouter);
 // Community → Homecell Material (materi pertemuan untuk pemimpin homecell).
 adminRouter.use('/homecell-material', homecellMaterialRouter);
@@ -135,18 +151,18 @@ adminRouter.use('/homecell', homecellRouter);
 // Support hierarchy N-level + public/private + invitation join code.
 adminRouter.use('/group', groupRouter);
 adminRouter.use('/event', eventRouter);
-adminRouter.use('/visit', visitRouter);
+adminRouter.use('/visit', fullGuard('visit'), visitRouter);
 adminRouter.use('/local-business', localBusinessRouter);
-adminRouter.use('/legal', legalRouter);
+adminRouter.use('/legal', writeGuard('legal'), legalRouter);
 adminRouter.use('/compliance', complianceRouter);
 adminRouter.use('/reviews', reviewsRouter);
-adminRouter.use('/app-version', appVersionRouter);
-adminRouter.use('/maintenance', maintenanceRouter);
-adminRouter.use('/server-health', serverHealthRouter);
-adminRouter.use('/maintenance-mode', maintenanceModeRouter);
+adminRouter.use('/app-version', writeGuard('app-version'), appVersionRouter);
+adminRouter.use('/maintenance', fullGuard('maintenance'), maintenanceRouter);
+adminRouter.use('/server-health', fullGuard('server-health'), serverHealthRouter);
+adminRouter.use('/maintenance-mode', writeGuard('maintenance-mode'), maintenanceModeRouter);
 adminRouter.use('/credential', credentialRouter);
 adminRouter.use('/diagnostics', diagnosticsAdminRouter);
-adminRouter.use('/website-content', websiteContentRouter);
+adminRouter.use('/website-content', fullGuard('website-content'), websiteContentRouter);
 // Shiftsoft Sync (Developer Tools) — trigger + monitor migration script async.
 // Fulltimer-only (guard di dalam router).
 adminRouter.use('/shiftsoft-sync', shiftsoftSyncRouter);
@@ -162,9 +178,9 @@ adminRouter.use('/elsa', elsaRouter);
 // Internal dev tool untuk IT Minister Team. Hirarki Epic → Story → Task + Sprint.
 // Gate: IT Minister Team membership (lib/rbac-planning.ts).
 adminRouter.use('/planning', planningRouter);
-adminRouter.use('/branch-change-request', branchChangeRouter);
-adminRouter.use('/sinode-api-key', apiKeyRouter);
-adminRouter.use('/audit-log', auditLogRouter);
+adminRouter.use('/branch-change-request', fullGuard('jemaat'), branchChangeRouter);
+adminRouter.use('/sinode-api-key', fullGuard('api-key'), apiKeyRouter);
+adminRouter.use('/audit-log', fullGuard('audit-log'), auditLogRouter);
 // Map View — pin cabang & homecell di peta (menu map-view)
 adminRouter.use('/map-view', mapViewRouter);
 // Onboarding Config — role otomatis saat daftar/onboarding di app

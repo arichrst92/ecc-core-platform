@@ -4,7 +4,9 @@
  * Penjaga halaman Portal berdasarkan Role Access.
  * Halaman /dashboard/* dicocokkan ke menu di MENU_CATALOG (awalan href terpanjang);
  * tanpa akses baca → tampil pesan "tidak punya akses" + daftar menu yang boleh dibuka.
- * Fulltimer lolos. Halaman di luar katalog (Profil, User Guide) selalu terbuka.
+ * Berlaku juga untuk Fulltimer. Halaman di luar katalog (Profil, User Guide) selalu terbuka.
+ * Akses diperbarui dari server saat dibuka, tiap 60 detik, dan saat tab kembali aktif
+ * (supaya perubahan Role Access langsung terasa tanpa login ulang).
  * Server tetap menjadi penjaga utama — ini supaya halaman tidak terbuka kosong.
  */
 import Link from 'next/link';
@@ -13,6 +15,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ShieldOff } from 'lucide-react';
 import { MENU_CATALOG, hasMenuAccess } from '@ecc/shared-types';
 import { useAuthStore } from '@/lib/auth-store';
+import { apiClient } from '@/lib/api-client';
 
 const PAGES = MENU_CATALOG.filter((m) => m.href.startsWith('/dashboard')).sort((a, b) => b.href.length - a.href.length);
 
@@ -32,9 +35,27 @@ export function MenuGate({ children }: { children: ReactNode }) {
     return p.onFinishHydration(() => setReady(true));
   }, []);
 
+  useEffect(() => {
+    if (!ready || !user) return;
+    const refresh = () =>
+      apiClient
+        .get<{ data: { canAccessPortal: boolean; menuAccess: Record<string, never> } }>('/auth/me/access')
+        .then((r) => useAuthStore.getState().setAccess(r.data.data))
+        .catch(() => {});
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    const onFocus = () => document.visibilityState === 'visible' && refresh();
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, !!user]);
+
   if (!ready) return null;
   const menu = menuForPath(pathname);
-  if (!user || !menu || user.isFulltimer || hasMenuAccess(user.menuAccess ?? {}, menu.key, 'read')) return <>{children}</>;
+  if (!user || !menu || hasMenuAccess(user.menuAccess ?? {}, menu.key, 'read')) return <>{children}</>;
 
   const allowed = MENU_CATALOG.filter(
     (m) => m.href.startsWith('/dashboard') && m.key !== menu.key && hasMenuAccess(user.menuAccess ?? {}, m.key, 'read'),

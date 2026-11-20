@@ -4,8 +4,8 @@
  *   router.use(requireMenu('diagnostics'))           → minimal canRead
  *   router.patch(..., requireMenu('diagnostics', 'write'), handler)
  *
- * Fulltimer selalu lolos. Selain itu wajib punya akses menu tsb di Role
- * Access (role / sub role). Mencegah jemaat biasa (token app mobile) memanggil
+ * Berlaku untuk SEMUA akun termasuk Fulltimer (2026-11): wajib punya akses
+ * menu tsb di Role Access (role / sub-role / status). Mencegah jemaat biasa (token app mobile) memanggil
  * endpoint admin yang hanya disembunyikan di UI portal.
  */
 import type { RequestHandler } from 'express';
@@ -15,7 +15,6 @@ import { resolveJemaatAccess } from '../lib/menu-access.js';
 export function requireMenu(menuKey: string, level: 'read' | 'write' | 'delete' = 'read'): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) throw Unauthorized();
-    if (req.user.isFulltimer) return next();
     resolveJemaatAccess(req.user.jemaatId)
       .then((access) => {
         const m = access.menuAccess[menuKey];
@@ -27,14 +26,13 @@ export function requireMenu(menuKey: string, level: 'read' | 'write' | 'delete' 
   };
 }
 
-/** Cek akses menu tanpa melempar (Fulltimer selalu true). */
+/** Cek akses menu tanpa melempar (Role Access, berlaku juga untuk Fulltimer). */
 export async function hasMenuAccessFor(
   user: { jemaatId: string; isFulltimer?: boolean } | undefined,
   menuKey: string,
   level: 'read' | 'write' | 'delete' = 'read',
 ): Promise<boolean> {
   if (!user) return false;
-  if (user.isFulltimer) return true;
   const access = await resolveJemaatAccess(user.jemaatId);
   const m = access.menuAccess[menuKey];
   return !!(level === 'read' ? m?.canRead : level === 'write' ? m?.canWrite : m?.canDelete);
@@ -72,7 +70,6 @@ export async function requireAnyMenuP(
 export function requireCkids(menus: string[] | 'any', opts: { manage?: boolean; alsoMenus?: string[] } = {}): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) throw Unauthorized();
-    if (req.user.isFulltimer) return next();
     resolveJemaatAccess(req.user.jemaatId)
       .then((access) => {
         const a = access.menuAccess;
@@ -93,7 +90,7 @@ export function requireCkids(menus: string[] | 'any', opts: { manage?: boolean; 
 // ============================================================
 //  menuGuard — penjaga Role Access per router (dipasang di routes/admin/index.ts).
 //  Resolver menentukan menu & level per request; return null = terbuka (cukup
-//  login), mis. bacaan master data yang dipakai app jemaat. Fulltimer lolos.
+//  login), mis. bacaan master data yang dipakai app jemaat. Berlaku juga untuk Fulltimer.
 //  Level bawaan per method: GET/HEAD → read, DELETE → delete, lainnya → write.
 // ============================================================
 
@@ -115,7 +112,7 @@ export function menuGuard(resolve: (req: import('express').Request) => GuardDeci
   return (req, _res, next) => {
     if (!req.user) throw Unauthorized();
     const d = resolve(req);
-    if (!d || req.user.isFulltimer) return next();
+    if (!d) return next();
     const level = d.level ?? levelForMethod(req.method);
     resolveJemaatAccess(req.user.jemaatId)
       .then((access) => {

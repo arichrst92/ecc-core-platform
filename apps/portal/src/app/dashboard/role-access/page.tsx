@@ -186,6 +186,17 @@ export default function RoleAccessPage() {
       toast.error(err.response?.data?.error?.message ?? 'Gagal update menu access'),
   });
 
+  // Kembalikan Sub-Role / Status ke "ikuti level atas".
+  const resetMut = useMutation({
+    mutationFn: async (input: { target: 'sub' | 'status'; id: string }) =>
+      apiClient.delete(input.target === 'sub' ? `/admin/role/sub/${input.id}/access/menu` : `/admin/role/status/${input.id}/access/menu`),
+    onSuccess: () => {
+      toast.success('Akses menu kembali mengikuti level di atasnya');
+      invalidateAfterEdit();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal mengembalikan'),
+  });
+
   // Buka / tutup SEMUA menu sekaligus (Role-level atau SubRole-level)
   const bulkMut = useMutation({
     mutationFn: async (input: { target: Target; id: string; grant: boolean }) =>
@@ -229,18 +240,19 @@ export default function RoleAccessPage() {
         Role Access
       </h1>
       <p className="text-neutral-500 mt-1 mb-6">
-        Atur wewenang akses portal + menu per Role / Sub-Role / Status. Status meng-override Sub-Role, Sub-Role meng-override Role.
+        Atur wewenang akses portal + menu per Role / Sub-Role / Status. Berlaku untuk semua akun, termasuk Fulltimer.
       </p>
 
       <div className="text-xs text-neutral-600 bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex gap-2">
         <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
         <div>
-          <strong>Cara kerja:</strong> User butuh minimal satu Role/SubRole dengan{' '}
-          <strong>Akses Portal = Ya</strong> untuk login. Setelah masuk, sidebar
-          hanya menampilkan menu dengan <strong>Read = ✓</strong>. SubRole bisa override
-          akses Role parent-nya, dan <strong>Status</strong> bisa override Sub-Role-nya (untuk Portal:
-          ✓/✗/inherit; untuk Menu: snapshot per row). Status hanya berlaku untuk jemaat yang role-nya
-          diberi status tersebut.
+          <strong>Cara kerja:</strong> User butuh minimal satu Role/Sub-Role/Status dengan{' '}
+          <strong>Akses Portal = Ya</strong> untuk login. Menu &amp; halaman hanya muncul bila <strong>Read = ✓</strong>.
+          Akses menu memakai level <b>paling spesifik yang sudah diatur</b>: Status → Sub-Role → Role.
+          Sub-Role / Status yang <b>sudah diatur</b> berlaku utuh — menu yang tidak dicentang berarti <b>tertutup</b>
+          (tidak lagi mewarisi Role). Yang <b>belum diatur</b> mengikuti level di atasnya; pakai tombol
+          <b> Ikuti level atas</b> untuk mengembalikannya. Berlaku juga untuk Fulltimer. Perubahan yang membuat Anda
+          kehilangan akses Role Access sendiri otomatis dibatalkan. Akun lain melihat perubahan dalam ±1 menit.
         </div>
       </div>
 
@@ -270,7 +282,10 @@ export default function RoleAccessPage() {
               statusMenuMut.mutate({ statusId, menuKey, ...levels })
             }
             onBulk={(target, id, grant) => bulkMut.mutate({ target, id, grant })}
-            bulkPending={bulkMut.isPending}
+            onReset={(target, id) => {
+              if (confirm('Kembalikan akses menu ke level di atasnya? Pengaturan menu di level ini dihapus.')) resetMut.mutate({ target, id });
+            }}
+            bulkPending={bulkMut.isPending || resetMut.isPending}
             currentUserJemaatId={authUser?.jemaatId}
           />
         ))}
@@ -320,6 +335,7 @@ function RoleCard({
   onStatusTogglePortal,
   onStatusMenuChange,
   onBulk,
+  onReset,
   bulkPending,
   currentUserJemaatId: _currentUserJemaatId,
 }: {
@@ -342,6 +358,7 @@ function RoleCard({
   onStatusTogglePortal: (statusId: string, value: boolean | null) => void;
   onStatusMenuChange: (statusId: string, menuKey: string, levels: Levels) => void;
   onBulk: (target: Target, id: string, grant: boolean) => void;
+  onReset: (target: 'sub' | 'status', id: string) => void;
   bulkPending: boolean;
   currentUserJemaatId?: string;
 }) {
@@ -354,11 +371,13 @@ function RoleCard({
   const activeSub = activeSubRole ? role.subRoles.find((s) => s.id === activeSubRole) : undefined;
   const statuses = activeSub?.statuses ?? [];
   const activeStatus = activeStatusId ? statuses.find((x) => x.id === activeStatusId) : undefined;
-  const contextRows = activeStatus
-    ? activeStatus.menuAccesses
-    : activeSub
-      ? activeSub.menuAccesses
-      : role.menuAccesses;
+  // Level yang sudah diatur berlaku utuh; yang belum diatur menampilkan akses
+  // warisan (abu-abu) dari level di atasnya.
+  const subRowsEff = activeSub?.menuAccesses.length ? activeSub.menuAccesses : role.menuAccesses;
+  const ownRows = activeStatus ? activeStatus.menuAccesses : activeSub ? activeSub.menuAccesses : role.menuAccesses;
+  const inherited = !!(activeStatus || activeSub) && ownRows.length === 0;
+  const inheritFrom = activeStatus ? (activeSub?.menuAccesses.length ? 'Sub-Role' : 'Role') : 'Role';
+  const contextRows = activeStatus ? (ownRows.length ? ownRows : subRowsEff) : activeSub ? (ownRows.length ? ownRows : role.menuAccesses) : role.menuAccesses;
   const contextName = activeStatus
     ? `${role.nama} → ${activeSub!.nama} → ${activeStatus.nama}`
     : activeSub
@@ -500,6 +519,29 @@ function RoleCard({
             />
           )}
 
+          {activeSub || activeStatus ? (
+            <div
+              className={`flex items-center justify-between gap-2 flex-wrap rounded-lg px-3 py-2 text-xs ${
+                inherited ? 'bg-neutral-50 border border-neutral-200 text-neutral-600' : 'bg-amber-50 border border-amber-200 text-amber-900'
+              }`}
+            >
+              <span>
+                {inherited
+                  ? `Belum diatur — mengikuti ${inheritFrom} (tampil abu-abu). Ubah satu centang untuk mulai mengatur level ini; akses ${inheritFrom} disalin dulu.`
+                  : 'Sudah diatur — berlaku utuh untuk level ini. Menu yang tidak dicentang = tertutup.'}
+              </span>
+              {!inherited ? (
+                <button
+                  onClick={() => (activeStatus ? onReset('status', activeStatus.id) : onReset('sub', activeSub!.id))}
+                  disabled={bulkPending}
+                  className="px-2.5 py-1 rounded-md border border-amber-300 bg-white font-semibold hover:bg-amber-100 disabled:opacity-40"
+                >
+                  Ikuti level atas
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Aksi massal untuk konteks aktif */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-neutral-500">
@@ -516,7 +558,7 @@ function RoleCard({
               </button>
               <button
                 onClick={() => bulk(false)}
-                disabled={bulkPending || contextRows.length === 0}
+                disabled={bulkPending || (!inherited && ownRows.every((r) => !r.canRead && !r.canWrite && !r.canDelete))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
               >
                 <Lock className="w-3.5 h-3.5" />
@@ -550,6 +592,7 @@ function RoleCard({
                       <MenuRow
                         key={m.key}
                         menu={m}
+                        dim={inherited}
                         cur={accessRowFor(contextRows, m.key)}
                         onChange={(levels) => {
                           if (activeStatus) onStatusMenuChange(activeStatus.id, m.key, levels);
@@ -638,9 +681,12 @@ function SubRolePortalCard({
 function MenuRow({
   menu,
   cur,
+  dim = false,
   onChange: emit,
 }: {
   menu: MenuItem;
+  /** true = nilai warisan dari level atas (belum diatur di level ini). */
+  dim?: boolean;
   /** Akses di level yang sedang diedit (Role / Sub-Role / Status). */
   cur: Levels;
   onChange: (l: Levels) => void;
@@ -655,7 +701,7 @@ function MenuRow({
   };
 
   return (
-    <tr className="border-b border-neutral-100">
+    <tr className={`border-b border-neutral-100 ${dim ? 'opacity-50' : ''}`}>
       <td className="py-1.5 px-2 text-neutral-800">{menu.label}</td>
       <td className="text-center px-2">
         <Check

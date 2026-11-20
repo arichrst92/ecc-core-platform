@@ -63,7 +63,7 @@ const errMsg = (e: any, fb: string) => e?.response?.data?.error?.message ?? fb;
 export default function HomecellMaterialPage() {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const can = (lvl: 'write' | 'delete') => !!user && (user.isFulltimer || hasMenuAccess(user.menuAccess ?? {}, 'homecell-material', lvl));
+  const can = (lvl: 'write' | 'delete') => !!user && hasMenuAccess(user.menuAccess ?? {}, 'homecell-material', lvl);
   const [cabangId, setCabangId] = usePersistentState('hcmat:cabang', '');
   const [bulan, setBulan] = usePersistentState('hcmat:bulan', '');
   const [status, setStatus] = usePersistentState<Status | ''>('hcmat:status', '');

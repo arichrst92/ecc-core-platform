@@ -47,7 +47,7 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
   const ckids = await ckidsMenusFor(jemaatId);
 
   if (jemaatRoles.length === 0) {
-    return { canAccessPortal: false, menuAccess: ckids };
+    return withBreakGlass(jemaatId, { canAccessPortal: false, menuAccess: ckids });
   }
 
   // Status aktif saja yang ikut menentukan akses (status nonaktif = diabaikan).
@@ -84,34 +84,20 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
 
   for (const jr of jemaatRoles) {
     // Build per-jemaatRole map dulu (SubRole-override-Role), lalu union ke total.
+    // 2026-11: level paling spesifik yang SUDAH DIATUR berlaku UTUH (snapshot):
+    // Status (punya baris) → Sub-role (punya baris) → Role. Menu yang tidak
+    // dicentang di level itu = tidak punya akses (tidak lagi mewarisi Role).
+    // Level tanpa baris sama sekali = ikut level di atasnya.
     const perRole: Record<string, MenuAccessLevels> = {};
-    for (const ra of jr.role.menuAccesses) {
-      perRole[ra.menuKey] = {
-        canRead: ra.canRead,
-        canWrite: ra.canWrite,
-        canDelete: ra.canDelete,
-      };
-    }
-    // SubRole-level OVERRIDE Role-level untuk menuKey yang sama.
-    if (jr.subRole) {
-      for (const sa of jr.subRole.menuAccesses) {
-        perRole[sa.menuKey] = {
-          canRead: sa.canRead,
-          canWrite: sa.canWrite,
-          canDelete: sa.canDelete,
-        };
-      }
-    }
-    // Status-level OVERRIDE SubRole/Role untuk menuKey yang sama.
     const st = statusOf(jr);
-    if (st) {
-      for (const xa of st.menuAccesses) {
-        perRole[xa.menuKey] = {
-          canRead: xa.canRead,
-          canWrite: xa.canWrite,
-          canDelete: xa.canDelete,
-        };
-      }
+    const rows =
+      st && st.menuAccesses.length
+        ? st.menuAccesses
+        : jr.subRole && jr.subRole.menuAccesses.length
+          ? jr.subRole.menuAccesses
+          : jr.role.menuAccesses;
+    for (const ra of rows) {
+      perRole[ra.menuKey] = { canRead: ra.canRead, canWrite: ra.canWrite, canDelete: ra.canDelete };
     }
     // Union perRole ke menuAccess total.
     for (const [k, v] of Object.entries(perRole)) {
@@ -120,7 +106,24 @@ export async function resolveJemaatAccess(jemaatId: string): Promise<JemaatAcces
   }
 
   for (const [k, v] of Object.entries(ckids)) unionInto(menuAccess, k, v);
-  return { canAccessPortal, menuAccess };
+  return withBreakGlass(jemaatId, { canAccessPortal, menuAccess });
+}
+
+/**
+ * Pengaman darurat: jemaat di env ROLE_ACCESS_ADMIN_JEMAAT_IDS (dipisah koma)
+ * selalu bisa masuk Portal & mengelola menu Role Access, supaya akses tidak
+ * terkunci total karena salah atur. Menu lain tetap mengikuti Role Access.
+ */
+function withBreakGlass(jemaatId: string, a: JemaatAccessSummary): JemaatAccessSummary {
+  const ids = (process.env.ROLE_ACCESS_ADMIN_JEMAAT_IDS ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (!ids.includes(jemaatId)) return a;
+  return {
+    canAccessPortal: true,
+    menuAccess: { ...a.menuAccess, 'role-access': { canRead: true, canWrite: true, canDelete: true } },
+  };
 }
 
 /**

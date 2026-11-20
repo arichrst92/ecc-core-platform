@@ -18,7 +18,6 @@ export function absUrl(req: Request, url: string | null | undefined): string | n
 /** Pengelola (fulltimer / punya akses menu ECC Worship) — boleh lihat draft. */
 export async function canManageWorship(req: Request): Promise<boolean> {
   if (!req.user) return false;
-  if (req.user.isFulltimer) return true;
   const a = await resolveJemaatAccess(req.user.jemaatId);
   return !!a.menuAccess[MENU]?.canRead;
 }

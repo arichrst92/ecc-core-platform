@@ -24,9 +24,7 @@ export async function scanAccess(req: Request): Promise<Access> {
   if (!req.user) throw Unauthorized();
   const jemaatId = req.user.jemaatId ?? null;
   let access: Access;
-  if (req.user.isFulltimer) {
-    access = { admin: true, ckids: new Set(['scanner', 'hadir', 'gift', 'adjust-point']), jemaatId };
-  } else if (!jemaatId) {
+  if (!jemaatId) {
     access = { admin: false, ckids: new Set(), jemaatId };
   } else {
     const { menuAccess } = await resolveJemaatAccess(jemaatId);

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { prisma } from '@ecc/database';
 import {
   createRoleSchema,
@@ -16,8 +16,69 @@ import {
 import { z } from 'zod';
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
+import { resolveJemaatAccess } from '../../lib/menu-access.js';
 
 export const roleRouter = Router();
+
+// ============================================================
+//  Pengaman anti-terkunci: perubahan Role Access yang membuat PENGUBAH sendiri
+//  kehilangan akses tulis menu Role Access (atau akses Portal) dibatalkan.
+// ============================================================
+async function snapshotAccess() {
+  const [ra, sa, xa, roles, subs, statuses] = await Promise.all([
+    prisma.roleMenuAccess.findMany(),
+    prisma.subRoleMenuAccess.findMany(),
+    prisma.subRoleStatusMenuAccess.findMany(),
+    prisma.role.findMany({ select: { id: true, canAccessPortal: true } }),
+    prisma.subRole.findMany({ select: { id: true, canAccessPortal: true } }),
+    prisma.subRoleStatus.findMany({ select: { id: true, canAccessPortal: true } }),
+  ]);
+  return { ra, sa, xa, roles, subs, statuses };
+}
+
+async function restoreAccess(snap: Awaited<ReturnType<typeof snapshotAccess>>) {
+  const strip = <T extends { id: string; createdAt?: Date; updatedAt?: Date }>(rows: T[]) =>
+    rows.map(({ createdAt: _c, updatedAt: _u, ...r }) => r);
+  await prisma.$transaction([
+    prisma.roleMenuAccess.deleteMany({}),
+    prisma.subRoleMenuAccess.deleteMany({}),
+    prisma.subRoleStatusMenuAccess.deleteMany({}),
+    prisma.roleMenuAccess.createMany({ data: strip(snap.ra) as never }),
+    prisma.subRoleMenuAccess.createMany({ data: strip(snap.sa) as never }),
+    prisma.subRoleStatusMenuAccess.createMany({ data: strip(snap.xa) as never }),
+    ...snap.roles.map((r) => prisma.role.update({ where: { id: r.id }, data: { canAccessPortal: r.canAccessPortal } })),
+    ...snap.subs.map((r) => prisma.subRole.update({ where: { id: r.id }, data: { canAccessPortal: r.canAccessPortal } })),
+    ...snap.statuses.map((r) => prisma.subRoleStatus.update({ where: { id: r.id }, data: { canAccessPortal: r.canAccessPortal } })),
+  ]);
+}
+
+function lockoutSafe(fn: (req: Request, res: Response) => Promise<void>) {
+  return async (req: Request, res: Response) => {
+    const snap = await snapshotAccess();
+    let code = 200;
+    let body: unknown;
+    const fake = {
+      status(c: number) {
+        code = c;
+        return fake;
+      },
+      json(b: unknown) {
+        body = b;
+        return fake;
+      },
+    } as unknown as Response;
+    await fn(req, fake);
+    const me = await resolveJemaatAccess(req.user!.jemaatId);
+    if (!me.canAccessPortal || !me.menuAccess['role-access']?.canWrite) {
+      await restoreAccess(snap);
+      throw BadRequest(
+        'Perubahan dibatalkan: Anda akan kehilangan akses ke Role Access sendiri. Beri dulu akses Role Access (Write) lewat role / sub-role / status Anda yang lain, atau minta admin lain mengubahnya.',
+      );
+    }
+    res.status(code).json(body);
+  };
+}
+
 
 // ===== Role =====
 roleRouter.get('/', async (_req, res) => {
@@ -201,7 +262,7 @@ roleRouter.get('/access/matrix', async (_req, res) => {
 });
 
 // PATCH /admin/role/:id/access/portal — toggle canAccessPortal Role
-roleRouter.patch('/:id/access/portal', async (req, res) => {
+roleRouter.patch('/:id/access/portal', lockoutSafe(async (req, res) => {
   const input = updateCanAccessPortalSchema.parse(req.body);
   const value = input.canAccessPortal ?? false; // Role tidak nullable, treat null = false
   const before = await prisma.role.findUnique({ where: { id: req.params.id } });
@@ -219,10 +280,10 @@ roleRouter.patch('/:id/access/portal', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated });
-});
+}));
 
 // PATCH /admin/role/sub/:id/access/portal — SubRole canAccessPortal (nullable)
-roleRouter.patch('/sub/:id/access/portal', async (req, res) => {
+roleRouter.patch('/sub/:id/access/portal', lockoutSafe(async (req, res) => {
   const input = updateCanAccessPortalSchema.parse(req.body);
   const before = await prisma.subRole.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('SubRole tidak ditemukan');
@@ -239,10 +300,10 @@ roleRouter.patch('/sub/:id/access/portal', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated });
-});
+}));
 
 // PUT /admin/role/:id/access/menu — upsert RoleMenuAccess
-roleRouter.put('/:id/access/menu', async (req, res) => {
+roleRouter.put('/:id/access/menu', lockoutSafe(async (req, res) => {
   const input = setMenuAccessSchema.parse(req.body);
   const role = await prisma.role.findUnique({ where: { id: req.params.id } });
   if (!role) throw NotFound('Role tidak ditemukan');
@@ -285,12 +346,12 @@ roleRouter.put('/:id/access/menu', async (req, res) => {
     after: upserted,
   });
   res.json({ success: true, data: upserted });
-});
+}));
 
 // PUT /admin/role/:id/access/menu/all — buka / tutup SEMUA menu (Role-level)
 // Body: { grant: true }  → semua menu katalog Read+Write+Delete
 //       { grant: false } → hapus semua akses menu role ini
-roleRouter.put('/:id/access/menu/all', async (req, res) => {
+roleRouter.put('/:id/access/menu/all', lockoutSafe(async (req, res) => {
   const { grant } = bulkMenuAccessSchema.parse(req.body);
   const role = await prisma.role.findUnique({ where: { id: req.params.id } });
   if (!role) throw NotFound('Role tidak ditemukan');
@@ -315,10 +376,10 @@ roleRouter.put('/:id/access/menu/all', async (req, res) => {
     resourceLabel: `${role.nama}: ${grant ? 'buka' : 'tutup'} semua akses menu (${keys.length} menu)`,
   });
   res.json({ success: true, data: { grant, menuCount: grant ? keys.length : 0 } });
-});
+}));
 
 // PUT /admin/role/sub/:id/access/menu/all — buka / tutup SEMUA menu (SubRole-level)
-roleRouter.put('/sub/:id/access/menu/all', async (req, res) => {
+roleRouter.put('/sub/:id/access/menu/all', lockoutSafe(async (req, res) => {
   const { grant } = bulkMenuAccessSchema.parse(req.body);
   const subRole = await prisma.subRole.findUnique({ where: { id: req.params.id } });
   if (!subRole) throw NotFound('SubRole tidak ditemukan');
@@ -334,7 +395,15 @@ roleRouter.put('/sub/:id/access/menu/all', async (req, res) => {
       ),
     );
   } else {
-    await prisma.subRoleMenuAccess.deleteMany({ where: { subRoleId: subRole.id } });
+    await prisma.$transaction(
+      keys.map((menuKey) =>
+        prisma.subRoleMenuAccess.upsert({
+          where: { subRoleId_menuKey: { subRoleId: subRole.id, menuKey } },
+          create: { subRoleId: subRole.id, menuKey, canRead: false, canWrite: false, canDelete: false },
+          update: { canRead: false, canWrite: false, canDelete: false },
+        }),
+      ),
+    );
   }
   audit(req, {
     action: 'UPDATE',
@@ -343,13 +412,23 @@ roleRouter.put('/sub/:id/access/menu/all', async (req, res) => {
     resourceLabel: `${subRole.nama}: ${grant ? 'buka' : 'tutup'} semua akses menu (${keys.length} menu)`,
   });
   res.json({ success: true, data: { grant, menuCount: grant ? keys.length : 0 } });
-});
+}));
 
 // PUT /admin/role/sub/:id/access/menu — upsert SubRoleMenuAccess
-roleRouter.put('/sub/:id/access/menu', async (req, res) => {
+roleRouter.put('/sub/:id/access/menu', lockoutSafe(async (req, res) => {
   const input = setMenuAccessSchema.parse(req.body);
   const subRole = await prisma.subRole.findUnique({ where: { id: req.params.id } });
   if (!subRole) throw NotFound('SubRole tidak ditemukan');
+
+  // Pertama kali diatur → salin dulu akses Role supaya menu lain tidak hilang.
+  if ((await prisma.subRoleMenuAccess.count({ where: { subRoleId: subRole.id } })) === 0) {
+    const base = await prisma.roleMenuAccess.findMany({ where: { roleId: subRole.roleId } });
+    if (base.length)
+      await prisma.subRoleMenuAccess.createMany({
+        data: base.map((b) => ({ subRoleId: subRole.id, menuKey: b.menuKey, canRead: b.canRead, canWrite: b.canWrite, canDelete: b.canDelete })),
+        skipDuplicates: true,
+      });
+  }
 
   const existing = await prisma.subRoleMenuAccess.findUnique({
     where: { subRoleId_menuKey: { subRoleId: subRole.id, menuKey: input.menuKey } },
@@ -358,20 +437,8 @@ roleRouter.put('/sub/:id/access/menu', async (req, res) => {
   const canWrite = input.canWrite ?? existing?.canWrite ?? false;
   const canDelete = input.canDelete ?? existing?.canDelete ?? false;
 
-  if (!canRead && !canWrite && !canDelete) {
-    if (existing) {
-      await prisma.subRoleMenuAccess.delete({ where: { id: existing.id } });
-      audit(req, {
-        action: 'DELETE',
-        resource: 'sub_role_menu_access',
-        resourceId: existing.id,
-        resourceLabel: `${subRole.nama}:${input.menuKey}`,
-        before: existing,
-      });
-    }
-    res.json({ success: true, data: null });
-    return;
-  }
+  // Semua "Tidak" tetap disimpan (baris false) = menu ditutup untuk sub-role ini,
+  // bukan kembali mewarisi Role.
 
   const upserted = await prisma.subRoleMenuAccess.upsert({
     where: { subRoleId_menuKey: { subRoleId: subRole.id, menuKey: input.menuKey } },
@@ -387,14 +454,14 @@ roleRouter.put('/sub/:id/access/menu', async (req, res) => {
     after: upserted,
   });
   res.json({ success: true, data: upserted });
-});
+}));
 
 // ============================================================
 //  Level Status (SubRoleStatus) — override SubRole → Role
 // ============================================================
 
 // PATCH /admin/role/status/:id/access/portal — Status canAccessPortal (nullable = inherit)
-roleRouter.patch('/status/:id/access/portal', async (req, res) => {
+roleRouter.patch('/status/:id/access/portal', lockoutSafe(async (req, res) => {
   const input = updateCanAccessPortalSchema.parse(req.body);
   const before = await prisma.subRoleStatus.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Status tidak ditemukan');
@@ -411,10 +478,10 @@ roleRouter.patch('/status/:id/access/portal', async (req, res) => {
     after: updated,
   });
   res.json({ success: true, data: updated });
-});
+}));
 
 // PUT /admin/role/status/:id/access/menu/all — buka / tutup SEMUA menu (Status-level)
-roleRouter.put('/status/:id/access/menu/all', async (req, res) => {
+roleRouter.put('/status/:id/access/menu/all', lockoutSafe(async (req, res) => {
   const { grant } = bulkMenuAccessSchema.parse(req.body);
   const status = await prisma.subRoleStatus.findUnique({ where: { id: req.params.id } });
   if (!status) throw NotFound('Status tidak ditemukan');
@@ -430,7 +497,15 @@ roleRouter.put('/status/:id/access/menu/all', async (req, res) => {
       ),
     );
   } else {
-    await prisma.subRoleStatusMenuAccess.deleteMany({ where: { subRoleStatusId: status.id } });
+    await prisma.$transaction(
+      keys.map((menuKey) =>
+        prisma.subRoleStatusMenuAccess.upsert({
+          where: { subRoleStatusId_menuKey: { subRoleStatusId: status.id, menuKey } },
+          create: { subRoleStatusId: status.id, menuKey, canRead: false, canWrite: false, canDelete: false },
+          update: { canRead: false, canWrite: false, canDelete: false },
+        }),
+      ),
+    );
   }
   audit(req, {
     action: 'UPDATE',
@@ -439,13 +514,28 @@ roleRouter.put('/status/:id/access/menu/all', async (req, res) => {
     resourceLabel: `${status.nama}: ${grant ? 'buka' : 'tutup'} semua akses menu (${keys.length} menu)`,
   });
   res.json({ success: true, data: { grant, menuCount: grant ? keys.length : 0 } });
-});
+}));
 
 // PUT /admin/role/status/:id/access/menu — upsert SubRoleStatusMenuAccess
-roleRouter.put('/status/:id/access/menu', async (req, res) => {
+roleRouter.put('/status/:id/access/menu', lockoutSafe(async (req, res) => {
   const input = setMenuAccessSchema.parse(req.body);
   const status = await prisma.subRoleStatus.findUnique({ where: { id: req.params.id } });
   if (!status) throw NotFound('Status tidak ditemukan');
+
+  // Pertama kali diatur → salin akses yang berlaku sekarang (Sub-role bila sudah diatur, else Role).
+  if ((await prisma.subRoleStatusMenuAccess.count({ where: { subRoleStatusId: status.id } })) === 0) {
+    const sub = await prisma.subRole.findUnique({ where: { id: status.subRoleId }, include: { menuAccesses: true } });
+    const base = sub?.menuAccesses.length
+      ? sub.menuAccesses
+      : sub
+        ? await prisma.roleMenuAccess.findMany({ where: { roleId: sub.roleId } })
+        : [];
+    if (base.length)
+      await prisma.subRoleStatusMenuAccess.createMany({
+        data: base.map((b) => ({ subRoleStatusId: status.id, menuKey: b.menuKey, canRead: b.canRead, canWrite: b.canWrite, canDelete: b.canDelete })),
+        skipDuplicates: true,
+      });
+  }
 
   const existing = await prisma.subRoleStatusMenuAccess.findUnique({
     where: { subRoleStatusId_menuKey: { subRoleStatusId: status.id, menuKey: input.menuKey } },
@@ -454,20 +544,7 @@ roleRouter.put('/status/:id/access/menu', async (req, res) => {
   const canWrite = input.canWrite ?? existing?.canWrite ?? false;
   const canDelete = input.canDelete ?? existing?.canDelete ?? false;
 
-  if (!canRead && !canWrite && !canDelete) {
-    if (existing) {
-      await prisma.subRoleStatusMenuAccess.delete({ where: { id: existing.id } });
-      audit(req, {
-        action: 'DELETE',
-        resource: 'sub_role_status_menu_access',
-        resourceId: existing.id,
-        resourceLabel: `${status.nama}:${input.menuKey}`,
-        before: existing,
-      });
-    }
-    res.json({ success: true, data: null });
-    return;
-  }
+  // Semua "Tidak" tetap disimpan (baris false) = menu ditutup untuk status ini.
 
   const upserted = await prisma.subRoleStatusMenuAccess.upsert({
     where: { subRoleStatusId_menuKey: { subRoleStatusId: status.id, menuKey: input.menuKey } },
@@ -483,4 +560,35 @@ roleRouter.put('/status/:id/access/menu', async (req, res) => {
     after: upserted,
   });
   res.json({ success: true, data: upserted });
-});
+}));
+
+// ============================================================
+//  Reset menu Sub-role / Status → kembali mengikuti level di atasnya.
+//   DELETE /admin/role/sub/:id/access/menu
+//   DELETE /admin/role/status/:id/access/menu
+// ============================================================
+roleRouter.delete('/sub/:id/access/menu', lockoutSafe(async (req, res) => {
+  const subRole = await prisma.subRole.findUnique({ where: { id: req.params.id } });
+  if (!subRole) throw NotFound('SubRole tidak ditemukan');
+  const n = await prisma.subRoleMenuAccess.deleteMany({ where: { subRoleId: subRole.id } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'sub_role_menu_access',
+    resourceId: subRole.id,
+    resourceLabel: `${subRole.nama}: akses menu kembali mengikuti Role (${n.count} baris dihapus)`,
+  });
+  res.json({ success: true, data: { reset: n.count } });
+}));
+
+roleRouter.delete('/status/:id/access/menu', lockoutSafe(async (req, res) => {
+  const status = await prisma.subRoleStatus.findUnique({ where: { id: req.params.id } });
+  if (!status) throw NotFound('Status tidak ditemukan');
+  const n = await prisma.subRoleStatusMenuAccess.deleteMany({ where: { subRoleStatusId: status.id } });
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'sub_role_status_menu_access',
+    resourceId: status.id,
+    resourceLabel: `${status.nama}: akses menu kembali mengikuti Sub-role (${n.count} baris dihapus)`,
+  });
+  res.json({ success: true, data: { reset: n.count } });
+}));

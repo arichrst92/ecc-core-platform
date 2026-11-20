@@ -182,7 +182,7 @@ export const CKIDS_MENUS = [
 export type CkidsMenuKey = (typeof CKIDS_MENUS)[number]['key'];
 export const CKIDS_MENU_KEYS = CKIDS_MENUS.map((m) => m.key) as CkidsMenuKey[];
 
-/** Menu CKids yang boleh dibuka user (Fulltimer, Role Access Gift Stall, atau config pelayanan/role). */
+/** Menu CKids yang boleh dibuka user (Role Access Gift Stall, atau config pelayanan/role). Berlaku juga untuk Fulltimer. */
 export function ckidsAllowedMenus(user: {
   isFulltimer?: boolean;
   menuAccess?: Record<string, Partial<MenuAccessLevels> | undefined>;
@@ -192,7 +192,6 @@ export function ckidsAllowedMenus(user: {
   const gs = user.menuAccess?.['gift-stall'];
   for (const m of CKIDS_MENUS) {
     if (
-      user.isFulltimer ||
       user.menuAccess?.[`ckids:${m.key}`]?.canRead ||
       (m.manage ? gs?.canWrite : gs?.canRead)
     ) out.add(m.key);

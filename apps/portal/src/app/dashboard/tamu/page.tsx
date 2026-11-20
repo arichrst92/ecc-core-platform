@@ -102,7 +102,7 @@ export default function TamuPage() {
   const kategori: Kategori | '' = (KATEGORI_ORDER as string[]).includes(kategoriRaw) ? kategoriRaw : '';
   const [adding, setAdding] = useState(false);
   const user = useAuthStore((st) => st.user);
-  const canDelete = !!user && (user.isFulltimer || hasMenuAccess(user.menuAccess ?? {}, 'tamu', 'delete'));
+  const canDelete = !!user && hasMenuAccess(user.menuAccess ?? {}, 'tamu', 'delete');
   const s = useDebounce(search, 300);
   const cabangQ = useCabangOptions();
 

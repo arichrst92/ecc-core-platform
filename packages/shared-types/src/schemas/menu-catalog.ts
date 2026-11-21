@@ -26,6 +26,11 @@ export interface MenuItem {
    * mencocokkan halaman (MenuGate) dan tidak tampil sebagai menu.
    */
   parent?: string;
+  /**
+   * Keterangan approval di halaman Role Access: apa yang bisa disetujui/diproses
+   * dengan level Write di menu ini (Read = hanya melihat antrian).
+   */
+  approval?: string;
 }
 
 export const MENU_CATALOG: MenuItem[] = [
@@ -43,34 +48,34 @@ export const MENU_CATALOG: MenuItem[] = [
   // Service
   { key: 'ibadah', label: 'Ibadah', href: '/dashboard/ibadah', group: 'Service' },
   { key: 'kategori-ibadah', label: 'Kategori Ibadah', href: '/dashboard/kategori-ibadah', group: 'Service' },
-  { key: 'pelayanan', label: 'Pelayanan', href: '/dashboard/pelayanan', group: 'Service' },
-  { key: 'ministry-join-requests', label: 'Permintaan Volunteer', href: '/dashboard/pelayanan/join-requests', group: 'Service' },
+  { key: 'pelayanan', label: 'Pelayanan', href: '/dashboard/pelayanan', group: 'Service', approval: 'Write juga = mengatur jadwal pelayanan semua cabang' },
+  { key: 'ministry-join-requests', label: 'Permintaan Volunteer', href: '/dashboard/pelayanan/join-requests', group: 'Service', approval: 'Write = setujui / tolak permintaan bergabung pelayanan (semua pelayanan & cabang)' },
   { key: 'kehadiran', label: 'Kehadiran', href: '/dashboard/kehadiran', group: 'Service' },
   { key: 'laporan-ibadah', label: 'Laporan Ibadah', href: '/dashboard/laporan-ibadah', group: 'Service' },
 
   // People
-  { key: 'jemaat', label: 'Jemaat', href: '/dashboard/jemaat', group: 'People' },
+  { key: 'jemaat', label: 'Jemaat', href: '/dashboard/jemaat', group: 'People', approval: 'Write juga = memproses Cek Duplikat jemaat' },
   { key: 'role-jemaat', label: 'Role Jemaat', href: '/dashboard/role', group: 'People' },
   { key: 'tipe-relasi', label: 'Relasi Jemaat', href: '/dashboard/tipe-relasi', group: 'People' },
-  { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People' },
-  { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People' },
-  { key: 'prayer-request', label: 'Prayer Request', href: '/dashboard/prayer-request', group: 'People' },
+  { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People', approval: 'Write = membalas & mengubah status kritik / saran' },
+  { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People', approval: 'Write = mengatur status & petugas follow-up tamu' },
+  { key: 'prayer-request', label: 'Prayer Request', href: '/dashboard/prayer-request', group: 'People', approval: 'Write = menugaskan petugas doa & menandai sudah didoakan' },
   { key: 'bible365', label: 'Bible 365', href: '/dashboard/bible365', group: 'People' },
 
   // Community
   { key: 'homecell-area', label: 'Zona', href: '/dashboard/homecell-area', group: 'Community' },
   { key: 'homecell', label: 'Homecell', href: '/dashboard/homecell', group: 'Community' },
   { key: 'homecell-material', label: 'Homecell Material', href: '/dashboard/homecell-material', group: 'Community' },
-  { key: 'group', label: 'Group', href: '/dashboard/group', group: 'Community' },
+  { key: 'group', label: 'Group', href: '/dashboard/group', group: 'Community', approval: 'Write juga = setujui / tolak permintaan bergabung group' },
 
   // Movement
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },
-  { key: 'event-payment', label: 'Verifikasi Pembayaran Event', href: '/dashboard/event#verifikasi', group: 'Movement', parent: 'event' },
+  { key: 'event-payment', label: 'Verifikasi Pembayaran Event', href: '/dashboard/event#verifikasi', group: 'Movement', parent: 'event', approval: 'Write = approve / tolak bukti transfer & menandai lunas (di halaman Event)' },
   { key: 'laporan-event', label: 'Laporan Event', href: '/dashboard/laporan-event', group: 'Movement' },
   { key: 'visit', label: 'Visit', href: '/dashboard/visit', group: 'Movement' },
   { key: 'spiritual-journey', label: 'Spiritual Journey', href: '/dashboard/spiritual-journey', group: 'Movement' },
   // Approval (2026-11): antrian persetujuan punya akses sendiri — read = lihat, write = setujui/tolak.
-  { key: 'spiritual-journey-request', label: 'Request Spiritual Journey', href: '/dashboard/spiritual-journey/request', group: 'Movement' },
+  { key: 'spiritual-journey-request', label: 'Request Spiritual Journey', href: '/dashboard/spiritual-journey/request', group: 'Movement', approval: 'Write = setujui / tolak request tahap dari app' },
   { key: 'local-business', label: 'Local Market', href: '/dashboard/local-business', group: 'Movement' },
 
   // Broadcast

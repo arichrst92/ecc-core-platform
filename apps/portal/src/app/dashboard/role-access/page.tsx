@@ -567,6 +567,14 @@ function RoleCard({
             </div>
           </div>
 
+          {/* Arti level akses */}
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <b>Read</b> = melihat · <b>Write</b> = menambah & mengubah data, <b>termasuk menyetujui / menolak</b> (approval) ·{' '}
+            <b>Delete</b> = menghapus. Menu bertanda{' '}
+            <span className="font-semibold uppercase text-[10px] px-1 py-0.5 rounded bg-amber-100">Approval</span> punya antrian
+            persetujuan: centang <b>Read</b> saja = hanya bisa melihat antrian, centang <b>Write</b> = bisa memproses.
+          </div>
+
           {/* Menu access table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -702,7 +710,17 @@ function MenuRow({
 
   return (
     <tr className={`border-b border-neutral-100 ${dim ? 'opacity-50' : ''}`}>
-      <td className="py-1.5 px-2 text-neutral-800">{menu.label}</td>
+      <td className="py-1.5 px-2 text-neutral-800">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {menu.label}
+          {menu.approval && (
+            <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+              Approval
+            </span>
+          )}
+        </div>
+        {menu.approval && <div className="text-[11px] text-neutral-500 mt-0.5">{menu.approval}</div>}
+      </td>
       <td className="text-center px-2">
         <Check
           checked={cur.canRead}
@@ -713,6 +731,7 @@ function MenuRow({
         <Check
           checked={cur.canWrite}
           onChange={(v) => onChange('canWrite', v)}
+          title={menu.approval ?? 'Tambah & ubah data'}
         />
       </td>
       <td className="text-center px-2">
@@ -725,10 +744,11 @@ function MenuRow({
   );
 }
 
-function Check({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Check({ checked, onChange, title }: { checked: boolean; onChange: (v: boolean) => void; title?: string }) {
   return (
     <input
       type="checkbox"
+      title={title}
       checked={checked}
       onChange={(e) => onChange(e.target.checked)}
       className="w-4 h-4 accent-brand-500 cursor-pointer"

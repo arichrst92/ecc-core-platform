@@ -159,6 +159,39 @@ export const cabangResource: ResourceConfig<Cabang> = {
           <NeedsFillBadge hint="Lokasi cabang belum diisi — dipakai petunjuk arah, Map View, dan jarak homecell ke cabang. Klik Edit untuk mengisi link Google Maps." />
         ),
     },
+    {
+      key: 'rekeningCount',
+      label: 'Rekening / QRIS',
+      width: '170px',
+      render: (_v, row) => {
+        const rek = Number(row.rekeningCount ?? 0);
+        const tanpa = Number(row.rekeningTanpaQris ?? 0);
+        if (!row.isActive) return <span className="text-xs text-neutral-400">{rek} rekening</span>;
+        if (!rek)
+          return (
+            <Link href={`/dashboard/cabang/${row.id}`} onClick={(e) => e.stopPropagation()}>
+              <NeedsFillBadge label="Rekening perlu diisi" hint="Belum ada rekening — buka detail cabang → Tambah Rekening" />
+            </Link>
+          );
+        return (
+          <div className="leading-tight">
+            <span className="text-xs text-neutral-700">{rek} rekening</span>
+            {tanpa ? (
+              <div className="mt-0.5">
+                <Link href={`/dashboard/cabang/${row.id}`} onClick={(e) => e.stopPropagation()}>
+                  <NeedsFillBadge
+                    label={`${tanpa} QRIS perlu diisi`}
+                    hint="Rekening aktif tanpa QRIS — buka detail cabang → Upload QRIS"
+                  />
+                </Link>
+              </div>
+            ) : (
+              <div className="text-[11px] text-emerald-700">QRIS lengkap</div>
+            )}
+          </div>
+        );
+      },
+    },
     { key: 'timezone', label: 'Zona Waktu', width: '150px' },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],

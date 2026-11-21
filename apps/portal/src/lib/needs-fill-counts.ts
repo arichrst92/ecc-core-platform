@@ -18,12 +18,12 @@ export type FillCounts = Partial<Record<FillKey, number>>;
 
 export const FILL_META: Record<FillKey, { label: string; target: string }> = {
   pelayanan: { label: 'pelayanan datanya belum lengkap', target: '/dashboard/pelayanan?status=perlu-diisi' },
-  ibadah: { label: 'ibadah dengan petugas yang tugasnya belum diisi', target: '/dashboard/ibadah' },
+  ibadah: { label: 'ibadah belum lengkap (pelayanan, petugas, link online, tugas petugas)', target: '/dashboard/ibadah' },
   event: { label: 'event mendatang belum lengkap (gambar, rekening/QRIS, tugas volunteer)', target: '/dashboard/event' },
   homecell: { label: 'homecell belum ada PIC / lokasi', target: '/dashboard/homecell' },
   zona: { label: 'zona belum ada PIC', target: '/dashboard/homecell-area' },
   group: { label: 'group belum ada PIC', target: '/dashboard/group' },
-  cabang: { label: 'cabang belum ada lokasi', target: '/dashboard/cabang' },
+  cabang: { label: 'cabang belum lengkap (lokasi, rekening, QRIS)', target: '/dashboard/cabang' },
 };
 
 export const FILL_QUERY_KEY = ['needs-fill-counts'] as const;

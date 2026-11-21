@@ -11,7 +11,8 @@
  *   homecell   homecell aktif tanpa PIC atau tanpa lokasi (belum ada / link tak terbaca)
  *   zona       zona aktif tanpa PIC
  *   group      group aktif tanpa PIC
- *   cabang     cabang aktif tanpa titik lokasi
+ *   cabang     cabang aktif tanpa titik lokasi / tanpa rekening / rekening tanpa QRIS
+ *   ibadah     (juga) ibadah aktif tanpa pelayanan, tanpa petugas, atau online tanpa link
  *
  * Dipanggil Portal tiap beberapa menit (lebih berat dari pending-counts).
  */
@@ -72,7 +73,29 @@ needsFillCountsRouter.get('/', async (req, res) => {
     };
   }
   if (can('ibadah')) {
-    jobs.ibadah = async () => new Set((await tugas()).filter((t) => t.jenis === 'ibadah').map((t) => t.targetId)).size;
+    jobs.ibadah = async () => {
+      const rows = await prisma.ibadah.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          isOnline: true,
+          linkOnline: true,
+          ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },
+        },
+      });
+      const ids = new Set(
+        rows
+          .filter(
+            (i) =>
+              !i.ibadahPelayanan.length ||
+              i.ibadahPelayanan.every((ip) => ip._count.petugas === 0) ||
+              (i.isOnline && !i.linkOnline?.trim()),
+          )
+          .map((i) => i.id),
+      );
+      for (const t of await tugas()) if (t.jenis === 'ibadah') ids.add(t.targetId);
+      return ids.size;
+    };
   }
   if (can('event')) {
     jobs.event = async () => {
@@ -103,7 +126,19 @@ needsFillCountsRouter.get('/', async (req, res) => {
   }
   if (can('homecell-area')) jobs.zona = () => prisma.homecellArea.count({ where: { isActive: true, picJemaatId: null } });
   if (can('group')) jobs.group = () => prisma.group.count({ where: { isActive: true, picJemaatId: null } });
-  if (can('cabang')) jobs.cabang = () => prisma.cabangGereja.count({ where: { isActive: true, latitude: null } });
+  if (can('cabang')) {
+    jobs.cabang = () =>
+      prisma.cabangGereja.count({
+        where: {
+          isActive: true,
+          OR: [
+            { latitude: null },
+            { rekening: { none: { isActive: true } } },
+            { rekening: { some: { isActive: true, qrisImageUrl: null } } },
+          ],
+        },
+      });
+  }
 
   const entries = await Promise.all(
     Object.entries(jobs).map(async ([k, fn]) => {

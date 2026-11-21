@@ -464,6 +464,18 @@ function CabangSection({
                         <Eye className="w-3.5 h-3.5 shrink-0" />
                         {i.nama}
                       </Link>
+                      {i.isActive && !i.pelayananCount ? (
+                        <Link href={`/dashboard/ibadah/${i.id}`}>
+                          <NeedsFillBadge label="Pelayanan" hint="Belum ada pelayanan yang bertugas di ibadah ini — buka ibadah → Tambah Pelayanan" />
+                        </Link>
+                      ) : i.isActive && !i.petugasCount ? (
+                        <Link href={`/dashboard/ibadah/${i.id}`}>
+                          <NeedsFillBadge label="Petugas" hint="Pelayanan sudah ditugaskan tapi belum ada petugas — buka ibadah → Tambah Petugas" />
+                        </Link>
+                      ) : null}
+                      {i.isActive && i.isOnline && !String(i.linkOnline ?? '').trim() ? (
+                        <NeedsFillBadge label="Link online" hint="Ibadah online tanpa link streaming — klik Edit untuk mengisi" onClick={() => onEdit(i)} />
+                      ) : null}
                       {tugasKosong.ibadah.has(i.id) ? (
                         <Link href={`/dashboard/ibadah/${i.id}`}>
                           <NeedsFillBadge label="Tugas petugas" hint="Ada petugas yang belum diberi tugas — buka ibadah, lalu klik badge biru di kartu pelayanan" />

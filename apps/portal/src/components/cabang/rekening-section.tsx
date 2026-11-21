@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -112,6 +113,13 @@ export function RekeningSection({ cabangId }: { cabangId: string }) {
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
             <Wallet className="w-4 h-4 text-amber-600" />
             Rekening Bank ({list.length})
+            {!listQ.isLoading && list.length === 0 ? <NeedsFillBadge label="Rekening perlu diisi" /> : null}
+            {list.filter((r) => r.isActive && !r.qrisImageUrl).length ? (
+              <NeedsFillBadge
+                label={`${list.filter((r) => r.isActive && !r.qrisImageUrl).length} QRIS perlu diisi`}
+                hint="Rekening aktif tanpa QRIS — jemaat tidak bisa scan untuk membayar. Klik Upload QRIS di kartu rekening."
+              />
+            ) : null}
           </h2>
           <p className="text-xs text-neutral-500 mt-0.5">
             Rekening yang dipakai cabang untuk menerima persembahan / donasi sesuai purpose.
@@ -300,8 +308,8 @@ function RekeningCard({
             />
           </a>
         ) : (
-          <div className="w-20 h-20 border border-dashed border-neutral-300 rounded flex items-center justify-center text-neutral-300 shrink-0">
-            <QrCode className="w-7 h-7" />
+          <div className="w-20 h-20 border border-dashed border-blue-300 rounded flex flex-col items-center justify-center text-blue-300 shrink-0 gap-1">
+            <QrCode className="w-6 h-6" />
           </div>
         )}
         <div className="flex flex-col gap-1.5 flex-1">
@@ -328,6 +336,9 @@ function RekeningCard({
             )}
             {r.qrisImageUrl ? 'Ganti QRIS' : 'Upload QRIS'}
           </button>
+          {!r.qrisImageUrl && r.isActive ? (
+            <NeedsFillBadge label="QRIS perlu diisi" hint="Upload gambar QRIS rekening ini" onClick={() => fileRef.current?.click()} className="self-start" />
+          ) : null}
           {r.qrisImageUrl && (
             <button
               onClick={() => qrisDeleteMut.mutate()}

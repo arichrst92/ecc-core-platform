@@ -35,6 +35,8 @@ cabangRouter.get('/', async (req, res) => {
       include: {
         sinode: { select: { id: true, nama: true, kode: true } },
         _count: { select: { jemaat: { where: { isTamu: false } }, ibadah: true, homecellAreas: true } },
+        // Kelengkapan rekening & QRIS (badge biru "Perlu diisi" di Portal).
+        rekening: { where: { isActive: true }, select: { qrisImageUrl: true } },
       },
     }),
     prisma.cabangGereja.count({ where }),
@@ -68,9 +70,11 @@ cabangRouter.get('/', async (req, res) => {
 
   // Flatten _count → jemaatCount / ibadahCount / homecellAreaCount / homecellCount
   const data = rows.map((c) => {
-    const { _count, ...rest } = c;
+    const { _count, rekening, ...rest } = c;
     return {
       ...rest,
+      rekeningCount: rekening.length,
+      rekeningTanpaQris: rekening.filter((r) => !r.qrisImageUrl).length,
       jemaatCount: _count.jemaat,
       ibadahCount: _count.ibadah,
       homecellAreaCount: _count.homecellAreas,

@@ -66,10 +66,20 @@ export function GroupJoinRequestsSection({ groupId }: { groupId: string }) {
   const rows = q.data ?? [];
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+    <div
+      id="permintaan"
+      className={`bg-white border rounded-xl overflow-hidden scroll-mt-4 ${rows.length ? 'border-red-300 ring-2 ring-red-100' : 'border-neutral-200'}`}
+    >
       <div className="px-5 py-4 border-b border-neutral-100">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
-          <UserPlus className="w-4 h-4 text-amber-500" /> Permintaan Bergabung ({rows.length})
+          <UserPlus className="w-4 h-4 text-amber-500" /> Permintaan Bergabung
+          {rows.length ? (
+            <span className="min-w-[20px] px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-none text-center">
+              {rows.length}
+            </span>
+          ) : (
+            <span className="text-neutral-400 font-normal">(0)</span>
+          )}
         </h2>
         <p className="text-xs text-neutral-500 mt-0.5">
           Jemaat yang join lewat app (publik / kode undangan) perlu disetujui PIC dulu.
@@ -156,5 +166,28 @@ export function GroupJoinRequestsSection({ groupId }: { groupId: string }) {
         </>
       )}
     </div>
+  );
+}
+
+/** Peringatan di atas halaman detail group bila ada permintaan menunggu → lompat ke bagiannya. */
+export function GroupJoinRequestsAlert({ groupId }: { groupId: string }) {
+  const q = useQuery({
+    queryKey: ['group', 'join-requests', groupId],
+    queryFn: async () =>
+      (await apiClient.get<{ data: JoinRequest[] }>(`/admin/group/${groupId}/join-requests`)).data.data,
+    retry: false,
+  });
+  const n = q.data?.length ?? 0;
+  if (!n) return null;
+  return (
+    <a
+      href="#permintaan"
+      className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 hover:bg-red-100"
+    >
+      <UserPlus className="w-4 h-4" />
+      <span>
+        <strong>{n} permintaan bergabung</strong> menunggu persetujuan — klik untuk memproses.
+      </span>
+    </a>
   );
 }

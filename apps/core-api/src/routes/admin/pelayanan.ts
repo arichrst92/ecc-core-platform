@@ -922,6 +922,77 @@ const portalOnly = (req: Parameters<typeof isMobileClient>[0]) => {
   if (isMobileClient(req)) throw Forbidden('Kategori & tugas hanya dapat diubah melalui Portal.');
 };
 
+/**
+ * GET /admin/pelayanan/:id/tugas-kosong — petugas yang TUGAS-nya belum diisi
+ * (2026-11, badge "Perlu diisi" di Portal). Hanya bila pelayanan sudah punya
+ * kategori tugas aktif. Cakupan: susunan tetap (default) + tanggal hari ini ke
+ * depan di ibadah aktif, dan event aktif yang belum lewat.
+ */
+pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
+  if (!UUID_PARAM.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan');
+  const kategoriCount = await prisma.pelayananTugasKategori.count({ where: { pelayananId: req.params.id, isActive: true } });
+  if (!kategoriCount) return res.json({ success: true, data: { hasKategori: false, total: 0, items: [] } });
+  const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z');
+  const [ib, ev] = await Promise.all([
+    prisma.ibadahPelayananPetugas.findMany({
+      where: {
+        ibadahPelayanan: { pelayananId: req.params.id, ibadah: { isActive: true } },
+        OR: [{ tanggalIbadah: null }, { tanggalIbadah: { gte: today } }],
+      },
+      select: {
+        id: true,
+        tugas: true,
+        tanggalIbadah: true,
+        jemaat: { select: { id: true, namaLengkap: true } },
+        ibadahPelayanan: { select: { ibadah: { select: { id: true, nama: true, cabang: { select: { nama: true } } } } } },
+      },
+    }),
+    prisma.eventPelayananPetugas.findMany({
+      where: {
+        eventPelayanan: {
+          pelayananId: req.params.id,
+          event: {
+            isActive: true,
+            OR: [{ tanggalSelesai: { gte: today } }, { tanggalSelesai: null, tanggalMulai: { gte: today } }],
+          },
+        },
+      },
+      select: {
+        id: true,
+        tugas: true,
+        jemaat: { select: { id: true, namaLengkap: true } },
+        eventPelayanan: { select: { event: { select: { id: true, judul: true, tanggalMulai: true, cabang: { select: { nama: true } } } } } },
+      },
+    }),
+  ]);
+  const items = [
+    ...ib
+      .filter((p) => parseTugas(p.tugas).length === 0)
+      .map((p) => ({
+        jenis: 'ibadah' as const,
+        petugasId: p.id,
+        jemaat: p.jemaat,
+        targetId: p.ibadahPelayanan.ibadah.id,
+        targetNama: p.ibadahPelayanan.ibadah.nama,
+        cabang: p.ibadahPelayanan.ibadah.cabang?.nama ?? null,
+        tanggal: p.tanggalIbadah ? p.tanggalIbadah.toISOString().slice(0, 10) : null,
+      })),
+    ...ev
+      .filter((p) => parseTugas(p.tugas).length === 0)
+      .map((p) => ({
+        jenis: 'event' as const,
+        petugasId: p.id,
+        jemaat: p.jemaat,
+        targetId: p.eventPelayanan.event.id,
+        targetNama: p.eventPelayanan.event.judul,
+        cabang: p.eventPelayanan.event.cabang?.nama ?? null,
+        tanggal: p.eventPelayanan.event.tanggalMulai.toISOString().slice(0, 10),
+      })),
+  ].sort((a, b) => (a.tanggal ?? '').localeCompare(b.tanggal ?? '') || a.targetNama.localeCompare(b.targetNama, 'id'));
+  res.json({ success: true, data: { hasKategori: true, total: items.length, items } });
+});
+
 pelayananRouter.get('/:id/tugas-kategori', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
   const pel = await prisma.pelayanan.findUnique({ where: { id: req.params.id }, select: { id: true } });

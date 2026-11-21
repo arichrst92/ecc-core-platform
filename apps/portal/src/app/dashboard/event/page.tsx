@@ -1,7 +1,8 @@
 'use client';
 
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -104,6 +105,17 @@ function targetLabel(item: EventListItem): string {
 }
 
 export default function EventPage() {
+  return (
+    <Suspense fallback={null}>
+      <EventPageInner />
+    </Suspense>
+  );
+}
+
+function EventPageInner() {
+  // Dari badge menu (?pembayaran=perlu-verifikasi) → langsung tersaring ke event yang perlu verifikasi.
+  const sp = useSearchParams();
+  const bayarFromUrl = sp.get('pembayaran') === 'perlu-verifikasi';
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -113,7 +125,11 @@ export default function EventPage() {
   const [filterCabang, setFilterCabang] = usePersistentState<string>('event:cabang', 'all');
   const [bulan, setBulan] = usePersistentState<string>('event:bulan', '');
   const [filterKuota, setFilterKuota] = usePersistentState<'all' | 'penuh'>('event:kuota', 'all');
-  const [filterBayar, setFilterBayar] = usePersistentState<'all' | 'perlu-verifikasi'>('event:pembayaran', 'all');
+  const [filterBayar, setFilterBayar] = usePersistentState<'all' | 'perlu-verifikasi'>(
+    'event:pembayaran',
+    bayarFromUrl ? 'perlu-verifikasi' : 'all',
+    { skipRestore: bayarFromUrl },
+  );
   const pendingTotal = usePendingCounts().eventPayment ?? 0;
   const cabangQ = useCabangOptions();
   const [filterTipe, setFilterTipe] = usePersistentState<'all' | EventListItem['tipeBayar']>('event:tipe', 'all');

@@ -89,6 +89,8 @@ groupRouter.get('/', async (req, res) => {
   if (q.search) where.nama = { contains: q.search, mode: 'insensitive' };
   if (cabangId) where.cabangId = cabangId;
   if (jenis) where.jenis = jenis as Prisma.GroupWhereInput['jenis'];
+  // Portal: ?permintaan=1 → hanya group yang punya permintaan bergabung menunggu (tujuan badge).
+  if (req.query.permintaan === '1') where.joinRequests = { some: { status: 'PENDING' } };
   if (parentIdParam === 'null' || parentIdParam === 'root') {
     where.parentId = null;
   } else if (parentIdParam) {
@@ -119,7 +121,10 @@ groupRouter.get('/', async (req, res) => {
   ]);
 
   let visible = allRows;
-  if (!requester.isFulltimer) {
+  // Portal: Role Access menu Group (baca) melihat semua group, termasuk privat
+  // (dulu hanya Fulltimer) — supaya group yang punya permintaan tidak tersembunyi.
+  const seeAll = requester.isFulltimer || (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'read')));
+  if (!seeAll) {
     // Fetch jemaat's membership set + PIC set untuk private visibility
     const [memberships, picOf] = await Promise.all([
       prisma.groupMember.findMany({

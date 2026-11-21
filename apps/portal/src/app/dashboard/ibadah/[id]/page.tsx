@@ -483,14 +483,14 @@ function PelayananLinkCard({
   const [deletingPetugas, setDeletingPetugas] = useState<PetugasItem | null>(null);
   const [tugasFor, setTugasFor] = useState<PetugasItem | null>(null);
   // Tombol tugas hanya muncul bila pelayanan ini sudah punya kategori tugas.
-  const tugasOpts = useTugasKategori(expanded ? link.pelayanan.id : null);
+  const tugasOpts = useTugasKategori(link.pelayanan.id);
   const canTugas = (p: PetugasItem) => (tugasOpts.data?.length ?? 0) > 0 || !!p.tugas?.length;
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
   const petugasQ = useQuery({
     queryKey: ['petugas', link.id],
-    enabled: expanded,
+    // Selalu dimuat (juga saat kartu dilipat) supaya badge "tugas perlu diisi" di header tetap akurat.
     queryFn: async () => {
       const res = await apiClient.get<{ data: PetugasItem[] }>(
         `/admin/pelayanan/ibadah-link/${link.id}/petugas`,
@@ -526,6 +526,8 @@ function PelayananLinkCard({
   });
 
   const petugas = petugasQ.data ?? [];
+  // Petugas tanpa tugas padahal pelayanan punya kategori tugas (badge biru di header kartu).
+  const tugasKosongCount = (tugasOpts.data?.length ?? 0) > 0 ? petugas.filter((p) => !p.tugas?.length).length : 0;
 
   // Pisahkan default vs override per tanggal
   const defaultPetugas = petugas.filter((p) => p.tanggalIbadah === null);
@@ -565,6 +567,12 @@ function PelayananLinkCard({
               <CalendarDays className="w-3 h-3" />
               {overrideDates.length} override
             </span>
+          )}
+          {tugasKosongCount > 0 && (
+            <NeedsFillBadge
+              label={`${tugasKosongCount} tugas perlu diisi`}
+              hint="Petugas di pelayanan ini belum diberi tugas — klik badge biru di nama petugas"
+            />
           )}
         </button>
         <div className="flex items-center gap-1 shrink-0">

@@ -28,12 +28,12 @@ export const PENDING_META: Record<PendingKey, { label: string; target: string }>
   volunteer: { label: 'permintaan volunteer menunggu', target: '/dashboard/pelayanan/join-requests' },
   feedback: { label: 'kritik & saran belum dibalas', target: '/dashboard/feedback' },
   prayer: { label: 'prayer request belum ditugaskan', target: '/dashboard/prayer-request' },
-  tamu: { label: 'tamu belum ada petugas follow-up', target: '/dashboard/tamu' },
+  tamu: { label: 'tamu belum ada petugas follow-up', target: '/dashboard/tamu?followupBy=none' },
   jemaatDuplicate: { label: 'kandidat akun ganda perlu ditinjau', target: '/dashboard/jemaat/duplicates' },
   sjRequest: { label: 'request spiritual journey menunggu', target: '/dashboard/spiritual-journey/request' },
-  eventPayment: { label: 'bukti transfer event menunggu verifikasi', target: '/dashboard/event' },
-  groupJoin: { label: 'permintaan bergabung group menunggu', target: '/dashboard/group' },
-  homecellLokasi: { label: 'homecell dengan titik lokasi salah di peta', target: '/dashboard/homecell' },
+  eventPayment: { label: 'bukti transfer event menunggu verifikasi', target: '/dashboard/event?pembayaran=perlu-verifikasi' },
+  groupJoin: { label: 'permintaan bergabung group menunggu', target: '/dashboard/group?permintaan=1' },
+  homecellLokasi: { label: 'homecell dengan titik lokasi salah di peta', target: '/dashboard/homecell?lokasi=bermasalah' },
 };
 
 export const PENDING_QUERY_KEY = ['pending-counts'] as const;

@@ -30,7 +30,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
-import { GroupJoinRequestsSection } from '@/components/group/group-join-requests';
+import { GroupJoinRequestsAlert, GroupJoinRequestsSection } from '@/components/group/group-join-requests';
 import { GroupContentSection } from '@/components/group/group-content';
 import { GroupHero } from '@/components/group/group-hero';
 import { parseYmd } from '@/lib/dates';
@@ -167,6 +167,7 @@ export default function GroupDetailPage() {
 
   return (
     <div className="space-y-6 w-full">
+      <GroupJoinRequestsAlert groupId={groupId} />
       <GroupHero groupId={g.id} nama={g.nama} heroImageUrl={g.heroImageUrl ?? null} picJemaatId={g.picJemaatId} />
 
       {/* Header */}

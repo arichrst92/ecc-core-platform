@@ -96,7 +96,9 @@ export default function TamuPage() {
   const [page, setPage] = usePersistentState('tamu:page', 1);
   const [noteFor, setNoteFor] = useState<Tamu | null>(null);
   const [assignFor, setAssignFor] = useState<Tamu | null>(null);
-  const [followupBy, setFollowupBy] = usePersistentState('tamu:followupBy', '');
+  // Dari badge menu (?followupBy=none) → langsung tampilkan tamu tanpa petugas follow-up.
+  const followupFromUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('followupBy') : null;
+  const [followupBy, setFollowupBy] = usePersistentState('tamu:followupBy', followupFromUrl ?? '', { skipRestore: !!followupFromUrl });
   const [sumber, setSumber] = usePersistentState('tamu:sumber', '');
   const [kategoriRaw, setKategori] = usePersistentState<Kategori | ''>('tamu:kategori', '');
   // Filter lama "Belum ditentukan" yang tersimpan di browser → Semua kategori.

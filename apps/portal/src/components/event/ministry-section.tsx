@@ -266,7 +266,7 @@ function PelayananCard({
   const [deletingVolunteer, setDeletingVolunteer] = useState<Volunteer | null>(null);
   const [tugasFor, setTugasFor] = useState<Volunteer | null>(null);
   // Tombol tugas hanya muncul bila pelayanan ini sudah punya kategori tugas.
-  const tugasOpts = useTugasKategori(expanded ? link.pelayanan.id : null);
+  const tugasOpts = useTugasKategori(link.pelayanan.id);
   const qc = useQueryClient();
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -300,6 +300,7 @@ function PelayananCard({
   });
 
   const scannerCount = link.petugas.filter((p) => p.canScanAttendance).length;
+  const tugasKosongCount = (tugasOpts.data?.length ?? 0) > 0 ? link.petugas.filter((p) => !p.tugas?.length).length : 0;
 
   return (
     <div className="border border-neutral-200 rounded-lg overflow-hidden">
@@ -326,6 +327,12 @@ function PelayananCard({
               <ScanLine className="w-3 h-3" />
               {scannerCount} scanner
             </span>
+          )}
+          {tugasKosongCount > 0 && (
+            <NeedsFillBadge
+              label={`${tugasKosongCount} tugas perlu diisi`}
+              hint="Volunteer di pelayanan ini belum diberi tugas — klik badge biru di nama volunteer"
+            />
           )}
         </button>
         <div className="flex items-center gap-1 shrink-0">

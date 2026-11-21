@@ -6,6 +6,8 @@
  * Tab tersimpan di URL (?tab=) supaya bisa dibuka langsung lewat link.
  * API: /admin/pelayanan/:id/members, /:id/candidates, /assign
  */
+import { TugasKosongPanel, useTugasKosong } from '@/components/pelayanan/tugas-kosong';
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -194,6 +196,7 @@ function PelayananDetail() {
   });
 
   const tagline = pel?.deskripsi?.split('\n')[0]?.trim();
+  const tugasKosong = useTugasKosong(id).data?.total ?? 0;
   const tabCount: Partial<Record<TabKey, number>> = {
     anggota: everyone.length,
     peran: pel?.roles.length,
@@ -287,6 +290,9 @@ function PelayananDetail() {
               <Icon className="w-4 h-4" />
               {t.label}
               {n != null ? <span className={`text-xs ${on ? 'text-brand-600' : 'text-neutral-400'}`}>{n}</span> : null}
+              {t.key === 'tugas' && tugasKosong > 0 ? (
+                <NeedsFillBadge label={`${tugasKosong} perlu diisi`} hint="Petugas yang belum diberi tugas — lihat daftarnya di tab ini" />
+              ) : null}
             </button>
           );
         })}
@@ -302,7 +308,10 @@ function PelayananDetail() {
       ) : tab === 'peran' ? (
         <RoleManager pelayananId={pel.id} roles={pel.roles} memberCountByRole={stats.byRole} onChanged={refresh} />
       ) : tab === 'tugas' ? (
-        <TugasKategoriPanel pelayananId={pel.id} warna={pel.warna} embedded />
+        <div className="space-y-4">
+          <TugasKosongPanel pelayananId={pel.id} />
+          <TugasKategoriPanel pelayananId={pel.id} warna={pel.warna} embedded />
+        </div>
       ) : tab === 'pendaftaran' ? (
         <div className="space-y-4">
           <PendaftaranPanel pelayananId={pel.id} embedded />

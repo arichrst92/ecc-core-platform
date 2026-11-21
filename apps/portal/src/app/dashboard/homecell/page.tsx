@@ -22,8 +22,13 @@ function HomecellInner() {
   // Filter disimpan per tab → tetap terisi saat kembali dari detail homecell.
   const [filter, setFilter] = usePersistentState<HomecellFilterState>(
     'homecell:filter',
-    () => ({ ...defaultHomecellFilter, cabangId: sp.get('cabangId') ?? '', areaId: sp.get('areaId') ?? '' }),
-    { skipRestore: sp.has('cabangId') || sp.has('areaId') },
+    () => ({
+      ...defaultHomecellFilter,
+      cabangId: sp.get('cabangId') ?? '',
+      areaId: sp.get('areaId') ?? '',
+      lokasi: sp.get('lokasi') === 'bermasalah' || sp.get('lokasi') === 'belum' ? (sp.get('lokasi') as 'bermasalah' | 'belum') : '',
+    }),
+    { skipRestore: sp.has('cabangId') || sp.has('areaId') || sp.has('lokasi') },
   );
   const extraParams = toHomecellQueryParams(filter);
   // Ringkasan titik lokasi bermasalah (mengikuti filter cabang/zona/status, tanpa filter lokasi).

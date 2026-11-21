@@ -31,6 +31,7 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 - **Buat Jadwal** pertemuan; ubah lewat ikon pensil (tanggal, jam, lokasi, catatan) — **juga setelah absen tercatat**, tanpa notifikasi ke anggota; kehadiran yang sudah tercatat tetap.
 - Saat bertemu: **Scan kehadiran** (QR kartu jemaat) atau manual. Anggota mendapat notifikasi "kehadiran tercatat".
 - Catat **tamu** yang hadir (kategori New Comer / Visitor).
+- **Absen hanya saat pertemuan dimulai atau setelahnya** (tanggal + jam mulai, zona waktu cabang; tanpa jam → mulai 00.00 hari itu). Sebelumnya app menampilkan "Absensi dibuka saat pertemuan dimulai" dan server menolak dengan ABSEN_BELUM_DIBUKA. Menghapus absen tetap bisa kapan saja.
 
 ## Keluarkan anggota
 - Titik tiga → **Keluarkan dari homecell** → pilih alasan (salah invite, sudah tidak aktif, pindah homecell, pindah kota, atau alasan lain). Anggota pindah ke daftar nonaktif (tanpa notifikasi); alasan tersimpan di riwayat (Portal). Bisa ditambahkan kembali kapan saja.

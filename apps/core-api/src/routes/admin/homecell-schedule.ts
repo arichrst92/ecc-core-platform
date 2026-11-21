@@ -21,6 +21,7 @@
  *
  * Lihat docs/backend-request-homecell-schedule-attendance.md (2026-05-24).
  */
+import { absenInfo, assertAbsenDibuka } from '../../lib/homecell-absen.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -190,6 +191,9 @@ homecellScheduleRouter.get('/', async (req, res) => {
     if (q.to) where.tanggal.lte = new Date(q.to);
   }
 
+  const tz = (
+    await prisma.homecell.findUnique({ where: { id: homecellId }, select: { area: { select: { cabang: { select: { timezone: true } } } } } })
+  )?.area.cabang.timezone;
   const [rows, total] = await Promise.all([
     prisma.homecellSchedule.findMany({
       where,
@@ -217,6 +221,8 @@ homecellScheduleRouter.get('/', async (req, res) => {
       createdAt: r.createdAt,
       attendanceCount: r._count.attendances,
       tamuCount: r._count.tamuAttendances,
+      // Absen dibuka saat pertemuan dimulai (app menonaktifkan tombol absen sebelumnya).
+      ...absenInfo(r, tz),
     })),
     meta: { total, limit: q.limit },
   });
@@ -326,6 +332,11 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       createdBy: schedule.createdBy,
       createdAt: schedule.createdAt,
       attendanceCount: schedule.attendances.length,
+      ...absenInfo(
+        schedule,
+        (await prisma.homecell.findUnique({ where: { id: homecellId }, select: { area: { select: { cabang: { select: { timezone: true } } } } } }))?.area.cabang
+          .timezone,
+      ),
       // Anggota + pemimpin yang bukan anggota (yang bisa diabsen).
       memberCount: members.length + leadersNotMember,
       attendances: schedule.attendances.map((a) => ({ ...a, peran: peranOf.get(a.jemaatId) ?? null })),
@@ -358,6 +369,8 @@ homecellScheduleRouter.post('/:scheduleId/attendance', async (req, res) => {
     select: { id: true },
   });
   if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+  // Absen hanya saat pertemuan dimulai atau setelahnya.
+  await assertAbsenDibuka(scheduleId);
 
   // Resolve kode → jemaatId
   const jemaat = await prisma.jemaat.findUnique({
@@ -479,6 +492,7 @@ homecellScheduleRouter.post('/:scheduleId/attendance/bulk', async (req, res) => 
     include: { homecell: { select: { nama: true } } },
   });
   if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+  await assertAbsenDibuka(scheduleId);
 
   interface BulkResultOk {
     kode: string;
@@ -761,6 +775,7 @@ homecellScheduleRouter.post('/:scheduleId/tamu', async (req, res) => {
 
   const schedule = await prisma.homecellSchedule.findFirst({ where: { id: scheduleId, homecellId }, select: { id: true, tanggal: true } });
   if (!schedule) throw NotFound('Schedule tidak ditemukan di homecell ini.');
+  await assertAbsenDibuka(scheduleId);
 
   const valid = await prisma.homecellTamu.findMany({
     where: { homecellId, tamuId: { in: tamuIds } },

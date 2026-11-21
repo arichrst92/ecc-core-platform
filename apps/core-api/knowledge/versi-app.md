@@ -24,7 +24,7 @@ summary: Status rilis Els App (2.4.9 & 2.5.0), fitur yang beda antar versi, atur
 
 ## Aturan server yang sudah berlaku untuk 2.4.9 (tanpa menunggu 2.5.0)
 - Grup sesi event (satu sesi per jemaat), daftar event urut terdekat.
-- Check-in petugas ±30 menit dari jam mulai; self check-in 15 menit sebelum s.d. 30 menit setelah mulai; jam server zona cabang; terlambat → walk-in.
+- Check-in petugas ±30 menit dari jam mulai; self check-in 15 menit sebelum mulai s.d. 30 menit setelah selesai; jam server zona cabang; terlambat → walk-in.
 - Ibadah anak menolak usia >13 tahun (bila tanggal lahir terisi).
 - Aturan batal pendaftaran event (sudah bayar / menunggu verifikasi / sudah mulai → lewat admin).
 - Notifikasi bukti ditolak & batal oleh admin (ikon umum di 2.4.9).

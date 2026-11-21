@@ -754,7 +754,7 @@ export const SECTIONS: Section[] = [
           'Urutan tampil: geser urutan di daftar Ibadah — tab Ibadah & Beranda di app mengikuti urutan ini.',
           'Kolom Rating (Ya/Tidak) di daftar ibadah: matikan bila ibadah tersebut tidak perlu diulas. Kartu ulasan di tiket app ikut hilang.',
           'Jadwal Bulanan: pilih minggu ke-1 sampai ke-4 lalu harinya. Jam jadwal = jam di zona waktu cabang.',
-          'Self check-in dibuka 15 menit sebelum s.d. 30 menit setelah ibadah/event dimulai (petugas bisa scan sejak 30 menit sebelum; terlambat → walk-in); jemaat juga bisa membatalkan self check-in yang salah dari tiket.',
+          'Self check-in dibuka 15 menit sebelum mulai sampai 30 menit setelah ibadah/event selesai (petugas bisa scan sejak 30 menit sebelum mulai); jemaat juga bisa membatalkan self check-in yang salah dari tiket.',
           'Laporan Ibadah: kehadiran, tamu per kategori, ulasan jemaat — bisa diunduh PDF/Excel.',
         ],
       },

@@ -2,7 +2,7 @@
 id: checkin-scan
 title: Check-in, Mode Scanner, Walk-in, Checkout & Jemput Anak
 tags: check-in, checkin, scan, scanner, usher, petugas scan, walk-in, terlambat, self check-in, geser check-in, qr, kode jemaat, checkout, pickup, jemput, jendela, ditutup, CHECKIN_CLOSED, radius, lokasi, batalkan check-in
-summary: Aturan jam check-in (petugas ±30 menit dari mulai, self check-in 15 menit sebelum s.d. 30 menit setelah mulai), walk-in sampai akhir hari, self check-in & radius lokasi, Mode Scanner di app, checkout/pickup, serta arti pesan error scan.
+summary: Aturan jam check-in (petugas ±30 menit dari mulai, self check-in 15 menit sebelum mulai s.d. 30 menit setelah SELESAI), walk-in sampai akhir hari, self check-in & radius lokasi, Mode Scanner di app, checkout/pickup, serta arti pesan error scan.
 ---
 
 # Check-in, Mode Scanner, Walk-in, Checkout & Jemput Anak
@@ -13,7 +13,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 | Jenis | Dibuka | Ditutup |
 |---|---|---|
 | Check-in **reservasi / peserta terdaftar** (scan petugas) | 30 menit sebelum jam mulai | 30 menit setelah jam mulai |
-| **Self check-in** jemaat dari HP | **15 menit** sebelum jam mulai | 30 menit setelah jam mulai |
+| **Self check-in** jemaat dari HP | **15 menit** sebelum jam mulai | **30 menit setelah jam selesai** |
 | **Walk-in** (tanpa reservasi / tamu baru) | 30 menit sebelum jam mulai | akhir hari ibadah/event (masih bisa dicatat walau terlambat) |
 | Checkout & jemput anak (pickup) | tidak dibatasi jendela | — |
 
@@ -41,7 +41,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 
 ## Self check-in (jemaat dari HP)
 - Dari tiket (geser untuk check-in) atau Detail Ibadah → Self Check-in → konfirmasi "saya di lokasi" → pilih siapa saja yang hadir (diri, keluarga, tamu).
-- Jendela: **15 menit sebelum** s.d. 30 menit setelah **mulai** (petugas tetap bisa scan sejak 30 menit sebelum). App menampilkan hitung mundur "Dibuka pukul HH.MM (15 menit sebelum mulai)".
+- Jendela: **15 menit sebelum mulai** s.d. **30 menit setelah selesai** (jemaat sering baru sempat check-in setelah ibadah). App menampilkan hitung mundur "Dibuka pukul HH.MM (15 menit sebelum mulai)" dan, setelah ibadah selesai, "berakhir dalam mm:ss". Petugas tetap bisa scan sejak 30 menit sebelum mulai.
 - **Radius lokasi** diatur per ibadah/event di Portal: pilihan 50, 100, 200, 300, 500, 1000, 2000, 5000 m, atau "di mana saja" (tidak dicek). Titik lokasi = titik ibadah/event; bila kosong pakai titik cabang. Bila venue tidak punya titik sama sekali, lokasi tidak dicek.
 - Penolakan lokasi: **LOCATION_REQUIRED** (izin lokasi HP mati / GPS belum dapat posisi) atau **TOO_FAR** (di luar radius; jarak ditampilkan).
 - **Ibadah anak tidak bisa self check-in** — check-in dilakukan di meja CKids.

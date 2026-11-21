@@ -116,7 +116,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
       label: 'PIC (Leader)',
       width: '170px',
       render: (_v, row) =>
-        <JemaatLink jemaat={row.picJemaat} />,
+        <JemaatLink jemaat={row.picJemaat} needsFill="Homecell ini belum punya PIC (Homecell Leader). Klik Edit untuk mengisi." />,
     },
     {
       key: 'memberCount',

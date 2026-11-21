@@ -4,6 +4,7 @@
  * Tanda & penjelasan titik lokasi homecell yang bermasalah (dihitung server,
  * lihat core-api lib/homecell-location.ts). Dipakai di daftar & detail Homecell.
  */
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { AlertTriangle, MapPin, MapPinOff } from 'lucide-react';
 
 export type LokasiIssueCode = 'LINK_TIDAK_TERBACA' | 'TITIK_BAWAAN' | 'LINTANG_TERBALIK' | 'JAUH_DARI_CABANG' | 'BELUM_ADA_LOKASI';
@@ -49,6 +50,7 @@ export function LokasiBadge({
   cabangNama?: string | null;
 }) {
   const cab = issue?.cabangNama ?? cabangNama ?? 'cabang';
+  if (issue?.code === 'BELUM_ADA_LOKASI') return <NeedsFillBadge label="Lokasi perlu diisi" hint={issue.saran} />;
   if (!issue) {
     return (
       <div className="leading-tight">

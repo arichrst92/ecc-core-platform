@@ -5,18 +5,22 @@
  * PIC homecell, dan pastor zona di halaman Zona / Homecell.
  * stopPropagation supaya klik di baris tabel tidak ikut membuka aksi baris.
  */
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import Link from 'next/link';
 
 export function JemaatLink({
   jemaat,
   className = '',
   empty = '—',
+  needsFill,
 }: {
   jemaat: { id: string; namaLengkap: string } | null | undefined;
   className?: string;
   empty?: string;
+  /** Bila diisi: kosong ditampilkan sebagai badge biru "Perlu diisi" dengan tooltip ini. */
+  needsFill?: string;
 }) {
-  if (!jemaat) return <span className="text-neutral-400">{empty}</span>;
+  if (!jemaat) return needsFill ? <NeedsFillBadge hint={needsFill} /> : <span className="text-neutral-400">{empty}</span>;
   return (
     <Link
       href={`/dashboard/jemaat/${jemaat.id}`}

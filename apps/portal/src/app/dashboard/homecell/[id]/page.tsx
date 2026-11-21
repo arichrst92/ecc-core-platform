@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -224,7 +225,7 @@ export default function HomecellDetailPage() {
             </div>
           </Link>
         ) : (
-          <div className="text-sm text-neutral-400 italic">Belum ada PIC</div>
+          <NeedsFillBadge label="PIC perlu diisi" hint="Homecell ini belum punya PIC (Homecell Leader). Isi dari Portal → Homecell → Edit." />
         )}
         <div className="mt-4 pt-3 border-t border-neutral-100 grid sm:grid-cols-2 gap-3 text-sm">
           <div>

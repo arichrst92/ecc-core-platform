@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { tzZoneLabel } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { useState } from 'react';
@@ -789,13 +790,19 @@ function PetugasRow({
           {p.pelayananRole.nama}
         </span>
         {onTugas ? (
-          <button
-            onClick={onTugas}
-            className={`block mt-0.5 text-left text-xs ${p.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
-            title="Atur tugas"
-          >
-            {p.tugas?.length ? `Tugas: ${tugasText(p.tugas)}` : '+ Atur tugas'}
-          </button>
+          p.tugas?.length ? (
+            <button onClick={onTugas} className="block mt-0.5 text-left text-xs text-neutral-700 hover:underline" title="Ubah tugas">
+              Tugas: {tugasText(p.tugas)}
+            </button>
+          ) : (
+            <div className="mt-1">
+              <NeedsFillBadge
+                label="Tugas perlu diisi"
+                hint="Pelayanan ini punya kategori tugas, tapi petugas ini belum diberi tugas. Klik untuk mengatur."
+                onClick={onTugas}
+              />
+            </div>
+          )
         ) : null}
         {p.catatan && <span className="text-xs text-neutral-500 italic block mt-0.5">{p.catatan}</span>}
       </div>

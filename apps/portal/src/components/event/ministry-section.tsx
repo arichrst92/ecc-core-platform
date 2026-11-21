@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -470,13 +471,19 @@ function VolunteerRow({
           )}
         </div>
         {onTugas ? (
-          <button
-            onClick={onTugas}
-            className={`block mt-0.5 text-left text-xs ${v.tugas?.length ? 'text-neutral-700' : 'text-brand-600 hover:underline'}`}
-            title="Atur tugas"
-          >
-            {v.tugas?.length ? `Tugas: ${tugasText(v.tugas)}` : '+ Atur tugas'}
-          </button>
+          v.tugas?.length ? (
+            <button onClick={onTugas} className="block mt-0.5 text-left text-xs text-neutral-700 hover:underline" title="Ubah tugas">
+              Tugas: {tugasText(v.tugas)}
+            </button>
+          ) : (
+            <div className="mt-1">
+              <NeedsFillBadge
+                label="Tugas perlu diisi"
+                hint="Pelayanan ini punya kategori tugas, tapi volunteer ini belum diberi tugas. Klik untuk mengatur."
+                onClick={onTugas}
+              />
+            </div>
+          )
         ) : null}
         {v.catatan && (
           <div className="text-xs text-neutral-500 italic mt-0.5">{v.catatan}</div>

@@ -1,3 +1,4 @@
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import Link from 'next/link';
 import { Eye, Users, Globe, Lock, MapPin, Pencil, Trash2, UserRound, UsersRound, Clock } from 'lucide-react';
 import { createGroupSchema, updateGroupSchema } from '@ecc/shared-types';
@@ -176,7 +177,11 @@ export const groupResource: ResourceConfig<Group> = {
       label: 'PIC',
       width: '160px',
       render: (_v, row) =>
-        row.picJemaat ? row.picJemaat.namaLengkap : <span className="text-neutral-400">—</span>,
+        row.picJemaat ? (
+          row.picJemaat.namaLengkap
+        ) : (
+          <NeedsFillBadge hint="Group ini belum punya PIC — permintaan bergabung tidak ada yang memproses di app. Klik Edit untuk mengisi." />
+        ),
     },
     {
       key: 'isPublic',

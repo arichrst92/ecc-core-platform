@@ -1,6 +1,7 @@
 'use client';
 
 import { useMenuAccess } from '@/lib/use-menu-access';
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { jamZone } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
@@ -439,9 +440,19 @@ export default function EventDetailPage() {
                   ? '(bebas)'
                   : formatNominal(e.nominal)}
               </Row>
-              <Row label="Bank">{e.bankNama ?? '-'}</Row>
-              <Row label="No. Rekening">{e.bankNomor ?? '-'}</Row>
-              <Row label="Atas Nama">{e.bankAtasNama ?? '-'}</Row>
+              {/* Tanpa rekening & QRIS, jemaat tidak tahu ke mana harus membayar. */}
+              {(() => {
+                const fill = !e.qrisImageUrl;
+                const v = (x: string | null) =>
+                  x ?? (fill ? <NeedsFillBadge hint="Event berbayar tanpa rekening maupun QRIS — jemaat tidak tahu ke mana membayar. Isi lewat Edit event, atau unggah QRIS." /> : '-');
+                return (
+                  <>
+                    <Row label="Bank">{v(e.bankNama)}</Row>
+                    <Row label="No. Rekening">{v(e.bankNomor)}</Row>
+                    <Row label="Atas Nama">{v(e.bankAtasNama)}</Row>
+                  </>
+                );
+              })()}
             </div>
 
             <div>

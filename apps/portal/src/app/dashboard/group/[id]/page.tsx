@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -284,7 +285,7 @@ export default function GroupDetailPage() {
                   </div>
                 </Link>
               ) : (
-                <span className="text-neutral-400 italic">Belum ada PIC</span>
+                <NeedsFillBadge label="PIC perlu diisi" hint="Group ini belum punya PIC. Isi dari Portal → Group → Edit." />
               )}
             </div>
           </div>

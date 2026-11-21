@@ -1,5 +1,6 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
@@ -441,7 +442,9 @@ export default function EventPage() {
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-300">
                       <ImageIcon className="w-8 h-8" />
-                      <span className="text-[11px] mt-1">Belum ada gambar</span>
+                      <span className="mt-1.5">
+                        <NeedsFillBadge label="Gambar perlu diisi" hint="Event belum punya gambar — tampil polos di app & saat dibagikan. Klik Edit untuk menambah gambar." />
+                      </span>
                     </div>
                   )}
                 </Link>

@@ -1,3 +1,4 @@
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import Link from 'next/link';
 import { Users, Home, BarChart3, MapPin, Smartphone } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
@@ -155,7 +156,7 @@ export const cabangResource: ResourceConfig<Cabang> = {
             Buka peta
           </a>
         ) : (
-          <span className="text-xs text-neutral-400">Belum diisi</span>
+          <NeedsFillBadge hint="Lokasi cabang belum diisi — dipakai petunjuk arah, Map View, dan jarak homecell ke cabang. Klik Edit untuk mengisi link Google Maps." />
         ),
     },
     { key: 'timezone', label: 'Zona Waktu', width: '150px' },

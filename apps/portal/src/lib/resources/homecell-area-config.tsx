@@ -106,7 +106,7 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       label: 'PIC (Zone Leader)',
       width: '200px',
       render: (_v, row) =>
-        <JemaatLink jemaat={row.picJemaat} />,
+        <JemaatLink jemaat={row.picJemaat} needsFill="Zona ini belum punya PIC (Zone Leader). Klik Edit untuk mengisi." />,
     },
     {
       key: 'pastors',

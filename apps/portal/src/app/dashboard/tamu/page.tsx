@@ -6,6 +6,7 @@
  * statusnya di aplikasi (Profil → Tamu Saya).
  * API: /admin/tamu
  */
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
@@ -429,11 +430,17 @@ export default function TamuPage() {
                         {t.followupSejak ? <div className="text-[10px] text-neutral-400">sejak {tgl(t.followupSejak)}</div> : null}
                       </>
                     ) : (
-                      <span className="text-neutral-400">Belum ada</span>
+                      <NeedsFillBadge
+                        label="Follow-up perlu diisi"
+                        hint="Tamu ini belum punya petugas follow-up. Klik untuk menugaskan."
+                        onClick={() => setAssignFor(t)}
+                      />
                     )}
-                    <button onClick={() => setAssignFor(t)} className="block mt-1 text-brand-600 hover:underline">
-                      {t.followupBy ? 'Ganti' : 'Tugaskan'}
-                    </button>
+                    {t.followupBy ? (
+                      <button onClick={() => setAssignFor(t)} className="block mt-1 text-brand-600 hover:underline">
+                        Ganti
+                      </button>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button

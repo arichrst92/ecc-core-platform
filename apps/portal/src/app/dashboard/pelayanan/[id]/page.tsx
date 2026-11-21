@@ -6,6 +6,7 @@
  * Tab tersimpan di URL (?tab=) supaya bisa dibuka langsung lewat link.
  * API: /admin/pelayanan/:id/members, /:id/candidates, /assign
  */
+import { useTugasKategori } from '@/components/pelayanan/tugas-kategori-panel';
 import { TugasKosongPanel, useTugasKosong } from '@/components/pelayanan/tugas-kosong';
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { Suspense, useMemo, useState } from 'react';
@@ -197,6 +198,10 @@ function PelayananDetail() {
 
   const tagline = pel?.deskripsi?.split('\n')[0]?.trim();
   const tugasKosong = useTugasKosong(id).data?.total ?? 0;
+  // Kategori tugas belum dibuat sama sekali → tab "Tugas petugas" diberi badge biru.
+  const kategoriQ = useTugasKategori(id);
+  const kategoriKosong = kategoriQ.isSuccess && (kategoriQ.data?.length ?? 0) === 0;
+  const koordinatorKosong = everyone.length > 0 && stats.koordinator.length === 0;
   const tabCount: Partial<Record<TabKey, number>> = {
     anggota: everyone.length,
     peran: pel?.roles.length,
@@ -290,8 +295,14 @@ function PelayananDetail() {
               <Icon className="w-4 h-4" />
               {t.label}
               {n != null ? <span className={`text-xs ${on ? 'text-brand-600' : 'text-neutral-400'}`}>{n}</span> : null}
+              {t.key === 'tugas' && kategoriKosong ? (
+                <NeedsFillBadge hint="Belum ada kategori & tugas petugas — buat di tab ini supaya koordinator bisa menetapkan tugas tiap petugas" />
+              ) : null}
               {t.key === 'tugas' && tugasKosong > 0 ? (
                 <NeedsFillBadge label={`${tugasKosong} perlu diisi`} hint="Petugas yang belum diberi tugas — lihat daftarnya di tab ini" />
+              ) : null}
+              {t.key === 'pendaftaran' && koordinatorKosong ? (
+                <NeedsFillBadge hint="Belum ada koordinator — permintaan bergabung & jadwal di app tidak ada yang mengurus" />
               ) : null}
             </button>
           );

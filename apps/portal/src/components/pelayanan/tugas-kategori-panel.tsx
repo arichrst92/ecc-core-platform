@@ -5,6 +5,7 @@
  * Dipakai koordinator (app) & admin (Portal) saat menyusun jadwal petugas.
  * Hapus = nonaktif: jadwal lama tetap menampilkan nama yang tersimpan.
  */
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Loader2, Pencil, Plus, RotateCcw, X } from 'lucide-react';
@@ -168,7 +169,14 @@ export function TugasKategoriPanel({
             </div>
           ) : (
             <div className="divide-y divide-neutral-100">
-              {visible.length === 0 ? <p className="px-4 py-4 text-sm text-neutral-500">Belum ada kategori.</p> : null}
+              {visible.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-neutral-600 flex flex-wrap items-center gap-2">
+                  <NeedsFillBadge label="Kategori perlu diisi" />
+                  <span>
+                    Belum ada kategori. Ketik nama kategori di bawah (mis. Sound, Lighting), lalu tambahkan tugas di dalamnya.
+                  </span>
+                </div>
+              ) : null}
               {visible.map((k, ki) => {
                 const inactive = k.isActive === false;
                 const tugas = showInactive ? k.tugas : k.tugas.filter((t) => t.isActive !== false);

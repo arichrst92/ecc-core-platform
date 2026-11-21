@@ -21,7 +21,7 @@ import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../l
 import { phoneSearchTerms } from '../../lib/phone-search.js';
 import { audit } from '../../lib/audit.js';
 import { resolveJemaatAccess } from '../../lib/menu-access.js';
-import { eventGrantsStep, jemaatWhereForStep } from '../../lib/spiritual-journey.js';
+import { eventGrantsStep, jemaatWhereForStage, jemaatWhereForStep } from '../../lib/spiritual-journey.js';
 
 export const spiritualJourneyRouter = Router();
 
@@ -55,12 +55,28 @@ async function validateRequirement(roleId: string, subRoleId: string | null, sub
   }
 }
 
+/**
+ * Jemaat yang tahap SAAT INI-nya = tahap ini (tahap tertinggi yang dipegang).
+ * Perjalanan bertahap: yang sudah di tahap 4 tidak lagi dihitung di tahap 1–3,
+ * walau status tahap 1–3 tertimpa. Tahap nonaktif: pemegang persis syaratnya.
+ */
+async function whereAtStep(step: { id: string; isActive: boolean; roleId: string; subRoleId: string | null; subRoleStatusId: string | null }) {
+  if (!step.isActive) return jemaatWhereForStep(step);
+  const active = await prisma.spiritualJourneyStep.findMany({
+    where: { isActive: true },
+    orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, roleId: true, subRoleId: true, subRoleStatusId: true },
+  });
+  const idx = active.findIndex((s) => s.id === step.id);
+  return idx < 0 ? jemaatWhereForStep(step) : jemaatWhereForStage(active, idx + 1);
+}
+
 spiritualJourneyRouter.get('/', async (req, res) => {
   await assertAccess(req, 'read');
   const steps = await prisma.spiritualJourneyStep.findMany({ orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }], include: stepInclude });
   const now = new Date();
   const [counts, events] = await Promise.all([
-    Promise.all(steps.map((s) => prisma.jemaat.count({ where: { isActive: true, ...jemaatWhereForStep(s) } }))),
+    Promise.all(steps.map(async (s) => prisma.jemaat.count({ where: { isActive: true, ...(await whereAtStep(s)) } }))),
     prisma.event.findMany({
       where: {
         isActive: true,
@@ -148,7 +164,7 @@ spiritualJourneyRouter.get('/:id/jemaat', async (req, res) => {
   const cabangId = typeof req.query.cabangId === 'string' && UUID_RE.test(req.query.cabangId) ? req.query.cabangId : undefined;
   const where = {
     isActive: true,
-    ...jemaatWhereForStep(step),
+    ...(await whereAtStep(step)),
     ...(cabangId ? { cabangId } : {}),
     ...(search ? { namaLengkap: { contains: search, mode: 'insensitive' as const } } : {}),
   };

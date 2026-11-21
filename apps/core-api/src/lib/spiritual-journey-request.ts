@@ -10,7 +10,7 @@
  */
 import { prisma, type Prisma } from '@ecc/database';
 import { BadRequest, NotFound } from './errors.js';
-import { meetsStep, type HeldRole } from './spiritual-journey.js';
+import { journeyProgress, meetsStep, type HeldRole } from './spiritual-journey.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -46,8 +46,10 @@ export async function grantPlan(jemaatId: string, targetStepId: string, db: Tx |
   const idx = steps.findIndex((s) => s.id === targetStepId);
   if (idx < 0) throw NotFound('Tahap tidak ditemukan atau sudah tidak aktif.');
   const plan: GrantPlanStep[] = [];
+  // Tahap yang sudah tercapai (termasuk karena sudah di tahap lebih lanjut) tidak diberikan ulang.
+  const reached = journeyProgress(steps, roles).steps.map((s) => s.achieved);
   steps.slice(0, idx + 1).forEach((s, i) => {
-    if (meetsStep(s, roles)) return;
+    if (reached[i] || meetsStep(s, roles)) return;
     plan.push({
       id: s.id,
       judul: s.judul,

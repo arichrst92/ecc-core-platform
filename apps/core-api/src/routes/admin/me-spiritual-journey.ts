@@ -15,7 +15,6 @@ import { prisma } from '@ecc/database';
 import { z } from 'zod';
 import { BadRequest, Conflict, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { meetsStep } from '../../lib/spiritual-journey.js';
 import { eventGrantsStep, journeyProgress } from '../../lib/spiritual-journey.js';
 import { stepInclude } from './spiritual-journey.js';
 
@@ -131,7 +130,7 @@ meSpiritualJourneyRouter.post('/request', async (req, res) => {
   if (pending) throw Conflict('Masih ada request yang menunggu persetujuan. Batalkan dulu bila ingin mengganti.');
   const idx = steps.findIndex((s) => s.id === input.stepId);
   if (idx < 0) throw NotFound('Tahap tidak ditemukan.');
-  if (steps.slice(0, idx + 1).every((s) => meetsStep(s, roles))) {
+  if (journeyProgress(steps, roles).steps[idx]!.achieved) {
     throw BadRequest('Tahap ini (dan tahap sebelumnya) sudah tercatat di Spiritual Journey Anda.');
   }
   const created = await prisma.spiritualJourneyRequest.create({

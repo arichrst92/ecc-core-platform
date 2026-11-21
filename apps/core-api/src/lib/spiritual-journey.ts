@@ -36,9 +36,16 @@ export interface JourneyProgress<S> {
   nextIndex: number | null;
 }
 
-/** `steps` harus sudah urut. */
+/**
+ * `steps` harus sudah urut. Perjalanan bersifat BERTAHAP (2026-11): mencapai
+ * tahap N berarti tahap 1..N-1 juga tercapai. Penting karena tahap-tahap ECC
+ * memakai role/sub-role yang sama dengan status berbeda — satu orang hanya
+ * memegang satu status, jadi status tahap awal "tertimpa" status tahap lanjut.
+ */
 export function journeyProgress<S extends StepRequirement>(steps: S[], roles: HeldRole[]): JourneyProgress<S> {
-  const achieved = steps.map((s) => meetsStep(s, roles));
+  const met = steps.map((s) => meetsStep(s, roles));
+  const highest = met.lastIndexOf(true);
+  const achieved = steps.map((_, i) => i <= highest);
   const next = achieved.findIndex((a) => !a);
   return {
     steps: steps.map((s, i) => ({ ...s, achieved: achieved[i]!, isNext: i === next })),
@@ -47,7 +54,7 @@ export function journeyProgress<S extends StepRequirement>(steps: S[], roles: He
   };
 }
 
-/** Filter Prisma Jemaat yang sudah mencapai tahap. */
+/** Filter Prisma: jemaat yang memegang syarat PERSIS tahap ini (tanpa memperhitungkan tahap lanjut). */
 export function jemaatWhereForStep(step: StepRequirement): Prisma.JemaatWhereInput {
   return {
     jemaatRoles: {
@@ -109,8 +116,15 @@ export function journeyStageLabel(s: JourneyStage): string {
  * (tahap 1..stage tercapai, tahap stage+1 belum). stage 0 = belum mulai.
  */
 export function jemaatWhereForStage(steps: StepRequirement[], stage: number): Prisma.JemaatWhereInput {
-  const and: Prisma.JemaatWhereInput[] = steps.slice(0, stage).map((s) => jemaatWhereForStep(s));
-  const next = steps[stage];
-  if (next) and.push({ NOT: jemaatWhereForStep(next) });
+  // Bertahap: tahap saat ini = tahap TERTINGGI yang dipegang.
+  const later = steps.slice(stage).map((s) => jemaatWhereForStep(s));
+  const and: Prisma.JemaatWhereInput[] = [];
+  if (stage > 0) and.push(jemaatWhereForStep(steps[stage - 1]!));
+  if (later.length) and.push({ NOT: { OR: later } });
   return { AND: and };
+}
+
+/** Filter Prisma: jemaat yang SUDAH MENCAPAI tahap ke-`index` (memegang tahap ini atau tahap sesudahnya). */
+export function jemaatWhereReached(steps: StepRequirement[], index: number): Prisma.JemaatWhereInput {
+  return { OR: steps.slice(index).map((s) => jemaatWhereForStep(s)) };
 }

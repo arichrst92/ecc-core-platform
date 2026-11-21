@@ -49,6 +49,7 @@ summary: Data jemaat & validasi isian, kartu QR, keluarga & relasi otomatis, tam
 ## Spiritual Journey
 - Tahap (mis. Encounter → Empower → Engage → Expand). Terisi otomatis dari role/kelas/event terkait, atau lewat **request dari app**: jemaat *Ajukan update tahap* + catatan (satu request menunggu per jemaat, bisa dibatalkan).
 - Portal → Spiritual Journey → **Request dari App** (badge): Setujui → tahap diminta + tahap sebelumnya yang belum tercatat diberikan (role/sub role/status), jemaat dinotifikasi; Tolak → alasan dikirim. Saring per cabang.
+- **Bertahap**: mencapai tahap N = tahap 1..N-1 dianggap tercapai (tahap ECC memakai role/sub-role sama dengan status berbeda, jadi status tahap awal tertimpa). Jumlah & daftar jemaat per tahap di Portal = jemaat yang tahap **saat ini**-nya tahap itu (tahap tertinggi).
 - Hapus jemaat dari tahap: klik jumlah jemaat di tahap → tempat sampah (butuh akses hapus menu Spiritual Journey).
 
 ## Alamat & peta

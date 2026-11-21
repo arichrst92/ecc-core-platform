@@ -5,6 +5,7 @@
  * Pengelolaan detail (anggota, peran, tugas petugas, pendaftaran & koordinator,
  * penugasan) ada di halaman detail: /dashboard/pelayanan/<id>?tab=…
  */
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,13 +30,14 @@ import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import {
   EditPelayananModal,
   ForceDeleteModal,
+  kelengkapanPelayanan,
   roleTone,
   usePendingJoinCounts,
   type Pelayanan,
 } from '@/components/pelayanan/pelayanan-manage';
 import { usePersistentState } from '@/lib/use-persistent-state';
 
-type StatusFilter = 'aktif' | 'nonaktif' | 'semua';
+type StatusFilter = 'aktif' | 'nonaktif' | 'semua' | 'perlu-diisi';
 type SortKey = 'nama' | 'anggota' | 'permintaan';
 
 export default function PelayananPage() {
@@ -95,6 +97,7 @@ export default function PelayananPage() {
       nonaktif: list.length - aktif.length,
       anggota: aktif.reduce((n, p) => n + (p._count?.jemaatPelayanan ?? 0), 0),
       tanpaPeran: aktif.filter((p) => p.roles.length === 0).length,
+      perluDiisi: aktif.filter((p) => kelengkapanPelayanan(p).length > 0).length,
     };
   }, [list]);
 
@@ -102,7 +105,8 @@ export default function PelayananPage() {
     const needle = search.trim().toLowerCase();
     const rows = list.filter(
       (p) =>
-        (status === 'semua' || (status === 'aktif' ? p.isActive : !p.isActive)) &&
+        (status === 'semua' ||
+          (status === 'perlu-diisi' ? kelengkapanPelayanan(p).length > 0 : status === 'aktif' ? p.isActive : !p.isActive)) &&
         (!needle || p.nama.toLowerCase().includes(needle) || (p.deskripsi ?? '').toLowerCase().includes(needle)),
     );
     const pend = (p: Pelayanan) => pending.byId.get(p.id) ?? 0;
@@ -209,6 +213,18 @@ export default function PelayananPage() {
               {s}
             </button>
           ))}
+          <button
+            onClick={() => setStatus('perlu-diisi')}
+            className={`px-3 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 ${
+              status === 'perlu-diisi' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-700'
+            }`}
+            title="Pelayanan aktif yang datanya belum lengkap"
+          >
+            Perlu diisi
+            {stats.perluDiisi ? (
+              <span className="min-w-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] leading-4 text-center">{stats.perluDiisi}</span>
+            ) : null}
+          </button>
         </div>
         <select
           value={sort}
@@ -221,6 +237,17 @@ export default function PelayananPage() {
           <option value="permintaan">Urut: Permintaan menunggu</option>
         </select>
       </div>
+
+      {stats.perluDiisi > 0 && status !== 'perlu-diisi' ? (
+        <button
+          type="button"
+          onClick={() => setStatus('perlu-diisi')}
+          className="w-full text-left flex items-center gap-2 text-sm text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-100"
+        >
+          <NeedsFillBadge label={`${stats.perluDiisi} pelayanan`} />
+          <span>datanya belum lengkap (peran, anggota, koordinator, tugas petugas, atau deskripsi) — klik untuk menampilkan.</span>
+        </button>
+      ) : null}
 
       {stats.tanpaPeran > 0 && status !== 'nonaktif' ? (
         <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -336,6 +363,7 @@ function PelayananCard({
   const roles = [...p.roles].sort((a, b) => b.level - a.level);
   const shownRoles = roles.slice(0, 4);
   const tagline = p.deskripsi?.split('\n')[0]?.trim();
+  const kurang = kelengkapanPelayanan(p);
   return (
     <div className={`bg-white border rounded-xl flex flex-col ${p.isActive ? 'border-neutral-200' : 'border-dashed border-neutral-300 opacity-75'}`}>
       <div className="flex items-start gap-3 p-4">
@@ -388,12 +416,27 @@ function PelayananCard({
             </span>
           ))
         ) : (
-          <span className="text-[11px] text-amber-700">Belum ada peran</span>
+          <span className="text-[11px] text-neutral-400">Belum ada peran</span>
         )}
         {roles.length > shownRoles.length ? (
           <span className="px-2 py-0.5 rounded-full text-[11px] text-neutral-500 bg-neutral-100">+{roles.length - shownRoles.length}</span>
         ) : null}
       </div>
+
+      {kurang.length ? (
+        <div className="px-4 pt-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-blue-800 font-medium">Perlu diisi:</span>
+          {kurang.map((k) =>
+            k.tab ? (
+              <Link key={k.key} href={`${href}?tab=${k.tab}`} title={k.hint}>
+                <NeedsFillBadge label={k.label} hint={k.hint} />
+              </Link>
+            ) : (
+              <NeedsFillBadge key={k.key} label={k.label} hint={k.hint} onClick={onEdit} />
+            ),
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-auto px-4 py-3 flex items-center gap-2">
         {pending > 0 ? (

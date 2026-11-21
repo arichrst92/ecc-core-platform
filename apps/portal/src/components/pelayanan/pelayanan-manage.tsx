@@ -31,7 +31,45 @@ export interface Pelayanan {
   warna?: string | null;
   isActive: boolean;
   roles: PelayananRole[];
-  _count?: { jemaatPelayanan: number; ibadahPelayanan: number };
+  _count?: { jemaatPelayanan: number; ibadahPelayanan: number; tugasKategori?: number; approvers?: number };
+  /** Petugas (ibadah/event mendatang) yang tugasnya belum diisi — dihitung server untuk Portal. */
+  tugasKosongCount?: number;
+}
+
+export type KelengkapanTab = 'anggota' | 'peran' | 'tugas' | 'pendaftaran';
+export interface KelengkapanItem {
+  key: string;
+  label: string;
+  hint: string;
+  tab: KelengkapanTab | null; // null = buka form Ubah
+}
+
+/** Data pelayanan aktif yang masih kosong (badge biru "Perlu diisi" di daftar). */
+export function kelengkapanPelayanan(p: Pelayanan): KelengkapanItem[] {
+  if (!p.isActive) return [];
+  const out: KelengkapanItem[] = [];
+  const anggota = p._count?.jemaatPelayanan ?? 0;
+  if (!p.roles.length)
+    out.push({ key: 'peran', label: 'Peran', hint: 'Belum ada peran — anggota baru tidak bisa ditambahkan sebelum ada peran.', tab: 'peran' });
+  if (!anggota) out.push({ key: 'anggota', label: 'Anggota', hint: 'Belum ada anggota aktif.', tab: 'anggota' });
+  if (anggota > 0 && (p._count?.approvers ?? 0) === 0)
+    out.push({
+      key: 'koordinator',
+      label: 'Koordinator',
+      hint: 'Belum ada koordinator — permintaan bergabung & jadwal di app tidak ada yang mengurus.',
+      tab: 'pendaftaran',
+    });
+  if (p._count?.tugasKategori === 0)
+    out.push({ key: 'kategori', label: 'Tugas petugas', hint: 'Belum ada kategori & tugas petugas.', tab: 'tugas' });
+  if ((p.tugasKosongCount ?? 0) > 0)
+    out.push({
+      key: 'tugas',
+      label: `${p.tugasKosongCount} tugas petugas`,
+      hint: 'Petugas ibadah/event mendatang yang belum diberi tugas — lihat daftarnya di tab Tugas petugas.',
+      tab: 'tugas',
+    });
+  if (!p.deskripsi?.trim()) out.push({ key: 'deskripsi', label: 'Deskripsi', hint: 'Deskripsi tampil di halaman pelayanan di app.', tab: null });
+  return out;
 }
 
 /** Jumlah permintaan bergabung yang menunggu, per pelayanan (+ total). */

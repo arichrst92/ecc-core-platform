@@ -49,14 +49,30 @@ pelayananRouter.get('/', async (req, res) => {
       include: {
         roles: { orderBy: { level: 'desc' } },
         // Hanya anggota AKTIF yang dihitung (riwayat nonaktif tidak).
-        _count: { select: { jemaatPelayanan: { where: { isActive: true, jemaat: { isActive: true } } }, ibadahPelayanan: true } },
+        _count: {
+          select: {
+            jemaatPelayanan: { where: { isActive: true, jemaat: { isActive: true } } },
+            ibadahPelayanan: true,
+            // Kelengkapan (badge "Perlu diisi" di daftar Portal).
+            tugasKategori: { where: { isActive: true } },
+            approvers: true,
+          },
+        },
       },
     }),
     prisma.pelayanan.count({ where }),
   ]);
+  // Portal: jumlah petugas yang tugasnya belum diisi per pelayanan.
+  let tugasKosong: Map<string, number> | null = null;
+  if (!isMobileClient(req)) {
+    tugasKosong = new Map();
+    for (const it of await tugasKosongItems(data.filter((p) => p.isActive).map((p) => p.id))) {
+      tugasKosong.set(it.pelayananId, (tugasKosong.get(it.pelayananId) ?? 0) + 1);
+    }
+  }
   res.json({
     success: true,
-    data,
+    data: tugasKosong ? data.map((p) => ({ ...p, tugasKosongCount: tugasKosong!.get(p.id) ?? 0 })) : data,
     meta: { page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit) },
   });
 });
@@ -928,16 +944,25 @@ const portalOnly = (req: Parameters<typeof isMobileClient>[0]) => {
  * kategori tugas aktif. Cakupan: susunan tetap (default) + tanggal hari ini ke
  * depan di ibadah aktif, dan event aktif yang belum lewat.
  */
-pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
-  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
-  if (!UUID_PARAM.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan');
-  const kategoriCount = await prisma.pelayananTugasKategori.count({ where: { pelayananId: req.params.id, isActive: true } });
-  if (!kategoriCount) return res.json({ success: true, data: { hasKategori: false, total: 0, items: [] } });
+/**
+ * Petugas yang TUGAS-nya belum diisi untuk pelayanan yang sudah punya kategori
+ * tugas aktif. Cakupan: susunan tetap + tanggal hari ini ke depan di ibadah aktif,
+ * dan event aktif yang belum lewat.
+ */
+async function tugasKosongItems(pelayananIds: string[]) {
+  if (!pelayananIds.length) return [];
+  const withKat = (
+    await prisma.pelayananTugasKategori.groupBy({
+      by: ['pelayananId'],
+      where: { pelayananId: { in: pelayananIds }, isActive: true },
+    })
+  ).map((g) => g.pelayananId);
+  if (!withKat.length) return [];
   const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z');
   const [ib, ev] = await Promise.all([
     prisma.ibadahPelayananPetugas.findMany({
       where: {
-        ibadahPelayanan: { pelayananId: req.params.id, ibadah: { isActive: true } },
+        ibadahPelayanan: { pelayananId: { in: withKat }, ibadah: { isActive: true } },
         OR: [{ tanggalIbadah: null }, { tanggalIbadah: { gte: today } }],
       },
       select: {
@@ -945,13 +970,13 @@ pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
         tugas: true,
         tanggalIbadah: true,
         jemaat: { select: { id: true, namaLengkap: true } },
-        ibadahPelayanan: { select: { ibadah: { select: { id: true, nama: true, cabang: { select: { nama: true } } } } } },
+        ibadahPelayanan: { select: { pelayananId: true, ibadah: { select: { id: true, nama: true, cabang: { select: { nama: true } } } } } },
       },
     }),
     prisma.eventPelayananPetugas.findMany({
       where: {
         eventPelayanan: {
-          pelayananId: req.params.id,
+          pelayananId: { in: withKat },
           event: {
             isActive: true,
             OR: [{ tanggalSelesai: { gte: today } }, { tanggalSelesai: null, tanggalMulai: { gte: today } }],
@@ -962,14 +987,17 @@ pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
         id: true,
         tugas: true,
         jemaat: { select: { id: true, namaLengkap: true } },
-        eventPelayanan: { select: { event: { select: { id: true, judul: true, tanggalMulai: true, cabang: { select: { nama: true } } } } } },
+        eventPelayanan: {
+          select: { pelayananId: true, event: { select: { id: true, judul: true, tanggalMulai: true, cabang: { select: { nama: true } } } } },
+        },
       },
     }),
   ]);
-  const items = [
+  return [
     ...ib
       .filter((p) => parseTugas(p.tugas).length === 0)
       .map((p) => ({
+        pelayananId: p.ibadahPelayanan.pelayananId,
         jenis: 'ibadah' as const,
         petugasId: p.id,
         jemaat: p.jemaat,
@@ -981,6 +1009,7 @@ pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
     ...ev
       .filter((p) => parseTugas(p.tugas).length === 0)
       .map((p) => ({
+        pelayananId: p.eventPelayanan.pelayananId,
         jenis: 'event' as const,
         petugasId: p.id,
         jemaat: p.jemaat,
@@ -989,7 +1018,18 @@ pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
         cabang: p.eventPelayanan.event.cabang?.nama ?? null,
         tanggal: p.eventPelayanan.event.tanggalMulai.toISOString().slice(0, 10),
       })),
-  ].sort((a, b) => (a.tanggal ?? '').localeCompare(b.tanggal ?? '') || a.targetNama.localeCompare(b.targetNama, 'id'));
+  ];
+}
+
+/** GET /admin/pelayanan/:id/tugas-kosong — badge "Perlu diisi" di tab Tugas petugas. */
+pelayananRouter.get('/:id/tugas-kosong', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'ibadah', 'event'], 'read');
+  if (!UUID_PARAM.test(req.params.id)) throw NotFound('Pelayanan tidak ditemukan');
+  const kategoriCount = await prisma.pelayananTugasKategori.count({ where: { pelayananId: req.params.id, isActive: true } });
+  if (!kategoriCount) return res.json({ success: true, data: { hasKategori: false, total: 0, items: [] } });
+  const items = (await tugasKosongItems([req.params.id]))
+    .map(({ pelayananId: _p, ...it }) => it)
+    .sort((a, b) => (a.tanggal ?? '').localeCompare(b.tanggal ?? '') || a.targetNama.localeCompare(b.targetNama, 'id'));
   res.json({ success: true, data: { hasKategori: true, total: items.length, items } });
 });
 

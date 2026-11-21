@@ -11,7 +11,8 @@
  * dengan titik tersimpan. Laporan menampilkan:
  *   - BEDA     : titik baru berjarak > 0,5 km dari titik lama → diperbarui (--apply)
  *   - TIDAK_TERBACA : link tidak menghasilkan titik → titik lama dibiarkan
- *                     (kecuali --clear-unresolved: dikosongkan)
+ *                     (kecuali --clear-unresolved: titik lama dikosongkan supaya
+ *                     tidak tampil / dipakai di tempat yang salah)
  *   - KEMBAR   : titik lama persis sama dengan entri lain yang linknya berbeda
  *                (indikasi kuat titik bawaan Google)
  *
@@ -19,7 +20,7 @@
  *   node -r dotenv/config dist/scripts/recheck-map-points.js dotenv_config_path=../../.env
  *     → DRY RUN (hanya laporan)
  *   ... --apply              → simpan titik baru
- *   ... --apply --clear-unresolved → juga kosongkan titik KEMBAR yang tidak terbaca
+ *   ... --apply --clear-unresolved → juga kosongkan titik yang linknya tidak terbaca
  *   ... --only=homecell,ibadah     → batasi jenis (cabang, ibadah, event, homecell, local)
  */
 import { prisma } from '@ecc/database';
@@ -91,7 +92,7 @@ async function save(table: string, id: string, loc: LatLng | null) {
 }
 
 async function main() {
-  console.log(`Periksa ulang titik Google Maps — ${APPLY ? 'MENYIMPAN' : 'DRY RUN (tanpa perubahan)'}${CLEAR ? ' + kosongkan titik kembar tak terbaca' : ''}\n`);
+  console.log(`Periksa ulang titik Google Maps — ${APPLY ? 'MENYIMPAN' : 'DRY RUN (tanpa perubahan)'}${CLEAR ? ' + kosongkan titik yang linknya tak terbaca' : ''}\n`);
   const totals = { cek: 0, beda: 0, tidak: 0, kembar: 0, disimpan: 0, dikosongkan: 0 };
   // Titik kembar dihitung lintas SEMUA jenis (titik bawaan Google sama untuk semua link).
   const all: (Row & { kind: Kind })[] = [];
@@ -117,7 +118,7 @@ async function main() {
     if (!loc) {
       totals.tidak++;
       console.log(`TIDAK_TERBACA${twin ? ' + KEMBAR' : ''}  ${label}  lama=${fmt(r)}  link=${r.mapsUrl}`);
-      if (APPLY && CLEAR && twin) {
+      if (APPLY && CLEAR && r.latitude != null) {
         await save(r.kind.table, r.id, null);
         totals.dikosongkan++;
       }

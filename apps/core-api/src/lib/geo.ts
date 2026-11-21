@@ -166,22 +166,49 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
   }
 }
 
-/** Geocoding nama tempat / alamat via OpenStreetMap Nominatim (cadangan terakhir). */
-async function geocodeText(text: string): Promise<LatLng | null> {
-  try {
-    const q = encodeURIComponent(text.slice(0, 300));
-    const res = await fetchWithTimeout(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`,
-      { headers: { 'User-Agent': 'ECC-Core-Platform/1.0 (eccchurch.global)', 'Accept-Language': 'id,en' } },
-      6000,
-    );
-    if (!res.ok) return null;
-    const arr = (await res.json()) as { lat?: string; lon?: string }[];
-    const first = arr[0];
-    return first ? valid(Number(first.lat), Number(first.lon)) : null;
-  } catch {
-    return null;
+/**
+ * Variasi teks untuk geocoding nama tempat dari link Google Maps, mis.
+ * "Bengkel T.H.O.R (The House Of Racing) - Bandung, Jl. BKR No.88a, Cigereleng, Kec. Regol, Kota Bandung, Jawa Barat 40254"
+ *   1. teks utuh (tanpa kurung)
+ *   2. tanpa nama usaha (mulai bagian alamat setelah koma pertama)
+ *   3. bagian alamat tanpa kode pos
+ */
+export function placeTextVariants(text: string): string[] {
+  const clean = text.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const out = [clean];
+  const comma = clean.indexOf(',');
+  if (comma > 0) {
+    const alamat = clean.slice(comma + 1).trim();
+    if (/\p{L}/u.test(alamat)) {
+      out.push(alamat);
+      const noPos = alamat.replace(/\s+\d{5}\b/g, '').trim();
+      if (noPos !== alamat) out.push(noPos);
+    }
   }
+  return [...new Set(out)].filter(Boolean);
+}
+
+/**
+ * Geocoding nama tempat / alamat (cadangan terakhir): Google Geocoding bila
+ * GOOGLE_GEOCODING_API_KEY ada, lalu OpenStreetMap Nominatim. Hanya hasil yang
+ * cukup tepat (tingkat bangunan / jalan / kawasan) yang dipakai — titik tengah
+ * kota tidak.
+ */
+async function geocodeText(text: string): Promise<LatLng | null> {
+  const variants = placeTextVariants(text.slice(0, 300));
+  try {
+    const g = await import('./jemaat-geocode.js');
+    const negara = null;
+    for (const v of variants) {
+      const hit = process.env.GOOGLE_GEOCODING_API_KEY?.trim()
+        ? await g.geocodeGoogle(v, negara).catch(() => null)
+        : await g.geocodeNominatim(v, negara).catch(() => null);
+      if (hit && hit !== 'UMUM') return valid(hit.lat, hit.lng);
+    }
+  } catch {
+    // abaikan — kembali null
+  }
+  return null;
 }
 
 /**

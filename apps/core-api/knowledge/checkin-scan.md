@@ -18,7 +18,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 | Checkout & jemput anak (pickup) | tidak dibatasi jendela | — |
 
 - Ibadah/event **tanpa jam mulai** → check-in terbuka sepanjang hari itu.
-- **Event beberapa hari** → jendela berlaku tiap hari pada jam mulai event.
+- **Event beberapa hari** → scan petugas: jendela berlaku tiap hari pada jam mulai event. **Self check-in**: satu jendela dari 15 menit sebelum mulai di hari pertama s.d. 30 menit setelah jam selesai di hari terakhir (kehadiran tetap tercatat sekali).
 - **Terlambat** (lewat 30 menit setelah mulai, di hari yang sama): scan petugas tetap diterima tetapi dicatat sebagai **walk-in** (metode WALK_IN). App menampilkan keterangan walk-in.
 - **Admin** (Fulltimer, atau Role Access menu Kehadiran/Ibadah tulis; pengelola event untuk event) **boleh di luar jendela** — untuk koreksi lewat Portal.
 - Tiket ibadah tetap tampil aktif sampai 30 menit setelah ibadah selesai (hanya tampilan). Setelah itu reservasi yang tidak dipakai **dibatalkan otomatis (NO_SHOW)**. Petugas/admin tetap bisa check-in tiket yang sudah dibatalkan bila jemaat ternyata hadir.

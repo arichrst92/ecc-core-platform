@@ -494,6 +494,10 @@ export const SECTIONS: Section[] = [
         kind: 'warning',
         text: 'PIC area/homecell HARUS jemaat yang sudah masuk pelayanan Penggembalaan. Kalau dia keluar dari pelayanan, PIC field tidak otomatis null — admin perlu manual re-assign.',
       },
+      {
+        kind: 'tip',
+        text: 'Absen pertemuan homecell (scan QR, Absen Checklist, tamu hadir) hanya bisa SAAT pertemuan dimulai atau setelahnya — sesuai tanggal & jam mulai jadwal (zona waktu cabang; tanpa jam → sejak 00.00). Tidak bisa diisi sebelum pertemuan atau untuk jadwal besok. Bila jam di jadwal salah, PIC/asisten ubah jadwalnya dulu. Di app 2.5.0 ke bawah, pesan penolakan tidak terlihat di layar scanner (scan seolah tidak bereaksi) — pakai Absen Checklist untuk melihat alasannya.',
+      },
     ],
   },
   {

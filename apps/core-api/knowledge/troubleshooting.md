@@ -36,6 +36,7 @@ summary: Indeks cepat masalah yang sering terjadi di lapangan (login, scan, rese
 | Petugas tidak muncul di jadwal tanggal tertentu | Ada susunan khusus tanggal yang menggantikan susunan tetap | Ubah susunan tanggal itu atau "Kembalikan ke susunan tetap" | pelayanan |
 | Pilihan tugas petugas tidak muncul | Kategori & tugas belum diisi / app <2.5.0 | Isi di Portal → detail pelayanan; update app | pelayanan |
 | Menu Kelola homecell tidak muncul | Bukan PIC/asisten/pastor zona homecell itu | Tetapkan PIC/asisten | homecell-zona |
+| Scan absen homecell "tidak bereaksi" / Absen Checklist ditolak "Absensi dibuka saat pertemuan dimulai" | Pertemuan belum dimulai (jam mulai jadwal, zona cabang) — app ≤2.5.0 tidak menampilkan pesan di layar scanner | Absen saat/sesudah jam mulai; bila jam jadwal salah, ubah jadwal (ikon pensil) | homecell-zona |
 | Materi homecell tidak terlihat | Belum publish / di luar masa berlaku / cabang salah / app <2.5.0 | Cek di Portal → Homecell Material | homecell-zona |
 | Non-anggota melihat anggota group | Server/app lama atau cache | Deploy terbaru, tarik untuk muat ulang | group |
 | Parent group tidak ada di pilihan | Dulu dropdown dibatasi 100 | Ketik nama di kotak cari | group |

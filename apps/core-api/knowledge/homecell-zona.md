@@ -31,7 +31,11 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 - **Buat Jadwal** pertemuan; ubah lewat ikon pensil (tanggal, jam, lokasi, catatan) — **juga setelah absen tercatat**, tanpa notifikasi ke anggota; kehadiran yang sudah tercatat tetap.
 - Saat bertemu: **Scan kehadiran** (QR kartu jemaat) atau manual. Anggota mendapat notifikasi "kehadiran tercatat".
 - Catat **tamu** yang hadir (kategori New Comer / Visitor).
-- **Absen hanya saat pertemuan dimulai atau setelahnya** (tanggal + jam mulai, zona waktu cabang; tanpa jam → mulai 00.00 hari itu). Sebelumnya app menampilkan "Absensi dibuka saat pertemuan dimulai" dan server menolak dengan ABSEN_BELUM_DIBUKA. Menghapus absen tetap bisa kapan saja.
+- **Absen hanya saat pertemuan dimulai atau setelahnya** (berlaku sejak 21 Nov 2026 untuk semua versi app): tanggal + jam mulai jadwal, zona waktu cabang; jadwal tanpa jam mulai → terbuka sejak 00.00 hari itu. Berlaku untuk scan QR, input kode manual, Absen Checklist, dan tandai tamu hadir. Tidak bisa lagi mengisi absen sebelum pertemuan / untuk jadwal besok. Menghapus absen yang salah tetap bisa kapan saja.
+  - Server menolak dengan pesan *"Absensi dibuka saat pertemuan dimulai (…). Silakan absen saat atau setelah pertemuan dimulai."* (kode ABSEN_BELUM_DIBUKA).
+  - **App ≤ 2.5.0**: pesan tampil di Absen Checklist & tandai tamu; di **layar scanner/input manual pesannya tidak terlihat** (scan seolah tidak bereaksi) → tutup scanner, cek jam mulai jadwal, atau coba Absen Checklist untuk melihat alasannya.
+  - **Build setelah 2.5.0**: tombol Scan & Absen Checklist disembunyikan sampai jam mulai (muncul otomatis), diganti keterangan "Absensi dibuka saat pertemuan dimulai (…)"; pesan error juga tampil di dalam layar scanner.
+  - Jam mulai salah di jadwal? PIC/asisten ubah jadwal (ikon pensil) — absen langsung mengikuti jam baru.
 
 ## Keluarkan anggota
 - Titik tiga → **Keluarkan dari homecell** → pilih alasan (salah invite, sudah tidak aktif, pindah homecell, pindah kota, atau alasan lain). Anggota pindah ke daftar nonaktif (tanpa notifikasi); alasan tersimpan di riwayat (Portal). Bisa ditambahkan kembali kapan saja.

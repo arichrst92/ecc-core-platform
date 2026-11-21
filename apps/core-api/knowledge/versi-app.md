@@ -22,6 +22,11 @@ summary: Status rilis Els App (2.4.9 & 2.5.0), fitur yang beda antar versi, atur
 - **Tampilan**: pop-up tidak tertutup status bar/garis home; gambar share 1080×1080 memuat foto hero dengan sudut tegak.
 - **Pelayanan**: pilih Kategori → Tugas untuk tiap petugas; "Tugas Anda" di Jadwal Pelayanan Saya & Beranda.
 
+## Menunggu build berikutnya (setelah 2.5.0)
+- Gambar share: foto tampil utuh mengikuti rasio (tidak terpotong).
+- Absen homecell: tombol Scan & Absen Checklist tersembunyi sampai pertemuan dimulai (+ keterangan jam buka).
+- Pesan notifikasi (toast) tampil di dalam jendela yang sedang terbuka (mis. error saat scan absen homecell).
+
 ## Aturan server yang sudah berlaku untuk 2.4.9 (tanpa menunggu 2.5.0)
 - Grup sesi event (satu sesi per jemaat), daftar event urut terdekat.
 - Check-in petugas ±30 menit dari jam mulai; self check-in 15 menit sebelum mulai s.d. 30 menit setelah selesai; jam server zona cabang; terlambat → walk-in.
@@ -34,6 +39,7 @@ summary: Status rilis Els App (2.4.9 & 2.5.0), fitur yang beda antar versi, atur
 - Endpoint scan & reservasi hanya untuk petugas scan / CKids / admin Kehadiran.
 - Notifikasi Homecell Material diterima, layar materinya baru di 2.5.0.
 - Tugas petugas: app lama tidak menampilkan/mengirim tugas; tugas yang sudah ada tetap aman.
+- Absen homecell hanya saat pertemuan dimulai atau setelahnya (21 Nov 2026) — app lama ditolak dengan pesan (tidak terlihat di layar scanner, lihat homecell-zona).
 
 ## Update paksa & versi minimum
 - Portal → App Settings → **App Versions**: per platform isi Latest Version, **Min Supported**, release notes, link toko; *Langsung publish* menonaktifkan versi lama.

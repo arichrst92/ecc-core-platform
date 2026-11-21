@@ -22,6 +22,7 @@
  *   ... --apply              → simpan titik baru
  *   ... --apply --clear-unresolved → juga kosongkan titik yang linknya tidak terbaca
  *   ... --apply --clear-far        → kosongkan titik TANPA link yang > 150 km dari cabangnya
+ *   ... --apply --fix-sign         → balik tanda lintang bila link kehilangan minus (titik di laut utara)
  *   ... --far-km=100               → ubah batas "jauh dari cabang"
  *   ... --only=homecell,ibadah     → batasi jenis (cabang, ibadah, event, homecell, local)
  * Termasuk entri NONAKTIF dan entri yang punya titik tanpa link.
@@ -115,6 +116,7 @@ const KINDS: Kind[] = [
 /** Batas "terlalu jauh dari cabang" (km) — homecell/ibadah/event biasanya di kota cabangnya. */
 const FAR_KM = Number(args.find((a) => a.startsWith('--far-km='))?.split('=')[1] ?? 150);
 const CLEAR_FAR = args.includes('--clear-far');
+const FIX_SIGN = args.includes('--fix-sign');
 function kmFromCabang(r: Row, p: { lat: number; lng: number } | null): number | null {
   if (!p || !r.cabang || r.cabang.latitude == null || r.cabang.longitude == null) return null;
   return distanceKm(p, { lat: r.cabang.latitude, lng: r.cabang.longitude });
@@ -170,7 +172,7 @@ async function main() {
       }
       continue;
     }
-    const loc = await resolveMapsLocation(r.mapsUrl).catch(() => null);
+    let loc = await resolveMapsLocation(r.mapsUrl).catch(() => null);
     await sleep(800); // sopan ke Google / OpenStreetMap
     if (!loc) {
       totals.tidak++;
@@ -184,12 +186,23 @@ async function main() {
       continue;
     }
     const old = oldPt;
-    const km = old ? distanceKm(old, loc) : Infinity;
-    const newFar = kmFromCabang(r, loc);
+    let newFar = kmFromCabang(r, loc);
     if (newFar != null && newFar > FAR_KM) {
-      totals.jauh++;
-      console.log(`PERIKSA_LINK  ${label}  link menunjuk ${newFar.toFixed(0)} km dari ${r.cabang!.nama} — pastikan linknya benar  ${fmt(loc)}`);
+      // Tanda minus lintang hilang (mis. "6.89,107.58" padahal Bandung -6.89) →
+      // titik jatuh di laut belahan utara. Balik tanda bila hasilnya dekat cabang.
+      const flipped = { lat: -loc.lat, lng: loc.lng };
+      const flipKm = kmFromCabang(r, flipped);
+      if (FIX_SIGN && flipKm != null && flipKm <= FAR_KM) {
+        console.log(`TANDA_LINTANG  ${label}  ${fmt(loc)} → ${fmt(flipped)} (${flipKm.toFixed(0)} km dari ${r.cabang!.nama}) — perbaiki juga link di Portal`);
+        loc = flipped;
+        newFar = flipKm;
+      } else {
+        totals.jauh++;
+        const hint = flipKm != null && flipKm <= FAR_KM ? ' [kemungkinan minus lintang hilang → --fix-sign]' : '';
+        console.log(`PERIKSA_LINK  ${label}  link menunjuk ${newFar.toFixed(0)} km dari ${r.cabang!.nama} — pastikan linknya benar  ${fmt(loc)}${hint}`);
+      }
     }
+    const km = old ? distanceKm(old, loc) : Infinity;
     if (km > 0.5) {
       totals.beda++;
       console.log(`BEDA${twin ? ' + KEMBAR' : ''}  ${label}  lama=${fmt(r)} → baru=${fmt(loc)} (${km === Infinity ? 'baru' : `${km.toFixed(1)} km`})`);

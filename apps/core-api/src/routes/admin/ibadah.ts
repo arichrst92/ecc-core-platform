@@ -18,6 +18,7 @@ import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
 import { occurrenceStart } from '../../lib/reservasi-window.js';
 import { tzOr } from '../../lib/tz.js';
+import { selfCheckinOpensAt } from '../../lib/self-checkin.js';
 import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
 import { scanAccess } from '../../lib/scan-access.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
@@ -139,7 +140,16 @@ ibadahRouter.get('/calendar', async (req, res) => {
     // Mobile gate "Akses Online" button dengan field ini.
     linkOnline: string | null;
     /** Okupansi seat pertemuan (sama dengan detail ?tanggal=); null bila seat belum diisi. */
-    okupansi: { tanggal: string; seat: number; hadir: number; persen: number | null } | null;
+    okupansi: {
+      tanggal: string;
+      seat: number;
+      hadir: number;
+      persen: number | null;
+      /** 2026-11: reservasi aktif (belum hadir + hadir) & saat self check-in dibuka.
+       *  App baru: sebelum checkinOpensAt tulis "N reservasi dari X kursi", sesudahnya "N hadir". */
+      reservasi: number;
+      checkinOpensAt: string;
+    } | null;
     /** Batas reservasi pertemuan ini (= jam mulai, zona cabang) — countdown di app. */
     reservasiClosesAt: string;
   }[] = [];
@@ -148,14 +158,18 @@ ibadahRouter.get('/calendar', async (req, res) => {
   const seatIds = ibadahs.filter((i) => i.kapasitasSeat).map((i) => i.id);
   const hadirRows = seatIds.length
     ? await prisma.reservasi.groupBy({
-        by: ['ibadahId', 'tanggalIbadah'],
-        where: { ibadahId: { in: seatIds }, tanggalIbadah: { gte: from, lte: to }, status: 'JOIN' },
+        by: ['ibadahId', 'tanggalIbadah', 'status'],
+        where: { ibadahId: { in: seatIds }, tanggalIbadah: { gte: from, lte: to }, status: { in: ['JOIN', 'RESERVE'] } },
         _count: { _all: true },
       })
     : [];
-  const hadirMap = new Map(
-    hadirRows.map((r) => [`${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`, r._count._all]),
-  );
+  const hadirMap = new Map<string, number>();
+  const resvMap = new Map<string, number>(); // JOIN + RESERVE
+  for (const r of hadirRows) {
+    const k = `${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`;
+    if (r.status === 'JOIN') hadirMap.set(k, (hadirMap.get(k) ?? 0) + r._count._all);
+    resvMap.set(k, (resvMap.get(k) ?? 0) + r._count._all);
+  }
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
@@ -184,7 +198,14 @@ ibadahRouter.get('/calendar', async (req, res) => {
         okupansi: i.kapasitasSeat
           ? (() => {
               const hadir = hadirMap.get(`${i.id}:${iso}`) ?? 0;
-              return { tanggal: iso, seat: i.kapasitasSeat, hadir, persen: occupancyPct(hadir, i.kapasitasSeat) };
+              return {
+                tanggal: iso,
+                seat: i.kapasitasSeat,
+                hadir,
+                persen: occupancyPct(hadir, i.kapasitasSeat),
+                reservasi: resvMap.get(`${i.id}:${iso}`) ?? 0,
+                checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
+              };
             })()
           : null,
       });
@@ -356,16 +377,26 @@ ibadahRouter.get('/:id', async (req, res) => {
   const { ibadahPelayanan: _strip, ...rest } = item;
 
   // Okupansi seat pertemuan ?tanggal= (pendataan saja — check-in tidak dibatasi).
-  let okupansi: { tanggal: string; seat: number | null; hadir: number; persen: number | null } | null = null;
+  let okupansi: {
+    tanggal: string;
+    seat: number | null;
+    hadir: number;
+    persen: number | null;
+    reservasi: number;
+    checkinOpensAt: string;
+  } | null = null;
   if (tanggalDate) {
-    const hadir = await prisma.reservasi.count({
-      where: { ibadahId: item.id, tanggalIbadah: tanggalDate, status: 'JOIN' },
-    });
+    const [hadir, reservasi] = await Promise.all([
+      prisma.reservasi.count({ where: { ibadahId: item.id, tanggalIbadah: tanggalDate, status: 'JOIN' } }),
+      prisma.reservasi.count({ where: { ibadahId: item.id, tanggalIbadah: tanggalDate, status: { in: ['JOIN', 'RESERVE'] } } }),
+    ]);
     okupansi = {
       tanggal: tanggalDate.toISOString().slice(0, 10),
       seat: item.kapasitasSeat,
       hadir,
       persen: occupancyPct(hadir, item.kapasitasSeat),
+      reservasi,
+      checkinOpensAt: selfCheckinOpensAt(tanggalDate, item.jamMulai, tzOr(item.cabang?.timezone)).toISOString(),
     };
   }
   // Batas reservasi pertemuan ?tanggal= (= jam mulai, zona cabang).

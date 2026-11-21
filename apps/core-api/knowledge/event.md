@@ -29,6 +29,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 - Jemaat hanya bisa mendaftarkan **diri sendiri, keluarga, dan tamunya** ("Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.").
 - Peserta yang belum memenuhi syarat usia ditandai "Belum memenuhi syarat usia" dan tidak bisa dicentang.
 - **Kuota penuh** → pendaftaran ditolak; admin di Portal bisa tetap memasukkan (force).
+- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & build setelah 2.5.0**: sebelum check-in dibuka (15 menit sebelum mulai) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar.
 - Tombol **sukarela/daftar dinonaktifkan** di app bila pendaftaran sudah ditutup atau kuota penuh (untuk yang belum terdaftar).
 - "Event ini belum dibuka untuk pendaftaran." → event belum publish/aktif.
 

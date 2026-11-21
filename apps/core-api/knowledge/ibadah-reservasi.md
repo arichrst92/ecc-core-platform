@@ -22,7 +22,9 @@ summary: Cara ibadah dijadwalkan (mingguan/dua mingguan/bulanan, zona waktu caba
 
 ## Reservasi
 1. Detail Ibadah → **Reservasi** → pilih tanggal → pilih siapa yang ikut (saya, keluarga, tamu saya).
-2. Setiap orang mendapat tiketnya sendiri (QR). Okupansi kursi tampil di detail.
+2. Setiap orang mendapat tiketnya sendiri (QR). Okupansi kursi tampil di kartu & detail ibadah (bila kapasitas kursi diisi di Portal):
+   - **App 2.5.0 ke bawah**: selalu "N hadir dari X kursi" — N = yang SUDAH check-in saja (reservasi belum dihitung), jadi sebelum ibadah bisa tertulis 0.
+   - **Web & build setelah 2.5.0**: sebelum self check-in dibuka (15 menit sebelum mulai) → "N reservasi dari X kursi" (reservasi aktif, termasuk yang sudah hadir); sesudahnya → "N hadir dari X kursi". Bisa > 100% (check-in tidak dibatasi kursi).
 - "Jemaat ini sudah reservasi untuk ibadah & tanggal yang sama" → sudah punya tiket.
 - **Pembatalan reservasi** bisa sampai **jam mulai** ibadah ("Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai."). Hanya reservasi berstatus Terdaftar yang bisa dibatalkan; yang sudah hadir tidak bisa dibatalkan.
 - Status reservasi: **RESERVE** (terdaftar) → **JOIN** (hadir) atau **CANCEL** (batal; cancelReason NO_SHOW bila otomatis).

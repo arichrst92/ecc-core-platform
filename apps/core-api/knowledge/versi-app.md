@@ -26,6 +26,7 @@ summary: Status rilis Els App (2.4.9 & 2.5.0), fitur yang beda antar versi, atur
 - Gambar share: foto tampil utuh mengikuti rasio (tidak terpotong).
 - Absen homecell: tombol Scan & Absen Checklist tersembunyi sampai pertemuan dimulai (+ keterangan jam buka).
 - Pesan notifikasi (toast) tampil di dalam jendela yang sedang terbuka (mis. error saat scan absen homecell).
+- Kartu ibadah/event: "N reservasi/terdaftar dari X" sebelum check-in dibuka, "N hadir dari X" sesudahnya (web sudah lebih dulu).
 
 ## Aturan server yang sudah berlaku untuk 2.4.9 (tanpa menunggu 2.5.0)
 - Grup sesi event (satu sesi per jemaat), daftar event urut terdekat.

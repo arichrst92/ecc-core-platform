@@ -58,6 +58,15 @@ type IbadahWin = IbadahForOccurrence & {
   jamSelesai: string;
 };
 
+/**
+ * Saat self check-in pertemuan `day` dibuka (rumus sama dengan windowForDay).
+ * Dipakai kartu okupansi: sebelum ini app menulis "reservasi", sesudahnya "hadir".
+ */
+export function selfCheckinOpensAt(day: Date, jamMulai: string | null | undefined, tz: string): Date {
+  const start = hhmmToMin(jamMulai ?? '') ?? 0;
+  return wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz);
+}
+
 /** Jendela self check-in untuk occurrence pada `day` (UTC midnight, kalender zona cabang). */
 function windowForDay(ibadah: IbadahWin, cancelledDates: string[], day: Date, now: Date, tz: string): SelfCheckinWindow {
   const tanggal = day.toISOString().slice(0, 10);

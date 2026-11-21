@@ -22,6 +22,7 @@ Sebelum mengubah salah satu aturan di bawah:
 | Reservasi tidak dipakai dibatalkan otomatis selesai + 30 menit | `lib/auto-cancel.ts` (`CLOSE_AFTER_MIN`) | — (sama dengan penutupan self check-in) |
 | Scan petugas 30 menit sebelum mulai | `lib/scan-window.ts` `SCAN_BEFORE_MIN` | pesan berasal dari server (aman) |
 | Batalkan visit dalam 1 jam | `routes/admin/me-visit.ts` `DELETE_WINDOW_MS` | i18n `visit.cancel_sub` ("1 jam pertama") |
+| Label okupansi ibadah/event "reservasi/terdaftar" → "hadir" | `routes/admin/ibadah.ts` `okupansi.reservasi/checkinOpensAt`, `routes/admin/event.ts` `attendanceInfo` (rumus = `selfCheckinOpensAt`) | `OccupancyBar`, `utils/eventCount.ts` memakai waktu dari server (aman); app ≤ 2.5.0 hanya menampilkan hadir/terdaftar |
 | Absen homecell saat pertemuan dimulai | `lib/homecell-absen.ts` | app ≥ build setelah 2.5.0 memakai `absenDibukaAt` dari server; app lama → server menolak dengan pesan |
 
 Pesan error dari server (`error.message`) tampil apa adanya di app — aman diubah kapan saja.

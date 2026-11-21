@@ -949,7 +949,7 @@ const portalOnly = (req: Parameters<typeof isMobileClient>[0]) => {
  * tugas aktif. Cakupan: susunan tetap + tanggal hari ini ke depan di ibadah aktif,
  * dan event aktif yang belum lewat.
  */
-async function tugasKosongItems(pelayananIds: string[]) {
+export async function tugasKosongItems(pelayananIds: string[]) {
   if (!pelayananIds.length) return [];
   const withKat = (
     await prisma.pelayananTugasKategori.groupBy({

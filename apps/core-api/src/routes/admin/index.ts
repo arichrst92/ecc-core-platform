@@ -4,6 +4,7 @@ import { sinodeRouter } from './sinode.js';
 import { cabangRouter } from './cabang.js';
 import { jemaatRouter } from './jemaat.js';
 import { pendingCountsRouter } from './pending-counts.js';
+import { needsFillCountsRouter } from './needs-fill-counts.js';
 import { jemaatDuplicateRouter } from './jemaat-duplicate.js';
 import { roleRouter } from './role.js';
 import { ibadahRouter } from './ibadah.js';
@@ -113,6 +114,7 @@ adminRouter.use('/wa-config', fullGuard('wa-config'), waConfigRouter);
 adminRouter.use('/announcement', announcementRouter);
 // Badge menu Portal — jumlah request menunggu tindakan admin.
 adminRouter.use('/pending-counts', pendingCountsRouter);
+adminRouter.use('/needs-fill-counts', needsFillCountsRouter);
 
 adminRouter.use('/sinode', writeGuard('sinode'), sinodeRouter);
 adminRouter.use('/cabang', writeGuard('cabang'), cabangRouter);

@@ -31,6 +31,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { EventFormModal, type EventFormValues } from '@/components/event/event-form-modal';
 import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
 import { usePendingCounts } from '@/lib/pending-counts';
+import { useTugasKosongTargets } from '@/lib/needs-fill-counts';
 import { useCabangOptions } from '@/components/report/report-ui';
 
 /** 'YYYY-MM' → { from, to } (hari pertama & terakhir bulan itu). */
@@ -60,6 +61,8 @@ interface EventListItem {
   pesertaCount: number;
   /** Peserta dengan bukti transfer menunggu verifikasi (hanya dikirim bila boleh memverifikasi). */
   pendingPaymentCount?: number;
+  bankNomor?: string | null;
+  qrisImageUrl?: string | null;
 }
 
 const PAGE_SIZE = 30;
@@ -131,6 +134,7 @@ function EventPageInner() {
     { skipRestore: bayarFromUrl },
   );
   const pendingTotal = usePendingCounts().eventPayment ?? 0;
+  const tugasKosong = useTugasKosongTargets();
   const cabangQ = useCabangOptions();
   const [filterTipe, setFilterTipe] = usePersistentState<'all' | EventListItem['tipeBayar']>('event:tipe', 'all');
   const [periode, setPeriode] = usePersistentState<'upcoming' | 'past'>('event:periode', 'upcoming');
@@ -476,6 +480,16 @@ function EventPageInner() {
                       {e.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                       {e.isPublished ? 'Published' : 'Belum publish'}
                     </span>
+                    {tugasKosong.event.has(e.id) && (
+                      <Link href={`/dashboard/event/${e.id}`}>
+                        <NeedsFillBadge label="Tugas volunteer" hint="Ada volunteer yang belum diberi tugas — buka event, lalu klik badge biru di kartu pelayanan" />
+                      </Link>
+                    )}
+                    {e.tipeBayar !== 'GRATIS' && !e.bankNomor && !e.qrisImageUrl && (
+                      <Link href={`/dashboard/event/${e.id}`}>
+                        <NeedsFillBadge label="Rekening / QRIS" hint="Event berbayar tanpa rekening maupun QRIS — jemaat tidak tahu ke mana membayar" />
+                      </Link>
+                    )}
                     {(e.pendingPaymentCount ?? 0) > 0 && (
                       <Link
                         href={`/dashboard/event/${e.id}`}

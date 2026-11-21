@@ -49,7 +49,14 @@ export default function PelayananPage() {
   const [adding, setAdding] = useState(false);
   const [newNama, setNewNama] = useState('');
   const [search, setSearch] = usePersistentState('pelayanan:list:search', '');
-  const [status, setStatus] = usePersistentState<StatusFilter>('pelayanan:list:status', 'aktif');
+  // Dari badge biru menu (?status=perlu-diisi) → langsung tersaring.
+  const statusFromUrl =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('status') === 'perlu-diisi';
+  const [status, setStatus] = usePersistentState<StatusFilter>(
+    'pelayanan:list:status',
+    statusFromUrl ? 'perlu-diisi' : 'aktif',
+    { skipRestore: statusFromUrl },
+  );
   const [sort, setSort] = usePersistentState<SortKey>('pelayanan:list:sort', 'nama');
   const pending = usePendingJoinCounts();
 

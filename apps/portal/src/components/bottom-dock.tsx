@@ -82,6 +82,7 @@ import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
 import { useAuthStore } from '@/lib/auth-store';
 import { PENDING_META, badgeText, usePendingCounts, type PendingCounts, type PendingKey } from '@/lib/pending-counts';
+import { FILL_META, useNeedsFillCounts, type FillCounts, type FillKey } from '@/lib/needs-fill-counts';
 
 interface NavItem {
   href: string;
@@ -92,6 +93,8 @@ interface NavItem {
   external?: boolean;
   /** Badge request menunggu tindakan (GET /admin/pending-counts). */
   badge?: PendingKey;
+  /** Badge biru "Perlu diisi" (GET /admin/needs-fill-counts). */
+  fill?: FillKey;
 }
 
 interface NavGroup {
@@ -117,16 +120,16 @@ const GROUPS: NavGroup[] = [
     icon: Building2,
     items: [
       { href: '/dashboard/sinode', label: 'Gereja', icon: Building2, menuKey: 'sinode' },
-      { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, menuKey: 'cabang' },
+      { href: '/dashboard/cabang', label: 'Cabang Gereja', icon: Church, menuKey: 'cabang', fill: 'cabang' },
     ],
   },
   {
     label: 'Service',
     icon: Calendar,
     items: [
-      { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, menuKey: 'ibadah' },
+      { href: '/dashboard/ibadah', label: 'Ibadah', icon: Calendar, menuKey: 'ibadah', fill: 'ibadah' },
       { href: '/dashboard/kategori-ibadah', label: 'Kategori Ibadah', icon: Layers, menuKey: 'kategori-ibadah' },
-      { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan' },
+      { href: '/dashboard/pelayanan', label: 'Pelayanan', icon: HandHeart, menuKey: 'pelayanan', fill: 'pelayanan' },
       { href: '/dashboard/pelayanan/join-requests', label: 'Permintaan Volunteer', icon: UserPlus, menuKey: 'ministry-join-requests', badge: 'volunteer' },
       { href: '/dashboard/kehadiran', label: 'Kehadiran', icon: Ticket, menuKey: 'kehadiran' },
       { href: '/dashboard/laporan-ibadah', label: 'Laporan Ibadah', icon: BarChart3, menuKey: 'laporan-ibadah' },
@@ -149,17 +152,17 @@ const GROUPS: NavGroup[] = [
     label: 'Community',
     icon: HomeIcon,
     items: [
-      { href: '/dashboard/homecell-area', label: 'Zona', icon: MapPin, menuKey: 'homecell-area' },
-      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell', badge: 'homecellLokasi' },
+      { href: '/dashboard/homecell-area', label: 'Zona', icon: MapPin, menuKey: 'homecell-area', fill: 'zona' },
+      { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell', badge: 'homecellLokasi', fill: 'homecell' },
       { href: '/dashboard/homecell-material', label: 'Homecell Material', icon: Library, menuKey: 'homecell-material' },
-      { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group', badge: 'groupJoin' },
+      { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group', badge: 'groupJoin', fill: 'group' },
     ],
   },
   {
     label: 'Movement',
     icon: Megaphone,
     items: [
-      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event', badge: 'eventPayment' },
+      { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event', badge: 'eventPayment', fill: 'event' },
       { href: '/dashboard/laporan-event', label: 'Laporan Event', icon: BarChart3, menuKey: 'laporan-event' },
       { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
       { href: '/dashboard/spiritual-journey', label: 'Spiritual Journey', icon: Footprints, menuKey: 'spiritual-journey' },
@@ -287,6 +290,7 @@ export function BottomDock() {
 
   // Badge request menunggu tindakan (grup + menu tujuan).
   const pending = usePendingCounts();
+  const fill = useNeedsFillCounts();
 
   // Filter groups berdasarkan menuAccess
   const visibleGroups = GROUPS.map((g) => {
@@ -358,6 +362,7 @@ export function BottomDock() {
             active={isGroupActive(g)}
             pathname={pathname}
             pending={pending}
+            fill={fill}
             onToggle={() => setOpenGroup((prev) => (prev === g.label ? null : g.label))}
             onNavigate={(href, external) => {
               setOpenGroup(null);
@@ -445,6 +450,7 @@ function DockGroup({
   active,
   pathname,
   pending,
+  fill,
   onToggle,
   onNavigate,
 }: {
@@ -453,16 +459,19 @@ function DockGroup({
   active: boolean;
   pathname: string | null;
   pending: PendingCounts;
+  fill: FillCounts;
   onToggle: () => void;
   onNavigate: (href: string, external?: boolean) => void;
 }) {
   const Icon = group.icon;
   const countOf = (item: NavItem) => (item.badge ? pending[item.badge] ?? 0 : 0);
   const groupTotal = group.items.reduce((n, it) => n + countOf(it), 0);
-  const groupTitle = group.items
-    .filter((it) => countOf(it) > 0)
-    .map((it) => `${countOf(it)} ${PENDING_META[it.badge as PendingKey].label}`)
-    .join('\n');
+  const fillOf = (item: NavItem) => (item.fill ? fill[item.fill] ?? 0 : 0);
+  const fillTotal = group.items.reduce((n, it) => n + fillOf(it), 0);
+  const groupTitle = [
+    ...group.items.filter((it) => countOf(it) > 0).map((it) => `${countOf(it)} ${PENDING_META[it.badge as PendingKey].label}`),
+    ...group.items.filter((it) => fillOf(it) > 0).map((it) => `Perlu diisi: ${fillOf(it)} ${FILL_META[it.fill as FillKey].label}`),
+  ].join('\n');
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ left: number; bottom: number } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -518,6 +527,8 @@ function DockGroup({
           const isActive = isItemActive(pathname, item.href);
           const n = countOf(item);
           const meta = item.badge ? PENDING_META[item.badge] : null;
+          const nf = fillOf(item);
+          const fmeta = item.fill ? FILL_META[item.fill] : null;
           return (
             <div
               key={item.href}
@@ -533,8 +544,18 @@ function DockGroup({
               >
                 <ItemIcon className="w-4 h-4 shrink-0" />
                 <span className="flex-1 truncate">{item.label}</span>
-                {isActive && !n ? <span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> : null}
+                {isActive && !n && !nf ? <span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> : null}
               </button>
+              {nf > 0 && fmeta ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(fmeta.target)}
+                  title={`Perlu diisi: ${nf} ${fmeta.label} — buka`}
+                  className="needs-fill-badge shrink-0 min-w-[22px] h-5 px-1.5 rounded-full text-white text-[11px] font-bold leading-5 text-center"
+                >
+                  {badgeText(nf)}
+                </button>
+              ) : null}
               {n > 0 && meta ? (
                 <button
                   type="button"
@@ -582,6 +603,14 @@ function DockGroup({
             aria-label={`${groupTotal} menunggu tindakan`}
           >
             {badgeText(groupTotal)}
+          </span>
+        ) : null}
+        {fillTotal > 0 ? (
+          <span
+            className="needs-fill-badge pointer-events-none absolute -top-1 left-0 md:-left-0.5 min-w-[20px] h-5 px-1 rounded-full text-white text-[10px] font-bold leading-5 text-center ring-2 ring-white"
+            aria-label={`${fillTotal} data perlu diisi`}
+          >
+            {badgeText(fillTotal)}
           </span>
         ) : null}
 

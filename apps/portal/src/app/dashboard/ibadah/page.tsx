@@ -1,5 +1,7 @@
 'use client';
 
+import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
+import { useTugasKosongTargets } from '@/lib/needs-fill-counts';
 import { jamZone } from '@/lib/tz-label';
 import { useMemo, useState } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
@@ -346,6 +348,7 @@ function CabangSection({
   onReorder: (ids: string[]) => void;
   onToggleReview: (i: IbadahItem, on: boolean) => void;
 }) {
+  const tugasKosong = useTugasKosongTargets();
   const [expanded, setExpanded] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -461,6 +464,11 @@ function CabangSection({
                         <Eye className="w-3.5 h-3.5 shrink-0" />
                         {i.nama}
                       </Link>
+                      {tugasKosong.ibadah.has(i.id) ? (
+                        <Link href={`/dashboard/ibadah/${i.id}`}>
+                          <NeedsFillBadge label="Tugas petugas" hint="Ada petugas yang belum diberi tugas — buka ibadah, lalu klik badge biru di kartu pelayanan" />
+                        </Link>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-2.5">

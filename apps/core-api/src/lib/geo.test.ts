@@ -77,6 +77,14 @@ describe('link Google Maps tanpa koordinat', () => {
     expect(extractCoordsFromMapsHtml('<html>tidak ada</html>')).toBeNull();
   });
 
+  it('tampilan bawaan yang jauh tidak dipakai (pin di tengah laut)', () => {
+    // Tampilan awal jarak ~150 km & peta statis zoom 10 → bukan titik tempat.
+    expect(extractCoordsFromMapsHtml('window.APP_INITIALIZATION_STATE=[[[152000.5,106.8,-5.9],[0,0,0]')).toBeNull();
+    expect(extractCoordsFromMapsHtml('staticmap?center=-5.9%2C106.8&amp;zoom=10')).toBeNull();
+    expect(extractCoordsFromMapsHtml('https://www.google.com/maps/@-5.9,106.8,10z')).toBeNull();
+    expect(extractCoordsFromMapsHtml('https://www.google.com/maps/@-6.2,106.8,17z')).toEqual({ lat: -6.2, lng: 106.8 });
+  });
+
   it('nama tempat dari URL', () => {
     expect(placeTextFromMapsUrl('https://maps.google.com/?q=Gereja+ECC+Bandung&ftid=0x1:0x2')).toBe('Gereja ECC Bandung');
     expect(placeTextFromMapsUrl('https://www.google.com/maps/place/Jl.+Dago+No.+12,+Bandung/data=!4m2')).toBe('Jl. Dago No. 12, Bandung');

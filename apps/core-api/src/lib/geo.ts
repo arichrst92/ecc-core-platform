@@ -86,24 +86,52 @@ export function isMapsLink(input: string): boolean {
  * Koordinat dari isi halaman Google Maps (untuk link tanpa koordinat, mis.
  * maps.app.goo.gl yang berujung ke ?q=Nama+Tempat&ftid=… atau /place/Nama/data=…).
  * Urutan: penanda tempat (!3d!4d), gambar peta statis (center= / markers=),
- * link kanonik (/@lat,lng), lalu pusat tampilan awal (APP_INITIALIZATION_STATE).
+ * link kanonik (/@lat,lng), lalu pusat tampilan awal (APP_INITIALIZATION_STATE) — yang
+ * berbasis tampilan hanya diterima bila peta diperbesar dekat (lihat Ranked).
  */
 export function extractCoordsFromMapsHtml(html: string): LatLng | null {
-  const pats: [RegExp, boolean][] = [
-    [new RegExp(`!3d${NUM}!4d${NUM}`), false],
-    [new RegExp(`[?&;](?:center|markers)=${NUM}(?:%2C|,)\\s*${NUM}`), false],
-    [new RegExp(`/@${NUM},${NUM},\\d`), false],
-    [new RegExp(`APP_INITIALIZATION_STATE=\\[\\[\\[[\\d.]+,${NUM},${NUM}\\]`), true], // [zoom, lng, lat]
-  ];
-  for (const [re, lngFirst] of pats) {
-    const m = re.exec(html);
-    if (!m) continue;
-    const a = Number(m[1]);
-    const b = Number(m[2]);
-    const v = lngFirst ? valid(b, a) : valid(a, b);
-    if (v) return v;
-  }
-  return null;
+  return extractCoordsFromMapsHtmlRanked(html).place ?? extractCoordsFromMapsHtmlRanked(html).view;
+}
+
+/**
+ * `place` = penanda tempat (!3d!4d / markers=) — titik usaha yang sebenarnya.
+ * `view`  = pusat tampilan peta (/@lat,lng). Hanya cadangan terakhir.
+ * 2026-11: pusat tampilan awal halaman (APP_INITIALIZATION_STATE / center=) TIDAK
+ * dipakai lagi — untuk link tanpa titik, Google mengirim tampilan bawaan yang
+ * sama untuk semua link (mis. di laut utara Jakarta), sehingga banyak pin
+ * menumpuk di satu titik yang salah.
+ */
+export function extractCoordsFromMapsHtmlRanked(html: string): { place: LatLng | null; view: LatLng | null } {
+  const first = (re: RegExp, order: 'latlng' | 'lnglat', accept?: (m: RegExpExecArray) => boolean) => {
+    const g = new RegExp(re.source, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(html))) {
+      if (accept && !accept(m)) continue;
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      const v = order === 'lnglat' ? valid(b, a) : valid(a, b);
+      if (v) return v;
+    }
+    return null;
+  };
+  const place =
+    first(new RegExp(`!3d${NUM}!4d${NUM}`), 'latlng') ??
+    first(new RegExp(`[?&;]markers=${NUM}(?:%2C|,)\\s*${NUM}`), 'latlng') ??
+    // Gambar peta statis: hanya bila diperbesar ke satu tempat (zoom ≥ 14).
+    first(new RegExp(`[?&;]center=${NUM}(?:%2C|,)\\s*${NUM}(?:&amp;|&)zoom=(\\d+)`), 'latlng', (m) => Number(m[3]) >= 14) ??
+    // Tampilan awal [jarak kamera(m), lng, lat]: hanya bila dekat (≤ 20 km) — tampilan bawaan
+    // untuk link tanpa titik berjarak jauh & sama untuk semua link (mis. di laut utara Jakarta).
+    appInit(html);
+  // Pusat peta di link kanonik (/@lat,lng,zoom) — cadangan, hanya bila diperbesar (zoom ≥ 14).
+  const view = first(new RegExp(`/@${NUM},${NUM},(\\d+(?:\\.\\d+)?)z`), 'latlng', (m) => Number(m[3]) >= 14);
+  return { place, view };
+}
+
+/** Tampilan awal halaman: [jarak kamera (m), lng, lat] — hanya bila dekat (≤ 20 km). */
+function appInit(html: string): LatLng | null {
+  const m = new RegExp(`APP_INITIALIZATION_STATE=\\[\\[\\[([\\d.]+),${NUM},${NUM}\\]`).exec(html);
+  if (!m || Number(m[1]) > 20_000) return null;
+  return valid(Number(m[3]), Number(m[2]));
 }
 
 /** Nama tempat / alamat dari URL Google Maps tanpa koordinat (untuk geocoding). */
@@ -173,6 +201,7 @@ export async function resolveMapsLocation(input: string): Promise<LatLng | null>
     // Lewati halaman persetujuan cookie Google (consent.google.com).
     Cookie: 'CONSENT=YES+cb; SOCS=CAI',
   };
+  let viewFallback: LatLng | null = null;
   // 2. ikuti redirect manual
   for (let i = 0; i < 6; i++) {
     let res: Response;
@@ -186,8 +215,9 @@ export async function resolveMapsLocation(input: string): Promise<LatLng | null>
       // 3. halaman akhir → cari titik di HTML
       try {
         const html = (await res.text()).slice(0, 3_000_000);
-        const found = extractCoordsFromMapsHtml(html);
-        if (found) return found;
+        const found = extractCoordsFromMapsHtmlRanked(html);
+        if (found.place) return found.place;
+        viewFallback = found.view;
       } catch {
         // abaikan
       }
@@ -200,9 +230,10 @@ export async function resolveMapsLocation(input: string): Promise<LatLng | null>
     const found = parseMapsCoordinates(url);
     if (found) return found;
   }
-  // 4. geocoding nama tempat / alamat
+  // 4. geocoding nama tempat / alamat dari link, baru pusat tampilan peta (bila tak ada nama).
   const text = placeTextFromMapsUrl(url) ?? placeTextFromMapsUrl(input.trim());
-  return text ? geocodeText(text) : null;
+  if (text) return geocodeText(text);
+  return viewFallback;
 }
 
 /** Jarak garis lurus (km) — rumus haversine. */

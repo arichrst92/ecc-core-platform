@@ -124,7 +124,21 @@ mapViewRouter.get('/', async (req, res) => {
       },
     }),
   ]);
-  // Usaha lama (link diisi sebelum titik disimpan) → isi titiknya di latar belakang.
+  // Titik mencurigakan: beberapa usaha dengan link BERBEDA tapi titik PERSIS sama
+  // (hasil lama yang mengambil pusat tampilan bawaan Google, mis. di tengah laut).
+  // → disembunyikan & dihitung ulang di latar belakang.
+  const byPoint = new Map<string, typeof bizRows>();
+  for (const b of bizRows) {
+    if (b.latitude == null || b.longitude == null) continue;
+    const k = `${b.latitude},${b.longitude}`;
+    byPoint.set(k, [...(byPoint.get(k) ?? []), b]);
+  }
+  const suspect = new Set<string>();
+  for (const g of byPoint.values()) {
+    if (g.length > 1 && new Set(g.map((b) => b.mapsUrl)).size > 1) for (const b of g) suspect.add(b.id);
+  }
+  for (const b of bizRows) if (suspect.has(b.id)) Object.assign(b, { latitude: null, longitude: null });
+  // Usaha tanpa titik (atau titik mencurigakan) → isi titiknya di latar belakang.
   void backfillBusinessCoords(bizRows.filter((b) => b.latitude == null).map((b) => ({ id: b.id, mapsUrl: b.mapsUrl! })));
 
   const homecellPerCabang = new Map<string, number>();
@@ -185,10 +199,8 @@ async function backfillBusinessCoords(rows: { id: string; mapsUrl: string }[]) {
   try {
     for (const r of rows.slice(0, 10)) {
       const loc = await resolveMapsLocation(r.mapsUrl).catch(() => null);
-      if (loc) {
-        // raw → updatedAt usaha tidak ikut berubah
-        await prisma.$executeRaw`UPDATE "local_business" SET "latitude" = ${loc.lat}, "longitude" = ${loc.lng} WHERE "id" = ${r.id}::uuid`.catch(() => undefined);
-      }
+      // raw → updatedAt usaha tidak ikut berubah. Tidak ketemu → kosongkan (tidak tampil, bukan titik salah).
+      await prisma.$executeRaw`UPDATE "local_business" SET "latitude" = ${loc?.lat ?? null}, "longitude" = ${loc?.lng ?? null} WHERE "id" = ${r.id}::uuid`.catch(() => undefined);
     }
   } catch (e) {
     logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'map-view: backfill titik usaha gagal');

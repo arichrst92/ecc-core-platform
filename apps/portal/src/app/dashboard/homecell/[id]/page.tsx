@@ -43,6 +43,7 @@ interface Homecell {
   latitude?: number | null;
   longitude?: number | null;
   lokasiIssue?: LokasiIssue | null;
+  jarakCabangKm?: number | null;
   area: {
     id: string;
     nama: string;
@@ -193,7 +194,14 @@ export default function HomecellDetailPage() {
         )}
       </div>
 
-      <LokasiIssueBox issue={h.lokasiIssue} latitude={h.latitude} longitude={h.longitude} mapsUrl={h.mapsUrl} />
+      <LokasiIssueBox
+        issue={h.lokasiIssue}
+        latitude={h.latitude}
+        longitude={h.longitude}
+        mapsUrl={h.mapsUrl}
+        jarakKm={h.jarakCabangKm}
+        cabangNama={h.area.cabang?.nama}
+      />
 
       {/* Laporan: periode, KPI, demografi, kehadiran anggota + Export PDF */}
       <HomecellReportPanel homecellId={homecellId} />

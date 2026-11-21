@@ -176,8 +176,14 @@ export const homecellResource: ResourceConfig<Homecell> = {
     {
       key: 'lokasiIssue',
       label: 'Lokasi',
-      width: '150px',
-      render: (_v, row) => <LokasiBadge issue={row.lokasiIssue as LokasiIssue | null | undefined} />,
+      width: '190px',
+      render: (_v, row) => (
+        <LokasiBadge
+          issue={row.lokasiIssue as LokasiIssue | null | undefined}
+          jarakKm={row.jarakCabangKm as number | null | undefined}
+          cabangNama={(row.area as { cabang?: { nama?: string } } | undefined)?.cabang?.nama}
+        />
+      ),
     },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],

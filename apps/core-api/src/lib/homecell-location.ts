@@ -39,20 +39,38 @@ export interface LokasiIssue {
   saran: string;
   /** Jarak titik sekarang ke cabang (km), bila diketahui. */
   jarakKm?: number;
+  /** LINTANG_TERBALIK: jarak ke cabang bila tanda minus dibetulkan (km). */
+  jarakSetelahDibetulkanKm?: number;
+  /** Titik tersimpan yang bermasalah (null = belum ada titik). */
+  titik: { lat: number; lng: number } | null;
+  /** Nama cabang pembanding jarak. */
+  cabangNama?: string | null;
+}
+
+/** Jarak titik homecell ke titik cabangnya (km, dibulatkan 1 desimal); null bila salah satu belum ada. */
+export function jarakKeCabangKm(h: Pt, cabang: Pt | null | undefined): number | null {
+  const a = toLatLng(h);
+  const b = toLatLng(cabang ?? null);
+  return a && b ? Math.round(distanceKm(a, b) * 10) / 10 : null;
 }
 
 type Pt = { latitude: number | null; longitude: number | null };
+type CabangPt = Pt & { nama?: string | null };
 
 const toLatLng = (p: Pt | null | undefined): LatLng | null =>
   p && p.latitude != null && p.longitude != null ? { lat: p.latitude, lng: p.longitude } : null;
 
-export function lokasiIssue(h: Pt & { mapsUrl: string | null }, cabang: Pt | null | undefined): LokasiIssue | null {
+export function lokasiIssue(h: Pt & { mapsUrl: string | null }, cabang: CabangPt | null | undefined): LokasiIssue | null {
   const pt = toLatLng(h);
   const cab = toLatLng(cabang ?? null);
-  const nama = 'cabangnya';
+  const nama = cabang?.nama ?? 'cabangnya';
+  const base = { titik: pt, cabangNama: cabang?.nama ?? null };
+  const km = pt && cab ? distanceKm(pt, cab) : null;
+  const jarak = km != null ? { jarakKm: Math.round(km) } : {};
   if (!pt) {
     return h.mapsUrl
       ? {
+          ...base,
           code: 'LINK_TIDAK_TERBACA',
           serius: false,
           label: 'Link tidak terbaca',
@@ -60,6 +78,7 @@ export function lokasiIssue(h: Pt & { mapsUrl: string | null }, cabang: Pt | nul
             'Link Google Maps tersimpan, tetapi titiknya tidak bisa dibaca sehingga homecell tidak tampil di peta & "Homecell terdekat". Ganti dengan link Bagikan dari titik lokasi, atau tempel koordinat (mis. -6.2088, 106.8456).',
         }
       : {
+          ...base,
           code: 'BELUM_ADA_LOKASI',
           serius: false,
           label: 'Belum ada lokasi',
@@ -68,27 +87,32 @@ export function lokasiIssue(h: Pt & { mapsUrl: string | null }, cabang: Pt | nul
   }
   if (distanceKm(pt, GOOGLE_DEFAULT_POINT) < 1) {
     return {
+      ...base,
+      ...jarak,
       code: 'TITIK_BAWAAN',
       serius: true,
       label: 'Titik di laut (bawaan Google)',
-      saran:
-        'Titik ini adalah pusat tampilan bawaan Google, bukan lokasi homecell (pin muncul di Laut Jawa). Simpan ulang dengan link Bagikan dari titik lokasi yang benar, atau tempel koordinatnya.',
+      saran: `Titik ini adalah pusat tampilan bawaan Google, bukan lokasi homecell (pin muncul di Laut Jawa${
+        km != null ? `, ${Math.round(km)} km dari ${nama}` : ''
+      }). Simpan ulang dengan link Bagikan dari titik lokasi yang benar, atau tempel koordinatnya.`,
     };
   }
-  if (cab) {
-    const km = distanceKm(pt, cab);
+  if (cab && km != null) {
     if (km > FAR_FROM_CABANG_KM) {
       const flipKm = distanceKm({ lat: -pt.lat, lng: pt.lng }, cab);
       if (flipKm <= FAR_FROM_CABANG_KM) {
         return {
+          ...base,
           code: 'LINTANG_TERBALIK',
           serius: true,
           jarakKm: Math.round(km),
+          jarakSetelahDibetulkanKm: Math.round(flipKm * 10) / 10,
           label: 'Tanda minus hilang',
-          saran: `Koordinat di link tidak memakai tanda minus (lintang selatan), jadi pin jatuh di belahan utara (laut). Contoh benar: -6.89, 107.58. Simpan ulang link/koordinat — sistem kini membetulkannya otomatis.`,
+          saran: `Koordinat tidak memakai tanda minus (lintang selatan), jadi pin jatuh di belahan utara (laut), ${Math.round(km)} km dari ${nama}. Dengan tanda minus, titiknya ${flipKm < 1 ? 'kurang dari 1 km' : `±${Math.round(flipKm)} km`} dari ${nama}. Contoh benar: ${(-pt.lat).toFixed(5)}, ${pt.lng.toFixed(5)}. Simpan ulang link/koordinat — sistem kini membetulkannya otomatis.`,
         };
       }
       return {
+        ...base,
         code: 'JAUH_DARI_CABANG',
         serius: true,
         jarakKm: Math.round(km),

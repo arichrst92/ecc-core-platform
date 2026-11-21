@@ -15,7 +15,7 @@ import {
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { MAPS_URL_ERROR } from '../../lib/geo.js';
-import { homecellLokasiIssues, lokasiIssue, resolveHomecellLokasi, type LokasiIssueCode } from '../../lib/homecell-location.js';
+import { homecellLokasiIssues, jarakKeCabangKm, lokasiIssue, resolveHomecellLokasi, type LokasiIssueCode } from '../../lib/homecell-location.js';
 import { assertCanManageHomecell, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { homecellBoardRouter } from './homecell-board.js';
@@ -186,7 +186,8 @@ homecellRouter.get('/', async (req, res) => {
       ...rest,
       area: { ...area, cabang },
       // Masalah titik lokasi (null = aman) — ditampilkan di daftar Portal.
-      lokasiIssue: lokasiIssue(r, { latitude: cabLat, longitude: cabLng }),
+      lokasiIssue: lokasiIssue(r, { nama: cabang.nama, latitude: cabLat, longitude: cabLng }),
+      jarakCabangKm: jarakKeCabangKm(r, { latitude: cabLat, longitude: cabLng }),
       memberCount,
       scheduleCount,
       totalAttendance,
@@ -506,7 +507,8 @@ homecellRouter.get('/:id', async (req, res) => {
   const areaRest = { ...areaRest0, cabang: cabangInfo };
   const rest = {
     ...restBase,
-    lokasiIssue: lokasiIssue(item, { latitude: cabLat, longitude: cabLng }),
+    lokasiIssue: lokasiIssue(item, { nama: cabangInfo.nama, latitude: cabLat, longitude: cabLng }),
+    jarakCabangKm: jarakKeCabangKm(item, { latitude: cabLat, longitude: cabLng }),
     area: { ...areaRest, pastorIds: areaPastors.map((p) => p.jemaatId), pastors: areaPastors.map((p) => p.jemaat) },
   };
   // Kehadiran terakhir tiap anggota di homecell ini (+ berapa hari lalu).

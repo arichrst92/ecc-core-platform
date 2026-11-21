@@ -29,6 +29,7 @@ import { HomecellBoardSection } from '@/components/group/group-content';
 import { todayYmd, parseYmd } from '@/lib/dates';
 import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
 import { ATTENDANCE_TIER_CLASS } from '@/lib/resources/homecell-config';
+import { LokasiIssueBox, type LokasiIssue } from '@/components/homecell/lokasi-issue';
 
 interface Homecell {
   id: string;
@@ -38,6 +39,10 @@ interface Homecell {
   kategori?: 'SINGLE' | 'COUPLE' | null;
   usiaMin?: number | null;
   usiaMax?: number | null;
+  mapsUrl?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lokasiIssue?: LokasiIssue | null;
   area: {
     id: string;
     nama: string;
@@ -187,6 +192,8 @@ export default function HomecellDetailPage() {
           </span>
         )}
       </div>
+
+      <LokasiIssueBox issue={h.lokasiIssue} latitude={h.latitude} longitude={h.longitude} mapsUrl={h.mapsUrl} />
 
       {/* Laporan: periode, KPI, demografi, kehadiran anggota + Export PDF */}
       <HomecellReportPanel homecellId={homecellId} />

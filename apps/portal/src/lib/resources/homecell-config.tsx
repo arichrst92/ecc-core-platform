@@ -10,6 +10,7 @@ import {
 import type { ResourceConfig } from '../crud-types';
 import { JemaatLink } from '@/components/jemaat/jemaat-link';
 import { statusBadge, nestedField } from './render-helpers';
+import { LokasiBadge, type LokasiIssue } from '@/components/homecell/lokasi-issue';
 
 interface Homecell extends Record<string, unknown> {
   id: string;
@@ -171,6 +172,12 @@ export const homecellResource: ResourceConfig<Homecell> = {
           </span>
         );
       },
+    },
+    {
+      key: 'lokasiIssue',
+      label: 'Lokasi',
+      width: '150px',
+      render: (_v, row) => <LokasiBadge issue={row.lokasiIssue as LokasiIssue | null | undefined} />,
     },
     { key: 'isActive', label: 'Status', width: '90px', render: statusBadge },
   ],

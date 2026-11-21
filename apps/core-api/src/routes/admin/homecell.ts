@@ -14,7 +14,8 @@ import {
 } from '@ecc/shared-types';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { MAPS_URL_ERROR, resolveMapsLocation } from '../../lib/geo.js';
+import { MAPS_URL_ERROR } from '../../lib/geo.js';
+import { homecellLokasiIssues, lokasiIssue, resolveHomecellLokasi, type LokasiIssueCode } from '../../lib/homecell-location.js';
 import { assertCanManageHomecell, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { homecellBoardRouter } from './homecell-board.js';
@@ -111,7 +112,18 @@ async function periodMeetingCounts(ids: string[], heldSchedule: Prisma.HomecellS
 // ===== List =====
 homecellRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const { where, period, heldSchedule } = homecellFilter(req, q.search);
+  const { where: baseWhere, period, heldSchedule } = homecellFilter(req, q.search);
+  // ?lokasi=bermasalah (titik salah/jauh/terbaca bawaan) | belum (belum ada / tak terbaca)
+  // | <KODE masalah>. Jumlah homecell kecil → dihitung di server lalu disaring per id.
+  const lokasi = typeof req.query.lokasi === 'string' ? req.query.lokasi : '';
+  let where = baseWhere;
+  if (lokasi) {
+    const issues = await homecellLokasiIssues(baseWhere);
+    const ids = [...issues.entries()]
+      .filter(([, i]) => (lokasi === 'bermasalah' ? i.serius : lokasi === 'belum' ? !i.serius : i.code === lokasi))
+      .map(([id]) => id);
+    where = { AND: [baseWhere, { id: { in: ids } }] };
+  }
 
   const [rows, total] = await Promise.all([
     prisma.homecell.findMany({
@@ -124,7 +136,7 @@ homecellRouter.get('/', async (req, res) => {
           select: {
             id: true,
             nama: true,
-            cabang: { select: { id: true, nama: true } },
+            cabang: { select: { id: true, nama: true, latitude: true, longitude: true } },
           },
         },
         picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true } },
@@ -168,9 +180,13 @@ homecellRouter.get('/', async (req, res) => {
     // Strip schedules array dari response — informasinya sudah ke-summarize
     // via counter di atas. Tetap return _count + flat counter buat backwards
     // compat dengan client lama yang baca memberCount langsung.
-    const { schedules: _schedules, _count, ...rest } = r;
+    const { schedules: _schedules, _count, area, ...rest } = r;
+    const { latitude: cabLat, longitude: cabLng, ...cabang } = area.cabang;
     return {
       ...rest,
+      area: { ...area, cabang },
+      // Masalah titik lokasi (null = aman) — ditampilkan di daftar Portal.
+      lokasiIssue: lokasiIssue(r, { latitude: cabLat, longitude: cabLng }),
       memberCount,
       scheduleCount,
       totalAttendance,
@@ -353,6 +369,23 @@ const fmtTgl = (ymdStr: string | null) =>
     : '—';
 
 
+/**
+ * GET /admin/homecell/lokasi-summary?<filter daftar> — jumlah homecell per
+ * masalah titik lokasi (untuk banner di halaman Homecell Portal).
+ */
+homecellRouter.get('/lokasi-summary', async (req, res) => {
+  await requireMenuP(req, 'homecell', 'read');
+  const { where } = homecellFilter(req, typeof req.query.search === 'string' ? req.query.search : undefined);
+  const issues = await homecellLokasiIssues(where);
+  const byCode: Partial<Record<LokasiIssueCode, number>> = {};
+  let serius = 0;
+  for (const i of issues.values()) {
+    byCode[i.code] = (byCode[i.code] ?? 0) + 1;
+    if (i.serius) serius++;
+  }
+  res.json({ success: true, data: { serius, belum: issues.size - serius, byCode } });
+});
+
 homecellRouter.get('/export', async (req, res) => {
   await requireMenuP(req, 'homecell', 'read');
   const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
@@ -427,7 +460,7 @@ homecellRouter.get('/:id', async (req, res) => {
           picJemaat: { select: { id: true, namaLengkap: true } },
           // Pastor zona — mobile memperlakukan pastor seperti PIC zona.
           pastors: { orderBy: { createdAt: 'asc' }, select: { jemaatId: true, jemaat: { select: { id: true, namaLengkap: true } } } },
-          cabang: { select: { id: true, nama: true, kode: true } },
+          cabang: { select: { id: true, nama: true, kode: true, latitude: true, longitude: true } },
         },
       },
       picJemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
@@ -468,9 +501,12 @@ homecellRouter.get('/:id', async (req, res) => {
 
   // Flatten _count + lastSchedule untuk response yang clean.
   const { _count, schedules, members, area: areaRaw, ...restBase } = item;
-  const { pastors: areaPastors, ...areaRest } = areaRaw;
+  const { pastors: areaPastors, cabang: cabRaw, ...areaRest0 } = areaRaw;
+  const { latitude: cabLat, longitude: cabLng, ...cabangInfo } = cabRaw;
+  const areaRest = { ...areaRest0, cabang: cabangInfo };
   const rest = {
     ...restBase,
+    lokasiIssue: lokasiIssue(item, { latitude: cabLat, longitude: cabLng }),
     area: { ...areaRest, pastorIds: areaPastors.map((p) => p.jemaatId), pastors: areaPastors.map((p) => p.jemaat) },
   };
   // Kehadiran terakhir tiap anggota di homecell ini (+ berapa hari lalu).
@@ -529,14 +565,10 @@ homecellRouter.get('/:id', async (req, res) => {
 });
 
 /** Link/koordinat Google Maps → { mapsUrl, latitude, longitude }. Kosong = hapus. */
-async function resolveLokasi(mapsUrl: string | null | undefined) {
+async function resolveLokasi(mapsUrl: string | null | undefined, ctx: { areaId?: string | null; homecellId?: string | null }) {
   if (!mapsUrl) return { mapsUrl: null, latitude: null, longitude: null };
-  const loc = await resolveMapsLocation(mapsUrl);
-  if (!loc) {
-    throw BadRequest(
-      MAPS_URL_ERROR,
-    );
-  }
+  // Tolak titik bawaan Google & betulkan tanda minus lintang yang hilang.
+  const loc = await resolveHomecellLokasi(mapsUrl, ctx, MAPS_URL_ERROR);
   return { mapsUrl, latitude: loc.lat, longitude: loc.lng };
 }
 
@@ -548,7 +580,7 @@ homecellRouter.post('/', async (req, res) => {
     await assertPenggembalaanRole(input.picJemaatId, PENGGEMBALAAN.HOMECELL_LEADER);
   }
   const { mapsUrl, ...rest } = input;
-  const created = await prisma.homecell.create({ data: { ...rest, ...(await resolveLokasi(mapsUrl)) } });
+  const created = await prisma.homecell.create({ data: { ...rest, ...(await resolveLokasi(mapsUrl, { areaId: input.areaId })) } });
   audit(req, {
     action: 'CREATE',
     resource: 'homecell',
@@ -577,7 +609,7 @@ homecellRouter.patch('/:id', async (req, res) => {
   const { mapsUrl, ...rest } = input;
   const updated = await prisma.homecell.update({
     where: { id: req.params.id },
-    data: { ...rest, ...(mapsUrl === undefined ? {} : await resolveLokasi(mapsUrl)) },
+    data: { ...rest, ...(mapsUrl === undefined ? {} : await resolveLokasi(mapsUrl, { areaId: input.areaId ?? before.areaId })) },
   });
   audit(req, {
     action: 'UPDATE',

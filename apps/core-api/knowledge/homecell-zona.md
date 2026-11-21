@@ -54,6 +54,13 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 - Role Access menu **Homecell Material** perlu diatur untuk admin yang mengunggah.
 - Materi tidak muncul → cek isPublished, tanggal berlaku, cabang tujuan, dan apakah orangnya memang pemimpin/asisten. Fitur ini butuh app 2.5.0.
 
+## Lokasi homecell (titik peta)
+- Titik diambil dari **Lokasi (link Google Maps)** saat disimpan (Portal → Homecell → Edit, atau PIC di app). Dipakai Map View & "Homecell terdekat".
+- Portal → Homecell menampilkan kolom **Lokasi**, banner jumlah yang bermasalah, filter **Lokasi**, dan kotak penjelasan di detail homecell.
+- Masalah yang dikenali: **Titik di laut (bawaan Google)** — link terbaca pusat peta bawaan; **Tanda minus hilang** — koordinat tanpa minus (mis. 6.89 untuk Bandung) sehingga pin di laut utara; **Jauh dari cabang** (>150 km) — link salah atau zona/cabang salah; **Link tidak terbaca**; **Belum ada lokasi**.
+- Sejak 2026-11 saat menyimpan: titik bawaan Google ditolak dengan pesan jelas, dan tanda minus yang hilang dibetulkan otomatis.
+- Perbaikan: ganti link dengan link *Bagikan* dari titik lokasi pertemuan, atau tempel koordinat (mis. -6.2088, 106.8456).
+
 ## Laporan & Portal
 - Portal Zona: saring cabang/pastor/periode, Export PDF/CSV. Detail homecell: anggota (aktif/nonaktif + alasan), jadwal, kehadiran.
 - Anggota keluar = toggle nonaktif (bukan hapus) agar riwayat tetap.

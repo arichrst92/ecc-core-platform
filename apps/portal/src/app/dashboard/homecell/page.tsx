@@ -2,7 +2,9 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { FileText } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { LOKASI_CODE_LABEL, type LokasiIssueCode } from '@/components/homecell/lokasi-issue';
 import { CrudPage } from '@/components/crud/crud-page';
 import { ATTENDANCE_TIER_CLASS, homecellResource } from '@/lib/resources/homecell-config';
 import { apiClient } from '@/lib/api-client';
@@ -24,6 +26,20 @@ function HomecellInner() {
     { skipRestore: sp.has('cabangId') || sp.has('areaId') },
   );
   const extraParams = toHomecellQueryParams(filter);
+  // Ringkasan titik lokasi bermasalah (mengikuti filter cabang/zona/status, tanpa filter lokasi).
+  const { lokasi: _lokasi, ...summaryParams } = extraParams;
+  const lokasiQ = useQuery({
+    queryKey: ['homecell', 'lokasi-summary', summaryParams],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { serius: number; belum: number; byCode: Partial<Record<LokasiIssueCode, number>> } }>(
+          '/admin/homecell/lokasi-summary',
+          { params: summaryParams },
+        )
+      ).data.data,
+    staleTime: 60_000,
+  });
+  const lokasiSum = lokasiQ.data;
 
   async function exportPdf() {
     const qs = new URLSearchParams({ format: 'pdf' });
@@ -62,6 +78,60 @@ function HomecellInner() {
         </button>
       </div>
       <HomecellFilterBar value={filter} onChange={setFilter} />
+      {lokasiSum && (lokasiSum.serius > 0 || lokasiSum.belum > 0) ? (
+        <div
+          className={`mb-3 rounded-lg border px-3 py-2 text-sm flex flex-wrap items-center gap-x-3 gap-y-1 ${
+            lokasiSum.serius > 0 ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1 min-w-[240px]">
+            {lokasiSum.serius > 0 ? (
+              <>
+                <b>{lokasiSum.serius} homecell</b> titik lokasinya salah tampil di peta (
+                {(['TITIK_BAWAAN', 'LINTANG_TERBALIK', 'JAUH_DARI_CABANG'] as const)
+                  .filter((c) => lokasiSum.byCode[c])
+                  .map((c) => `${lokasiSum.byCode[c]} ${LOKASI_CODE_LABEL[c]}`)
+                  .join(', ')}
+                ).{' '}
+              </>
+            ) : null}
+            {lokasiSum.belum > 0 ? (
+              <>
+                <b>{lokasiSum.belum} homecell</b> belum punya titik (
+                {(['BELUM_ADA_LOKASI', 'LINK_TIDAK_TERBACA'] as const)
+                  .filter((c) => lokasiSum.byCode[c])
+                  .map((c) => `${lokasiSum.byCode[c]} ${LOKASI_CODE_LABEL[c]}`)
+                  .join(', ')}
+                ) — tidak tampil di peta & "Homecell terdekat".
+              </>
+            ) : null}
+          </span>
+          {lokasiSum.serius > 0 && filter.lokasi !== 'bermasalah' && (
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, lokasi: 'bermasalah' })}
+              className="px-2.5 py-1 rounded-md bg-white border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-100"
+            >
+              Tampilkan yang bermasalah
+            </button>
+          )}
+          {lokasiSum.belum > 0 && filter.lokasi !== 'belum' && (
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, lokasi: 'belum' })}
+              className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-800 text-xs font-semibold hover:bg-amber-100"
+            >
+              Tampilkan yang belum ada titik
+            </button>
+          )}
+          {filter.lokasi ? (
+            <button type="button" onClick={() => setFilter({ ...filter, lokasi: '' })} className="text-xs underline">
+              Tampilkan semua
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500 mb-3">
         <span className="font-medium">Indikator rata² hadir:</span>
         <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE_TIER_CLASS.merah}`}>0–25%</span>

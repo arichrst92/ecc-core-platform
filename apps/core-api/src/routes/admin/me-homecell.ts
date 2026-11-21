@@ -18,6 +18,7 @@
  *
  * Aturan: 1 jemaat hanya boleh punya 1 homecell aktif & 1 permintaan PENDING.
  */
+import { resolveHomecellLokasi } from '../../lib/homecell-location.js';
 import {
   getLastAttendanceMap,
   getLastMeetingMap,
@@ -41,7 +42,7 @@ import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { isMobileClient } from '../../lib/client-kind.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
-import { MAPS_URL_ERROR, distanceKm, resolveMapsLocation, type LatLng } from '../../lib/geo.js';
+import { MAPS_URL_ERROR, distanceKm, type LatLng } from '../../lib/geo.js';
 import { scheduleFileSelect } from './homecell-schedule.js';
 
 export const meHomecellRouter = Router();
@@ -966,12 +967,7 @@ meHomecellRouter.patch('/:id', async (req, res) => {
     if (!input.mapsUrl) {
       Object.assign(data, { mapsUrl: null, latitude: null, longitude: null });
     } else {
-      const loc = await resolveMapsLocation(input.mapsUrl);
-      if (!loc) {
-        throw BadRequest(
-          MAPS_URL_ERROR,
-        );
-      }
+      const loc = await resolveHomecellLokasi(input.mapsUrl, { homecellId: req.params.id }, MAPS_URL_ERROR);
       Object.assign(data, { mapsUrl: input.mapsUrl, latitude: loc.lat, longitude: loc.lng });
     }
   }
@@ -1020,12 +1016,7 @@ meHomecellRouter.patch('/:id/lokasi', async (req, res) => {
   if (!mapsUrl) {
     data = { mapsUrl: null, latitude: null, longitude: null };
   } else {
-    const loc = await resolveMapsLocation(mapsUrl);
-    if (!loc) {
-      throw BadRequest(
-        MAPS_URL_ERROR,
-      );
-    }
+    const loc = await resolveHomecellLokasi(mapsUrl, { homecellId: req.params.id }, MAPS_URL_ERROR);
     data = { mapsUrl, latitude: loc.lat, longitude: loc.lng };
   }
   const updated = await prisma.homecell.update({

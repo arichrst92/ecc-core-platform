@@ -20,6 +20,8 @@ export interface HomecellFilterState {
   from: string; // YYYY-MM-DD (periode=custom)
   to: string;
   pertemuan: '' | 'ada' | 'tidak';
+  /** Titik lokasi: bermasalah (salah tampil di peta) / belum (belum ada / link tak terbaca). */
+  lokasi?: '' | 'bermasalah' | 'belum';
 }
 
 export const defaultHomecellFilter: HomecellFilterState = {
@@ -31,6 +33,7 @@ export const defaultHomecellFilter: HomecellFilterState = {
   from: '',
   to: '',
   pertemuan: '',
+  lokasi: '',
 };
 
 export const PERIODE_OPTIONS: { value: PeriodePreset; label: string }[] = [
@@ -55,6 +58,7 @@ export function toHomecellQueryParams(s: HomecellFilterState): Record<string, st
     from: custom ? s.from || undefined : undefined,
     to: custom ? s.to || undefined : undefined,
     pertemuan: s.pertemuan || undefined,
+    lokasi: s.lokasi || undefined,
   };
 }
 
@@ -182,6 +186,17 @@ export function HomecellFilterBar({
             <option value="">Semua</option>
             <option value="ada">Ada pertemuan</option>
             <option value="tidak">{value.periode ? 'Tidak ada pertemuan' : 'Belum pernah pertemuan'}</option>
+          </select>
+        </Field>
+        <Field label="Lokasi">
+          <select
+            value={value.lokasi ?? ''}
+            onChange={(e) => patch({ lokasi: e.target.value as HomecellFilterState['lokasi'] })}
+            className={selectCls}
+          >
+            <option value="">Semua</option>
+            <option value="bermasalah">Titik bermasalah</option>
+            <option value="belum">Belum ada / link tak terbaca</option>
           </select>
         </Field>
       </div>

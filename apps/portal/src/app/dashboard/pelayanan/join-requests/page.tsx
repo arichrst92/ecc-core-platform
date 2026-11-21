@@ -7,7 +7,7 @@
  * Tampilan gabungan semua ministry yang bisa dikelola (Fulltimer: semua,
  * leader: ministry yang dipimpin) + filter per ministry via chip / ?pelayananId=.
  */
-import { Suspense, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,11 +19,19 @@ import {
   Loader2,
   MessageSquareQuote,
   Phone,
+  RotateCcw,
+  Search,
   UserPlus,
   X,
 } from 'lucide-react';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { apiClient } from '@/lib/api-client';
+import { usePersistentState } from '@/lib/use-persistent-state';
+
+type Umur = 'all' | '3' | '7' | '14';
+type Urut = 'oldest' | 'newest' | 'name';
+const DAY = 86_400_000;
+const filterCls = 'px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
 
 interface Role {
   id: string;
@@ -91,6 +99,12 @@ function JoinRequestsContent() {
   const selected = params.get('pelayananId') ?? '';
   const [rejecting, setRejecting] = useState<JoinRequest | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // Filter disimpan per tab → tetap terisi saat kembali dari detail jemaat.
+  const [search, setSearch] = usePersistentState('joinreq:search', '');
+  const [cabangId, setCabangId] = usePersistentState('joinreq:cabang', '');
+  const [peran, setPeran] = usePersistentState('joinreq:peran', '');
+  const [umur, setUmur] = usePersistentState<Umur>('joinreq:umur', 'all');
+  const [urut, setUrut] = usePersistentState<Urut>('joinreq:urut', 'oldest');
 
   const q = useQuery({
     queryKey: ['ministry-join-requests', 'all'],
@@ -101,8 +115,63 @@ function JoinRequestsContent() {
   });
 
   const ministries = q.data?.ministries ?? [];
-  const allRequests = q.data?.requests ?? [];
-  const requests = selected ? allRequests.filter((r) => r.pelayanan.id === selected) : allRequests;
+  const allRequests = useMemo(() => q.data?.requests ?? [], [q.data]);
+
+  // Opsi filter diambil dari permintaan yang ada (hanya cabang/peran yang relevan).
+  const cabangOpts = useMemo(() => {
+    const m = new Map<string, { nama: string; n: number }>();
+    for (const r of allRequests) {
+      const k = r.jemaat.cabang?.id ?? 'none';
+      const cur = m.get(k) ?? { nama: r.jemaat.cabang?.nama ?? 'Tanpa cabang', n: 0 };
+      cur.n++;
+      m.set(k, cur);
+    }
+    return [...m.entries()].sort((a, b) => a[1].nama.localeCompare(b[1].nama, 'id'));
+  }, [allRequests]);
+  const peranOpts = useMemo(
+    () => [...new Set(allRequests.map((r) => r.requestedRole?.nama ?? '—'))].sort((a, b) => a.localeCompare(b, 'id')),
+    [allRequests],
+  );
+
+  // Semua filter KECUALI pelayanan → dipakai untuk angka di chip pelayanan.
+  const baseFiltered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const digits = term.replace(/\D/g, '');
+    const minAge = umur === 'all' ? 0 : Number(umur) * DAY;
+    const now = Date.now();
+    const list = allRequests.filter((r) => {
+      if (cabangId && (r.jemaat.cabang?.id ?? 'none') !== cabangId) return false;
+      if (peran && (r.requestedRole?.nama ?? '—') !== peran) return false;
+      if (minAge && now - new Date(r.createdAt).getTime() < minAge) return false;
+      if (term) {
+        const hit =
+          r.jemaat.namaLengkap.toLowerCase().includes(term) ||
+          (r.jemaat.kode ?? '').toLowerCase().includes(term) ||
+          (digits.length >= 4 && (r.jemaat.noHp ?? '').replace(/\D/g, '').includes(digits));
+        if (!hit) return false;
+      }
+      return true;
+    });
+    return list.sort((a, b) =>
+      urut === 'name'
+        ? a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap, 'id')
+        : (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * (urut === 'oldest' ? 1 : -1),
+    );
+  }, [allRequests, search, cabangId, peran, umur, urut]);
+  const requests = selected ? baseFiltered.filter((r) => r.pelayanan.id === selected) : baseFiltered;
+  const countByMinistry = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of baseFiltered) m.set(r.pelayanan.id, (m.get(r.pelayanan.id) ?? 0) + 1);
+    return m;
+  }, [baseFiltered]);
+  const activeFilters = [search.trim(), cabangId, peran, umur !== 'all' ? umur : ''].filter(Boolean).length;
+  const resetFilters = () => {
+    setSearch('');
+    setCabangId('');
+    setPeran('');
+    setUmur('all');
+  };
+  const overdue = allRequests.filter((r) => Date.now() - new Date(r.createdAt).getTime() >= 7 * DAY).length;
   const rolesByMinistry = new Map(ministries.map((m) => [m.id, m.roles]));
 
   function selectMinistry(id: string) {
@@ -150,12 +219,13 @@ function JoinRequestsContent() {
     },
   });
 
-  const totalPending = allRequests.length;
+  const totalPending = baseFiltered.length;
+  const countOf = (m: Ministry) => (activeFilters ? countByMinistry.get(m.id) ?? 0 : m.pendingRequestCount);
   const selectedMinistry = ministries.find((m) => m.id === selected);
   // Chip: yang punya permintaan dulu; yang kosong disembunyikan kecuali "tampilkan semua".
   const chipMinistries = [...ministries]
-    .filter((m) => showAll || m.pendingRequestCount > 0 || m.id === selected)
-    .sort((a, b) => b.pendingRequestCount - a.pendingRequestCount || a.nama.localeCompare(b.nama, 'id'));
+    .filter((m) => showAll || countOf(m) > 0 || m.id === selected)
+    .sort((a, b) => countOf(b) - countOf(a) || a.nama.localeCompare(b.nama, 'id'));
   const hiddenCount = ministries.length - chipMinistries.length;
 
   return (
@@ -216,6 +286,79 @@ function JoinRequestsContent() {
 
       {q.data?.canManageAny && (
         <>
+          {/* Filter pemohon */}
+          <div className="bg-white border border-neutral-200 rounded-lg p-3 mb-3 flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[200px]">
+              <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cari pemohon</span>
+              <div className="relative">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Nama, kode jemaat, atau no HP…"
+                  className="w-full pl-8 pr-3 py-1.5 border border-neutral-300 rounded text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+            <div>
+              <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cabang pemohon</span>
+              <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={filterCls}>
+                <option value="">Semua cabang</option>
+                {cabangOpts.map(([id, c]) => (
+                  <option key={id} value={id}>
+                    {c.nama} ({c.n})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Peran diminta</span>
+              <select value={peran} onChange={(e) => setPeran(e.target.value)} className={filterCls}>
+                <option value="">Semua peran</option>
+                {peranOpts.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Lama menunggu</span>
+              <select value={umur} onChange={(e) => setUmur(e.target.value as Umur)} className={filterCls}>
+                <option value="all">Semua</option>
+                <option value="3">≥ 3 hari</option>
+                <option value="7">≥ 7 hari</option>
+                <option value="14">≥ 14 hari</option>
+              </select>
+            </div>
+            <div>
+              <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Urutkan</span>
+              <select value={urut} onChange={(e) => setUrut(e.target.value as Urut)} className={filterCls}>
+                <option value="oldest">Terlama dulu</option>
+                <option value="newest">Terbaru dulu</option>
+                <option value="name">Nama A–Z</option>
+              </select>
+            </div>
+            {activeFilters > 0 && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-sm text-neutral-600 hover:bg-neutral-100"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset ({activeFilters})
+              </button>
+            )}
+          </div>
+          {overdue > 0 && umur === 'all' && (
+            <button
+              type="button"
+              onClick={() => setUmur('7')}
+              className="mb-3 w-full text-left text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 hover:bg-amber-100"
+            >
+              {overdue} permintaan sudah menunggu ≥ 7 hari — klik untuk menampilkannya.
+            </button>
+          )}
+
           {/* Filter chip per ministry */}
           <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
             <Chip active={!selected} onClick={() => selectMinistry('')} label="Semua" count={totalPending} />
@@ -225,7 +368,7 @@ function JoinRequestsContent() {
                 active={selected === m.id}
                 onClick={() => selectMinistry(m.id)}
                 label={m.nama}
-                count={m.pendingRequestCount}
+                count={countOf(m)}
               />
             ))}
             {hiddenCount > 0 || showAll ? (
@@ -242,7 +385,16 @@ function JoinRequestsContent() {
           {requests.length === 0 ? (
             <div className="bg-white border border-dashed border-neutral-300 rounded-xl p-12 text-center">
               <Inbox className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
-              <p className="text-sm text-neutral-500">Tidak ada permintaan yang menunggu.</p>
+              <p className="text-sm text-neutral-500">
+                {activeFilters > 0 && allRequests.length > 0
+                  ? 'Tidak ada permintaan yang cocok dengan filter.'
+                  : 'Tidak ada permintaan yang menunggu.'}
+              </p>
+              {activeFilters > 0 && allRequests.length > 0 && (
+                <button type="button" onClick={resetFilters} className="mt-2 text-sm text-brand-600 hover:underline">
+                  Reset filter
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -366,7 +518,9 @@ function RequestCard({
                   {req.jemaat.noHp}
                 </span>
               )}
-              <span>· {timeAgo(req.createdAt)}</span>
+              <span className={Date.now() - new Date(req.createdAt).getTime() >= 7 * DAY ? 'text-amber-700 font-medium' : ''}>
+                · {timeAgo(req.createdAt)}
+              </span>
             </div>
             <div className="text-xs mt-2 flex items-center gap-2 flex-wrap">
               {showMinistry && (

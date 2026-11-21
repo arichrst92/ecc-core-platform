@@ -21,12 +21,22 @@ import {
   ChevronRight,
   CalendarClock,
   History,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { EventFormModal, type EventFormValues } from '@/components/event/event-form-modal';
 import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
+import { useCabangOptions } from '@/components/report/report-ui';
+
+/** 'YYYY-MM' → { from, to } (hari pertama & terakhir bulan itu). */
+function monthRange(ym: string): { from?: string; to?: string } {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  if (!m) return {};
+  const last = new Date(Number(m[1]), Number(m[2]), 0).getDate();
+  return { from: `${ym}-01`, to: `${ym}-${String(last).padStart(2, '0')}` };
+}
 
 interface EventListItem {
   id: string;
@@ -95,7 +105,11 @@ export default function EventPage() {
 
   // Filter disimpan per tab → tetap terisi saat kembali dari detail event.
   const [search, setSearch] = usePersistentState('event:search', '');
-  const [filterStatus, setFilterStatus] = usePersistentState<'all' | 'published' | 'draft'>('event:status', 'all');
+  const [filterStatus, setFilterStatus] = usePersistentState<'all' | 'published' | 'draft' | 'nonaktif'>('event:status', 'all');
+  const [filterCabang, setFilterCabang] = usePersistentState<string>('event:cabang', 'all');
+  const [bulan, setBulan] = usePersistentState<string>('event:bulan', '');
+  const [filterKuota, setFilterKuota] = usePersistentState<'all' | 'penuh'>('event:kuota', 'all');
+  const cabangQ = useCabangOptions();
   const [filterTipe, setFilterTipe] = usePersistentState<'all' | EventListItem['tipeBayar']>('event:tipe', 'all');
   const [periode, setPeriode] = usePersistentState<'upcoming' | 'past'>('event:periode', 'upcoming');
   const [page, setPage] = useState(1);
@@ -104,7 +118,7 @@ export default function EventPage() {
   const [deleting, setDeleting] = useState<EventListItem | null>(null);
 
   const listQ = useQuery({
-    queryKey: ['event', 'list', { search, filterStatus, filterTipe, periode, page }],
+    queryKey: ['event', 'list', { search, filterStatus, filterTipe, filterCabang, bulan, filterKuota, periode, page }],
     queryFn: async () => {
       const res = await apiClient.get<{
         data: EventListItem[];
@@ -116,8 +130,12 @@ export default function EventPage() {
           periode,
           search: search || undefined,
           isPublished:
-            filterStatus === 'all' ? undefined : filterStatus === 'published' ? 'true' : 'false',
+            filterStatus === 'published' ? 'true' : filterStatus === 'draft' ? 'false' : undefined,
+          isActive: filterStatus === 'nonaktif' ? 'false' : undefined,
           tipeBayar: filterTipe === 'all' ? undefined : filterTipe,
+          cabangId: filterCabang === 'all' ? undefined : filterCabang,
+          pendaftaran: filterKuota === 'penuh' ? 'penuh' : undefined,
+          ...monthRange(bulan),
         },
       });
       return res.data;
@@ -184,6 +202,16 @@ export default function EventPage() {
   const events = listQ.data?.data ?? [];
   const counts = listQ.data?.meta.counts;
   const totalPages = listQ.data?.meta.totalPages ?? 1;
+  const activeFilters = [search.trim(), filterStatus !== 'all', filterTipe !== 'all', filterCabang !== 'all', bulan, filterKuota !== 'all'].filter(Boolean).length;
+  const resetFilters = () => {
+    setPage(1);
+    setSearch('');
+    setFilterStatus('all');
+    setFilterTipe('all');
+    setFilterCabang('all');
+    setBulan('');
+    setFilterKuota('all');
+  };
   // Ganti filter / tab → kembali ke halaman 1.
   const resetPage = <T,>(fn: (v: T) => void) => (v: T) => {
     setPage(1);
@@ -257,7 +285,33 @@ export default function EventPage() {
             <option value="all">Semua</option>
             <option value="published">Published</option>
             <option value="draft">Draft</option>
+            <option value="nonaktif">Nonaktif</option>
           </select>
+        </div>
+        <div>
+          <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cabang</span>
+          <select
+            value={filterCabang}
+            onChange={(e) => resetPage(setFilterCabang)(e.target.value)}
+            className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white max-w-[200px]"
+          >
+            <option value="all">Semua cabang</option>
+            <option value="none">Global / Sinode (tanpa cabang)</option>
+            {(cabangQ.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Bulan</span>
+          <input
+            type="month"
+            value={bulan}
+            onChange={(e) => resetPage(setBulan)(e.target.value)}
+            className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white"
+          />
         </div>
         <div>
           <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Tipe Bayar</span>
@@ -272,6 +326,26 @@ export default function EventPage() {
             <option value="NOMINAL_BEBAS">Nominal Bebas / Sukarela</option>
           </select>
         </div>
+        <div>
+          <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Kuota</span>
+          <select
+            value={filterKuota}
+            onChange={(e) => resetPage(setFilterKuota)(e.target.value as typeof filterKuota)}
+            className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+          >
+            <option value="all">Semua</option>
+            <option value="penuh">Kuota penuh</option>
+          </select>
+        </div>
+        {activeFilters > 0 && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-sm text-neutral-600 hover:bg-neutral-100"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reset ({activeFilters})
+          </button>
+        )}
       </div>
 
       {/* Grid */}
@@ -282,8 +356,18 @@ export default function EventPage() {
       ) : events.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-xl p-12 text-center text-neutral-500">
           <Megaphone className="w-10 h-10 mx-auto mb-3 text-neutral-300" />
-          <p className="font-medium">{periode === 'upcoming' ? 'Belum ada event yang akan datang.' : 'Belum ada event yang sudah lewat.'}</p>
-          {periode === 'upcoming' && (
+          <p className="font-medium">
+            {activeFilters > 0
+              ? 'Tidak ada event yang cocok dengan filter.'
+              : periode === 'upcoming'
+                ? 'Belum ada event yang akan datang.'
+                : 'Belum ada event yang sudah lewat.'}
+          </p>
+          {activeFilters > 0 ? (
+            <button type="button" onClick={resetFilters} className="mt-2 text-sm text-brand-600 hover:underline">
+              Reset filter
+            </button>
+          ) : periode === 'upcoming' && (
             <p className="text-sm mt-1">
               Klik <strong>Tambah Event</strong> untuk membuat event baru.
             </p>
@@ -339,6 +423,9 @@ export default function EventPage() {
                       {e.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                       {e.isPublished ? 'Published' : 'Belum publish'}
                     </span>
+                    {e.quotaPeserta != null && e.pesertaCount >= e.quotaPeserta && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Kuota penuh</span>
+                    )}
                     {!e.isActive && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Nonaktif</span>
                     )}

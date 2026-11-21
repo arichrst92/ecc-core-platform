@@ -263,8 +263,24 @@ eventRouter.get('/', async (req, res) => {
 
   const where: Prisma.EventWhereInput = {};
   if (sinodeId) where.sinodeId = sinodeId;
-  if (cabangId) where.cabangId = cabangId;
+  // cabangId=none → event tanpa cabang (Global / Sinode) — dipakai filter Portal.
+  if (cabangId === 'none') where.cabangId = null;
+  else if (cabangId) where.cabangId = cabangId;
   if (typeof isPublished === 'boolean') where.isPublished = isPublished;
+  const isActiveRaw = req.query.isActive;
+  if (isActiveRaw === 'true' || isActiveRaw === 'false') where.isActive = isActiveRaw === 'true';
+  // Portal: pendaftaran=penuh → kuota sudah tercapai (hitungan sama dengan pesertaCount:
+  // bukan BATAL, kecuali batal otomatis no-show).
+  if (req.query.pendaftaran === 'penuh') {
+    const full = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT e.id FROM "event" e
+      WHERE e.quota_peserta IS NOT NULL
+        AND e.quota_peserta <= (
+          SELECT COUNT(*) FROM "event_participation" p
+          WHERE p.event_id = e.id AND (p.status <> 'BATAL' OR p.cancel_reason = 'NO_SHOW')
+        )`;
+    where.id = { in: full.map((r) => r.id) };
+  }
   if (tipeBayar && ['GRATIS', 'NOMINAL_TETAP', 'NOMINAL_BEBAS'].includes(tipeBayar)) {
     where.tipeBayar = tipeBayar as Prisma.EventWhereInput['tipeBayar'];
   }

@@ -351,8 +351,8 @@ groupRouter.get('/:id', async (req, res) => {
       where: { groupId: group.id, jemaatId: requester.jemaatId, status: 'PENDING' },
       select: { id: true, createdAt: true },
     }),
-    // Jumlah permintaan hanya untuk PIC (Fulltimer: hanya di Portal).
-    group.picJemaatId === requester.jemaatId || (requester.isFulltimer && !isMobileClient(req))
+    // Jumlah permintaan hanya untuk PIC (Portal: Role Access Group tulis).
+    group.picJemaatId === requester.jemaatId || (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'write')))
       ? prisma.groupJoinRequest.count({ where: { groupId: group.id, status: 'PENDING' } })
       : Promise.resolve(0),
   ]);
@@ -789,11 +789,12 @@ groupRouter.delete('/:id/join-request', async (req, res) => {
 
 /**
  * Siapa yang boleh melihat & memproses permintaan bergabung group:
- * hanya PIC group. Admin Fulltimer hanya dari Portal — di app, Fulltimer
- * yang bukan PIC tidak melihat permintaan (privasi pemohon).
+ *   - PIC group (app & Portal);
+ *   - di Portal: Role Access menu "Group" tulis (berlaku juga untuk Fulltimer —
+ *     tidak ada lagi jalan pintas Fulltimer). Di app hanya PIC (privasi pemohon).
  */
-async function canReviewGroupRequests(req: import('express').Request, groupId: string, jemaatId: string, isFulltimer: boolean) {
-  if (isFulltimer && !isMobileClient(req)) return true;
+async function canReviewGroupRequests(req: import('express').Request, groupId: string, jemaatId: string, _isFulltimer?: boolean) {
+  if (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'write'))) return true;
   const g = await prisma.group.findUnique({ where: { id: groupId }, select: { picJemaatId: true } });
   if (!g) throw NotFound('Group tidak ditemukan');
   return g.picJemaatId === jemaatId;

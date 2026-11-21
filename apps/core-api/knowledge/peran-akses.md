@@ -8,10 +8,21 @@ summary: Peta peran di app & Portal (Fulltimer, Role Access, petugas scan, koord
 # Siapa Bisa Apa
 
 ## Portal
-- **Fulltimer** (role Fulltimer) otomatis bisa masuk Portal dan memakai Elsa.
-- Role lain butuh **Role Access** (Developer Tools → Role Access): *Can Access Portal* + centang menu dengan level **Read / Write / Delete**. Sub role mewarisi role induk kecuali di-override.
+- Masuk Portal & menu ditentukan **Role Access** (Developer Tools → Role Access): *Can Access Portal* + centang menu dengan level **Read / Write / Delete**. Berlaku **juga untuk Fulltimer** (tidak ada jalan pintas). Level paling spesifik yang sudah diatur (Status → Sub role → Role) berlaku utuh; level tanpa pengaturan ikut level di atasnya.
 - Sidebar/dock hanya menampilkan menu yang diizinkan. Aksi tanpa level cukup → "tidak punya akses".
-- Contoh kebutuhan akses: ubah jemaat = Jemaat **Write**; hapus jemaat = **Delete**; kelola peserta/pembayaran event = Event **Write**; scan/koreksi kehadiran = Kehadiran atau Ibadah **Write**; proses Spiritual Journey = **Write**; lihat pin jemaat di Map View = menu Jemaat.
+- Contoh kebutuhan akses: ubah jemaat = Jemaat **Write**; hapus jemaat = **Delete**; kelola peserta event = Event **Write**; scan/koreksi kehadiran = Kehadiran atau Ibadah **Write**; kelola tahap Spiritual Journey = **Write**; lihat pin jemaat di Map View = menu Jemaat.
+
+### Approval (antrian persetujuan) di Portal
+Read = melihat antrian, **Write = menyetujui/menolak**.
+| Approval | Menu Role Access |
+|---|---|
+| Permintaan bergabung pelayanan (Permintaan Volunteer & tab Pendaftaran) | **Permintaan Volunteer** — Write = proses semua pelayanan & cabang. Tanpa itu, hanya pelayanan/cabang dari *Otoritas approval* |
+| Request tahap Spiritual Journey dari app | **Request Spiritual Journey** (terpisah dari menu Spiritual Journey) |
+| Bukti transfer / status bayar event | **Verifikasi Pembayaran Event** (di halaman Event; butuh juga Event Read untuk membuka halaman) |
+| Permintaan bergabung group | **Group** Write (selain PIC group) |
+| Prayer Request (tugaskan petugas, tandai didoakan) | **Prayer Request** Write |
+| Kritik & Saran (balas) · Tamu (petugas follow-up) · Cek Duplikat jemaat | Kritik & Saran · Tamu · Jemaat Write |
+- Jadwal pelayanan di Portal untuk semua cabang = **Pelayanan** Write (selain koordinator yang punya otoritas).
 
 ## Peran di app (muncul otomatis bila ditugaskan)
 | Peran | Ditetapkan di | Yang muncul / bisa dilakukan |

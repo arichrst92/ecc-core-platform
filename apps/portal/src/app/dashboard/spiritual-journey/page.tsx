@@ -5,6 +5,7 @@
  * Status + cara mendapatkannya. Jemaat melihat progresnya di app mobile.
  * API: /admin/spiritual-journey
  */
+import { useMenuAccess } from '@/lib/use-menu-access';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -71,7 +72,9 @@ export default function SpiritualJourneyPage() {
   });
   const steps = q.data ?? [];
   // 2.4.6 — request update tahap dari app yang menunggu persetujuan.
+  const canSeeRequests = useMenuAccess('spiritual-journey-request');
   const reqSummary = useQuery({
+    enabled: canSeeRequests,
     queryKey: ['spiritual-journey-request', 'summary'],
     queryFn: async () =>
       (await apiClient.get<{ data: { pending: number } }>('/admin/spiritual-journey-request/summary')).data.data,
@@ -116,6 +119,7 @@ export default function SpiritualJourneyPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {canSeeRequests && (
           <Link
             href="/dashboard/spiritual-journey/request"
             className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-sm font-semibold rounded-lg"
@@ -127,6 +131,7 @@ export default function SpiritualJourneyPage() {
               </span>
             ) : null}
           </Link>
+          )}
           <button
             onClick={() => setEditing('new')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg"

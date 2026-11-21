@@ -19,7 +19,7 @@
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
-import { requireMenuP } from '../../middleware/require-menu.js';
+import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
@@ -52,17 +52,25 @@ export const ministryRouter = Router();
  * Otoritas approval request bergabung (2026-11) — diberikan admin di Portal
  * (Pelayanan → anggota → Otoritas approval) per CABANG. Hanya anggota aktif
  * yang diberi otoritas yang boleh menyetujui/menolak request dari jemaat di
- * cabang tsb (dan mengatur jadwal). Fulltimer boleh semua — hanya di Portal.
+ * cabang tsb (dan mengatur jadwal).
  *
- * Map pelayananId → Set cabangId; 'ALL' untuk Fulltimer.
+ * Di Portal, cakupan SEMUA pelayanan & cabang diberikan lewat Role Access
+ * (bukan lagi otomatis untuk Fulltimer):
+ *   - antrian & approval  → menu "Permintaan Volunteer" (read = lihat, write = setujui/tolak)
+ *   - jadwal pelayanan    → menu "Pelayanan" (write)
+ * Di app, semua orang (termasuk Fulltimer) mengikuti otoritas approval.
+ *
+ * Map pelayananId → Set cabangId; 'ALL' = semua (dari Role Access, Portal saja).
  */
 type ApprovalScope = 'ALL' | Map<string, Set<string>>;
 
-export async function approvalScope(req: Request): Promise<ApprovalScope> {
+export async function approvalScope(
+  req: Request,
+  opts: { menu?: string; level?: 'read' | 'write' } = {},
+): Promise<ApprovalScope> {
   if (!req.user) return new Map();
-  // Fulltimer bebas mengelola semua HANYA di Portal. Di app, Fulltimer pun
-  // mengikuti otoritas yang diberikan (cabang & pelayanan tertentu).
-  if (req.user.isFulltimer && !isMobileClient(req)) return 'ALL';
+  const menu = opts.menu ?? 'ministry-join-requests';
+  if (!isMobileClient(req) && (await hasMenuAccessFor(req.user, menu, opts.level ?? 'write'))) return 'ALL';
   const rows = await prisma.pelayananApprover.findMany({
     where: {
       jemaatId: req.user.jemaatId,
@@ -93,8 +101,8 @@ export function scopeRequestWhere(scope: ApprovalScope, pelayananId?: string) {
   return { OR: entries.map(([pid, cab]) => ({ pelayananId: pid, jemaat: { cabangId: { in: [...cab] } } })) };
 }
 
-async function assertCanManage(req: Request, pelayananId: string): Promise<ApprovalScope> {
-  const scope = await approvalScope(req);
+async function assertCanManage(req: Request, pelayananId: string, level: 'read' | 'write' = 'write'): Promise<ApprovalScope> {
+  const scope = await approvalScope(req, { level });
   if (!canManageMinistry(managedIdsOf(scope), pelayananId)) {
     throw Forbidden('Hanya anggota yang diberi otoritas approval yang dapat mengelola permintaan bergabung.');
   }
@@ -221,7 +229,8 @@ ministryRouter.get('/', async (req, res) => {
  */
 ministryRouter.get('/join-requests', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  const scope = await approvalScope(req);
+  // Lihat antrian cukup akses baca; tombol proses tetap butuh akses tulis.
+  const scope = await approvalScope(req, { level: 'read' });
   const managed = managedIdsOf(scope);
   const filterId = typeof req.query.pelayananId === 'string' ? req.query.pelayananId : undefined;
 
@@ -281,6 +290,12 @@ ministryRouter.get('/join-requests', async (req, res) => {
     },
   });
 
+  // Akses baca saja (Role Access) → boleh melihat, tombol proses hanya untuk
+  // yang punya akses tulis atau otoritas approval di pelayanan & cabang pemohon.
+  const writeScope = scope === 'ALL' ? await approvalScope(req, { level: 'write' }) : scope;
+  const canProcess = (pid: string, cabangId: string | null | undefined) =>
+    writeScope === 'ALL' || (!!cabangId && !!writeScope.get(pid)?.has(cabangId));
+
   res.json({
     success: true,
     data: {
@@ -289,7 +304,7 @@ ministryRouter.get('/join-requests', async (req, res) => {
         ...m,
         pendingRequestCount: countById.get(m.id) ?? 0,
       })),
-      requests,
+      requests: requests.map((r) => ({ ...r, canProcess: canProcess(r.pelayanan.id, r.jemaat.cabang?.id) })),
     },
   });
 });
@@ -603,7 +618,7 @@ ministryRouter.delete('/:id/join-request', async (req, res) => {
 
 /** GET /admin/ministry/:id/join-requests — list PENDING (leader / Fulltimer). */
 ministryRouter.get('/:id/join-requests', async (req, res) => {
-  const scope = await assertCanManage(req, req.params.id);
+  const scope = await assertCanManage(req, req.params.id, 'read');
   const rows = await prisma.pelayananJoinRequest.findMany({
     where: { status: 'PENDING', ...scopeRequestWhere(scope, req.params.id) },
     orderBy: { createdAt: 'asc' },
@@ -1106,7 +1121,7 @@ const UUIDV = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Cabang tempat requester boleh mengatur jadwal pelayanan ini. */
 async function jadwalCabangIds(req: Request, pelayananId: string): Promise<'ALL' | string[]> {
-  const scope = await approvalScope(req);
+  const scope = await approvalScope(req, { menu: 'pelayanan' });
   if (scope === 'ALL') return 'ALL';
   const set = scope.get(pelayananId);
   if (!set || !set.size) throw Forbidden('Hanya anggota dengan otoritas yang dapat mengatur jadwal pelayanan.');

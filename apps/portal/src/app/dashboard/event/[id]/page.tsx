@@ -1,5 +1,6 @@
 'use client';
 
+import { useMenuAccess } from '@/lib/use-menu-access';
 import { jamZone } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
@@ -221,6 +222,7 @@ export default function EventDetailPage() {
     onError: (e: any) => toast.error(e.response?.data?.error?.message ?? 'Gagal update'),
   });
 
+  const canVerify = useMenuAccess('event-payment', 'write');
   const approveMut = useMutation({
     mutationFn: async (id: string) =>
       apiClient.post(`/admin/event/${eventId}/peserta/${id}/approve`),
@@ -584,6 +586,7 @@ export default function EventDetailPage() {
                   p={p}
                   apiBase={apiBase}
                   isPaid={isPaid}
+                  canVerify={canVerify}
                   onApprove={() => approveMut.mutate(p.id)}
                   onReject={() => {
                     const alasan = window.prompt('Alasan bukti ditolak (dikirim ke jemaat):', 'Bukti transfer tidak terbaca / nominal tidak sesuai');
@@ -689,6 +692,7 @@ function PesertaRow({
   p,
   apiBase,
   isPaid,
+  canVerify,
   eventId,
   onApprove,
   onReject,
@@ -698,6 +702,8 @@ function PesertaRow({
   p: Peserta;
   apiBase: string;
   isPaid: boolean;
+  /** Role Access "Verifikasi Pembayaran Event" (tulis). */
+  canVerify: boolean;
   eventId: string;
   onApprove: () => void;
   onReject: () => void;
@@ -807,7 +813,7 @@ function PesertaRow({
             </button>
           </>
         )}
-        {isPaid && p.status === 'MENUNGGU_VERIFIKASI' && (
+        {isPaid && canVerify && p.status === 'MENUNGGU_VERIFIKASI' && (
           <button
             onClick={onApprove}
             className="px-2 py-1 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded inline-flex items-center gap-1"
@@ -815,7 +821,7 @@ function PesertaRow({
             <Check className="w-3 h-3" /> Approve
           </button>
         )}
-        {isPaid && p.status === 'MENUNGGU_VERIFIKASI' && (
+        {isPaid && canVerify && p.status === 'MENUNGGU_VERIFIKASI' && (
           <button
             onClick={onReject}
             className="px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded"

@@ -20,6 +20,12 @@ export interface MenuItem {
   label: string;
   href: string;
   group: string | null;
+  /**
+   * Izin tambahan di dalam halaman menu lain (bukan halaman sendiri), mis.
+   * "Verifikasi Pembayaran Event" di halaman Event. Tidak dipakai untuk
+   * mencocokkan halaman (MenuGate) dan tidak tampil sebagai menu.
+   */
+  parent?: string;
 }
 
 export const MENU_CATALOG: MenuItem[] = [
@@ -59,9 +65,12 @@ export const MENU_CATALOG: MenuItem[] = [
 
   // Movement
   { key: 'event', label: 'Event', href: '/dashboard/event', group: 'Movement' },
+  { key: 'event-payment', label: 'Verifikasi Pembayaran Event', href: '/dashboard/event#verifikasi', group: 'Movement', parent: 'event' },
   { key: 'laporan-event', label: 'Laporan Event', href: '/dashboard/laporan-event', group: 'Movement' },
   { key: 'visit', label: 'Visit', href: '/dashboard/visit', group: 'Movement' },
   { key: 'spiritual-journey', label: 'Spiritual Journey', href: '/dashboard/spiritual-journey', group: 'Movement' },
+  // Approval (2026-11): antrian persetujuan punya akses sendiri — read = lihat, write = setujui/tolak.
+  { key: 'spiritual-journey-request', label: 'Request Spiritual Journey', href: '/dashboard/spiritual-journey/request', group: 'Movement' },
   { key: 'local-business', label: 'Local Market', href: '/dashboard/local-business', group: 'Movement' },
 
   // Broadcast

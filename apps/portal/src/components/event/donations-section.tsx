@@ -16,6 +16,7 @@
  *
  * Patch 2026-05-21l.
  */
+import { useMenuAccess } from '@/lib/use-menu-access';
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -285,6 +286,7 @@ function DonationRowItem({
   onCancel: () => void;
   approving: boolean;
 }) {
+  const canVerify = useMenuAccess('event-payment', 'write');
   const buktiRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -408,7 +410,7 @@ function DonationRowItem({
                 )}
                 {donation.buktiTransferUrl ? 'Ganti bukti' : 'Upload bukti'}
               </button>
-              {isMenunggu ? (
+              {isMenunggu && canVerify ? (
                 <button
                   onClick={onApprove}
                   disabled={approving}

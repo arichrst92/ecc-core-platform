@@ -17,7 +17,8 @@ import { MENU_CATALOG, hasMenuAccess } from '@ecc/shared-types';
 import { useAuthStore } from '@/lib/auth-store';
 import { apiClient } from '@/lib/api-client';
 
-const PAGES = MENU_CATALOG.filter((m) => m.href.startsWith('/dashboard')).sort((a, b) => b.href.length - a.href.length);
+// Izin tambahan (punya `parent`, mis. Verifikasi Pembayaran Event) bukan halaman sendiri.
+const PAGES = MENU_CATALOG.filter((m) => !m.parent && m.href.startsWith('/dashboard')).sort((a, b) => b.href.length - a.href.length);
 
 /** Menu katalog untuk sebuah path (null = halaman tidak diatur Role Access). */
 export function menuForPath(pathname: string) {
@@ -58,7 +59,7 @@ export function MenuGate({ children }: { children: ReactNode }) {
   if (!user || !menu || hasMenuAccess(user.menuAccess ?? {}, menu.key, 'read')) return <>{children}</>;
 
   const allowed = MENU_CATALOG.filter(
-    (m) => m.href.startsWith('/dashboard') && m.key !== menu.key && hasMenuAccess(user.menuAccess ?? {}, m.key, 'read'),
+    (m) => !m.parent && m.href.startsWith('/dashboard') && m.key !== menu.key && hasMenuAccess(user.menuAccess ?? {}, m.key, 'read'),
   );
   return (
     <div className="max-w-xl mx-auto mt-10 bg-white border border-neutral-200 rounded-2xl p-6 text-center">

@@ -75,7 +75,8 @@ import {
   CloudUpload,
   ClipboardList,
   UserCheck,
-  Download, Library
+  Download, Library,
+  Inbox,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { hasMenuAccess } from '@ecc/shared-types';
@@ -161,7 +162,8 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/event', label: 'Event', icon: Megaphone, menuKey: 'event', badge: 'eventPayment' },
       { href: '/dashboard/laporan-event', label: 'Laporan Event', icon: BarChart3, menuKey: 'laporan-event' },
       { href: '/dashboard/visit', label: 'Visit', icon: Handshake, menuKey: 'visit' },
-      { href: '/dashboard/spiritual-journey', label: 'Spiritual Journey', icon: Footprints, menuKey: 'spiritual-journey', badge: 'sjRequest' },
+      { href: '/dashboard/spiritual-journey', label: 'Spiritual Journey', icon: Footprints, menuKey: 'spiritual-journey' },
+      { href: '/dashboard/spiritual-journey/request', label: 'Request Spiritual Journey', icon: Inbox, menuKey: 'spiritual-journey-request', badge: 'sjRequest' },
       { href: '/dashboard/local-business', label: 'Local Market', icon: Store, menuKey: 'local-business' },
     ],
   },

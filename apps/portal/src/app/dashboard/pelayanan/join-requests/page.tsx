@@ -50,6 +50,8 @@ interface JoinRequest {
   id: string;
   createdAt: string;
   motivasi: string | null;
+  /** false = hanya boleh melihat (Role Access baca saja / di luar otoritas approval). */
+  canProcess?: boolean;
   pelayanan: { id: string; nama: string; ikon?: string | null; warna?: string | null };
   requestedRole: Role | null;
   jemaat: {
@@ -543,6 +545,11 @@ function RequestCard({
         </div>
 
         {/* Aksi */}
+        {req.canProcess === false ? (
+          <div className="md:w-60 shrink-0 text-xs text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
+            Hanya lihat — memproses permintaan butuh akses <b>tulis</b> menu Permintaan Volunteer (Role Access) atau otoritas approval pelayanan ini.
+          </div>
+        ) : (
         <div className="flex flex-col gap-2 md:w-60 shrink-0">
           <label className="text-[11px] font-medium text-neutral-500">Tetapkan peran</label>
           <select
@@ -579,6 +586,7 @@ function RequestCard({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

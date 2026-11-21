@@ -7,7 +7,8 @@
  *   POST /:id/approve  { subRoleIds?: {stepId: subRoleId} } → beri tahap s/d tahap dipilih
  *   POST /:id/reject   { alasan }                 → tolak (alasan dikirim ke jemaat)
  *
- * Akses: sama dengan menu Spiritual Journey (read untuk melihat, write untuk memproses).
+ * Akses: menu Role Access "Request Spiritual Journey" (read = melihat, write = setujui/tolak).
+ * Terpisah dari menu Spiritual Journey sejak 2026-11 (akses awal disalin saat migrasi).
  */
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
@@ -20,6 +21,7 @@ import { journeyStage } from '../../lib/spiritual-journey.js';
 import { assertAccess } from './spiritual-journey.js';
 
 export const spiritualJourneyRequestRouter = Router();
+const REQ_MENU = 'spiritual-journey-request' as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUS = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
@@ -56,13 +58,13 @@ async function stepNumberMap() {
 }
 
 spiritualJourneyRequestRouter.get('/summary', async (req, res) => {
-  await assertAccess(req, 'read');
+  await assertAccess(req, 'read', REQ_MENU);
   const pending = await prisma.spiritualJourneyRequest.count({ where: { status: 'PENDING' } });
   res.json({ success: true, data: { pending } });
 });
 
 spiritualJourneyRequestRouter.get('/', async (req, res) => {
-  await assertAccess(req, 'read');
+  await assertAccess(req, 'read', REQ_MENU);
   const q = z
     .object({
       status: z.enum(STATUS).optional(),
@@ -103,7 +105,7 @@ spiritualJourneyRequestRouter.get('/', async (req, res) => {
 });
 
 spiritualJourneyRequestRouter.get('/:id', async (req, res) => {
-  await assertAccess(req, 'read');
+  await assertAccess(req, 'read', REQ_MENU);
   if (!UUID_RE.test(req.params.id)) throw NotFound('Request tidak ditemukan');
   const r = await prisma.spiritualJourneyRequest.findUnique({ where: { id: req.params.id }, select: requestSelect });
   if (!r) throw NotFound('Request tidak ditemukan');
@@ -124,7 +126,7 @@ spiritualJourneyRequestRouter.get('/:id', async (req, res) => {
 });
 
 spiritualJourneyRequestRouter.post('/:id/approve', async (req, res) => {
-  await assertAccess(req, 'write');
+  await assertAccess(req, 'write', REQ_MENU);
   if (!UUID_RE.test(req.params.id)) throw NotFound('Request tidak ditemukan');
   const { subRoleIds } = z
     .object({ subRoleIds: z.record(z.string().uuid(), z.string().uuid()).default({}) })
@@ -163,7 +165,7 @@ spiritualJourneyRequestRouter.post('/:id/approve', async (req, res) => {
 });
 
 spiritualJourneyRequestRouter.post('/:id/reject', async (req, res) => {
-  await assertAccess(req, 'write');
+  await assertAccess(req, 'write', REQ_MENU);
   if (!UUID_RE.test(req.params.id)) throw NotFound('Request tidak ditemukan');
   const { alasan } = z.object({ alasan: z.string().trim().min(3, 'Isi alasan penolakan (min. 3 karakter).').max(500) }).parse(req.body ?? {});
   const r = await prisma.spiritualJourneyRequest.findUnique({

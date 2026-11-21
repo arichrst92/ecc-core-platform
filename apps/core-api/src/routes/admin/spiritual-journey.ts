@@ -27,11 +27,19 @@ export const spiritualJourneyRouter = Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function assertAccess(req: Request, level: 'read' | 'write' | 'delete') {
+export async function assertAccess(
+  req: Request,
+  level: 'read' | 'write' | 'delete',
+  menu: 'spiritual-journey' | 'spiritual-journey-request' = 'spiritual-journey',
+) {
   if (!req.user) throw Unauthorized();
-  const m = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess['spiritual-journey'];
+  const m = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess[menu];
   const ok = level === 'read' ? m?.canRead : level === 'write' ? m?.canWrite : m?.canDelete;
-  if (!ok) throw Forbidden('Anda tidak punya akses ke menu Spiritual Journey.');
+  if (!ok) {
+    throw Forbidden(
+      menu === 'spiritual-journey' ? 'Anda tidak punya akses ke menu Spiritual Journey.' : 'Anda tidak punya akses ke menu Request Spiritual Journey.',
+    );
+  }
 }
 
 export const stepInclude = {

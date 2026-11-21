@@ -24,14 +24,14 @@ export const pendingCountsRouter = Router();
 
 pendingCountsRouter.get('/', async (req, res) => {
   if (!req.user) throw Unauthorized();
-  const full = !!req.user.isFulltimer;
-  const access = full ? null : (await resolveJemaatAccess(req.user.jemaatId)).menuAccess;
-  const can = (menu: string) => full || !!access?.[menu]?.canRead;
+  // Role Access berlaku penuh (juga untuk Fulltimer).
+  const access = (await resolveJemaatAccess(req.user.jemaatId)).menuAccess;
+  const can = (menu: string) => !!access[menu]?.canRead;
 
   const jobs: Record<string, () => Promise<number>> = {};
   if (can('ministry-join-requests')) {
     jobs.volunteer = async () => {
-      const scope = await approvalScope(req);
+      const scope = await approvalScope(req, { level: 'read' });
       if (scope !== 'ALL' && scope.size === 0) return 0;
       return prisma.pelayananJoinRequest.count({ where: { status: 'PENDING', ...scopeRequestWhere(scope) } });
     };
@@ -51,8 +51,8 @@ pendingCountsRouter.get('/', async (req, res) => {
       });
   }
   if (can('jemaat')) jobs.jemaatDuplicate = () => prisma.duplicateCandidate.count({ where: { status: 'OPEN' } });
-  if (can('spiritual-journey')) jobs.sjRequest = () => prisma.spiritualJourneyRequest.count({ where: { status: 'PENDING' } });
-  if (can('event')) {
+  if (can('spiritual-journey-request')) jobs.sjRequest = () => prisma.spiritualJourneyRequest.count({ where: { status: 'PENDING' } });
+  if (can('event') && access['event-payment']?.canWrite) {
     jobs.eventPayment = () =>
       prisma.eventDonation.count({
         where: { status: 'MENUNGGU_VERIFIKASI', buktiTransferUrl: { not: null }, participation: { status: { not: 'BATAL' } } },

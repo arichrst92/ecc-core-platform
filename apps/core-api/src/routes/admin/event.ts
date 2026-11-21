@@ -227,6 +227,14 @@ async function ensureUniqueSlug(base: string, excludeId?: string): Promise<strin
 const W = (level: 'read' | 'write' | 'delete' = 'write'): any => (req: import('express').Request, _res: unknown, next: (e?: unknown) => void) => {
   requireMenuP(req, 'event', level).then(() => next(), next);
 };
+/**
+ * Verifikasi pembayaran (approve / tolak bukti transfer, ubah status bayar) =
+ * Role Access "Verifikasi Pembayaran Event" (tulis) — terpisah dari mengelola event.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PAY: any = (req: import('express').Request, _res: unknown, next: (e?: unknown) => void) => {
+  requireMenuP(req, 'event-payment', 'write').then(() => next(), next);
+};
 /** Pengelola event = Role Access menu Event (tulis). Berlaku juga untuk Fulltimer. */
 async function isEventManager(req: import('express').Request): Promise<boolean> {
   // Sesi tautan web (pembayaran) selalu level jemaat.
@@ -2192,6 +2200,8 @@ eventRouter.patch('/:id/donations/:donationId', W(), async (req, res) => {
     throw NotFound('Donation tidak ditemukan');
   }
   const input = updateEventDonationSchema.parse(req.body);
+  // Mengubah status bayar = verifikasi pembayaran.
+  if (input.status && input.status !== before.status) await requireMenuP(req, 'event-payment', 'write');
   // approver relasi ke Jemaat — pakai jemaatId. Verify exist (cegah P2025).
   const approverJemaatId = await resolveApproverJemaatId(req);
 
@@ -2288,7 +2298,7 @@ eventRouter.post(
 );
 
 // Approve shortcut — set status BAYAR
-eventRouter.post('/:id/donations/:donationId/approve', W(), async (req, res) => {
+eventRouter.post('/:id/donations/:donationId/approve', PAY, async (req, res) => {
   // Baris sintetis (virt-<participationId>) = pembayaran dari data partisipasi
   // lama tanpa row donation → approve partisipasinya langsung.
   if (req.params.donationId.startsWith(VIRT_PREFIX)) {
@@ -2407,6 +2417,8 @@ eventRouter.patch('/:id/peserta/:participationId', W(), async (req, res) => {
   }
 
   const input = updateEventParticipationSchema.parse(req.body);
+  // Menandai lunas (BAYAR) = verifikasi pembayaran → butuh akses Verifikasi Pembayaran Event.
+  if (input.status === 'BAYAR' && before.status !== 'BAYAR') await requireMenuP(req, 'event-payment', 'write');
   // Mengaktifkan kembali pendaftaran BATAL → patuhi grup sesi.
   if (before.status === 'BATAL' && input.status && input.status !== 'BATAL' && before.event.grupSesi) {
     const c = await sesiConflict(before.event, before.jemaatId);
@@ -2886,7 +2898,7 @@ async function approveParticipation(req: import('express').Request, eventId: str
   return updated;
 }
 
-eventRouter.post('/:id/peserta/:participationId/approve', W(), async (req, res) => {
+eventRouter.post('/:id/peserta/:participationId/approve', PAY, async (req, res) => {
   const updated = await approveParticipation(req, req.params.id, req.params.participationId);
   res.json({ success: true, data: updated });
 });
@@ -2894,7 +2906,7 @@ eventRouter.post('/:id/peserta/:participationId/approve', W(), async (req, res) 
 // Tolak bukti bayar (2026-11): status kembali "Daftar" (belum bayar), bukti
 // dihapus dari tiket, jemaat diberi tahu alasannya & diminta unggah ulang.
 // Sebelumnya admin hanya bisa Approve atau Batalkan seluruh pendaftaran.
-eventRouter.post('/:id/peserta/:participationId/reject-payment', W(), async (req, res) => {
+eventRouter.post('/:id/peserta/:participationId/reject-payment', PAY, async (req, res) => {
   const { alasan } = z.object({ alasan: z.string().trim().min(3, 'Tulis alasan penolakan (min. 3 karakter).').max(300) }).parse(req.body ?? {});
   const before = await prisma.eventParticipation.findUnique({
     where: { id: req.params.participationId ?? '' },

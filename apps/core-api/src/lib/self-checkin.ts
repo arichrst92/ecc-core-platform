@@ -3,14 +3,16 @@
  *
  * Aturan: self check-in hanya terbuka pada HARI ibadah dijadwalkan (sesuai
  * tipeJadwal/hari/tanggalMulai, tidak dibatalkan) dan pada JAM ibadah:
- * mulai OPEN_BEFORE_MIN (30) menit sebelum jamMulai sampai CLOSE_AFTER_START_MIN
- * (30) menit SETELAH jamMulai — sama dengan scan petugas (2026-11), jam dinding
- * di zona waktu cabang (default Asia/Jakarta).
+ * mulai OPEN_BEFORE_MIN (15) menit sebelum jamMulai sampai CLOSE_AFTER_START_MIN
+ * (30) menit SETELAH jamMulai, jam dinding di zona waktu cabang (default Asia/Jakarta).
+ * Catatan: 15 menit sama dengan teks & perhitungan di app (≤ 2.5.0: "15 menit sebelum
+ * mulai", jam kalender = opensAt + 15). Scan petugas tetap 30 menit (lib/scan-window.ts).
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { DEFAULT_TZ, calendarDateOf, todayInTz, wallToInstant } from './tz.js';
 
-export const OPEN_BEFORE_MIN = 30;
+/** Self check-in dibuka N menit sebelum mulai — app ≤ 2.5.0 menulis "15 menit"; ubah bersama app. */
+export const OPEN_BEFORE_MIN = 15;
 /** Self check-in (& scan petugas) ditutup N menit setelah ibadah/event DIMULAI. */
 export const CLOSE_AFTER_START_MIN = 30;
 /** Tiket ibadah tetap tampil aktif N menit setelah ibadah selesai (tampilan, bukan check-in). */
@@ -228,7 +230,7 @@ export function venueInfo(
 
 /**
  * Jendela self check-in untuk SATU reservasi ibadah (tanggal tertentu), dipakai
- * tiket di "Reservasi Saya": 30 menit sebelum s.d. 30 menit setelah jamMulai, jam
+ * tiket di "Reservasi Saya": 15 menit sebelum s.d. 30 menit setelah jamMulai, jam
  * dinding zona cabang. Ibadah anak → check-in di meja CKids (mode DESK).
  * Validasi final tetap di POST /me/ibadah/:id/self-checkin.
  */

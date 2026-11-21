@@ -19,16 +19,16 @@ describe('hhmmToMin', () => {
 });
 
 describe('selfCheckinWindow', () => {
-  it('buka 30 menit sebelum mulai, tutup 30 menit setelah mulai', () => {
-    const w = selfCheckinWindow(base, [], wib('2026-10-18T08:30:00'));
+  it('buka 15 menit sebelum mulai, tutup 30 menit setelah mulai', () => {
+    const w = selfCheckinWindow(base, [], wib('2026-10-18T08:45:00'));
     expect(w.available).toBe(true);
     expect(w.tanggal).toBe('2026-10-18');
-    expect(w.opensAt).toBe('2026-10-18T01:30:00.000Z');
+    expect(w.opensAt).toBe('2026-10-18T01:45:00.000Z');
     expect(w.closesAt).toBe('2026-10-18T02:30:00.000Z'); // 09:00 + 30 menit
   });
-  it('terlalu awal (08:29)', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T08:29:59')).reason).toBe('TOO_EARLY'));
-  it('jam server UTC tidak menggeser: 01:29Z = 08:29 WIB masih tutup', () =>
-    expect(selfCheckinWindow(base, [], new Date('2026-10-18T01:29:00Z')).available).toBe(false));
+  it('terlalu awal (08:44)', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T08:44:59')).reason).toBe('TOO_EARLY'));
+  it('jam server UTC tidak menggeser: 01:44Z = 08:44 WIB masih tutup', () =>
+    expect(selfCheckinWindow(base, [], new Date('2026-10-18T01:44:00Z')).available).toBe(false));
   it('saat ibadah (09:15)', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T09:15:00')).available).toBe(true));
   it('tepat 30 menit setelah mulai masih bisa', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T09:30:00')).available).toBe(true));
   it('lewat 30 menit setelah mulai', () => expect(selfCheckinWindow(base, [], wib('2026-10-18T09:31:00')).reason).toBe('ENDED'));
@@ -68,12 +68,12 @@ describe('eventSelfCheckinWindow', () => {
     jamMulai: '18:00',
     jamSelesai: '21:00',
   };
-  it('dibuka 17:30 WIB', () => {
-    const w = eventSelfCheckinWindow(ev, wib('2026-10-20T17:30:00'));
+  it('dibuka 17:45 WIB', () => {
+    const w = eventSelfCheckinWindow(ev, wib('2026-10-20T17:45:00'));
     expect(w.available).toBe(true);
-    expect(w.opensAt).toBe('2026-10-20T10:30:00.000Z');
+    expect(w.opensAt).toBe('2026-10-20T10:45:00.000Z');
   });
-  it('17:29 belum', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T17:29:00')).reason).toBe('TOO_EARLY'));
+  it('17:44 belum', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T17:44:00')).reason).toBe('TOO_EARLY'));
   it('18:30 masih bisa', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T18:30:00')).available).toBe(true));
   it('18:31 tutup', () => expect(eventSelfCheckinWindow(ev, wib('2026-10-20T18:31:00')).reason).toBe('ENDED'));
   it('tidak diizinkan', () =>
@@ -153,7 +153,7 @@ describe('self check-in di zona cabang lain', () => {
     const w = selfCheckinWindow(sydney, [], new Date('2026-12-05T21:45:00Z'), 'Australia/Sydney');
     expect(w.tanggal).toBe('2026-12-06');
     expect(w.available).toBe(true);
-    expect(w.opensAt).toBe('2026-12-05T21:30:00.000Z');
+    expect(w.opensAt).toBe('2026-12-05T21:45:00.000Z');
   });
   it('dengan zona WIB, waktu yang sama bukan hari ibadah', () => {
     expect(selfCheckinWindow(sydney, [], new Date('2026-12-05T21:45:00Z')).available).toBe(false);
@@ -169,7 +169,7 @@ describe('self check-in di zona cabang lain', () => {
       jamSelesai: '21:00',
     };
     const w = eventSelfCheckinWindow(ev, new Date('2026-10-20T21:50:00Z'), 'America/New_York');
-    expect(w.opensAt).toBe('2026-10-20T21:30:00.000Z');
+    expect(w.opensAt).toBe('2026-10-20T21:45:00.000Z');
     expect(w.available).toBe(true);
   });
 });

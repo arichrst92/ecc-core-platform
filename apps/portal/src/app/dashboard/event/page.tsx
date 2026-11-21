@@ -28,6 +28,7 @@ import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { EventFormModal, type EventFormValues } from '@/components/event/event-form-modal';
 import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
+import { usePendingCounts } from '@/lib/pending-counts';
 import { useCabangOptions } from '@/components/report/report-ui';
 
 /** 'YYYY-MM' → { from, to } (hari pertama & terakhir bulan itu). */
@@ -55,6 +56,8 @@ interface EventListItem {
   isPublished: boolean;
   isActive: boolean;
   pesertaCount: number;
+  /** Peserta dengan bukti transfer menunggu verifikasi (hanya dikirim bila boleh memverifikasi). */
+  pendingPaymentCount?: number;
 }
 
 const PAGE_SIZE = 30;
@@ -109,6 +112,8 @@ export default function EventPage() {
   const [filterCabang, setFilterCabang] = usePersistentState<string>('event:cabang', 'all');
   const [bulan, setBulan] = usePersistentState<string>('event:bulan', '');
   const [filterKuota, setFilterKuota] = usePersistentState<'all' | 'penuh'>('event:kuota', 'all');
+  const [filterBayar, setFilterBayar] = usePersistentState<'all' | 'perlu-verifikasi'>('event:pembayaran', 'all');
+  const pendingTotal = usePendingCounts().eventPayment ?? 0;
   const cabangQ = useCabangOptions();
   const [filterTipe, setFilterTipe] = usePersistentState<'all' | EventListItem['tipeBayar']>('event:tipe', 'all');
   const [periode, setPeriode] = usePersistentState<'upcoming' | 'past'>('event:periode', 'upcoming');
@@ -118,7 +123,7 @@ export default function EventPage() {
   const [deleting, setDeleting] = useState<EventListItem | null>(null);
 
   const listQ = useQuery({
-    queryKey: ['event', 'list', { search, filterStatus, filterTipe, filterCabang, bulan, filterKuota, periode, page }],
+    queryKey: ['event', 'list', { search, filterStatus, filterTipe, filterCabang, bulan, filterKuota, filterBayar, periode, page }],
     queryFn: async () => {
       const res = await apiClient.get<{
         data: EventListItem[];
@@ -135,6 +140,7 @@ export default function EventPage() {
           tipeBayar: filterTipe === 'all' ? undefined : filterTipe,
           cabangId: filterCabang === 'all' ? undefined : filterCabang,
           pendaftaran: filterKuota === 'penuh' ? 'penuh' : undefined,
+          pembayaran: filterBayar === 'perlu-verifikasi' ? 'perlu-verifikasi' : undefined,
           ...monthRange(bulan),
         },
       });
@@ -202,7 +208,7 @@ export default function EventPage() {
   const events = listQ.data?.data ?? [];
   const counts = listQ.data?.meta.counts;
   const totalPages = listQ.data?.meta.totalPages ?? 1;
-  const activeFilters = [search.trim(), filterStatus !== 'all', filterTipe !== 'all', filterCabang !== 'all', bulan, filterKuota !== 'all'].filter(Boolean).length;
+  const activeFilters = [search.trim(), filterStatus !== 'all', filterTipe !== 'all', filterCabang !== 'all', bulan, filterKuota !== 'all', filterBayar !== 'all'].filter(Boolean).length;
   const resetFilters = () => {
     setPage(1);
     setSearch('');
@@ -211,6 +217,7 @@ export default function EventPage() {
     setFilterCabang('all');
     setBulan('');
     setFilterKuota('all');
+    setFilterBayar('all');
   };
   // Ganti filter / tab → kembali ke halaman 1.
   const resetPage = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -337,6 +344,17 @@ export default function EventPage() {
             <option value="penuh">Kuota penuh</option>
           </select>
         </div>
+        <div>
+          <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Pembayaran</span>
+          <select
+            value={filterBayar}
+            onChange={(e) => resetPage(setFilterBayar)(e.target.value as typeof filterBayar)}
+            className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+          >
+            <option value="all">Semua</option>
+            <option value="perlu-verifikasi">Perlu verifikasi{pendingTotal ? ` (${pendingTotal})` : ''}</option>
+          </select>
+        </div>
         {activeFilters > 0 && (
           <button
             type="button"
@@ -347,6 +365,22 @@ export default function EventPage() {
           </button>
         )}
       </div>
+
+      {pendingTotal > 0 && filterBayar !== 'perlu-verifikasi' && (
+        <button
+          type="button"
+          onClick={() => {
+            setPage(1);
+            setFilterBayar('perlu-verifikasi');
+          }}
+          className="mb-3 w-full text-left text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 hover:bg-amber-100 flex items-center gap-2"
+        >
+          <CircleDollarSign className="w-4 h-4 shrink-0" />
+          <span>
+            <b>{pendingTotal} bukti transfer</b> menunggu verifikasi — klik untuk menampilkan event-nya (cek juga tab Akan Datang / Sudah Lewat).
+          </span>
+        </button>
+      )}
 
       {/* Grid */}
       {listQ.isLoading ? (
@@ -423,6 +457,16 @@ export default function EventPage() {
                       {e.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                       {e.isPublished ? 'Published' : 'Belum publish'}
                     </span>
+                    {(e.pendingPaymentCount ?? 0) > 0 && (
+                      <Link
+                        href={`/dashboard/event/${e.id}`}
+                        title="Bukti transfer menunggu verifikasi — buka detail event, bagian Peserta / Pembayaran"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white hover:bg-red-600"
+                      >
+                        <CircleDollarSign className="w-3 h-3" />
+                        {e.pendingPaymentCount} perlu verifikasi
+                      </Link>
+                    )}
                     {e.quotaPeserta != null && e.pesertaCount >= e.quotaPeserta && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Kuota penuh</span>
                     )}

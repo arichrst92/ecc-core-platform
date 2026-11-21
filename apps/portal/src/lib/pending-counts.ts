@@ -11,7 +11,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 
-export type PendingKey = 'volunteer' | 'feedback' | 'prayer' | 'tamu' | 'jemaatDuplicate' | 'sjRequest' | 'eventPayment';
+export type PendingKey =
+  | 'volunteer'
+  | 'feedback'
+  | 'prayer'
+  | 'tamu'
+  | 'jemaatDuplicate'
+  | 'sjRequest'
+  | 'eventPayment'
+  | 'groupJoin'
+  | 'homecellLokasi';
 export type PendingCounts = Partial<Record<PendingKey, number>>;
 
 /** Keterangan & halaman tujuan per badge. */
@@ -23,6 +32,8 @@ export const PENDING_META: Record<PendingKey, { label: string; target: string }>
   jemaatDuplicate: { label: 'kandidat akun ganda perlu ditinjau', target: '/dashboard/jemaat/duplicates' },
   sjRequest: { label: 'request spiritual journey menunggu', target: '/dashboard/spiritual-journey/request' },
   eventPayment: { label: 'bukti transfer event menunggu verifikasi', target: '/dashboard/event' },
+  groupJoin: { label: 'permintaan bergabung group menunggu', target: '/dashboard/group' },
+  homecellLokasi: { label: 'homecell dengan titik lokasi salah di peta', target: '/dashboard/homecell' },
 };
 
 export const PENDING_QUERY_KEY = ['pending-counts'] as const;

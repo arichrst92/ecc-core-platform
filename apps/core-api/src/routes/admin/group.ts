@@ -143,8 +143,23 @@ groupRouter.get('/', async (req, res) => {
   // Trim ke q.limit setelah filter
   visible = visible.slice(0, q.limit);
 
+  // Portal: jumlah permintaan bergabung menunggu per group (badge) untuk yang
+  // boleh memproses (Role Access Group tulis).
+  const pendingJoin =
+    !isMobileClient(req) && visible.length && (await hasMenuAccessFor(req.user, 'group', 'write'))
+      ? new Map(
+          (
+            await prisma.groupJoinRequest.groupBy({
+              by: ['groupId'],
+              where: { status: 'PENDING', groupId: { in: visible.map((g) => g.id) } },
+              _count: { _all: true },
+            })
+          ).map((x) => [x.groupId, x._count._all]),
+        )
+      : null;
   const data = visible.map((g) => ({
     ...g,
+    ...(pendingJoin ? { pendingJoinCount: pendingJoin.get(g.id) ?? 0 } : {}),
     memberCount: g._count.members,
     childrenCount: g._count.children,
     // Hide joinCode dari non-PIC/non-admin listing (privacy — code = invitation)

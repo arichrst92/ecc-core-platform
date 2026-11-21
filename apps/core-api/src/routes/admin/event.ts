@@ -11,6 +11,7 @@
  *   - Participation lifecycle (DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR / BATAL)
  *   - Bukti transfer upload per participation + admin approval
  */
+import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
@@ -279,6 +280,11 @@ eventRouter.get('/', async (req, res) => {
   if (isActiveRaw === 'true' || isActiveRaw === 'false') where.isActive = isActiveRaw === 'true';
   // Portal: pendaftaran=penuh → kuota sudah tercapai (hitungan sama dengan pesertaCount:
   // bukan BATAL, kecuali batal otomatis no-show).
+  // Portal: pembayaran=perlu-verifikasi → event yang punya bukti transfer menunggu verifikasi.
+  if (req.query.pembayaran === 'perlu-verifikasi') {
+    const ids = [...(await pendingPaymentByEvent()).keys()];
+    where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), { id: { in: ids } }];
+  }
   if (req.query.pendaftaran === 'penuh') {
     const full = await prisma.$queryRaw<{ id: string }[]>`
       SELECT e.id FROM "event" e
@@ -373,9 +379,13 @@ eventRouter.get('/', async (req, res) => {
     periode ? prisma.event.count({ where: { AND: [baseWhere, pastWhere] } }) : Promise.resolve(null),
   ]);
 
+  // Badge "perlu verifikasi" per event (Portal) — hanya untuk yang boleh memverifikasi.
+  const canVerify = !isMobileClient(req) && (await hasMenuAccessFor(req.user, 'event-payment', 'read'));
+  const pendingPay = canVerify ? await pendingPaymentByEvent(rows.map((r) => r.id)) : null;
   const data = rows.map((r) => ({
     ...r,
     pesertaCount: r._count.partisipasi,
+    ...(pendingPay ? { pendingPaymentCount: pendingPay.get(r.id) ?? 0 } : {}),
     // Batas pendaftaran online (countdown di app) = saat event dimulai.
     registrationClosesAt: eventStartsAt(r, tzOr(r.cabang?.timezone)).toISOString(),
   }));

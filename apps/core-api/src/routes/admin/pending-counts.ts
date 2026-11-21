@@ -9,7 +9,9 @@
  *   tamu            Tamu                   belum ada petugas follow-up
  *   jemaatDuplicate Jemaat → Cek Duplikat  kandidat akun ganda OPEN
  *   sjRequest       Spiritual Journey      request langkah rohani PENDING
- *   eventPayment    Event                  bukti transfer menunggu verifikasi
+ *   eventPayment    Event                  peserta dengan bukti transfer menunggu verifikasi
+ *   groupJoin       Group                  permintaan bergabung group PENDING (Group tulis)
+ *   homecellLokasi  Homecell               homecell aktif yang titik lokasinya salah di peta
  *
  * Murah: hanya COUNT berindeks; Portal memanggil tiap 60 detik + saat pindah halaman.
  */
@@ -19,6 +21,8 @@ import { Unauthorized } from '../../lib/errors.js';
 import { resolveJemaatAccess } from '../../lib/menu-access.js';
 import { logger } from '../../lib/logger.js';
 import { approvalScope, scopeRequestWhere } from './ministry.js';
+import { pendingPaymentTotal } from '../../lib/event-payment-pending.js';
+import { homecellLokasiIssues } from '../../lib/homecell-location.js';
 
 export const pendingCountsRouter = Router();
 
@@ -53,10 +57,19 @@ pendingCountsRouter.get('/', async (req, res) => {
   if (can('jemaat')) jobs.jemaatDuplicate = () => prisma.duplicateCandidate.count({ where: { status: 'OPEN' } });
   if (can('spiritual-journey-request')) jobs.sjRequest = () => prisma.spiritualJourneyRequest.count({ where: { status: 'PENDING' } });
   if (can('event') && access['event-payment']?.canWrite) {
-    jobs.eventPayment = () =>
-      prisma.eventDonation.count({
-        where: { status: 'MENUNGGU_VERIFIKASI', buktiTransferUrl: { not: null }, participation: { status: { not: 'BATAL' } } },
-      });
+    // Sama dengan badge per event di daftar Event (dihitung per peserta).
+    jobs.eventPayment = () => pendingPaymentTotal();
+  }
+
+  if (can('group') && access['group']?.canWrite) {
+    jobs.groupJoin = () => prisma.groupJoinRequest.count({ where: { status: 'PENDING', group: { isActive: true } } });
+  }
+  if (can('homecell')) {
+    jobs.homecellLokasi = async () => {
+      let n = 0;
+      for (const i of (await homecellLokasiIssues({ isActive: true })).values()) if (i.serius) n++;
+      return n;
+    };
   }
 
   const entries = await Promise.all(

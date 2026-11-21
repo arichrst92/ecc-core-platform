@@ -141,6 +141,14 @@ export const groupResource: ResourceConfig<Group> = {
           >
             <Eye className="w-3.5 h-3.5 shrink-0" />
             {row.nama}
+            {Number(row.pendingJoinCount ?? 0) > 0 ? (
+              <span
+                className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none no-underline"
+                title="Permintaan bergabung menunggu persetujuan — buka detail group"
+              >
+                {Number(row.pendingJoinCount)} menunggu
+              </span>
+            ) : null}
           </Link>
           {row.parent ? (
             <Link href={`/dashboard/group/${row.parent.id}`} className="block text-xs text-neutral-500 hover:underline truncate pl-5">

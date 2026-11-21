@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Users, Home, BarChart3, MapPin } from 'lucide-react';
+import { Users, Home, BarChart3, MapPin, Smartphone } from 'lucide-react';
 import { createCabangSchema, updateCabangSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -18,6 +18,8 @@ interface Cabang extends Record<string, unknown> {
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
   jemaatCount?: number;
+  /** Jemaat aktif yang sudah memakai Els App (selesai onboarding di app). */
+  appUserCount?: number;
   ibadahCount?: number;
   homecellAreaCount?: number;
   homecellCount?: number;
@@ -89,6 +91,26 @@ export const cabangResource: ResourceConfig<Cabang> = {
           {row.jemaatCount ?? 0}
         </Link>
       ),
+    },
+    {
+      key: 'appUserCount',
+      label: 'Pakai Els App',
+      width: '130px',
+      render: (_v, row) => {
+        const n = row.appUserCount ?? 0;
+        const total = row.jemaatCount ?? 0;
+        const pct = total ? Math.round((n / total) * 100) : 0;
+        return (
+          <span
+            className="inline-flex items-center gap-1 font-medium text-neutral-800"
+            title="Jemaat aktif (bukan tamu) yang sudah masuk & menyelesaikan pendaftaran di Els App"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-brand-500" />
+            {n.toLocaleString('id-ID')}
+            {total ? <span className="text-[11px] text-neutral-500">({pct}%)</span> : null}
+          </span>
+        );
+      },
     },
     {
       key: 'homecellCount',

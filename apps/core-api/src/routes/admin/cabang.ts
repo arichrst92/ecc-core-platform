@@ -55,6 +55,17 @@ cabangRouter.get('/', async (req, res) => {
     homecellCountByCabang.set(cid, (homecellCountByCabang.get(cid) ?? 0) + 1);
   }
 
+  // Jemaat (bukan tamu, aktif) yang sudah memakai Els App = sudah menyelesaikan
+  // onboarding di app (onboardedAt terisi).
+  const appUserRows = cabangIds.length
+    ? await prisma.jemaat.groupBy({
+        by: ['cabangId'],
+        where: { cabangId: { in: cabangIds }, isTamu: false, isActive: true, onboardedAt: { not: null } },
+        _count: { _all: true },
+      })
+    : [];
+  const appUserByCabang = new Map(appUserRows.map((r) => [r.cabangId, r._count._all]));
+
   // Flatten _count → jemaatCount / ibadahCount / homecellAreaCount / homecellCount
   const data = rows.map((c) => {
     const { _count, ...rest } = c;
@@ -64,6 +75,7 @@ cabangRouter.get('/', async (req, res) => {
       ibadahCount: _count.ibadah,
       homecellAreaCount: _count.homecellAreas,
       homecellCount: homecellCountByCabang.get(c.id) ?? 0,
+      appUserCount: appUserByCabang.get(c.id) ?? 0,
     };
   });
   res.json({

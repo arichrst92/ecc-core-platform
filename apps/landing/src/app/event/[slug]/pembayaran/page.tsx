@@ -98,6 +98,10 @@ export default async function EventPembayaranPage(
   const isFree = event.tipeBayar === 'GRATIS';
   const isFixed = event.tipeBayar === 'NOMINAL_TETAP';
   const isBebas = event.tipeBayar === 'NOMINAL_BEBAS';
+  // Info pembayaran: rekening dan/atau QRIS (salah satu cukup).
+  const hasBank = !!event.bankNomor;
+  const hasQris = !!event.qrisImageUrl;
+  const hasPayInfo = hasBank || hasQris;
 
   // Mode ber-session (web action token dari app) — lihat middleware.ts.
   const jar = cookies();
@@ -121,6 +125,18 @@ export default async function EventPembayaranPage(
       waParticipations = mine?.participations ?? [];
     }
   }
+
+  // Langkah transfer mengikuti tipe event & info pembayaran yang tersedia.
+  const payTarget = hasBank && hasQris
+    ? L('ke rekening yang tercantum, atau scan QRIS', 'to the listed account, or scan the QRIS')
+    : hasBank
+      ? L('ke rekening yang tercantum', 'to the listed account')
+      : L('dengan scan QRIS di atas', 'by scanning the QRIS above');
+  const payStep = !hasPayInfo
+    ? L('Hubungi panitia / admin cabang untuk info rekening atau QRIS, lalu lakukan transfer.', 'Contact the committee / branch admin for the account or QRIS details, then transfer.')
+    : isBebas
+      ? L(`Berikan sesuai kerelaan hati ${payTarget}.`, `Give as your heart leads ${payTarget}.`)
+      : L(`Lakukan transfer sesuai nominal di atas ${payTarget}.`, `Transfer the amount above ${payTarget}.`);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
@@ -241,7 +257,7 @@ export default async function EventPembayaranPage(
         </div>
 
         {/* Payment info */}
-        {!isFree && event.bankNomor && (
+        {!isFree && hasPayInfo && (
           <div className="bg-white border border-orange-100 rounded-2xl overflow-hidden">
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-grad text-white">
               <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
@@ -250,6 +266,7 @@ export default async function EventPembayaranPage(
             </div>
             <div className="p-3 sm:p-6 space-y-4">
               <div className="min-w-0 border border-neutral-200 rounded-xl p-4">
+                {hasBank && (
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-neutral-500">{event.bankNama}</p>
@@ -262,11 +279,12 @@ export default async function EventPembayaranPage(
                       </p>
                     )}
                   </div>
-                  <CopyRekeningButton nomor={event.bankNomor} />
+                  <CopyRekeningButton nomor={event.bankNomor ?? ''} />
                 </div>
+                )}
 
-                {event.qrisImageUrl && (
-                  <div className="mt-3 pt-3 border-t border-neutral-100 flex items-start gap-3">
+                {hasQris && (
+                  <div className={`flex items-start gap-3 ${hasBank ? 'mt-3 pt-3 border-t border-neutral-100' : ''}`}>
                     <QrisPreview
                       src={resolveAssetUrl(event.qrisImageUrl) ?? ''}
                       alt={`QRIS ${event.judul}`}
@@ -287,6 +305,22 @@ export default async function EventPembayaranPage(
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rekening & QRIS belum diisi panitia → jangan biarkan jemaat bingung. */}
+        {!isFree && !hasPayInfo && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex items-start gap-3">
+            <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-900">
+              <p className="font-semibold">{L('Info pembayaran belum tersedia', 'Payment details not available yet')}</p>
+              <p className="mt-1 leading-relaxed">
+                {L(
+                  `Rekening / QRIS untuk event ini belum diisi. Silakan hubungi panitia atau admin ${event.cabang?.nama ?? 'cabang'} untuk info pembayaran.`,
+                  `The bank account / QRIS for this event hasn't been added yet. Please contact the committee or ${event.cabang?.nama ?? 'branch'} admin for payment details.`,
+                )}
+              </p>
             </div>
           </div>
         )}
@@ -328,13 +362,13 @@ export default async function EventPembayaranPage(
                   {isBebas ? L(' dan isi nominal', ' and enter the amount') : ''}
                   {L(', lalu tekan Daftar.', ', then tap Register.')}
                 </li>
-                <li>{L('Transfer ke rekening yang tercantum, atau scan QRIS.', 'Transfer to the listed account, or scan the QRIS.')}</li>
+                <li>{payStep}</li>
                 <li>{L('Upload bukti transfer untuk tiap peserta di kartu Pendaftaran.', 'Upload the transfer receipt for each participant on the Registration card.')}</li>
                 <li>{L('Tekan "Kembali ke Els App" — status akan tampil di detail event.', 'Tap "Back to Els App" — the status will appear on the event details.')}</li>
               </>
             ) : (
               <>
-                <li>{L('Lakukan transfer sesuai nominal di atas ke rekening yang tercantum, atau scan QRIS.', 'Transfer the amount above to the listed account, or scan the QRIS.')}</li>
+                <li>{payStep}</li>
                 <li>{L('Simpan bukti transfer (screenshot / foto struk).', 'Keep your transfer receipt (screenshot / photo of the slip).')}</li>
                 <li>{L('Kembali ke Els App untuk upload bukti transfer & konfirmasi pendaftaran.', 'Return to Els App to upload the receipt & confirm your registration.')}</li>
               </>
@@ -345,10 +379,15 @@ export default async function EventPembayaranPage(
         {/* Legal */}
         <div className="text-xs text-neutral-500 space-y-1">
           <p>
-            {L(
-              'Pembayaran event bersifat sukarela. Untuk konfirmasi & bukti resmi, hubungi panitia / admin cabang penyelenggara.',
-              'Event payments are voluntary. For confirmation & an official receipt, contact the organizing committee / branch admin.',
-            )}
+            {isBebas
+              ? L(
+                  'Pemberian untuk event ini bersifat sukarela. Untuk konfirmasi & bukti resmi, hubungi panitia / admin cabang penyelenggara.',
+                  'Giving for this event is voluntary. For confirmation & an official receipt, contact the organizing committee / branch admin.',
+                )
+              : L(
+                  'Untuk konfirmasi & bukti resmi pembayaran, hubungi panitia / admin cabang penyelenggara.',
+                  'For payment confirmation & an official receipt, contact the organizing committee / branch admin.',
+                )}
           </p>
           <p>
             <a href="/privacy" className="text-orange-600 hover:underline">

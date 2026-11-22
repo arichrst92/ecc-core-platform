@@ -13,27 +13,7 @@
  */
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
-import { selfCheckinOpensAt } from '../../lib/self-checkin.js';
-
-/**
- * Kartu peserta di app (2026-11): sebelum `checkinOpensAt` app menulis
- * "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (hadirCount).
- * Event tanpa pencatatan kehadiran → null (app tetap menulis terdaftar).
- */
-function attendanceInfo(ev: { tanggalMulai: Date; jamMulai: string | null; butuhKehadiran: boolean }, tz: string, hadir: number) {
-  if (!ev.butuhKehadiran) return { hadirCount: null, checkinOpensAt: null };
-  return { hadirCount: hadir, checkinOpensAt: selfCheckinOpensAt(calendarDateOf(ev.tanggalMulai, tz), ev.jamMulai, tz).toISOString() };
-}
-
-async function hadirCountByEvent(ids: string[]): Promise<Map<string, number>> {
-  if (!ids.length) return new Map();
-  const g = await prisma.eventParticipation.groupBy({
-    by: ['eventId'],
-    where: { eventId: { in: ids }, status: 'HADIR' },
-    _count: { _all: true },
-  });
-  return new Map(g.map((x) => [x.eventId, x._count._all]));
-}
+import { attendanceInfo, hadirCountByEvent } from '../../lib/event-attendance.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {

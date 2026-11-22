@@ -16,6 +16,7 @@ import type { DictKey } from '@/lib/i18n';
 import './home.css';
 import { EccLogo } from '@/components/ecc-logo';
 import { tzLabel } from '@/lib/tz';
+import { SeatText } from '@/components/seat-bar';
 import { YOUTUBE_PATH } from '@/lib/youtube';
 
 export interface TodayIbadah {
@@ -25,6 +26,11 @@ export interface TodayIbadah {
   judul: string;
   cabang: { id: string; nama: string; timezone?: string | null };
   isOnline: boolean;
+  /** Kursi & okupansi (server ≥ 2026-11-22: hadir + checkinOpensAt). */
+  kapasitasSeat?: number | null;
+  terisi?: number;
+  hadir?: number;
+  checkinOpensAt?: string;
 }
 
 export interface HomeAppLinks {
@@ -399,6 +405,11 @@ export function HomeShowcase({ today, todayLabel, links }: { today: TodayIbadah[
                     <small>
                       <MapPin size={12} /> {i.isOnline ? t('common.online') : i.cabang.nama}
                     </small>
+                    {i.kapasitasSeat ? (
+                      <small>
+                        <SeatText kind="ibadah" quota={i.kapasitasSeat} filled={i.terisi} attending={i.hadir} opensAt={i.checkinOpensAt} />
+                      </small>
+                    ) : null}
                   </div>
                 </Link>
               ))

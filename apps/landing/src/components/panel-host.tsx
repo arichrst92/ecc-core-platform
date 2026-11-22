@@ -229,7 +229,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
               <div className={`font-semibold ${d.tipeBayar === 'GRATIS' ? 'text-green-700' : 'text-neutral-900'}`}>{fee}</div>
             </Row>
             <div className="rounded-2xl bg-brand-50/70 border border-orange-100 p-3">
-              <SeatBar quota={d.quotaPeserta} filled={d.pesertaCount} size="md" />
+              <SeatBar quota={d.quotaPeserta} filled={d.pesertaCount} attending={d.hadirCount} opensAt={d.checkinOpensAt} size="md" />
             </div>
           </div>
         </PanelSection>

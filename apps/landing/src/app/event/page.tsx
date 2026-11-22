@@ -44,6 +44,8 @@ interface EventItem {
   deskripsi?: string | null;
   quotaPeserta?: number | null;
   pesertaCount?: number;
+  hadirCount?: number | null;
+  checkinOpensAt?: string | null;
   cabang: { id: string; nama: string; timezone?: string | null } | null;
 }
 
@@ -117,7 +119,7 @@ export default async function EventListPage() {
             </p>
           ) : null}
           <div className="pt-1">
-            <SeatBar quota={e.quotaPeserta} filled={e.pesertaCount} />
+            <SeatBar quota={e.quotaPeserta} filled={e.pesertaCount} attending={e.hadirCount} opensAt={e.checkinOpensAt} />
           </div>
           <div className="pt-1">
             {e.tipeBayar === 'GRATIS' ? (

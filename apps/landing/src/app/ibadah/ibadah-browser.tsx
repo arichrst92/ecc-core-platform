@@ -45,6 +45,9 @@ export interface IbadahEvent {
   isKidsIbadah?: boolean;
   kapasitasSeat?: number | null;
   terisi?: number;
+  /** Sudah hadir & saat self check-in dibuka (server ≥ 2026-11-22). */
+  hadir?: number;
+  checkinOpensAt?: string;
 }
 
 const hhmm = (s: string) => (s ?? '').slice(0, 5);
@@ -149,7 +152,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                       </p>
                       {e.kapasitasSeat ? (
                         <div className="mt-2">
-                          <SeatBar quota={e.kapasitasSeat} filled={e.terisi} showLeft={false} />
+                          <SeatBar kind="ibadah" quota={e.kapasitasSeat} filled={e.terisi} attending={e.hadir} opensAt={e.checkinOpensAt} showLeft={false} />
                         </div>
                       ) : null}
                     </div>
@@ -216,7 +219,7 @@ export function IbadahBrowser({ events, todayIso }: { events: IbadahEvent[]; tod
                 {sel.kapasitasSeat ? (
                   <>
                     <div className="h-px bg-orange-100" />
-                    <SeatBar quota={sel.kapasitasSeat} filled={sel.terisi} size="md" />
+                    <SeatBar kind="ibadah" quota={sel.kapasitasSeat} filled={sel.terisi} attending={sel.hadir} opensAt={sel.checkinOpensAt} size="md" />
                   </>
                 ) : null}
               </section>

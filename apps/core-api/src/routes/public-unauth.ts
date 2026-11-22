@@ -29,6 +29,9 @@ import { hargaLabel, hitView, publicItemsOf, serializeItem } from '../lib/local-
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
 import { parseLinks } from '../lib/announcement.js';
 import { generateOccurrences } from '../lib/ibadah-occurrences.js';
+import { selfCheckinOpensAt } from '../lib/self-checkin.js';
+import { tzOr } from '../lib/tz.js';
+import { attendanceInfo, hadirCountByEvent } from '../lib/event-attendance.js';
 
 export const publicUnauthRouter = Router();
 
@@ -275,11 +278,15 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
     // reservasi aktif (RESERVE + JOIN) untuk tanggal itu.
     kapasitasSeat: number | null;
     terisi: number;
+    /** 2026-11: yang sudah hadir (JOIN) & saat self check-in dibuka — website
+     *  menulis "reservasi" sebelum checkinOpensAt, "hadir" sesudahnya. */
+    hadir: number;
+    checkinOpensAt: string;
   }> = [];
 
   const filledRows = ibadahIds.length
     ? await prisma.reservasi.groupBy({
-        by: ['ibadahId', 'tanggalIbadah'],
+        by: ['ibadahId', 'tanggalIbadah', 'status'],
         where: {
           ibadahId: { in: ibadahIds },
           tanggalIbadah: { gte: from, lte: to },
@@ -288,9 +295,13 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         _count: { _all: true },
       })
     : [];
-  const filled = new Map(
-    filledRows.map((r) => [`${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`, r._count._all]),
-  );
+  const filled = new Map<string, number>(); // RESERVE + JOIN
+  const hadirMap = new Map<string, number>(); // JOIN
+  for (const r of filledRows) {
+    const k = `${r.ibadahId}:${r.tanggalIbadah.toISOString().slice(0, 10)}`;
+    filled.set(k, (filled.get(k) ?? 0) + r._count._all);
+    if (r.status === 'JOIN') hadirMap.set(k, (hadirMap.get(k) ?? 0) + r._count._all);
+  }
 
   for (const i of ibadahs) {
     const dates = generateOccurrences(
@@ -318,6 +329,8 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         isKidsIbadah: i.isKidsIbadah,
         kapasitasSeat: i.kapasitasSeat,
         terisi: filled.get(`${i.id}:${iso}`) ?? 0,
+        hadir: hadirMap.get(`${i.id}:${iso}`) ?? 0,
+        checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
       });
     }
   }
@@ -448,12 +461,14 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
         nominal: true,
         // Kuota seat (website: progress bar). Terisi = pendaftar selain BATAL (sama dengan guard kuota).
         quotaPeserta: true,
+        butuhKehadiran: true,
         _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } },
         cabang: { select: { id: true, nama: true, timezone: true } },
       },
     }),
     prisma.event.count({ where }),
   ]);
+  const hadirById = await hadirCountByEvent(rows.map((r) => r.id));
 
   res.json({
     success: true,
@@ -461,6 +476,8 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
     data: rows.map(({ _count, ...r }) => ({
       ...r,
       pesertaCount: _count.partisipasi,
+      // Website: "terdaftar" sebelum check-in dibuka, "hadir" sesudahnya.
+      ...attendanceInfo(r, tzOr(r.cabang?.timezone), hadirById.get(r.id) ?? 0),
       deskripsi: r.deskripsi ? (r.deskripsi.length > 300 ? `${r.deskripsi.slice(0, 300).trimEnd()}…` : r.deskripsi) : null,
     })),
     meta: { page: q.page, limit: q.limit, total },
@@ -909,6 +926,7 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       tags: true,
       viewCount: true,
       quotaPeserta: true,
+      butuhKehadiran: true,
       _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } },
       cabang: { select: { id: true, nama: true, timezone: true } },
     },
@@ -925,6 +943,7 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
     data: {
       ...(({ _count, ...rest }) => rest)(row),
       pesertaCount: row._count.partisipasi,
+      ...attendanceInfo(row, tzOr(row.cabang?.timezone), (await hadirCountByEvent([row.id])).get(row.id) ?? 0),
       viewCount: row.viewCount + 1,
     },
   });

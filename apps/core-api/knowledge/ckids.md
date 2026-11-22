@@ -16,6 +16,7 @@ summary: Alur check-in anak di meja CKids, kode jemput 6 digit, batas usia 13 ta
 - Ibadah anak = ibadah dengan flag **Ibadah Anak**. Hanya untuk anak **usia 13 tahun ke bawah** (dari tanggal lahir). Lebih tua → ditolak saat check-in.
 - Anak tidak membuat akun sendiri (di bawah 13 tahun) — orang tua menambahkannya lewat **Keluarga** (tanggal lahir wajib agar CKids muncul).
 - **Tidak ada self check-in** untuk ibadah anak; check-in dilakukan di meja CKids.
+  - App: setelah ibadah anak dimulai, detail ibadah menulis "Reservasi ditutup karena ibadah sudah dimulai — check-in anak langsung di meja CKids." Di **daftar ibadah** app ≤ 2.5.0 sempat menulis "…gunakan self check-in di app" (salah) — sejak 22 Nov 2026 server tidak lagi mengirim batas reservasi untuk ibadah anak yang sudah mulai, jadi pesan itu tidak muncul; build berikutnya memakai pesan meja CKids.
 - Ibadah anak **tidak menerima tamu walk-in** lewat form tamu biasa.
 
 ## Alur hari H

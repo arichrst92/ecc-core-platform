@@ -23,6 +23,7 @@ Sebelum mengubah salah satu aturan di bawah:
 | Scan petugas 30 menit sebelum mulai | `lib/scan-window.ts` `SCAN_BEFORE_MIN` | pesan berasal dari server (aman) |
 | Batalkan visit dalam 1 jam | `routes/admin/me-visit.ts` `DELETE_WINDOW_MS` | i18n `visit.cancel_sub` ("1 jam pertama") |
 | Label okupansi ibadah/event "reservasi/terdaftar" → "hadir" (app & website) | `routes/admin/ibadah.ts` `okupansi.reservasi/checkinOpensAt`, `lib/event-attendance.ts` `attendanceInfo`, `routes/public-unauth.ts` (calendar `hadir/checkinOpensAt`, event `hadirCount`) — rumus = `selfCheckinOpensAt` | `OccupancyBar`, `utils/eventCount.ts` memakai waktu dari server (aman); app ≤ 2.5.0 hanya menampilkan hadir/terdaftar |
+| Pesan "Reservasi ditutup… gunakan self check-in" di daftar ibadah | `routes/admin/ibadah.ts` calendar: `reservasiClosesAt` TIDAK dikirim untuk ibadah anak yang sudah mulai (+ `isKidsIbadah`) | app ≤ 2.5.0 daftar ibadah selalu pakai teks ibadah umum (i18n `deadline.ibadah_closed`); build berikutnya pakai `deadline.kids_closed` |
 | Absen homecell saat pertemuan dimulai | `lib/homecell-absen.ts` | app ≥ build setelah 2.5.0 memakai `absenDibukaAt` dari server; app lama → server menolak dengan pesan |
 
 Pesan error dari server (`error.message`) tampil apa adanya di app — aman diubah kapan saja.

@@ -150,8 +150,13 @@ ibadahRouter.get('/calendar', async (req, res) => {
       reservasi: number;
       checkinOpensAt: string;
     } | null;
-    /** Batas reservasi pertemuan ini (= jam mulai, zona cabang) — countdown di app. */
-    reservasiClosesAt: string;
+    /** Batas reservasi pertemuan ini (= jam mulai, zona cabang) — countdown di app.
+     *  Ibadah anak yang SUDAH dimulai → tidak dikirim: app ≤ 2.5.0 di daftar ibadah
+     *  selalu menulis "…gunakan self check-in di app" (salah untuk ibadah anak, yang
+     *  check-in di meja CKids). Tanpa field ini app tidak menampilkan pesan apa pun. */
+    reservasiClosesAt?: string;
+    /** Ibadah anak (check-in di meja CKids, tanpa self check-in). */
+    isKidsIbadah: boolean;
   }[] = [];
 
   // Hadir (JOIN) per pertemuan — hanya ibadah yang punya kapasitas seat.
@@ -194,7 +199,11 @@ ibadahRouter.get('/calendar', async (req, res) => {
         isOnline: i.isOnline,
         urutan: i.urutan,
         linkOnline: i.linkOnline,
-        reservasiClosesAt: occurrenceStart(iso, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
+        ...(() => {
+          const closes = occurrenceStart(iso, i.jamMulai, tzOr(i.cabang?.timezone));
+          return i.isKidsIbadah && Date.now() >= closes.getTime() ? {} : { reservasiClosesAt: closes.toISOString() };
+        })(),
+        isKidsIbadah: i.isKidsIbadah,
         okupansi: i.kapasitasSeat
           ? (() => {
               const hadir = hadirMap.get(`${i.id}:${iso}`) ?? 0;

@@ -11,6 +11,7 @@
  *
  * Mount di app.ts sebagai `/public/*`.
  */
+import { appRules, appTexts } from '../lib/app-rules.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
@@ -54,6 +55,8 @@ publicUnauthRouter.get('/app-config', async (_req, res) => {
         lowConfidenceWarnThreshold: 0.7,
         telemetrySamplingRate: 1.0,
         errorReportingEnabled: true,
+        rules: appRules(),
+        texts: appTexts(null),
       },
     });
   }
@@ -64,6 +67,9 @@ publicUnauthRouter.get('/app-config', async (_req, res) => {
       lowConfidenceWarnThreshold: row.lowConfidenceWarnThreshold,
       telemetrySamplingRate: row.telemetrySamplingRate,
       errorReportingEnabled: row.errorReportingEnabled,
+      // 2026-11: aturan & teks yang dulu tertanam di app (build setelah 2.5.0).
+      rules: appRules(),
+      texts: appTexts(row.appTextOverrides),
     },
   });
 });

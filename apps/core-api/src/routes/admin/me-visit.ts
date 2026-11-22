@@ -14,6 +14,7 @@
  *   - DELETE /admin/me/visits/:id              → batal/hapus visit (initiator-only,
  *                                                 dalam window 1 jam pasca create)
  */
+import { VISIT_CANCEL_MIN } from '../../lib/app-rules.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
@@ -345,7 +346,8 @@ meVisitRouter.patch('/:id/note', async (req, res) => {
 //  DELETE — initiator only, dalam window 1 jam pasca create.
 //  (Untuk fix mis-scan / typo judul; setelah itu hanya admin yg bisa delete.)
 // ============================================================
-const DELETE_WINDOW_MS = 60 * 60 * 1000;
+// Angka ini juga dikirim ke app lewat /public/app-config (rules & teks).
+const DELETE_WINDOW_MS = VISIT_CANCEL_MIN * 60 * 1000;
 
 meVisitRouter.delete('/:id', async (req, res) => {
   const jemaatId = assertJemaatId(req);

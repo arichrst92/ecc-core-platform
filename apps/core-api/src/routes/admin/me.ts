@@ -27,6 +27,7 @@
  *   - GET    /admin/me/branch-change-requests   → list request user (riwayat)
  *   - POST   /admin/me/branch-change-request    → submit request pindah cabang
  */
+import { ZONE_MET_DAYS, ZONE_NOT_MET_DAYS } from '../../lib/app-rules.js';
 import { homecellAdmin } from '../../lib/homecell-pic.js';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -952,8 +953,9 @@ async function zoneStats(areaIds: string[]) {
     s.homecells++;
     s.members += h._count.members;
     const ago = lastMap.get(h.id)?.lastMeetingDaysAgo ?? null;
-    if (ago !== null && ago <= 6) s.met7++;
-    if (ago === null || ago > 14) s.notMet14++;
+    // Nama field tetap (met7 / notMet14) untuk app lama; angkanya dari app-rules.
+    if (ago !== null && ago <= ZONE_MET_DAYS - 1) s.met7++;
+    if (ago === null || ago > ZONE_NOT_MET_DAYS) s.notMet14++;
     if (!hasUpcoming.has(h.id)) s.noSchedule++;
   }
   return out;

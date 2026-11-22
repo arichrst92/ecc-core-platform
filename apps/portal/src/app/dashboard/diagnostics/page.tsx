@@ -495,6 +495,145 @@ function AppConfigTab() {
         {update.isError ? <span className="text-sm text-red-600">{errMsg(update.error)}</span> : null}
         {update.isSuccess && !isDirty && <span className="text-sm text-green-600">Tersimpan ✓</span>}
       </div>
+
+      <AppTextsEditor />
+    </div>
+  );
+}
+
+// ============================================================
+//  Teks app — label Els App tanpa build baru (2026-11)
+// ============================================================
+
+type TextMap = Record<string, string>;
+interface AppTextConfig {
+  appTextOverrides?: { id?: TextMap; en?: TextMap } | null;
+  appRules?: Record<string, number>;
+  ruleTexts?: { id: TextMap; en: TextMap };
+}
+
+const RULE_LABEL: Record<string, string> = {
+  selfCheckinOpenBeforeMin: 'Self check-in dibuka (menit sebelum mulai)',
+  selfCheckinCloseAfterMin: 'Self check-in ditutup (menit setelah selesai)',
+  scanBeforeMin: 'Scan petugas dibuka (menit sebelum mulai)',
+  scanAfterMin: 'Scan reservasi ditutup (menit setelah mulai)',
+  cancelCheckinAfterMin: 'Batal self check-in (menit setelah selesai)',
+  visitCancelMin: 'Hapus kunjungan (menit sejak dibuat)',
+  kidsMaxAge: 'Usia maksimal ibadah anak (tahun)',
+  signupWindowMin: 'Waktu isi data pendaftaran (menit)',
+  homecellOkDays: 'Homecell: hadir terakhir hijau (≤ hari)',
+  homecellWarnDays: 'Homecell: hadir terakhir kuning (≤ hari)',
+  zoneMetDays: 'Zona: bertemu dalam (hari)',
+  zoneNotMetDays: 'Zona: belum bertemu lebih dari (hari)',
+};
+
+function AppTextsEditor() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['diagnostics', 'app-config'],
+    queryFn: async () => (await apiClient.get<{ data: AppTextConfig }>('/admin/diagnostics/app-config')).data.data,
+  });
+  const [lang, setLang] = useState<'id' | 'en'>('id');
+  const [rows, setRows] = useState<{ key: string; text: string }[] | null>(null);
+  const saved = data?.appTextOverrides?.[lang] ?? {};
+  const current = rows ?? Object.entries(saved).map(([key, text]) => ({ key, text }));
+  const keyOk = (k: string) => /^[a-z0-9_]+(\.[a-z0-9_]+)+$/i.test(k);
+  const allOk = current.every((r) => (!r.key && !r.text) || (keyOk(r.key) && r.text.trim()));
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const map: TextMap = {};
+      for (const r of current) if (r.key && r.text.trim()) map[r.key.trim()] = r.text;
+      const next = { ...(data?.appTextOverrides ?? {}), [lang]: map };
+      return (await apiClient.patch('/admin/diagnostics/app-config', { appTextOverrides: next })).data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['diagnostics', 'app-config'] });
+      setRows(null);
+    },
+  });
+
+  return (
+    <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-4">
+      <div>
+        <h3 className="font-semibold text-neutral-900">Teks app (tanpa build baru)</h3>
+        <p className="text-sm text-neutral-500 mt-1">
+          Menimpa teks bawaan Els App (build setelah 2.5.0) per kunci i18n, mis. <code>ibadah.self_checkin_opens_at</code>.
+          Pertahankan penanda seperti <code>{'{{time}}'}</code>, <code>{'{{name}}'}</code>, <code>{'{{count}}'}</code> yang ada di teks asli.
+          Teks yang menyebut angka aturan di bawah sudah otomatis mengikuti server — isi di sini hanya untuk koreksi lain.
+        </p>
+      </div>
+
+      {data?.appRules ? (
+        <div>
+          <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Aturan yang dikirim ke app (dari server)</div>
+          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            {Object.entries(data.appRules).map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-3 border-b border-neutral-100 py-1">
+                <span className="text-neutral-600">{RULE_LABEL[k] ?? k}</span>
+                <span className="font-semibold tabular-nums">{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex gap-2">
+        {(['id', 'en'] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => {
+              setLang(l);
+              setRows(null);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${lang === l ? 'bg-brand-500 text-white' : 'bg-neutral-100 text-neutral-700'}`}
+          >
+            {l === 'id' ? 'Bahasa Indonesia' : 'English'}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {current.length === 0 ? <div className="text-sm text-neutral-400">Belum ada teks pengganti.</div> : null}
+        {current.map((r, i) => (
+          <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] gap-2 items-start">
+            <input
+              value={r.key}
+              onChange={(e) => setRows(current.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))}
+              placeholder="kunci.i18n"
+              className={`border rounded-lg px-2 py-1.5 text-sm font-mono ${r.key && !keyOk(r.key) ? 'border-red-400' : 'border-neutral-200'}`}
+            />
+            <textarea
+              value={r.text}
+              onChange={(e) => setRows(current.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+              rows={2}
+              placeholder={data?.ruleTexts?.[lang]?.[r.key] ?? 'Teks pengganti'}
+              className="border border-neutral-200 rounded-lg px-2 py-1.5 text-sm"
+            />
+            <button type="button" onClick={() => setRows(current.filter((_, j) => j !== i))} className="px-2 py-1.5 text-sm text-red-600">
+              Hapus
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => setRows([...current, { key: '', text: '' }])} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-200">
+          + Tambah teks
+        </button>
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={rows === null || !allOk || save.isPending}
+          className="px-4 py-2 bg-brand-500 text-white rounded-lg font-medium disabled:opacity-50 hover:bg-brand-600 transition"
+        >
+          {save.isPending ? 'Menyimpan…' : 'Simpan teks'}
+        </button>
+        {!allOk ? <span className="text-sm text-red-600">Kunci harus seperti "bagian.kunci" dan teks tidak boleh kosong.</span> : null}
+        {save.isError ? <span className="text-sm text-red-600">{errMsg(save.error)}</span> : null}
+        {save.isSuccess && rows === null ? <span className="text-sm text-green-600">Tersimpan ✓</span> : null}
+      </div>
     </div>
   );
 }

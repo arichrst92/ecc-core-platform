@@ -37,5 +37,12 @@ Sebelum mengubah salah satu aturan di bawah:
 
 Pesan error dari server (`error.message`) tampil apa adanya di app — aman diubah kapan saja.
 
+### Aturan & teks lewat API (build setelah 2.5.0)
+`GET /public/app-config` mengirim `rules` (angka aturan) dan `texts` (teks i18n pengganti per bahasa) — sumbernya `apps/core-api/src/lib/app-rules.ts` (dibentuk dari konstanta server: `OPEN_BEFORE_MIN`, `CLOSE_AFTER_MIN`, `SCAN_*`, `KIDS_MAX_AGE`, `VISIT_CANCEL_MIN`, `HOMECELL_*_DAYS`, `ZONE_*_DAYS`, `ENROLL_WINDOW_MS`) + override Portal (Developer Tools → Diagnostics → App Config → **Teks app**, kolom `app_config.app_text_overrides`).
+App (`src/config/appRules.ts`): `appRule('…')` untuk hitungan, teks ditimpa ke i18n, disimpan di AsyncStorage (berlaku saat offline).
+- Menambah aturan baru yang tampil/dihitung di app → tambahkan ke `AppRules` di KEDUA sisi + teksnya di `ruleTexts()`, jangan menulis angka langsung di app.
+- Label app yang salah → perbaiki lewat Portal "Teks app" (pertahankan `{{placeholder}}`), lalu benahi juga file i18n app untuk build berikutnya.
+- App ≤ 2.5.0 tidak membaca `rules`/`texts` → tabel di atas tetap berlaku untuk mereka.
+
 ## Pengaman darurat Role Access
 `ROLE_ACCESS_ADMIN_JEMAAT_IDS` (root `.env`, dipisah koma) **wajib diisi di production** — jemaat ini selalu bisa membuka Portal & menu Role Access (`lib/menu-access.ts` `withBreakGlass`). Tanpa ini, salah atur Role Access hanya bisa diperbaiki lewat database.

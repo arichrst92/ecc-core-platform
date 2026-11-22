@@ -36,6 +36,14 @@ export const appConfigUpdateSchema = z.object({
   lowConfidenceWarnThreshold: z.number().min(0).max(1).optional(),
   telemetrySamplingRate: z.number().min(0).max(1).optional(),
   errorReportingEnabled: z.boolean().optional(),
+  /** Teks app per bahasa: { id: { "kunci.i18n": "teks" }, en: {...} }. null = hapus semua. */
+  appTextOverrides: z
+    .object({
+      id: z.record(z.string().regex(/^[a-z0-9_]+(\.[a-z0-9_]+)+$/i), z.string().trim().min(1).max(1000)).optional(),
+      en: z.record(z.string().regex(/^[a-z0-9_]+(\.[a-z0-9_]+)+$/i), z.string().trim().min(1).max(1000)).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type AppConfigUpdate = z.infer<typeof appConfigUpdateSchema>;
 

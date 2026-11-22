@@ -2413,6 +2413,9 @@ model AppConfig {
   // Toggle untuk disable error reporting kalau ada incident (mis. infinite
   // loop error report). Mobile cek field ini sebelum push ke /diagnostics/error.
   errorReportingEnabled      Boolean  @default(true) @map("error_reporting_enabled")
+  // Teks app yang menimpa teks bawaan Els App (2026-11): { "id": { "kunci.i18n": "teks" }, "en": {...} }.
+  // Dikirim lewat /public/app-config → label bisa diperbaiki tanpa build app baru.
+  appTextOverrides           Json?    @map("app_text_overrides")
   // Onboarding: New Comer naik menjadi Jemaat Tetap setelah hadir ibadah
   // sebanyak ini (reservasi status JOIN). NULL / 0 = nonaktif.
   newComerMinHadir           Int?     @map("new_comer_min_hadir")

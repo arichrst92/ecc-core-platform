@@ -24,6 +24,7 @@ import {
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { requireMenu } from '../../middleware/require-menu.js';
+import { appRules, ruleTexts } from '../../lib/app-rules.js';
 
 export const diagnosticsAdminRouter = Router();
 // Hanya fulltimer / role dengan akses menu "diagnostics" (data berisi no HP,
@@ -36,7 +37,8 @@ diagnosticsAdminRouter.use(requireMenu('diagnostics'));
 diagnosticsAdminRouter.get('/app-config', async (_req, res) => {
   const row = await prisma.appConfig.findUnique({ where: { id: 'global' } });
   if (!row) throw NotFound('App config singleton tidak ditemukan (run migration).');
-  res.json({ success: true, data: row });
+  // + aturan & teks bawaan dari server (referensi editor "Teks app" di Portal).
+  res.json({ success: true, data: { ...row, appRules: appRules(), ruleTexts: ruleTexts() } });
 });
 
 // ============================================================
@@ -48,10 +50,14 @@ diagnosticsAdminRouter.patch('/app-config', requireMenu('diagnostics', 'write'),
     throw BadRequest('Minimal satu field harus diisi untuk update.');
   }
   const userId = req.user?.sub ?? null;
+  const { appTextOverrides, ...rest } = input;
   const updated = await prisma.appConfig.update({
     where: { id: 'global' },
     data: {
-      ...input,
+      ...rest,
+      ...(appTextOverrides !== undefined
+        ? { appTextOverrides: appTextOverrides === null ? Prisma.DbNull : (appTextOverrides as Prisma.InputJsonValue) }
+        : {}),
       updatedByUserId: userId,
     },
   });

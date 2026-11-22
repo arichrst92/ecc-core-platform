@@ -169,6 +169,8 @@ meEventTiketRouter.get('/', async (req, res) => {
           longitude: ev.longitude ?? ev.cabang?.longitude ?? null,
           tipeBayar: ev.tipeBayar,
           nominal: ev.nominal != null ? Number(ev.nominal) : null,
+          // false = event tidak mencatat kehadiran → app (build berikutnya) tidak menampilkan QR.
+          butuhKehadiran: ev.butuhKehadiran,
           cabang: ev.cabang ? { nama: ev.cabang.nama } : null,
           timezone: tz,
         },

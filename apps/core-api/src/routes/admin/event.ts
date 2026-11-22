@@ -1516,6 +1516,60 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
 });
 
 // ============================================================
+// Daftar peserta yang sudah hadir — untuk halaman scanner app.
+//   GET /admin/event/:id/checkin/list?q=nama
+// Hanya authorized scanner event ini (canScanAttendance) / pengelola event.
+// ============================================================
+eventRouter.get('/:id/checkin/list', async (req, res) => {
+  const event = await prisma.event.findUnique({ where: { id: req.params.id }, select: { id: true, judul: true } });
+  if (!event) throw NotFound('Event tidak ditemukan');
+  if (!req.user) throw Forbidden('User tidak terautentikasi');
+  if (!(await isEventManager(req))) {
+    const jemaatId = req.user.jemaatId ?? null;
+    const ok = jemaatId
+      ? await prisma.eventPelayananPetugas.findFirst({
+          where: { jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
+          select: { id: true },
+        })
+      : null;
+    if (!ok) throw Forbidden(`Anda tidak berwenang melihat daftar hadir event "${event.judul}".`);
+  }
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const rows = await prisma.eventParticipation.findMany({
+    where: {
+      eventId: event.id,
+      status: 'HADIR',
+      ...(q
+        ? { jemaat: { OR: [{ namaLengkap: { contains: q, mode: 'insensitive' } }, { kode: { contains: q, mode: 'insensitive' } }] } }
+        : {}),
+    },
+    select: {
+      id: true,
+      attendedAt: true,
+      checkinMethod: true,
+      guestSource: true,
+      jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true } },
+    },
+    orderBy: [{ attendedAt: 'desc' }, { updatedAt: 'desc' }],
+    take: 500,
+  });
+  res.json({
+    success: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      jemaat: r.jemaat,
+      at: r.attendedAt,
+      method: r.checkinMethod,
+      guest: !!r.guestSource,
+      byMe: false,
+      scannedBy: null,
+      checkedOutAt: null,
+      pickedUpAt: null,
+    })),
+  });
+});
+
+// ============================================================
 //  Get-own-participation — GET /admin/event/:idOrSlug/peserta/me
 // ============================================================
 //

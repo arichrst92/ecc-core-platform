@@ -36,6 +36,8 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 3. Arahkan kamera ke QR kartu jemaat atau tiket. Kamera punya jeda ±3 detik antar scan supaya tidak dobel.
 4. QR tidak terbaca → **Input Manual**: ketik 8 karakter kode jemaat.
 5. **Walk-in / tamu baru**: catat nama, no HP, kategori (New Comer/Visitor) → langsung tercatat hadir. Tombol walk-in muncul setelah info ibadah termuat.
+6. **Daftar hadir** (app setelah 2.5.0): ketuk angka hadir di kanan atas layar scan → daftar jemaat yang sudah hadir, terbaru di atas, dengan jam check-in & petugas yang scan. Pilihan **Discan petugas** / **Semua hadir** (termasuk self check-in), bisa cari nama/kode. Di app 2.5.0 belum ada — lihat di Portal → Kehadiran.
+- Pilihan mode Check-in/Checkout/Pickup hanya tampil bila ibadah punya lebih dari satu mode (ibadah umum tanpa checkout langsung Check-in).
 - Bila orang **sudah check-in sebelumnya**, app menampilkan "sudah tercatat" (bukan error) — tidak dicatat dobel.
 - Scan peserta event yang tidak terdaftar di sesi itu tetapi terdaftar di **sesi lain** (grup sesi) → pesan menyebut sesi lain tempat ia terdaftar.
 

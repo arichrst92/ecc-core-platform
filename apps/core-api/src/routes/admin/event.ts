@@ -390,7 +390,10 @@ eventRouter.get('/', async (req, res) => {
     ...attendanceInfo(r, tzOr(r.cabang?.timezone), hadirById.get(r.id) ?? 0),
     ...(pendingPay ? { pendingPaymentCount: pendingPay.get(r.id) ?? 0 } : {}),
     // Batas pendaftaran online (countdown di app) = saat event dimulai.
-    registrationClosesAt: eventStartsAt(r, tzOr(r.cabang?.timezone)).toISOString(),
+    // Hitung mundur di KARTU event (app). Event sukarela tidak diberi hitung mundur →
+    // tidak dikirim di daftar (app lama pun langsung tidak menampilkannya). Detail
+    // event tetap mengirimnya (dipakai menutup pendaftaran saat event mulai).
+    ...(r.tipeBayar === 'NOMINAL_BEBAS' ? {} : { registrationClosesAt: eventStartsAt(r, tzOr(r.cabang?.timezone)).toISOString() }),
   }));
 
   res.json({

@@ -79,7 +79,8 @@ meEventTiketRouter.get('/', async (req, res) => {
       attendedAt: true,
       checkinMethod: true,
       jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, isTamu: true, isActive: true } },
-      donations: { select: { status: true, nominalBayar: true } },
+      nominalBayar: true,
+      donations: { select: { status: true, nominalBayar: true, tambahan: true } },
       event: {
         select: {
           id: true,
@@ -120,7 +121,24 @@ meEventTiketRouter.get('/', async (req, res) => {
       const finished = endAt != null && now.getTime() > endAt && (r.status === 'HADIR' || r.status === 'BATAL' || ended);
       // Bukti di partisipasi juga dihitung "menunggu"; sukarela tanpa minimum = tidak wajib bayar.
       const payment = paymentStatusOf(ev, r);
-      const totalBayar = r.donations.filter((d) => d.status === 'BAYAR').reduce((a, d) => a + Number(d.nominalBayar), 0);
+      // Nominal yang diberikan (tiket: "Biaya"). Pembayaran pertama bisa tercatat di
+      // partisipasi (daftar lewat web/app, lalu di-approve) tanpa baris donasi —
+      // dulu hanya donasi yang dihitung, jadi tiket sukarela menampilkan nominal
+      // MINIMAL event. Lunas → total terkonfirmasi; belum ada → total menunggu verifikasi.
+      const hasPrimary = r.donations.some((d) => !d.tambahan);
+      const pays: { status: string; n: number }[] = [
+        ...(!hasPrimary && Number(r.nominalBayar ?? 0) > 0
+          ? [
+              {
+                status: r.status === 'BAYAR' || r.status === 'HADIR' ? 'BAYAR' : r.status === 'MENUNGGU_VERIFIKASI' ? 'MENUNGGU_VERIFIKASI' : 'DAFTAR',
+                n: Number(r.nominalBayar),
+              },
+            ]
+          : []),
+        ...r.donations.map((d) => ({ status: d.status, n: Number(d.nominalBayar) })),
+      ];
+      const sumOf = (st: string) => pays.filter((x) => x.status === st).reduce((a, x) => a + x.n, 0);
+      const totalBayar = sumOf('BAYAR') || sumOf('MENUNGGU_VERIFIKASI');
       const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventStartsAt(ev, tz), now);
       const relasi = r.jemaat.id === u.jemaatId ? null : (fam.get(r.jemaat.id) ?? (r.jemaat.isTamu ? 'Tamu' : null));
       return {

@@ -1661,7 +1661,7 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
 
   const event = await prisma.event.findFirst({
     where: idOrSlugWhere(key),
-    select: { id: true },
+    select: { id: true, tipeBayar: true, nominal: true, tanggalMulai: true, jamMulai: true, isActive: true, cabang: { select: { timezone: true } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
 
@@ -1765,9 +1765,23 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
     };
   };
 
+  // Boleh batal sendiri? (aturan sama dengan self-cancel: belum hadir, belum
+  // bayar / menunggu verifikasi, event belum mulai). App build berikutnya memakai
+  // flag ini untuk menyembunyikan tombol "Batalkan pendaftaran"; app lama tetap
+  // menampilkan tombol, tetapi server menolak dengan pesan CANCEL_NOT_ALLOWED.
+  const startsAt = eventStartsAt(event, tzOr(event.cabang?.timezone));
+  const nowCancel = new Date();
   const participations = rows.map((r) => ({
     ...r,
     ...summarize(r),
+    canCancel:
+      event.isActive &&
+      selfCancelBlockedReason(
+        r.status,
+        paymentStatusOf(event, { status: r.status, donations: (donByPart.get(r.id) ?? []).map((d) => ({ status: d.status })) }),
+        startsAt,
+        nowCancel,
+      ) === null,
     isSelf: r.jemaatId === selfId,
     isTamu: tamuSet.has(r.jemaatId),
     relationLabel:

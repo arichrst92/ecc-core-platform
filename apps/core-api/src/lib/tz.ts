@@ -103,18 +103,29 @@ const TZ_CITY_ID: Record<string, string> = {
   'Asia/Singapore': 'Singapura',
 };
 
-/** "Waktu Kuala Lumpur" — label zona cabang untuk pesan/laporan. */
-export function tzZoneLabel(tz: string | null | undefined): string {
+/** Kota cabang untuk label zona: "ECC Bali" → "Bali" (bukan "Makassar" dari Asia/Makassar). */
+export function cabangKota(nama: string | null | undefined): string | null {
+  const s = (nama ?? '').replace(/^\s*ECC\s+/i, '').trim();
+  return s || null;
+}
+
+/** "Waktu Kuala Lumpur" — label zona cabang untuk pesan/laporan. `cabangNama` → "Waktu Bali". */
+export function tzZoneLabel(tz: string | null | undefined, cabangNama?: string | null): string {
   const key = tzOr(tz);
-  const city = TZ_CITY_ID[key] ?? (key.split('/').pop() ?? key).replace(/_/g, ' ');
+  const city = cabangKota(cabangNama) ?? TZ_CITY_ID[key] ?? (key.split('/').pop() ?? key).replace(/_/g, ' ');
   return `Waktu ${city}`;
 }
 
 /** "10.00 - 12.00 Waktu Kuala Lumpur" dari jam dinding cabang. */
-export function jamWithZone(jamMulai: string | null | undefined, jamSelesai: string | null | undefined, tz: string | null | undefined): string {
+export function jamWithZone(
+  jamMulai: string | null | undefined,
+  jamSelesai: string | null | undefined,
+  tz: string | null | undefined,
+  cabangNama?: string | null,
+): string {
   const f = (s: string) => s.slice(0, 5).replace(':', '.');
-  if (!jamMulai) return tzZoneLabel(tz);
-  return `${f(jamMulai)}${jamSelesai && jamSelesai !== jamMulai ? ` - ${f(jamSelesai)}` : ''} ${tzZoneLabel(tz)}`;
+  if (!jamMulai) return tzZoneLabel(tz, cabangNama);
+  return `${f(jamMulai)}${jamSelesai && jamSelesai !== jamMulai ? ` - ${f(jamSelesai)}` : ''} ${tzZoneLabel(tz, cabangNama)}`;
 }
 
 /** "Sab, 26 Okt 2026 10.05 Waktu Kuala Lumpur" — instant di zona cabang. */

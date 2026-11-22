@@ -2452,7 +2452,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
               jamMulai: true,
               jamSelesai: true,
               lokasi: true,
-              cabang: { select: { timezone: true } },
+              cabang: { select: { timezone: true, nama: true } },
             },
           },
           assignments: {
@@ -2477,6 +2477,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     ibadahJamSelesai: r.schedule.ibadah?.jamSelesai ?? null,
     ibadahLokasi: r.schedule.ibadah?.lokasi ?? null,
     timezone: r.schedule.ibadah?.cabang?.timezone ?? null,
+    cabangNama: r.schedule.ibadah?.cabang?.nama ?? null,
     ministryId: r.schedule.pelayanan.id,
     ministryNama: r.schedule.pelayanan.nama,
     ministryIkon: r.schedule.pelayanan.ikon,

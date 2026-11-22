@@ -13,19 +13,19 @@ summary: Jenis group, siapa yang melihat group private, alur bergabung (selalu d
 
 ## Dasar
 - Group = komunitas di luar homecell (profesi, hobi, pelayanan, keluarga). Jenis: Homecell Style, Family, Ministry, Community, System, Lainnya.
-- **Publik**: terlihat semua jemaat. **Private**: hanya terlihat oleh anggota, PIC, dan Fulltimer.
+- **Publik**: terlihat semua jemaat. **Private**: hanya terlihat oleh anggota, PIC, dan (di Portal) pemegang Role Access menu Group.
 - Setiap group (publik & private) punya **kode/QR** untuk dibuka lewat scan di app; kode dibuat otomatis saat PIC/admin membuka group lama. Kode hanya terlihat oleh PIC/admin.
 - Gambar group diunggah dengan crop 16:9.
 
 ## Bergabung
 - Jemaat bergabung (dari group publik atau lewat kode undangan) → menjadi **permintaan** yang harus **disetujui PIC** (atau admin). PIC mendapat notifikasi.
-- **Di app, permintaan diproses oleh PIC**; Fulltimer memproses lewat **Portal**.
+- **Di app, permintaan diproses oleh PIC**; pemegang Role Access menu **Group** (tulis) memproses lewat **Portal**.
 - PIC & admin yang bergabung ke group sendiri langsung menjadi anggota.
 - PIC juga bisa menambah anggota langsung (pilih jemaat / kode jemaat). Anggota mendapat notifikasi ditambahkan/dikeluarkan.
 
 ## Siapa yang melihat daftar anggota
 - **App**: hanya **anggota aktif** dan **PIC** group itu. Orang lain — termasuk Fulltimer yang bukan anggota — hanya melihat **jumlah anggota** dan keterangan "daftar anggota hanya untuk anggota".
-- **Portal**: anggota, PIC, Fulltimer, dan pemegang akses menu Group.
+- **Portal**: anggota, PIC, dan pemegang akses menu Group. Status Fulltimer saja **tidak** memberi akses (sejak 2026-11).
 - No HP anggota mengikuti pengaturan privasi masing-masing.
 
 ## Parent group (hierarki)
@@ -39,9 +39,13 @@ summary: Jenis group, siapa yang melihat group private, alur bergabung (selalu d
 
 ## Kasus umum
 - **"Non-anggota masih melihat anggota"** → pastikan server sudah versi terbaru; tarik layar untuk muat ulang. Di Portal, admin memang bisa melihat.
-- **"Group private tidak ketemu di pencarian"** → private hanya terlihat anggota/PIC/Fulltimer; bagikan kode/QR.
+- **"Group private tidak ketemu di pencarian"** → private hanya terlihat anggota/PIC/pemegang Role Access Group (Portal); bagikan kode/QR.
 - **"Sudah minta gabung tapi belum masuk"** → menunggu persetujuan PIC.
 - **"Parent group tidak ada di pilihan"** → gunakan pencarian (bukan dropdown); group nonaktif tidak muncul.
 
 ## Diagnosis (untuk Elsa)
 `group` (isPublic, isActive, picJemaat, parent) → `group_member` (isActive) → `group_join_request` (status) → `group_announcement` / `group_poll`.
+
+## Hak admin group (2026-11)
+- Kelola group (edit, gambar, anggota, konten, permintaan) = **PIC** group itu, atau di **Portal** pemegang Role Access menu **Group** (tulis). Fulltimer tidak lagi otomatis bisa.
+- Di app hanya PIC yang mengelola; app lama (≤ 2.5.0) mungkin masih menampilkan tombol edit/gabung langsung untuk Fulltimer — server menolak / menjadikannya permintaan.

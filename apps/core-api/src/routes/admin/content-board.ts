@@ -41,7 +41,7 @@ export interface BoardScope {
   resource: string;
   /** Kolom FK pemilik di tabel announcement/poll. */
   fk: 'groupId' | 'homecellId';
-  loadAccess: (req: Request, ctx: { jemaatId: string; isFulltimer: boolean }) => Promise<BoardAccess>;
+  loadAccess: (req: Request, ctx: { jemaatId: string }) => Promise<BoardAccess>;
   announcement: () => any;
   poll: () => any;
   vote: () => any;
@@ -146,7 +146,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
     if (!userSub) throw new ApiError(401, 'UNAUTHORIZED', 'Auth required');
     const jemaatId = await getJemaatIdForUser(userSub);
     if (!jemaatId) throw new ApiError(401, 'UNAUTHORIZED', 'User tanpa jemaat profile');
-    return scope.loadAccess(req, { jemaatId, isFulltimer: req.user?.isFulltimer === true });
+    return scope.loadAccess(req, { jemaatId });
   }
   async function manage(req: Request) {
     const a = await access(req);

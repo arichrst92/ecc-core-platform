@@ -16,7 +16,7 @@ import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { MAPS_URL_ERROR } from '../../lib/geo.js';
 import { homecellLokasiIssues, jarakKeCabangKm, lokasiIssue, resolveHomecellLokasi, type LokasiIssueCode } from '../../lib/homecell-location.js';
-import { assertCanManageHomecell, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
+import { assertCanManageHomecell, homecellAdmin, assertPenggembalaanRole, PENGGEMBALAAN } from '../../lib/homecell-pic.js';
 import { hasMenuAccessFor, requireMenuP } from '../../middleware/require-menu.js';
 import { homecellBoardRouter } from './homecell-board.js';
 import {
@@ -44,7 +44,8 @@ async function assertHomecellAccess(
 ) {
   if (!req.user?.jemaatId) throw Unauthorized();
   if (await hasMenuAccessFor(req.user, 'homecell', level)) return;
-  await assertCanManageHomecell(homecellId, req.user.jemaatId, req.user.isFulltimer === true, opts);
+  // Role Access sudah dicek di atas → di sini hanya PIC / PIC zona / pastor / asisten.
+  await assertCanManageHomecell(homecellId, req.user.jemaatId, false, opts);
 }
 
 // Sub-router: /:homecellId/schedule/* — jadwal pertemuan + QR attendance.
@@ -525,7 +526,7 @@ homecellRouter.get('/:id', async (req, res) => {
   // Privasi no HP (pengaturan masing-masing). PIC homecell / area selalu
   // lihat semua; admin portal (bukan app mobile) juga.
   const gate =
-    req.user?.isFulltimer && !isMobileClient(req)
+    !isMobileClient(req) && (await homecellAdmin(req, 'read'))
       ? OPEN_GATE
       : req.user?.jemaatId
         ? await privacyGate(req.user.jemaatId, [
@@ -562,6 +563,9 @@ homecellRouter.get('/:id', async (req, res) => {
       }),
       scheduleCount: _count.schedules,
       lastSchedule,
+      // 2026-11: admin homecell = Role Access Homecell (tulis), bukan status
+      // Fulltimer — app memakai ini untuk tombol kelola (tamu, hapus jadwal).
+      isHomecellAdmin: await homecellAdmin(req, 'write'),
     },
   });
 });

@@ -39,7 +39,7 @@ describe('buildIbadahReport', () => {
     expect(r.summary.rataRata).toBe(2.5);
   });
   it('cara check-in', () =>
-    expect(r.summary.methods).toEqual({ SCAN: 1, SELF: 2, WALK_IN: 1, MANUAL: 0, UNKNOWN: 1 }));
+    expect(r.summary.methods).toEqual({ SCAN: 1, SELF: 2, WALK_IN: 1, LATE: 0, MANUAL: 0, UNKNOWN: 1 }));
   it('per pertemuan (terbaru dulu) + tamu baru di pertemuan pertamanya', () => {
     expect(r.occurrences[0]!.tanggal).toBe('2026-10-11');
     expect(r.occurrences[0]!.tamuBaru).toBe(1);

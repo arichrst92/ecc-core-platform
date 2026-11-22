@@ -1,4 +1,4 @@
-import { jamZone } from '../tz-label';
+import { jamZone, type CabangLabel } from '../tz-label';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
 import { createIbadahSchema, updateIbadahSchema } from '@ecc/shared-types';
@@ -96,7 +96,7 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       key: 'jamMulai',
       label: 'Jam',
       width: '170px',
-      render: (_v, row) => jamZone(row.jamMulai, row.jamSelesai, (row.cabang as { timezone?: string } | undefined)?.timezone),
+      render: (_v, row) => jamZone(row.jamMulai, row.jamSelesai, (row.cabang as { timezone?: string } | undefined)?.timezone, row.cabang as CabangLabel),
     },
     {
       key: 'isOnline',

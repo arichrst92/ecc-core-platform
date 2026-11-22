@@ -2,7 +2,7 @@
 
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { useTugasKosongTargets } from '@/lib/needs-fill-counts';
-import { jamZone } from '@/lib/tz-label';
+import { jamZone, type CabangLabel } from '@/lib/tz-label';
 import { useMemo, useState } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
@@ -501,7 +501,7 @@ function CabangSection({
                         : ''}
                   </td>
                   <td className="px-4 py-2.5 text-neutral-700 tabular-nums">
-                    {jamZone(i.jamMulai, i.jamSelesai, (i.cabang as { timezone?: string } | undefined)?.timezone)}
+                    {jamZone(i.jamMulai, i.jamSelesai, (i.cabang as { timezone?: string } | undefined)?.timezone, i.cabang as CabangLabel)}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {typeof i.kapasitasSeat === 'number' && i.kapasitasSeat > 0 ? (

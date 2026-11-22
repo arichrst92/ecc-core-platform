@@ -247,12 +247,12 @@ export async function notDiscoverableByPhone(ids: string[]): Promise<Set<string>
 }
 
 /**
- * Petugas absensi: fulltimer, petugas scan ibadah/event (canScanAttendance),
+ * Petugas absensi: admin Kehadiran/Ibadah (Role Access, dihitung pemanggil), petugas scan ibadah/event (canScanAttendance),
  * atau PIC homecell / PIC area. Untuk mereka pencarian jemaat keperluan
  * check-in tetap bisa lewat no HP (pengaturan "bisa dicari" diabaikan).
  */
-export async function canDoCheckin(jemaatId: string, isFulltimer: boolean): Promise<boolean> {
-  if (isFulltimer) return true;
+export async function canDoCheckin(jemaatId: string, isAttendanceAdmin: boolean): Promise<boolean> {
+  if (isAttendanceAdmin) return true;
   const [ib, ev, hc, area] = await Promise.all([
     prisma.ibadahPelayananPetugas.findFirst({ where: { jemaatId, canScanAttendance: true }, select: { id: true } }),
     prisma.eventPelayananPetugas.findFirst({ where: { jemaatId, canScanAttendance: true }, select: { id: true } }),

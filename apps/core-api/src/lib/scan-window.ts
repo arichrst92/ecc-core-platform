@@ -46,6 +46,21 @@ function windowAround(day: Date, jamMulai: string | null, tz: string, now: Date)
   void now;
 }
 
+/**
+ * Cache singkat untuk polling statistik scanner (tiap 10 detik per petugas):
+ * jendela scan ibadah dihitung ulang paling sering tiap 30 detik per ibadah.
+ */
+const WIN_CACHE = new Map<string, { at: number; win: ScanWindow | null }>();
+export async function ibadahScanWindowCached(ibadahId: string): Promise<ScanWindow | null> {
+  const hit = WIN_CACHE.get(ibadahId);
+  const now = Date.now();
+  if (hit && now - hit.at < 30_000) return hit.win;
+  const win = await ibadahScanWindow(ibadahId);
+  WIN_CACHE.set(ibadahId, { at: now, win });
+  if (WIN_CACHE.size > 500) WIN_CACHE.clear();
+  return win;
+}
+
 /** Jendela scan ibadah hari ini (zona cabang). */
 export async function ibadahScanWindow(ibadahId: string, now: Date = new Date()): Promise<ScanWindow | null> {
   const ib = await prisma.ibadah.findUnique({

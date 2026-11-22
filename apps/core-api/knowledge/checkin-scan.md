@@ -20,14 +20,14 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 - Ibadah/event **tanpa jam mulai** → check-in terbuka sepanjang hari itu.
 - **Event beberapa hari** → scan petugas: jendela berlaku tiap hari pada jam mulai event. **Self check-in**: satu jendela dari 15 menit sebelum mulai di hari pertama s.d. 30 menit setelah jam selesai di hari terakhir (kehadiran tetap tercatat sekali).
 - **Terlambat** (lewat 30 menit setelah mulai, di hari yang sama): scan petugas tetap diterima tetapi dicatat sebagai **walk-in** (metode WALK_IN). App menampilkan keterangan walk-in.
-- **Admin** (Fulltimer, atau Role Access menu Kehadiran/Ibadah tulis; pengelola event untuk event) **boleh di luar jendela** — untuk koreksi lewat Portal.
+- **Admin** (Role Access menu Kehadiran/Ibadah tulis; pengelola event = Role Access Event tulis — status Fulltimer saja tidak cukup) **boleh di luar jendela** — untuk koreksi lewat Portal.
 - Tiket ibadah tetap tampil aktif sampai 30 menit setelah ibadah selesai (hanya tampilan). Setelah itu reservasi yang tidak dipakai **dibatalkan otomatis (NO_SHOW)**. Petugas/admin tetap bisa check-in tiket yang sudah dibatalkan bila jemaat ternyata hadir.
 
 ## Siapa yang boleh scan
 - **Petugas scan ibadah**: petugas pelayanan di ibadah itu dengan tanda **"Bisa Scan" / canScanAttendance** (diatur di Portal → detail ibadah → Pelayanan → petugas, atau koordinator di app → Ministry → Atur jadwal → chip scan). Berlaku permisif: cukup ada di salah satu baris petugas link itu dengan tanda scan.
 - **Petugas scan event**: petugas pelayanan event dengan tanda scan (Portal → detail event → Pelayanan & volunteer → "Beri akses scan").
 - **Petugas CKids**: Akses CKids "Scanner Ibadah" (atau Gift Stall) — khusus ibadah anak.
-- **Admin**: Fulltimer, atau Role Access menu "Kehadiran"/"Ibadah" level tulis (Portal).
+- **Admin**: Role Access menu "Kehadiran"/"Ibadah" level tulis (Portal). Status Fulltimer saja tidak memberi hak scan.
 - Jemaat biasa **tidak** boleh scan. Menu **Mode Scanner** di app hanya muncul bila jemaat ditugaskan sebagai scanner.
 
 ## Mode Scanner di app (usher/petugas)
@@ -85,3 +85,9 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 3. Cek hak scan petugas: `ibadah_pelayanan_petugas` / `event_pelayanan_petugas` dengan canScanAttendance untuk jemaat petugas.
 4. Cek reservasi jemaat: `reservasi` (status, tanggalIbadah, checkinMethod, cancelReason=NO_SHOW).
 5. Bandingkan waktu kejadian dengan jendela (±30 menit dari mulai, zona cabang).
+
+## Metode check-in & tanggal scanner (2026-11)
+- **SCAN** = discan petugas tepat waktu · **LATE** = sudah reservasi/terdaftar tapi discan lewat 30 menit setelah mulai · **WALK_IN** = tamu atau datang tanpa reservasi · **SELF** = self check-in · **MANUAL** = diubah admin. Data sebelum 2026-11-22: yang terlambat masih tercatat WALK_IN.
+- Angka & daftar hadir di layar scan memakai **tanggal hari ini zona cabang** (sama dengan tanggal yang dicatat saat scan), bukan tanggal HP.
+- Statistik & daftar hadir scanner hanya bisa dibuka petugas scan ibadah/event itu atau admin kehadiran / pengelola event.
+- Daftar hadir event kini juga menampilkan petugas yang scan (data sejak 2026-11-22).

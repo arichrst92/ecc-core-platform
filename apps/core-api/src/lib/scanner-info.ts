@@ -5,7 +5,7 @@
  */
 import { prisma } from '@ecc/database';
 import type { ScanWindow } from './scan-window.js';
-import { tzZoneLabel } from './tz.js';
+import { tzZoneLabel, type CabangLabel } from './tz.js';
 
 const hhmm = (d: Date, tz: string) =>
   new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
@@ -26,7 +26,7 @@ export type ScanWindowInfo = {
  * `tanggalIso` = tanggal yang sedang dibuka di scanner. Bila bukan hari ini
  * (zona cabang) → OTHER_DAY: scan dicatat untuk tanggal hari ini oleh server.
  */
-export function scanWindowInfo(w: ScanWindow | null, cabangNama: string | null | undefined, tanggalIso?: string): ScanWindowInfo | null {
+export function scanWindowInfo(w: ScanWindow | null, cabang: CabangLabel, tanggalIso?: string): ScanWindowInfo | null {
   if (!w) return null;
   const today = w.tanggal.toISOString().slice(0, 10);
   const otherDay = !!tanggalIso && tanggalIso !== today && w.phase !== 'NOT_TODAY';
@@ -34,7 +34,7 @@ export function scanWindowInfo(w: ScanWindow | null, cabangNama: string | null |
     phase: otherDay ? 'OTHER_DAY' : w.phase,
     opensJam: hhmm(w.opens, w.tz),
     closesJam: hhmm(w.closes, w.tz),
-    zona: tzZoneLabel(w.tz, cabangNama),
+    zona: tzZoneLabel(w.tz, cabang),
     message: otherDay ? 'Tanggal ini bukan hari ini — scan hanya untuk jadwal hari ini.' : w.closedReason,
   };
 }

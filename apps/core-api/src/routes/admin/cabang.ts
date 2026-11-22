@@ -161,6 +161,8 @@ cabangRouter.patch('/:id', async (req, res) => {
   // Link Google Maps → latitude/longitude (link kosong = hapus titik).
   const loc = await mapsUrlToFields(input.mapsUrl);
   if (loc === null) throw BadRequest(MAPS_URL_ERROR);
+  // Kota kosong = pakai nama cabang (null).
+  if (input.kota !== undefined) input.kota = input.kota?.trim() || null;
   const updated = await prisma.cabangGereja.update({ where: { id: req.params.id }, data: { ...input, ...(loc ?? {}) } });
   audit(req, { action: 'UPDATE', resource: 'cabang_gereja', resourceId: updated.id, resourceLabel: updated.nama, before, after: updated });
   res.json({ success: true, data: updated });

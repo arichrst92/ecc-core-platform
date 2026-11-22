@@ -145,7 +145,7 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
           jamSelesai: true,
           lokasi: true,
           isOnline: true,
-          cabang: { select: { nama: true, timezone: true } },
+          cabang: { select: { nama: true, kota: true, timezone: true } },
         },
       },
     },
@@ -171,7 +171,7 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
       jemaatId: r.jemaatId,
       dedupKey: `${groupPrefix}${r.jemaatId}`,
       title: 'Pengingat ibadah besok',
-      body: `${r.ibadah.nama} (${r.ibadah.cabang.nama}) — ${tanggalLabel}, ${jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone, r.ibadah.cabang.nama)}. Lokasi: ${r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-')}.`,
+      body: `${r.ibadah.nama} (${r.ibadah.cabang.nama}) — ${tanggalLabel}, ${jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone, r.ibadah.cabang)}. Lokasi: ${r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-')}.`,
       actionUrl: '/my-reservasi',
       channels: ch,
     });
@@ -189,7 +189,7 @@ async function dispatchIbadahRemindersInner(): Promise<{ sent: number; failed: n
         timeZone: 'UTC', // kolom @db.Date (tengah malam UTC) — jangan geser ke zona server
       }),
       // Jam dinding cabang + label zona (jemaat bisa di negara lain).
-      jam: jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone, r.ibadah.cabang.nama),
+      jam: jamWithZone(r.ibadah.jamMulai, r.ibadah.jamSelesai, r.ibadah.cabang.timezone, r.ibadah.cabang),
       lokasi: r.ibadah.isOnline ? 'Online' : (r.ibadah.lokasi ?? '-'),
     });
     const outcome = await sendWaOnce({
@@ -249,7 +249,7 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
           jamMulai: true,
           jamSelesai: true,
           lokasi: true,
-          cabang: { select: { timezone: true, nama: true } },
+          cabang: { select: { timezone: true, nama: true, kota: true } },
         },
       },
     },
@@ -273,7 +273,7 @@ async function dispatchEventRemindersInner(): Promise<{ sent: number; failed: nu
       day: 'numeric',
       month: 'long',
       timeZone: 'UTC',
-    })}, ${jamWithZone(p.event.jamMulai, p.event.jamSelesai, p.event.cabang?.timezone, p.event.cabang?.nama)}`;
+    })}, ${jamWithZone(p.event.jamMulai, p.event.jamSelesai, p.event.cabang?.timezone, p.event.cabang)}`;
     const groupPrefix = `EVENT_REMINDER:${p.eventId}:${tomorrowIso}:`;
     await notifyScheduled({
       key: 'EVENT_REMINDER_H1',

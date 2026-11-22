@@ -135,7 +135,7 @@ export const ENTITY_MAP: Record<string, EntityConfig> = {
   },
   reservasi: {
     prismaKey: 'reservasi',
-    description: 'Reservasi/kehadiran ibadah per jemaat per tanggal. Status: RESERVE (terdaftar) / JOIN (hadir) / CANCEL (batal; cancelReason NO_SHOW = batal otomatis). checkinMethod: SCAN / MANUAL / WALK_IN / SELF.',
+    description: 'Reservasi/kehadiran ibadah per jemaat per tanggal. Status: RESERVE (terdaftar) / JOIN (hadir) / CANCEL (batal; cancelReason NO_SHOW = batal otomatis). checkinMethod: SCAN / MANUAL / WALK_IN (tamu/datang tanpa reservasi) / LATE (sudah reservasi, discan petugas lewat 30 menit setelah mulai; sejak 2026-11) / SELF.',
     allowedInclude: ['jemaat', 'ibadah'],
     keyFields: ['id', 'jemaatId', 'ibadahId', 'tanggalIbadah', 'status', 'kode', 'joinedAt', 'checkinMethod', 'cancelledAt', 'cancelReason', 'checkedOutAt', 'pickedUpAt', 'pickupCode'],
   },

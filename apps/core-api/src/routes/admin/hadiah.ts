@@ -4,6 +4,7 @@
  * Modul 28. Scope: per cabang. Foto pakai upload endpoint standar
  * (upload dulu ke /uploads/... via existing helper, kirim fotoUrl aja).
  */
+import { hasMenuAccessFor } from '../../middleware/require-menu.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -23,10 +24,11 @@ export const hadiahRouter = Router();
 // GET /admin/hadiah — list dengan filter cabang + isActive
 // ============================================================
 // Terbuka untuk semua user login: app CKids (orang tua) menampilkan katalog
-// hadiah cabang anak. Non-fulltimer hanya melihat hadiah AKTIF dari cabang
+// hadiah cabang anak. Tanpa akses menu Katalog Hadiah hanya melihat hadiah AKTIF dari cabang
 // yang diminta (read-only). Endpoint lain (CRUD) tetap khusus Fulltimer.
 hadiahRouter.get('/', async (req, res) => {
-  const isAdmin = req.user?.isFulltimer === true;
+  // Admin = Role Access menu Katalog Hadiah (baca) — bukan status Fulltimer.
+  const isAdmin = await hasMenuAccessFor(req.user, 'hadiah', 'read');
   const q = paginationQuerySchema.parse(req.query);
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
   // `status=aktif|nonaktif` (filter portal) atau `isActive=true|false`.

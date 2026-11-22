@@ -1188,6 +1188,8 @@ authRouter.get('/cabang', cabangListLimiter, async (req, res) => {
       mapsUrl: true,
       // Zona waktu IANA cabang — mobile mengonversi jam jadwal ke zona HP.
       timezone: true,
+      // Kota untuk label jam "Waktu <kota>" (null = dari nama cabang).
+      kota: true,
       isActive: true,
       // Tidak expose: kontak, sinodeId internal, jumlah jemaat, dll.
     },

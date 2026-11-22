@@ -844,7 +844,8 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
           joinedAt: now,
           cancelledAt: null,
           checkedInBy: adminId,
-          checkinMethod: late ? 'WALK_IN' : parsed.via === 'search' ? 'MANUAL' : 'SCAN',
+          // Sudah reservasi tapi terlambat → LATE (bukan WALK_IN = tamu/tanpa reservasi).
+          checkinMethod: late ? 'LATE' : parsed.via === 'search' ? 'MANUAL' : 'SCAN',
           pickupCode,
         },
       });
@@ -1031,9 +1032,9 @@ async function notifyKidsPickup(
   // Jam jemput di zona waktu cabang ibadah (bukan zona server).
   const tzRow = await prisma.reservasi.findUnique({
     where: { id: reservasiId },
-    select: { ibadah: { select: { cabang: { select: { timezone: true } } } } },
+    select: { ibadah: { select: { cabang: { select: { timezone: true, nama: true, kota: true } } } } },
   });
-  const jam = instantInTzLabel(new Date(), tzRow?.ibadah.cabang.timezone, false);
+  const jam = instantInTzLabel(new Date(), tzRow?.ibadah.cabang.timezone, false, tzRow?.ibadah.cabang);
   await createNotificationBatch(guardians, {
     type: 'CKIDS_PICKUP',
     title: `${anakNama} sudah dijemput`,

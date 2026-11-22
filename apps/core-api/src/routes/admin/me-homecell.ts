@@ -37,7 +37,7 @@ import { cariPotensialMember, usiaDari } from '../../lib/potensial-member.js';
 import { prisma, type Prisma } from '@ecc/database';
 import { z } from 'zod';
 import { ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors.js';
-import { isHomecellAsisten } from '../../lib/homecell-pic.js';
+import { homecellAdmin, isHomecellAsisten } from '../../lib/homecell-pic.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
 import { isMobileClient } from '../../lib/client-kind.js';
@@ -140,20 +140,20 @@ async function targetCabangId(req: Request, jemaatId: string): Promise<string> {
 
 /**
  * Permintaan bergabung / tamu homecell hanya diproses PIC homecell-nya.
- * Fulltimer hanya lewat Portal (di app tidak melihat daftar permintaan).
+ * Admin Role Access Homecell hanya lewat Portal (di app tidak melihat daftar permintaan).
  */
 async function assertRequestReviewer(req: Request, homecellId: string) {
   const u = me(req);
-  if (u.isFulltimer && !isMobileClient(req)) return;
+  if (!isMobileClient(req) && (await homecellAdmin(req, 'write'))) return;
   const hc = await prisma.homecell.findUnique({ where: { id: homecellId }, select: { picJemaatId: true } });
   if (!hc) throw NotFound('Homecell tidak ditemukan');
   if (hc.picJemaatId !== u.jemaatId) throw Forbidden('Hanya pemimpin homecell ini yang dapat memproses permintaan bergabung.');
 }
 
-/** Leader = PIC homecell (Fulltimer boleh juga, mis. pastor/admin). */
+/** Leader = PIC homecell (atau admin Role Access Homecell tulis — bukan status Fulltimer). */
 async function assertLeaderOf(req: Request, homecellId: string) {
   const u = me(req);
-  if (u.isFulltimer) return;
+  if (await homecellAdmin(req, 'write')) return;
   const hc = await prisma.homecell.findUnique({ where: { id: homecellId }, select: { picJemaatId: true } });
   if (!hc) throw NotFound('Homecell tidak ditemukan');
   if (hc.picJemaatId !== u.jemaatId) throw Forbidden('Hanya pemimpin homecell ini yang dapat melakukan aksi ini.');
@@ -590,7 +590,7 @@ meHomecellRouter.get('/:id/materi', async (req, res) => {
   const u = me(req);
   if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
   const status = (await myStatusMap(u.jemaatId)).get(req.params.id);
-  if (status !== 'MEMBER' && status !== 'LEADER' && !u.isFulltimer) {
+  if (status !== 'MEMBER' && status !== 'LEADER' && !(await homecellAdmin(req, 'read'))) {
     throw Forbidden('Materi hanya bisa dilihat anggota homecell ini.');
   }
   const today = new Date();
@@ -730,7 +730,7 @@ meHomecellRouter.post('/report-link', async (req, res) => {
       where: { id: input.id, area: { pastors: { some: { jemaatId: u.jemaatId } } } },
     });
     if (!pastorOk) await assertLeaderOrAreaPic(req, input.id);
-  } else if (!u.isFulltimer) {
+  } else if (!(await homecellAdmin(req, 'read'))) {
     const area = await prisma.homecellArea.findUnique({
       where: { id: input.id },
       select: { picJemaatId: true, pastors: { where: { jemaatId: u.jemaatId }, select: { id: true } } },
@@ -891,10 +891,10 @@ async function assertLeaderAreaPicOrAsisten(req: Request, homecellId: string) {
   await assertLeaderOrAreaPic(req, homecellId);
 }
 
-/** Pemimpin homecell ATAU PIC / pastor zona homecell tsb (atau fulltimer). */
+/** Pemimpin homecell ATAU PIC / pastor zona homecell tsb (atau admin Role Access Homecell). */
 async function assertLeaderOrAreaPic(req: Request, homecellId: string) {
   const u = me(req);
-  if (u.isFulltimer) return;
+  if (await homecellAdmin(req, 'write')) return;
   const hc = await prisma.homecell.findUnique({
     where: { id: homecellId },
     select: { picJemaatId: true, area: { select: { picJemaatId: true, pastors: { where: { jemaatId: u.jemaatId }, select: { id: true } } } } },

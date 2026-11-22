@@ -55,7 +55,7 @@ const id = {
   totalPresent: 'total hadir',
   startAt: (t: string) => `mulai ${t}`,
   peak: (t: string, n: string) => `Puncak ${t} · ${n} orang`,
-  method: { SELF: 'Self check-in (app)', SCAN: 'Scan QR petugas', WALK_IN: 'Walk-in (tamu)', MANUAL: 'Manual', LAINNYA: 'Lainnya' } as Record<string, string>,
+  method: { SELF: 'Self check-in (app)', SCAN: 'Scan QR petugas', WALK_IN: 'Walk-in (tamu)', LATE: 'Scan terlambat', MANUAL: 'Manual', LAINNYA: 'Lainnya' } as Record<string, string>,
   event: 'Event',
   sinode: 'Sinode',
   // layar /monitor
@@ -150,7 +150,7 @@ const en: typeof id = {
   totalPresent: 'total present',
   startAt: (t) => `start ${t}`,
   peak: (t, n) => `Peak ${t} · ${n} people`,
-  method: { SELF: 'Self check-in (app)', SCAN: 'QR scan by usher', WALK_IN: 'Walk-in (guest)', MANUAL: 'Manual', LAINNYA: 'Other' },
+  method: { SELF: 'Self check-in (app)', SCAN: 'QR scan by usher', WALK_IN: 'Walk-in (guest)', LATE: 'Late scan', MANUAL: 'Manual', LAINNYA: 'Other' },
   event: 'Event',
   sinode: 'Synod',
   appTitle: 'ECC Monitor',

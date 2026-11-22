@@ -6,13 +6,14 @@ import { FileSpreadsheet, FileText, Filter } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { PERIODE_OPTIONS, type PeriodePreset } from '@/components/homecell/homecell-filter-bar';
 
-export const METHOD_KEYS = ['SCAN', 'SELF', 'WALK_IN', 'MANUAL', 'UNKNOWN'] as const;
+export const METHOD_KEYS = ['SCAN', 'SELF', 'WALK_IN', 'LATE', 'MANUAL', 'UNKNOWN'] as const;
 export type MethodKey = (typeof METHOD_KEYS)[number];
 export type MethodCount = Record<MethodKey, number>;
 export const METHOD_META: Record<MethodKey, { label: string; cls: string }> = {
   SCAN: { label: 'Scan usher', cls: 'bg-sky-500' },
   SELF: { label: 'Self check-in', cls: 'bg-emerald-500' },
   WALK_IN: { label: 'Walk-in (tamu)', cls: 'bg-violet-500' },
+  LATE: { label: 'Scan terlambat', cls: 'bg-amber-500' },
   MANUAL: { label: 'Manual admin', cls: 'bg-amber-500' },
   UNKNOWN: { label: 'Tidak tercatat', cls: 'bg-neutral-300' },
 };

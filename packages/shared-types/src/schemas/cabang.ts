@@ -60,6 +60,8 @@ export const createCabangSchema = z
     /** Link Google Maps / "lat, lng". Bila diisi, latitude & longitude diambil dari sini. */
     mapsUrl: emptyToUndefined(z.string().trim().max(2000)),
     timezone: timezoneSchema.optional().openapi({ example: 'Asia/Jakarta' }),
+    /** Kota untuk label jam "Waktu <kota>". Kosong = dari nama cabang. */
+    kota: emptyToUndefined(z.string().trim().max(100)),
   })
   .openapi('CreateCabangInput');
 export type CreateCabangInput = z.infer<typeof createCabangSchema>;
@@ -76,6 +78,8 @@ export const updateCabangSchema = z
     /** null / '' = hapus titik lokasi cabang. */
     mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
     timezone: timezoneSchema.optional(),
+    /** null / '' = pakai nama cabang. */
+    kota: z.union([z.string().trim().max(100), z.null()]).optional(),
     isActive: z.boolean().optional(),
   })
   .openapi('UpdateCabangInput');

@@ -24,6 +24,7 @@ const METHOD_COLOR: Record<string, string> = {
   SCAN: '#f97316',
   SELF: '#10b981',
   WALK_IN: '#8b5cf6',
+  LATE: '#f59e0b',
   MANUAL: '#3b82f6',
   UNKNOWN: '#cbd5e1',
 };

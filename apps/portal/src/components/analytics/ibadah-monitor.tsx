@@ -25,6 +25,7 @@ export const METHOD_LABEL: Record<string, string> = {
   SELF: 'Self check-in (app)',
   SCAN: 'Scan QR petugas',
   WALK_IN: 'Walk-in (tamu)',
+  LATE: 'Scan terlambat',
   MANUAL: 'Manual',
   LAINNYA: 'Lainnya',
 };

@@ -19,6 +19,7 @@ import { deleteGroupFile, deleteGroupHero, saveGroupFile, saveGroupHero } from '
 import { flexImageUpload } from '../../lib/image-upload.js';
 import { buildBoardRouter } from './content-board.js';
 import { getJemaatIdForUser } from '../../lib/homecell-pic.js';
+import { hasMenuAccessFor } from '../../middleware/require-menu.js';
 import { isMobileClient } from '../../lib/client-kind.js';
 
 export const groupContentRouter = Router({ mergeParams: true });
@@ -28,7 +29,6 @@ const personSelect = { id: true, namaLengkap: true } as const;
 async function loadAccess(req: Request) {
   const userSub = req.user?.sub;
   if (!userSub) throw new ApiError(401, 'UNAUTHORIZED', 'Auth required');
-  const isFulltimer = req.user?.isFulltimer === true;
   const jemaatId = await getJemaatIdForUser(userSub);
   if (!jemaatId) throw new ApiError(401, 'UNAUTHORIZED', 'User tanpa jemaat profile');
 
@@ -47,8 +47,9 @@ async function loadAccess(req: Request) {
         select: { isActive: true },
       });
   const isParticipant = isPic || !!m?.isActive;
-  // Admin fulltimer hanya lewat portal; di app mobile konten hanya untuk anggota & PIC.
-  const adminBypass = isFulltimer && !isMobileClient(req);
+  // Admin = Role Access menu Group (tulis) di Portal — tanpa jalan pintas Fulltimer.
+  // Di app mobile konten hanya untuk anggota & PIC.
+  const adminBypass = !isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'write'));
   const canManage = isPic || adminBypass;
   if (!isParticipant && !adminBypass) throw Forbidden('Konten ini hanya untuk anggota group.');
   return { group, jemaatId, canManage, isParticipant };
@@ -147,8 +148,8 @@ groupContentRouter.delete('/files/:fileId', async (req, res) => {
 });
 
 // ============================================================
-// HERO IMAGE — hanya PIC group. Kalau group belum punya PIC, admin
-// fulltimer boleh mengisi.
+// HERO IMAGE — hanya PIC group. Kalau group belum punya PIC, admin Role Access
+// Group (Portal) boleh mengisi.
 // ============================================================
 
 async function loadHeroEditor(req: Request) {
@@ -162,8 +163,11 @@ async function loadHeroEditor(req: Request) {
     select: { id: true, nama: true, picJemaatId: true, heroImageUrl: true },
   });
   if (!group) throw NotFound('Group tidak ditemukan');
-  const ok = group.picJemaatId ? group.picJemaatId === jemaatId : req.user?.isFulltimer === true;
-  if (!ok) throw Forbidden('Hanya PIC group yang boleh mengganti gambar group.');
+  // Tanpa PIC → admin Role Access Group (Portal), bukan status Fulltimer.
+  const ok = group.picJemaatId
+    ? group.picJemaatId === jemaatId
+    : !isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'write'));
+  if (!ok) throw Forbidden('Hanya PIC group (atau admin dengan akses Group di Portal) yang boleh mengganti gambar group.');
   return group;
 }
 

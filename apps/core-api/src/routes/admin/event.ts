@@ -12,7 +12,7 @@
  *   - Bukti transfer upload per participation + admin approval
  */
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
-import { DEFAULT_TZ, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
+import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { attendanceInfo, hadirCountByEvent } from '../../lib/event-attendance.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
@@ -1483,9 +1483,28 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
 
 // Stats kehadiran event — count by status + lastUpdated.
 // Polling-friendly untuk scanner mode di mobile.
+/**
+ * Hak lihat statistik & daftar hadir scanner event: authorized scanner event
+ * ini (canScanAttendance) atau pengelola event (Role Access Event tulis).
+ */
+async function assertCanViewEventScan(req: import('express').Request, event: { id: string; judul: string }) {
+  if (!req.user) throw Forbidden('User tidak terautentikasi');
+  if (await isEventManager(req)) return;
+  const jemaatId = req.user.jemaatId ?? null;
+  const ok = jemaatId
+    ? await prisma.eventPelayananPetugas.findFirst({
+        where: { jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
+        select: { id: true },
+      })
+    : null;
+  if (!ok) throw Forbidden(`Anda tidak berwenang melihat data scan event "${event.judul}".`);
+}
+
 eventRouter.get('/:id/checkin/stats', async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');
+  // 2026-11: hanya petugas scan event ini / pengelola event.
+  await assertCanViewEventScan(req, event);
   const grouped = await prisma.eventParticipation.groupBy({
     by: ['status'],
     where: { eventId: event.id },
@@ -1504,11 +1523,13 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
   const total =
     byStatus.DAFTAR + byStatus.MENUNGGU_VERIFIKASI + byStatus.BAYAR + byStatus.HADIR;
   // Info petugas (2026-11, app setelah 2.5.0): cara hadir, jendela scan, info event.
-  const [byMethod, cab] = await Promise.all([
+  const me = req.user?.sub ?? null;
+  const [byMethod, cab, byMe] = await Promise.all([
     prisma.eventParticipation.groupBy({ by: ['checkinMethod'], where: { eventId: event.id, status: 'HADIR' }, _count: { _all: true } }),
     event.cabangId
-      ? prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { nama: true, timezone: true } })
+      ? prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { nama: true, kota: true, timezone: true } })
       : Promise.resolve(null),
+    me ? prisma.eventParticipation.count({ where: { eventId: event.id, status: 'HADIR', checkedInBy: me } }) : Promise.resolve(0),
   ]);
   const m = (k: string) => byMethod.find((g) => g.checkinMethod === k)?._count._all ?? 0;
   res.json({
@@ -1521,7 +1542,9 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
       byStatus,
       belumHadir: byStatus.DAFTAR + byStatus.MENUNGGU_VERIFIKASI + byStatus.BAYAR,
       walkIn: m('WALK_IN'),
+      late: m('LATE'),
       self: m('SELF'),
+      byMe,
       event: {
         judul: event.judul,
         jamMulai: event.jamMulai,
@@ -1529,9 +1552,10 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
         lokasi: event.lokasi,
         tipeBayar: event.tipeBayar,
         cabangNama: cab?.nama ?? null,
+        cabangKota: cabangKota(cab),
         timezone: cab?.timezone ?? null,
       },
-      scanWindow: event.butuhKehadiran ? scanWindowInfo(eventScanWindow(event, tzOr(cab?.timezone)), cab?.nama) : null,
+      scanWindow: event.butuhKehadiran ? scanWindowInfo(eventScanWindow(event, tzOr(cab?.timezone)), cab) : null,
       lastUpdated: new Date().toISOString(),
     },
   });
@@ -1545,17 +1569,7 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
 eventRouter.get('/:id/checkin/list', async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id }, select: { id: true, judul: true, tipeBayar: true } });
   if (!event) throw NotFound('Event tidak ditemukan');
-  if (!req.user) throw Forbidden('User tidak terautentikasi');
-  if (!(await isEventManager(req))) {
-    const jemaatId = req.user.jemaatId ?? null;
-    const ok = jemaatId
-      ? await prisma.eventPelayananPetugas.findFirst({
-          where: { jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
-          select: { id: true },
-        })
-      : null;
-    if (!ok) throw Forbidden(`Anda tidak berwenang melihat daftar hadir event "${event.judul}".`);
-  }
+  await assertCanViewEventScan(req, event);
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   // status=belum → terdaftar tapi belum hadir (beserta status bayar).
   const belum = req.query.status === 'belum';
@@ -1573,6 +1587,7 @@ eventRouter.get('/:id/checkin/list', async (req, res) => {
       registeredAt: true,
       attendedAt: true,
       checkinMethod: true,
+      checkedInBy: true,
       guestSource: true,
       invitedByJemaatId: true,
       jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true } },
@@ -1580,7 +1595,15 @@ eventRouter.get('/:id/checkin/list', async (req, res) => {
     orderBy: belum ? [{ jemaat: { namaLengkap: 'asc' } }] : [{ attendedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 500,
   });
-  const inviters = await inviterNames(rows.map((r) => r.invitedByJemaatId));
+  const userIds = [...new Set(rows.map((r) => r.checkedInBy).filter((x): x is string => !!x))];
+  const [inviters, users] = await Promise.all([
+    inviterNames(rows.map((r) => r.invitedByJemaatId)),
+    userIds.length
+      ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, jemaat: { select: { namaLengkap: true } } } })
+      : Promise.resolve([]),
+  ]);
+  const nameByUser = new Map(users.map((u) => [u.id, u.jemaat?.namaLengkap ?? null]));
+  const me = req.user?.sub ?? null;
   const paid = event.tipeBayar !== 'GRATIS';
   res.json({
     success: true,
@@ -1595,8 +1618,8 @@ eventRouter.get('/:id/checkin/list', async (req, res) => {
       guest: !!r.guestSource,
       guestSource: r.guestSource,
       invitedBy: r.invitedByJemaatId ? (inviters.get(r.invitedByJemaatId) ?? null) : null,
-      byMe: false,
-      scannedBy: null,
+      byMe: !!me && r.checkedInBy === me,
+      scannedBy: r.checkedInBy ? (nameByUser.get(r.checkedInBy) ?? null) : null,
       checkedOutAt: null,
       pickedUpAt: null,
       umur: null,
@@ -2806,7 +2829,9 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     data: {
       status: 'HADIR',
       attendedAt: now,
-      checkinMethod: late ? 'WALK_IN' : 'SCAN',
+      // Terdaftar tapi terlambat → LATE (bukan WALK_IN = tamu/tanpa pendaftaran).
+      checkinMethod: late ? 'LATE' : 'SCAN',
+      checkedInBy: req.user?.sub ?? null,
     },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
@@ -2828,7 +2853,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     jemaatId: jemaat.id,
     type: 'EVENT_CHECKED_IN',
     title: `Kehadiran tercatat: ${event.judul}`,
-    body: `Anda sudah check-in di event "${event.judul}" pada ${instantInTzLabel(now, (await prisma.cabangGereja.findUnique({ where: { id: event.cabangId ?? '00000000-0000-0000-0000-000000000000' }, select: { timezone: true } }))?.timezone)}. Terima kasih atas partisipasinya.`,
+    body: `Anda sudah check-in di event "${event.judul}" pada ${await (async () => { const c = await prisma.cabangGereja.findUnique({ where: { id: event.cabangId ?? '00000000-0000-0000-0000-000000000000' }, select: { timezone: true, nama: true, kota: true } }); return instantInTzLabel(now, c?.timezone, true, c); })()}. Terima kasih atas partisipasinya.`,
     actionUrl: `/event/${event.id}`,
     metadata: { eventId: event.id, eventJudul: event.judul, participationId: updated.id },
   });
@@ -2911,7 +2936,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
   const participation = existing
     ? await prisma.eventParticipation.update({
         where: { id: existing.id },
-        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, checkinMethod: 'WALK_IN', ...(paid ? { paidAt: now } : {}), ...guestData },
+        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, checkinMethod: 'WALK_IN', checkedInBy: req.user?.sub ?? null, ...(paid ? { paidAt: now } : {}), ...guestData },
       })
     : await prisma.eventParticipation.create({
         data: {
@@ -2920,6 +2945,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
           status: 'HADIR',
           attendedAt: now,
           checkinMethod: 'WALK_IN',
+          checkedInBy: req.user?.sub ?? null,
           nominalBayar: paid ? nominal : null,
           ...(paid ? { paidAt: now } : {}),
           ...guestData,

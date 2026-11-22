@@ -16,6 +16,8 @@ interface Cabang extends Record<string, unknown> {
   longitude: number | null;
   mapsUrl: string | null;
   timezone: string;
+  /** Kota untuk label jam "Waktu <kota>" (null = dari nama cabang). */
+  kota?: string | null;
   isActive: boolean;
   sinode?: { id: string; nama: string; kode: string };
   jemaatCount?: number;
@@ -231,6 +233,14 @@ export const cabangResource: ResourceConfig<Cabang> = {
       options: TIMEZONE_OPTIONS,
       helperText:
         'Jam jadwal ibadah & event cabang ini mengikuti zona waktu ini. Jemaat di zona lain melihat jam yang sudah dikonversi ke zona waktu HP mereka.',
+    },
+    {
+      name: 'kota',
+      label: 'Kota (label jam)',
+      type: 'text',
+      placeholder: 'Bali',
+      helperText:
+        'Nama kota pada label jam, mis. "Waktu Bali". Kosongkan untuk memakai nama cabang tanpa "ECC" (ECC Bali → Bali). Berguna bila nama cabang bukan nama kota, mis. "ECC Kelapa Gading" → isi "Jakarta".',
     },
     { name: 'isActive', label: 'Status Aktif', type: 'switch', defaultValue: true },
   ],

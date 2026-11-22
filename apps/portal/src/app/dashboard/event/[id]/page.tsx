@@ -2,7 +2,7 @@
 
 import { useMenuAccess } from '@/lib/use-menu-access';
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
-import { jamZone } from '@/lib/tz-label';
+import { jamZone, type CabangLabel } from '@/lib/tz-label';
 import { ReviewPanel } from '@/components/reviews/review-panel';
 import { WalkInGuestModal } from '@/components/tamu/walk-in-guest-modal';
 import { useRef, useState } from 'react';
@@ -372,7 +372,7 @@ export default function EventDetailPage() {
               {e.tanggalSelesai && e.tanggalSelesai !== e.tanggalMulai && (
                 <> – {formatTanggalShort(e.tanggalSelesai)}</>
               )}
-              <div className="text-xs text-neutral-500 mt-0.5">{jamZone(e.jamMulai, e.jamSelesai, e.cabang?.timezone)}</div>
+              <div className="text-xs text-neutral-500 mt-0.5">{jamZone(e.jamMulai, e.jamSelesai, e.cabang?.timezone, e.cabang as CabangLabel)}</div>
             </InfoBlock>
             {e.lokasi && (
               <InfoBlock icon={MapPin} label="Lokasi">

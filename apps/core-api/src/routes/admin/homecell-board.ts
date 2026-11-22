@@ -11,11 +11,12 @@ import { prisma } from '@ecc/database';
 import { Forbidden, NotFound } from '../../lib/errors.js';
 import { buildBoardRouter } from './content-board.js';
 import { isMobileClient } from '../../lib/client-kind.js';
+import { homecellAdmin } from '../../lib/homecell-pic.js';
 
 export const homecellBoardRouter = buildBoardRouter({
   resource: 'homecell',
   fk: 'homecellId',
-  loadAccess: async (req, { jemaatId, isFulltimer }) => {
+  loadAccess: async (req, { jemaatId }) => {
     const homecellId = (req.params as { homecellId: string }).homecellId;
     const hc = await prisma.homecell.findUnique({
       where: { id: homecellId },
@@ -36,8 +37,9 @@ export const homecellBoardRouter = buildBoardRouter({
           select: { isActive: true, isAsisten: true },
         });
     const isParticipant = isPic || !!m?.isActive;
-    // Admin fulltimer hanya lewat portal; di app mobile konten hanya untuk anggota & PIC.
-    const adminBypass = isFulltimer && !isMobileClient(req);
+    // Admin = Role Access Homecell (tulis) lewat Portal — tanpa jalan pintas Fulltimer.
+    // Di app mobile konten hanya untuk anggota & PIC.
+    const adminBypass = !isMobileClient(req) && (await homecellAdmin(req, 'write'));
     // Asisten homecell (2.4.7) boleh membuat pengumuman & voting.
     const canManage = isPic || adminBypass || (!!m?.isActive && !!m.isAsisten);
     if (!isParticipant && !adminBypass) throw Forbidden('Konten ini hanya untuk anggota homecell.');

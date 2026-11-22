@@ -23,7 +23,7 @@ export function absenInfo(s: { tanggal: Date; jamMulai: string | null }, tz: str
 export async function assertAbsenDibuka(scheduleId: string) {
   const s = await prisma.homecellSchedule.findUnique({
     where: { id: scheduleId },
-    select: { tanggal: true, jamMulai: true, homecell: { select: { area: { select: { cabang: { select: { timezone: true } } } } } } },
+    select: { tanggal: true, jamMulai: true, homecell: { select: { area: { select: { cabang: { select: { timezone: true, nama: true, kota: true } } } } } } },
   });
   if (!s) return; // ditangani pemanggil (404)
   const tz = s.homecell.area.cabang.timezone;
@@ -32,7 +32,7 @@ export async function assertAbsenDibuka(scheduleId: string) {
     throw new ApiError(
       400,
       'ABSEN_BELUM_DIBUKA',
-      `Absensi dibuka saat pertemuan dimulai (${instantInTzLabel(mulai, tz)}). Silakan absen saat atau setelah pertemuan dimulai.`,
+      `Absensi dibuka saat pertemuan dimulai (${instantInTzLabel(mulai, tz, true, s.homecell.area.cabang)}). Silakan absen saat atau setelah pertemuan dimulai.`,
       { absenDibukaAt: mulai.toISOString() },
     );
   }

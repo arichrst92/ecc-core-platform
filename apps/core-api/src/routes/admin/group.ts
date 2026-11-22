@@ -24,7 +24,7 @@
  *   - Private group: HIDDEN dari listing kalau bukan member/PIC/admin.
  *     Join hanya via joinCode (QR scan mobile / manual input).
  *
- * PIC identity: PIC = Group.picJemaatId. Admin fulltimer (isFulltimer=true)
+ * PIC identity: PIC = Group.picJemaatId. Admin = Role Access menu Group di Portal (bukan Fulltimer)
  * auto-passes semua auth check (mirror pattern Homecell).
  */
 import { Router } from 'express';
@@ -61,21 +61,30 @@ import { groupContentRouter } from './group-content.js';
 export const groupRouter = Router();
 const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Helper — extract requester context (jemaatId + isFulltimer) dari JWT. */
+/**
+ * Helper — requester context. Hak admin group TIDAK lagi dari status Fulltimer
+ * (2026-11): hanya Role Access menu "Group" di Portal.
+ *   isGroupAdmin = Portal + Group tulis → kelola semua group
+ *   canViewAll   = Portal + Group baca  → lihat semua group termasuk privat
+ * Di app hanya PIC (kelola) dan anggota (lihat group privat).
+ */
 async function getRequester(req: import('express').Request) {
   const userSub = req.user?.sub;
   if (!userSub) throw new ApiError(401, 'UNAUTHORIZED', 'Auth required');
-  const isFulltimer = req.user?.isFulltimer === true;
   const jemaatId = await getJemaatIdForUser(userSub);
   if (!jemaatId) throw new ApiError(401, 'UNAUTHORIZED', 'User tanpa jemaat profile');
-  return { jemaatId, isFulltimer };
+  const portal = !isMobileClient(req);
+  const [isGroupAdmin, canViewAll] = portal
+    ? await Promise.all([hasMenuAccessFor(req.user, 'group', 'write'), hasMenuAccessFor(req.user, 'group', 'read')])
+    : [false, false];
+  return { jemaatId, isGroupAdmin, canViewAll: canViewAll || isGroupAdmin };
 }
 
 // ============================================================
 // GET / — list groups
 // ============================================================
 // Filter: cabangId, jenis, parentId, search. Public group visible ke semua.
-// Private group hanya visible kalau requester member/PIC atau isFulltimer.
+// Private group hanya visible kalau requester member/PIC atau Role Access Group (Portal).
 groupRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
@@ -123,7 +132,7 @@ groupRouter.get('/', async (req, res) => {
   let visible = allRows;
   // Portal: Role Access menu Group (baca) melihat semua group, termasuk privat
   // (dulu hanya Fulltimer) — supaya group yang punya permintaan tidak tersembunyi.
-  const seeAll = requester.isFulltimer || (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'read')));
+  const seeAll = requester.canViewAll;
   if (!seeAll) {
     // Fetch jemaat's membership set + PIC set untuk private visibility
     const [memberships, picOf] = await Promise.all([
@@ -169,7 +178,7 @@ groupRouter.get('/', async (req, res) => {
     childrenCount: g._count.children,
     // Hide joinCode dari non-PIC/non-admin listing (privacy — code = invitation)
     joinCode:
-      requester.isFulltimer || g.picJemaatId === requester.jemaatId
+      requester.isGroupAdmin || g.picJemaatId === requester.jemaatId
         ? g.joinCode
         : null,
   }));
@@ -195,7 +204,7 @@ const joinMessageSchema = z.object({
 async function requestJoinGroup(
   req: import('express').Request,
   group: { id: string; nama: string; picJemaatId: string | null },
-  requester: { jemaatId: string; isFulltimer: boolean },
+  requester: { jemaatId: string; isGroupAdmin: boolean },
   via: 'PUBLIC' | 'CODE',
   pesan?: string,
 ) {
@@ -208,7 +217,7 @@ async function requestJoinGroup(
   }
 
   // PIC / admin → langsung jadi anggota (tidak perlu menyetujui diri sendiri).
-  if (requester.isFulltimer || group.picJemaatId === requester.jemaatId) {
+  if (requester.isGroupAdmin || group.picJemaatId === requester.jemaatId) {
     await prisma.groupMember.upsert({
       where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
       create: { groupId: group.id, jemaatId: requester.jemaatId, isActive: true },
@@ -322,7 +331,7 @@ groupRouter.post('/join-by-code', async (req, res) => {
 // ============================================================
 groupRouter.get('/:id', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanViewGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanViewGroup(req.params.id, requester.jemaatId, requester.canViewAll);
 
   const group = await prisma.group.findUnique({
     where: { id: req.params.id },
@@ -353,7 +362,7 @@ groupRouter.get('/:id', async (req, res) => {
 
   // Hide joinCode kalau bukan PIC/admin
   const isPicOrAdmin =
-    requester.isFulltimer || group.picJemaatId === requester.jemaatId;
+    requester.isGroupAdmin || group.picJemaatId === requester.jemaatId;
   // Semua group (public & private) punya kode/QR supaya bisa dibuka lewat
   // scan QR di app. Group lama yang belum punya kode → dibuat saat dibuka PIC/admin.
   if (isPicOrAdmin && !group.joinCode) {
@@ -379,7 +388,7 @@ groupRouter.get('/:id', async (req, res) => {
   // Privasi no HP anggota (pengaturan privasi masing-masing). Admin di
   // portal tetap melihat semua.
   const gate =
-    requester.isFulltimer && !isMobileClient(req)
+    requester.canViewAll
       ? OPEN_GATE
       : await privacyGate(requester.jemaatId, [
           ...(rest.picJemaat ? [rest.picJemaat.id] : []),
@@ -389,18 +398,16 @@ groupRouter.get('/:id', async (req, res) => {
     ...j,
     noHp: gate.can(j.id, 'noHp') ? j.noHp : null,
   });
-  // Daftar anggota hanya untuk anggota aktif, PIC, Fulltimer, dan admin menu
-  // Group di Portal. Orang lain (mis. melihat group publik sebelum bergabung)
+  // Daftar anggota hanya untuk anggota aktif, PIC, dan admin menu Group di
+  // Portal (tanpa jalan pintas Fulltimer). Orang lain (mis. melihat group publik sebelum bergabung)
   // hanya melihat JUMLAH anggota. App memakai `members` untuk "apakah saya
   // anggota" — tetap benar karena non-anggota memang bukan anggota.
   const isActiveMember = rest.members.some((m) => m.jemaat.id === requester.jemaatId);
   const isPic = group.picJemaatId === requester.jemaatId;
-  // App: HANYA anggota aktif & PIC (Fulltimer yang bukan anggota juga tidak
-  // melihat — pengelolaan anggota oleh Fulltimer lewat Portal).
-  // Portal: anggota, PIC, Fulltimer, atau admin menu Group.
+  // App: HANYA anggota aktif & PIC. Portal: anggota, PIC, atau admin menu Group.
   const canSeeMembers = isMobileClient(req)
     ? isActiveMember || isPic
-    : isPicOrAdmin || isActiveMember || (await hasMenuAccessFor(req.user, 'group', 'read'));
+    : isPicOrAdmin || isActiveMember || requester.canViewAll;
   res.json({
     success: true,
     data: {
@@ -414,6 +421,8 @@ groupRouter.get('/:id', async (req, res) => {
       myJoinRequest,
       // [PIC/admin] jumlah permintaan bergabung yang menunggu.
       pendingJoinCount,
+      // 2026-11: boleh kelola (edit, anggota) — app memakai ini, bukan status Fulltimer.
+      canManage: isPicOrAdmin,
     },
   });
 });
@@ -468,7 +477,7 @@ groupRouter.post('/', async (req, res) => {
 // Toggle isPublic: dijadikan private → joinCode di-rotate; public tetap punya kode (QR group).
 groupRouter.patch('/:id', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const input = updateGroupSchema.parse(req.body);
   const before = await prisma.group.findUnique({ where: { id: req.params.id } });
@@ -527,7 +536,7 @@ groupRouter.patch('/:id', async (req, res) => {
 // ============================================================
 groupRouter.delete('/:id', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const before = await prisma.group.findUnique({
     where: { id: req.params.id },
@@ -593,7 +602,7 @@ groupRouter.delete('/:id', async (req, res) => {
 // ============================================================
 groupRouter.post('/:id/regenerate-code', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const group = await prisma.group.findUnique({
     where: { id: req.params.id },
@@ -627,7 +636,7 @@ groupRouter.post('/:id/regenerate-code', async (req, res) => {
 groupRouter.post('/:id/members/:jemaatId', async (req, res, next) => {
   if (!UUID_PARAM.test(req.params.jemaatId)) return next(); // mis. /members/by-kode
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const { catatan } = addGroupMemberSchema.partial().parse(req.body);
 
@@ -671,7 +680,7 @@ groupRouter.post('/:id/members/:jemaatId', async (req, res, next) => {
 // ============================================================
 groupRouter.post('/:id/members/by-kode', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const kode = typeof req.body?.kode === 'string' ? req.body.kode.trim().toUpperCase() : '';
   const catatan = typeof req.body?.catatan === 'string' ? req.body.catatan.trim() : undefined;
@@ -723,7 +732,7 @@ groupRouter.post('/:id/members/by-kode', async (req, res) => {
 // ============================================================
 groupRouter.delete('/:id/members/:jemaatId', async (req, res) => {
   const requester = await getRequester(req);
-  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isFulltimer);
+  await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
 
   const existing = await prisma.groupMember.findUnique({
     where: { groupId_jemaatId: { groupId: req.params.id, jemaatId: req.params.jemaatId } },
@@ -813,7 +822,7 @@ groupRouter.delete('/:id/join-request', async (req, res) => {
  *   - di Portal: Role Access menu "Group" tulis (berlaku juga untuk Fulltimer —
  *     tidak ada lagi jalan pintas Fulltimer). Di app hanya PIC (privasi pemohon).
  */
-async function canReviewGroupRequests(req: import('express').Request, groupId: string, jemaatId: string, _isFulltimer?: boolean) {
+async function canReviewGroupRequests(req: import('express').Request, groupId: string, jemaatId: string, _isGroupAdmin?: boolean) {
   if (!isMobileClient(req) && (await hasMenuAccessFor(req.user, 'group', 'write'))) return true;
   const g = await prisma.group.findUnique({ where: { id: groupId }, select: { picJemaatId: true } });
   if (!g) throw NotFound('Group tidak ditemukan');
@@ -823,7 +832,7 @@ async function canReviewGroupRequests(req: import('express').Request, groupId: s
 // GET /:id/join-requests — [PIC/admin] permintaan PENDING
 groupRouter.get('/:id/join-requests', async (req, res) => {
   const requester = await getRequester(req);
-  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isGroupAdmin))) {
     // App lama memanggil ini untuk Fulltimer non-PIC → kosongkan, jangan error.
     return res.json({ success: true, data: [] });
   }
@@ -862,7 +871,7 @@ async function loadGroupRequest(groupId: string, reqId: string) {
 // POST /:id/join-requests/:reqId/approve — [PIC/admin] terima → jadi anggota
 groupRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
   const requester = await getRequester(req);
-  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isGroupAdmin))) {
     throw Forbidden('Hanya PIC group yang dapat memproses permintaan bergabung.');
   }
   const request = await loadGroupRequest(req.params.id, req.params.reqId);
@@ -904,7 +913,7 @@ groupRouter.post('/:id/join-requests/:reqId/approve', async (req, res) => {
 // POST /:id/join-requests/:reqId/reject — [PIC/admin] tolak { reason? }
 groupRouter.post('/:id/join-requests/:reqId/reject', async (req, res) => {
   const requester = await getRequester(req);
-  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isFulltimer))) {
+  if (!(await canReviewGroupRequests(req, req.params.id, requester.jemaatId, requester.isGroupAdmin))) {
     throw Forbidden('Hanya PIC group yang dapat memproses permintaan bergabung.');
   }
   const { reason } = groupRejectSchema.parse(req.body ?? {});

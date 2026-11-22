@@ -3,7 +3,7 @@
 /**
  * Hero image group — rasio 16:9 (sama dengan app), tidak terpotong.
  * Ganti gambar: pilih file → crop 16:9 → unggah. Hanya PIC group yang boleh
- * ganti/hapus (kalau group belum punya PIC: admin fulltimer).
+ * ganti/hapus (kalau group belum punya PIC: admin dengan Role Access Group tulis).
  * API: POST/DELETE /admin/group/:id/hero
  */
 import { useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import { ImagePlus, Loader2, Trash2, UsersRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
+import { useMenuAccess } from '@/lib/use-menu-access';
 
 const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 const href = (u: string) => (/^https?:\/\//.test(u) ? u : `${apiBase}${u}`);
@@ -30,7 +31,8 @@ export function GroupHero({
 }) {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const canEdit = !!user && (picJemaatId ? picJemaatId === user.jemaatId : user.isFulltimer);
+  const groupWrite = useMenuAccess('group', 'write');
+  const canEdit = !!user && (picJemaatId ? picJemaatId === user.jemaatId : groupWrite);
   const ref = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['group', 'detail', groupId] });

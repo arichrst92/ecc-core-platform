@@ -3,18 +3,19 @@
  *
  * Rules:
  *   - PIC (Group.picJemaatId) → full manage (approve, add, remove, dismiss)
- *   - Fulltimer admin cabang → full manage
+ *   - Admin Portal dengan Role Access menu Group (tulis) → full manage
+ *     (2026-11: TIDAK ada lagi jalan pintas Fulltimer)
  *   - Member (in GroupMember) → view + leave self only
  *   - Non-member → view public group only (or via joinCode)
  */
 import { prisma } from '@ecc/database';
 import { Forbidden, NotFound } from './errors.js';
 
-/** Cek user boleh manage group (PIC atau admin fulltimer). */
+/** Cek user boleh manage group (PIC atau admin Role Access Group). `isAdmin` dihitung pemanggil. */
 export async function assertCanManageGroup(
   groupId: string,
   userJemaatId: string,
-  isFulltimer: boolean,
+  isAdmin: boolean,
 ): Promise<void> {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -22,29 +23,25 @@ export async function assertCanManageGroup(
   });
   if (!group) throw NotFound('Group tidak ditemukan');
 
-  // Fulltimer di cabang yang sama → OK
-  if (isFulltimer) {
-    // TODO: strict — cek fulltimer beneran di cabang yg sama.
-    // MVP: any fulltimer = OK (mirror pattern homecell-pic.ts).
-    return;
-  }
+  // Admin Role Access Group (Portal) → OK
+  if (isAdmin) return;
   // PIC sendiri → OK
   if (group.picJemaatId === userJemaatId) return;
 
-  throw Forbidden('Cuma PIC atau admin fulltimer yg boleh manage group ini');
+  throw Forbidden('Hanya PIC group ini (atau admin dengan akses Group di Portal) yang boleh mengelola group ini.');
 }
 
 /**
  * Cek group visible/accessible ke user:
  * - Public group → siapa aja
- * - Private group → cuma member + PIC + fulltimer
+ * - Private group → cuma member + PIC + admin Role Access Group (Portal)
  *
  * Return group data (dengan minimal fields) atau throw 403/404.
  */
 export async function assertCanViewGroup(
   groupId: string,
   userJemaatId: string,
-  isFulltimer: boolean,
+  canViewAll: boolean,
 ): Promise<{ id: string; isPublic: boolean; picJemaatId: string | null }> {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -55,7 +52,7 @@ export async function assertCanViewGroup(
   if (group.isPublic) return group;
 
   // Private — cek membership atau role
-  if (isFulltimer) return group;
+  if (canViewAll) return group;
   if (group.picJemaatId === userJemaatId) return group;
 
   const isMember = await prisma.groupMember.findUnique({

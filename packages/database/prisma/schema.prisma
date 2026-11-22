@@ -60,6 +60,9 @@ model CabangGereja {
   // Zona waktu IANA cabang (mis. "Asia/Jakarta", "Australia/Sydney"). Jam
   // jadwal ibadah/event cabang = jam dinding di zona ini.
   timezone  String   @default("Asia/Jakarta") @db.VarChar(64)
+  // Nama kota untuk label jam "Waktu <kota>" (2026-11). Kosong = nama cabang
+  // tanpa awalan "ECC" (mis. "ECC Bali" → "Bali").
+  kota      String?  @db.VarChar(100)
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1674,6 +1677,8 @@ model EventParticipation {
   guestSource       String? @map("guest_source") @db.VarChar(20)
   // Cara check-in (lihat Reservasi.checkinMethod). NULL = data lama.
   checkinMethod     String? @map("checkin_method") @db.VarChar(20)
+  // userId petugas yang scan / mencatat walk-in (2026-11). NULL = self / data lama.
+  checkedInBy       String? @map("checked_in_by") @db.Uuid
 
   // Lifecycle timestamps
   registeredAt DateTime  @default(now()) @map("registered_at")

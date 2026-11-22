@@ -48,7 +48,8 @@ export async function assertPenggembalaanRole(jemaatId: string, roleNama: string
  * Authorization helper untuk endpoint Homecell Schedule + Attendance.
  *
  * Allow:
- *   - Admin Fulltimer (req.user.isFulltimer = true)
+ *   - Admin dengan Role Access menu Homecell (tulis) — dihitung pemanggil lewat
+ *     `homecellAdmin(req)`. 2026-11: TIDAK ada lagi jalan pintas Fulltimer.
  *   - PIC homecell (homecell.picJemaatId === userJemaatId)
  *   - PIC area parent (area.picJemaatId === userJemaatId)
  *   - Pastor zona parent (homecell_area_pastor)
@@ -72,11 +73,12 @@ export async function isHomecellAsisten(homecellId: string, jemaatId: string): P
 export async function assertCanManageHomecell(
   homecellId: string,
   userJemaatId: string,
-  isFulltimer: boolean,
+  /** Admin Role Access menu Homecell (tulis) — lihat `homecellAdmin`. */
+  isAdmin: boolean,
   /** Asisten homecell juga boleh (jadwal, absen, tamu, lampiran). */
   opts: { allowAsisten?: boolean } = {},
 ): Promise<void> {
-  if (isFulltimer) return; // admin bypass
+  if (isAdmin) return;
 
   const homecell = await prisma.homecell.findUnique({
     where: { id: homecellId },
@@ -128,4 +130,13 @@ export async function getJemaatIdForUser(userId: string): Promise<string | null>
   // Auto-cleanup setelah 5 menit supaya tidak grow unbounded
   setTimeout(() => userJemaatCache.delete(userId), 5 * 60 * 1000);
   return user.jemaatId;
+}
+
+/** Admin homecell = Role Access menu Homecell (level `level`), bukan status Fulltimer. */
+export async function homecellAdmin(
+  req: { user?: { jemaatId: string; isFulltimer?: boolean } },
+  level: 'read' | 'write' = 'write',
+): Promise<boolean> {
+  const { hasMenuAccessFor } = await import('../middleware/require-menu.js');
+  return hasMenuAccessFor(req.user, 'homecell', level);
 }

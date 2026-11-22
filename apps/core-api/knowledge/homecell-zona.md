@@ -24,7 +24,7 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 ## Bergabung ke homecell
 - Jemaat: Homecell → **Cari homecell terdekat** (izinkan lokasi) atau cari nama/area → detail → **Minta bergabung** (pesan opsional) → tunggu persetujuan.
 - **Mode tamu** (tanpa akun): Lanjut sebagai Tamu → Cari homecell → Minta Bergabung → isi nama, WhatsApp, tujuan (belum tahu / ingin bergabung / sekadar berkunjung). Permintaan tampil di bagian *Dari mode tamu*; pemimpin menghubungi lewat WhatsApp.
-- **PIC homecell** (di app): banner permintaan → lihat profil, pesan, tujuan → **Terima / Tolak**. Fulltimer memproses lewat **Portal**. PIC zona, pastor zona, dan asisten **tidak** memproses permintaan bergabung di app ("Hanya pemimpin homecell ini yang dapat memproses permintaan bergabung.").
+- **PIC homecell** (di app): banner permintaan → lihat profil, pesan, tujuan → **Terima / Tolak**. Admin dengan Role Access menu **Homecell** (tulis) memproses lewat **Portal** — status Fulltimer saja tidak cukup (sejak 2026-11). PIC zona, pastor zona, dan asisten **tidak** memproses permintaan bergabung di app ("Hanya pemimpin homecell ini yang dapat memproses permintaan bergabung.").
 - "Jemaat sudah jadi member homecell ini" → sudah anggota.
 
 ## Pertemuan & absen
@@ -73,7 +73,11 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 ## Kasus umum
 - **"Menu Kelola tidak muncul"** → orangnya bukan PIC/asisten/pastor zona homecell itu.
 - **"Asisten tidak bisa keluarkan anggota"** → memang tidak diizinkan; PIC yang melakukan.
-- **"Permintaan bergabung tidak bisa diproses"** → hanya PIC homecell itu (app) atau Fulltimer (Portal); cek bagian *Dari mode tamu* untuk permintaan dari tamu.
+- **"Permintaan bergabung tidak bisa diproses"** → hanya PIC homecell itu (app) atau pemegang Role Access Homecell tulis (Portal); cek bagian *Dari mode tamu* untuk permintaan dari tamu.
 
 ## Diagnosis (untuk Elsa)
 `homecell_area` (+ `homecell_area_pastor`) → `homecell` (picJemaat, area) → `homecell_member` (isActive, peran asisten) → `homecell_schedule` → `homecell_attendance` → `homecell_join_request` / `homecell_guest_request` / `homecell_tamu` → `homecell_material`.
+
+## Hak admin homecell (2026-11)
+- Tidak ada lagi jalan pintas **Fulltimer**. Mengelola homecell mana pun (jadwal, absen, tamu, hapus jadwal, laporan zona, ubah zona) hanya untuk **PIC / PIC zona / pastor zona / asisten** homecell itu, atau pemegang **Role Access menu Homecell** (tulis; baca untuk materi & laporan).
+- App lama (≤ 2.5.0) masih menampilkan tombol kelola untuk Fulltimer; server menolak dengan pesan "Hanya pemimpin homecell ini…". Solusi: beri Role Access Homecell atau jadikan PIC/asisten.

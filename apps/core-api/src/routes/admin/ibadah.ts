@@ -17,9 +17,9 @@ import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
 import { occurrenceStart } from '../../lib/reservasi-window.js';
-import { tzOr } from '../../lib/tz.js';
+import { cabangKota, todayInTz, tzOr } from '../../lib/tz.js';
 import { selfCheckinOpensAt } from '../../lib/self-checkin.js';
-import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { assertWalkInOpen, ibadahScanWindow, ibadahScanWindowCached } from '../../lib/scan-window.js';
 import { inviterNames, scanWindowInfo } from '../../lib/scanner-info.js';
 import { assertCanScanIbadah, scanAccess } from '../../lib/scan-access.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
@@ -864,19 +864,17 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
       lokasi: true,
       isKidsIbadah: true,
       requiresCheckout: true,
-      cabang: { select: { nama: true, timezone: true } },
+      cabang: { select: { nama: true, kota: true, timezone: true } },
     },
   });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
+  // 2026-11: hanya petugas scan ibadah ini / admin kehadiran (dulu semua user login).
+  await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
-  // Tanggal default = hari ini (UTC midnight, biar match @db.Date)
-  let tanggalDate: Date;
+  // Tanggal default = hari ini menurut ZONA CABANG (sama dengan tanggal yang
+  // dipakai server saat mencatat scan), bukan tanggal UTC / tanggal HP.
   const tanggalStr = typeof req.query.tanggalIbadah === 'string' ? req.query.tanggalIbadah : undefined;
-  if (tanggalStr) {
-    tanggalDate = parseTanggal(tanggalStr);
-  } else {
-    tanggalDate = todayAsUtcMidnight();
-  }
+  const tanggalDate = tanggalStr ? parseTanggal(tanggalStr) : todayInTz(tzOr(ibadah.cabang?.timezone));
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
   const where = { ibadahId: ibadah.id, tanggalIbadah: tanggalDate };
   const me = req.user?.sub ?? null;
@@ -887,7 +885,7 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
     me ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', checkedInBy: me } }) : Promise.resolve(0),
     ibadah.requiresCheckout ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', checkedOutAt: { not: null } } }) : Promise.resolve(0),
     ibadah.isKidsIbadah ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', pickedUpAt: { not: null } } }) : Promise.resolve(0),
-    ibadahScanWindow(ibadah.id),
+    ibadahScanWindowCached(ibadah.id),
   ]);
   const byStatus = { RESERVE: 0, JOIN: 0, CANCEL: 0 };
   for (const g of grouped) byStatus[g.status] = g._count._all;
@@ -908,6 +906,8 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
       // Info petugas (2026-11, app setelah 2.5.0).
       belumHadir: byStatus.RESERVE,
       walkIn: m('WALK_IN'),
+      // Sudah reservasi, discan lewat 30 menit setelah mulai (2026-11).
+      late: m('LATE'),
       self: m('SELF'),
       byMe,
       checkedOut,
@@ -920,9 +920,10 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
         isKidsIbadah: ibadah.isKidsIbadah,
         requiresCheckout: ibadah.requiresCheckout,
         cabangNama: ibadah.cabang?.nama ?? null,
+        cabangKota: cabangKota(ibadah.cabang),
         timezone: ibadah.cabang?.timezone ?? null,
       },
-      scanWindow: scanWindowInfo(win, ibadah.cabang?.nama, tanggalIso),
+      scanWindow: scanWindowInfo(win, ibadah.cabang, tanggalIso),
       lastUpdated: new Date().toISOString(),
     },
   });
@@ -938,13 +939,14 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
 ibadahRouter.get('/:id/checkin/list', async (req, res) => {
   const ibadah = await prisma.ibadah.findUnique({
     where: { id: req.params.id },
-    select: { id: true, nama: true, isKidsIbadah: true },
+    select: { id: true, nama: true, isKidsIbadah: true, cabang: { select: { timezone: true } } },
   });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
   await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
   const tanggalStr = typeof req.query.tanggalIbadah === 'string' ? req.query.tanggalIbadah : undefined;
-  const tanggalDate = tanggalStr ? parseTanggal(tanggalStr) : todayAsUtcMidnight();
+  // Default = hari ini zona cabang (sama dengan tanggal scan di server).
+  const tanggalDate = tanggalStr ? parseTanggal(tanggalStr) : todayInTz(tzOr(ibadah.cabang?.timezone));
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   const belum = req.query.status === 'belum';
 

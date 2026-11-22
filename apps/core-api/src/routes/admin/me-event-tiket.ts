@@ -139,6 +139,8 @@ meEventTiketRouter.get('/', async (req, res) => {
       ];
       const sumOf = (st: string) => pays.filter((x) => x.status === st).reduce((a, x) => a + x.n, 0);
       const totalBayar = sumOf('BAYAR') || sumOf('MENUNGGU_VERIFIKASI');
+      // CONFIRMED = sudah diverifikasi; PENDING = nominal masih menunggu verifikasi (2026-11).
+      const totalBayarStatus = sumOf('BAYAR') ? 'CONFIRMED' : sumOf('MENUNGGU_VERIFIKASI') ? 'PENDING' : null;
       const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventStartsAt(ev, tz), now);
       const relasi = r.jemaat.id === u.jemaatId ? null : (fam.get(r.jemaat.id) ?? (r.jemaat.isTamu ? 'Tamu' : null));
       return {
@@ -149,6 +151,7 @@ meEventTiketRouter.get('/', async (req, res) => {
         checkinMethod: r.checkinMethod,
         payment,
         totalBayar,
+        totalBayarStatus,
         canCancel,
         isSelf: r.jemaat.id === u.jemaatId,
         relasi,

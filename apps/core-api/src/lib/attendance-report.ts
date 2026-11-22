@@ -3,19 +3,22 @@
  * supaya mudah di-test. Route `routes/admin/report.ts` yang mengambil data.
  */
 
-export const CHECKIN_METHODS = ['SCAN', 'SELF', 'WALK_IN', 'MANUAL', 'UNKNOWN'] as const;
+// LATE (2026-11) = sudah reservasi/terdaftar, discan petugas lewat 30 menit setelah mulai
+// (dulu dicatat WALK_IN sehingga tercampur dengan tamu walk-in).
+export const CHECKIN_METHODS = ['SCAN', 'SELF', 'WALK_IN', 'LATE', 'MANUAL', 'UNKNOWN'] as const;
 export type CheckinMethod = (typeof CHECKIN_METHODS)[number];
 
 export const METHOD_LABEL: Record<CheckinMethod, string> = {
   SCAN: 'Scan usher',
   SELF: 'Self check-in',
   WALK_IN: 'Walk-in (tamu)',
+  LATE: 'Scan terlambat',
   MANUAL: 'Manual admin',
   UNKNOWN: 'Tidak tercatat',
 };
 
 export type MethodCount = Record<CheckinMethod, number>;
-export const emptyMethods = (): MethodCount => ({ SCAN: 0, SELF: 0, WALK_IN: 0, MANUAL: 0, UNKNOWN: 0 });
+export const emptyMethods = (): MethodCount => ({ SCAN: 0, SELF: 0, WALK_IN: 0, LATE: 0, MANUAL: 0, UNKNOWN: 0 });
 
 export function normMethod(m: string | null | undefined): CheckinMethod {
   return (CHECKIN_METHODS as readonly string[]).includes(m ?? '') ? (m as CheckinMethod) : 'UNKNOWN';

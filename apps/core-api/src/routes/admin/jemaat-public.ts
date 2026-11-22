@@ -20,6 +20,7 @@
  * Endpoint TIDAK overlap dengan /admin/jemaat/:id (admin CRUD untuk fulltimer).
  * Mobile call /admin/jemaat-public/:id.
  */
+import { scanAccess } from '../../lib/scan-access.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
@@ -92,7 +93,7 @@ jemaatPublicRouter.get('/search', async (req, res) => {
   // dengan nama / kode, dan no HP-nya tidak ditampilkan (meski disamarkan).
   // Kecuali untuk check-in/absensi oleh petugas (usher/scanner, PIC
   // homecell/area, fulltimer): `purpose=checkin` → tetap bisa dicari via no HP.
-  const forCheckin = req.query.purpose === 'checkin' && (await canDoCheckin(req.user.jemaatId, req.user.isFulltimer === true));
+  const forCheckin = req.query.purpose === 'checkin' && (await canDoCheckin(req.user.jemaatId, (await scanAccess(req)).admin));
   const hidden = forCheckin ? new Set<string>() : await notDiscoverableByPhone(rows.map((r) => r.id));
   const matchesNameOrKode = (r: (typeof rows)[number]) =>
     (r.kode ?? '').startsWith(upper) || r.namaLengkap.toLowerCase().includes(lower);

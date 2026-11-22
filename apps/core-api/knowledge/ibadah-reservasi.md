@@ -59,3 +59,8 @@ summary: Cara ibadah dijadwalkan (mingguan/dua mingguan/bulanan, zona waktu caba
 
 ## Diagnosis (untuk Elsa)
 `ibadah` (jadwal, cabang.timezone, isActive) → `ibadah_occurrence_status` (tanggal ditiadakan) → `reservasi` (filter ibadahId + tanggalIbadah + jemaatId; status, cancelReason, checkinMethod) → `service_review`.
+
+## Label jam "Waktu <kota>" (2026-11)
+- Jam ibadah/event ditulis dengan label kota cabang, mis. ECC Bali → **Waktu Bali** (dulu "Waktu Makassar" dari zona Asia/Makassar).
+- Kota diambil dari kolom **Kota (label jam)** di Portal → Cabang; bila kosong, dari nama cabang tanpa "ECC". Cabang yang namanya bukan kota (mis. "ECC Kelapa Gading") → isi kolom Kota.
+- App ≤ 2.5.0 masih menulis nama kota zona waktu sampai jemaat update; Portal, pengingat & pesan server sudah memakai kota cabang.

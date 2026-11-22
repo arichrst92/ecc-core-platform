@@ -27,6 +27,7 @@
  *   - GET    /admin/me/branch-change-requests   → list request user (riwayat)
  *   - POST   /admin/me/branch-change-request    → submit request pindah cabang
  */
+import { homecellAdmin } from '../../lib/homecell-pic.js';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma, Prisma } from '@ecc/database';
@@ -91,7 +92,7 @@ import { meSpiritualJourneyRouter } from './me-spiritual-journey.js';
 import { notDiscoverableByPhone, privacyGate } from '../../lib/privacy.js';
 import { activeWindow, isActiveRow, relationFor } from '../../lib/my-reservasi.js';
 import { resolveIbadahDuties } from '../../lib/ibadah-duty.js';
-import { tzOr } from '../../lib/tz.js';
+import { cabangKota, tzOr } from '../../lib/tz.js';
 import { getLastMeetingMap } from '../../lib/homecell-last-attendance.js';
 import { todayWib } from '../../lib/last-attendance.js';
 import { canCancelCheckin, canCancelReservasi } from '../../lib/reservasi-window.js';
@@ -866,7 +867,8 @@ meRouter.patch('/homecell-area/:id', async (req, res) => {
   const input = meUpdateHomecellAreaSchema.parse(req.body ?? {});
   const before = await prisma.homecellArea.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Zona tidak ditemukan');
-  if (!req.user?.isFulltimer && before.picJemaatId !== jemaatId) {
+  // Admin Role Access Homecell (tulis) boleh juga — tanpa jalan pintas Fulltimer.
+  if (before.picJemaatId !== jemaatId && !(await homecellAdmin(req, 'write'))) {
     throw Forbidden('Hanya PIC zona ini yang dapat mengubahnya.');
   }
   try {
@@ -2452,7 +2454,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
               jamMulai: true,
               jamSelesai: true,
               lokasi: true,
-              cabang: { select: { timezone: true, nama: true } },
+              cabang: { select: { timezone: true, nama: true, kota: true } },
             },
           },
           assignments: {
@@ -2478,6 +2480,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     ibadahLokasi: r.schedule.ibadah?.lokasi ?? null,
     timezone: r.schedule.ibadah?.cabang?.timezone ?? null,
     cabangNama: r.schedule.ibadah?.cabang?.nama ?? null,
+    cabangKota: cabangKota(r.schedule.ibadah?.cabang),
     ministryId: r.schedule.pelayanan.id,
     ministryNama: r.schedule.pelayanan.nama,
     ministryIkon: r.schedule.pelayanan.ikon,

@@ -1687,6 +1687,22 @@ authRouter.post(
       updateData.emailSource = 'SELF';
     }
 
+    if (typeof updateData.email === 'string') {
+      const owner = await findJemaatByEmail(updateData.email);
+      if (owner && owner.id !== existing.id) {
+        throw Conflict('Email ini sudah dipakai akun lain. Kosongkan kolom email atau gunakan email lain.');
+      }
+    }
+    if (input.cabangId !== undefined) {
+      const cab = await prisma.cabangGereja.findUnique({ where: { id: input.cabangId }, select: { isActive: true } });
+      if (!cab?.isActive) throw BadRequest('Cabang tidak valid atau nonaktif.');
+    }
+
+    // Simpan profil DULU (bisa gagal, mis. email sudah dipakai akun lain) —
+    // dulu onboardedAt diklaim lebih dulu, jadi bila update gagal, percobaan
+    // berikutnya bukan "pertama kali" lagi dan role onboarding tidak pernah diberikan.
+    await prisma.jemaat.update({ where: { id: existing.id }, data: updateData });
+
     // Tandai onboarded secara atomik: hanya satu permintaan yang "menang" bila
     // tombol ditekan dua kali / request terkirim ulang → role tidak dobel.
     let firstTime = false;
@@ -1695,9 +1711,8 @@ authRouter.post(
       firstTime = claim.count === 1;
     }
 
-    const updated = await prisma.jemaat.update({
+    const updated = await prisma.jemaat.findUniqueOrThrow({
       where: { id: existing.id },
-      data: updateData,
       select: {
         id: true,
         namaLengkap: true,

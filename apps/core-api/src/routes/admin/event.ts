@@ -56,6 +56,7 @@ import { paymentOkForCheckin, paymentStatusOf, selfCancelBlockedReason } from '.
 import { createNotification } from '../../lib/notification.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { assertWalkInOpen, eventScanWindow } from '../../lib/scan-window.js';
+import { inviterNames, scanWindowInfo } from '../../lib/scanner-info.js';
 import {
   notifyTugasUpdated,
   parseTugas,
@@ -1502,6 +1503,14 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
   }
   const total =
     byStatus.DAFTAR + byStatus.MENUNGGU_VERIFIKASI + byStatus.BAYAR + byStatus.HADIR;
+  // Info petugas (2026-11, app setelah 2.5.0): cara hadir, jendela scan, info event.
+  const [byMethod, cab] = await Promise.all([
+    prisma.eventParticipation.groupBy({ by: ['checkinMethod'], where: { eventId: event.id, status: 'HADIR' }, _count: { _all: true } }),
+    event.cabangId
+      ? prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { nama: true, timezone: true } })
+      : Promise.resolve(null),
+  ]);
+  const m = (k: string) => byMethod.find((g) => g.checkinMethod === k)?._count._all ?? 0;
   res.json({
     success: true,
     data: {
@@ -1510,6 +1519,19 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
       total,
       hadir: byStatus.HADIR,
       byStatus,
+      belumHadir: byStatus.DAFTAR + byStatus.MENUNGGU_VERIFIKASI + byStatus.BAYAR,
+      walkIn: m('WALK_IN'),
+      self: m('SELF'),
+      event: {
+        judul: event.judul,
+        jamMulai: event.jamMulai,
+        jamSelesai: event.jamSelesai,
+        lokasi: event.lokasi,
+        tipeBayar: event.tipeBayar,
+        cabangNama: cab?.nama ?? null,
+        timezone: cab?.timezone ?? null,
+      },
+      scanWindow: event.butuhKehadiran ? scanWindowInfo(eventScanWindow(event, tzOr(cab?.timezone)), cab?.nama) : null,
       lastUpdated: new Date().toISOString(),
     },
   });
@@ -1521,7 +1543,7 @@ eventRouter.get('/:id/checkin/stats', async (req, res) => {
 // Hanya authorized scanner event ini (canScanAttendance) / pengelola event.
 // ============================================================
 eventRouter.get('/:id/checkin/list', async (req, res) => {
-  const event = await prisma.event.findUnique({ where: { id: req.params.id }, select: { id: true, judul: true } });
+  const event = await prisma.event.findUnique({ where: { id: req.params.id }, select: { id: true, judul: true, tipeBayar: true } });
   if (!event) throw NotFound('Event tidak ditemukan');
   if (!req.user) throw Forbidden('User tidak terautentikasi');
   if (!(await isEventManager(req))) {
@@ -1535,36 +1557,49 @@ eventRouter.get('/:id/checkin/list', async (req, res) => {
     if (!ok) throw Forbidden(`Anda tidak berwenang melihat daftar hadir event "${event.judul}".`);
   }
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  // status=belum → terdaftar tapi belum hadir (beserta status bayar).
+  const belum = req.query.status === 'belum';
   const rows = await prisma.eventParticipation.findMany({
     where: {
       eventId: event.id,
-      status: 'HADIR',
+      status: belum ? { in: ['DAFTAR', 'MENUNGGU_VERIFIKASI', 'BAYAR'] } : 'HADIR',
       ...(q
         ? { jemaat: { OR: [{ namaLengkap: { contains: q, mode: 'insensitive' } }, { kode: { contains: q, mode: 'insensitive' } }] } }
         : {}),
     },
     select: {
       id: true,
+      status: true,
+      registeredAt: true,
       attendedAt: true,
       checkinMethod: true,
       guestSource: true,
+      invitedByJemaatId: true,
       jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true } },
     },
-    orderBy: [{ attendedAt: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: belum ? [{ jemaat: { namaLengkap: 'asc' } }] : [{ attendedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 500,
   });
+  const inviters = await inviterNames(rows.map((r) => r.invitedByJemaatId));
+  const paid = event.tipeBayar !== 'GRATIS';
   res.json({
     success: true,
     data: rows.map((r) => ({
       id: r.id,
       jemaat: r.jemaat,
-      at: r.attendedAt,
+      at: belum ? r.registeredAt : r.attendedAt,
+      status: belum ? 'BELUM' : 'HADIR',
+      // Event berbayar: status pembayaran peserta yang belum hadir.
+      payment: belum && paid ? (r.status === 'BAYAR' ? 'LUNAS' : r.status === 'MENUNGGU_VERIFIKASI' ? 'MENUNGGU' : 'BELUM_BAYAR') : null,
       method: r.checkinMethod,
       guest: !!r.guestSource,
+      guestSource: r.guestSource,
+      invitedBy: r.invitedByJemaatId ? (inviters.get(r.invitedByJemaatId) ?? null) : null,
       byMe: false,
       scannedBy: null,
       checkedOutAt: null,
       pickedUpAt: null,
+      umur: null,
     })),
   });
 });

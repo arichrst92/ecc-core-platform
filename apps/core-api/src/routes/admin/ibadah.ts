@@ -20,6 +20,7 @@ import { occurrenceStart } from '../../lib/reservasi-window.js';
 import { tzOr } from '../../lib/tz.js';
 import { selfCheckinOpensAt } from '../../lib/self-checkin.js';
 import { assertWalkInOpen, ibadahScanWindow } from '../../lib/scan-window.js';
+import { inviterNames, scanWindowInfo } from '../../lib/scanner-info.js';
 import { assertCanScanIbadah, scanAccess } from '../../lib/scan-access.js';
 import { ageYears, KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 import { parseTugas, refreshTugasNames, tugasVisiblePelayanan, type TugasEntry } from '../../lib/pelayanan-tugas.js';
@@ -853,7 +854,19 @@ ibadahRouter.post('/:id/checkin', async (req, res) => {
 //     → { reserved, joined, cancelled, walkIn, total, lastUpdated }
 // ============================================================
 ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
-  const ibadah = await prisma.ibadah.findUnique({ where: { id: req.params.id } });
+  const ibadah = await prisma.ibadah.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      nama: true,
+      jamMulai: true,
+      jamSelesai: true,
+      lokasi: true,
+      isKidsIbadah: true,
+      requiresCheckout: true,
+      cabang: { select: { nama: true, timezone: true } },
+    },
+  });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
 
   // Tanggal default = hari ini (UTC midnight, biar match @db.Date)
@@ -865,14 +878,20 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
     tanggalDate = todayAsUtcMidnight();
   }
   const tanggalIso = tanggalDate.toISOString().slice(0, 10);
+  const where = { ibadahId: ibadah.id, tanggalIbadah: tanggalDate };
+  const me = req.user?.sub ?? null;
 
-  const grouped = await prisma.reservasi.groupBy({
-    by: ['status'],
-    where: { ibadahId: ibadah.id, tanggalIbadah: tanggalDate },
-    _count: { _all: true },
-  });
+  const [grouped, byMethod, byMe, checkedOut, pickedUp, win] = await Promise.all([
+    prisma.reservasi.groupBy({ by: ['status'], where, _count: { _all: true } }),
+    prisma.reservasi.groupBy({ by: ['checkinMethod'], where: { ...where, status: 'JOIN' }, _count: { _all: true } }),
+    me ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', checkedInBy: me } }) : Promise.resolve(0),
+    ibadah.requiresCheckout ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', checkedOutAt: { not: null } } }) : Promise.resolve(0),
+    ibadah.isKidsIbadah ? prisma.reservasi.count({ where: { ...where, status: 'JOIN', pickedUpAt: { not: null } } }) : Promise.resolve(0),
+    ibadahScanWindow(ibadah.id),
+  ]);
   const byStatus = { RESERVE: 0, JOIN: 0, CANCEL: 0 };
   for (const g of grouped) byStatus[g.status] = g._count._all;
+  const m = (k: string) => byMethod.find((g) => g.checkinMethod === k)?._count._all ?? 0;
 
   res.json({
     success: true,
@@ -886,54 +905,82 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
       // dikirim sehingga header scanner hanya menampilkan "/33".
       hadir: byStatus.JOIN,
       total: byStatus.RESERVE + byStatus.JOIN,
+      // Info petugas (2026-11, app setelah 2.5.0).
+      belumHadir: byStatus.RESERVE,
+      walkIn: m('WALK_IN'),
+      self: m('SELF'),
+      byMe,
+      checkedOut,
+      pickedUp,
+      ibadah: {
+        nama: ibadah.nama,
+        jamMulai: ibadah.jamMulai,
+        jamSelesai: ibadah.jamSelesai,
+        lokasi: ibadah.lokasi,
+        isKidsIbadah: ibadah.isKidsIbadah,
+        requiresCheckout: ibadah.requiresCheckout,
+        cabangNama: ibadah.cabang?.nama ?? null,
+        timezone: ibadah.cabang?.timezone ?? null,
+      },
+      scanWindow: scanWindowInfo(win, ibadah.cabang?.nama, tanggalIso),
       lastUpdated: new Date().toISOString(),
     },
   });
 });
 
 // ============================================================
-// Daftar jemaat yang sudah hadir (check-in) — untuk halaman scanner app.
-//   GET /admin/ibadah/:id/checkin/list?tanggalIbadah=2026-11-22&q=nama
-//     → [{ id, jemaat, at, method, guest, byMe, scannedBy, checkedOutAt, pickedUpAt }]
+// Daftar jemaat untuk halaman scanner app.
+//   GET /admin/ibadah/:id/checkin/list?tanggalIbadah=2026-11-22&q=nama&status=hadir|belum
+//     hadir (default) → sudah check-in, terbaru di atas
+//     belum           → reservasi yang belum check-in (urut nama)
 // Hanya petugas scan ibadah ini / admin kehadiran (sama dengan hak scan).
 // ============================================================
 ibadahRouter.get('/:id/checkin/list', async (req, res) => {
-  const ibadah = await prisma.ibadah.findUnique({ where: { id: req.params.id }, select: { id: true, nama: true } });
+  const ibadah = await prisma.ibadah.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, nama: true, isKidsIbadah: true },
+  });
   if (!ibadah) throw NotFound('Ibadah tidak ditemukan');
   await assertCanScanIbadah(req, ibadah.id, ibadah.nama);
 
   const tanggalStr = typeof req.query.tanggalIbadah === 'string' ? req.query.tanggalIbadah : undefined;
   const tanggalDate = tanggalStr ? parseTanggal(tanggalStr) : todayAsUtcMidnight();
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const belum = req.query.status === 'belum';
 
   const rows = await prisma.reservasi.findMany({
     where: {
       ibadahId: ibadah.id,
       tanggalIbadah: tanggalDate,
-      status: 'JOIN',
+      status: belum ? 'RESERVE' : 'JOIN',
       ...(q
         ? { jemaat: { OR: [{ namaLengkap: { contains: q, mode: 'insensitive' } }, { kode: { contains: q, mode: 'insensitive' } }] } }
         : {}),
     },
     select: {
       id: true,
+      reservedAt: true,
       joinedAt: true,
       checkinMethod: true,
       guestSource: true,
+      invitedByJemaatId: true,
       checkedInBy: true,
       checkedOutAt: true,
       pickedUpAt: true,
-      jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true } },
+      jemaat: { select: { id: true, namaLengkap: true, kode: true, fotoUrl: true, tanggalLahir: true } },
     },
-    orderBy: [{ joinedAt: 'desc' }, { createdAt: 'desc' }],
+    orderBy: belum ? [{ jemaat: { namaLengkap: 'asc' } }] : [{ joinedAt: 'desc' }, { createdAt: 'desc' }],
     take: 500,
   });
 
-  // Nama petugas yang scan (checkedInBy = userId).
+  // Nama petugas yang scan (checkedInBy = userId) & pengundang tamu.
   const userIds = [...new Set(rows.map((r) => r.checkedInBy).filter((x): x is string => !!x))];
-  const users = userIds.length
-    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, jemaat: { select: { namaLengkap: true } } } })
-    : [];
+  const [users, inviters] = await Promise.all([
+    userIds.length
+      ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, jemaat: { select: { namaLengkap: true } } } })
+      : Promise.resolve([]),
+    inviterNames(rows.map((r) => r.invitedByJemaatId)),
+  ]);
   const nameByUser = new Map(users.map((u) => [u.id, u.jemaat?.namaLengkap ?? null]));
   const me = req.user?.sub ?? null;
 
@@ -941,14 +988,18 @@ ibadahRouter.get('/:id/checkin/list', async (req, res) => {
     success: true,
     data: rows.map((r) => ({
       id: r.id,
-      jemaat: r.jemaat,
-      at: r.joinedAt,
+      jemaat: { id: r.jemaat.id, namaLengkap: r.jemaat.namaLengkap, kode: r.jemaat.kode, fotoUrl: r.jemaat.fotoUrl },
+      at: belum ? r.reservedAt : r.joinedAt,
+      status: belum ? 'BELUM' : 'HADIR',
       method: r.checkinMethod,
       guest: !!r.guestSource,
+      guestSource: r.guestSource,
+      invitedBy: r.invitedByJemaatId ? (inviters.get(r.invitedByJemaatId) ?? null) : null,
       byMe: !!me && r.checkedInBy === me,
       scannedBy: r.checkedInBy ? (nameByUser.get(r.checkedInBy) ?? null) : null,
       checkedOutAt: r.checkedOutAt,
       pickedUpAt: r.pickedUpAt,
+      umur: ibadah.isKidsIbadah && r.jemaat.tanggalLahir ? ageYears(r.jemaat.tanggalLahir) : null,
     })),
   });
 });

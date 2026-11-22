@@ -182,7 +182,17 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
       </>
     );
   } else if (target.type === 'event') {
-    const fee = d.tipeBayar === 'GRATIS' ? t('common.free') : d.nominal ? `Rp ${Number(d.nominal).toLocaleString('id-ID')}` : t('ev.flexible');
+    // Sukarela (NOMINAL_BEBAS): tampil "Sukarela" — nominal event = batas minimal, bukan harga.
+    const isBebas = d.tipeBayar === 'NOMINAL_BEBAS';
+    const fee =
+      d.tipeBayar === 'GRATIS'
+        ? t('common.free')
+        : isBebas
+          ? t('ev.voluntary')
+          : d.nominal
+            ? `Rp ${Number(d.nominal).toLocaleString('id-ID')}`
+            : t('ev.flexible');
+    const feeSub = isBebas && d.nominal && Number(d.nominal) > 0 ? `${t('ev.minAmount')} Rp ${Number(d.nominal).toLocaleString('id-ID')}` : null;
     const when = `${date(d.tanggalMulai, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${
       d.tanggalSelesai && d.tanggalSelesai !== d.tanggalMulai ? ` – ${date(d.tanggalSelesai)}` : ''
     }`;
@@ -227,6 +237,7 @@ function PanelBody({ target, open, onClose, data, state }: { target: Target; ope
             ) : null}
             <Row Icon={CreditCard} label={t('ev.fee')}>
               <div className={`font-semibold ${d.tipeBayar === 'GRATIS' ? 'text-green-700' : 'text-neutral-900'}`}>{fee}</div>
+              {feeSub ? <div className="text-xs text-neutral-500">{feeSub}</div> : null}
             </Row>
             <div className="rounded-2xl bg-brand-50/70 border border-orange-100 p-3">
               <SeatBar quota={d.quotaPeserta} filled={d.pesertaCount} attending={d.hadirCount} opensAt={d.checkinOpensAt} size="md" />

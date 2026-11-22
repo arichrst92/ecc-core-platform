@@ -220,7 +220,16 @@ export default async function EventPembayaranPage(
               {isFixed && event.nominal !== null && (
                 <p className="text-xl sm:text-2xl font-extrabold text-neutral-900 tabular-nums">Rp {formatRupiah(event.nominal)}</p>
               )}
-              {isBebas && <p className="text-xl font-extrabold text-neutral-900">{L('Sukarela', 'Voluntary')}</p>}
+              {isBebas && (
+                <>
+                  <p className="text-xl font-extrabold text-neutral-900">{L('Sukarela', 'Voluntary')}</p>
+                  {event.nominal != null && Number(event.nominal) > 0 && (
+                    <p className="text-xs text-neutral-500">
+                      {L('Minimal', 'Minimum')} Rp {formatRupiah(Number(event.nominal))}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

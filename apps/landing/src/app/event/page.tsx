@@ -127,7 +127,11 @@ export default async function EventListPage() {
             ) : (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
                 <CreditCard className="w-3 h-3" />
-                {e.nominal ? `Rp ${Number(e.nominal).toLocaleString('id-ID')}` : t('common.paid')}
+                {e.tipeBayar === 'NOMINAL_BEBAS'
+                  ? t('ev.voluntary')
+                  : e.nominal
+                    ? `Rp ${Number(e.nominal).toLocaleString('id-ID')}`
+                    : t('common.paid')}
               </span>
             )}
           </div>

@@ -331,8 +331,8 @@ export function WebActionPanel({
             </h3>
             <p className="text-xs text-neutral-500 mb-3">
               {L(
-                'Ingin memberi lagi untuk event ini? Transfer ke rekening di atas, lalu kirim bukti di sini. Bisa berkali-kali.',
-                'Want to give again for this event? Transfer to the account above, then send the receipt here. You can do this multiple times.',
+                'Transfer lagi ke rekening / QRIS di atas, lalu kirim buktinya di sini. Bisa berkali-kali.',
+                'Transfer again to the account / QRIS above, then send the receipt here. You can repeat this.',
               )}
             </p>
             {participations.length > 1 && (

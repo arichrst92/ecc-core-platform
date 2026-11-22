@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Calendar, MapPin, Church, QrCode, Info, Landmark, ChevronLeft, HandCoins, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, Church, QrCode, Info, Landmark, HandCoins, Sparkles } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { CopyRekeningButton } from '../../../persembahan/copy-button';
 import { cookies } from 'next/headers';
@@ -204,74 +203,29 @@ export default async function EventPembayaranPage(
               </p>
             )}
           </div>
-          <Link
-            href={`/event/${event.slug ?? event.id}`}
-            className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-white/85 hover:text-white"
-          >
-            <ChevronLeft className="w-4 h-4" /> {L('Lihat detail event', 'View event details')}
-          </Link>
         </div>
       </section>
 
       {/* Kartu menumpang di bawah pita oranye */}
       <section className="relative max-w-3xl mx-auto px-4 sm:px-6 -mt-10 sm:-mt-12 pb-8 space-y-4 sm:space-y-5">
-        {/* Biaya (+ poster event) */}
-        <article className={`${cardCls} overflow-hidden`}>
-          {event.heroImageUrl && (
-            <div className="relative aspect-[16/9] bg-neutral-100">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={resolveAssetUrl(event.heroImageUrl) ?? ''} alt={event.judul} className="w-full h-full object-cover" />
-            </div>
-          )}
-          <div className="flex items-center gap-3 px-5 py-4">
+        {/* Pembayaran — satu kartu: biaya + rekening / QRIS (gaya kartu rekening Persembahan) */}
+        <article className={cardCls}>
+          <div className="flex items-center gap-3 px-5 pt-5 pb-4">
             <span className="w-10 h-10 rounded-2xl bg-brand-grad text-white flex items-center justify-center shrink-0 shadow-[0_10px_20px_-10px_rgba(234,88,12,.8)]">
               <HandCoins className="w-5 h-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-extrabold uppercase tracking-[0.12em] text-brand-700">{L('Biaya', 'Fee')}</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">{L('Biaya', 'Fee')}</p>
               {isFree && <p className="text-xl font-extrabold text-emerald-600">{L('Gratis', 'Free')}</p>}
               {isFixed && event.nominal !== null && (
                 <p className="text-xl sm:text-2xl font-extrabold text-neutral-900 tabular-nums">Rp {formatRupiah(event.nominal)}</p>
               )}
-              {isBebas && (
-                <>
-                  <p className="text-lg font-extrabold text-neutral-900">{L('Nominal Sukarela', 'Voluntary amount')}</p>
-                  <p className="text-xs text-neutral-500">{L('Silakan berikan sesuai kerelaan hati Anda.', 'Please give as your heart leads.')}</p>
-                </>
-              )}
+              {isBebas && <p className="text-xl font-extrabold text-neutral-900">{L('Sukarela', 'Voluntary')}</p>}
             </div>
           </div>
-        </article>
 
-        {/* Penting: upload bukti di app */}
-        {!isFree && (
-          <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-2.5 text-sm text-amber-900">
-            <Info className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-            <p className="leading-relaxed">
-              <strong>
-                {waSession
-                  ? L('Daftar & upload bukti bisa langsung di halaman ini.', 'You can register & upload the receipt right on this page.')
-                  : L('Setelah transfer, WAJIB kembali ke Els App', 'After transferring, you MUST return to Els App')}
-              </strong>
-              {waSession
-                ? L(' Setelah selesai, tekan "Kembali ke Els App".', ' When done, tap "Back to Els App".')
-                : L(' untuk upload bukti transfer & konfirmasi pendaftaran.', ' to upload the receipt & confirm your registration.')}
-            </p>
-          </div>
-        )}
-
-        {/* Info pembayaran — kartu seperti rekening Persembahan */}
-        {!isFree && hasPayInfo && (
-          <article className={cardCls}>
-            <div className="flex items-center gap-3 px-5 pt-5">
-              <span className="w-10 h-10 rounded-2xl bg-brand-grad text-white flex items-center justify-center shrink-0 shadow-[0_10px_20px_-10px_rgba(234,88,12,.8)]">
-                <Landmark className="w-5 h-5" />
-              </span>
-              <h2 className="min-w-0 flex-1 text-[13px] font-extrabold uppercase tracking-[0.12em] text-brand-700">
-                {L('Info Pembayaran', 'Payment Info')}
-              </h2>
-            </div>
-            <div className="px-5 pt-4 pb-5">
+          {!isFree && hasPayInfo && (
+            <div className="px-5 pb-5">
               {hasBank && (
                 <div className="rounded-2xl bg-brand-50/70 border border-orange-100 px-4 py-3.5">
                   {event.bankNama && (
@@ -291,42 +245,36 @@ export default async function EventPembayaranPage(
                 </div>
               )}
               {hasQris && (
-                <div className={`flex items-start gap-3 ${hasBank ? 'mt-4' : ''}`}>
+                <div className={`flex items-center gap-3 ${hasBank ? 'mt-4' : ''}`}>
                   <QrisPreview
                     src={resolveAssetUrl(event.qrisImageUrl) ?? ''}
                     alt={`QRIS ${event.judul}`}
                     downloadName={`qris-event-${event.slug ?? event.id}`.toLowerCase().replace(/\s+/g, '-')}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-neutral-800 mb-1 flex items-center gap-1">
+                    <p className="text-xs font-bold text-neutral-800 flex items-center gap-1">
                       <QrCode className="w-3.5 h-3.5 text-brand-600" /> QRIS
                     </p>
-                    <p className="text-xs text-neutral-500 leading-relaxed">
-                      {L(
-                        'Tap gambar untuk preview besar & download. Scan dengan mobile banking atau e-wallet Anda (GoPay, OVO, Dana, ShopeePay, dll).',
-                        'Tap the image to enlarge & download. Scan with your mobile banking or e-wallet app (GoPay, OVO, Dana, ShopeePay, etc.).',
-                      )}
-                    </p>
+                    <p className="text-xs text-neutral-500">{L('Tap untuk perbesar & simpan.', 'Tap to enlarge & save.')}</p>
                   </div>
                 </div>
               )}
             </div>
-          </article>
-        )}
+          )}
 
-        {/* Rekening & QRIS belum diisi panitia */}
-        {!isFree && !hasPayInfo && (
-          <div className={`${cardCls} text-center py-10 px-6`}>
-            <Info className="w-10 h-10 text-brand-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-neutral-800">{L('Info pembayaran belum tersedia', 'Payment details not available yet')}</p>
-            <p className="mt-1 text-sm text-neutral-600">
-              {L(
-                `Rekening / QRIS untuk event ini belum diisi. Silakan hubungi panitia atau admin ${event.cabang?.nama ?? 'cabang'}.`,
-                `The bank account / QRIS for this event hasn't been added yet. Please contact the committee or ${event.cabang?.nama ?? 'branch'} admin.`,
-              )}
-            </p>
-          </div>
-        )}
+          {/* Rekening & QRIS belum diisi panitia */}
+          {!isFree && !hasPayInfo && (
+            <div className="mx-5 mb-5 rounded-2xl bg-brand-50/70 border border-orange-100 px-4 py-3.5 flex items-start gap-2.5 text-sm text-neutral-700">
+              <Info className="w-4 h-4 mt-0.5 shrink-0 text-brand-600" />
+              <p>
+                {L(
+                  `Rekening / QRIS belum tersedia. Hubungi panitia atau admin ${event.cabang?.nama ?? 'cabang'}.`,
+                  `Bank account / QRIS not available yet. Contact the committee or ${event.cabang?.nama ?? 'branch'} admin.`,
+                )}
+              </p>
+            </div>
+          )}
+        </article>
 
         {/* Mode ber-session: daftar + upload bukti langsung di web (alur tidak berubah) */}
         {waSession && (
@@ -349,7 +297,8 @@ export default async function EventPembayaranPage(
           </div>
         )}
 
-        {/* Panduan */}
+        {/* Panduan — hanya tanpa sesi (dengan sesi, panel Pendaftaran sudah bernomor) */}
+        {!waSession && (
         <div className={`${cardCls} p-5 sm:p-6`}>
           <h3 className={eyebrowCls}>
             <Sparkles className="w-4 h-4" />
@@ -366,6 +315,7 @@ export default async function EventPembayaranPage(
             ))}
           </ol>
         </div>
+        )}
 
         {/* Legal */}
         <div className="pt-2 text-xs text-neutral-500 space-y-1 text-center">

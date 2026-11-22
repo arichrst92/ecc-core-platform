@@ -13,7 +13,7 @@
  *  - Desktop (bukan dari app) → tidak ada bar; kartu akhir menampilkan unduh app.
  */
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 import { useLang } from '@/components/lang-provider';
 import { APP_STORE_URL as IOS_APP_URL, PLAY_STORE_URL as ANDROID_APP_URL } from '@/lib/app-links';
@@ -121,18 +121,6 @@ export function EventReturnFooter({ withSession }: { withSession: boolean }) {
               {L(' di pojok kanan atas atau ', ' in the top-right corner or ')}
               <strong>◀ Els App</strong>
               {L(' di kiri atas layar.', ' at the top left of the screen.')}
-            </p>
-            <p className="text-[11px] text-neutral-400 mt-1">
-              {L('Belum install?', 'Not installed yet?')}{' '}
-              <a
-                href={mode.platform === 'ios' ? IOS_APP_URL : ANDROID_APP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-orange-600 hover:underline inline-flex items-center gap-0.5"
-              >
-                {L('Download di', 'Download on')} {mode.platform === 'ios' ? 'App Store' : 'Play Store'}
-                <ExternalLink className="w-3 h-3" />
-              </a>
             </p>
           </>
         ) : null}

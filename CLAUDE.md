@@ -28,6 +28,7 @@ Sebelum mengubah salah satu aturan di bawah:
 | Tiket event: nominal diberikan & QR | `routes/admin/me-event-tiket.ts` `totalBayar` (pembayaran di partisipasi + donasi), `event.butuhKehadiran` | app menampilkan `totalBayar` (fallback `event.nominal` bila 0); build berikutnya: nominal di kartu ringkas & tanpa QR bila `butuhKehadiran=false` |
 | Hitung mundur pendaftaran di kartu event | `routes/admin/event.ts` daftar: `registrationClosesAt` TIDAK dikirim untuk event sukarela (detail tetap mengirim) | kartu Beranda & daftar Event (`DeadlineCountdown`) tampil bila field ada; build berikutnya juga memeriksa `tipeBayar` |
 | Label zona jam "Waktu <kota cabang>" (ECC Bali → "Waktu Bali", bukan "Makassar") | `lib/tz.ts` `cabangKota`/`tzZoneLabel(tz, cabangNama)`/`jamWithZone` (pengingat push); `me.ts` ministry-schedule mengirim `cabangNama` | app ≤ 2.5.0 membentuk label dari zona IANA (`utils/time.ts` `TZ_CITY`) → tetap "Waktu Makassar" sampai update; build berikutnya `cabangCity(cabang.nama)`. Kota = nama cabang tanpa awalan "ECC" — jangan ubah pola nama cabang |
+| Statistik scanner ibadah (header "hadir/total") | `routes/admin/ibadah.ts` `GET /:id/checkin/stats` wajib mengirim `hadir` (= JOIN) & `total` | `app/scanner/ibadah/[id].tsx` membaca `stats.hadir` — tanpa field ini header tampil "/33" |
 | Absen homecell saat pertemuan dimulai | `lib/homecell-absen.ts` | app ≥ build setelah 2.5.0 memakai `absenDibukaAt` dari server; app lama → server menolak dengan pesan |
 
 Pesan error dari server (`error.message`) tampil apa adanya di app — aman diubah kapan saja.

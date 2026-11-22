@@ -882,6 +882,9 @@ ibadahRouter.get('/:id/checkin/stats', async (req, res) => {
       reserved: byStatus.RESERVE,
       joined: byStatus.JOIN,
       cancelled: byStatus.CANCEL,
+      // App scanner membaca `hadir` (sama dengan stats event) — dulu tidak
+      // dikirim sehingga header scanner hanya menampilkan "/33".
+      hadir: byStatus.JOIN,
       total: byStatus.RESERVE + byStatus.JOIN,
       lastUpdated: new Date().toISOString(),
     },

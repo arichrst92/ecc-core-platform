@@ -125,7 +125,11 @@ export default async function EventListPage() {
             {e.tipeBayar === 'GRATIS' ? (
               <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-bold">{t('common.free')}</span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                  e.tipeBayar === 'NOMINAL_BEBAS' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                }`}
+              >
                 <CreditCard className="w-3 h-3" />
                 {e.tipeBayar === 'NOMINAL_BEBAS'
                   ? t('ev.voluntary')

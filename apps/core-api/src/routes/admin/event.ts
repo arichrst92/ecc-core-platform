@@ -802,7 +802,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
     }
     if (src.audiencePelayanan.length) {
       await tx.eventAudiencePelayanan.createMany({
-        data: src.audiencePelayanan.map((a) => ({ eventId: ev.id, pelayananId: a.pelayananId, minLevel: a.minLevel })),
+        data: src.audiencePelayanan.map((a) => ({ eventId: ev.id, pelayananId: a.pelayananId, minLevel: a.minLevel, cabangId: a.cabangId })),
       });
     }
     for (const link of src.pelayanan) {

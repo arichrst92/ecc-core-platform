@@ -56,9 +56,17 @@ const eventRoleFields = {
   // diisi = event hanya terlihat & bisa diikuti anggota aktif salah satu pelayanan ini.
   audiencePelayananIds: z.array(uuidSchema).max(30).optional(),
   // Sama dengan audiencePelayananIds + level role minimal per pelayanan
-  // (minLevel null = semua anggota; 5 = role level ≥ 5). Bila dikirim, menggantikan audiencePelayananIds.
+  // (minLevel null = semua anggota; 5 = role level ≥ 5) & cabang anggota (null = semua cabang).
+  // Bila dikirim, menggantikan audiencePelayananIds.
   audiencePelayanan: z
-    .array(z.object({ pelayananId: uuidSchema, minLevel: z.number().int().min(0).max(1000).nullable().optional() }))
+    .array(
+      z.object({
+        pelayananId: uuidSchema,
+        minLevel: z.number().int().min(0).max(1000).nullable().optional(),
+        // Cabang anggota (null = semua cabang).
+        cabangId: uuidSchema.nullable().optional(),
+      }),
+    )
     .max(30)
     .optional(),
   grantRoleId: uuidSchema.nullable().optional(),

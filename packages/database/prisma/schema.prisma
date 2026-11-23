@@ -90,6 +90,7 @@ model CabangGereja {
   pelayananPendaftaran PelayananPendaftaran[]
   homecellMaterials    HomecellMaterialCabang[]
 
+  eventAudiencePelayanan EventAudiencePelayanan[] @relation("EventAudienceCabang")
   @@unique([sinodeId, kode])
   @@index([sinodeId])
   @@map("cabang_gereja")
@@ -1823,12 +1824,15 @@ model EventAudiencePelayanan {
   // Level role pelayanan minimal (PelayananRole.level, makin tinggi makin senior).
   // NULL = semua anggota pelayanan; 5 = hanya anggota dengan role level ≥ 5.
   minLevel    Int?     @map("min_level")
+  // Cabang anggota (Jemaat.cabangId). NULL = anggota pelayanan di semua cabang.
+  cabangId    String?  @map("cabang_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  pelayanan Pelayanan @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pelayanan Pelayanan     @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+  cabang    CabangGereja? @relation("EventAudienceCabang", fields: [cabangId], references: [id], onDelete: Cascade)
 
-  @@unique([eventId, pelayananId])
+  @@index([eventId])
   @@index([pelayananId])
   @@map("event_audience_pelayanan")
 }

@@ -44,7 +44,7 @@ export type EventFormValues = {
   // edit dari list tidak menghapus syarat yang sudah ada.
   roleRequirements?: RoleTriple[];
   audiencePelayananIds?: string[];
-  audiencePelayanan?: { pelayananId: string; minLevel: number | null }[];
+  audiencePelayanan?: { pelayananId: string; minLevel: number | null; cabangId: string | null }[];
   grantRoleId?: string | null;
   grantSubRoleId?: string | null;
   grantSubRoleStatusId?: string | null;
@@ -60,7 +60,7 @@ interface RoleOption {
 
 interface EventRoleConfig {
   roleRequirements: { roleId: string; subRoleId: string | null; subRoleStatusId: string | null }[];
-  audiencePelayanan?: { minLevel?: number | null; pelayanan: { id: string; nama: string } }[];
+  audiencePelayanan?: { minLevel?: number | null; cabangId?: string | null; cabang?: { id: string; nama: string } | null; pelayanan: { id: string; nama: string } }[];
   grantRoleId: string | null;
   grantSubRoleId: string | null;
   grantSubRoleStatusId: string | null;
@@ -120,7 +120,8 @@ export function EventFormModal({
   const [tagsInput, setTagsInput] = useState('');
   const [reqs, setReqs] = useState<RoleTriple[]>([]);
   // Audiens level pelayanan (kosong = semua jemaat sesuai sinode/cabang).
-  const [audPel, setAudPel] = useState<{ id: string; minLevel: number | null }[]>([]);
+  // Baris audiens: pelayanan + level minimal + cabang anggota (pelayanan boleh berulang untuk cabang/level lain).
+  const [audPel, setAudPel] = useState<{ key: number; id: string; minLevel: number | null; cabangId: string | null }[]>([]);
   const [audPelOpen, setAudPelOpen] = useState(false);
   const [grant, setGrant] = useState<RoleTriple>(EMPTY_TRIPLE);
   const [roleConfigReady, setRoleConfigReady] = useState(false);
@@ -153,7 +154,7 @@ export function EventFormModal({
     setRoleConfigReady(false);
     const d = roleConfigQ.data;
     if (!d) return;
-    setAudPel((d.audiencePelayanan ?? []).map((a) => ({ id: a.pelayanan.id, minLevel: a.minLevel ?? null })));
+    setAudPel((d.audiencePelayanan ?? []).map((a, i) => ({ key: i + 1, id: a.pelayanan.id, minLevel: a.minLevel ?? null, cabangId: a.cabangId ?? null })));
     setReqs(
       (d.roleRequirements ?? []).map((r) => ({
         roleId: r.roleId,
@@ -234,6 +235,14 @@ export function EventFormModal({
     staleTime: 60_000,
   });
 
+  const allCabangQ = useQuery({
+    queryKey: ['cabang', 'options', 'all'],
+    enabled: open,
+    queryFn: async () =>
+      (await apiClient.get<{ data: { id: string; nama: string }[] }>('/admin/cabang', { params: { limit: 200 } })).data.data,
+    staleTime: 5 * 60_000,
+  });
+
   const cabangQ = useQuery({
     queryKey: ['cabang', 'options', values.sinodeId],
     enabled: open && !!values.sinodeId,
@@ -295,7 +304,7 @@ export function EventFormModal({
     };
     if (roleConfigReady) {
       payload.roleRequirements = reqs.filter((r) => r.roleId);
-      payload.audiencePelayanan = audPel.map((a) => ({ pelayananId: a.id, minLevel: a.minLevel }));
+      payload.audiencePelayanan = audPel.map((a) => ({ pelayananId: a.id, minLevel: a.minLevel, cabangId: a.cabangId }));
       payload.grantRoleId = grant.roleId || null;
       payload.grantSubRoleId = grant.roleId ? grant.subRoleId : null;
       payload.grantSubRoleStatusId = grant.roleId ? grant.subRoleStatusId : null;
@@ -474,11 +483,11 @@ export function EventFormModal({
                 <span className="block text-sm font-medium text-neutral-700">Pelayanan (opsional)</span>
                 <span className="block text-[11px] text-neutral-500 mb-1">
                   Kosong = semua jemaat di sinode/cabang di atas. Dipilih = event hanya tampil di app & bisa diikuti anggota
-                  aktif pelayanan tersebut (tidak tampil di website / mode tamu). Atur level per pelayanan, mis. level 5 ke atas
-                  = hanya anggota dengan role level 5 atau lebih tinggi.
+                  aktif pelayanan tersebut (tidak tampil di website / mode tamu). Per baris bisa diatur level role minimal
+                  (mis. level 5 ke atas) dan cabang anggota; ＋ untuk menambah pelayanan yang sama dengan cabang/level lain.
                 </span>
                 <div className="flex flex-wrap gap-1.5 items-center">
-                  {audPel.map(({ id, minLevel }) => {
+                  {audPel.map(({ key, id, minLevel, cabangId }) => {
                     const pel = pelayananQ.data?.find((p) => p.id === id);
                     const nama = pel?.nama
                       ?? roleConfigQ.data?.audiencePelayanan?.find((a) => a.pelayanan.id === id)?.pelayanan.nama
@@ -486,12 +495,12 @@ export function EventFormModal({
                     // Level role pelayanan (makin tinggi makin senior) — unik & urut naik.
                     const levels = [...new Map((pel?.roles ?? []).map((r) => [r.level, r])).values()].sort((a, b) => a.level - b.level);
                     return (
-                      <span key={id} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-violet-50 border border-violet-200 text-xs font-medium text-violet-800">
+                      <span key={key} className="inline-flex flex-wrap items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-violet-50 border border-violet-200 text-xs font-medium text-violet-800">
                         {nama}
                         <select
                           value={minLevel === null ? '' : String(minLevel)}
                           onChange={(e) =>
-                            setAudPel((cur) => cur.map((x) => (x.id === id ? { ...x, minLevel: e.target.value === '' ? null : Number(e.target.value) } : x)))
+                            setAudPel((cur) => cur.map((x) => (x.key === key ? { ...x, minLevel: e.target.value === '' ? null : Number(e.target.value) } : x)))
                           }
                           title="Level role pelayanan minimal yang bisa melihat event"
                           className="ml-1 bg-white border border-violet-200 rounded-full px-1.5 py-0.5 text-[11px] text-violet-800"
@@ -506,9 +515,31 @@ export function EventFormModal({
                             <option value={minLevel}>level {minLevel} ke atas</option>
                           ) : null}
                         </select>
+                        <select
+                          value={cabangId ?? ''}
+                          onChange={(e) => setAudPel((cur) => cur.map((x) => (x.key === key ? { ...x, cabangId: e.target.value || null } : x)))}
+                          title="Cabang anggota pelayanan (Jemaat → cabang)"
+                          className="bg-white border border-violet-200 rounded-full px-1.5 py-0.5 text-[11px] text-violet-800 max-w-[150px]"
+                        >
+                          <option value="">semua cabang</option>
+                          {(allCabangQ.data ?? []).map((c) => (
+                            <option key={c.id} value={c.id}>{c.nama}</option>
+                          ))}
+                        </select>
                         <button
                           type="button"
-                          onClick={() => setAudPel((cur) => cur.filter((x) => x.id !== id))}
+                          title="Tambah baris pelayanan ini untuk cabang / level lain"
+                          onClick={() =>
+                            setAudPel((cur) => [...cur, { key: Math.max(0, ...cur.map((x) => x.key)) + 1, id, minLevel, cabangId: null }])
+                          }
+                          className="w-4 h-4 rounded-full hover:bg-violet-200 flex items-center justify-center"
+                          aria-label={`Tambah ${nama} untuk cabang lain`}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAudPel((cur) => cur.filter((x) => x.key !== key))}
                           className="w-4 h-4 rounded-full hover:bg-violet-200 flex items-center justify-center"
                           aria-label={`Hapus ${nama}`}
                         >
@@ -537,7 +568,13 @@ export function EventFormModal({
                             <input
                               type="checkbox"
                               checked={on}
-                              onChange={() => setAudPel((cur) => (on ? cur.filter((x) => x.id !== p.id) : [...cur, { id: p.id, minLevel: null }]))}
+                              onChange={() =>
+                                setAudPel((cur) =>
+                                  on
+                                    ? cur.filter((x) => x.id !== p.id)
+                                    : [...cur, { key: Math.max(0, ...cur.map((x) => x.key)) + 1, id: p.id, minLevel: null, cabangId: null }],
+                                )
+                              }
                               className="accent-brand-500"
                             />
                             {p.nama}

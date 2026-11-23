@@ -22,7 +22,7 @@ const FILTERS = [
 ];
 
 function audienceLabel(a: AnnouncementItem) {
-  if (a.audienceMode === 'ALL') return 'Semua jemaat';
+  if (a.audienceMode === 'ALL') return 'Semua pemakai Els App';
   const parts = [
     a.cabangIds.length ? `${a.cabangIds.length} cabang` : null,
     a.areaIds.length ? `${a.areaIds.length} area` : null,

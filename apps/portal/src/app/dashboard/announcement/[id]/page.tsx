@@ -431,8 +431,11 @@ export default function AnnouncementEditPage() {
       <div className="min-w-0">
       {/* Penerima */}
       <Card title="Penerima">
+        <p className="text-xs text-neutral-500 mb-2">
+          Hanya jemaat yang sudah aktif di Els App (sudah masuk &amp; menyelesaikan pendaftaran di app). Jemaat yang belum memakai app tidak menerima pengumuman ini di kanal mana pun.
+        </p>
         <div className="flex flex-wrap items-center gap-3 mb-3">
-          <Seg value={f.audienceMode} onChange={(v) => set('audienceMode', v)} disabled={readOnly} options={[['ALL', 'Semua jemaat'], ['FILTER', 'Saring']]} />
+          <Seg value={f.audienceMode} onChange={(v) => set('audienceMode', v)} disabled={readOnly} options={[['ALL', 'Semua pemakai Els App'], ['FILTER', 'Saring']]} />
           {f.audienceMode === 'FILTER' ? (
             <>
               <span className="text-xs text-neutral-500">Cara gabung:</span>

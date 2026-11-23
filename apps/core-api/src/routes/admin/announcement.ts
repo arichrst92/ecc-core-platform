@@ -32,8 +32,7 @@ import {
   previewAudience,
   publicPageUrl,
   tickAnnouncements,
-  WA_DELAY_MS,
-} from '../../lib/announcement.js';
+  WA_DELAY_MS, ELS_APP_USER } from '../../lib/announcement.js';
 
 export const announcementRouter = Router();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -112,6 +111,8 @@ announcementRouter.get('/targets', menuRead, async (req, res) => {
           where: {
             isActive: true,
             isTamu: false,
+            // Hanya jemaat yang sudah aktif di Els App (penerima pengumuman).
+            ...ELS_APP_USER,
             OR: [{ namaLengkap: { contains: q, mode: 'insensitive' } }, { kode: { contains: q, mode: 'insensitive' } }],
           },
           select: { id: true, namaLengkap: true, kode: true, cabang: { select: { nama: true } } },

@@ -62,12 +62,19 @@ export function makeSlug(judul: string): string {
 }
 
 /**
- * Where Prisma jemaat penerima. Selalu: aktif & bukan tamu.
+ * Jemaat yang sudah aktif di Els App = sudah menyelesaikan onboarding di app
+ * (sama dengan kolom "pemakai Els App" di Portal → Cabang). 2026-11.
+ */
+export const ELS_APP_USER: Prisma.JemaatWhereInput = { onboardedAt: { not: null } };
+
+/**
+ * Where Prisma jemaat penerima. Selalu: aktif, bukan tamu, dan sudah aktif di Els App
+ * (pengumuman tidak dikirim ke jemaat yang belum memakai app — semua kanal).
  * FILTER: tiap saringan yang terisi jadi satu kondisi; OR = salah satu, AND = semua.
  * Saringan kosong semua (FILTER) → tidak ada penerima.
  */
 export function audienceWhere(a: AudienceInput): Prisma.JemaatWhereInput {
-  const base: Prisma.JemaatWhereInput = { isActive: true, isTamu: false };
+  const base: Prisma.JemaatWhereInput = { isActive: true, isTamu: false, ...ELS_APP_USER };
   if (a.audienceMode === 'ALL') return base;
   const conds: Prisma.JemaatWhereInput[] = [];
   if (a.cabangIds.length) conds.push({ cabangId: { in: a.cabangIds } });

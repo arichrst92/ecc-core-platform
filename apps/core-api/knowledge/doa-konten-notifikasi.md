@@ -28,6 +28,7 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 
 ## Announcement (pengumuman)
 - Portal → **Announcement**: susun pengumuman ke penerima tertentu dan pantau pengiriman (halaman detail: konten | penerima & pengiriman).
+- **Penerima hanya jemaat yang sudah aktif di Els App** (sudah masuk & menyelesaikan pendaftaran di app) — untuk semua kanal (in-app, WhatsApp, email). Jemaat yang belum memakai app tidak menerima pengumuman; "Semua pemakai Els App" = semua jemaat aktif yang sudah memakai app. (2026-11)
 
 ## Notifikasi
 - **In-app** (lonceng di app; app memeriksa berkala ±30 detik). Ketuk notifikasi → membuka halaman terkait. *Tandai semua* = sudah dibaca.

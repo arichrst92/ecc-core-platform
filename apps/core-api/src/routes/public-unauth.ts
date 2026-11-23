@@ -11,7 +11,7 @@
  *
  * Mount di app.ts sebagai `/public/*`.
  */
-import { appRules, appTexts } from '../lib/app-rules.js';
+import { appLinks, appRules, appTexts } from '../lib/app-rules.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import {
@@ -57,6 +57,7 @@ publicUnauthRouter.get('/app-config', async (_req, res) => {
         errorReportingEnabled: true,
         rules: appRules(),
         texts: appTexts(null),
+        links: appLinks(),
       },
     });
   }
@@ -70,6 +71,8 @@ publicUnauthRouter.get('/app-config', async (_req, res) => {
       // 2026-11: aturan & teks yang dulu tertanam di app (build setelah 2.5.0).
       rules: appRules(),
       texts: appTexts(row.appTextOverrides),
+      // Tautan dokumen (User Manual per bahasa).
+      links: appLinks(),
     },
   });
 });

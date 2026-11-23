@@ -29,6 +29,9 @@ summary: Cara masuk app & Portal (OTP WA, email, kode sementara dari admin), pen
 - Daftar dengan **WhatsApp atau email** (2.4.9), centang persetujuan S&K/Privasi, pilih kelompok usia, isi **3 data wajib**: Nama Lengkap, Jenis Kelamin, Cabang; jawab *Jemaat tetap* atau *New Comer*. Akun langsung aktif.
 - **Usia**: di bawah 13 tahun **tidak boleh** punya akun ("…usia Anda di bawah 13 tahun… didaftarkan orang tua/wali melalui menu Keluarga"). 13–17 tahun harus memilih "13–17 tahun dengan izin orang tua".
 - Role otomatis saat onboarding diatur di Portal → **Onboarding Config** (Jemaat Tetap / New Comer). New Comer otomatis dipindah ke Jemaat Tetap setelah N kali hadir (bila diatur).
+- **Perbaikan alur (2.5.1)**: halaman awal bisa digulir (kartu Daftar/Tamu tidak terpotong di HP kecil); layar **Pendaftaran berhasil** + kode jemaat tampil (2.5.0 langsung ke Beranda); semua kesalahan isian & dari server terlihat; dari layar kode WhatsApp bisa **pindah ke email**; nomor sudah terdaftar → tombol **Masuk**, belum terdaftar saat login → tombol **Daftar**; tombol kembali Android meminta konfirmasi batal pendaftaran.
+- **Onboarding jemaat lama (2.5.1)**: ada pilihan **Jemaat Tetap / New Comer**, tanggal lahir terformat, alamat yang salah diberi tanda. Server memeriksa email bentrok & cabang aktif sebelum menyimpan.
+- **Pemilih tanggal Android (2.5.1)**: kolom Tanggal · Bulan · Tahun (di sebagian HP dialog kalender lama tidak bisa mengganti tahun — solusi di 2.5.0: ketuk angka tahun di kepala kalender bila ada, atau isi lewat Portal).
 - Data lama (mis. hasil impor Shiftsoft) bisa **diklaim** saat daftar dengan WhatsApp, memakai kode verifikasi ("Klaim data lama hanya untuk pendaftaran dengan WhatsApp.", "Kode verifikasi data lama wajib diisi.", "Data lama sudah memakai nomor HP lain. Hubungi admin cabang.").
 
 ## Konflik nomor / email

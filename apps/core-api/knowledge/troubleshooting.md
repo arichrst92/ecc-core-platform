@@ -39,6 +39,11 @@ summary: Indeks cepat masalah yang sering terjadi di lapangan (login, scan, rese
 | Scan absen homecell "tidak bereaksi" / Absen Checklist ditolak "Absensi dibuka saat pertemuan dimulai" | Pertemuan belum dimulai (jam mulai jadwal, zona cabang) — app ≤2.5.0 tidak menampilkan pesan di layar scanner | Absen saat/sesudah jam mulai; bila jam jadwal salah, ubah jadwal (ikon pensil) | homecell-zona |
 | Materi homecell tidak terlihat | Belum publish / di luar masa berlaku / cabang salah / app <2.5.0 | Cek di Portal → Homecell Material | homecell-zona |
 | Non-anggota melihat anggota group | Server/app lama atau cache | Deploy terbaru, tarik untuk muat ulang | group |
+| Group yang dibuat tidak tampil untuk orang lain / tidak bisa mengundang | Pengajuan group belum disetujui admin | Portal → Community → Pengajuan Group → Setujui | group |
+| Label/tulisan di app salah | Teks tertanam di app | Portal → Diagnostics → Tulisan di App (app 2.5.1+); app 2.5.0 perlu update | versi-app |
+| Jam ibadah tertulis "Waktu Makassar" untuk Bali | App 2.5.0 memakai nama zona waktu | Update ke 2.5.1; isi kolom Kota cabang bila nama cabang bukan kota | ibadah-reservasi |
+| Pilih tahun di tanggal lahir (Android) tidak bisa | Dialog kalender bawaan HP | App 2.5.1 kolom Tanggal · Bulan · Tahun | akun-login |
+| Header scanner hanya "/33" | Server lama tidak mengirim jumlah hadir | Deploy server terbaru | checkin-scan |
 | Parent group tidak ada di pilihan | Dulu dropdown dibatasi 100 | Ketik nama di kotak cari | group |
 | Notifikasi WA tidak terkirim | Jenis notif nonaktif / saluran / gateway / jemaat mematikan WA | WhatsApp Notif Config, Server Health | doa-konten-notifikasi |
 | Menu Portal tidak terlihat / "tidak punya akses" | Role Access belum memberi menu/level | Developer Tools → Role Access | peran-akses |

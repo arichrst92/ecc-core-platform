@@ -9,7 +9,7 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 
 ## Prayer Request
 - Jemaat (app): Akses Cepat → **Doa** → + → kategori, untuk siapa (diri/keluarga/orang lain), pokok doa → opsi **anonim** (nama hanya terlihat admin, tidak oleh petugas doa) → Kirim. Status: Menunggu → Sudah didoakan (+ catatan tim) → bisa ditandai **terjawab** + kesaksian.
-- **Doa terjawab (2.5.1)**: tombol **Bagikan** membuat kartu gambar kesaksian + ayat & tautan ayatnya (isi doa tidak ikut), plus ajakan "Ingin memberikan sesuatu yang berarti untuk Tuhan dari jawaban doa ini?" → halaman **Beri**.
+- **Doa terjawab (2.5.1)**: tombol **Bagikan** membuat kartu gambar kesaksian + ayat & tautan ayatnya (isi doa tidak ikut), plus ajakan "Ingin memberikan sesuatu yang berarti untuk Tuhan dari jawaban doa ini?" → halaman **Beri** — tampil di detail doa dan juga di **daftar Doa Saya** (tab Terjawab) di bawah tiap doa terjawab.
 - Portal → **People → Prayer Request**:
   1. **Konfigurasi Petugas**: tentukan siapa petugas doa — berdasarkan **Role** (+ sub role) dan/atau **Ministry** (+ peran tertentu / semua anggota aktif).
   2. **Tugaskan** doa ke petugas → petugas mendapat notifikasi in-app + WhatsApp; tab **Ditugaskan ke Saya** muncul di app mereka.

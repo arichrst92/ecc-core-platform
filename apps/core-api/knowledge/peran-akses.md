@@ -20,8 +20,11 @@ Read = melihat antrian, **Write = menyetujui/menolak**.
 | Request tahap Spiritual Journey dari app | **Request Spiritual Journey** (terpisah dari menu Spiritual Journey) |
 | Bukti transfer / status bayar event | **Verifikasi Pembayaran Event** (di halaman Event; butuh juga Event Read untuk membuka halaman) |
 | Permintaan bergabung group | **Group** Write (selain PIC group) |
+| Pengajuan group baru dari app (Community → Pengajuan Group) | **Group** Write — group dari app menunggu persetujuan; dibuat admin Group di Portal langsung aktif |
 | Prayer Request (tugaskan petugas, tandai didoakan) | **Prayer Request** Write |
 | Kritik & Saran (balas) · Tamu (petugas follow-up) · Cek Duplikat jemaat | Kritik & Saran · Tamu · Jemaat Write |
+- **Pengaman darurat**: jemaat di `ROLE_ACCESS_ADMIN_JEMAAT_IDS` (.env server) selalu bisa membuka Portal & menu Role Access, supaya akses tidak terkunci bila salah atur.
+- Tanpa jalan pintas Fulltimer juga berlaku untuk: kelola group & homecell (Role Access Group / Homecell, atau PIC/asisten), katalog hadiah (menu Hadiah), dan mencari jemaat untuk check-in (admin kehadiran).
 - Jadwal pelayanan di Portal untuk semua cabang = **Pelayanan** Write (selain koordinator yang punya otoritas).
 
 ## Peran di app (muncul otomatis bila ditugaskan)

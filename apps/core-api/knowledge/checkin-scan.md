@@ -36,7 +36,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 3. Arahkan kamera ke QR kartu jemaat atau tiket. Kamera punya jeda ±3 detik antar scan supaya tidak dobel.
 4. QR tidak terbaca → **Input Manual**: ketik 8 karakter kode jemaat.
 5. **Walk-in / tamu baru**: catat nama, no HP, kategori (New Comer/Visitor) → langsung tercatat hadir. Tombol walk-in muncul setelah info ibadah termuat.
-6. **Info petugas** (app setelah 2.5.0) di bawah judul layar scan: jam & lokasi, status jendela scan (belum dibuka / dibuka s.d. jam X / lewat → dicatat walk-in), dan ringkasan hadir · belum hadir · walk-in · self check-in · discan saya (ibadah anak: dijemput; wajib checkout: check-out).
+6. **Info petugas** (app 2.5.1) di bawah judul layar scan — **terlipat satu baris** (status scan + 2 angka; mode Jemput: jam ibadah), ketuk untuk membuka: jam "Waktu <kota>" & lokasi, status jendela scan (kuning belum dibuka / hijau dibuka s.d. jam X / ungu lewat → yang sudah reservasi dicatat terlambat, tamu walk-in), dan ringkasan hadir · belum hadir · walk-in · terlambat · self check-in · discan saya (ibadah anak: dijemput; wajib checkout: check-out).
 7. **Daftar hadir**: ketuk angka di kanan atas atau salah satu ringkasan → tab **Discan petugas** / **Semua hadir** / **Belum hadir** (sudah reservasi/daftar tapi belum check-in; event berbayar menampilkan Lunas / Menunggu verifikasi / Belum bayar). Tiap orang: jam check-in, kode, petugas yang scan, tamu + nama pengundang, umur & status jemput (ibadah anak). Bisa cari nama/kode. Di app 2.5.0 belum ada — lihat di Portal → Kehadiran.
 - Pilihan mode Check-in/Checkout/Pickup hanya tampil bila ibadah punya lebih dari satu mode (ibadah umum tanpa checkout langsung Check-in).
 - Bila orang **sudah check-in sebelumnya**, app menampilkan "sudah tercatat" (bukan error) — tidak dicatat dobel.
@@ -77,7 +77,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 | "Jemaat belum check-in — tidak bisa checkout/pickup" | Urutan salah | Check-in dulu. |
 | "Ibadah ini tidak require checkout" | Checkout tidak dipakai | Tidak perlu checkout. |
 | "Ibadah anak tidak menerima tamu walk-in — gunakan meja CKids." | Form tamu di ibadah anak | Daftarkan lewat CKids. |
-| Berlaku LATE / walkIn di hasil scan | Datang terlambat | Normal — tercatat sebagai walk-in. |
+| Berlaku LATE / walkIn di hasil scan | Datang terlambat | Normal — yang sudah reservasi dicatat **terlambat** (LATE, kolom "Scan terlambat" di laporan); tamu tanpa reservasi = walk-in. |
 
 ## Langkah diagnosis (untuk Elsa)
 1. Tanyakan: ibadah/event apa, tanggal & jam kejadian, siapa yang scan (nama petugas), nama/kode jemaat, pesan error persis.

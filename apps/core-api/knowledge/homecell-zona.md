@@ -34,8 +34,11 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 - **Absen hanya saat pertemuan dimulai atau setelahnya** (berlaku sejak 21 Nov 2026 untuk semua versi app): tanggal + jam mulai jadwal, zona waktu cabang; jadwal tanpa jam mulai → terbuka sejak 00.00 hari itu. Berlaku untuk scan QR, input kode manual, Absen Checklist, dan tandai tamu hadir. Tidak bisa lagi mengisi absen sebelum pertemuan / untuk jadwal besok. Menghapus absen yang salah tetap bisa kapan saja.
   - Server menolak dengan pesan *"Absensi dibuka saat pertemuan dimulai (…). Silakan absen saat atau setelah pertemuan dimulai."* (kode ABSEN_BELUM_DIBUKA).
   - **App ≤ 2.5.0**: pesan tampil di Absen Checklist & tandai tamu; di **layar scanner/input manual pesannya tidak terlihat** (scan seolah tidak bereaksi) → tutup scanner, cek jam mulai jadwal, atau coba Absen Checklist untuk melihat alasannya.
-  - **Build setelah 2.5.0**: tombol Scan & Absen Checklist disembunyikan sampai jam mulai (muncul otomatis), diganti keterangan "Absensi dibuka saat pertemuan dimulai (…)"; pesan error juga tampil di dalam layar scanner.
+  - **App 2.5.1**: tombol Scan & Absen Checklist disembunyikan sampai jam mulai (muncul otomatis), diganti keterangan "Absensi dibuka saat pertemuan dimulai (…)"; pesan error juga tampil di dalam layar scanner.
   - Jam mulai salah di jadwal? PIC/asisten ubah jadwal (ikon pensil) — absen langsung mengikuti jam baru.
+
+- **Ajakan ECC Worship (2.5.1)**: PIC & asisten melihat "Homecell tidak punya pemain musik? Coba ECC Worship karaoke" di detail homecell → membuka menu ECC Worship (versi karaoke).
+- Tombol kelola di app 2.5.1 mengikuti izin dari server (`isHomecellAdmin`), bukan status Fulltimer.
 
 ## Keluarkan anggota
 - Titik tiga → **Keluarkan dari homecell** → pilih alasan (salah invite, sudah tidak aktif, pindah homecell, pindah kota, atau alasan lain). Anggota pindah ke daftar nonaktif (tanpa notifikasi); alasan tersimpan di riwayat (Portal). Bisa ditambahkan kembali kapan saja.

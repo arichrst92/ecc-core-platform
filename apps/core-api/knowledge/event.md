@@ -14,7 +14,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 
 ## Membuat event (Portal)
 1. Event → Tambah Event: judul, slug (otomatis), ringkasan, deskripsi (editor dengan toolbar seperti Announcement: tebal, miring, coret, judul, daftar, daftar bernomor, kutipan, link + tab Pratinjau).
-2. Tanggal mulai/selesai, jam mulai/selesai, lokasi (+ link Google Maps). Lokasi/jam yang dikosongkan tampil **"-"** di app.
+2. Tanggal mulai/selesai, jam mulai/selesai, lokasi (+ link Google Maps). Lokasi/jam yang dikosongkan tampil **"-"** di app 2.5.0; di 2.5.1 baris jam/lokasi & tombol petunjuk arah disembunyikan. Jam tertulis "Waktu <kota cabang>"; event semua cabang = Waktu Jakarta.
 3. Audiens: sinode atau cabang tertentu.
 4. **Tipe bayar**: Gratis (hijau) · **Sukarela** (biru; dulu "donasi / nominal bebas") · **Berbayar nominal tetap** (kuning). Untuk berbayar/sukarela isi rekening + QRIS (opsional). Sukarela boleh punya nominal minimum.
 5. Kuota peserta (opsional), syarat usia (opsional), tags.
@@ -29,7 +29,8 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 - Jemaat hanya bisa mendaftarkan **diri sendiri, keluarga, dan tamunya** ("Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.").
 - Peserta yang belum memenuhi syarat usia ditandai "Belum memenuhi syarat usia" dan tidak bisa dicentang.
 - **Kuota penuh** → pendaftaran ditolak; admin di Portal bisa tetap memasukkan (force).
-- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & build setelah 2.5.0**: sebelum check-in dibuka (15 menit sebelum mulai) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
+- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & app 2.5.1**: sebelum check-in dibuka (15 menit sebelum mulai) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
+- App 2.5.1: tulisan kuota di **atas** bar (tidak terpotong).
 - Tombol **sukarela/daftar dinonaktifkan** di app bila pendaftaran sudah ditutup atau kuota penuh (untuk yang belum terdaftar).
 - "Event ini belum dibuka untuk pendaftaran." → event belum publish/aktif.
 
@@ -42,6 +43,9 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 - **Berbayar**: setelah daftar, peserta transfer lalu **upload bukti** → status **Menunggu Verifikasi** → admin setujui → **Lunas**. QR/tiket aktif setelah diverifikasi.
 - **Sukarela** di iPhone/app: pendaftaran + nominal + upload bukti dilakukan di **halaman web** (eccchurch.global/event/…/pembayaran) sesuai aturan App Store. App membuka halaman itu sudah login (token sekali pakai, sesi 30 menit). Minimal Rp 1.000/orang (atau nominal minimum event). Tombol "Kembali ke Els App" menutup browser. "Sesi kedaluwarsa" → buka ulang dari app.
 - Pemberian sukarela tambahan dari website tercatat per baris sendiri.
+- **Tampilan event sukarela (2.5.1)**: kartu Beranda/daftar tanpa hitung mundur (server tidak mengirimnya untuk event sukarela — berlaku juga di 2.5.0) + ringkasan & **status saya** (Sudah memberi + nominal / Menunggu verifikasi / tombol Beri Sukarela); detail event menampilkan ucapan terima kasih (bukan "Sampai bertemu di acara").
+- **Event tanpa kehadiran** (Butuh Kehadiran mati): 2.5.1 menyembunyikan **Tiket Saya** & QR.
+- **Nominal di tiket** = nominal yang benar-benar diberikan (bukan minimum); bila belum diverifikasi tertulis "menunggu verifikasi" (2.5.1) dan tanpa tombol bayar.
 - **Wajib lunas sebelum check-in**: event berbayar selalu; sukarela hanya bila ada nominal minimum (tanpa minimum, peserta boleh hadir walau belum memberi).
 
 ### Verifikasi bukti (Portal)
@@ -53,7 +57,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 ## Pembatalan
 Aturan sama di app, website, dan Portal (oleh peserta sendiri):
 - Sudah **hadir** → tidak bisa dibatalkan sendiri ("… sudah hadir — tidak bisa dibatalkan. Hubungi admin event bila keliru.").
-- Sudah **bayar / menunggu verifikasi** → dibatalkan **lewat admin event** (untuk pengembalian dana).
+- Sudah **bayar / menunggu verifikasi** → dibatalkan **lewat admin event** (untuk pengembalian dana). App 2.5.0 masih menampilkan tombol "Batalkan pendaftaran" (server menolak dengan pesan); 2.5.1 menyembunyikannya (`canCancel`).
 - Event **sudah dimulai** → tidak bisa dibatalkan sendiri.
 - Admin membatalkan peserta (ubah status ke Batal di Portal) → peserta mendapat notifikasi *"dibatalkan oleh admin"*.
 
@@ -62,7 +66,7 @@ Aturan sama di app, website, dan Portal (oleh peserta sendiri):
 - Petugas tetap bisa check-in tiket yang terlanjur dibatalkan bila orangnya hadir.
 
 ## Hari H — check-in & walk-in
-- Check-in peserta terdaftar: 30 menit sebelum s.d. 30 menit setelah jam mulai; terlambat → dicatat walk-in (lihat panduan *checkin-scan*).
+- Check-in peserta terdaftar: 30 menit sebelum s.d. 30 menit setelah jam mulai; lewat itu peserta terdaftar dicatat **terlambat** (metode LATE, kolom "Scan terlambat" di laporan), tamu tanpa pendaftaran = walk-in (lihat panduan *checkin-scan*). Petugas yang scan tercatat ("oleh Anda / oleh <petugas>" di Daftar Hadir scanner 2.5.1).
 - **Walk-in / tamu di lokasi** oleh petugas: untuk event berbayar wajib pilih metode bayar tamu (**Tunai / Transfer / QRIS**) atau Gratis — langsung tercatat lunas ("Diterima petugas").
 - Pengingat event hanya dikirim untuk event **aktif**.
 

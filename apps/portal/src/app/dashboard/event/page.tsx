@@ -104,8 +104,8 @@ function formatRangeTanggal(mulai: string, selesai: string | null) {
 function targetLabel(item: EventListItem): string {
   const base = item.cabang ? `Cabang · ${item.cabang.nama}` : item.sinode ? `Sinode · ${item.sinode.nama}` : 'Global';
   // Audiens level pelayanan (2026-11).
-  const pel = (item as { audiencePelayanan?: { pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
-  return pel.length ? `${base} · Pelayanan ${pel.map((a) => a.pelayanan.nama).join(', ')}` : base;
+  const pel = (item as { audiencePelayanan?: { minLevel?: number | null; pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
+  return pel.length ? `${base} · Pelayanan ${pel.map((a) => a.pelayanan.nama + (a.minLevel != null ? ` (level ${a.minLevel}+)` : '')).join(', ')}` : base;
 }
 
 export default function EventPage() {

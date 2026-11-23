@@ -278,10 +278,10 @@ export default function EventDetailPage() {
   const e = eventQ.data;
   const peserta = pesertaQ.data ?? [];
   const isPaid = e.tipeBayar !== 'GRATIS';
-  const audPel = (e as { audiencePelayanan?: { pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
+  const audPel = (e as { audiencePelayanan?: { minLevel?: number | null; pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
   const targetLabel =
     (e.cabang ? `Cabang · ${e.cabang.nama}` : e.sinode ? `Sinode · ${e.sinode.nama}` : 'Global') +
-    (audPel.length ? ` · Pelayanan ${audPel.map((a) => a.pelayanan.nama).join(', ')}` : '');
+    (audPel.length ? ` · Pelayanan ${audPel.map((a) => a.pelayanan.nama + (a.minLevel != null ? ` (level ${a.minLevel}+)` : '')).join(', ')}` : '');
 
   return (
     <div className="w-full">

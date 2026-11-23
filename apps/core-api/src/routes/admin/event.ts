@@ -14,7 +14,7 @@
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { attendanceInfo, hadirCountByEvent, myEventStatusMap } from '../../lib/event-attendance.js';
-import { audienceLabel, eventAudienceInclude, eventAudienceStatus, eventAudienceVisibleWhere, saveEventAudience } from '../../lib/event-audience.js';
+import { audienceLabel, eventAudienceInclude, eventAudienceStatus, eventAudienceVisibleWhereFull, saveEventAudience } from '../../lib/event-audience.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -333,7 +333,7 @@ eventRouter.get('/', async (req, res) => {
   // Audiens level pelayanan: di app, event khusus pelayanan hanya untuk anggotanya
   // (+ peserta terdaftar & petugas event). Portal (pengelola) melihat semua.
   if (isMobileClient(req) && req.user?.jemaatId) {
-    where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), eventAudienceVisibleWhere(req.user.jemaatId)];
+    where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), await eventAudienceVisibleWhereFull(req.user.jemaatId)];
   }
 
   // Tab Portal: periode=upcoming (belum selesai, terdekat dulu) | past (sudah lewat, terbaru dulu).
@@ -711,7 +711,7 @@ eventRouter.post('/', W(), async (req, res) => {
     },
   });
   await saveRoleConfig(created.id, { roleRequirements: input.roleRequirements });
-  await saveEventAudience(created.id, input.audiencePelayananIds);
+  await saveEventAudience(created.id, input.audiencePelayananIds, input.audiencePelayanan);
   audit(req, {
     action: 'CREATE',
     resource: 'event',
@@ -802,7 +802,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
     }
     if (src.audiencePelayanan.length) {
       await tx.eventAudiencePelayanan.createMany({
-        data: src.audiencePelayanan.map((a) => ({ eventId: ev.id, pelayananId: a.pelayananId })),
+        data: src.audiencePelayanan.map((a) => ({ eventId: ev.id, pelayananId: a.pelayananId, minLevel: a.minLevel })),
       });
     }
     for (const link of src.pelayanan) {
@@ -902,7 +902,7 @@ eventRouter.patch('/:id', W(), async (req, res) => {
   }
   // Role yang diberikan: undefined = tidak diubah, null = hapus.
   await saveRoleConfig(before.id, input);
-  await saveEventAudience(before.id, input.audiencePelayananIds);
+  await saveEventAudience(before.id, input.audiencePelayananIds, input.audiencePelayanan);
   if (input.grantRoleId !== undefined) {
     data.grantRole = input.grantRoleId ? { connect: { id: input.grantRoleId } } : { disconnect: true };
     data.grantSubRole =

@@ -44,6 +44,7 @@ export type EventFormValues = {
   // edit dari list tidak menghapus syarat yang sudah ada.
   roleRequirements?: RoleTriple[];
   audiencePelayananIds?: string[];
+  audiencePelayanan?: { pelayananId: string; minLevel: number | null }[];
   grantRoleId?: string | null;
   grantSubRoleId?: string | null;
   grantSubRoleStatusId?: string | null;
@@ -59,7 +60,7 @@ interface RoleOption {
 
 interface EventRoleConfig {
   roleRequirements: { roleId: string; subRoleId: string | null; subRoleStatusId: string | null }[];
-  audiencePelayanan?: { pelayanan: { id: string; nama: string } }[];
+  audiencePelayanan?: { minLevel?: number | null; pelayanan: { id: string; nama: string } }[];
   grantRoleId: string | null;
   grantSubRoleId: string | null;
   grantSubRoleStatusId: string | null;
@@ -119,7 +120,7 @@ export function EventFormModal({
   const [tagsInput, setTagsInput] = useState('');
   const [reqs, setReqs] = useState<RoleTriple[]>([]);
   // Audiens level pelayanan (kosong = semua jemaat sesuai sinode/cabang).
-  const [audPel, setAudPel] = useState<string[]>([]);
+  const [audPel, setAudPel] = useState<{ id: string; minLevel: number | null }[]>([]);
   const [audPelOpen, setAudPelOpen] = useState(false);
   const [grant, setGrant] = useState<RoleTriple>(EMPTY_TRIPLE);
   const [roleConfigReady, setRoleConfigReady] = useState(false);
@@ -152,7 +153,7 @@ export function EventFormModal({
     setRoleConfigReady(false);
     const d = roleConfigQ.data;
     if (!d) return;
-    setAudPel((d.audiencePelayanan ?? []).map((a) => a.pelayanan.id));
+    setAudPel((d.audiencePelayanan ?? []).map((a) => ({ id: a.pelayanan.id, minLevel: a.minLevel ?? null })));
     setReqs(
       (d.roleRequirements ?? []).map((r) => ({
         roleId: r.roleId,
@@ -229,7 +230,7 @@ export function EventFormModal({
     queryKey: ['pelayanan', 'options'],
     enabled: open,
     queryFn: async () =>
-      (await apiClient.get<{ data: { id: string; nama: string; isActive?: boolean }[] }>('/admin/pelayanan', { params: { limit: 500 } })).data.data,
+      (await apiClient.get<{ data: { id: string; nama: string; isActive?: boolean; roles?: { id: string; nama: string; level: number }[] }[] }>('/admin/pelayanan', { params: { limit: 500 } })).data.data,
     staleTime: 60_000,
   });
 
@@ -294,7 +295,7 @@ export function EventFormModal({
     };
     if (roleConfigReady) {
       payload.roleRequirements = reqs.filter((r) => r.roleId);
-      payload.audiencePelayananIds = audPel;
+      payload.audiencePelayanan = audPel.map((a) => ({ pelayananId: a.id, minLevel: a.minLevel }));
       payload.grantRoleId = grant.roleId || null;
       payload.grantSubRoleId = grant.roleId ? grant.subRoleId : null;
       payload.grantSubRoleStatusId = grant.roleId ? grant.subRoleStatusId : null;
@@ -473,19 +474,41 @@ export function EventFormModal({
                 <span className="block text-sm font-medium text-neutral-700">Pelayanan (opsional)</span>
                 <span className="block text-[11px] text-neutral-500 mb-1">
                   Kosong = semua jemaat di sinode/cabang di atas. Dipilih = event hanya tampil di app & bisa diikuti anggota
-                  aktif pelayanan tersebut (tidak tampil di website / mode tamu).
+                  aktif pelayanan tersebut (tidak tampil di website / mode tamu). Atur level per pelayanan, mis. level 5 ke atas
+                  = hanya anggota dengan role level 5 atau lebih tinggi.
                 </span>
                 <div className="flex flex-wrap gap-1.5 items-center">
-                  {audPel.map((id) => {
-                    const nama = pelayananQ.data?.find((p) => p.id === id)?.nama
+                  {audPel.map(({ id, minLevel }) => {
+                    const pel = pelayananQ.data?.find((p) => p.id === id);
+                    const nama = pel?.nama
                       ?? roleConfigQ.data?.audiencePelayanan?.find((a) => a.pelayanan.id === id)?.pelayanan.nama
                       ?? '…';
+                    // Level role pelayanan (makin tinggi makin senior) — unik & urut naik.
+                    const levels = [...new Map((pel?.roles ?? []).map((r) => [r.level, r])).values()].sort((a, b) => a.level - b.level);
                     return (
                       <span key={id} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-violet-50 border border-violet-200 text-xs font-medium text-violet-800">
                         {nama}
+                        <select
+                          value={minLevel === null ? '' : String(minLevel)}
+                          onChange={(e) =>
+                            setAudPel((cur) => cur.map((x) => (x.id === id ? { ...x, minLevel: e.target.value === '' ? null : Number(e.target.value) } : x)))
+                          }
+                          title="Level role pelayanan minimal yang bisa melihat event"
+                          className="ml-1 bg-white border border-violet-200 rounded-full px-1.5 py-0.5 text-[11px] text-violet-800"
+                        >
+                          <option value="">semua anggota</option>
+                          {levels.map((r) => (
+                            <option key={r.level} value={r.level}>
+                              {r.nama} (level {r.level}) ke atas
+                            </option>
+                          ))}
+                          {minLevel !== null && !levels.some((r) => r.level === minLevel) ? (
+                            <option value={minLevel}>level {minLevel} ke atas</option>
+                          ) : null}
+                        </select>
                         <button
                           type="button"
-                          onClick={() => setAudPel((cur) => cur.filter((x) => x !== id))}
+                          onClick={() => setAudPel((cur) => cur.filter((x) => x.id !== id))}
                           className="w-4 h-4 rounded-full hover:bg-violet-200 flex items-center justify-center"
                           aria-label={`Hapus ${nama}`}
                         >
@@ -508,13 +531,13 @@ export function EventFormModal({
                     {(pelayananQ.data ?? [])
                       .filter((p) => p.isActive !== false)
                       .map((p) => {
-                        const on = audPel.includes(p.id);
+                        const on = audPel.some((x) => x.id === p.id);
                         return (
                           <label key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-neutral-50">
                             <input
                               type="checkbox"
                               checked={on}
-                              onChange={() => setAudPel((cur) => (on ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
+                              onChange={() => setAudPel((cur) => (on ? cur.filter((x) => x.id !== p.id) : [...cur, { id: p.id, minLevel: null }]))}
                               className="accent-brand-500"
                             />
                             {p.nama}

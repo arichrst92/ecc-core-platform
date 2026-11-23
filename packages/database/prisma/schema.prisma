@@ -3793,6 +3793,12 @@ model Resolusi {
   isDone    Boolean   @default(false) @map("is_done")
   doneAt    DateTime? @map("done_at")
   urutan    Int       @default(0)
+  // Ayat yang ditautkan (opsional, 2026-11): versi Alkitab app (BIMK / KJV), kitab 1–66, bab, ayat (rentang).
+  ayatVersi   String? @map("ayat_versi") @db.VarChar(16)
+  ayatKitab   Int?    @map("ayat_kitab")
+  ayatBab     Int?    @map("ayat_bab")
+  ayatMulai   Int?    @map("ayat_mulai")
+  ayatSelesai Int?    @map("ayat_selesai")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

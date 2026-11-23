@@ -122,12 +122,25 @@ export const RESOLUSI_KATEGORI_LABEL: Record<ResolusiKategori, { id: string; en:
 
 export const resolusiTahunSchema = z.coerce.number().int().min(2000).max(2100);
 
+/** Ayat yang ditautkan ke resolusi. null = lepas tautan. */
+export const resolusiAyatSchema = z
+  .object({
+    versi: z.string().trim().min(2).max(16),
+    kitab: z.number().int().min(1).max(66),
+    bab: z.number().int().min(1).max(150),
+    mulai: z.number().int().min(1).max(200),
+    selesai: z.number().int().min(1).max(200).nullable().optional(),
+  })
+  .refine((a) => a.selesai == null || a.selesai >= a.mulai, 'Ayat akhir harus sesudah ayat awal');
+export type ResolusiAyat = z.infer<typeof resolusiAyatSchema>;
+
 export const createResolusiSchema = z.object({
   tahun: resolusiTahunSchema,
   judul: teksSchema(200),
   catatan: optText(2000),
   kategori: z.enum(RESOLUSI_KATEGORI),
   isDone: z.boolean().optional(),
+  ayat: resolusiAyatSchema.nullable().optional(),
 });
 export type CreateResolusiInput = z.infer<typeof createResolusiSchema>;
 
@@ -136,6 +149,7 @@ export const updateResolusiSchema = z.object({
   catatan: optText(2000),
   kategori: z.enum(RESOLUSI_KATEGORI).optional(),
   isDone: z.boolean().optional(),
+  ayat: resolusiAyatSchema.nullable().optional(),
 });
 
 export const reorderResolusiSchema = z.object({

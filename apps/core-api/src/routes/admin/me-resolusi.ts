@@ -2,8 +2,8 @@
  * Resolusi Tahunan saya — mobile — /admin/me/resolusi
  *
  *   GET    /?tahun=2027   → { tahun, years, items, progress }
- *   POST   /              → { tahun, judul, kategori, catatan?, isDone? }
- *   PATCH  /:id           → { judul?, kategori?, catatan?, isDone? }
+ *   POST   /              → { tahun, judul, kategori, catatan?, isDone?, ayat? }
+ *   PATCH  /:id           → { judul?, kategori?, catatan?, isDone?, ayat? (null = lepas) }
  *   DELETE /:id
  *   POST   /reorder       → { ids } (urutan dalam satu tahun)
  */
@@ -17,7 +17,7 @@ import {
 } from '@ecc/shared-types';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { UUID_RE } from '../../lib/prayer.js';
-import { loadResolusi, resolusiSelect } from '../../lib/resolusi.js';
+import { ayatData, loadResolusi, resolusiSelect } from '../../lib/resolusi.js';
 
 export const meResolusiRouter = Router();
 
@@ -60,6 +60,7 @@ meResolusiRouter.post('/', async (req, res) => {
       isDone: input.isDone ?? false,
       doneAt: input.isDone ? new Date() : null,
       urutan: (last?.urutan ?? -1) + 1,
+      ...ayatData(input.ayat),
     },
     select: resolusiSelect,
   });
@@ -93,6 +94,7 @@ meResolusiRouter.patch('/:id', async (req, res) => {
       catatan: 'catatan' in (req.body ?? {}) ? input.catatan : undefined,
       isDone: input.isDone,
       doneAt: doneChanged ? (input.isDone ? new Date() : null) : undefined,
+      ...ayatData(input.ayat),
     },
     select: resolusiSelect,
   });

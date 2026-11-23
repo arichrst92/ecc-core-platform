@@ -10,6 +10,11 @@ export const resolusiSelect = {
   isDone: true,
   doneAt: true,
   urutan: true,
+  ayatVersi: true,
+  ayatKitab: true,
+  ayatBab: true,
+  ayatMulai: true,
+  ayatSelesai: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -35,5 +40,18 @@ export async function loadResolusi(jemaatId: string, tahun: number) {
     years: years.map((y) => ({ tahun: y.tahun, total: y._count._all })),
     items,
     progress: { done, total: items.length },
+  };
+}
+
+/** Body `ayat` (create/update) → kolom DB. undefined = tidak diubah, null = lepas tautan. */
+export function ayatData(ayat: { versi: string; kitab: number; bab: number; mulai: number; selesai?: number | null } | null | undefined) {
+  if (ayat === undefined) return {};
+  if (ayat === null) return { ayatVersi: null, ayatKitab: null, ayatBab: null, ayatMulai: null, ayatSelesai: null };
+  return {
+    ayatVersi: ayat.versi,
+    ayatKitab: ayat.kitab,
+    ayatBab: ayat.bab,
+    ayatMulai: ayat.mulai,
+    ayatSelesai: ayat.selesai && ayat.selesai > ayat.mulai ? ayat.selesai : null,
   };
 }

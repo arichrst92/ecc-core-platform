@@ -17,6 +17,13 @@ summary: Jenis group, siapa yang melihat group private, alur bergabung (selalu d
 - Setiap group (publik & private) punya **kode/QR** untuk dibuka lewat scan di app; kode dibuat otomatis saat PIC/admin membuka group lama. Kode hanya terlihat oleh PIC/admin.
 - Gambar group diunggah dengan crop 16:9.
 
+## Membuat group = pengajuan (2026-11)
+- Group yang dibuat jemaat dari **Els App** (siapa pun, termasuk Fulltimer) berstatus **Menunggu persetujuan**. Pembuat otomatis jadi PIC.
+- Selama menunggu: group **tidak tampil** untuk jemaat lain, **belum bisa menerima anggota** (gabung / kode / QR / tambah anggota ditolak dengan pesan "masih menunggu persetujuan admin"). Pembuat masih bisa melihat & mengubah datanya, atau membatalkan pengajuan.
+- Disetujui/ditolak oleh pemegang Role Access menu **Group (tulis)** di Portal: menu **Community → Pengajuan Group** (badge jumlah) → buka group → **Setujui** / **Tolak** (alasan wajib). Pembuat mendapat notifikasi; ditolak → group nonaktif, alasan ikut di notifikasi.
+- Group yang dibuat admin Group langsung dari Portal langsung aktif.
+- App 2.5.0 belum mengenal status ini: setelah membuat group masih tertulis "berhasil dibuat", tetapi group tetap menunggu persetujuan (orang lain belum bisa bergabung). App 2.5.1 menampilkan "Pengajuan terkirim" + label "Menunggu persetujuan".
+
 ## Bergabung
 - Jemaat bergabung (dari group publik atau lewat kode undangan) → menjadi **permintaan** yang harus **disetujui PIC** (atau admin). PIC mendapat notifikasi.
 - **Di app, permintaan diproses oleh PIC**; pemegang Role Access menu **Group** (tulis) memproses lewat **Portal**.
@@ -41,10 +48,11 @@ summary: Jenis group, siapa yang melihat group private, alur bergabung (selalu d
 - **"Non-anggota masih melihat anggota"** → pastikan server sudah versi terbaru; tarik layar untuk muat ulang. Di Portal, admin memang bisa melihat.
 - **"Group private tidak ketemu di pencarian"** → private hanya terlihat anggota/PIC/pemegang Role Access Group (Portal); bagikan kode/QR.
 - **"Sudah minta gabung tapi belum masuk"** → menunggu persetujuan PIC.
+- **"Group yang saya buat tidak muncul untuk teman / tidak bisa diundang"** → pengajuan group belum disetujui admin (Portal → Community → Pengajuan Group).
 - **"Parent group tidak ada di pilihan"** → gunakan pencarian (bukan dropdown); group nonaktif tidak muncul.
 
 ## Diagnosis (untuk Elsa)
-`group` (isPublic, isActive, picJemaat, parent) → `group_member` (isActive) → `group_join_request` (status) → `group_announcement` / `group_poll`.
+`group` (approvalStatus PENDING/APPROVED/REJECTED + approvalNote, isPublic, isActive, picJemaat, parent) → `group_member` (isActive) → `group_join_request` (status) → `group_announcement` / `group_poll`.
 
 ## Hak admin group (2026-11)
 - Kelola group (edit, gambar, anggota, konten, permintaan) = **PIC** group itu, atau di **Portal** pemegang Role Access menu **Group** (tulis). Fulltimer tidak lagi otomatis bisa.

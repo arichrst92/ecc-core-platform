@@ -7,7 +7,10 @@
  *   Public/PIC/Admin:
  *     GET    /                       list (filter: cabangId, jenis, parentId, search)
  *     GET    /:id                    detail + members + children
- *     POST   /                       create (PIC/admin only)
+ *     POST   /                       create — dari app = PENGAJUAN (approvalStatus PENDING),
+ *                                     dari Portal oleh admin Group (tulis) = langsung APPROVED
+ *     POST   /:id/approve            [Portal, Group tulis] setujui pengajuan group
+ *     POST   /:id/reject             [Portal, Group tulis] tolak pengajuan (alasan) → nonaktif
  *     PATCH  /:id                    update
  *     DELETE /:id                    dismiss (soft delete + notif members)
  *     POST   /:id/regenerate-code    rotate joinCode (private group only)
@@ -100,6 +103,18 @@ groupRouter.get('/', async (req, res) => {
   if (jenis) where.jenis = jenis as Prisma.GroupWhereInput['jenis'];
   // Portal: ?permintaan=1 → hanya group yang punya permintaan bergabung menunggu (tujuan badge).
   if (req.query.permintaan === '1') where.joinRequests = { some: { status: 'PENDING' } };
+  // Persetujuan pembuatan group (2026-11). Bawaan: hanya group yang sudah
+  // disetujui, ditambah pengajuan milik saya sendiri (PIC) supaya pembuat
+  // tetap melihatnya. Portal (Group baca): ?approval=PENDING → antrian pengajuan.
+  const approvalParam = typeof req.query.approval === 'string' ? req.query.approval.toUpperCase() : '';
+  if (requester.canViewAll && (approvalParam === 'PENDING' || approvalParam === 'REJECTED')) {
+    where.approvalStatus = approvalParam;
+    if (approvalParam === 'REJECTED') delete where.isActive;
+  } else if (requester.canViewAll && approvalParam === 'ALL') {
+    // semua status (group aktif)
+  } else {
+    where.AND = [{ OR: [{ approvalStatus: 'APPROVED' }, { picJemaatId: requester.jemaatId }] }];
+  }
   if (parentIdParam === 'null' || parentIdParam === 'root') {
     where.parentId = null;
   } else if (parentIdParam) {
@@ -201,9 +216,18 @@ const joinMessageSchema = z.object({
   pesan: z.string().trim().max(500).optional().transform((v) => (v ? v : undefined)),
 });
 
+/** Group yang belum disetujui admin belum boleh menerima anggota (pesan tampil apa adanya di app). */
+const PENDING_GROUP_MSG = (nama: string) =>
+  `Group "${nama}" masih menunggu persetujuan admin, belum bisa menerima anggota.`;
+async function assertGroupApproved(groupId: string) {
+  const g = await prisma.group.findUnique({ where: { id: groupId }, select: { nama: true, approvalStatus: true } });
+  if (!g) throw NotFound('Group tidak ditemukan');
+  if (g.approvalStatus !== 'APPROVED') throw BadRequest(PENDING_GROUP_MSG(g.nama));
+}
+
 async function requestJoinGroup(
   req: import('express').Request,
-  group: { id: string; nama: string; picJemaatId: string | null },
+  group: { id: string; nama: string; picJemaatId: string | null; approvalStatus: string },
   requester: { jemaatId: string; isGroupAdmin: boolean },
   via: 'PUBLIC' | 'CODE',
   pesan?: string,
@@ -212,6 +236,7 @@ async function requestJoinGroup(
     where: { groupId_jemaatId: { groupId: group.id, jemaatId: requester.jemaatId } },
     select: { isActive: true },
   });
+  if (group.approvalStatus !== 'APPROVED' && !existing?.isActive) throw BadRequest(PENDING_GROUP_MSG(group.nama));
   if (existing?.isActive) {
     return { status: 'MEMBER' as const, message: 'Anda sudah anggota group ini', alreadyMember: true };
   }
@@ -305,7 +330,7 @@ groupRouter.post('/join-by-code', async (req, res) => {
 
   const group = await prisma.group.findUnique({
     where: { joinCode: code.toUpperCase() },
-    select: { id: true, nama: true, isActive: true, picJemaatId: true, isPublic: true },
+    select: { id: true, nama: true, isActive: true, picJemaatId: true, isPublic: true, approvalStatus: true },
   });
   if (!group || !group.isActive) throw NotFound('Kode invitation tidak valid');
 
@@ -359,6 +384,10 @@ groupRouter.get('/:id', async (req, res) => {
     },
   });
   if (!group) throw NotFound('Group tidak ditemukan');
+  // Pengajuan yang belum disetujui hanya terlihat oleh pembuat (PIC) & admin Group.
+  if (group.approvalStatus !== 'APPROVED' && group.picJemaatId !== requester.jemaatId && !requester.canViewAll) {
+    throw NotFound('Group tidak ditemukan');
+  }
 
   // Hide joinCode kalau bukan PIC/admin
   const isPicOrAdmin =
@@ -433,6 +462,10 @@ groupRouter.get('/:id', async (req, res) => {
 groupRouter.post('/', async (req, res) => {
   const requester = await getRequester(req);
   const input = createGroupSchema.parse(req.body);
+  // Group baru dari app (siapa pun, termasuk Fulltimer) = PENGAJUAN yang
+  // menunggu persetujuan admin Group di Portal. Admin Group yang membuat dari
+  // Portal = langsung disetujui (dia sendiri penyetujunya).
+  const autoApprove = requester.isGroupAdmin;
 
   // Semua group punya joinCode (QR group) — public maupun private.
   const joinCode = await generateUniqueJoinCode();
@@ -455,6 +488,8 @@ groupRouter.post('/', async (req, res) => {
       isPublic: input.isPublic,
       isActive: input.isActive,
       joinCode,
+      approvalStatus: autoApprove ? 'APPROVED' : 'PENDING',
+      ...(autoApprove ? { approvalById: requester.jemaatId, approvalAt: new Date() } : {}),
     },
   });
   // Pembuat/PIC langsung jadi anggota → muncul di "My Groups".
@@ -468,7 +503,79 @@ groupRouter.post('/', async (req, res) => {
     after: created,
   });
 
-  res.status(201).json({ success: true, data: created });
+  res.status(201).json({
+    success: true,
+    message: autoApprove
+      ? `Group "${created.nama}" berhasil dibuat.`
+      : `Pengajuan group "${created.nama}" terkirim. Group aktif setelah disetujui admin; Anda akan mendapat notifikasi.`,
+    data: created,
+  });
+});
+
+// ============================================================
+// Persetujuan pembuatan group — Portal, Role Access menu Group (tulis)
+// ============================================================
+const groupApprovalRejectSchema = z.object({
+  alasan: z.string().trim().min(3, 'Alasan penolakan wajib diisi').max(300),
+});
+
+async function loadPendingGroupForReview(req: import('express').Request) {
+  const requester = await getRequester(req);
+  if (isMobileClient(req) || !requester.isGroupAdmin) {
+    throw Forbidden('Hanya admin dengan akses Group (tulis) di Portal yang dapat memproses pengajuan group.');
+  }
+  const group = await prisma.group.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, nama: true, picJemaatId: true, approvalStatus: true, isActive: true },
+  });
+  if (!group) throw NotFound('Group tidak ditemukan');
+  return { requester, group };
+}
+
+groupRouter.post('/:id/approve', async (req, res) => {
+  const { requester, group } = await loadPendingGroupForReview(req);
+  const claimed = await prisma.group.updateMany({
+    // Pengajuan yang sudah dibatalkan pembuat (nonaktif) tidak ikut diaktifkan.
+    where: { id: group.id, approvalStatus: 'PENDING', isActive: true },
+    data: { approvalStatus: 'APPROVED', approvalNote: null, approvalById: requester.jemaatId, approvalAt: new Date(), isActive: true },
+  });
+  if (claimed.count === 0) throw new ApiError(409, 'GROUP_APPROVAL_NOT_PENDING', 'Pengajuan group ini sudah diproses.');
+  await ensurePicMember(group.id, group.picJemaatId);
+  audit(req, { action: 'UPDATE', resource: 'group', resourceId: group.id, resourceLabel: `Setujui pengajuan group: ${group.nama}` });
+  if (group.picJemaatId) {
+    // Tipe notifikasi yang sudah dikenal app lama → membuka halaman group.
+    void createNotification({
+      jemaatId: group.picJemaatId,
+      type: 'GROUP_JOIN_APPROVED',
+      title: `Group "${group.nama}" disetujui`,
+      body: 'Group Anda sudah aktif. Undang anggota lewat QR / kode group.',
+      actionUrl: `/group/${group.id}`,
+      metadata: { groupId: group.id, kind: 'GROUP_CREATE_APPROVED' },
+    });
+  }
+  res.json({ success: true, message: `Group "${group.nama}" disetujui.`, data: { id: group.id, approvalStatus: 'APPROVED' } });
+});
+
+groupRouter.post('/:id/reject', async (req, res) => {
+  const { requester, group } = await loadPendingGroupForReview(req);
+  const { alasan } = groupApprovalRejectSchema.parse(req.body ?? {});
+  const claimed = await prisma.group.updateMany({
+    where: { id: group.id, approvalStatus: 'PENDING' },
+    data: { approvalStatus: 'REJECTED', approvalNote: alasan, approvalById: requester.jemaatId, approvalAt: new Date(), isActive: false },
+  });
+  if (claimed.count === 0) throw new ApiError(409, 'GROUP_APPROVAL_NOT_PENDING', 'Pengajuan group ini sudah diproses.');
+  audit(req, { action: 'UPDATE', resource: 'group', resourceId: group.id, resourceLabel: `Tolak pengajuan group: ${group.nama}`, metadata: { alasan } });
+  if (group.picJemaatId) {
+    void createNotification({
+      jemaatId: group.picJemaatId,
+      type: 'GROUP_JOIN_REJECTED',
+      title: `Pengajuan group "${group.nama}" ditolak`,
+      body: `Alasan: ${alasan}`,
+      actionUrl: '/group',
+      metadata: { groupId: group.id, kind: 'GROUP_CREATE_REJECTED', alasan },
+    });
+  }
+  res.json({ success: true, message: `Pengajuan group "${group.nama}" ditolak.`, data: { id: group.id, approvalStatus: 'REJECTED' } });
 });
 
 // ============================================================
@@ -482,6 +589,9 @@ groupRouter.patch('/:id', async (req, res) => {
   const input = updateGroupSchema.parse(req.body);
   const before = await prisma.group.findUnique({ where: { id: req.params.id } });
   if (!before) throw NotFound('Group tidak ditemukan');
+  if (before.approvalStatus === 'REJECTED' && !requester.isGroupAdmin) {
+    throw BadRequest('Pengajuan group ini ditolak admin dan tidak bisa diubah. Silakan ajukan group baru.');
+  }
 
   const updateData: Prisma.GroupUpdateInput = {};
   if (input.parentId !== undefined) {
@@ -499,7 +609,8 @@ groupRouter.patch('/:id', async (req, res) => {
       ? { connect: { id: input.picJemaatId } }
       : { disconnect: true };
   }
-  if (input.isActive !== undefined) updateData.isActive = input.isActive;
+  // Group yang ditolak tetap nonaktif (hanya bisa lewat persetujuan ulang admin).
+  if (input.isActive !== undefined && before.approvalStatus !== 'REJECTED') updateData.isActive = input.isActive;
 
   // Visibility toggle logic
   if (input.isPublic !== undefined && input.isPublic !== before.isPublic) {
@@ -637,6 +748,7 @@ groupRouter.post('/:id/members/:jemaatId', async (req, res, next) => {
   if (!UUID_PARAM.test(req.params.jemaatId)) return next(); // mis. /members/by-kode
   const requester = await getRequester(req);
   await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
+  await assertGroupApproved(req.params.id);
 
   const { catatan } = addGroupMemberSchema.partial().parse(req.body);
 
@@ -681,6 +793,7 @@ groupRouter.post('/:id/members/:jemaatId', async (req, res, next) => {
 groupRouter.post('/:id/members/by-kode', async (req, res) => {
   const requester = await getRequester(req);
   await assertCanManageGroup(req.params.id, requester.jemaatId, requester.isGroupAdmin);
+  await assertGroupApproved(req.params.id);
 
   const kode = typeof req.body?.kode === 'string' ? req.body.kode.trim().toUpperCase() : '';
   const catatan = typeof req.body?.catatan === 'string' ? req.body.catatan.trim() : undefined;
@@ -774,7 +887,7 @@ groupRouter.post('/:id/join', async (req, res) => {
   const { pesan } = joinMessageSchema.parse(req.body ?? {});
   const group = await prisma.group.findUnique({
     where: { id: req.params.id },
-    select: { id: true, nama: true, isPublic: true, isActive: true, picJemaatId: true },
+    select: { id: true, nama: true, isPublic: true, isActive: true, picJemaatId: true, approvalStatus: true },
   });
   if (!group || !group.isActive) throw NotFound('Group tidak ditemukan');
   if (!group.isPublic) {

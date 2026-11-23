@@ -20,6 +20,7 @@ export type PendingKey =
   | 'sjRequest'
   | 'eventPayment'
   | 'groupJoin'
+  | 'groupApproval'
   | 'homecellLokasi';
 export type PendingCounts = Partial<Record<PendingKey, number>>;
 
@@ -33,6 +34,7 @@ export const PENDING_META: Record<PendingKey, { label: string; target: string }>
   sjRequest: { label: 'request spiritual journey menunggu', target: '/dashboard/spiritual-journey/request' },
   eventPayment: { label: 'bukti transfer event menunggu verifikasi', target: '/dashboard/event?pembayaran=perlu-verifikasi' },
   groupJoin: { label: 'permintaan bergabung group menunggu', target: '/dashboard/group?permintaan=1' },
+  groupApproval: { label: 'pengajuan group baru menunggu persetujuan', target: '/dashboard/group?pengajuan=1' },
   homecellLokasi: { label: 'homecell dengan titik lokasi salah di peta', target: '/dashboard/homecell?lokasi=bermasalah' },
 };
 

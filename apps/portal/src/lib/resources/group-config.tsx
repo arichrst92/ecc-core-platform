@@ -1,6 +1,6 @@
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import Link from 'next/link';
-import { Eye, Users, Globe, Lock, MapPin, Pencil, Trash2, UserRound, UsersRound, Clock } from 'lucide-react';
+import { Eye, Users, Globe, Lock, MapPin, Pencil, Trash2, UserRound, UsersRound, Clock, Hourglass } from 'lucide-react';
 import { createGroupSchema, updateGroupSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField } from './render-helpers';
@@ -20,6 +20,7 @@ interface Group extends Record<string, unknown> {
   isPublic: boolean;
   joinCode: string | null;
   isActive: boolean;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
   heroImageUrl?: string | null;
   cabang?: { id: string; nama: string; kode: string };
   parent?: { id: string; nama: string } | null;
@@ -70,6 +71,11 @@ function GroupCard({ g, onEdit, onDelete }: { g: Group; onEdit: () => void; onDe
             <h3 className="font-semibold text-neutral-900 leading-snug line-clamp-2 flex-1">{g.nama}</h3>
             <span className={`shrink-0 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${JENIS_COLORS[g.jenis]}`}>{JENIS_LABEL[g.jenis]}</span>
           </div>
+          {g.approvalStatus === 'PENDING' ? (
+            <span className="self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">
+              <Hourglass className="w-3 h-3" /> Menunggu persetujuan — buka untuk memproses
+            </span>
+          ) : null}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
             {g.cabang?.nama ? (
               <span className="inline-flex items-center gap-1">
@@ -142,6 +148,11 @@ export const groupResource: ResourceConfig<Group> = {
           >
             <Eye className="w-3.5 h-3.5 shrink-0" />
             {row.nama}
+            {row.approvalStatus === 'PENDING' ? (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold leading-none no-underline">
+                Menunggu persetujuan
+              </span>
+            ) : null}
             {Number(row.pendingJoinCount ?? 0) > 0 ? (
               <span
                 className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none no-underline"

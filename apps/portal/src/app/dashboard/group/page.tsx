@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { X, Filter, UserPlus } from 'lucide-react';
+import { X, Filter, UserPlus, Hourglass } from 'lucide-react';
 import { usePendingCounts } from '@/lib/pending-counts';
 import { CrudPage } from '@/components/crud/crud-page';
 import { groupResource } from '@/lib/resources/group-config';
@@ -16,7 +16,11 @@ function GroupInner() {
   const jenis = sp.get('jenis') ?? undefined;
   // Dari badge menu (?permintaan=1) → hanya group yang punya permintaan bergabung menunggu.
   const permintaan = sp.get('permintaan') === '1' ? '1' : undefined;
-  const pendingGroups = usePendingCounts().groupJoin ?? 0;
+  // ?pengajuan=1 → antrian pengajuan group baru dari Els App (menunggu persetujuan).
+  const pengajuan = sp.get('pengajuan') === '1';
+  const counts = usePendingCounts();
+  const pendingGroups = counts.groupJoin ?? 0;
+  const pendingApproval = counts.groupApproval ?? 0;
 
   const cabangQ = useQuery({
     queryKey: ['cabang', 'detail', cabangId],
@@ -30,7 +34,35 @@ function GroupInner() {
   });
 
   let banner: React.ReactNode = null;
-  if (permintaan) {
+  if (pengajuan) {
+    banner = (
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+        <div className="flex items-center gap-2 text-amber-900">
+          <Hourglass className="w-4 h-4" />
+          Menampilkan <strong>pengajuan group baru</strong> dari Els App. Buka group → Setujui / Tolak (dengan alasan).
+        </div>
+        <button
+          onClick={() => router.push('/dashboard/group')}
+          className="flex items-center gap-1 text-xs text-amber-800 hover:text-amber-950 px-2 py-1 hover:bg-amber-100 rounded"
+        >
+          <X className="w-3 h-3" />
+          Tampilkan semua
+        </button>
+      </div>
+    );
+  } else if (pendingApproval > 0 && !permintaan && !cabangId && !jenis) {
+    banner = (
+      <button
+        onClick={() => router.push('/dashboard/group?pengajuan=1')}
+        className="w-full text-left flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 hover:bg-amber-100"
+      >
+        <Hourglass className="w-4 h-4" />
+        <span>
+          <strong>{pendingApproval} pengajuan group baru</strong> menunggu persetujuan — klik untuk memproses.
+        </span>
+      </button>
+    );
+  } else if (permintaan) {
     banner = (
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-red-800">
@@ -80,7 +112,7 @@ function GroupInner() {
   }
 
   return (
-    <CrudPage config={groupResource} extraParams={{ cabangId, jenis, permintaan }} filterBanner={banner} />
+    <CrudPage config={groupResource} extraParams={{ cabangId, jenis, permintaan, approval: pengajuan ? 'PENDING' : undefined }} filterBanner={banner} />
   );
 }
 

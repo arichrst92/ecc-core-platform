@@ -2723,6 +2723,13 @@ model Group {
   // via endpoint /regenerate-code kalau kode leak.
   joinCode                String?     @unique @map("join_code") @db.VarChar(20)
   isActive                Boolean     @default(true) @map("is_active")
+  // Persetujuan pembuatan group (2026-11). Group dari Els App = PENDING sampai
+  // disetujui admin Role Access menu Group (tulis) di Portal; dibuat admin di
+  // Portal = langsung APPROVED. Group lama = APPROVED. REJECTED → isActive=false.
+  approvalStatus          GroupApprovalStatus @default(APPROVED) @map("approval_status")
+  approvalNote            String?     @map("approval_note") @db.VarChar(300)
+  approvalById            String?     @map("approval_by_id") @db.Uuid
+  approvalAt              DateTime?   @map("approval_at")
   // Idempotent guard untuk sync ulang dari Shiftsoft. NULL untuk group
   // yang dibuat organic via portal (bukan hasil import legacy).
   legacyShiftsoftCircleId Int?        @unique @map("legacy_shiftsoft_circle_id")
@@ -2743,7 +2750,16 @@ model Group {
   @@index([parentId])
   @@index([picJemaatId])
   @@index([jenis])
+  @@index([approvalStatus])
   @@map("church_group")
+}
+
+enum GroupApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("group_approval_status")
 }
 
 enum GroupJenis {

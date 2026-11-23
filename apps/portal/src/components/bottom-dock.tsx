@@ -156,6 +156,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/homecell', label: 'Homecell', icon: HomeIcon, menuKey: 'homecell', badge: 'homecellLokasi', fill: 'homecell' },
       { href: '/dashboard/homecell-material', label: 'Homecell Material', icon: Library, menuKey: 'homecell-material' },
       { href: '/dashboard/group', label: 'Group', icon: UsersRound, menuKey: 'group', badge: 'groupJoin', fill: 'group' },
+      { href: '/dashboard/group?pengajuan=1', label: 'Pengajuan Group', icon: UsersRound, menuKey: 'group', badge: 'groupApproval' },
     ],
   },
   {

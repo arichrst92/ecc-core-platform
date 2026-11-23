@@ -33,6 +33,7 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { GroupJoinRequestsAlert, GroupJoinRequestsSection } from '@/components/group/group-join-requests';
 import { GroupContentSection } from '@/components/group/group-content';
 import { GroupHero } from '@/components/group/group-hero';
+import { GroupApprovalPanel } from '@/components/group/group-approval';
 import { parseYmd } from '@/lib/dates';
 
 interface GroupMember {
@@ -62,6 +63,8 @@ interface GroupDetail {
   isPublic: boolean;
   joinCode: string | null;
   isActive: boolean;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
   legacyShiftsoftCircleId: number | null;
   cabang: { id: string; nama: string; kode: string };
   parent: { id: string; nama: string } | null;
@@ -167,6 +170,15 @@ export default function GroupDetailPage() {
 
   return (
     <div className="space-y-6 w-full">
+      {g.approvalStatus === 'PENDING' ? (
+        <GroupApprovalPanel
+          groupId={g.id}
+          nama={g.nama}
+          picNama={g.picJemaat?.namaLengkap ?? null}
+          createdAt={g.createdAt}
+          onRejected={() => router.push('/dashboard/group?pengajuan=1')}
+        />
+      ) : null}
       <GroupJoinRequestsAlert groupId={groupId} />
       <GroupHero groupId={g.id} nama={g.nama} heroImageUrl={g.heroImageUrl ?? null} picJemaatId={g.picJemaatId} />
 

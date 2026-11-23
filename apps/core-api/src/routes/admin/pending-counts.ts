@@ -11,6 +11,7 @@
  *   sjRequest       Spiritual Journey      request langkah rohani PENDING
  *   eventPayment    Event                  peserta dengan bukti transfer menunggu verifikasi
  *   groupJoin       Group                  permintaan bergabung group PENDING (Group tulis)
+ *   groupApproval   Group                  pengajuan group baru dari app menunggu persetujuan (Group tulis)
  *   homecellLokasi  Homecell               homecell aktif yang titik lokasinya salah di peta
  *
  * Murah: hanya COUNT berindeks; Portal memanggil tiap 60 detik + saat pindah halaman.
@@ -63,6 +64,7 @@ pendingCountsRouter.get('/', async (req, res) => {
 
   if (can('group') && access['group']?.canWrite) {
     jobs.groupJoin = () => prisma.groupJoinRequest.count({ where: { status: 'PENDING', group: { isActive: true } } });
+    jobs.groupApproval = () => prisma.group.count({ where: { approvalStatus: 'PENDING', isActive: true } });
   }
   if (can('homecell')) {
     jobs.homecellLokasi = async () => {

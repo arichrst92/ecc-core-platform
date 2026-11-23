@@ -4,12 +4,33 @@
  * Editor Markdown sederhana untuk isi Announcement: toolbar (tebal, miring,
  * coret, judul, daftar, kutipan, link) + tab Tulis / Pratinjau.
  * Pratinjau memakai renderer yang sama dengan email (mdToHtml, sudah di-escape).
+ *
+ * Dipakai juga untuk konten Renungan/News & deskripsi Event. `tools` membatasi
+ * tombol sesuai yang bisa ditampilkan app terpasang (Els App 2.5.0 untuk
+ * renungan/news belum mengenal coret, daftar bernomor & link).
  */
 import { useRef, useState } from 'react';
 import { Bold, Heading2, Italic, Link2, List, ListOrdered, Quote, Strikethrough } from 'lucide-react';
 import { mdToHtml } from '@ecc/shared-types';
 
-export function MarkdownEditor({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+export type MarkdownTool = 'bold' | 'italic' | 'strike' | 'heading' | 'list' | 'olist' | 'quote' | 'link';
+const ALL_TOOLS: MarkdownTool[] = ['bold', 'italic', 'strike', 'heading', 'list', 'olist', 'quote', 'link'];
+
+export function MarkdownEditor({
+  value,
+  onChange,
+  disabled,
+  tools: allowed = ALL_TOOLS,
+  rows = 9,
+  placeholder = 'Shalom jemaat ECC!\n\n**Ibadah Natal** diadakan 24 Desember pukul 18.00.\n- Reservasi dibuka 1 Desember',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  tools?: MarkdownTool[];
+  rows?: number;
+  placeholder?: string;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [tab, setTab] = useState<'write' | 'preview'>('write');
 
@@ -42,16 +63,17 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
     wrap('[', `](${url})`, 'teks link');
   }
 
-  const tools: { icon: typeof Bold; title: string; run: () => void }[] = [
-    { icon: Bold, title: 'Tebal', run: () => wrap('**') },
-    { icon: Italic, title: 'Miring', run: () => wrap('*') },
-    { icon: Strikethrough, title: 'Coret', run: () => wrap('~~') },
-    { icon: Heading2, title: 'Judul kecil', run: () => prefixLines(() => '## ') },
-    { icon: List, title: 'Daftar', run: () => prefixLines(() => '- ') },
-    { icon: ListOrdered, title: 'Daftar bernomor', run: () => prefixLines((i) => `${i + 1}. `) },
-    { icon: Quote, title: 'Kutipan', run: () => prefixLines(() => '> ') },
-    { icon: Link2, title: 'Link dalam teks', run: link },
+  const allTools: { key: MarkdownTool; icon: typeof Bold; title: string; run: () => void }[] = [
+    { key: 'bold', icon: Bold, title: 'Tebal', run: () => wrap('**') },
+    { key: 'italic', icon: Italic, title: 'Miring', run: () => wrap('*') },
+    { key: 'strike', icon: Strikethrough, title: 'Coret', run: () => wrap('~~') },
+    { key: 'heading', icon: Heading2, title: 'Judul kecil', run: () => prefixLines(() => '## ') },
+    { key: 'list', icon: List, title: 'Daftar', run: () => prefixLines(() => '- ') },
+    { key: 'olist', icon: ListOrdered, title: 'Daftar bernomor', run: () => prefixLines((i) => `${i + 1}. `) },
+    { key: 'quote', icon: Quote, title: 'Kutipan', run: () => prefixLines(() => '> ') },
+    { key: 'link', icon: Link2, title: 'Link dalam teks', run: link },
   ];
+  const tools = allTools.filter((t) => allowed.includes(t.key));
 
   return (
     <div className="border border-neutral-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-brand-500">
@@ -86,8 +108,8 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          rows={9}
-          placeholder={'Shalom jemaat ECC!\n\n**Ibadah Natal** diadakan 24 Desember pukul 18.00.\n- Reservasi dibuka 1 Desember'}
+          rows={rows}
+          placeholder={placeholder}
           className="w-full px-3 py-2.5 text-sm outline-none resize-y font-mono leading-relaxed disabled:bg-neutral-50"
         />
       ) : (

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Loader2, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { todayYmd } from '@/lib/dates';
+import { MarkdownEditor } from '@/components/announcement/markdown-editor';
 
 export type EventFormValues = {
   judul: string;
@@ -332,14 +333,21 @@ export function EventFormModal({
                   className={inputCls}
                 />
               </Field>
-              <Field label="Deskripsi" required helper="Body event (markdown didukung).">
-                <textarea
-                  rows={5}
-                  value={values.deskripsi}
-                  onChange={(e) => patch({ deskripsi: e.target.value })}
-                  className={inputCls}
-                />
-              </Field>
+              {/* Bukan <label>: tombol toolbar di dalam label ikut terpicu saat judul diklik. */}
+              <div className="block">
+                <span className="block text-sm font-medium text-neutral-700">
+                  Deskripsi<span className="text-red-500 ml-1">*</span>
+                </span>
+                <span className="block text-[11px] text-neutral-500 mb-0.5">Isi detail event — tampil sama di Els App &amp; website.</span>
+                <div className="mt-1">
+                  <MarkdownEditor
+                    value={values.deskripsi ?? ''}
+                    onChange={(v) => patch({ deskripsi: v })}
+                    rows={7}
+                    placeholder={'Retreat pemuda 3 hari 2 malam.\n\n**Yang perlu dibawa**\n- Alkitab & alat tulis\n- Pakaian ganti'}
+                  />
+                </div>
+              </div>
               <Field label="Video teaser (URL)" helper="YouTube / Vimeo / link mp4. Opsional.">
                 <input
                   value={values.videoUrl ?? ''}

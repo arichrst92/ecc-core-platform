@@ -13,7 +13,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 - App: Event dibuka dari Beranda / Akses Cepat (2.4.9: menu bawah tidak lagi punya tab Event). Tiket event di tab **Reservasi → Event**.
 
 ## Membuat event (Portal)
-1. Event → Tambah Event: judul, slug (otomatis), ringkasan, deskripsi (markdown didukung: tebal, poin, judul, tautan).
+1. Event → Tambah Event: judul, slug (otomatis), ringkasan, deskripsi (editor dengan toolbar seperti Announcement: tebal, miring, coret, judul, daftar, daftar bernomor, kutipan, link + tab Pratinjau).
 2. Tanggal mulai/selesai, jam mulai/selesai, lokasi (+ link Google Maps). Lokasi/jam yang dikosongkan tampil **"-"** di app.
 3. Audiens: sinode atau cabang tertentu.
 4. **Tipe bayar**: Gratis (hijau) · **Sukarela** (biru; dulu "donasi / nominal bebas") · **Berbayar nominal tetap** (kuning). Untuk berbayar/sukarela isi rekening + QRIS (opsional). Sukarela boleh punya nominal minimum.

@@ -25,6 +25,12 @@ import { ConfirmDelete } from '@/components/crud/confirm-delete';
 import { useDebounce } from '@/lib/use-debounce';
 import { dateLocal } from '@/lib/resources/render-helpers';
 import { UploadHint } from '@/components/upload/upload-hint';
+import { MarkdownEditor, type MarkdownTool } from '@/components/announcement/markdown-editor';
+
+// Els App 2.5.0 menampilkan renungan/news dengan renderer sederhana: judul, tebal,
+// miring, daftar & kutipan. Coret, daftar bernomor & link baru dikenal 2.5.1 —
+// tombolnya ditambahkan setelah 2.5.0 tidak dipakai lagi (lihat CLAUDE.md).
+const KONTEN_TOOLS: MarkdownTool[] = ['bold', 'italic', 'heading', 'list', 'quote'];
 
 export type KontenTipe = 'news' | 'renungan';
 
@@ -573,19 +579,23 @@ function KontenFormModal({
               />
             </label>
 
-            <label className="block">
+            <div className="block">
               <span className="text-sm font-medium text-neutral-700">
                 Konten <span className="text-red-500">*</span>
-                <span className="text-xs text-neutral-500 ml-1 font-normal">(Markdown)</span>
               </span>
-              <textarea
-                value={konten}
-                onChange={(e) => setKonten(e.target.value)}
-                rows={10}
-                placeholder="# Heading&#10;&#10;Paragraph body dengan **bold** dan *italic*..."
-                className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
-              />
-            </label>
+              <div className="mt-1">
+                <MarkdownEditor
+                  value={konten}
+                  onChange={setKonten}
+                  tools={KONTEN_TOOLS}
+                  rows={12}
+                  placeholder={'## Judul bagian\n\nIsi paragraf dengan **tebal** dan *miring*.\n\n> Ayat atau kutipan\n- Poin penting'}
+                />
+              </div>
+              <p className="text-xs text-neutral-500 mt-1">
+                Tampil sama di Els App &amp; website. Pisahkan paragraf dengan satu baris kosong.
+              </p>
+            </div>
 
             {tipe === 'renungan' && (
               <div className="grid grid-cols-2 gap-3">

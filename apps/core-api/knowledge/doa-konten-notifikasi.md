@@ -21,7 +21,7 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 - Portal → **People → Kritik & Saran**: balas → jemaat menerima notifikasi & balasan di percakapan yang sama.
 
 ## Konten broadcast
-- Portal → **Broadcast → News / Renungan**: judul, ringkasan, isi (markdown), audiens (global/sinode/cabang), tanggal & ayat (renungan). **Simpan dulu, baru unggah hero image** (3:2). Centang Published.
+- Portal → **Broadcast → News / Renungan**: judul, ringkasan, isi (editor dengan toolbar Tebal · Miring · Judul · Daftar · Kutipan + tab Pratinjau; coret, daftar bernomor & link belum tersedia karena Els App 2.5.0 belum bisa menampilkannya), audiens (global/sinode/cabang), tanggal & ayat (renungan). **Simpan dulu, baru unggah hero image** (3:2). Centang Published.
 - App: bookmark, bagikan sebagai kartu gambar + link pratinjau.
 - **ECC Worship**: album & single (vokal/karaoke, lirik, unduh offline) dikelola di Portal → Worship.
 - **Alkitab & Bible 365**, **Catatan saya**, **Resolusi** = data pribadi jemaat; tidak terlihat di Portal.

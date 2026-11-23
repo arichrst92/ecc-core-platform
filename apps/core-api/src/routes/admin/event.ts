@@ -13,7 +13,7 @@
  */
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
-import { attendanceInfo, hadirCountByEvent } from '../../lib/event-attendance.js';
+import { attendanceInfo, hadirCountByEvent, myEventStatusMap } from '../../lib/event-attendance.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -385,9 +385,13 @@ eventRouter.get('/', async (req, res) => {
   const canVerify = !isMobileClient(req) && (await hasMenuAccessFor(req.user, 'event-payment', 'read'));
   const pendingPay = canVerify ? await pendingPaymentByEvent(rows.map((r) => r.id)) : null;
   const hadirById = await hadirCountByEvent(rows.map((r) => r.id));
+  // Kartu event di app: status partisipasi saya (sudah memberi / menunggu / belum bayar).
+  const myStatus =
+    isMobileClient(req) && req.user?.jemaatId ? await myEventStatusMap(req.user.jemaatId, rows) : null;
   const data = rows.map((r) => ({
     ...r,
     pesertaCount: r._count.partisipasi,
+    ...(myStatus ? { myStatus: myStatus.get(r.id) ?? null } : {}),
     ...attendanceInfo(r, tzOr(r.cabang?.timezone), hadirById.get(r.id) ?? 0),
     ...(pendingPay ? { pendingPaymentCount: pendingPay.get(r.id) ?? 0 } : {}),
     // Batas pendaftaran online (countdown di app) = saat event dimulai.

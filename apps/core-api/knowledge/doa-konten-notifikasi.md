@@ -9,6 +9,7 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 
 ## Prayer Request
 - Jemaat (app): Akses Cepat → **Doa** → + → kategori, untuk siapa (diri/keluarga/orang lain), pokok doa → opsi **anonim** (nama hanya terlihat admin, tidak oleh petugas doa) → Kirim. Status: Menunggu → Sudah didoakan (+ catatan tim) → bisa ditandai **terjawab** + kesaksian.
+- **Doa terjawab (2.5.1)**: tombol **Bagikan** membuat kartu gambar kesaksian + ayat & tautan ayatnya (isi doa tidak ikut), plus ajakan "Ingin memberikan sesuatu yang berarti untuk Tuhan dari jawaban doa ini?" → halaman **Beri**.
 - Portal → **People → Prayer Request**:
   1. **Konfigurasi Petugas**: tentukan siapa petugas doa — berdasarkan **Role** (+ sub role) dan/atau **Ministry** (+ peran tertentu / semua anggota aktif).
   2. **Tugaskan** doa ke petugas → petugas mendapat notifikasi in-app + WhatsApp; tab **Ditugaskan ke Saya** muncul di app mereka.
@@ -25,6 +26,10 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 - App: bookmark, bagikan sebagai kartu gambar + link pratinjau.
 - **ECC Worship**: album & single (vokal/karaoke, lirik, unduh offline) dikelola di Portal → Worship.
 - **Alkitab & Bible 365**, **Catatan saya**, **Resolusi** = data pribadi jemaat; tidak terlihat di Portal.
+- **Resolusi (2.5.1)**: tiap resolusi bisa ditautkan **ayat pegangan** (cukup ketik referensinya seperti di Catatan, mis. "Yoh 3:16" / "1 Kor 13:4-7"; versi = Alkitab yang dipakai jemaat; tautan ayat di daftar & detail membuka Alkitab di ayat itu). Resolusi **tercapai** bisa dibagikan sebagai gambar + ayatnya, dengan ajakan Beri seperti doa terjawab.
+- **Ajakan ECC Worship (2.5.1)**: di Alkitab & Catatan ("baca/mencatat sambil mendengarkan ECC Worship") dan di detail homecell untuk PIC & asisten ("tidak punya pemain musik? Coba ECC Worship karaoke") → membuka menu ECC Worship.
+- **Renungan di Beranda (2.5.1)**: hanya renungan bertanggal **hari ini**; tidak ada → section disembunyikan (2.5.0 menampilkan renungan terbit terakhir).
+- **Kalender (2.5.1)**: ulang tahun **Anda sendiri** ikut tampil.
 
 ## Announcement (pengumuman)
 - Portal → **Announcement**: susun pengumuman ke penerima tertentu dan pantau pengiriman (halaman detail: konten | penerima & pengiriman).
@@ -41,6 +46,8 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 - **"Notifikasi WA tidak terkirim"** → cek jenis notif aktif di WhatsApp Notif Config, saluran notifikasi, gateway (Server Health), dan apakah jemaat mematikan pesan WA.
 - **"Petugas doa tidak melihat tab tugas"** → ia belum cocok dengan Konfigurasi Petugas (role/ministry).
 - **"Gambar berita tidak bisa diunggah"** → simpan konten dulu.
+- **"Renungan tidak muncul di Beranda"** → di 2.5.1 hanya renungan bertanggal hari ini yang tampil; pastikan tanggal renungan = hari ini & Published.
+- **"Tombol bagikan doa tidak ada"** → hanya untuk doa yang sudah ditandai terjawab, di app 2.5.1.
 
 ## Diagnosis (untuk Elsa)
 `prayer_request` (status, tanpa isi) + `prayer_petugas_role` / `prayer_petugas_pelayanan` → `feedback` → `konten` → `notification` (jemaatId, type, createdAt, readAt) untuk memastikan notifikasi in-app terkirim.

@@ -14,6 +14,7 @@
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { attendanceInfo, hadirCountByEvent, myEventStatusMap } from '../../lib/event-attendance.js';
+import { audienceLabel, eventAudienceInclude, eventAudienceStatus, eventAudienceVisibleWhere, saveEventAudience } from '../../lib/event-audience.js';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
@@ -329,6 +330,12 @@ eventRouter.get('/', async (req, res) => {
     where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), { OR: conds }];
   }
 
+  // Audiens level pelayanan: di app, event khusus pelayanan hanya untuk anggotanya
+  // (+ peserta terdaftar & petugas event). Portal (pengelola) melihat semua.
+  if (isMobileClient(req) && req.user?.jemaatId) {
+    where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), eventAudienceVisibleWhere(req.user.jemaatId)];
+  }
+
   // Tab Portal: periode=upcoming (belum selesai, terdekat dulu) | past (sudah lewat, terbaru dulu).
   // Batas = awal hari ini (WIB); event multi-hari dihitung dari tanggal selesai.
   const periode = req.query.periode === 'upcoming' || req.query.periode === 'past' ? req.query.periode : undefined;
@@ -366,6 +373,7 @@ eventRouter.get('/', async (req, res) => {
         sinode: { select: { id: true, nama: true } },
         cabang: { select: { id: true, nama: true, timezone: true } },
         author: { select: { id: true, jemaat: { select: { namaLengkap: true } } } },
+        ...eventAudienceInclude,
         // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md
         // 2026-09-01). Alias `partisipasiAll` return total termasuk BATAL untuk audit.
         _count: {
@@ -456,6 +464,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       cabang: { select: { id: true, nama: true, timezone: true } },
       author: { select: { id: true, jemaat: { select: { id: true, namaLengkap: true } } } },
       ...roleConfigInclude,
+      ...eventAudienceInclude,
       // pesertaCount exclude BATAL (per backend-request-pesertacount-exclude-batal.md 2026-09-01).
       _count: {
         select: {
@@ -481,6 +490,20 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       select: { roleId: true, subRoleId: true, subRoleStatusId: true },
     });
     myEligible = isEligible(item.roleRequirements, roles);
+  }
+  // Audiens level pelayanan → tampil sebagai syarat (app lama pun sudah
+  // menampilkan requirementLabels / eligibilityMessage).
+  let audienceFailLabel: string | null = null;
+  if (item.audiencePelayanan.length) {
+    const aud = await eventAudienceStatus(item.id, req.user?.jemaatId ?? null);
+    const label = audienceLabel(aud.names)!;
+    requirementLabels.push(label);
+    if (req.user) {
+      if (!aud.ok) {
+        myEligible = false;
+        audienceFailLabel = label;
+      } else if (myEligible === null) myEligible = true;
+    }
   }
   if (req.user) {
     const row = await prisma.eventParticipation.findUnique({
@@ -585,7 +608,12 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       requirementLabels,
       myEligible,
       // Kalimat siap tampil untuk mobile/web kalau myEligible === false.
-      eligibilityMessage: myEligible === false ? notEligibleMessage(requirementLabels) : null,
+      eligibilityMessage:
+        myEligible === false
+          ? audienceFailLabel
+            ? notEligibleMessage([audienceFailLabel.charAt(0).toLowerCase() + audienceFailLabel.slice(1)])
+            : notEligibleMessage(requirementLabels)
+          : null,
       grantLabel: item.grantRole
         ? requirementLabel({
             role: item.grantRole,
@@ -683,6 +711,7 @@ eventRouter.post('/', W(), async (req, res) => {
     },
   });
   await saveRoleConfig(created.id, { roleRequirements: input.roleRequirements });
+  await saveEventAudience(created.id, input.audiencePelayananIds);
   audit(req, {
     action: 'CREATE',
     resource: 'event',
@@ -706,6 +735,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
     where: { id: req.params.id },
     include: {
       roleRequirements: true,
+      audiencePelayanan: true,
       pelayanan: { include: { petugas: true } },
     },
   });
@@ -768,6 +798,11 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
           subRoleId: r.subRoleId,
           subRoleStatusId: r.subRoleStatusId,
         })),
+      });
+    }
+    if (src.audiencePelayanan.length) {
+      await tx.eventAudiencePelayanan.createMany({
+        data: src.audiencePelayanan.map((a) => ({ eventId: ev.id, pelayananId: a.pelayananId })),
       });
     }
     for (const link of src.pelayanan) {
@@ -867,6 +902,7 @@ eventRouter.patch('/:id', W(), async (req, res) => {
   }
   // Role yang diberikan: undefined = tidak diubah, null = hapus.
   await saveRoleConfig(before.id, input);
+  await saveEventAudience(before.id, input.audiencePelayananIds);
   if (input.grantRoleId !== undefined) {
     data.grantRole = input.grantRoleId ? { connect: { id: input.grantRoleId } } : { disconnect: true };
     data.grantSubRole =

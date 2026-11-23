@@ -43,6 +43,7 @@ export type EventFormValues = {
   // Tidak dikirim (undefined) kalau data role event belum termuat — supaya
   // edit dari list tidak menghapus syarat yang sudah ada.
   roleRequirements?: RoleTriple[];
+  audiencePelayananIds?: string[];
   grantRoleId?: string | null;
   grantSubRoleId?: string | null;
   grantSubRoleStatusId?: string | null;
@@ -58,6 +59,7 @@ interface RoleOption {
 
 interface EventRoleConfig {
   roleRequirements: { roleId: string; subRoleId: string | null; subRoleStatusId: string | null }[];
+  audiencePelayanan?: { pelayanan: { id: string; nama: string } }[];
   grantRoleId: string | null;
   grantSubRoleId: string | null;
   grantSubRoleStatusId: string | null;
@@ -116,6 +118,9 @@ export function EventFormModal({
   const [values, setValues] = useState<EventFormValues>(EMPTY);
   const [tagsInput, setTagsInput] = useState('');
   const [reqs, setReqs] = useState<RoleTriple[]>([]);
+  // Audiens level pelayanan (kosong = semua jemaat sesuai sinode/cabang).
+  const [audPel, setAudPel] = useState<string[]>([]);
+  const [audPelOpen, setAudPelOpen] = useState(false);
   const [grant, setGrant] = useState<RoleTriple>(EMPTY_TRIPLE);
   const [roleConfigReady, setRoleConfigReady] = useState(false);
   const editId = isEdit ? ((defaultValues as { id?: string } | undefined)?.id ?? null) : null;
@@ -139,6 +144,7 @@ export function EventFormModal({
     if (!open) return;
     if (!editId) {
       setReqs([]);
+      setAudPel([]);
       setGrant(EMPTY_TRIPLE);
       setRoleConfigReady(true);
       return;
@@ -146,6 +152,7 @@ export function EventFormModal({
     setRoleConfigReady(false);
     const d = roleConfigQ.data;
     if (!d) return;
+    setAudPel((d.audiencePelayanan ?? []).map((a) => a.pelayanan.id));
     setReqs(
       (d.roleRequirements ?? []).map((r) => ({
         roleId: r.roleId,
@@ -218,6 +225,14 @@ export function EventFormModal({
     staleTime: 5 * 60_000,
   });
 
+  const pelayananQ = useQuery({
+    queryKey: ['pelayanan', 'options'],
+    enabled: open,
+    queryFn: async () =>
+      (await apiClient.get<{ data: { id: string; nama: string; isActive?: boolean }[] }>('/admin/pelayanan', { params: { limit: 500 } })).data.data,
+    staleTime: 60_000,
+  });
+
   const cabangQ = useQuery({
     queryKey: ['cabang', 'options', values.sinodeId],
     enabled: open && !!values.sinodeId,
@@ -279,6 +294,7 @@ export function EventFormModal({
     };
     if (roleConfigReady) {
       payload.roleRequirements = reqs.filter((r) => r.roleId);
+      payload.audiencePelayananIds = audPel;
       payload.grantRoleId = grant.roleId || null;
       payload.grantSubRoleId = grant.roleId ? grant.subRoleId : null;
       payload.grantSubRoleStatusId = grant.roleId ? grant.subRoleStatusId : null;
@@ -451,6 +467,63 @@ export function EventFormModal({
                     ))}
                   </select>
                 </Field>
+              </div>
+              {/* Audiens level pelayanan — dibatasi lagi ke anggota pelayanan tertentu */}
+              <div className="mt-3">
+                <span className="block text-sm font-medium text-neutral-700">Pelayanan (opsional)</span>
+                <span className="block text-[11px] text-neutral-500 mb-1">
+                  Kosong = semua jemaat di sinode/cabang di atas. Dipilih = event hanya tampil di app & bisa diikuti anggota
+                  aktif pelayanan tersebut (tidak tampil di website / mode tamu).
+                </span>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {audPel.map((id) => {
+                    const nama = pelayananQ.data?.find((p) => p.id === id)?.nama
+                      ?? roleConfigQ.data?.audiencePelayanan?.find((a) => a.pelayanan.id === id)?.pelayanan.nama
+                      ?? '…';
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-violet-50 border border-violet-200 text-xs font-medium text-violet-800">
+                        {nama}
+                        <button
+                          type="button"
+                          onClick={() => setAudPel((cur) => cur.filter((x) => x !== id))}
+                          className="w-4 h-4 rounded-full hover:bg-violet-200 flex items-center justify-center"
+                          aria-label={`Hapus ${nama}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setAudPelOpen((v) => !v)}
+                    disabled={!roleConfigReady}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-neutral-300 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                  >
+                    <Plus className="w-3 h-3" /> {audPel.length ? 'Tambah pelayanan' : 'Pilih pelayanan'}
+                  </button>
+                </div>
+                {audPelOpen ? (
+                  <div className="mt-2 max-h-48 overflow-y-auto border border-neutral-200 rounded-lg divide-y divide-neutral-100">
+                    {(pelayananQ.data ?? [])
+                      .filter((p) => p.isActive !== false)
+                      .map((p) => {
+                        const on = audPel.includes(p.id);
+                        return (
+                          <label key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-neutral-50">
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() => setAudPel((cur) => (on ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
+                              className="accent-brand-500"
+                            />
+                            {p.nama}
+                          </label>
+                        );
+                      })}
+                    {pelayananQ.isLoading ? <div className="px-3 py-2 text-xs text-neutral-500">Memuat pelayanan…</div> : null}
+                  </div>
+                ) : null}
               </div>
             </Section>
 

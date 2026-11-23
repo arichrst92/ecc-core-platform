@@ -52,6 +52,9 @@ export type EventRoleRequirementInput = z.infer<typeof eventRoleRequirementSchem
 // daftar). null = hapus. Role + Sub-Role wajib berpasangan.
 const eventRoleFields = {
   roleRequirements: z.array(eventRoleRequirementSchema).max(20).optional(),
+  // Audiens level pelayanan (2026-11): kosong = semua jemaat (sesuai sinode/cabang);
+  // diisi = event hanya terlihat & bisa diikuti anggota aktif salah satu pelayanan ini.
+  audiencePelayananIds: z.array(uuidSchema).max(30).optional(),
   grantRoleId: uuidSchema.nullable().optional(),
   grantSubRoleId: uuidSchema.nullable().optional(),
   grantSubRoleStatusId: uuidSchema.nullable().optional(),

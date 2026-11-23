@@ -15,7 +15,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 ## Membuat event (Portal)
 1. Event → Tambah Event: judul, slug (otomatis), ringkasan, deskripsi (editor dengan toolbar seperti Announcement: tebal, miring, coret, judul, daftar, daftar bernomor, kutipan, link + tab Pratinjau).
 2. Tanggal mulai/selesai, jam mulai/selesai, lokasi (+ link Google Maps). Lokasi/jam yang dikosongkan tampil **"-"** di app 2.5.0; di 2.5.1 baris jam/lokasi & tombol petunjuk arah disembunyikan. Jam tertulis "Waktu <kota cabang>"; event semua cabang = Waktu Jakarta.
-3. Audiens: sinode atau cabang tertentu.
+3. Audiens: sinode atau cabang tertentu, dan (opsional, 2026-11) **pelayanan** tertentu — Target Audience → **Pelayanan (opsional)**. Dipilih = event hanya tampil di app & hanya bisa diikuti **anggota aktif** salah satu pelayanan itu (tetap terlihat oleh yang sudah terdaftar & petugas event); tidak tampil di website / mode tamu. Berlaku juga untuk app 2.5.0 (disaring server); di detail event app tampil sebagai syarat "Anggota pelayanan …".
 4. **Tipe bayar**: Gratis (hijau) · **Sukarela** (biru; dulu "donasi / nominal bebas") · **Berbayar nominal tetap** (kuning). Untuk berbayar/sukarela isi rekening + QRIS (opsional). Sukarela boleh punya nominal minimum.
 5. Kuota peserta (opsional), syarat usia (opsional), tags.
 6. **Butuh Kehadiran** — nyalakan bila ada scan QR/absensi di hari H (tanpa ini scan ditolak "Event ini tidak mencatat kehadiran").
@@ -86,5 +86,8 @@ EVENT_REGISTERED (daftar diterima), EVENT_APPROVED (pembayaran disetujui), EVENT
 - **"Event ini gratis — tidak perlu bukti transfer."**, **"Event ini nominal tetap — pembayaran hanya sekali dan sudah tercatat."** → upload bukti tidak diperlukan.
 - **"Pendaftaran ini sudah dibatalkan. Daftar ulang dulu sebelum mengunggah bukti."**
 
+- **"Event tidak muncul di app saya"** → cek audiens: cabang lain, atau event khusus anggota pelayanan tertentu (Portal → detail event, baris audiens "… · Pelayanan X"). Bergabung ke pelayanan itu dulu, atau minta admin mendaftarkan.
+- **"Tidak bisa daftar: belum diperbolehkan … anggota pelayanan X"** → event khusus pelayanan; jemaat harus anggota aktif pelayanan itu (Pelayanan → anggota).
+
 ## Diagnosis (untuk Elsa)
-- `event` (isActive, isPublished, tanggalMulai/Selesai, jamMulai, butuhKehadiran, grupSesi, kuota, tipe bayar) → `event_participation` (status DAFTAR/HADIR/BATAL, filter eventId + jemaatId) → `event_donation` (status MENUNGGU_VERIFIKASI/BAYAR/BATAL per participationId) → `event_pelayanan_petugas` untuk hak scan petugas.
+- `event` (audiencePelayanan → event_audience_pelayanan, isActive, isPublished, tanggalMulai/Selesai, jamMulai, butuhKehadiran, grupSesi, kuota, tipe bayar) → `event_participation` (status DAFTAR/HADIR/BATAL, filter eventId + jemaatId) → `event_donation` (status MENUNGGU_VERIFIKASI/BAYAR/BATAL per participationId) → `event_pelayanan_petugas` untuk hak scan petugas.

@@ -102,9 +102,10 @@ function formatRangeTanggal(mulai: string, selesai: string | null) {
 }
 
 function targetLabel(item: EventListItem): string {
-  if (item.cabang) return `Cabang · ${item.cabang.nama}`;
-  if (item.sinode) return `Sinode · ${item.sinode.nama}`;
-  return 'Global';
+  const base = item.cabang ? `Cabang · ${item.cabang.nama}` : item.sinode ? `Sinode · ${item.sinode.nama}` : 'Global';
+  // Audiens level pelayanan (2026-11).
+  const pel = (item as { audiencePelayanan?: { pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
+  return pel.length ? `${base} · Pelayanan ${pel.map((a) => a.pelayanan.nama).join(', ')}` : base;
 }
 
 export default function EventPage() {

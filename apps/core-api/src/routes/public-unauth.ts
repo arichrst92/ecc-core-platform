@@ -435,12 +435,15 @@ publicUnauthRouter.get('/event', publicBrowseLimiter, async (req, res) => {
     isActive: true;
     isPublic: true;
     isPublished: true;
+    audiencePelayanan: { none: Record<string, never> };
     cabangId?: string | null;
     OR?: Array<Record<string, unknown>>;
   } = {
     isActive: true,
     isPublic: true,
     isPublished: true,
+    // Event khusus anggota pelayanan tidak tampil di website / mode tamu.
+    audiencePelayanan: { none: {} },
     OR: [
       { tanggalSelesai: { gte: now } },
       { tanggalSelesai: null, tanggalMulai: { gte: now } },
@@ -911,6 +914,7 @@ publicUnauthRouter.get('/event/:id', publicBrowseLimiter, async (req, res) => {
       isActive: true,
       isPublic: true,
       isPublished: true,
+      audiencePelayanan: { none: {} },
       ...(isUuid ? { id: idOrSlug } : { slug: idOrSlug }),
     },
     select: {

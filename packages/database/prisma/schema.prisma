@@ -901,6 +901,7 @@ model Pelayanan {
   jemaatPelayanan JemaatPelayanan[]
   ibadahPelayanan IbadahPelayanan[]
   eventPelayanan  EventPelayanan[]
+  eventAudience   EventAudiencePelayanan[]
   schedules       PelayananSchedule[]
   joinRequests    PelayananJoinRequest[]
   prayerPetugas   PrayerPetugasPelayanan[]
@@ -1622,6 +1623,8 @@ model Event {
   cabang      CabangGereja?        @relation(fields: [cabangId], references: [id], onDelete: SetNull)
   partisipasi EventParticipation[]
   pelayanan   EventPelayanan[]
+  // Audiens level pelayanan (kosong = semua jemaat sesuai sinode/cabang).
+  audiencePelayanan EventAudiencePelayanan[]
   webActionTokens WebActionToken[]
   roleRequirements  EventRoleRequirement[]
   grantRole          Role?           @relation("EventGrantRole", fields: [grantRoleId], references: [id], onDelete: SetNull)
@@ -1810,6 +1813,23 @@ enum EventDonationStatus {
 // Hanya relevan saat `event.butuhKehadiran=true`. Untuk event tanpa absensi,
 // section ministry/volunteer tidak ditampilkan / tidak wajib diisi.
 // ============================================================
+// Audiens event level pelayanan (2026-11): event hanya terlihat & bisa diikuti
+// anggota aktif (JemaatPelayanan) salah satu pelayanan ini. Bukan tim petugas
+// event (itu EventPelayanan).
+model EventAudiencePelayanan {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @map("event_id") @db.Uuid
+  pelayananId String   @map("pelayanan_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pelayanan Pelayanan @relation(fields: [pelayananId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, pelayananId])
+  @@index([pelayananId])
+  @@map("event_audience_pelayanan")
+}
+
 model EventPelayanan {
   id          String   @id @default(uuid()) @db.Uuid
   eventId     String   @map("event_id") @db.Uuid

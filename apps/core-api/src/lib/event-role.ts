@@ -14,6 +14,7 @@
  *
  * 3. Partisipasi BATAL / dihapus → role dari event ini diakhiri.
  */
+import { audienceLabel, eventAudienceStatus } from './event-audience.js';
 import { prisma } from '@ecc/database';
 import { ApiError } from './errors.js';
 import { logger } from './logger.js';
@@ -83,14 +84,22 @@ export async function assertEventEligible(
     where: { eventId },
     include: reqInclude,
   });
-  if (reqs.length === 0) return;
-  const roles = await prisma.jemaatRole.findMany({
-    where: { jemaatId, isActive: true },
-    select: { roleId: true, subRoleId: true, subRoleStatusId: true },
-  });
-  if (isEligible(reqs, roles)) return;
-  const labels = reqs.map(requirementLabel);
-  throw new ApiError(403, 'NOT_ELIGIBLE', notEligibleMessage(labels, who), { requirements: labels });
+  if (reqs.length > 0) {
+    const roles = await prisma.jemaatRole.findMany({
+      where: { jemaatId, isActive: true },
+      select: { roleId: true, subRoleId: true, subRoleStatusId: true },
+    });
+    if (!isEligible(reqs, roles)) {
+      const labels = reqs.map(requirementLabel);
+      throw new ApiError(403, 'NOT_ELIGIBLE', notEligibleMessage(labels, who), { requirements: labels });
+    }
+  }
+  // Audiens level pelayanan (2026-11): wajib anggota aktif salah satu pelayanan.
+  const aud = await eventAudienceStatus(eventId, jemaatId);
+  if (!aud.ok) {
+    const label = audienceLabel(aud.names)!;
+    throw new ApiError(403, 'NOT_ELIGIBLE', notEligibleMessage([label.charAt(0).toLowerCase() + label.slice(1)], who), { requirements: [label] });
+  }
 }
 
 /**

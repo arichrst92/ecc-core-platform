@@ -200,6 +200,15 @@ export const noHpSchema = z
 export const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (v === '' || v === null ? undefined : v), schema.optional());
 
+/**
+ * Untuk schema UPDATE field opsional yang boleh DIKOSONGKAN: '' / null → null
+ * (hapus nilai di database), tidak dikirim → undefined (tidak diubah).
+ * emptyToUndefined membuat isian yang dikosongkan admin diabaikan server →
+ * nilai lama muncul lagi setelah disimpan.
+ */
+export const emptyToNull = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' ? null : v), schema.nullable().optional());
+
 /** Common envelope schemas (untuk OpenAPI registration) */
 export const successEnvelopeSchema = z.object({
   success: z.literal(true),

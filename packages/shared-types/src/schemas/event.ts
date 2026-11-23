@@ -1,6 +1,6 @@
 import './common.js';
 import { z } from 'zod';
-import { uuidSchema, emptyToUndefined } from './common.js';
+import { uuidSchema, emptyToUndefined, emptyToNull } from './common.js';
 
 /** Radius self check-in (meter). '' / null = boleh di mana saja; undefined = tidak diubah. */
 const selfCheckinRadiusSchema = z
@@ -185,9 +185,10 @@ export const updateEventSchema = z
   .object({
     judul: z.string().trim().min(3, 'Minimal 3 karakter').max(255).optional(),
     slug: emptyToUndefined(slugSchema),
-    ringkasan: emptyToUndefined(z.string().trim().max(500)),
+    ringkasan: emptyToNull(z.string().trim().max(500)),
     deskripsi: z.string().trim().min(3, 'Minimal 3 karakter').optional(),
-    videoUrl: emptyToUndefined(z.string().trim().url('Harus URL valid')),
+    // '' / null = kosongkan (dulu diabaikan → nilai lama muncul lagi).
+    videoUrl: emptyToNull(z.string().trim().url('Harus URL valid')),
     tanggalMulai: emptyToUndefined(
       z.string().datetime({ offset: true }).or(z.string().date()),
     ),
@@ -206,7 +207,7 @@ export const updateEventSchema = z
         .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:mm (24-hour)')
         .openapi({ example: '12:00' }),
     ),
-    lokasi: emptyToUndefined(z.string().trim().max(500)),
+    lokasi: emptyToNull(z.string().trim().max(500)),
     // Link Google Maps / koordinat "lat, lng" — untuk cek radius self check-in.
     mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
     // Radius self check-in (meter). null/'' = boleh di mana saja.
@@ -215,9 +216,9 @@ export const updateEventSchema = z
     cabangId: emptyToUndefined(uuidSchema),
     tipeBayar: eventTipeBayarSchema.optional(),
     nominal: nominalSchema.optional(),
-    bankNama: emptyToUndefined(z.string().trim().max(100)),
-    bankNomor: emptyToUndefined(z.string().trim().max(100)),
-    bankAtasNama: emptyToUndefined(z.string().trim().max(255)),
+    bankNama: emptyToNull(z.string().trim().max(100)),
+    bankNomor: emptyToNull(z.string().trim().max(100)),
+    bankAtasNama: emptyToNull(z.string().trim().max(255)),
     quotaPeserta: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
     // '' / null = lepas dari grup sesi.

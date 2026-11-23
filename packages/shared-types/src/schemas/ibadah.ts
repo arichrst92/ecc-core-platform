@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema, emptyToUndefined } from './common.js';
+import { uuidSchema, emptyToUndefined, emptyToNull } from './common.js';
 
 /** Radius self check-in (meter). '' / null = boleh di mana saja; undefined = tidak diubah. */
 const selfCheckinRadiusSchema = z
@@ -99,17 +99,18 @@ export const updateIbadahSchema = z.object({
   mingguKe: mingguKeSchema,
   jamMulai: emptyToUndefined(z.string().regex(jamRegex)),
   jamSelesai: emptyToUndefined(z.string().regex(jamRegex)),
-  lokasi: emptyToUndefined(z.string().trim()),
+  lokasi: emptyToNull(z.string().trim()),
   mapsUrl: z.union([z.string().trim().max(2000), z.null()]).optional(),
   // Radius self check-in (meter). null/'' = boleh di mana saja.
   selfCheckinRadiusM: selfCheckinRadiusSchema,
   kapasitasSeat: kapasitasSeatSchema,
   isOnline: z.boolean().optional(),
-  linkOnline: emptyToUndefined(z.string().url()),
+  // '' = kosongkan link (dulu diabaikan → link lama muncul lagi setelah disimpan).
+  linkOnline: emptyToNull(z.string().url()),
   requiresCheckout: z.boolean().optional(),
   isKidsIbadah: z.boolean().optional(),
   allowReview: z.boolean().optional(),
-  deskripsi: emptyToUndefined(z.string().trim()),
+  deskripsi: emptyToNull(z.string().trim()),
   isActive: z.boolean().optional(),
 });
 export type UpdateIbadahInput = z.infer<typeof updateIbadahSchema>;

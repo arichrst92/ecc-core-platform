@@ -39,6 +39,7 @@ export interface JemaatFilterState {
   cabangIds?: string[];
   homecellAreaIds?: string[];
   homecellIds?: string[];
+  pelayananIds?: string[];
   /** '' = semua, 'ya' / 'tidak' (pelayanan & role aktif) */
   terlibatPelayanan?: '' | 'ya' | 'tidak';
   /** Level role pelayanan minimal (≥) bila terlibat = ya; '' = semua level */
@@ -71,6 +72,7 @@ export const defaultJemaatFilter: JemaatFilterState = {
   cabangIds: [],
   homecellAreaIds: [],
   homecellIds: [],
+  pelayananIds: [],
   terlibatPelayanan: '',
   pelayananMinLevel: '',
   homecellLeader: '',
@@ -91,6 +93,7 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
   const cab = ids(s.cabangIds, s.cabangId);
   const zona = ids(s.homecellAreaIds, s.homecellAreaId);
   const hc = ids(s.homecellIds, s.homecellId);
+  const pel = ids(s.pelayananIds, s.pelayananId);
   return {
     jenis: s.jenis === 'jemaat' ? undefined : s.jenis,
     isActive: s.status === 'all' ? undefined : s.status,
@@ -101,7 +104,7 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     cabangIds: cab.length ? cab.join(',') : undefined,
     homecellAreaIds: zona.length ? zona.join(',') : undefined,
     homecellIds: hc.length ? hc.join(',') : undefined,
-    pelayananId: s.pelayananId || undefined,
+    pelayananIds: pel.length ? pel.join(',') : undefined,
     terlibatPelayanan: s.terlibatPelayanan || undefined,
     pelayananMinLevel: s.terlibatPelayanan === 'ya' && s.pelayananMinLevel ? s.pelayananMinLevel : undefined,
     homecellLeader: s.homecellLeader || undefined,
@@ -132,6 +135,7 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     !!s.cabangIds?.length ||
     !!s.homecellAreaIds?.length ||
     !!s.homecellIds?.length ||
+    !!s.pelayananIds?.length ||
     !!s.terlibatPelayanan ||
     !!s.homecellLeader ||
     !!s.zoneLeader ||
@@ -210,6 +214,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
   const selCabang = ids(value.cabangIds, value.cabangId);
   const selZona = ids(value.homecellAreaIds, value.homecellAreaId);
   const selHc = ids(value.homecellIds, value.homecellId);
+  const selPel = ids(value.pelayananIds, value.pelayananId);
   const zonaOptions = (homecellAreaQ.data ?? [])
     .filter((a) => !selCabang.length || selCabang.includes(a.cabang?.id ?? a.cabangId ?? ''))
     .map((a) => ({ id: a.id, label: a.nama, sub: selCabang.length === 1 ? undefined : a.cabang?.nama }));
@@ -369,22 +374,16 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           </select>
         </Field>
 
-        {/* Ministry (Pelayanan) */}
-        <Field label="Ministry">
-          <select
-            value={value.pelayananId}
-            onChange={(e) => patch({ pelayananId: e.target.value })}
-            className={selectCls}
-            disabled={pelayananQ.isLoading}
-          >
-            <option value="">{pelayananQ.isLoading ? 'Memuat...' : 'Semua Ministry'}</option>
-            {(pelayananQ.data ?? []).map((p: { id: string; nama: string }) => (
-              <option key={p.id} value={p.id}>
-                {p.nama}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {/* Pelayanan (multi) */}
+        <FieldBox label="Pelayanan">
+          <MultiSelect
+            options={(pelayananQ.data ?? []).map((p: { id: string; nama: string }) => ({ id: p.id, label: p.nama }))}
+            value={selPel}
+            onChange={(v) => patch({ pelayananIds: v, pelayananId: '' })}
+            allLabel="Semua Pelayanan"
+            loading={pelayananQ.isLoading}
+          />
+        </FieldBox>
 
         {/* Spiritual Journey — tahap saat ini */}
         <Field label="Spiritual Journey">

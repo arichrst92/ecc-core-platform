@@ -305,7 +305,9 @@ async function applyLeaderAppFilters(req: any, where: any) {
     pelayananRole: { isActive: true, ...(minLevel !== null ? { level: { gte: minLevel } } : {}) },
     ...extra,
   });
-  if (terlibat === 'ya') and.push({ jemaatPelayanan: { some: activeJp() } });
+  // Pelayanan terpilih (multi) + level → satu keanggotaan yang memenuhi keduanya.
+  const pelIds = idList(req, 'pelayananIds');
+  if (terlibat === 'ya') and.push({ jemaatPelayanan: { some: activeJp(pelIds.length ? { pelayananId: { in: pelIds } } : {}) } });
   else if (terlibat === 'tidak') and.push({ jemaatPelayanan: { none: { isActive: true, pelayanan: { isActive: true } } } });
 
   const hl = getQueryString(req, 'homecellLeader');
@@ -341,14 +343,17 @@ function idList(req: any, key: string): string[] {
 
 /**
  * Multi-select Portal 2026-11: ?cabangIds=a,b (cabang jemaat), ?homecellAreaIds=a,b
- * (anggota aktif homecell di zona tsb) & ?homecellIds=a,b (anggota aktif homecell tsb).
+ * (anggota aktif homecell di zona tsb), ?homecellIds=a,b (anggota aktif homecell tsb) &
+ * ?pelayananIds=a,b (anggota aktif salah satu pelayanan tsb).
  * Dipakai bersama cabangId/homecellAreaId/homecellId lama.
  */
 function applyMultiStructureFilters(req: any, where: any) {
   const cabangIds = idList(req, 'cabangIds');
   const areaIds = idList(req, 'homecellAreaIds');
   const homecellIds = idList(req, 'homecellIds');
+  const pelayananIds = idList(req, 'pelayananIds');
   const and: any[] = [];
+  if (pelayananIds.length) and.push({ jemaatPelayanan: { some: { isActive: true, pelayananId: { in: pelayananIds } } } });
   if (cabangIds.length) and.push({ cabangId: { in: cabangIds } });
   if (areaIds.length) and.push({ homecellMembership: { some: { isActive: true, homecell: { areaId: { in: areaIds } } } } });
   if (homecellIds.length) and.push({ homecellMembership: { some: { isActive: true, homecellId: { in: homecellIds } } } });
@@ -732,126 +737,126 @@ jemaatRouter.get('/export', async (req, res) => {
     return res.send(bom + lines.join('\n'));
   }
 
-  // Keterangan filter baru di judul PDF.
-  const [cabNames, zonaNames, hcNames] = await Promise.all([
-    idList(req, 'cabangIds').length
-      ? prisma.cabangGereja.findMany({ where: { id: { in: idList(req, 'cabangIds') } }, select: { nama: true } })
-      : Promise.resolve([]),
-    idList(req, 'homecellAreaIds').length
-      ? prisma.homecellArea.findMany({ where: { id: { in: idList(req, 'homecellAreaIds') } }, select: { nama: true } })
-      : Promise.resolve([]),
-    idList(req, 'homecellIds').length
-      ? prisma.homecell.findMany({ where: { id: { in: idList(req, 'homecellIds') } }, select: { nama: true } })
-      : Promise.resolve([]),
-  ]);
-  const filterNote = [
-    cabNames.length ? `Cabang: ${cabNames.map((c) => c.nama).join(', ')}` : '',
-    zonaNames.length ? `Zona: ${zonaNames.map((z) => z.nama).join(', ')}` : '',
-    hcNames.length ? `Homecell: ${hcNames.map((h) => h.nama).join(', ')}` : '',
-    getQueryString(req, 'terlibatPelayanan') === 'ya'
-      ? `Terlibat pelayanan${getQueryString(req, 'pelayananMinLevel') ? ` (level ${getQueryString(req, 'pelayananMinLevel')} ke atas)` : ''}`
-      : getQueryString(req, 'terlibatPelayanan') === 'tidak'
-        ? 'Tidak terlibat pelayanan'
-        : '',
-    getQueryString(req, 'homecellLeader') === 'ya' ? 'Homecell Leader' : getQueryString(req, 'homecellLeader') === 'tidak' ? 'Bukan Homecell Leader' : '',
-    getQueryString(req, 'zoneLeader') === 'ya' ? 'Zone Leader' : getQueryString(req, 'zoneLeader') === 'tidak' ? 'Bukan Zone Leader' : '',
-    getQueryString(req, 'elsApp') === 'sudah' ? 'Sudah pakai Els App' : getQueryString(req, 'elsApp') === 'belum' ? 'Belum pakai Els App' : '',
-  ]
-    .filter(Boolean)
-    .join(', ');
-
   if (format === 'pdf' || format === 'html' || format === 'print') {
     // Server-side HTML print-view — user Ctrl+P → save as PDF.
-    // Detect mobile UA — di mobile, @media print tidak reliable + "Save as PDF"
-    // dari Share menu kadang screenshot plain HTML. Jadi di mobile kita hide
-    // preview bar entirely + auto-trigger print on load.
+    // Mobile: tanpa bar pratinjau + print otomatis (lihat catatan lama).
     const uaStr = (req.get('user-agent') ?? '').toLowerCase();
     const isMobileUa = /mobi|android|iphone|ipad|ipod/.test(uaStr);
+    const chips = await exportFilterChips(req, journeySteps);
+    const n = dataRows.length;
+    const cnt = (f: (r: (typeof dataRows)[number]) => boolean) => dataRows.filter(f).length;
+    const pct = (x: number) => (n ? `${Math.round((x / n) * 100)}%` : '0%');
+    const laki = cnt((r) => r.jenisKelamin === 'L');
+    const perempuan = cnt((r) => r.jenisKelamin === 'P');
+    const app = cnt((r) => r.elsApp === 'Sudah');
+    const pel = cnt((r) => r.levelPelayanan !== '');
+    const hcl = cnt((r) => r.homecellLeader === 'Ya');
+    const zl = cnt((r) => r.zoneLeader === 'Ya');
+    const kpi = (icon: ExportIcon, color: string, label: string, value: string, sub: string) => `
+<div class="kpi"><div class="kpi-ic" style="background:${color}1A;color:${color}">${xi(icon, 16, color)}</div>
+<div><div class="kpi-v">${value}</div><div class="kpi-l">${label}</div><div class="kpi-s">${sub}</div></div></div>`;
+    const badge = (txt: string, bg: string, fg: string, icon?: ExportIcon) =>
+      txt ? `<span class="bd" style="background:${bg};color:${fg}">${icon ? xi(icon, 9, fg) : ''}${escapeHtml(txt)}</span>` : '';
     const tableBody = dataRows
       .map(
-        (row) => `
+        (row, idx) => `
 <tr>
-  <td>${escapeHtml(row.kode)}</td>
-  <td>${escapeHtml(row.namaLengkap)}</td>
-  <td>${escapeHtml(String(row.jenisKelamin))}</td>
-  <td>${escapeHtml(String(row.usia))}</td>
-  <td>${escapeHtml(row.noHp)}</td>
-  <td class="email">${escapeHtml(row.email)}</td>
-  <td>${escapeHtml([row.pekerjaan, row.namaKantor].filter(Boolean).join(' · '))}</td>
-  <td>${escapeHtml(row.statusPernikahan)}</td>
-  <td>${escapeHtml(row.cabang)}</td>
-  <td>${escapeHtml(row.homecellArea)}</td>
-  <td>${escapeHtml(row.homecell)}</td>
-  <td>${escapeHtml(row.ministry)}</td>
+  <td class="no">${idx + 1}</td>
+  <td><div class="nm">${escapeHtml(row.namaLengkap)}</div><div class="sub">${escapeHtml(row.kode)}${row.jenisKelamin ? ` · ${escapeHtml(String(row.jenisKelamin))}` : ''}${row.usia !== '' ? ` · ${escapeHtml(String(row.usia))} th` : ''}</div></td>
+  <td><div class="ph">${escapeHtml(row.noHp)}</div><div class="sub email">${escapeHtml(row.email)}</div></td>
+  <td><div>${escapeHtml(row.cabang)}</div><div class="sub">${escapeHtml([row.homecellArea, row.homecell].filter(Boolean).join(' › '))}</div></td>
+  <td>${escapeHtml(row.ministry)}${row.levelPelayanan ? `<div class="sub">Level tertinggi ${escapeHtml(row.levelPelayanan)}</div>` : ''}</td>
+  <td>${escapeHtml([row.pekerjaan, row.statusPernikahan].filter(Boolean).join(' · '))}</td>
   <td>${escapeHtml(row.spiritualJourney)}</td>
-  <td>${escapeHtml(row.status)}</td>
-  <td>${escapeHtml(row.elsApp)}</td>
-  <td>${escapeHtml([row.homecellLeader === 'Ya' ? 'HC Leader' : '', row.zoneLeader === 'Ya' ? 'Zone Leader' : ''].filter(Boolean).join(', '))}</td>
+  <td class="bds">${badge(row.status, row.status === 'Aktif' ? '#DCFCE7' : '#F5F5F5', row.status === 'Aktif' ? '#15803D' : '#737373')}${badge(row.elsApp === 'Sudah' ? 'Els App' : '', '#FFEDD5', '#C2410C', 'smartphone')}${badge(row.homecellLeader === 'Ya' ? 'HC Leader' : '', '#EDE9FE', '#6D28D9', 'home')}${badge(row.zoneLeader === 'Ya' ? 'Zone Leader' : '', '#E0F2FE', '#0369A1', 'mapPinned')}</td>
 </tr>`,
       )
       .join('');
+    const portalUrl = (process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '');
     const html = `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Daftar Jemaat — ${timestamp}</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; color: #0f172a; margin: 0; }
-  h1 { font-size: 16px; margin: 0 0 4px; }
-  .meta { font-size: 11px; color: #64748b; margin-bottom: 12px; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: top; }
-  td.email { word-break: break-all; max-width: 150px; }
-  thead { background: #f1f5f9; font-weight: 600; }
-  tbody tr:nth-child(even) { background: #fafafa; }
-  .footer { font-size: 10px; color: #94a3b8; margin-top: 10px; text-align: right; }
-  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
-  .powered { display: flex; align-items: center; gap: 6px; color: #64748b; }
-  @media print {
-    .noprint, .noprint * { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
-  }
-  .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; }
-  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
+  @page { size: A4 landscape; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 9.5px; color: #171717; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .wrap { padding: 8mm; }
+  .hero { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: linear-gradient(135deg, #F97316, #C2410C); color: #fff; }
+  .hero-ic { width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
+  .hero h1 { font-size: 19px; margin: 0; }
+  .hero .meta { font-size: 10.5px; opacity: .9; margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero .meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .filters { margin-top: 10px; padding: 10px 12px; border: 1px solid #FED7AA; background: #FFF7ED; border-radius: 12px; }
+  .filters .t { font-size: 10px; font-weight: 700; color: #9A3412; display: flex; align-items: center; gap: 5px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: #fff; border: 1px solid #FDBA74; color: #7C2D12; font-size: 9.5px; }
+  .chip b { font-weight: 700; }
+  .none { color: #9A3412; font-size: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 10px 0 12px; }
+  .kpi { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid #EDEDED; border-radius: 12px; background: #fff; }
+  .kpi-ic { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .kpi-v { font-size: 15px; font-weight: 800; line-height: 1.1; }
+  .kpi-l { font-size: 9px; color: #525252; font-weight: 600; }
+  .kpi-s { font-size: 8.5px; color: #A3A3A3; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; border: 1px solid #EDEDED; border-radius: 12px; overflow: hidden; }
+  thead th { background: #FFF7ED; color: #9A3412; font-size: 9px; text-transform: uppercase; letter-spacing: .3px; text-align: left; padding: 6px 7px; border-bottom: 1px solid #FED7AA; }
+  td { padding: 5px 7px; border-bottom: 1px solid #F5F5F5; vertical-align: top; }
+  tbody tr:nth-child(even) td { background: #FAFAFA; }
+  tbody tr { page-break-inside: avoid; }
+  td.no { color: #A3A3A3; width: 22px; }
+  .nm { font-weight: 700; font-size: 10px; }
+  .sub { color: #737373; font-size: 8.5px; margin-top: 1px; }
+  .email { word-break: break-all; }
+  .ph { white-space: nowrap; }
+  .nm { min-width: 90px; }
+  .bds { white-space: nowrap; }
+  .bd { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; font-weight: 700; margin: 0 3px 3px 0; }
+  thead { display: table-header-group; }
+  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 8px; border-top: 1px solid #EDEDED; font-size: 9px; color: #A3A3A3; }
+  .powered { display: flex; align-items: center; gap: 6px; color: #737373; }
+  @media print { .noprint, .noprint * { display: none !important; } .wrap { padding: 0; } }
+  .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; font-size: 13px; }
+  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px; }
 </style>
 </head><body>
 ${
   isMobileUa
     ? ''
-    : `<div class="noprint">
-  <strong>Print Preview — Daftar Jemaat</strong>
-  &nbsp;·&nbsp; Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.
-  <button onclick="doPrint()">Print / Save as PDF</button>
-</div>`
+    : `<div class="noprint"><strong>Pratinjau — Daftar Jemaat</strong> · Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.<button onclick="doPrint()">Print / Simpan PDF</button></div>`
 }
 <script>
-  function doPrint() {
-    document.querySelectorAll('.noprint').forEach(el => el.remove());
-    setTimeout(() => window.print(), 50);
-  }
-  window.addEventListener('beforeprint', () => {
-    document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none');
-  });
-  ${isMobileUa ? '// Mobile: auto-trigger print on load (preview bar hidden anyway)\nsetTimeout(() => window.print(), 600);' : ''}
+  function doPrint() { document.querySelectorAll('.noprint').forEach(el => el.remove()); setTimeout(() => window.print(), 50); }
+  window.addEventListener('beforeprint', () => { document.querySelectorAll('.noprint').forEach(el => el.style.display = 'none'); });
+  ${isMobileUa ? 'setTimeout(() => window.print(), 600);' : ''}
 </script>
-<div style="padding: 10mm;">
-<h1>Daftar Jemaat ECC</h1>
-<div class="meta">Total ${dataRows.length} jemaat · Export ${timestamp}${filterNote ? ` · Filter: ${escapeHtml(filterNote)}` : ''}</div>
+<div class="wrap">
+<div class="hero">
+  <div class="hero-ic">${xi('users', 22, '#fff')}</div>
+  <div style="flex:1">
+    <h1>Daftar Jemaat ECC</h1>
+    <div class="meta"><span>${xi('users', 11, '#fff')} ${n.toLocaleString('id-ID')} jemaat</span><span>${xi('calendar', 11, '#fff')} Diekspor ${escapeHtml(new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }))} WIB</span></div>
+  </div>
+  <div style="background:#fff;border-radius:10px;padding:5px 9px;display:flex"><img src="${portalUrl}/logo-ecc-church.webp" alt="ECC" onerror="this.parentElement.style.display='none'" style="height:28px;width:auto"/></div>
+</div>
+<div class="filters">
+  <div class="t">${xi('filter', 11, '#9A3412')} Hasil filter</div>
+  ${chips.length ? `<div class="chips">${chips.map((c) => `<span class="chip">${xi(c.icon, 10, '#C2410C')}<b>${escapeHtml(c.label)}:</b> ${escapeHtml(c.value)}</span>`).join('')}</div>` : '<div class="none">Tanpa filter — semua jemaat.</div>'}
+</div>
+<div class="kpis">
+  ${kpi('users', '#EA580C', 'Total jemaat', n.toLocaleString('id-ID'), `${laki} L · ${perempuan} P`)}
+  ${kpi('smartphone', '#C2410C', 'Pakai Els App', app.toLocaleString('id-ID'), `${pct(app)} dari hasil`)}
+  ${kpi('heartHandshake', '#7C3AED', 'Terlibat pelayanan', pel.toLocaleString('id-ID'), pct(pel))}
+  ${kpi('home', '#6D28D9', 'Homecell Leader', hcl.toLocaleString('id-ID'), pct(hcl))}
+  ${kpi('mapPinned', '#0369A1', 'Zone Leader', zl.toLocaleString('id-ID'), pct(zl))}
+  ${kpi('userCheck', '#15803D', 'Aktif', cnt((r) => r.status === 'Aktif').toLocaleString('id-ID'), pct(cnt((r) => r.status === 'Aktif')))}
+</div>
 <table>
-<thead>
-<tr>
-  <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th><th>Email</th>
-  <th>Pekerjaan</th><th>Pernikahan</th>
-  <th>Cabang</th><th>Zona</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
-  <th>Els App</th><th>Pemimpin</th>
-</tr>
-</thead>
-<tbody>${tableBody}</tbody>
+<thead><tr><th>#</th><th>Jemaat</th><th>Kontak</th><th>Cabang › Zona › Homecell</th><th>Pelayanan</th><th>Pekerjaan · Pernikahan</th><th>Spiritual Journey</th><th>Status</th></tr></thead>
+<tbody>${tableBody || '<tr><td colspan="8" style="text-align:center;color:#A3A3A3;padding:16px">Tidak ada jemaat yang cocok dengan filter.</td></tr>'}</tbody>
 </table>
 <div class="footer-row">
-  <div>© ${new Date().getFullYear()} Elshaddai Creative Community</div>
-  <div class="powered">
-    <span>Powered by</span>
-    <img src="${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/>
-  </div>
+  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Data pribadi — gunakan sesuai kebijakan privasi ECC</div>
+  <div class="powered"><span>Powered by</span><img src="${portalUrl}/logo-idea.webp" alt="IDEA" onerror="this.style.display='none'" style="height:18px;width:auto;"/></div>
 </div>
 </div>
 </body></html>`;
@@ -861,6 +866,83 @@ ${
 
   throw BadRequest('Format tidak dikenali. Pakai format=csv atau format=pdf.');
 });
+
+// ---- Ikon (lucide) untuk export PDF daftar jemaat
+const EXPORT_ICONS = {
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  building: '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>',
+  mapPinned: '<path d="M18 8c0 4.5-6 9-6 9s-6-4.5-6-9a6 6 0 0 1 12 0"/><circle cx="12" cy="8" r="2"/><path d="M8.835 14H5a1 1 0 0 0-.9.7l-2 6c-.1.1-.1.2-.1.3 0 .6.4 1 1 1h18c.6 0 1-.4 1-1 0-.1 0-.2-.1-.3l-2-6a1 1 0 0 0-.9-.7h-3.835"/>',
+  home: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  heartHandshake: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/>',
+  smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+  userCheck: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+} as const;
+type ExportIcon = keyof typeof EXPORT_ICONS;
+const xi = (name: ExportIcon, size = 12, color = '#fff') =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">${EXPORT_ICONS[name]}</svg>`;
+
+/** Ringkasan filter aktif (label manusiawi) untuk kepala PDF daftar jemaat. */
+async function exportFilterChips(req: any, steps: JourneySteps): Promise<{ icon: ExportIcon; label: string; value: string }[]> {
+  const q = (k: string) => getQueryString(req, k);
+  const multi = (k: string, single: string) => [...new Set([...idList(req, k), ...(q(single) && /^[0-9a-f-]{36}$/i.test(q(single)!) ? [q(single)!] : [])])];
+  const cabIds = multi('cabangIds', 'cabangId');
+  const zonaIds = multi('homecellAreaIds', 'homecellAreaId');
+  const hcIds = multi('homecellIds', 'homecellId');
+  const pelIds = multi('pelayananIds', 'pelayananId');
+  const sinodeId = q('sinodeId');
+  const roleId = q('roleId');
+  const [cab, zona, hc, pel, sinode, role] = await Promise.all([
+    cabIds.length ? prisma.cabangGereja.findMany({ where: { id: { in: cabIds } }, select: { nama: true } }) : [],
+    zonaIds.length ? prisma.homecellArea.findMany({ where: { id: { in: zonaIds } }, select: { nama: true } }) : [],
+    hcIds.length ? prisma.homecell.findMany({ where: { id: { in: hcIds } }, select: { nama: true } }) : [],
+    pelIds.length ? prisma.pelayanan.findMany({ where: { id: { in: pelIds } }, select: { nama: true } }) : [],
+    sinodeId ? prisma.sinode.findUnique({ where: { id: sinodeId }, select: { nama: true } }).catch(() => null) : null,
+    roleId ? prisma.role.findUnique({ where: { id: roleId }, select: { nama: true } }).catch(() => null) : null,
+  ]);
+  const list = (rows: { nama: string }[]) => rows.map((r) => r.nama).join(', ');
+  const out: { icon: ExportIcon; label: string; value: string }[] = [];
+  const add = (icon: ExportIcon, label: string, value: string | null | undefined | false) => {
+    if (value) out.push({ icon, label, value });
+  };
+  const yt = (v: string | undefined, ya: string, tidak: string) => (v === 'ya' ? ya : v === 'tidak' ? tidak : null);
+  add('search', 'Cari', q('search'));
+  add('users', 'Jenis', q('jenis') === 'tamu' ? 'Tamu (non-anggota)' : q('jenis') === 'semua' ? 'Semua (anggota & tamu)' : null);
+  add('building', 'Sinode', sinode?.nama);
+  add('building', 'Cabang', list(cab));
+  add('mapPinned', 'Zona', list(zona));
+  add('home', 'Homecell', list(hc));
+  add('heartHandshake', 'Pelayanan', list(pel));
+  const minLv = q('pelayananMinLevel');
+  add('heartHandshake', 'Terlibat pelayanan', q('terlibatPelayanan') === 'ya' ? `Ya${minLv ? ` · level ${minLv} ke atas` : ''}` : q('terlibatPelayanan') === 'tidak' ? 'Tidak' : null);
+  add('home', 'Homecell Leader', yt(q('homecellLeader'), 'Ya', 'Bukan'));
+  add('mapPinned', 'Zone Leader', yt(q('zoneLeader'), 'Ya', 'Bukan'));
+  add('smartphone', 'Els App', q('elsApp') === 'sudah' ? 'Sudah memakai' : q('elsApp') === 'belum' ? 'Belum memakai' : null);
+  add('userCheck', 'Status', q('isActive') === 'true' ? 'Aktif' : q('isActive') === 'false' ? 'Nonaktif' : null);
+  add('users', 'Jenis kelamin', q('jenisKelamin') === 'L' ? 'Laki-laki' : q('jenisKelamin') === 'P' ? 'Perempuan' : null);
+  const uMin = q('umurMin');
+  const uMax = q('umurMax');
+  add('calendar', 'Usia', uMin || uMax ? (uMin && uMax ? `${uMin}–${uMax} th` : uMin ? `≥ ${uMin} th` : `≤ ${uMax} th`) : null);
+  add('shield', 'Role', role?.nama);
+  const js = q('journeyStage');
+  if (js !== undefined && js !== null && js !== '') {
+    const n = Number(js);
+    add('route', 'Spiritual Journey', n === 0 ? 'Belum mulai' : `Tahap ${n}${steps[n - 1]?.judul ? ` · ${steps[n - 1]!.judul}` : ''}`);
+  }
+  const kos = (v: string | undefined) => (v === KOSONG ? 'Belum diisi' : v);
+  add('briefcase', 'Pekerjaan', kos(q('statusPekerjaan')));
+  add('users', 'Pernikahan', kos(q('statusPernikahan')));
+  const sumber = q('sumber');
+  add('database', 'Sumber data', sumber === 'SHIFTSOFT' ? 'Shiftsoft (impor)' : sumber === 'KELUARGA' ? 'Didaftarkan keluarga' : sumber === 'APP_PORTAL' ? 'App / Portal' : null);
+  add('database', 'Potensial junk', q('junk') === '1' ? (q('junkAlasan') ? JUNK_LABEL[q('junkAlasan')!] ?? q('junkAlasan')! : 'Semua alasan') : null);
+  return out;
+}
 
 function escapeHtml(s: unknown): string {
   if (s === null || s === undefined) return '';

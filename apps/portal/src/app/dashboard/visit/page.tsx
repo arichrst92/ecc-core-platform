@@ -231,7 +231,7 @@ export default function VisitPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Handshake className="w-6 h-6" />
             Visit
@@ -415,12 +415,12 @@ export default function VisitPage() {
 
       {sum && sum.top.length > 0 ? (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-100">
+          <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Jemaat paling aktif</h2>
             <p className="text-xs text-neutral-500 mt-0.5">Jumlah visit per jemaat pada filter ini.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                 <tr>
                   <th className="text-left px-4 py-2 font-medium w-10">#</th>
@@ -463,7 +463,8 @@ export default function VisitPage() {
             {anyFilter ? 'Tidak ada visit yang cocok dengan filter.' : 'Belum ada visit yang tercatat.'}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Judul / Lokasi</th>
@@ -517,11 +518,12 @@ export default function VisitPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
 
         {/* Pagination */}
         {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500 gap-2">
             <div>
               Halaman {meta.page} dari {meta.totalPages} · {meta.total} total
             </div>
@@ -626,7 +628,7 @@ function DetailModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-start justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-neutral-900 truncate">
                 {visit.judul}
@@ -652,7 +654,7 @@ function DetailModal({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 space-y-4">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-4">
             <SideCard
               title="Initiator (yang scan QR)"
               jemaat={visit.initiator}
@@ -669,7 +671,7 @@ function DetailModal({
             />
           </div>
 
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex flex-wrap justify-between gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onDelete}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"

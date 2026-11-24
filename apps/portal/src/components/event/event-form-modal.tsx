@@ -340,7 +340,7 @@ export function EventFormModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={loading ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="text-lg font-semibold text-neutral-900 min-w-0 truncate">{title}</h2>
             <button onClick={onClose} disabled={loading} className="p-1.5 hover:bg-neutral-100 rounded-lg disabled:opacity-50">
               <X className="w-4 h-4" />

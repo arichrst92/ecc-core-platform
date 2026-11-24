@@ -162,8 +162,8 @@ export default function LocalBusinessPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Store className="w-6 h-6" />
             Local Market
@@ -179,7 +179,7 @@ export default function LocalBusinessPage() {
 
       {/* Filters */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[220px]">
+        <div className="flex-1 min-w-0 basis-56">
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             Cari nama / deskripsi / industri / owner
           </label>
@@ -192,12 +192,12 @@ export default function LocalBusinessPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="flex-1 py-1.5 outline-none text-sm"
+              className="flex-1 min-w-0 py-1.5 outline-none text-sm"
               placeholder="..."
             />
           </div>
         </div>
-        <div className="w-44">
+        <div className="w-full min-[420px]:w-44">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Cabang owner</label>
           <select
             value={filterCabangId}
@@ -215,7 +215,7 @@ export default function LocalBusinessPage() {
             ))}
           </select>
         </div>
-        <div className="w-32">
+        <div className="w-[calc(50%-0.375rem)] min-[420px]:w-32">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Tipe</label>
           <select
             value={filterTipe}
@@ -231,7 +231,7 @@ export default function LocalBusinessPage() {
             <option value="B2B2C">B2B2C</option>
           </select>
         </div>
-        <div className="w-44">
+        <div className="w-full min-[420px]:w-44">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Industri</label>
           <input
             type="text"
@@ -244,7 +244,7 @@ export default function LocalBusinessPage() {
             placeholder="F&B, IT, ..."
           />
         </div>
-        <div className="w-32">
+        <div className="w-[calc(50%-0.375rem)] min-[420px]:w-32">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Status</label>
           <select
             value={filterAktif}
@@ -294,7 +294,7 @@ export default function LocalBusinessPage() {
 
       {/* Pagination */}
       {meta && meta.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-xs text-neutral-500">
+        <div className="flex flex-wrap items-center justify-between mt-4 text-xs text-neutral-500 gap-2">
           <div>
             Halaman {meta.page} dari {meta.totalPages} · {meta.total} total
           </div>
@@ -380,8 +380,8 @@ function BusinessCard({
         )}
       </div>
       <div className={`p-4 flex-1 flex flex-col gap-2 ${b.logoUrl ? 'pt-6' : ''}`}>
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-neutral-900 truncate flex-1">{b.nama}</h3>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h3 className="font-semibold text-neutral-900 truncate flex-1 min-w-0">{b.nama}</h3>
           <span
             className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${TIPE_COLOR[b.tipeBisnis]}`}
           >
@@ -408,7 +408,7 @@ function BusinessCard({
             </>
           )}
         </div>
-        <div className="mt-auto pt-2 border-t border-neutral-100 flex items-center justify-between gap-2">
+        <div className="mt-auto pt-2 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2">
           <Link
             href={`/dashboard/jemaat/${b.owner.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -473,7 +473,7 @@ function DetailModal({
               className="w-full aspect-video shrink-0 object-cover rounded-t-2xl bg-neutral-100"
             />
           )}
-          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100 gap-3">
+          <div className="flex flex-wrap items-start justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-3">
             {b.logoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -518,7 +518,7 @@ function DetailModal({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 space-y-4">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-4">
             {/* Owner */}
             <Link
               href={`/dashboard/jemaat/${b.owner.id}`}
@@ -596,7 +596,7 @@ function DetailModal({
             <KatalogList businessId={b.id} apiBase={apiBase} />
           </div>
 
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex flex-wrap justify-between gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onDelete}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"
@@ -683,7 +683,7 @@ function KatalogConfig() {
   const n = Number(val);
   return (
     <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
-      <div className="flex-1 min-w-[220px]">
+      <div className="flex-1 min-w-0 basis-56">
         <div className="text-sm font-semibold text-neutral-900">Batas item katalog per usaha</div>
         <div className="text-xs text-neutral-500">Berlaku untuk semua usaha. Sekarang: {q.data?.maxItems ?? '…'} item.</div>
       </div>
@@ -728,7 +728,7 @@ function KatalogList({ businessId, apiBase }: { businessId: string; apiBase: str
       ) : items.length === 0 ? (
         <div className="text-xs text-neutral-500">Belum ada item.</div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
           {items.map((it) => (
             <div key={it.id} className={`border border-neutral-200 rounded-lg overflow-hidden ${it.isHiddenByAdmin || !it.isActive ? 'opacity-60' : ''}`}>
               <div className="bg-neutral-100" style={{ aspectRatio: '3 / 2' }}>
@@ -754,7 +754,7 @@ function KatalogList({ businessId, apiBase }: { businessId: string; apiBase: str
                     ))}
                   </div>
                 )}
-                <div className="flex items-center justify-between mt-1.5">
+                <div className="flex flex-wrap items-center justify-between mt-1.5 gap-2">
                   <span className="text-[10px] text-neutral-500">
                     {it.isHiddenByAdmin ? 'Disembunyikan admin' : !it.isActive ? 'Disembunyikan pemilik' : 'Tampil'}
                   </span>

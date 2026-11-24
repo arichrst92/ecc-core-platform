@@ -89,7 +89,7 @@ export default function SpiritualJourneyRequestPage() {
         <Link href="/dashboard/spiritual-journey" className="p-2 rounded-lg hover:bg-neutral-100" aria-label="Kembali">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Footprints className="w-6 h-6 text-brand-500" /> Request Spiritual Journey
           </h1>
@@ -121,7 +121,7 @@ export default function SpiritualJourneyRequestPage() {
             setPage(1);
           }}
           aria-label="Filter cabang"
-          className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500"
+          className="max-w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="">Semua cabang</option>
           {(cabangQ.data ?? []).map((c) => (
@@ -130,7 +130,7 @@ export default function SpiritualJourneyRequestPage() {
             </option>
           ))}
         </select>
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-0 basis-56">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={search}
@@ -152,7 +152,8 @@ export default function SpiritualJourneyRequestPage() {
         ) : rows.length === 0 ? (
           <div className="py-12 text-center text-sm text-neutral-500">Tidak ada request.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-left">
               <tr>
                 <th className="px-4 py-2 font-medium">Jemaat</th>
@@ -188,6 +189,7 @@ export default function SpiritualJourneyRequestPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
       {(q.data?.meta.totalPages ?? 1) > 1 ? (
@@ -248,7 +250,7 @@ function RequestModal({ id, onClose }: { id: string; onClose: () => void }) {
       <div className="fixed inset-0 bg-black/40 z-40" onClick={busy ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">Request Spiritual Journey</h2>
             <button onClick={onClose} disabled={busy} className="p-1.5 rounded-lg hover:bg-neutral-100">
               <X className="w-4 h-4" />
@@ -284,8 +286,8 @@ function RequestModal({ id, onClose }: { id: string; onClose: () => void }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-neutral-50 rounded-lg p-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                <div className="bg-neutral-50 rounded-lg p-3 min-w-0 break-words">
                   <div className="text-xs text-neutral-500">Tahap diminta</div>
                   <div className="font-semibold text-neutral-900">
                     {d.step.nomor ? `${d.step.nomor}. ` : ''}

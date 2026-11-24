@@ -113,7 +113,7 @@ export default function LaporanEventPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-brand-500" /> Laporan Event
           </h1>
@@ -197,11 +197,11 @@ export default function LaporanEventPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
               <h2 className="font-semibold text-neutral-900">Per event ({d.events.length})</h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Tanggal</th>
@@ -272,13 +272,13 @@ export default function LaporanEventPage() {
           <ReviewReportCard data={d.reviews} itemHeader="Event" />
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-violet-600" /> Daftar tamu ({d.guests.length})
               </h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Event</th>

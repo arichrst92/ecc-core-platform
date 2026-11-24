@@ -624,7 +624,7 @@ function AddVolunteerModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-start justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-start justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
             <div className="min-w-0">
               <h2 className="font-semibold text-neutral-900">Tambah Volunteer</h2>
               <p className="text-xs text-neutral-500 mt-0.5">

@@ -740,7 +740,7 @@ function InfoBlock({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-neutral-100 pb-1.5">
+    <div className="flex flex-wrap justify-between gap-3 border-b border-neutral-100 pb-1.5">
       <span className="text-neutral-500 shrink-0">{label}</span>
       <span className="text-neutral-900 font-medium text-right min-w-0 break-words">{children}</span>
     </div>
@@ -1329,11 +1329,11 @@ function CheckinModal({
           </div>
 
           <div className="flex-1 overflow-y-auto border-t border-neutral-100">
-            <div className="px-6 py-3 text-xs uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-white border-b border-neutral-100">
+            <div className="px-4 sm:px-6 py-3 text-xs uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-white border-b border-neutral-100">
               Riwayat sesi ini ({history.length})
             </div>
             {history.length === 0 ? (
-              <p className="text-sm text-neutral-400 italic text-center py-6 px-6">
+              <p className="text-sm text-neutral-400 italic text-center py-6 px-4 sm:px-6">
                 Belum ada scan.
               </p>
             ) : (
@@ -1385,7 +1385,7 @@ function CheckinModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-3 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-3 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"

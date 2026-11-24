@@ -241,7 +241,7 @@ export function UploadHint({ kind, context, className }: UploadHintProps) {
 
           {promptOpen ? (
             <div className="mt-2 border border-brand-100 bg-brand-50/50 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
                 <span className="text-xs font-semibold text-brand-900">
                   Prompt siap-pakai (ChatGPT / DALL-E / Midjourney / Stable Diffusion)
                 </span>

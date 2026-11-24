@@ -16,9 +16,9 @@ import { audit } from '../../lib/audit.js';
 import { generateOccurrences } from '../../lib/ibadah-occurrences.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { occupancyPct } from '../../lib/attendance-report.js';
-import { occurrenceStart } from '../../lib/reservasi-window.js';
+import { occurrenceStart, reservasiClosesAt } from '../../lib/reservasi-window.js';
 import { cabangKota, todayInTz, tzOr } from '../../lib/tz.js';
-import { selfCheckinOpensAt } from '../../lib/self-checkin.js';
+import { checkinRuleInfo, selfCheckinClosesAt, selfCheckinOpensAt } from '../../lib/self-checkin.js';
 import { assertWalkInOpen, ibadahScanWindow, ibadahScanWindowCached } from '../../lib/scan-window.js';
 import { inviterNames, scanWindowInfo } from '../../lib/scanner-info.js';
 import { assertCanScanIbadah, scanAccess } from '../../lib/scan-access.js';
@@ -156,6 +156,8 @@ ibadahRouter.get('/calendar', async (req, res) => {
      *  selalu menulis "…gunakan self check-in di app" (salah untuk ibadah anak, yang
      *  check-in di meja CKids). Tanpa field ini app tidak menampilkan pesan apa pun. */
     reservasiClosesAt?: string;
+    checkinClosesAt: string;
+    checkinRule: ReturnType<typeof checkinRuleInfo>;
     /** Ibadah anak (check-in di meja CKids, tanpa self check-in). */
     isKidsIbadah: boolean;
   }[] = [];
@@ -201,9 +203,15 @@ ibadahRouter.get('/calendar', async (req, res) => {
         urutan: i.urutan,
         linkOnline: i.linkOnline,
         ...(() => {
-          const closes = occurrenceStart(iso, i.jamMulai, tzOr(i.cabang?.timezone));
-          return i.isKidsIbadah && Date.now() >= closes.getTime() ? {} : { reservasiClosesAt: closes.toISOString() };
+          const tz = tzOr(i.cabang?.timezone);
+          const start = occurrenceStart(iso, i.jamMulai, tz);
+          const closes = reservasiClosesAt(iso, i.jamMulai, tz, i);
+          return i.isKidsIbadah && Date.now() >= start.getTime() ? {} : { reservasiClosesAt: closes.toISOString() };
         })(),
+        // 2.5.1: kapan self check-in pertemuan ini ditutup (kartu Beranda diburamkan
+        // sesudahnya) + angka aturan ibadah ini. App ≤ 2.5.0 memakai selesai + 30 menit.
+        checkinClosesAt: selfCheckinClosesAt(d, i.jamMulai, i.jamSelesai, tzOr(i.cabang?.timezone), i).toISOString(),
+        checkinRule: checkinRuleInfo(i),
         isKidsIbadah: i.isKidsIbadah,
         okupansi: i.kapasitasSeat
           ? (() => {
@@ -214,7 +222,7 @@ ibadahRouter.get('/calendar', async (req, res) => {
                 hadir,
                 persen: occupancyPct(hadir, i.kapasitasSeat),
                 reservasi: resvMap.get(`${i.id}:${iso}`) ?? 0,
-                checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
+                checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone), i).toISOString(),
               };
             })()
           : null,
@@ -406,14 +414,20 @@ ibadahRouter.get('/:id', async (req, res) => {
       hadir,
       persen: occupancyPct(hadir, item.kapasitasSeat),
       reservasi,
-      checkinOpensAt: selfCheckinOpensAt(tanggalDate, item.jamMulai, tzOr(item.cabang?.timezone)).toISOString(),
+      checkinOpensAt: selfCheckinOpensAt(tanggalDate, item.jamMulai, tzOr(item.cabang?.timezone), item).toISOString(),
     };
   }
-  // Batas reservasi pertemuan ?tanggal= (= jam mulai, zona cabang).
-  const reservasiClosesAt = tanggalDate
-    ? occurrenceStart(tanggalDate.toISOString().slice(0, 10), item.jamMulai, tzOr(item.cabang?.timezone)).toISOString()
+  // Batas reservasi pertemuan ?tanggal= (= jam mulai, atau registrasiTutupMenit; zona cabang).
+  const resvClosesAt = tanggalDate
+    ? reservasiClosesAt(tanggalDate.toISOString().slice(0, 10), item.jamMulai, tzOr(item.cabang?.timezone), item).toISOString()
     : null;
-  res.json({ success: true, data: { ...rest, petugas, okupansi, reservasiClosesAt } });
+  const checkinClosesAt = tanggalDate
+    ? selfCheckinClosesAt(tanggalDate, item.jamMulai, item.jamSelesai, tzOr(item.cabang?.timezone), item).toISOString()
+    : null;
+  res.json({
+    success: true,
+    data: { ...rest, petugas, okupansi, reservasiClosesAt: resvClosesAt, checkinClosesAt, checkinRule: checkinRuleInfo(item) },
+  });
 });
 
 /**

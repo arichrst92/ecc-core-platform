@@ -38,7 +38,7 @@ import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 import { isMobileClient } from '../../lib/client-kind.js';
-import { eventStartsAt, REGISTRATION_CLOSED_MESSAGE } from '../../lib/event-time.js';
+import { eventCancelClosesAt, eventRegistrationClosesAt, registrationClosedMessage } from '../../lib/event-time.js';
 import {
   saveContentHero,
   deleteContentHero,
@@ -403,11 +403,12 @@ eventRouter.get('/', async (req, res) => {
     ...(myStatus ? { myStatus: myStatus.get(r.id) ?? null } : {}),
     ...attendanceInfo(r, tzOr(r.cabang?.timezone), hadirById.get(r.id) ?? 0),
     ...(pendingPay ? { pendingPaymentCount: pendingPay.get(r.id) ?? 0 } : {}),
-    // Batas pendaftaran online (countdown di app) = saat event dimulai.
+    // Batas pendaftaran online (countdown di app) = saat event dimulai, atau
+    // registrasiTutupMenit sebelum/sesudah mulai bila diatur per event.
     // Hitung mundur di KARTU event (app). Event sukarela tidak diberi hitung mundur →
     // tidak dikirim di daftar (app lama pun langsung tidak menampilkannya). Detail
     // event tetap mengirimnya (dipakai menutup pendaftaran saat event mulai).
-    ...(r.tipeBayar === 'NOMINAL_BEBAS' ? {} : { registrationClosesAt: eventStartsAt(r, tzOr(r.cabang?.timezone)).toISOString() }),
+    ...(r.tipeBayar === 'NOMINAL_BEBAS' ? {} : { registrationClosesAt: eventRegistrationClosesAt(r, tzOr(r.cabang?.timezone)).toISOString() }),
   }));
 
   res.json({
@@ -599,9 +600,9 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       pesertaCount: item._count.partisipasi,
       ...attendanceInfo(item, tzOr(item.cabang?.timezone), (await hadirCountByEvent([item.id])).get(item.id) ?? 0),
       petugas,
-      // Batas pendaftaran online (countdown di app) = saat event dimulai;
-      // setelah itu registrasi walk-in di lokasi.
-      registrationClosesAt: eventStartsAt(item, tzOr(item.cabang?.timezone)).toISOString(),
+      // Batas pendaftaran online (countdown di app) = saat event dimulai (atau
+      // sesuai registrasiTutupMenit); setelah itu registrasi walk-in di lokasi.
+      registrationClosesAt: eventRegistrationClosesAt(item, tzOr(item.cabang?.timezone)).toISOString(),
       myParticipation,
       familyParticipationsCount,
       // Syarat role (kosong = terbuka untuk semua) + kelayakan user login.
@@ -700,6 +701,10 @@ eventRouter.post('/', W(), async (req, res) => {
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
       allowSelfCheckin: input.allowSelfCheckin ?? false,
+      registrasiTutupMenit: input.registrasiTutupMenit ?? null,
+      checkinBukaMenit: input.checkinBukaMenit ?? null,
+      checkinTutupMenit: input.checkinTutupMenit ?? null,
+      checkinTutupAcuan: input.checkinTutupAcuan ?? null,
       allowReview: input.allowReview ?? true,
       selfCheckinRadiusM: input.selfCheckinRadiusM ?? null,
       ...(loc ?? {}),
@@ -780,6 +785,10 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
         butuhKehadiran: src.butuhKehadiran,
         allowReview: src.allowReview,
         allowSelfCheckin: src.allowSelfCheckin,
+        registrasiTutupMenit: src.registrasiTutupMenit,
+        checkinBukaMenit: src.checkinBukaMenit,
+        checkinTutupMenit: src.checkinTutupMenit,
+        checkinTutupAcuan: src.checkinTutupAcuan,
         grantRoleId: src.grantRoleId,
         grantSubRoleId: src.grantSubRoleId,
         grantSubRoleStatusId: src.grantSubRoleStatusId,
@@ -885,6 +894,10 @@ eventRouter.patch('/:id', W(), async (req, res) => {
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
     allowSelfCheckin: input.allowSelfCheckin,
+    registrasiTutupMenit: input.registrasiTutupMenit,
+    checkinBukaMenit: input.checkinBukaMenit,
+    checkinTutupMenit: input.checkinTutupMenit,
+    checkinTutupAcuan: input.checkinTutupAcuan,
     allowReview: input.allowReview,
     selfCheckinRadiusM: input.selfCheckinRadiusM,
     isActive: input.isActive,
@@ -1085,14 +1098,15 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
-  // Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di
+  // Pendaftaran online (app & website) ditutup saat event dimulai (atau sesuai
+  // registrasiTutupMenit) → walk-in di
   // lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan.
   if (!(await isEventManager(req))) {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    if (new Date() >= eventStartsAt(event, tzOr(cab?.timezone))) {
-      throw new ApiError(400, 'REGISTRATION_CLOSED', REGISTRATION_CLOSED_MESSAGE);
+    if (new Date() >= eventRegistrationClosesAt(event, tzOr(cab?.timezone))) {
+      throw new ApiError(400, 'REGISTRATION_CLOSED', registrationClosedMessage(event));
     }
   }
 
@@ -1296,14 +1310,15 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
     include: { _count: { select: { partisipasi: { where: { status: { not: 'BATAL' } } } } } },
   });
   if (!event) throw NotFound('Event tidak ditemukan');
-  // Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di
+  // Pendaftaran online (app & website) ditutup saat event dimulai (atau sesuai
+  // registrasiTutupMenit) → walk-in di
   // lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan.
   if (!(await isEventManager(req))) {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    if (new Date() >= eventStartsAt(event, tzOr(cab?.timezone))) {
-      throw new ApiError(400, 'REGISTRATION_CLOSED', REGISTRATION_CLOSED_MESSAGE);
+    if (new Date() >= eventRegistrationClosesAt(event, tzOr(cab?.timezone))) {
+      throw new ApiError(400, 'REGISTRATION_CLOSED', registrationClosedMessage(event));
     }
   }
 
@@ -1733,14 +1748,24 @@ async function assertSelfCancelAllowed(participationId: string, nama: string) {
     select: {
       status: true,
       donations: { select: { status: true } },
-      event: { select: { tipeBayar: true, nominal: true, tanggalMulai: true, jamMulai: true, isActive: true, cabang: { select: { timezone: true } } } },
+      event: {
+        select: {
+          tipeBayar: true,
+          nominal: true,
+          tanggalMulai: true,
+          jamMulai: true,
+          registrasiTutupMenit: true,
+          isActive: true,
+          cabang: { select: { timezone: true } },
+        },
+      },
     },
   });
   if (!p) return;
   const reason = selfCancelBlockedReason(
     p.status,
     paymentStatusOf(p.event, p),
-    eventStartsAt(p.event, tzOr(p.event.cabang?.timezone)),
+    eventCancelClosesAt(p.event, tzOr(p.event.cabang?.timezone)),
     new Date(),
     nama,
   );
@@ -1931,7 +1956,7 @@ eventRouter.get('/:idOrSlug/peserta/mine-and-family', async (req, res) => {
   // bayar / menunggu verifikasi, event belum mulai). App build berikutnya memakai
   // flag ini untuk menyembunyikan tombol "Batalkan pendaftaran"; app lama tetap
   // menampilkan tombol, tetapi server menolak dengan pesan CANCEL_NOT_ALLOWED.
-  const startsAt = eventStartsAt(event, tzOr(event.cabang?.timezone));
+  const startsAt = eventCancelClosesAt(event, tzOr(event.cabang?.timezone));
   const nowCancel = new Date();
   const participations = rows.map((r) => ({
     ...r,

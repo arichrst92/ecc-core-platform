@@ -173,3 +173,66 @@ describe('self check-in di zona cabang lain', () => {
     expect(w.available).toBe(true);
   });
 });
+
+// ============================================================
+// Konfigurasi jendela per ibadah / event (2026-11)
+// ============================================================
+import { ibadahTicketCheckin, registrationClosesAt, selfCheckinReasonText } from './self-checkin.js';
+import { canCancelReservasi, reservasiClosesAt } from './reservasi-window.js';
+
+describe('jendela per ibadah', () => {
+  const cfg = { ...base, checkinBukaMenit: 60, checkinTutupMenit: 20, checkinTutupAcuan: 'START' };
+  it('dibuka 60 menit sebelum mulai', () => {
+    expect(selfCheckinWindow(cfg, [], wib('2026-10-18T08:00:00')).available).toBe(true);
+    expect(selfCheckinWindow(cfg, [], wib('2026-10-18T07:59:00')).reason).toBe('TOO_EARLY');
+  });
+  it('ditutup 20 menit setelah MULAI', () => {
+    expect(selfCheckinWindow(cfg, [], wib('2026-10-18T09:20:00')).available).toBe(true);
+    expect(selfCheckinWindow(cfg, [], wib('2026-10-18T09:21:00')).reason).toBe('ENDED');
+  });
+  it('teks alasan mengikuti angka', () => {
+    expect(selfCheckinReasonText('TOO_EARLY', cfg)).toBe('Self check-in dibuka 1 jam sebelum ibadah dimulai.');
+    expect(selfCheckinReasonText('ENDED', cfg)).toBe('Self check-in ditutup 20 menit setelah ibadah dimulai.');
+    expect(selfCheckinReasonText('ENDED', base)).toBe('Self check-in ditutup 30 menit setelah ibadah selesai.');
+  });
+  it('tiket: app lama tetap bentuk bawaan, app baru jendela sebenarnya', () => {
+    const t = ibadahTicketCheckin(cfg, new Date('2026-10-18T00:00:00Z'), 'Asia/Jakarta');
+    expect(t.opensAt).toBe(wib('2026-10-18T08:00:00').toISOString());
+    expect(t.closesAt).toBe(wib('2026-10-18T09:20:00').toISOString());
+    expect(t.startAt).toBe(wib('2026-10-18T09:00:00').toISOString());
+    const old = ibadahTicketCheckin(cfg, new Date('2026-10-18T00:00:00Z'), 'Asia/Jakarta', true);
+    expect(old.opensAt).toBe(wib('2026-10-18T08:45:00').toISOString());
+    expect(old.closesAt).toBe(wib('2026-10-18T11:30:00').toISOString());
+  });
+  it('batas reservasi 2 jam sebelum mulai; batal tetap sampai mulai', () => {
+    const c = { registrasiTutupMenit: 120 };
+    expect(reservasiClosesAt('2026-10-18', '09:00', 'Asia/Jakarta', c).toISOString()).toBe(wib('2026-10-18T07:00:00').toISOString());
+    const r = { status: 'RESERVE', tanggalIbadah: new Date('2026-10-18T00:00:00Z') };
+    expect(canCancelReservasi(r, '09:00', wib('2026-10-18T08:30:00'), 'Asia/Jakarta', c)).toBe(true);
+    expect(canCancelReservasi(r, '09:00', wib('2026-10-18T09:00:00'), 'Asia/Jakarta', c)).toBe(false);
+  });
+  it('batas negatif = sesudah mulai', () => {
+    const s = wib('2026-10-18T09:00:00');
+    expect(registrationClosesAt(s, { registrasiTutupMenit: -30 }).toISOString()).toBe(wib('2026-10-18T09:30:00').toISOString());
+  });
+});
+
+describe('jendela per event', () => {
+  const ev = {
+    allowSelfCheckin: true,
+    butuhKehadiran: true,
+    isActive: true,
+    tanggalMulai: new Date('2026-10-20T00:00:00Z'),
+    tanggalSelesai: null,
+    jamMulai: '18:00',
+    jamSelesai: '21:00',
+    checkinBukaMenit: 0,
+    checkinTutupMenit: 45,
+    checkinTutupAcuan: 'END',
+  };
+  it('dibuka tepat saat mulai, tutup 45 menit setelah selesai', () => {
+    expect(eventSelfCheckinWindow(ev, wib('2026-10-20T17:59:00')).reason).toBe('TOO_EARLY');
+    expect(eventSelfCheckinWindow(ev, wib('2026-10-20T21:45:00')).available).toBe(true);
+    expect(eventSelfCheckinWindow(ev, wib('2026-10-20T21:46:00')).reason).toBe('ENDED');
+  });
+});

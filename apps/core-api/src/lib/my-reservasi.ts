@@ -10,7 +10,7 @@
  *   - KELUARGA   : anggota keluarga yang saya self check-in-kan
  */
 import { DEFAULT_TZ, addDays, todayInTz, wallToInstant } from './tz.js';
-import { CLOSE_AFTER_MIN, hhmmToMin } from './self-checkin.js';
+import { type CheckinCfg, hhmmToMin, selfCheckinClosesAt } from './self-checkin.js';
 
 export type MyReservasiRelation = 'SELF' | 'ANAK' | 'TANGGUNGAN' | 'TAMU' | 'KELUARGA';
 
@@ -32,7 +32,7 @@ export function activeWindow(now: Date = new Date()) {
  *   - pertemuan hari ini → aktif sampai ibadah SELESAI (jamSelesai), lalu pindah
  *     ke Riwayat. Pengecualian setelah selesai:
  *       · ibadah anak yang sudah check-in tapi belum dijemput (kode jemput masih dipakai);
- *       · masih RESERVE dan jendela self check-in belum tutup (+CLOSE_AFTER_MIN).
+ *       · masih RESERVE dan jendela self check-in belum tutup (bawaan +30 menit, bisa diatur per ibadah).
  *   - pertemuan lampau → riwayat, kecuali anak yang belum dijemput (check-in < 24 jam).
  * Tanpa info ibadah (pemanggil lama) → aturan lama: tanggal >= hari ini / check-in < 24 jam.
  */
@@ -46,7 +46,7 @@ export function isActiveRow(
   },
   tz: string = DEFAULT_TZ,
   now: Date = new Date(),
-  ib?: { jamMulai: string; jamSelesai: string; isKidsIbadah?: boolean },
+  ib?: { jamMulai: string; jamSelesai: string; isKidsIbadah?: boolean } & CheckinCfg,
 ): boolean {
   const w = activeWindow(now);
   const today = todayInTz(tz, now).getTime();
@@ -67,7 +67,7 @@ export function isActiveRow(
   const t = now.getTime();
   if (t <= end) return true;
   if (kidsPendingPickup) return true;
-  return r.status === 'RESERVE' && t <= end + CLOSE_AFTER_MIN * 60_000;
+  return r.status === 'RESERVE' && t <= Math.max(end, selfCheckinClosesAt(r.tanggalIbadah, ib.jamMulai, ib.jamSelesai, tz, ib).getTime());
 }
 
 export function relationFor(

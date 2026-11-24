@@ -14,6 +14,10 @@
  * dalam", kartu Beranda, batal check-in). Jangan ubah angka ini tanpa app.
  * (2026-11-18 sempat diubah ±30 menit dari mulai → dikembalikan 2026-11-22.)
  * Scan petugas punya jendela sendiri (lib/scan-window.ts).
+ *
+ * 2026-11: tiap ibadah/event boleh punya jendela sendiri (CheckinCfg). App
+ * 2.5.1 membaca angka dari respons; app ≤ 2.5.0 menerima bentuk bawaan
+ * (legacyWindowTimes) dan ditolak server dengan pesan jelas bila beda.
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { DEFAULT_TZ, calendarDateOf, todayInTz, wallToInstant } from './tz.js';
@@ -21,6 +25,99 @@ import { DEFAULT_TZ, calendarDateOf, todayInTz, wallToInstant } from './tz.js';
 export const OPEN_BEFORE_MIN = 15;
 /** Self check-in masih dibuka sampai N menit setelah ibadah/event selesai. */
 export const CLOSE_AFTER_MIN = 30;
+
+// ============================================================
+// Konfigurasi jendela per ibadah / event (2026-11). Kolom NULL = aturan bawaan
+// di atas (app ≤ 2.5.0 hanya mengenal aturan bawaan — lihat CLAUDE.md).
+// ============================================================
+
+export type CheckinCloseRef = 'START' | 'END';
+export interface CheckinCfg {
+  /** Batas reservasi / daftar online = mulai − N menit (negatif = sesudah mulai). NULL = 0. */
+  registrasiTutupMenit?: number | null;
+  /** Self check-in dibuka N menit sebelum mulai. NULL = OPEN_BEFORE_MIN. */
+  checkinBukaMenit?: number | null;
+  /** Self check-in ditutup N menit setelah acuan. NULL = CLOSE_AFTER_MIN. */
+  checkinTutupMenit?: number | null;
+  /** Acuan penutupan: 'START' (mulai) | 'END' (selesai). NULL = END. */
+  checkinTutupAcuan?: string | null;
+}
+export const CHECKIN_CFG_SELECT = {
+  registrasiTutupMenit: true,
+  checkinBukaMenit: true,
+  checkinTutupMenit: true,
+  checkinTutupAcuan: true,
+} as const;
+
+export const cfgOpenMin = (c?: CheckinCfg | null) => c?.checkinBukaMenit ?? OPEN_BEFORE_MIN;
+export const cfgCloseMin = (c?: CheckinCfg | null) => c?.checkinTutupMenit ?? CLOSE_AFTER_MIN;
+export const cfgCloseRef = (c?: CheckinCfg | null): CheckinCloseRef => (c?.checkinTutupAcuan === 'START' ? 'START' : 'END');
+export const cfgRegCloseMin = (c?: CheckinCfg | null) => c?.registrasiTutupMenit ?? 0;
+/** Jendela self check-in sama dengan aturan bawaan (yang tertanam di app lama)? */
+export const isDefaultCheckinCfg = (c?: CheckinCfg | null) =>
+  cfgOpenMin(c) === OPEN_BEFORE_MIN && cfgCloseMin(c) === CLOSE_AFTER_MIN && cfgCloseRef(c) === 'END';
+
+/** Info aturan untuk app 2.5.1 (teks & hitungan memakai angka ini, bukan konstanta). */
+export function checkinRuleInfo(c?: CheckinCfg | null) {
+  return {
+    openBeforeMin: cfgOpenMin(c),
+    closeMin: cfgCloseMin(c),
+    closeRef: cfgCloseRef(c),
+    regCloseMin: cfgRegCloseMin(c),
+  };
+}
+
+/** "N menit" / "N jam" / "N jam M menit". */
+export function fmtMenit(n: number): string {
+  const a = Math.abs(n);
+  if (a < 60) return `${a} menit`;
+  const h = Math.floor(a / 60);
+  const m = a % 60;
+  return m ? `${h} jam ${m} menit` : `${h} jam`;
+}
+
+/** Kalimat aturan penutupan, mis. "30 menit setelah ibadah selesai" / "saat event dimulai". */
+export function closeRuleText(c: CheckinCfg | null | undefined, kind: 'ibadah' | 'event'): string {
+  const n = cfgCloseMin(c);
+  const ref = cfgCloseRef(c) === 'START' ? 'dimulai' : 'selesai';
+  return n === 0 ? `saat ${kind} ${ref}` : `${fmtMenit(n)} setelah ${kind} ${ref}`;
+}
+export function openRuleText(c: CheckinCfg | null | undefined, kind: 'ibadah' | 'event'): string {
+  const n = cfgOpenMin(c);
+  return n === 0 ? `saat ${kind} dimulai` : `${fmtMenit(n)} sebelum ${kind} dimulai`;
+}
+/** Kalimat batas reservasi / pendaftaran, mis. "60 menit sebelum event dimulai". */
+export function regCloseRuleText(c: CheckinCfg | null | undefined, kind: 'ibadah' | 'event'): string {
+  const n = cfgRegCloseMin(c);
+  if (n === 0) return `saat ${kind} dimulai`;
+  return n > 0 ? `${fmtMenit(n)} sebelum ${kind} dimulai` : `${fmtMenit(n)} setelah ${kind} dimulai`;
+}
+
+/**
+ * Instant buka/tutup self check-in. `startDay/endDay` = tanggal kalender (UTC
+ * midnight) di zona cabang; `startMin/endMin` = menit jam dinding.
+ */
+export function checkinBounds(
+  startDay: Date,
+  startMin: number,
+  endDay: Date,
+  endMin: number,
+  tz: string,
+  c?: CheckinCfg | null,
+): { opens: Date; closes: Date; start: Date; end: Date } {
+  const start = wallToInstant(startDay, startMin, tz);
+  const end = wallToInstant(endDay, endMin, tz);
+  const opens = wallToInstant(startDay, startMin - cfgOpenMin(c), tz);
+  let closes =
+    cfgCloseRef(c) === 'START' ? wallToInstant(startDay, startMin + cfgCloseMin(c), tz) : wallToInstant(endDay, endMin + cfgCloseMin(c), tz);
+  if (closes < opens) closes = opens;
+  return { opens, closes, start, end };
+}
+
+/** Batas reservasi / daftar online (mulai − registrasiTutupMenit). */
+export function registrationClosesAt(start: Date, c?: CheckinCfg | null): Date {
+  return new Date(start.getTime() - cfgRegCloseMin(c) * 60_000);
+}
 
 export type SelfCheckinReason =
   | 'INACTIVE'
@@ -38,6 +135,9 @@ export interface SelfCheckinWindow {
   /** ISO — kapan self check-in dibuka / ditutup hari ini (kalau hari ibadah). */
   opensAt: string | null;
   closesAt: string | null;
+  /** 2.5.1: jam mulai / selesai occurrence (ISO) — tiket & teks tidak lagi menebak dari opensAt/closesAt. */
+  startAt?: string | null;
+  endAt?: string | null;
 }
 
 /** "HH:mm" → menit sejak 00:00; null kalau format salah. */
@@ -58,15 +158,29 @@ type IbadahWin = IbadahForOccurrence & {
   allowKidsSelfCheckin?: boolean;
   jamMulai: string;
   jamSelesai: string;
-};
+} & CheckinCfg;
 
 /**
  * Saat self check-in pertemuan `day` dibuka (rumus sama dengan windowForDay).
  * Dipakai kartu okupansi: sebelum ini app menulis "reservasi", sesudahnya "hadir".
  */
-export function selfCheckinOpensAt(day: Date, jamMulai: string | null | undefined, tz: string): Date {
+export function selfCheckinOpensAt(day: Date, jamMulai: string | null | undefined, tz: string, c?: CheckinCfg | null): Date {
   const start = hhmmToMin(jamMulai ?? '') ?? 0;
-  return wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz);
+  return wallToInstant(day, start - cfgOpenMin(c), tz);
+}
+
+/** Saat self check-in pertemuan `day` ditutup (ibadah: hari yang sama). */
+export function selfCheckinClosesAt(
+  day: Date,
+  jamMulai: string | null | undefined,
+  jamSelesai: string | null | undefined,
+  tz: string,
+  c?: CheckinCfg | null,
+): Date {
+  const start = hhmmToMin(jamMulai ?? '') ?? 0;
+  let end = hhmmToMin(jamSelesai ?? '') ?? 24 * 60 - 1;
+  if (end <= start) end = 24 * 60 - 1;
+  return checkinBounds(day, start, day, end, tz, c).closes;
 }
 
 /** Jendela self check-in untuk occurrence pada `day` (UTC midnight, kalender zona cabang). */
@@ -83,10 +197,17 @@ function windowForDay(ibadah: IbadahWin, cancelledDates: string[], day: Date, no
   const start = hhmmToMin(ibadah.jamMulai) ?? 0;
   let end = hhmmToMin(ibadah.jamSelesai) ?? 24 * 60 - 1;
   if (end <= start) end = 24 * 60 - 1; // jam selesai lewat tengah malam → sampai akhir hari
-  // Jam dinding di zona cabang → instant UTC (menit > 1440 = lewat tengah malam, aman).
-  const opens = wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz);
-  const closes = wallToInstant(day, end + CLOSE_AFTER_MIN, tz);
-  const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
+  // Jam dinding di zona cabang → instant UTC (menit > 1440 / < 0 = lewat tengah malam, aman).
+  const b = checkinBounds(day, start, day, end, tz, ibadah);
+  const opens = b.opens;
+  const closes = b.closes;
+  const win = {
+    tanggal,
+    opensAt: opens.toISOString(),
+    closesAt: closes.toISOString(),
+    startAt: b.start.toISOString(),
+    endAt: b.end.toISOString(),
+  };
   if (now < opens) return { ...win, available: false, reason: 'TOO_EARLY' };
   if (now > closes) return { ...win, available: false, reason: 'ENDED' };
   return { ...win, available: true, reason: null };
@@ -106,6 +227,13 @@ export function selfCheckinWindow(
   const yesterday = new Date(today.getTime() - 86_400_000);
   const y = windowForDay(ibadah, cancelledDates, yesterday, now, tz);
   return y.available ? y : w;
+}
+
+/** Teks alasan sesuai konfigurasi ibadah (TOO_EARLY / ENDED memakai angka ibadah ini). */
+export function selfCheckinReasonText(reason: SelfCheckinReason, c?: CheckinCfg | null): string {
+  if (reason === 'TOO_EARLY') return `Self check-in dibuka ${openRuleText(c, 'ibadah')}.`;
+  if (reason === 'ENDED') return `Self check-in ditutup ${closeRuleText(c, 'ibadah')}.`;
+  return SELF_CHECKIN_REASON_TEXT[reason];
 }
 
 export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
@@ -139,26 +267,69 @@ export function eventSelfCheckinWindow(
     tanggalSelesai: Date | null;
     jamMulai: string | null;
     jamSelesai: string | null;
-  },
+  } & CheckinCfg,
   now: Date = new Date(),
   /** Zona waktu cabang event (IANA); event global → default. */
   tz: string = DEFAULT_TZ,
-): { available: boolean; reason: EventSelfCheckinReason | null; tanggal: string; opensAt: string | null; closesAt: string | null } {
+): {
+  available: boolean;
+  reason: EventSelfCheckinReason | null;
+  tanggal: string;
+  opensAt: string | null;
+  closesAt: string | null;
+  startAt: string;
+  endAt: string;
+} {
   const tanggal = todayInTz(tz, now).toISOString().slice(0, 10);
   const startDay = calendarDateOf(ev.tanggalMulai, tz);
   const endDay = calendarDateOf(ev.tanggalSelesai ?? ev.tanggalMulai, tz);
   const start = hhmmToMin(ev.jamMulai) ?? 0;
   let end = hhmmToMin(ev.jamSelesai) ?? 24 * 60 - 1;
   if (!ev.tanggalSelesai && end <= start) end = 24 * 60 - 1;
-  const opens = wallToInstant(startDay, Math.max(0, start - OPEN_BEFORE_MIN), tz);
-  const closes = wallToInstant(endDay, end + CLOSE_AFTER_MIN, tz);
-  const win = { tanggal, opensAt: opens.toISOString(), closesAt: closes.toISOString() };
+  const b = checkinBounds(startDay, start, endDay, end, tz, ev);
+  const opens = b.opens;
+  const closes = b.closes;
+  const win = {
+    tanggal,
+    opensAt: opens.toISOString(),
+    closesAt: closes.toISOString(),
+    startAt: b.start.toISOString(),
+    endAt: b.end.toISOString(),
+  };
   if (!ev.allowSelfCheckin) return { ...win, available: false, reason: 'DISABLED' };
   if (!ev.butuhKehadiran) return { ...win, available: false, reason: 'NO_ATTENDANCE' };
   if (!ev.isActive) return { ...win, available: false, reason: 'INACTIVE' };
   if (now < opens) return { ...win, available: false, reason: 'TOO_EARLY' };
   if (now > closes) return { ...win, available: false, reason: 'ENDED' };
   return { ...win, available: true, reason: null };
+}
+
+export function eventSelfCheckinReasonText(reason: EventSelfCheckinReason, c?: CheckinCfg | null): string {
+  if (reason === 'TOO_EARLY') return `Self check-in dibuka ${openRuleText(c, 'event')}.`;
+  if (reason === 'ENDED') return `Self check-in ditutup ${closeRuleText(c, 'event')}.`;
+  return EVENT_SELF_CHECKIN_REASON_TEXT[reason];
+}
+
+/**
+ * Bentuk lama opensAt/closesAt untuk app ≤ 2.5.0: app menghitung jam tiket =
+ * opensAt + 15 / closesAt − 30 dan menulis "15 menit sebelum mulai" — kirim
+ * jendela bawaan supaya jam yang tampil tetap benar. Penegakan di server tetap
+ * memakai konfigurasi sebenarnya (pesan error menjelaskan).
+ */
+export function legacyWindowTimes(startAt: string, endAt: string): { opensAt: string; closesAt: string } {
+  return {
+    opensAt: new Date(Date.parse(startAt) - OPEN_BEFORE_MIN * 60_000).toISOString(),
+    closesAt: new Date(Date.parse(endAt) + CLOSE_AFTER_MIN * 60_000).toISOString(),
+  };
+}
+
+/** Jendela untuk respons app: app ≤ 2.5.0 → opensAt/closesAt bentuk bawaan. */
+export function windowForClient<W extends { opensAt: string | null; closesAt: string | null; startAt?: string | null; endAt?: string | null }>(
+  w: W,
+  legacy: boolean,
+): W {
+  if (!legacy || !w.startAt || !w.endAt) return w;
+  return { ...w, ...legacyWindowTimes(w.startAt, w.endAt) };
 }
 
 export const EVENT_SELF_CHECKIN_REASON_TEXT: Record<EventSelfCheckinReason, string> = {
@@ -251,20 +422,40 @@ export function venueInfo(
  * Validasi final tetap di POST /me/ibadah/:id/self-checkin.
  */
 export function ibadahTicketCheckin(
-  ib: { jamMulai: string; jamSelesai: string; isKidsIbadah: boolean; allowKidsSelfCheckin?: boolean },
+  ib: { jamMulai: string; jamSelesai: string; isKidsIbadah: boolean; allowKidsSelfCheckin?: boolean } & CheckinCfg,
   tanggalIbadah: Date,
   tz: string,
-): { mode: 'SELF' | 'DESK'; kidsSelf: boolean; opensAt: string; closesAt: string } {
+  /** App ≤ 2.5.0 → opensAt/closesAt bentuk bawaan (lihat legacyWindowTimes). */
+  legacy = false,
+): {
+  mode: 'SELF' | 'DESK';
+  kidsSelf: boolean;
+  opensAt: string;
+  closesAt: string;
+  startAt: string;
+  endAt: string;
+  openBeforeMin: number;
+  closeMin: number;
+  closeRef: CheckinCloseRef;
+} {
   const start = hhmmToMin(ib.jamMulai) ?? 0;
   let end = hhmmToMin(ib.jamSelesai) ?? 24 * 60 - 1;
   if (end <= start) end = 24 * 60 - 1;
   const day = calendarDateOf(tanggalIbadah, tz);
+  const b = checkinBounds(day, start, day, end, tz, ib);
+  const startAt = b.start.toISOString();
+  const endAt = b.end.toISOString();
+  const times = legacy ? legacyWindowTimes(startAt, endAt) : { opensAt: b.opens.toISOString(), closesAt: b.closes.toISOString() };
   return {
     // Ibadah anak tetap 'DESK' (app ≤ 2.5.0 menampilkan kartu kode jemput untuk
     // mode ini); kidsSelf = orang tua boleh self check-in (app 2.5.1 menampilkan tombol).
     mode: ib.isKidsIbadah ? 'DESK' : 'SELF',
     kidsSelf: ib.isKidsIbadah && !!ib.allowKidsSelfCheckin,
-    opensAt: wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz).toISOString(),
-    closesAt: wallToInstant(day, end + CLOSE_AFTER_MIN, tz).toISOString(),
+    ...times,
+    startAt,
+    endAt,
+    openBeforeMin: cfgOpenMin(ib),
+    closeMin: cfgCloseMin(ib),
+    closeRef: cfgCloseRef(ib),
   };
 }

@@ -18,7 +18,10 @@ import { ApiError, BadRequest, NotFound, Unauthorized } from '../../lib/errors.j
 import { audit } from '../../lib/audit.js';
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import {
-  SELF_CHECKIN_REASON_TEXT,
+  CHECKIN_CFG_SELECT,
+  checkinRuleInfo,
+  selfCheckinReasonText,
+  windowForClient,
   checkSelfCheckinRadius,
   radiusErrorMessage,
   selfCheckinWindow,
@@ -30,9 +33,11 @@ import { KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
 import { resolveGuardianJemaatIds } from '../../lib/notification.js';
 import { generateUniquePickupCode, notifyKidsCheckin } from './reservasi.js';
 import { tzOr } from '../../lib/tz.js';
+import { isLegacyApp } from '../../lib/client-kind.js';
 import {
   canCancelReservasi,
   eligibleForKids,
+  reservasiClosedMessage,
   reservableOccurrences,
   type ReservableOccurrence,
 } from '../../lib/reservasi-window.js';
@@ -83,6 +88,7 @@ async function loadIbadahWindow(ibadahId: string) {
       isActive: true,
       isKidsIbadah: true,
       allowKidsSelfCheckin: true,
+      ...CHECKIN_CFG_SELECT,
       tipeJadwal: true,
       mingguKe: true,
       tanggalMulai: true,
@@ -158,11 +164,14 @@ meIbadahRouter.get('/:id/self-checkin', async (req, res) => {
   res.json({
     success: true,
     data: {
-      ...window,
+      // App ≤ 2.5.0: opensAt/closesAt bentuk bawaan (teks "15 menit sebelum mulai");
+      // penegakan tetap memakai jendela ibadah ini (POST menolak dengan pesan).
+      ...windowForClient(window, isLegacyApp(req)),
+      ...checkinRuleInfo(ibadah),
       // Jam server (UTC ISO) — mobile menghitung selisih jam HP vs server supaya
       // tombol muncul/hilang tepat waktu walau jam / zona waktu HP berbeda.
       serverNow: new Date().toISOString(),
-      reasonText: window.reason ? SELF_CHECKIN_REASON_TEXT[window.reason] : null,
+      reasonText: window.reason ? selfCheckinReasonText(window.reason, ibadah) : null,
       ibadah: { id: ibadah.id, nama: ibadah.nama, jamMulai: ibadah.jamMulai, jamSelesai: ibadah.jamSelesai, lokasi: ibadah.lokasi },
       // Zona waktu cabang: jamMulai/jamSelesai adalah jam dinding di zona ini.
       timezone: tzOr(ibadah.cabang.timezone),
@@ -186,7 +195,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
   const { jemaatIds, lat, lng } = bodySchema.parse(req.body ?? {});
   const { ibadah, window } = await loadIbadahWindow(req.params.id);
   if (!window.available) {
-    throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, SELF_CHECKIN_REASON_TEXT[window.reason!]);
+    throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, selfCheckinReasonText(window.reason!, ibadah));
   }
   // Radius sesuai pengaturan ibadah (null = di mana saja), dari titik ibadah
   // atau titik cabang. Di luar radius → arahkan ke usher (QR).
@@ -305,7 +314,7 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
 //        (hari ini s.d. 30 hari, zona waktu cabang) + daftar saya & keluarga beserta status
 //   POST /:id/reservasi         { tanggal, jemaatIds } → reservasi (RESERVE)
 //   POST /:id/reservasi/cancel  { tanggal, jemaatIds } → batal (CANCEL)
-// Ditutup saat jam mulai ibadah. Ibadah anak: hanya anak ≤ 13 tahun.
+// Ditutup saat jam mulai ibadah (atau registrasiTutupMenit per ibadah). Ibadah anak: hanya anak ≤ 13 tahun.
 
 async function loadReservable(ibadahId: string) {
   if (!UUID_RE.test(ibadahId)) throw NotFound('Ibadah tidak ditemukan');
@@ -317,6 +326,7 @@ async function loadReservable(ibadahId: string) {
       isActive: true,
       isKidsIbadah: true,
       allowKidsSelfCheckin: true,
+      ...CHECKIN_CFG_SELECT,
       tipeJadwal: true,
       mingguKe: true,
       tanggalMulai: true,
@@ -435,7 +445,7 @@ meIbadahRouter.post('/:id/reservasi', async (req, res) => {
   const { ibadah, occurrences, tz } = await loadReservable(req.params.id);
   const occ = pickOccurrence(occurrences, tanggal)!;
   if (occ.cancelled) throw new ApiError(400, 'RESERVASI_CANCELLED', 'Ibadah di tanggal ini dibatalkan.');
-  if (!occ.open) throw new ApiError(400, 'RESERVASI_CLOSED', 'Reservasi sudah ditutup karena ibadah sudah dimulai.');
+  if (!occ.open) throw new ApiError(400, 'RESERVASI_CLOSED', reservasiClosedMessage(ibadah));
 
   const tgl = new Date(`${tanggal}T00:00:00.000Z`);
   const members = await reservableMembers(u.jemaatId, ibadah, tgl, tz);
@@ -504,7 +514,7 @@ meIbadahRouter.post('/:id/reservasi/cancel', async (req, res) => {
   const allowed = new Set(members.map((m) => m.id));
   const unique = [...new Set(jemaatIds)];
   if (unique.some((id) => !allowed.has(id))) throw BadRequest('Hanya bisa membatalkan reservasi Anda, keluarga, dan tamu Anda.');
-  if (!canCancelReservasi({ status: 'RESERVE', tanggalIbadah: tgl }, ibadah.jamMulai, new Date(), tz)) {
+  if (!canCancelReservasi({ status: 'RESERVE', tanggalIbadah: tgl }, ibadah.jamMulai, new Date(), tz, ibadah)) {
     throw new ApiError(400, 'RESERVASI_CLOSED', 'Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai.');
   }
   const upd = await prisma.reservasi.updateMany({

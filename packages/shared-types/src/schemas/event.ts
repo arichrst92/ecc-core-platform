@@ -1,4 +1,5 @@
 import './common.js';
+import { checkinWindowFields } from './checkin-window.js';
 import { z } from 'zod';
 import { uuidSchema, emptyToUndefined, emptyToNull } from './common.js';
 
@@ -151,6 +152,8 @@ export const createEventSchema = z
     butuhKehadiran: z.boolean().default(false),
     // Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran=true).
     allowSelfCheckin: z.boolean().default(false),
+    // Jendela pendaftaran online & self check-in (kosong = aturan bawaan)
+    ...checkinWindowFields,
     // Rating & ulasan peserta dari tiket (off = tidak muncul di app)
     allowReview: z.boolean().default(true),
 
@@ -225,6 +228,7 @@ export const updateEventSchema = z
     grupSesi: z.string().trim().max(80).nullable().optional(),
     butuhKehadiran: z.boolean().optional(),
     allowSelfCheckin: z.boolean().optional(),
+    ...checkinWindowFields,
     allowReview: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     isActive: z.boolean().optional(),

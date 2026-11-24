@@ -4,14 +4,16 @@
  * Aturan:
  *   - Bisa reservasi pertemuan ibadah terjadwal dari hari ini s.d.
  *     RESERVE_DAYS_AHEAD hari ke depan (zona waktu cabang), yang tidak dibatalkan.
- *   - Reservasi & pembatalan ditutup saat jam mulai ibadah (zona cabang). Setelah
- *     itu pakai self check-in / scan usher.
+ *   - Reservasi ditutup saat jam mulai ibadah (zona cabang) — atau
+ *     `registrasiTutupMenit` sebelum/sesudah mulai bila diatur per ibadah.
+ *     Pembatalan: sampai jam mulai (atau batas reservasi bila lebih lambat).
+ *     Setelah itu pakai self check-in / scan usher.
  *   - Ibadah anak: hanya untuk anak ≤ KIDS_MAX_AGE tahun (atau tanggungan
  *     tanpa tanggal lahir).
  */
 import { generateOccurrences, type IbadahForOccurrence } from './ibadah-occurrences.js';
 import { DEFAULT_TZ, todayInTz, wallToInstant } from './tz.js';
-import { CLOSE_AFTER_MIN, hhmmToMin } from './self-checkin.js';
+import { type CheckinCfg, cfgRegCloseMin, hhmmToMin, regCloseRuleText, registrationClosesAt, selfCheckinClosesAt } from './self-checkin.js';
 
 export const RESERVE_DAYS_AHEAD = 30;
 export const KIDS_MAX_AGE = 13;
@@ -22,16 +24,28 @@ export function occurrenceStart(tanggal: string, jamMulai: string, tz: string = 
   return wallToInstant(tanggal, hhmmToMin(jamMulai) ?? 0, tz);
 }
 
+/** Batas reservasi & pembatalan pertemuan `tanggal` (mulai − registrasiTutupMenit). */
+export function reservasiClosesAt(tanggal: string, jamMulai: string, tz: string = DEFAULT_TZ, cfg?: CheckinCfg | null): Date {
+  return registrationClosesAt(occurrenceStart(tanggal, jamMulai, tz), cfg);
+}
+
+export function reservasiClosedMessage(cfg?: CheckinCfg | null): string {
+  if (cfgRegCloseMin(cfg) === 0) return 'Reservasi sudah ditutup karena ibadah sudah dimulai.';
+  return `Reservasi sudah ditutup (batasnya ${regCloseRuleText(cfg, 'ibadah')}). Silakan self check-in / scan usher di lokasi.`;
+}
+
 export interface ReservableOccurrence {
   tanggal: string;
   startsAt: string;
   cancelled: boolean;
-  /** Masih bisa reservasi / batal (belum lewat jam mulai, tidak dibatalkan). */
+  /** Masih bisa reservasi / batal (belum lewat batas reservasi, tidak dibatalkan). */
   open: boolean;
+  /** Batas reservasi (ISO) — sama dengan startsAt kecuali diatur per ibadah. */
+  closesAt: string;
 }
 
 export function reservableOccurrences(
-  ibadah: IbadahForOccurrence & { jamMulai: string },
+  ibadah: IbadahForOccurrence & { jamMulai: string } & CheckinCfg,
   cancelledDates: string[],
   now: Date = new Date(),
   tz: string = DEFAULT_TZ,
@@ -41,19 +55,24 @@ export function reservableOccurrences(
   return generateOccurrences(ibadah, today, to).map((d) => {
     const tanggal = d.toISOString().slice(0, 10);
     const startsAt = occurrenceStart(tanggal, ibadah.jamMulai, tz);
+    const closes = registrationClosesAt(startsAt, ibadah);
     const cancelled = cancelledDates.includes(tanggal);
-    return { tanggal, startsAt: startsAt.toISOString(), cancelled, open: !cancelled && now < startsAt };
+    return { tanggal, startsAt: startsAt.toISOString(), closesAt: closes.toISOString(), cancelled, open: !cancelled && now < closes };
   }).filter((o) => o.open || o.cancelled);
 }
 
-/** Masih boleh batal: status RESERVE dan belum lewat jam mulai. */
+/** Masih boleh batal: status RESERVE dan belum lewat jam mulai (atau batas reservasi bila diatur sesudah mulai). */
 export function canCancelReservasi(
   r: { status: string; tanggalIbadah: Date },
   jamMulai: string,
   now: Date = new Date(),
   tz: string = DEFAULT_TZ,
+  cfg?: CheckinCfg | null,
 ): boolean {
-  return r.status === 'RESERVE' && now < occurrenceStart(r.tanggalIbadah.toISOString().slice(0, 10), jamMulai, tz);
+  const ymd = r.tanggalIbadah.toISOString().slice(0, 10);
+  const start = occurrenceStart(ymd, jamMulai, tz);
+  const reg = reservasiClosesAt(ymd, jamMulai, tz, cfg);
+  return r.status === 'RESERVE' && now < (reg > start ? reg : start);
 }
 
 /** Usia penuh (tahun) per tanggal WIB hari ini; null kalau tanggal lahir kosong. */
@@ -100,7 +119,7 @@ export function canCancelCheckin(
     checkedOutAt?: Date | null;
     pickupCode?: string | null;
   },
-  ibadah: { jamMulai: string; jamSelesai: string | null; isKidsIbadah?: boolean | null },
+  ibadah: { jamMulai: string; jamSelesai: string | null; isKidsIbadah?: boolean | null } & CheckinCfg,
   me: { userId: string; jemaatId: string },
   now: Date = new Date(),
   tz: string = DEFAULT_TZ,
@@ -108,7 +127,7 @@ export function canCancelCheckin(
   if (r.status !== 'JOIN' || r.checkinMethod !== 'SELF') return false;
   if (r.checkedInBy !== me.userId && r.jemaatId !== me.jemaatId) return false;
   if (ibadah.isKidsIbadah || r.checkedOutAt || r.pickupCode) return false;
-  // Sama dengan penutupan self check-in: sampai CLOSE_AFTER_MIN setelah ibadah selesai.
-  const end = occurrenceEnd(r.tanggalIbadah.toISOString().slice(0, 10), ibadah.jamMulai, ibadah.jamSelesai, tz);
-  return now.getTime() < end.getTime() + CLOSE_AFTER_MIN * 60_000;
+  // Sama dengan penutupan self check-in (bawaan 30 menit setelah selesai; bisa diatur per ibadah).
+  const closes = selfCheckinClosesAt(r.tanggalIbadah, ibadah.jamMulai, ibadah.jamSelesai, tz, ibadah);
+  return now.getTime() < closes.getTime();
 }

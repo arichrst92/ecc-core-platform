@@ -340,7 +340,7 @@ publicUnauthRouter.get('/ibadah/calendar', publicBrowseLimiter, async (req, res)
         kapasitasSeat: i.kapasitasSeat,
         terisi: filled.get(`${i.id}:${iso}`) ?? 0,
         hadir: hadirMap.get(`${i.id}:${iso}`) ?? 0,
-        checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone)).toISOString(),
+        checkinOpensAt: selfCheckinOpensAt(d, i.jamMulai, tzOr(i.cabang?.timezone), i).toISOString(),
       });
     }
   }

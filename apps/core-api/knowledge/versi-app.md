@@ -30,7 +30,7 @@ summary: Status rilis Els App (2.5.0 & 2.5.1), fitur yang beda antar versi, atur
 - **Tulisan & angka aturan dari server**: label app bisa diperbaiki lewat Portal → Diagnostics → **Tulisan di App** tanpa build baru (hanya 2.5.1 ke atas).
 
 ## Aturan server yang sudah berlaku untuk 2.5.0 (tanpa menunggu 2.5.1)
-- Self check-in 15 menit sebelum mulai s.d. 30 menit setelah selesai (sama dengan teks di 2.5.0).
+- Self check-in bawaan 15 menit sebelum mulai s.d. 30 menit setelah selesai (sama dengan teks di 2.5.0). Ibadah/event dengan jendela khusus (2026-11): 2.5.0 tetap menampilkan jam bawaan, server menegakkan jendela sebenarnya dengan pesan jelas; 2.5.1 menampilkan jendela sebenarnya. Batas reservasi/pendaftaran khusus sudah tampil benar di hitung mundur 2.5.0.
 - Angka hadir header scanner ibadah kembali benar ("/33" diperbaiki di server).
 - Website: okupansi reservasi → hadir & label Sukarela.
 - Event sukarela: kartu tanpa hitung mundur; batal pendaftaran yang sudah bayar ditolak dengan pesan; nominal tiket = nominal yang diberikan.

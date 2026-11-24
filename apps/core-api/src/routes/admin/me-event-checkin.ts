@@ -19,7 +19,10 @@ import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { syncEventRoleForStatus } from '../../lib/event-role.js';
 import { familyOf } from '../../lib/family.js';
 import {
-  EVENT_SELF_CHECKIN_REASON_TEXT,
+  CHECKIN_CFG_SELECT,
+  checkinRuleInfo,
+  eventSelfCheckinReasonText,
+  windowForClient,
   checkSelfCheckinRadius,
   eventSelfCheckinWindow,
   radiusErrorMessage,
@@ -27,6 +30,7 @@ import {
   venuePoint,
 } from '../../lib/self-checkin.js';
 import { tzOr } from '../../lib/tz.js';
+import { isLegacyApp } from '../../lib/client-kind.js';
 import { paymentOkForCheckin } from '../../lib/event-payment.js';
 
 export const meEventCheckinRouter = Router();
@@ -58,6 +62,7 @@ async function loadEvent(eventId: string) {
       latitude: true,
       longitude: true,
       selfCheckinRadiusM: true,
+      ...CHECKIN_CFG_SELECT,
       cabang: { select: { latitude: true, longitude: true, timezone: true } },
     },
   });
@@ -107,11 +112,13 @@ meEventCheckinRouter.get('/:eventId', async (req, res) => {
   res.json({
     success: true,
     data: {
-      ...window,
+      // App ≤ 2.5.0: opensAt/closesAt bentuk bawaan; penegakan tetap jendela event ini.
+      ...windowForClient(window, isLegacyApp(req)),
+      ...checkinRuleInfo(event),
       // Tidak ada peserta terdaftar (saya/keluarga) → tidak ada yang bisa di-check-in.
       available: window.available && rows.length > 0,
       serverNow: new Date().toISOString(),
-      reasonText: window.reason ? EVENT_SELF_CHECKIN_REASON_TEXT[window.reason] : null,
+      reasonText: window.reason ? eventSelfCheckinReasonText(window.reason, event) : null,
       event: {
         id: event.id,
         judul: event.judul,
@@ -139,7 +146,7 @@ meEventCheckinRouter.post('/:eventId', async (req, res) => {
   const { jemaatIds, lat, lng } = bodySchema.parse(req.body ?? {});
   const { event, window } = await loadEvent(req.params.eventId);
   if (!window.available) {
-    throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, EVENT_SELF_CHECKIN_REASON_TEXT[window.reason!]);
+    throw new ApiError(400, `SELF_CHECKIN_${window.reason}`, eventSelfCheckinReasonText(window.reason!, event));
   }
   // Radius sesuai pengaturan event (null = di mana saja), dari titik event
   // atau titik cabang. Di luar radius → arahkan ke usher (QR).

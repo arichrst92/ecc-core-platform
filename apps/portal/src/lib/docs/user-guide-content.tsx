@@ -555,7 +555,7 @@ export const SECTIONS: Section[] = [
         title: 'Aturan event (berlaku untuk app, website & Portal)',
         items: [
           'Tipe bayar: Gratis (hijau) · Sukarela (biru, dulu "donasi / nominal bebas") · Berbayar nominal tetap (kuning).',
-          'Pendaftaran online (app & website) ditutup saat event dimulai → walk-in di lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.',
+          'Pendaftaran online (app & website) ditutup saat event dimulai (atau sesuai Batas Pendaftaran Online di form event) → walk-in di lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.',
           'Hanya event aktif & sudah dipublikasikan yang bisa didaftari jemaat. Jemaat hanya bisa mendaftarkan diri, keluarga, dan tamunya.',
           'Berbayar wajib lunas sebelum check-in. Sukarela wajib lunas hanya bila ada nominal minimum; tanpa minimum, peserta boleh hadir walau belum memberi.',
           'Tidak hadir: tiket yang belum dibayar dibatalkan otomatis 30 menit setelah event selesai. Peserta yang sudah membayar / menunggu verifikasi TIDAK dibatalkan.',
@@ -753,7 +753,7 @@ export const SECTIONS: Section[] = [
     id: 'service-baru',
     title: 'Ibadah & Event — Pengaturan Terbaru',
     icon: Church,
-    summary: 'Urutan ibadah, rating on/off, self check-in +30 menit, laporan ibadah & event.',
+    summary: 'Urutan ibadah, rating on/off, jendela reservasi & self check-in per ibadah/event, laporan ibadah & event.',
     content: [
       {
         kind: 'bullet',
@@ -762,7 +762,8 @@ export const SECTIONS: Section[] = [
           'Urutan tampil: geser urutan di daftar Ibadah — tab Ibadah & Beranda di app mengikuti urutan ini.',
           'Kolom Rating (Ya/Tidak) di daftar ibadah: matikan bila ibadah tersebut tidak perlu diulas. Kartu ulasan di tiket app ikut hilang.',
           'Jadwal Bulanan: pilih minggu ke-1 sampai ke-4 lalu harinya. Jam jadwal = jam di zona waktu cabang.',
-          'Self check-in dibuka 15 menit sebelum mulai sampai 30 menit setelah ibadah/event selesai (petugas bisa scan sejak 30 menit sebelum mulai); jemaat juga bisa membatalkan self check-in yang salah dari tiket.',
+          'Self check-in bawaan dibuka 15 menit sebelum mulai sampai 30 menit setelah ibadah/event selesai (petugas bisa scan sejak 30 menit sebelum mulai); jemaat juga bisa membatalkan self check-in yang salah dari tiket.',
+          'Jendela per ibadah (form ibadah): Batas reservasi (menit sebelum mulai; negatif = sesudah mulai), Self check-in dibuka (menit sebelum mulai), Self check-in ditutup (menit setelah ibadah dimulai / selesai). Kosong = aturan bawaan. Hitung mundur & teks di Els App 2.5.1 mengikuti pengaturan; app 2.5.0 tetap menampilkan jam bawaan dan server menolak di luar jendela dengan pesan jelas.',
           'Laporan Ibadah: kehadiran, tamu per kategori, ulasan jemaat — bisa diunduh PDF/Excel.',
         ],
       },
@@ -771,6 +772,7 @@ export const SECTIONS: Section[] = [
         title: 'Event',
         items: [
           'Rating & ulasan bisa dinyalakan/dimatikan per event di form event.',
+          'Form event → Batas Pendaftaran Online (menit sebelum mulai; 1440 = sehari sebelumnya) dan Jam self check-in (dibuka N menit sebelum mulai, ditutup N menit setelah event dimulai / selesai). Kosong = bawaan. Peserta yang belum hadir dibatalkan otomatis setelah self check-in ditutup (paling cepat saat event selesai).',
           'Lokasi atau jam yang dikosongkan tampil "-" di app.',
           'Laporan Event: peserta, kehadiran, tamu, ulasan — PDF/Excel.',
         ],

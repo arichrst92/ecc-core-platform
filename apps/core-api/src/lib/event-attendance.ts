@@ -1,6 +1,6 @@
 /** Jumlah hadir & waktu buka check-in event — kartu app & website (2026-11). */
 import { prisma } from '@ecc/database';
-import { selfCheckinOpensAt } from './self-checkin.js';
+import { type CheckinCfg, selfCheckinOpensAt } from './self-checkin.js';
 import { calendarDateOf } from './tz.js';
 
 /**
@@ -8,9 +8,13 @@ import { calendarDateOf } from './tz.js';
  * "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (hadirCount).
  * Event tanpa pencatatan kehadiran → null (app tetap menulis terdaftar).
  */
-export function attendanceInfo(ev: { tanggalMulai: Date; jamMulai: string | null; butuhKehadiran: boolean }, tz: string, hadir: number) {
+export function attendanceInfo(
+  ev: { tanggalMulai: Date; jamMulai: string | null; butuhKehadiran: boolean } & CheckinCfg,
+  tz: string,
+  hadir: number,
+) {
   if (!ev.butuhKehadiran) return { hadirCount: null, checkinOpensAt: null };
-  return { hadirCount: hadir, checkinOpensAt: selfCheckinOpensAt(calendarDateOf(ev.tanggalMulai, tz), ev.jamMulai, tz).toISOString() };
+  return { hadirCount: hadir, checkinOpensAt: selfCheckinOpensAt(calendarDateOf(ev.tanggalMulai, tz), ev.jamMulai, tz, ev).toISOString() };
 }
 
 export async function hadirCountByEvent(ids: string[]): Promise<Map<string, number>> {

@@ -14,9 +14,10 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/errors.js';
 import { familyOf } from '../../lib/family.js';
-import { eventSelfCheckinWindow, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { checkinRuleInfo, eventSelfCheckinWindow, legacyWindowTimes, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { isLegacyApp } from '../../lib/client-kind.js';
 import { tzOr } from '../../lib/tz.js';
-import { eventEndsAt, eventStartsAt } from '../../lib/event-time.js';
+import { eventCancelClosesAt, eventEndsAt } from '../../lib/event-time.js';
 import { revokeEventRole } from '../../lib/event-role.js';
 import { audit } from '../../lib/audit.js';
 import { paymentStatusOf } from '../../lib/event-payment.js';
@@ -101,6 +102,10 @@ meEventTiketRouter.get('/', async (req, res) => {
           isActive: true,
           butuhKehadiran: true,
           allowSelfCheckin: true,
+          registrasiTutupMenit: true,
+          checkinBukaMenit: true,
+          checkinTutupMenit: true,
+          checkinTutupAcuan: true,
           cabang: { select: { nama: true, timezone: true, latitude: true, longitude: true, mapsUrl: true } },
         },
       },
@@ -108,6 +113,7 @@ meEventTiketRouter.get('/', async (req, res) => {
   });
 
   const now = new Date();
+  const legacy = isLegacyApp(req);
   const data = rows
     .map((r) => {
       const ev = r.event;
@@ -141,7 +147,7 @@ meEventTiketRouter.get('/', async (req, res) => {
       const totalBayar = sumOf('BAYAR') || sumOf('MENUNGGU_VERIFIKASI');
       // CONFIRMED = sudah diverifikasi; PENDING = nominal masih menunggu verifikasi (2026-11).
       const totalBayarStatus = sumOf('BAYAR') ? 'CONFIRMED' : sumOf('MENUNGGU_VERIFIKASI') ? 'PENDING' : null;
-      const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventStartsAt(ev, tz), now);
+      const canCancel = ev.isActive && canCancelTicket(r.status, payment, eventCancelClosesAt(ev, tz), now);
       const relasi = r.jemaat.id === u.jemaatId ? null : (fam.get(r.jemaat.id) ?? (r.jemaat.isTamu ? 'Tamu' : null));
       return {
         id: r.id,
@@ -180,8 +186,12 @@ meEventTiketRouter.get('/', async (req, res) => {
         // Check-in mandiri lewat tiket: hanya kalau event mengizinkan.
         selfCheckin: {
           enabled: ev.allowSelfCheckin && ev.butuhKehadiran,
-          opensAt: win.opensAt,
-          closesAt: win.closesAt,
+          // App ≤ 2.5.0 menghitung jam tiket dari opensAt + 15 / closesAt − 30 →
+          // bentuk bawaan; 2.5.1 memakai startAt/endAt + angka aturan event ini.
+          ...(legacy ? legacyWindowTimes(win.startAt, win.endAt) : { opensAt: win.opensAt, closesAt: win.closesAt }),
+          startAt: win.startAt,
+          endAt: win.endAt,
+          ...checkinRuleInfo(ev),
           venue: venueInfo(ev.selfCheckinRadiusM, venuePoint(ev, ev.cabang)),
         },
         _ended: ended,
@@ -221,7 +231,16 @@ meEventTiketRouter.post('/:id/cancel', async (req, res) => {
       jemaat: { select: { namaLengkap: true } },
       donations: { select: { status: true } },
       event: {
-        select: { judul: true, isActive: true, tipeBayar: true, nominal: true, tanggalMulai: true, jamMulai: true, cabang: { select: { timezone: true } } },
+        select: {
+          judul: true,
+          isActive: true,
+          tipeBayar: true,
+          nominal: true,
+          tanggalMulai: true,
+          jamMulai: true,
+          registrasiTutupMenit: true,
+          cabang: { select: { timezone: true } },
+        },
       },
     },
   });
@@ -238,7 +257,7 @@ meEventTiketRouter.post('/:id/cancel', async (req, res) => {
   if (payment === 'LUNAS' || payment === 'MENUNGGU') {
     throw BadRequest('Tiket yang sudah dibayar / menunggu verifikasi pembayaran dibatalkan lewat admin event.');
   }
-  if (!p.event.isActive || !canCancelTicket(p.status, payment, eventStartsAt(p.event, tz), new Date())) {
+  if (!p.event.isActive || !canCancelTicket(p.status, payment, eventCancelClosesAt(p.event, tz), new Date())) {
     throw BadRequest('Tiket tidak bisa dibatalkan karena event sudah dimulai.');
   }
 

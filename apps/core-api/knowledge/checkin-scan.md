@@ -2,7 +2,7 @@
 id: checkin-scan
 title: Check-in, Mode Scanner, Walk-in, Checkout & Jemput Anak
 tags: check-in, checkin, scan, scanner, usher, petugas scan, walk-in, terlambat, self check-in, geser check-in, qr, kode jemaat, checkout, pickup, jemput, jendela, ditutup, CHECKIN_CLOSED, radius, lokasi, batalkan check-in
-summary: Aturan jam check-in (petugas ±30 menit dari mulai, self check-in 15 menit sebelum mulai s.d. 30 menit setelah SELESAI), walk-in sampai akhir hari, self check-in & radius lokasi, Mode Scanner di app, checkout/pickup, serta arti pesan error scan.
+summary: Aturan jam check-in (petugas ±30 menit dari mulai, self check-in bawaan 15 menit sebelum mulai s.d. 30 menit setelah SELESAI — bisa diatur per ibadah/event), walk-in sampai akhir hari, self check-in & radius lokasi, Mode Scanner di app, checkout/pickup, serta arti pesan error scan.
 ---
 
 # Check-in, Mode Scanner, Walk-in, Checkout & Jemput Anak
@@ -13,15 +13,19 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 | Jenis | Dibuka | Ditutup |
 |---|---|---|
 | Check-in **reservasi / peserta terdaftar** (scan petugas) | 30 menit sebelum jam mulai | 30 menit setelah jam mulai |
-| **Self check-in** jemaat dari HP | **15 menit** sebelum jam mulai | **30 menit setelah jam selesai** |
+| **Self check-in** jemaat dari HP | **15 menit** sebelum jam mulai (bawaan; bisa diatur per ibadah/event) | **30 menit setelah jam selesai** (bawaan; bisa diatur N menit setelah mulai/selesai) |
 | **Walk-in** (tanpa reservasi / tamu baru) | 30 menit sebelum jam mulai | akhir hari ibadah/event (masih bisa dicatat walau terlambat) |
 | Checkout & jemput anak (pickup) | tidak dibatasi jendela | — |
 
 - Ibadah/event **tanpa jam mulai** → check-in terbuka sepanjang hari itu.
+- **Jendela per ibadah / event (2026-11)**: Portal → Ibadah (form) / Event (form → *Batas Pendaftaran Online* & *Jam self check-in*) bisa mengatur: (1) **batas reservasi / pendaftaran online** = N menit sebelum mulai (negatif = sesudah mulai; kosong = saat mulai), (2) **self check-in dibuka** N menit sebelum mulai (kosong = 15), (3) **self check-in ditutup** N menit setelah **mulai** atau **selesai** (kosong = 30 menit setelah selesai). Kosong = aturan bawaan di tabel atas. Pesan penolakan menyebut angka sebenarnya, mis. "Self check-in ditutup 20 menit setelah ibadah dimulai." / "Reservasi sudah ditutup (batasnya 2 jam sebelum ibadah dimulai)…".
+  - **App 2.5.1**: hitung mundur, teks "Dibuka pukul … (N menit sebelum mulai)", jam tiket, kartu Beranda & batas batal check-in mengikuti pengaturan.
+  - **App 2.5.0 ke bawah**: tetap menampilkan jam bawaan (15 menit sebelum mulai s.d. 30 menit setelah selesai). Bila pengaturan lebih sempit, tombol bisa tampil tetapi server menolak dengan pesan di atas; bila lebih lebar, app lama baru membuka tombol pada jam bawaan (minta update app atau scan usher).
+  - Scan petugas **tidak** berubah (tetap ±30 menit dari mulai). Pembatalan reservasi/pendaftaran oleh jemaat tetap sampai jam mulai (atau batas pendaftaran bila diatur sesudah mulai). Batal otomatis (NO_SHOW) = saat self check-in ditutup, paling cepat saat acara selesai.
 - **Event beberapa hari** → scan petugas: jendela berlaku tiap hari pada jam mulai event. **Self check-in**: satu jendela dari 15 menit sebelum mulai di hari pertama s.d. 30 menit setelah jam selesai di hari terakhir (kehadiran tetap tercatat sekali).
 - **Terlambat** (lewat 30 menit setelah mulai, di hari yang sama): scan petugas tetap diterima tetapi dicatat sebagai **walk-in** (metode WALK_IN). App menampilkan keterangan walk-in.
 - **Admin** (Role Access menu Kehadiran/Ibadah tulis; pengelola event = Role Access Event tulis; Fulltimer lewat Portal) **boleh di luar jendela** — untuk koreksi lewat Portal.
-- Tiket ibadah tetap tampil aktif sampai 30 menit setelah ibadah selesai (hanya tampilan). Setelah itu reservasi yang tidak dipakai **dibatalkan otomatis (NO_SHOW)**. Petugas/admin tetap bisa check-in tiket yang sudah dibatalkan bila jemaat ternyata hadir.
+- Tiket ibadah tetap tampil aktif sampai self check-in ditutup (bawaan 30 menit setelah ibadah selesai; hanya tampilan). Setelah itu reservasi yang tidak dipakai **dibatalkan otomatis (NO_SHOW)**. Petugas/admin tetap bisa check-in tiket yang sudah dibatalkan bila jemaat ternyata hadir.
 
 ## Siapa yang boleh scan
 - **Petugas scan ibadah**: petugas pelayanan di ibadah itu dengan tanda **"Bisa Scan" / canScanAttendance** (diatur di Portal → detail ibadah → Pelayanan → petugas, atau koordinator di app → Ministry → Atur jadwal → chip scan). Berlaku permisif: cukup ada di salah satu baris petugas link itu dengan tanda scan.
@@ -46,7 +50,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 
 ## Self check-in (jemaat dari HP)
 - Dari tiket (geser untuk check-in) atau Detail Ibadah → Self Check-in → konfirmasi "saya di lokasi" → pilih siapa saja yang hadir (diri, keluarga, tamu).
-- Jendela: **15 menit sebelum mulai** s.d. **30 menit setelah selesai** (jemaat sering baru sempat check-in setelah ibadah). App menampilkan hitung mundur "Dibuka pukul HH.MM (15 menit sebelum mulai)" dan, setelah ibadah selesai, "berakhir dalam mm:ss". Petugas tetap bisa scan sejak 30 menit sebelum mulai.
+- Jendela bawaan: **15 menit sebelum mulai** s.d. **30 menit setelah selesai** (jemaat sering baru sempat check-in setelah ibadah); bisa diatur per ibadah/event (lihat atas). App menampilkan hitung mundur "Dibuka pukul HH.MM (15 menit sebelum mulai)" dan, setelah ibadah selesai, "berakhir dalam mm:ss". Petugas tetap bisa scan sejak 30 menit sebelum mulai.
 - **Radius lokasi** diatur per ibadah/event di Portal: pilihan 50, 100, 200, 300, 500, 1000, 2000, 5000 m, atau "di mana saja" (tidak dicek). Titik lokasi = titik ibadah/event; bila kosong pakai titik cabang. Bila venue tidak punya titik sama sekali, lokasi tidak dicek.
 - Penolakan lokasi: **LOCATION_REQUIRED** (izin lokasi HP mati / GPS belum dapat posisi) atau **TOO_FAR** (di luar radius; jarak ditampilkan).
 - **Ibadah anak tidak bisa self check-in** — check-in dilakukan di meja CKids.

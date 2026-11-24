@@ -2,7 +2,7 @@
 id: event
 title: Event — Pendaftaran, Pembayaran, Pembatalan, Sesi & Petugas
 tags: event, pendaftaran, daftar, peserta, kuota, berbayar, sukarela, gratis, nominal, bukti transfer, verifikasi, tolak bukti, lunas, batal, pembatalan, refund, grup sesi, sesi, natal, walk-in event, tiket event, publish, butuh kehadiran, laporan event, website pembayaran
-summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup sesi, verifikasi/tolak bukti transfer, aturan pembatalan, batal otomatis, walk-in di lokasi, petugas & laporan.
+summary: Membuat event, tipe bayar, aturan pendaftaran (bawaan tutup saat mulai, bisa diatur per event), grup sesi, verifikasi/tolak bukti transfer, aturan pembatalan, batal otomatis, walk-in di lokasi, petugas & laporan.
 ---
 
 # Event — Pendaftaran, Pembayaran, Pembatalan, Sesi & Petugas
@@ -25,11 +25,11 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (tutup saat mulai), grup 
 9. **Publish** → event tampil di app. Hanya event **aktif & dipublikasikan** yang bisa didaftari.
 
 ## Aturan pendaftaran (app, website & Portal)
-- Pendaftaran **online (app & website) ditutup saat event dimulai** → setelah itu hanya **walk-in di lokasi** lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.
+- Pendaftaran **online (app & website) ditutup saat event dimulai** (bawaan) — atau sesuai **Batas Pendaftaran Online** di form event (N menit sebelum mulai; negatif = sesudah mulai). Hitung mundur pendaftaran di app mengikuti batas ini; pesan: "Pendaftaran online sudah ditutup (batasnya …)". Setelah itu hanya **walk-in di lokasi** lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.
 - Jemaat hanya bisa mendaftarkan **diri sendiri, keluarga, dan tamunya** ("Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.").
 - Peserta yang belum memenuhi syarat usia ditandai "Belum memenuhi syarat usia" dan tidak bisa dicentang.
 - **Kuota penuh** → pendaftaran ditolak; admin di Portal bisa tetap memasukkan (force).
-- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & app 2.5.1**: sebelum check-in dibuka (15 menit sebelum mulai) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
+- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & app 2.5.1**: sebelum check-in dibuka (bawaan 15 menit sebelum mulai, atau sesuai pengaturan event) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
 - App 2.5.1: tulisan kuota di **atas** bar (tidak terpotong).
 - Tombol **sukarela/daftar dinonaktifkan** di app bila pendaftaran sudah ditutup atau kuota penuh (untuk yang belum terdaftar).
 - "Event ini belum dibuka untuk pendaftaran." → event belum publish/aktif.
@@ -62,7 +62,7 @@ Aturan sama di app, website, dan Portal (oleh peserta sendiri):
 - Admin membatalkan peserta (ubah status ke Batal di Portal) → peserta mendapat notifikasi *"dibatalkan oleh admin"*.
 
 ## Batal otomatis (no-show)
-- Tiket event yang **belum dibayar** dibatalkan otomatis **30 menit setelah event selesai** (hanya event yang "Butuh Kehadiran"). Peserta yang sudah membayar / menunggu verifikasi **tidak** dibatalkan.
+- Tiket event yang **belum dibayar** dibatalkan otomatis saat **self check-in ditutup** (bawaan **30 menit setelah event selesai**; sesuai *Jam self check-in* di form event, paling cepat saat event selesai) (hanya event yang "Butuh Kehadiran"). Peserta yang sudah membayar / menunggu verifikasi **tidak** dibatalkan.
 - Petugas tetap bisa check-in tiket yang terlanjur dibatalkan bila orangnya hadir.
 
 ## Hari H — check-in & walk-in

@@ -42,7 +42,18 @@ import { DonationsSection } from '@/components/event/donations-section';
 import { UploadHint } from '@/components/upload/upload-hint';
 import { DuplicateEventButton } from '@/components/event/duplicate-event-button';
 
+/** "15 menit sebelum mulai s.d. 30 menit setelah selesai" sesuai jendela event ini. */
+function checkinWindowText(e: { checkinBukaMenit?: number | null; checkinTutupMenit?: number | null; checkinTutupAcuan?: string | null }) {
+  const buka = e.checkinBukaMenit ?? 15;
+  const tutup = e.checkinTutupMenit ?? 30;
+  const acuan = e.checkinTutupAcuan === 'START' ? 'mulai' : 'selesai';
+  return `${buka ? `${buka} menit sebelum mulai` : 'saat mulai'} s.d. ${tutup ? `${tutup} menit setelah ${acuan}` : `saat ${acuan}`}`;
+}
+
 interface EventDetail {
+  checkinBukaMenit?: number | null;
+  checkinTutupMenit?: number | null;
+  checkinTutupAcuan?: string | null;
   id: string;
   judul: string;
   slug: string;
@@ -544,7 +555,7 @@ export default function EventDetailPage() {
             <p className="text-xs text-neutral-500 mt-0.5">
               {e.butuhKehadiran
                 ? e.allowSelfCheckin
-                  ? 'Event ini butuh kehadiran — scan QR jemaat, atau peserta self check-in dari aplikasi (15 menit sebelum mulai s.d. 30 menit setelah selesai).'
+                  ? `Event ini butuh kehadiran — scan QR jemaat, atau peserta self check-in dari aplikasi (${checkinWindowText(e)}).`
                   : 'Event ini butuh kehadiran — gunakan tombol Check-in untuk scan QR jemaat.'
                 : 'Jemaat yang berpartisipasi di event ini.'}
             </p>

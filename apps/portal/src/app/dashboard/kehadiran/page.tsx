@@ -38,7 +38,7 @@ interface ReservasiItem {
   reservedAt: string;
   joinedAt: string | null;
   cancelledAt: string | null;
-  /** NO_SHOW = dibatalkan otomatis (tidak check-in s.d. 30 menit setelah ibadah selesai). */
+  /** NO_SHOW = dibatalkan otomatis (tidak check-in s.d. self check-in ditutup — bawaan 30 menit setelah ibadah selesai). */
   cancelReason?: string | null;
   catatan: string | null;
   guestSource?: string | null;
@@ -390,7 +390,7 @@ export default function KehadiranPage() {
                         {r.status === 'CANCEL' && r.cancelReason === 'NO_SHOW' ? 'Tidak hadir' : STATUS_LABEL[r.status]}
                       </span>
                       {r.status === 'CANCEL' && r.cancelReason === 'NO_SHOW' ? (
-                        <div className="text-[10px] text-neutral-400 mt-0.5" title="Tidak check-in sampai 30 menit setelah ibadah selesai">
+                        <div className="text-[10px] text-neutral-400 mt-0.5" title="Tidak check-in sampai self check-in ditutup (bawaan 30 menit setelah ibadah selesai)">
                           batal otomatis
                         </div>
                       ) : null}

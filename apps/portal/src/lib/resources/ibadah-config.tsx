@@ -22,6 +22,10 @@ interface Ibadah extends Record<string, unknown> {
   requiresCheckout: boolean;
   isKidsIbadah: boolean;
   allowKidsSelfCheckin?: boolean;
+  registrasiTutupMenit?: number | null;
+  checkinBukaMenit?: number | null;
+  checkinTutupMenit?: number | null;
+  checkinTutupAcuan?: 'START' | 'END' | null;
   isActive: boolean;
   cabang?: { id: string; nama: string };
   kategoriIbadah?: { id: string; nama: string };
@@ -192,6 +196,41 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       ],
       helperText:
         'Dengan radius: jemaat harus berada di dekat titik lokasi (GPS HP dicek). Di luar radius diarahkan ke usher untuk scan QR. Radius butuh titik lokasi ibadah atau cabang.',
+    },
+    // Jendela reservasi & self check-in per ibadah (2026-11). Kosong = aturan bawaan.
+    {
+      name: 'registrasiTutupMenit',
+      label: 'Batas reservasi (menit sebelum mulai)',
+      type: 'number',
+      placeholder: '0',
+      helperText:
+        'Kosong / 0 = reservasi ditutup saat ibadah mulai (bawaan). Isi 60 = ditutup 1 jam sebelum mulai. Isi negatif (mis. -15) = masih bisa reservasi s.d. 15 menit setelah mulai. Pembatalan reservasi tetap dibuka sampai ibadah mulai.',
+    },
+    {
+      name: 'checkinBukaMenit',
+      label: 'Self check-in dibuka (menit sebelum mulai)',
+      type: 'number',
+      placeholder: '15',
+      helperText: 'Kosong = 15 menit sebelum mulai (bawaan). 0 = tepat saat ibadah mulai. Maks. 720.',
+    },
+    {
+      name: 'checkinTutupMenit',
+      label: 'Self check-in ditutup (menit setelah …)',
+      type: 'number',
+      placeholder: '30',
+      helperText: 'Kosong = 30 menit (bawaan). Acuannya dipilih di bawah. Tiket reservasi yang tidak dipakai batal otomatis setelah ini (paling cepat saat ibadah selesai).',
+    },
+    {
+      name: 'checkinTutupAcuan',
+      label: 'Self check-in ditutup dihitung dari',
+      type: 'select',
+      defaultValue: '',
+      options: [
+        { value: '', label: 'Ibadah selesai (bawaan)' },
+        { value: 'START', label: 'Ibadah dimulai' },
+      ],
+      helperText:
+        'Contoh: 30 menit + "Ibadah dimulai" = self check-in ditutup 30 menit setelah ibadah mulai. Els App ≤ 2.5.0 tetap menampilkan jam bawaan (15 menit sebelum mulai s.d. 30 menit setelah selesai) — server menolak di luar jendela ini dengan pesan yang jelas.',
     },
     {
       name: 'kapasitasSeat',

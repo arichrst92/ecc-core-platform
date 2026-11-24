@@ -38,6 +38,11 @@ export type EventFormValues = {
   allowReview?: boolean;
   /** Radius self check-in (meter). '' / null = di mana saja. */
   selfCheckinRadiusM?: number | string | null;
+  /** Jendela per event (2026-11). '' / null = aturan bawaan. */
+  registrasiTutupMenit?: number | string | null;
+  checkinBukaMenit?: number | string | null;
+  checkinTutupMenit?: number | string | null;
+  checkinTutupAcuan?: 'START' | 'END' | '' | null;
   isPublished?: boolean;
   // Syarat role untuk daftar (salah satu cocok) + role yang diberikan ke peserta.
   // Tidak dikirim (undefined) kalau data role event belum termuat — supaya
@@ -206,6 +211,10 @@ export function EventFormModal({
         allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
         allowReview: (dv.allowReview as boolean) ?? true,
         selfCheckinRadiusM: (dv.selfCheckinRadiusM as number | null | undefined) ?? '',
+        registrasiTutupMenit: (dv.registrasiTutupMenit as number | null | undefined) ?? '',
+        checkinBukaMenit: (dv.checkinBukaMenit as number | null | undefined) ?? '',
+        checkinTutupMenit: (dv.checkinTutupMenit as number | null | undefined) ?? '',
+        checkinTutupAcuan: (dv.checkinTutupAcuan as 'START' | 'END' | null | undefined) ?? '',
         isPublished: (dv.isPublished as boolean) ?? false,
       });
       setTagsInput(((dv.tags as string[]) ?? []).join(', '));
@@ -301,6 +310,11 @@ export function EventFormModal({
       quotaPeserta: values.quotaPeserta === '' ? undefined : values.quotaPeserta,
       // '' → null (lepas dari grup) saat edit; undefined saat create kosong.
       grupSesi: values.grupSesi ? values.grupSesi : isEdit ? null : undefined,
+      // '' → null = aturan bawaan.
+      registrasiTutupMenit: numOrNull(values.registrasiTutupMenit),
+      checkinBukaMenit: numOrNull(values.checkinBukaMenit),
+      checkinTutupMenit: numOrNull(values.checkinTutupMenit),
+      checkinTutupAcuan: values.checkinTutupAcuan || null,
     };
     if (roleConfigReady) {
       payload.roleRequirements = reqs.filter((r) => r.roleId);
@@ -723,6 +737,26 @@ export function EventFormModal({
               </div>
             </Section>
 
+            {/* Batas pendaftaran online (2026-11) */}
+            <Section title="Batas Pendaftaran Online" helper="Setelah batas ini peserta baru didaftarkan petugas di lokasi (walk-in).">
+              <div className="flex items-center gap-2 text-sm text-neutral-700 flex-wrap">
+                Ditutup
+                <MinuteInput
+                  value={values.registrasiTutupMenit}
+                  placeholder="0"
+                  min={-720}
+                  max={10080}
+                  onChange={(v) => patch({ registrasiTutupMenit: v })}
+                />
+                menit sebelum event dimulai
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Kosong / 0 = saat event dimulai (bawaan). 1440 = sehari sebelumnya. Negatif (mis. -30) = masih bisa daftar s.d.
+                30 menit setelah event dimulai. Hitung mundur pendaftaran di app mengikuti batas ini. Pembatalan oleh peserta
+                tetap dibuka sampai event dimulai.
+              </p>
+            </Section>
+
             {/* Kehadiran section */}
             <Section title="Kehadiran" helper="Aktifkan kalau event butuh absensi pada hari H.">
               <label className="flex items-start gap-2 cursor-pointer p-3 border border-neutral-200 rounded-lg hover:bg-neutral-50">
@@ -760,14 +794,38 @@ export function EventFormModal({
                   <div className="text-sm font-medium text-neutral-900">Perbolehkan self check-in</div>
                   <div className="text-xs text-neutral-500 mt-0.5">
                     Peserta bisa check-in sendiri dari aplikasi (dirinya + keluarga yang terdaftar di event ini),
-                    mulai 15 menit sebelum event sampai 30 menit setelah event selesai. Event berbayar: hanya peserta yang
-                    pembayarannya sudah terverifikasi.
+                    bawaan mulai 15 menit sebelum event sampai 30 menit setelah event selesai (bisa diatur di bawah). Event
+                    berbayar: hanya peserta yang pembayarannya sudah terverifikasi.
                   </div>
                 </div>
               </label>
               {values.butuhKehadiran && values.allowSelfCheckin ? (
                 <div className="mt-2 p-3 border border-neutral-200 rounded-lg space-y-2">
-                  <div className="text-sm font-medium text-neutral-900">Lokasi self check-in</div>
+                  <div className="text-sm font-medium text-neutral-900">Jam self check-in</div>
+                  <div className="flex items-center gap-2 text-sm text-neutral-700 flex-wrap">
+                    Dibuka
+                    <MinuteInput value={values.checkinBukaMenit} placeholder="15" min={0} max={720} onChange={(v) => patch({ checkinBukaMenit: v })} />
+                    menit sebelum event dimulai
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-neutral-700 flex-wrap">
+                    Ditutup
+                    <MinuteInput value={values.checkinTutupMenit} placeholder="30" min={0} max={720} onChange={(v) => patch({ checkinTutupMenit: v })} />
+                    menit setelah event
+                    <select
+                      value={values.checkinTutupAcuan || ''}
+                      onChange={(e) => patch({ checkinTutupAcuan: e.target.value as 'START' | '' })}
+                      className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white"
+                    >
+                      <option value="">selesai</option>
+                      <option value="START">dimulai</option>
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-neutral-500">
+                    Kosong = bawaan (15 menit sebelum mulai s.d. 30 menit setelah selesai). Peserta yang belum hadir dibatalkan
+                    otomatis setelah self check-in ditutup (paling cepat saat event selesai). Els App ≤ 2.5.0 tetap menampilkan
+                    jam bawaan — server menolak di luar jendela ini dengan pesan yang jelas.
+                  </p>
+                  <div className="text-sm font-medium text-neutral-900 pt-1">Lokasi self check-in</div>
                   <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
                     <input
                       type="radio"
@@ -1047,5 +1105,39 @@ function RadioCard({
       <div className="text-sm font-medium">{title}</div>
       <div className="text-[11px] text-neutral-500 mt-0.5">{desc}</div>
     </button>
+  );
+}
+
+/** '' / null / NaN → null (aturan bawaan); selain itu angka bulat. */
+function numOrNull(v: number | string | null | undefined): number | null {
+  if (v === '' || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function MinuteInput({
+  value,
+  placeholder,
+  min,
+  max,
+  onChange,
+}: {
+  value: number | string | null | undefined;
+  placeholder: string;
+  min: number;
+  max: number;
+  onChange: (v: number | '') => void;
+}) {
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      step={5}
+      value={value ?? ''}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+      className="w-24 px-2 py-1 border border-neutral-300 rounded text-sm"
+    />
   );
 }

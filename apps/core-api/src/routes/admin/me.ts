@@ -97,7 +97,8 @@ import { cabangKota, tzOr } from '../../lib/tz.js';
 import { getLastMeetingMap } from '../../lib/homecell-last-attendance.js';
 import { todayWib } from '../../lib/last-attendance.js';
 import { canCancelCheckin, canCancelReservasi } from '../../lib/reservasi-window.js';
-import { ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { CHECKIN_CFG_SELECT, ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
+import { isLegacyApp } from '../../lib/client-kind.js';
 import { familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
@@ -2074,6 +2075,7 @@ meRouter.get('/reservasi', async (req, res) => {
           lokasi: true,
           isKidsIbadah: true,
           allowKidsSelfCheckin: true,
+          ...CHECKIN_CFG_SELECT,
           requiresCheckout: true,
           latitude: true,
           longitude: true,
@@ -2088,6 +2090,7 @@ meRouter.get('/reservasi', async (req, res) => {
 
   // Saring "aktif" per zona waktu cabang masing-masing ibadah.
   const now = new Date();
+  const legacy = isLegacyApp(req);
   // Aktif = belum selesai (lihat isActiveRow). Riwayat (activeOnly=false, tanpa
   // filter tanggal/ibadah) = sisanya, supaya tiket tidak muncul di dua tab.
   const activeOf = (r: (typeof rows)[number]) => isActiveRow(r, tzOr(r.ibadah.cabang.timezone), now, r.ibadah);
@@ -2114,11 +2117,11 @@ meRouter.get('/reservasi', async (req, res) => {
         relation: relationFor(r, jemaatId, people),
         // Tiket: jendela self check-in tanggal ini + kebutuhan lokasi (radius).
         selfCheckin: {
-          ...ibadahTicketCheckin(r.ibadah, r.tanggalIbadah, tz),
+          ...ibadahTicketCheckin(r.ibadah, r.tanggalIbadah, tz, legacy),
           venue: venueInfo(selfCheckinRadiusM, venuePoint({ latitude, longitude }, r.ibadah.cabang)),
         },
         // Reservasi (RESERVE) bisa dibatalkan sampai jam mulai ibadah (zona cabang).
-        canCancel: canCancelReservasi(r, r.ibadah.jamMulai, now, tz),
+        canCancel: canCancelReservasi(r, r.ibadah.jamMulai, now, tz, r.ibadah),
         // Self check-in bisa dibatalkan (salah input) sampai ibadah selesai.
         canCancelCheckin: canCancelCheckin(r, r.ibadah, { userId, jemaatId }, now, tz),
       };
@@ -2136,7 +2139,7 @@ meRouter.post('/reservasi/:id/cancel', async (req, res) => {
   const r = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
     include: {
-      ibadah: { select: { nama: true, jamMulai: true, cabang: { select: { timezone: true } } } },
+      ibadah: { select: { nama: true, jamMulai: true, registrasiTutupMenit: true, cabang: { select: { timezone: true } } } },
       jemaat: { select: { namaLengkap: true } },
     },
   });
@@ -2146,7 +2149,7 @@ meRouter.post('/reservasi/:id/cancel', async (req, res) => {
     throw NotFound('Reservasi tidak ditemukan');
   }
   if (r.status !== 'RESERVE') throw BadRequest('Hanya reservasi berstatus Terdaftar yang bisa dibatalkan.');
-  if (!canCancelReservasi(r, r.ibadah.jamMulai, new Date(), tzOr(r.ibadah.cabang.timezone))) {
+  if (!canCancelReservasi(r, r.ibadah.jamMulai, new Date(), tzOr(r.ibadah.cabang.timezone), r.ibadah)) {
     throw BadRequest('Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai.');
   }
   const updated = await prisma.reservasi.update({
@@ -2178,7 +2181,9 @@ meRouter.post('/reservasi/:id/cancel-checkin', async (req, res) => {
   const r = await prisma.reservasi.findUnique({
     where: { id: req.params.id },
     include: {
-      ibadah: { select: { nama: true, jamMulai: true, jamSelesai: true, isKidsIbadah: true, cabang: { select: { timezone: true } } } },
+      ibadah: {
+        select: { nama: true, jamMulai: true, jamSelesai: true, isKidsIbadah: true, ...CHECKIN_CFG_SELECT, cabang: { select: { timezone: true } } },
+      },
       jemaat: { select: { namaLengkap: true } },
     },
   });

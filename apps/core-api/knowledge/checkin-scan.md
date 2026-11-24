@@ -53,6 +53,7 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 - Salah check-in (mis. ikut men-check-in keluarga yang tidak hadir) → buka tiket berstatus Hadir → **Batalkan check-in** (selama jendela masih dibuka). Status kembali Terdaftar.
 
 ## Ibadah anak (CKids)
+- **Self check-in anak oleh orang tua / wali (2026-11)**: bila ibadah anak mengizinkan (Portal → Ibadah → *Orang tua boleh self check-in anak*, bawaan aktif), orang tua / wali bisa check-in anaknya dari app — jam & radius sama dengan self check-in ibadah (15 menit sebelum mulai s.d. 30 menit setelah selesai). Hanya anak ≤ 13 tahun (atau tanggungan tanpa tanggal lahir) yang dia wali-i; orang dewasa / bukan wali ditolak. **Kode jemput dibuat otomatis** & dikirim ke wali (notifikasi). Point CKids tetap diberikan petugas. App 2.5.0: lewat tombol Self check-in di detail ibadah / Beranda (tiket masih menulis "check-in di meja CKids"); 2.5.1: tombol geser di tiket anak.
 - Hanya untuk anak **usia 13 tahun ke bawah** (dihitung dari tanggal lahir). Lebih tua → ditolak: "{nama} berusia N tahun — ibadah anak hanya untuk usia 13 tahun ke bawah."
 - Check-in anak menghasilkan **kode jemput 6 digit** (tampil di tiket anak di app orang tua + notifikasi).
 - **Ibadah anak tidak menerima tamu walk-in** lewat form tamu → gunakan meja CKids.

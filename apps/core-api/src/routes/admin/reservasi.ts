@@ -999,7 +999,7 @@ reservasiRouter.post('/walk-in', requireAnyScanner, async (req, res) => {
  * Kirim notif in-app ke semua guardian anak saat check-in kids ibadah.
  * Include pickup code di body + metadata untuk mobile display prominently.
  */
-async function notifyKidsCheckin(
+export async function notifyKidsCheckin(
   anakId: string,
   anakNama: string,
   ibadahNama: string,

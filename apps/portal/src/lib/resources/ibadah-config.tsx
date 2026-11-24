@@ -21,6 +21,7 @@ interface Ibadah extends Record<string, unknown> {
   linkOnline: string | null;
   requiresCheckout: boolean;
   isKidsIbadah: boolean;
+  allowKidsSelfCheckin?: boolean;
   isActive: boolean;
   cabang?: { id: string; nama: string };
   kategoriIbadah?: { id: string; nama: string };
@@ -217,6 +218,15 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
       defaultValue: false,
       helperText:
         'Kalau ON: (1) mobile tampil badge "Ibadah Anak" di list, (2) saat check-in auto-generate 6-digit kode jemput untuk parent, (3) point earn di-enable saat check-in.',
+    },
+    {
+      name: 'allowKidsSelfCheckin',
+      label: 'Orang tua boleh self check-in anak',
+      type: 'switch',
+      defaultValue: true,
+      helperText:
+        'ON: orang tua / wali bisa check-in anaknya sendiri dari Els App (jam & radius sama dengan self check-in ibadah), kode jemput dibuat otomatis. OFF: check-in anak hanya di meja CKids.',
+      showIf: (v) => !!v.isKidsIbadah,
     },
     {
       name: 'requiresCheckout',

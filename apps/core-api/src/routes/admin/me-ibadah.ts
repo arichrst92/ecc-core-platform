@@ -7,7 +7,9 @@
  *                              keluarga (harus anggota keluarga saya)
  *
  * Jendela: hanya di hari ibadah terjadwal, 15 menit sebelum jamMulai s.d.
- * jamSelesai (jam dinding zona waktu cabang). Ibadah anak tidak bisa self check-in (lewat meja CKids).
+ * jamSelesai (jam dinding zona waktu cabang). Ibadah anak: orang tua / wali boleh
+ * self check-in ANAKNYA (≤ batas usia) bila ibadah.allowKidsSelfCheckin — kode jemput
+ * dibuat otomatis & dikirim ke wali; orang dewasa tidak bisa check-in ke ibadah anak.
  */
 import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
@@ -24,6 +26,9 @@ import {
   venuePoint,
 } from '../../lib/self-checkin.js';
 import { familyOf } from '../../lib/family.js';
+import { KIDS_MAX_AGE } from '../../lib/reservasi-window.js';
+import { resolveGuardianJemaatIds } from '../../lib/notification.js';
+import { generateUniquePickupCode, notifyKidsCheckin } from './reservasi.js';
 import { tzOr } from '../../lib/tz.js';
 import {
   canCancelReservasi,
@@ -33,6 +38,33 @@ import {
 } from '../../lib/reservasi-window.js';
 
 export const meIbadahRouter = Router();
+
+/**
+ * Ibadah anak — siapa yang boleh saya self check-in-kan: anak (≤ batas usia, atau
+ * tanggungan tanpa tanggal lahir) yang saya wali-i (wali utama / relasi orang tua).
+ * Map jemaatId → null (boleh) | alasan ditolak.
+ */
+async function kidsCheckinEligibility(requesterId: string, ids: string[], tz: string): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  const people = await prisma.jemaat.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, namaLengkap: true, tanggalLahir: true, primaryGuardianId: true },
+  });
+  for (const p of people) {
+    if (p.id === requesterId) {
+      out.set(p.id, `Ibadah anak — hanya untuk anak ≤ ${KIDS_MAX_AGE} tahun`);
+      continue;
+    }
+    const isDependent = p.primaryGuardianId === requesterId;
+    if (!eligibleForKids({ tanggalLahir: p.tanggalLahir, isDependent }, new Date(), tz)) {
+      out.set(p.id, `Usia di atas ${KIDS_MAX_AGE} tahun`);
+      continue;
+    }
+    const guardians = isDependent ? [requesterId] : await resolveGuardianJemaatIds(p.id);
+    out.set(p.id, guardians.includes(requesterId) ? null : 'Hanya orang tua / wali yang bisa check-in');
+  }
+  return out;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -50,6 +82,7 @@ async function loadIbadahWindow(ibadahId: string) {
       nama: true,
       isActive: true,
       isKidsIbadah: true,
+      allowKidsSelfCheckin: true,
       tipeJadwal: true,
       mingguKe: true,
       tanggalMulai: true,
@@ -112,7 +145,16 @@ async function membersWithStatus(jemaatId: string, ibadahId: string, tanggal: Da
 meIbadahRouter.get('/:id/self-checkin', async (req, res) => {
   const u = me(req);
   const { ibadah, window } = await loadIbadahWindow(req.params.id);
-  const members = await membersWithStatus(u.jemaatId, ibadah.id, new Date(`${window.tanggal}T00:00:00.000Z`));
+  const membersRaw = await membersWithStatus(u.jemaatId, ibadah.id, new Date(`${window.tanggal}T00:00:00.000Z`));
+  let members: (typeof membersRaw[number] & { eligible?: boolean; disabledReason?: string | null })[] = membersRaw;
+  if (ibadah.isKidsIbadah) {
+    // Ibadah anak: hanya anak (≤ batas usia) yang saya wali-i yang bisa dicentang.
+    const ok = await kidsCheckinEligibility(u.jemaatId, membersRaw.map((m) => m.id), tzOr(ibadah.cabang.timezone));
+    members = membersRaw.map((m) => {
+      const why = ok.get(m.id) ?? null;
+      return { ...m, eligible: why === null, disabledReason: why };
+    });
+  }
   res.json({
     success: true,
     data: {
@@ -171,11 +213,18 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
     where: { id: { in: unique } },
     select: { id: true, namaLengkap: true, isActive: true, isTamu: true },
   });
+  // Ibadah anak: hanya anak yang saya wali-i (null = boleh, string = alasan ditolak).
+  const kidsBlock = ibadah.isKidsIbadah ? await kidsCheckinEligibility(u.jemaatId, unique, tzOr(ibadah.cabang.timezone)) : null;
   const results: { jemaatId: string; namaLengkap: string; result: 'CHECKED_IN' | 'ALREADY' | 'FAILED'; message?: string }[] = [];
 
   for (const p of people) {
     if (!p.isActive) {
       results.push({ jemaatId: p.id, namaLengkap: p.namaLengkap, result: 'FAILED', message: 'Jemaat tidak aktif' });
+      continue;
+    }
+    const kidsWhy = kidsBlock?.get(p.id) ?? null;
+    if (kidsWhy) {
+      results.push({ jemaatId: p.id, namaLengkap: p.namaLengkap, result: 'FAILED', message: `${p.namaLengkap}: ${kidsWhy}` });
       continue;
     }
     const existing = await prisma.reservasi.findUnique({
@@ -185,16 +234,18 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
       results.push({ jemaatId: p.id, namaLengkap: p.namaLengkap, result: 'ALREADY' });
       continue;
     }
+    // Ibadah anak: kode jemput 6 digit dibuat saat check-in (sama dengan meja CKids).
+    const pickupCode = ibadah.isKidsIbadah ? await generateUniquePickupCode(ibadah.id, tanggal) : null;
     if (existing?.status === 'CANCEL') {
       // Reservasi pernah dibatalkan — hadir sekarang tetap dicatat.
       await prisma.reservasi.update({
         where: { id: existing.id },
-        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: u.sub, checkinMethod: 'SELF' },
+        data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkedInBy: u.sub, checkinMethod: 'SELF', ...(pickupCode ? { pickupCode } : {}) },
       });
     } else if (existing) {
       await prisma.reservasi.update({
         where: { id: existing.id },
-        data: { status: 'JOIN', joinedAt: now, checkedInBy: u.sub, checkinMethod: 'SELF' },
+        data: { status: 'JOIN', joinedAt: now, checkedInBy: u.sub, checkinMethod: 'SELF', ...(pickupCode ? { pickupCode } : {}) },
       });
     } else {
       const kode = await generateUniqueKode(async (k) => !!(await prisma.reservasi.findUnique({ where: { kode: k } })));
@@ -208,11 +259,24 @@ meIbadahRouter.post('/:id/self-checkin', async (req, res) => {
           joinedAt: now,
           checkedInBy: u.sub,
           checkinMethod: 'SELF',
+          ...(pickupCode ? { pickupCode } : {}),
           ...(p.isTamu ? { invitedByJemaatId: u.jemaatId, guestSource: 'DIUNDANG' } : {}),
         },
       });
     }
-    results.push({ jemaatId: p.id, namaLengkap: p.namaLengkap, result: 'CHECKED_IN' });
+    if (pickupCode) {
+      const r = await prisma.reservasi.findUnique({
+        where: { jemaatId_ibadahId_tanggalIbadah: { jemaatId: p.id, ibadahId: ibadah.id, tanggalIbadah: tanggal } },
+        select: { id: true },
+      });
+      if (r) void notifyKidsCheckin(p.id, p.namaLengkap, ibadah.nama, pickupCode, r.id);
+    }
+    results.push({
+      jemaatId: p.id,
+      namaLengkap: p.namaLengkap,
+      result: 'CHECKED_IN',
+      ...(pickupCode ? { pickupCode, message: `Kode jemput: ${pickupCode}` } : {}),
+    });
   }
 
   const checkedIn = results.filter((r) => r.result === 'CHECKED_IN');
@@ -252,6 +316,7 @@ async function loadReservable(ibadahId: string) {
       nama: true,
       isActive: true,
       isKidsIbadah: true,
+      allowKidsSelfCheckin: true,
       tipeJadwal: true,
       mingguKe: true,
       tanggalMulai: true,

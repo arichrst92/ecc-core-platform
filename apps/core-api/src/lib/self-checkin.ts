@@ -54,6 +54,8 @@ export function hhmmToMin(s: string | null | undefined): number | null {
 type IbadahWin = IbadahForOccurrence & {
   isActive: boolean;
   isKidsIbadah: boolean;
+  /** Ibadah anak: orang tua / wali boleh self check-in anaknya (2026-11). Tidak diisi = tidak. */
+  allowKidsSelfCheckin?: boolean;
   jamMulai: string;
   jamSelesai: string;
 };
@@ -72,7 +74,7 @@ function windowForDay(ibadah: IbadahWin, cancelledDates: string[], day: Date, no
   const tanggal = day.toISOString().slice(0, 10);
   const base = { tanggal, opensAt: null, closesAt: null };
   if (!ibadah.isActive) return { ...base, available: false, reason: 'INACTIVE' };
-  if (ibadah.isKidsIbadah) return { ...base, available: false, reason: 'KIDS_IBADAH' };
+  if (ibadah.isKidsIbadah && !ibadah.allowKidsSelfCheckin) return { ...base, available: false, reason: 'KIDS_IBADAH' };
 
   const occ = generateOccurrences(ibadah, day, day);
   if (occ.length === 0) return { ...base, available: false, reason: 'NOT_TODAY' };
@@ -108,7 +110,7 @@ export function selfCheckinWindow(
 
 export const SELF_CHECKIN_REASON_TEXT: Record<SelfCheckinReason, string> = {
   INACTIVE: 'Ibadah ini tidak aktif.',
-  KIDS_IBADAH: 'Check-in ibadah anak dilakukan di meja CKids.',
+  KIDS_IBADAH: 'Check-in ibadah anak ini dilakukan di meja CKids.',
   NOT_TODAY: 'Hari ini tidak ada jadwal ibadah ini.',
   CANCELLED: 'Ibadah hari ini dibatalkan.',
   TOO_EARLY: `Self check-in dibuka ${OPEN_BEFORE_MIN} menit sebelum ibadah dimulai.`,
@@ -249,16 +251,19 @@ export function venueInfo(
  * Validasi final tetap di POST /me/ibadah/:id/self-checkin.
  */
 export function ibadahTicketCheckin(
-  ib: { jamMulai: string; jamSelesai: string; isKidsIbadah: boolean },
+  ib: { jamMulai: string; jamSelesai: string; isKidsIbadah: boolean; allowKidsSelfCheckin?: boolean },
   tanggalIbadah: Date,
   tz: string,
-): { mode: 'SELF' | 'DESK'; opensAt: string; closesAt: string } {
+): { mode: 'SELF' | 'DESK'; kidsSelf: boolean; opensAt: string; closesAt: string } {
   const start = hhmmToMin(ib.jamMulai) ?? 0;
   let end = hhmmToMin(ib.jamSelesai) ?? 24 * 60 - 1;
   if (end <= start) end = 24 * 60 - 1;
   const day = calendarDateOf(tanggalIbadah, tz);
   return {
+    // Ibadah anak tetap 'DESK' (app ≤ 2.5.0 menampilkan kartu kode jemput untuk
+    // mode ini); kidsSelf = orang tua boleh self check-in (app 2.5.1 menampilkan tombol).
     mode: ib.isKidsIbadah ? 'DESK' : 'SELF',
+    kidsSelf: ib.isKidsIbadah && !!ib.allowKidsSelfCheckin,
     opensAt: wallToInstant(day, Math.max(0, start - OPEN_BEFORE_MIN), tz).toISOString(),
     closesAt: wallToInstant(day, end + CLOSE_AFTER_MIN, tz).toISOString(),
   };

@@ -582,6 +582,9 @@ model Ibadah {
   //   - Saat check-in: auto-generate 6-digit pickup code untuk parent jemput.
   //   - Point earn saat check-in di-enable (kalau juga isKidsIbadah).
   isKidsIbadah     Boolean     @default(false) @map("is_kids_ibadah")
+  // Ibadah anak (2026-11): orang tua / wali boleh self check-in anaknya dari app
+  // (kode jemput dibuat otomatis). false = check-in hanya di meja CKids.
+  allowKidsSelfCheckin Boolean  @default(true) @map("allow_kids_self_checkin")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 

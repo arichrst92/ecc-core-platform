@@ -2073,6 +2073,7 @@ meRouter.get('/reservasi', async (req, res) => {
           jamSelesai: true,
           lokasi: true,
           isKidsIbadah: true,
+          allowKidsSelfCheckin: true,
           requiresCheckout: true,
           latitude: true,
           longitude: true,

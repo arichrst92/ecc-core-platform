@@ -322,7 +322,7 @@ export default function EventDetailPage() {
 
       {/* Hero */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden mb-6">
-        <div className="relative aspect-[3/1] bg-neutral-100">
+        <div className="relative aspect-[16/9] sm:aspect-[3/1] bg-neutral-100">
           {e.heroImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -370,7 +370,7 @@ export default function EventDetailPage() {
           )}
         </div>
 
-        <div className="px-6 pt-4">
+        <div className="px-4 sm:px-6 pt-4">
           <UploadHint
             kind="hero-event"
             context={{
@@ -382,16 +382,16 @@ export default function EventDetailPage() {
           />
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-              <Megaphone className="w-6 h-6 text-brand-500" />
-              {e.judul}
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-start gap-2 min-w-0 break-words">
+              <Megaphone className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" />
+              <span className="min-w-0">{e.judul}</span>
             </h1>
             <DuplicateEventButton eventId={e.id} judul={e.judul} variant="button" />
           </div>
-          <div className="text-sm text-neutral-500 mt-1">{targetLabel}</div>
-          {e.ringkasan && <p className="mt-3 text-neutral-700">{e.ringkasan}</p>}
+          <div className="text-sm text-neutral-500 mt-1 break-words">{targetLabel}</div>
+          {e.ringkasan && <p className="mt-3 text-neutral-700 break-words">{e.ringkasan}</p>}
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <InfoBlock icon={Calendar} label="Tanggal">
@@ -443,20 +443,20 @@ export default function EventDetailPage() {
             <summary className="text-xs uppercase tracking-wider text-neutral-500 font-semibold cursor-pointer hover:text-neutral-700">
               Deskripsi lengkap
             </summary>
-            <p className="mt-2 text-sm text-neutral-700 whitespace-pre-line">{e.deskripsi}</p>
+            <p className="mt-2 text-sm text-neutral-700 whitespace-pre-line break-words [overflow-wrap:anywhere]">{e.deskripsi}</p>
           </details>
         </div>
       </div>
 
       {/* Pembayaran section */}
       {isPaid && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6">
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-3">
             <CircleDollarSign className="w-4 h-4 text-amber-600" />
             Info Pembayaran
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm min-w-0">
               <Row label="Tipe">
                 {e.tipeBayar === 'NOMINAL_TETAP'
                   ? 'Nominal Tetap'
@@ -547,8 +547,8 @@ export default function EventDetailPage() {
 
       {/* Peserta section */}
       <div className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-neutral-100">
+          <div className="min-w-0 flex-1 basis-64">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Users className="w-4 h-4" />
               Peserta ({e.pesertaCount})
@@ -561,7 +561,7 @@ export default function EventDetailPage() {
                 : 'Jemaat yang berpartisipasi di event ini.'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {e.butuhKehadiran && (
               <button
                 onClick={() => setWalkInOpen(true)}
@@ -591,7 +591,7 @@ export default function EventDetailPage() {
           </div>
         </div>
 
-        <div className="px-6 py-3 border-b border-neutral-100 flex items-center gap-2 text-xs">
+        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-neutral-500">Filter:</span>
           <select
             value={filterStatus}
@@ -605,7 +605,7 @@ export default function EventDetailPage() {
             <option value="HADIR">Hadir</option>
             <option value="BATAL">Batal</option>
           </select>
-          <div className="relative ml-auto w-full sm:w-64">
+          <div className="relative sm:ml-auto w-full sm:w-64">
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               value={pesertaSearch}
@@ -617,7 +617,7 @@ export default function EventDetailPage() {
           {pesertaNeedle ? <span className="text-neutral-500">{peserta.length} ditemukan</span> : null}
         </div>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {pesertaQ.isLoading ? (
             <div className="flex justify-center py-6">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -721,9 +721,9 @@ function InfoBlock({
   return (
     <div>
       <div className="text-[10px] uppercase text-neutral-400 font-semibold">{label}</div>
-      <div className="flex items-center gap-1.5 text-neutral-700 mt-0.5">
-        <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span>{children}</span>
+      <div className="flex items-start gap-1.5 text-neutral-700 mt-0.5 min-w-0">
+        <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0 mt-0.5" />
+        <span className="min-w-0 break-words">{children}</span>
       </div>
     </div>
   );
@@ -732,8 +732,8 @@ function InfoBlock({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3 border-b border-neutral-100 pb-1.5">
-      <span className="text-neutral-500">{label}</span>
-      <span className="text-neutral-900 font-medium text-right">{children}</span>
+      <span className="text-neutral-500 shrink-0">{label}</span>
+      <span className="text-neutral-900 font-medium text-right min-w-0 break-words">{children}</span>
     </div>
   );
 }
@@ -781,7 +781,7 @@ function PesertaRow({
   });
 
   return (
-    <div className="flex items-start gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
+    <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
       {p.jemaat.fotoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -798,7 +798,7 @@ function PesertaRow({
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/dashboard/jemaat/${p.jemaat.id}`}
-            className="font-medium text-neutral-900 hover:text-brand-600 hover:underline text-sm"
+            className="font-medium text-neutral-900 hover:text-brand-600 hover:underline text-sm break-words min-w-0"
           >
             {p.jemaat.namaLengkap}
           </Link>
@@ -834,7 +834,7 @@ function PesertaRow({
           )}
         </div>
         {p.catatan && (
-          <div className="text-xs text-neutral-600 italic mt-1">{p.catatan}</div>
+          <div className="text-xs text-neutral-600 italic mt-1 break-words">{p.catatan}</div>
         )}
         {p.buktiTransferUrl && (
           <a
@@ -848,7 +848,7 @@ function PesertaRow({
         )}
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+      <div className="flex items-center gap-1 flex-wrap justify-end w-full sm:w-auto sm:shrink-0">
         {isPaid && (
           <>
             <input
@@ -983,14 +983,14 @@ function AddPesertaModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto flex flex-col max-h-[90vh]">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 flex-wrap gap-2">
             <h2 className="font-semibold text-neutral-900">Daftarkan Jemaat ke Event</h2>
             <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Cari Jemaat</span>
               <input
@@ -1084,7 +1084,7 @@ function AddPesertaModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={createMut.isPending}
@@ -1220,8 +1220,8 @@ function CheckinModal({
             </button>
           </div>
 
-          <div className="p-6 space-y-3">
-            <div className="flex items-center justify-between gap-2">
+          <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1 min-h-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium text-neutral-700">Scan QR kartu / tiket jemaat</span>
               <button
                 type="button"

@@ -143,8 +143,8 @@ export function EventMinistrySection({ eventId }: { eventId: string }) {
 
   return (
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-neutral-100">
+        <div className="min-w-0 flex-1 basis-56">
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
             <HandHeart className="w-4 h-4 text-brand-500" />
             Ministry & Volunteer
@@ -162,14 +162,14 @@ export function EventMinistrySection({ eventId }: { eventId: string }) {
         </div>
         <button
           onClick={() => setAddLinkOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg"
+          className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg shrink-0"
         >
           <Plus className="w-4 h-4" />
           Tambah Pelayanan
         </button>
       </div>
 
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         {linksQ.isLoading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -304,10 +304,10 @@ function PelayananCard({
 
   return (
     <div className="border border-neutral-200 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between gap-3 p-3 bg-neutral-50">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-neutral-50">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-white/50 rounded-md px-1 py-0.5"
+          className="flex flex-wrap items-center gap-2 flex-1 basis-56 min-w-0 text-left hover:bg-white/50 rounded-md px-1 py-0.5"
         >
           {expanded ? (
             <ChevronDown className="w-4 h-4 text-neutral-400" />
@@ -335,7 +335,7 @@ function PelayananCard({
             />
           )}
         </button>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
           <button
             onClick={() => {
               setExpanded(true);
@@ -357,7 +357,7 @@ function PelayananCard({
       </div>
 
       {expanded && (
-        <div className="p-4">
+        <div className="p-2 sm:p-4">
           {link.petugas.length === 0 ? (
             <p className="text-sm text-neutral-400 italic text-center py-3">
               Belum ada volunteer di pelayanan ini.
@@ -441,7 +441,7 @@ function VolunteerRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-3 p-3 border rounded-lg ${
+      className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 p-3 border rounded-lg ${
         v.canScanAttendance
           ? 'border-green-200 bg-green-50/30'
           : 'border-neutral-100 hover:bg-neutral-50'
@@ -499,7 +499,7 @@ function VolunteerRow({
       <button
         onClick={onToggleScanner}
         disabled={togglePending}
-        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded disabled:opacity-50 ${
+        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded disabled:opacity-50 shrink-0 ml-auto sm:ml-0 ${
           v.canScanAttendance
             ? 'text-green-700 bg-green-100 hover:bg-green-200'
             : 'text-neutral-600 hover:bg-neutral-100 border border-neutral-300'
@@ -624,8 +624,8 @@ function AddVolunteerModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-            <div>
+          <div className="flex items-start justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
+            <div className="min-w-0">
               <h2 className="font-semibold text-neutral-900">Tambah Volunteer</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
                 Pilih member <strong>{pelayanan.nama}</strong>. Toggle{' '}
@@ -638,7 +638,7 @@ function AddVolunteerModal({
             </button>
           </div>
 
-          <div className="px-6 pt-4">
+          <div className="px-4 sm:px-6 pt-4">
             <input
               type="text"
               value={search}
@@ -654,7 +654,7 @@ function AddVolunteerModal({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 min-h-0">
             {pelayananQ.isLoading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
@@ -743,7 +743,7 @@ function AddVolunteerModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex flex-wrap justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <button
               onClick={onClose}
               disabled={batchMut.isPending}

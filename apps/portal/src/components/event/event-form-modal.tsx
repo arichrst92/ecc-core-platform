@@ -340,14 +340,14 @@ export function EventFormModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={loading ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-            <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
+          <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
+            <h2 className="text-lg font-semibold text-neutral-900 min-w-0 truncate">{title}</h2>
             <button onClick={onClose} disabled={loading} className="p-1.5 hover:bg-neutral-100 rounded-lg disabled:opacity-50">
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 space-y-6">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-6 min-h-0 flex-1">
             {/* Section: Info dasar */}
             <Section title="Info Dasar">
               <Field label="Judul" required>
@@ -400,7 +400,7 @@ export function EventFormModal({
 
             {/* Section: Waktu & Lokasi */}
             <Section title="Waktu & Lokasi">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Tanggal Mulai" required>
                   <input
                     type="date"
@@ -418,7 +418,7 @@ export function EventFormModal({
                   />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   label="Jam Mulai"
                   helper="Format HH:mm 24 jam. Kosongkan kalau acara seharian / festival tanpa jadwal jam spesifik."
@@ -465,7 +465,7 @@ export function EventFormModal({
 
             {/* Section: Target Audience */}
             <Section title="Target Audience" helper="Kosongkan keduanya = global. Pilih cabang juga otomatis set sinode.">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Sinode">
                   <select
                     value={values.sinodeId ?? ''}
@@ -641,7 +641,7 @@ export function EventFormModal({
                       className={inputCls}
                     />
                   </Field>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Nama Bank">
                       <input
                         value={values.bankNama ?? ''}
@@ -676,7 +676,7 @@ export function EventFormModal({
 
             {/* Section: Quota & Tags */}
             <Section title="Quota & Tags">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Quota Peserta" helper="Kosongkan = tanpa batas.">
                   <input
                     type="number"
@@ -950,7 +950,7 @@ export function EventFormModal({
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex flex-wrap justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <button
               onClick={onClose}
               disabled={loading}
@@ -994,7 +994,7 @@ function RoleTripleSelect({
   const role = roles.find((r) => r.id === value.roleId);
   const sub = role?.subRoles.find((s) => s.id === value.subRoleId);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1 min-w-0">
       <select
         value={value.roleId}
         onChange={(e) => onChange({ roleId: e.target.value, subRoleId: null, subRoleStatusId: null })}

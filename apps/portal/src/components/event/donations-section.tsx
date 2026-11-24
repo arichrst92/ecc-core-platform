@@ -141,8 +141,8 @@ export function DonationsSection({
   const isFundraising = eventTipeBayar === 'NOMINAL_BEBAS';
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
+    <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
           <CircleDollarSign className="w-4 h-4 text-emerald-600" />
           {isFundraising ? 'Donations / Persembahan' : 'Payment History'}
@@ -194,7 +194,7 @@ export function DonationsSection({
 
       {/* Pagination */}
       {donationsQ.data && donationsQ.data.meta.totalPages > 1 ? (
-        <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
           <span>
             Halaman {page} dari {donationsQ.data.meta.totalPages}
           </span>
@@ -331,8 +331,8 @@ function DonationRowItem({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div>
-            <div className="font-medium text-neutral-900 text-sm flex items-center gap-1.5">
+          <div className="min-w-0">
+            <div className="font-medium text-neutral-900 text-sm flex flex-wrap items-center gap-1.5 break-words">
               {donation.participation.jemaat.namaLengkap}
               {donation.tambahan ? (
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
@@ -353,7 +353,7 @@ function DonationRowItem({
         </div>
 
         {donation.catatan ? (
-          <div className="mt-1 text-xs text-neutral-600 italic">"{donation.catatan}"</div>
+          <div className="mt-1 text-xs text-neutral-600 italic break-words">"{donation.catatan}"</div>
         ) : null}
 
         <div className="mt-2 flex items-center gap-3 flex-wrap text-xs">

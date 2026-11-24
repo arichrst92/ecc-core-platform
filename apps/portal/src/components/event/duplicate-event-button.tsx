@@ -54,13 +54,13 @@ export function DuplicateEventButton({
         <>
           <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => !mut.isPending && setConfirming(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-              <div className="px-6 py-4 border-b border-neutral-100">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto flex flex-col max-h-[90vh]">
+              <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
                 <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                   <CopyPlus className="w-5 h-5 text-brand-500" /> Duplikat event
                 </h2>
               </div>
-              <div className="p-6 text-sm text-neutral-700 space-y-3">
+              <div className="p-4 sm:p-6 text-sm text-neutral-700 space-y-3 overflow-y-auto min-h-0">
                 <p>
                   Buat salinan dari <b>{judul}</b>?
                 </p>
@@ -70,7 +70,7 @@ export function DuplicateEventButton({
                   <li>Peserta, pemberian sukarela, dan statistik tidak ikut disalin.</li>
                 </ul>
               </div>
-              <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+              <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
                 <button
                   onClick={() => setConfirming(false)}
                   disabled={mut.isPending}

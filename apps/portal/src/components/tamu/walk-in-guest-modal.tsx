@@ -68,8 +68,8 @@ export function WalkInGuestModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto flex flex-col max-h-[90vh]">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-violet-600" /> Tamu Walk-in
             </h2>
@@ -77,7 +77,7 @@ export function WalkInGuestModal({
               <X className="w-4 h-4 text-neutral-500" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <p className="text-xs text-neutral-500">
               Untuk orang yang datang ke <strong>{eventNama}</strong> tanpa mendaftar. Tamu langsung tercatat hadir. Kalau no HP-nya
               ternyata milik jemaat terdaftar, jemaat itu yang dicatat.
@@ -99,7 +99,7 @@ export function WalkInGuestModal({
             {paid ? (
               <div>
                 <span className="text-sm font-medium text-neutral-700">Pembayaran</span>
-                <div className="mt-1 grid grid-cols-4 gap-2">
+                <div className="mt-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['TUNAI', 'TRANSFER', 'QRIS', 'GRATIS'] as Bayar[]).map((b) => (
                     <button
                       key={b}
@@ -134,7 +134,7 @@ export function WalkInGuestModal({
               </div>
             ) : null}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <button onClick={onClose} className="px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 rounded-lg">
               Batal
             </button>

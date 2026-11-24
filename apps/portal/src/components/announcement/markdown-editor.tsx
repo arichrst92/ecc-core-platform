@@ -77,7 +77,7 @@ export function MarkdownEditor({
 
   return (
     <div className="border border-neutral-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-brand-500">
-      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-neutral-50 border-b border-neutral-200">
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-neutral-50 border-b border-neutral-200">
         {tools.map((t) => (
           <button
             key={t.title}

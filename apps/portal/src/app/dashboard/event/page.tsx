@@ -249,8 +249,8 @@ function EventPageInner() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Megaphone className="w-6 h-6 text-brand-500" /> Event
           </h1>
@@ -260,7 +260,7 @@ function EventPageInner() {
         </div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
+          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm shrink-0"
         >
           <Plus className="w-4 h-4" />
           Tambah Event
@@ -268,7 +268,7 @@ function EventPageInner() {
       </div>
 
       {/* Tab periode */}
-      <div className="flex gap-1 mb-3 bg-neutral-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 mb-3 bg-neutral-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
         {(
           [
             ['upcoming', 'Akan Datang', CalendarClock],
@@ -295,7 +295,7 @@ function EventPageInner() {
 
       {/* Filter bar */}
       <div className="bg-white border border-neutral-200 rounded-lg p-3 mb-4 flex flex-wrap items-end gap-2">
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 basis-full sm:basis-auto min-w-0 sm:min-w-[200px]">
           <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cari</span>
           <input
             value={search}
@@ -322,7 +322,7 @@ function EventPageInner() {
           <select
             value={filterCabang}
             onChange={(e) => resetPage(setFilterCabang)(e.target.value)}
-            className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white max-w-[200px]"
+            className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white max-w-[200px] w-full"
           >
             <option value="all">Semua cabang</option>
             <option value="none">Global / Sinode (tanpa cabang)</option>
@@ -435,14 +435,14 @@ function EventPageInner() {
             {events.map((e) => (
               <div
                 key={e.id}
-                className={`bg-white border rounded-xl overflow-hidden flex ${
+                className={`bg-white border rounded-xl overflow-hidden flex flex-col sm:flex-row min-w-0 ${
                   e.isPublished ? 'border-neutral-200' : 'border-dashed border-neutral-300'
                 }`}
               >
                 {/* Gambar — rasio asli (contain) di atas latar blur */}
                 <Link
                   href={`/dashboard/event/${e.id}`}
-                  className="relative w-36 sm:w-56 shrink-0 self-stretch min-h-[9rem] bg-neutral-100 overflow-hidden"
+                  className="relative w-full h-40 sm:h-auto sm:w-56 shrink-0 sm:self-stretch sm:min-h-[9rem] bg-neutral-100 overflow-hidden"
                 >
                   {e.heroImageUrl ? (
                     <>
@@ -546,8 +546,8 @@ function EventPageInner() {
                     )}
                   </div>
 
-                  <div className="mt-auto pt-2.5 flex items-center gap-1 text-xs">
-                    <span className="text-[10px] text-neutral-400 uppercase tracking-wider truncate mr-auto">{targetLabel(e)}</span>
+                  <div className="mt-auto pt-2.5 flex flex-wrap items-center gap-1 text-xs">
+                    <span className="text-[10px] text-neutral-400 uppercase tracking-wider truncate mr-auto min-w-0 basis-full sm:basis-auto">{targetLabel(e)}</span>
                     <Link
                       href={`/dashboard/event/${e.id}`}
                       className="flex items-center gap-1 px-2 py-1 rounded text-brand-600 hover:bg-brand-50"
@@ -577,7 +577,7 @@ function EventPageInner() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-4 text-sm">
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-sm">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}

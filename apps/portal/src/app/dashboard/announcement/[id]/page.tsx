@@ -89,7 +89,7 @@ function durationLabel(sec: number) {
 function Card({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <section className="bg-white border border-neutral-200 rounded-xl p-5 mb-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
         <h2 className="font-semibold text-neutral-900">{title}</h2>
         {right}
       </div>
@@ -603,7 +603,7 @@ export default function AnnouncementEditPage() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => !send.isPending && setConfirm(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-6">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
               <h2 className="font-semibold text-neutral-900 text-lg mb-1">{sendMode === 'now' ? 'Kirim announcement sekarang?' : 'Jadwalkan announcement?'}</h2>
               <p className="text-sm text-neutral-600 mb-4">“{f.judul}”</p>
               <ul className="text-sm space-y-1.5 mb-5">
@@ -663,7 +663,7 @@ function Report({ a }: { a: AnnouncementItem }) {
   );
   return (
     <section className="bg-white border border-neutral-200 rounded-xl p-5 mb-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
         <h2 className="font-semibold text-neutral-900">Laporan kirim</h2>
         <a href={a.publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline">
           Halaman publik <ExternalLink className="w-3.5 h-3.5" />

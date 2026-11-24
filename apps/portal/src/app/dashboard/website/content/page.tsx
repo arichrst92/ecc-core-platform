@@ -77,11 +77,11 @@ export default function WebsiteContentPage() {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <LayoutTemplate className="w-7 h-7 text-brand-500" />
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Konten Website</h1>
+      <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <LayoutTemplate className="w-7 h-7 text-brand-500 shrink-0" />
+          <div className="min-w-0 flex-1 basis-64">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Konten Website</h1>
             <p className="text-sm text-neutral-500 mt-0.5">
               CMS untuk landing site{' '}
               <a
@@ -191,7 +191,7 @@ function SectionRow({
     <button
       type="button"
       onClick={onEdit}
-      className="w-full text-left bg-white border border-neutral-200 rounded-lg p-4 hover:border-brand-300 hover:shadow-sm transition flex items-start gap-4"
+      className="w-full text-left bg-white border border-neutral-200 rounded-lg p-3 sm:p-4 hover:border-brand-300 hover:shadow-sm transition flex items-start gap-3 sm:gap-4"
     >
       <div className="w-10 h-10 bg-brand-50 text-brand-500 rounded-lg flex items-center justify-center shrink-0">
         {section.contentType === 'json' ? (
@@ -201,9 +201,9 @@ function SectionRow({
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className="font-semibold text-neutral-900">{section.title}</h3>
-          <span className="text-xs font-mono text-neutral-400">{section.key}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">
+          <h3 className="font-semibold text-neutral-900 break-words min-w-0">{section.title}</h3>
+          <span className="text-xs font-mono text-neutral-400 break-all">{section.key}</span>
           {!section.isActive && (
             <span className="px-2 py-0.5 text-xs bg-neutral-100 text-neutral-500 rounded-full inline-flex items-center gap-1">
               <EyeOff className="w-3 h-3" />
@@ -288,11 +288,11 @@ function EditModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="border-b border-neutral-200 px-6 py-4 flex items-start justify-between gap-4">
+        <div className="border-b border-neutral-200 px-4 sm:px-6 py-4 flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg text-neutral-900">{section.title}</h3>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs font-mono text-neutral-500">{section.key}</span>
+            <h3 className="font-bold text-lg text-neutral-900 break-words">{section.title}</h3>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <span className="text-xs font-mono text-neutral-500 break-all">{section.key}</span>
               <span
                 className={`px-2 py-0.5 text-xs rounded ${
                   section.contentType === 'json'
@@ -314,7 +314,7 @@ function EditModal({
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           {section.description && (
             <div className="text-sm text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg p-3 flex items-start gap-2">
               <Info className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
@@ -356,7 +356,7 @@ function EditModal({
           </div>
 
           {/* Active toggle */}
-          <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+          <div className="flex flex-wrap items-center justify-between p-3 bg-neutral-50 rounded-lg gap-2">
             <div className="flex items-center gap-2">
               {isActive ? (
                 <Eye className="w-4 h-4 text-green-600" />
@@ -370,7 +370,7 @@ function EditModal({
             <button
               type="button"
               onClick={() => setIsActive(!isActive)}
-              className={`w-11 h-6 rounded-full transition ${
+              className={`w-11 h-6 rounded-full transition shrink-0 ${
                 isActive ? 'bg-brand-500' : 'bg-neutral-300'
               }`}
             >
@@ -384,7 +384,7 @@ function EditModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-neutral-200 px-6 py-4 flex items-center justify-end gap-3">
+        <div className="border-t border-neutral-200 px-4 sm:px-6 py-4 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}

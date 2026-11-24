@@ -93,7 +93,7 @@ export default function BackupEmailPage() {
   return (
     <div className="w-full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <CloudUpload className="w-6 h-6" />
           Kirim Backup Bulanan
         </h1>
@@ -111,7 +111,7 @@ export default function BackupEmailPage() {
       )}
 
       <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 space-y-5">
-        <label className="flex items-center justify-between gap-4">
+        <label className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-neutral-900">Aktifkan kiriman bulanan</div>
             <div className="text-xs text-neutral-500">Bila dimatikan, backup tetap dibuat manual di Maintenance.</div>
@@ -140,7 +140,7 @@ export default function BackupEmailPage() {
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEmail())}
               placeholder="nama@eccchurch.global"
-              className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              className="flex-1 min-w-0 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
             />
             <button onClick={addEmail} className="inline-flex items-center gap-1 px-3 py-2 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50">
               <Plus className="w-4 h-4" /> Tambah
@@ -201,12 +201,12 @@ export default function BackupEmailPage() {
         <div className="font-semibold text-neutral-900 mb-2">Kiriman terakhir</div>
         {cfg.lastSentAt ? (
           <div className="space-y-1 text-neutral-700">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {cfg.lastStatus === 'SUCCESS' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
               {cfg.lastStatus === 'SUCCESS' ? 'Berhasil' : 'Gagal'} · {new Date(cfg.lastSentAt).toLocaleString('id-ID')}
             </div>
-            {cfg.lastFile && <div className="text-xs text-neutral-500">File: <code>{cfg.lastFile}</code></div>}
-            {cfg.lastError && <div className="text-xs text-red-700">{cfg.lastError}</div>}
+            {cfg.lastFile && <div className="text-xs text-neutral-500 break-all">File: <code>{cfg.lastFile}</code></div>}
+            {cfg.lastError && <div className="text-xs text-red-700 break-words">{cfg.lastError}</div>}
             {cfg.lastScheduledMonth && <div className="text-xs text-neutral-500">Kiriman terjadwal terakhir: {cfg.lastScheduledMonth}</div>}
           </div>
         ) : (

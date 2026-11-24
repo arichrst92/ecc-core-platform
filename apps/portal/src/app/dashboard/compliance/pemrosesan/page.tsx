@@ -115,8 +115,8 @@ export default function ProcessingPage() {
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <ClipboardList className="w-6 h-6" />
             Catatan Pemrosesan & Penilaian Risiko
           </h1>
@@ -149,7 +149,8 @@ export default function ProcessingPage() {
         {q.isLoading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-neutral-400" /></div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-neutral-600 text-xs uppercase">
               <tr>
                 <th className="text-left px-4 py-2.5">Kode</th>
@@ -210,6 +211,7 @@ export default function ProcessingPage() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -311,7 +313,7 @@ function EditModal({ value, isNew, saving, onClose, onSave }: { value: Form; isN
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+        <div className="flex justify-end gap-2 px-3 sm:px-5 py-4 border-t border-neutral-100">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg hover:bg-neutral-100">Batal</button>
           <button onClick={() => onSave(f)} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-40">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Simpan

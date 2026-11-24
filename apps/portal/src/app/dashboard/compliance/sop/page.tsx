@@ -42,7 +42,7 @@ export default function ComplianceSopPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <ShieldAlert className="w-6 h-6" />
           SOP Compliance
         </h1>
@@ -147,7 +147,7 @@ function SopEditor({ sopKey, country }: { sopKey: SopKey; country: Country }) {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       {q.isError && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded-lg">
           SOP ini belum ada. Isi lalu simpan untuk membuatnya.
@@ -172,7 +172,7 @@ function SopEditor({ sopKey, country }: { sopKey: SopKey; country: Country }) {
         </div>
       </div>
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
           <label className="text-xs font-medium text-neutral-600">
             Isi SOP <span className="text-neutral-400">(markdown: # judul, **tebal**, - daftar, | tabel |)</span>
           </label>

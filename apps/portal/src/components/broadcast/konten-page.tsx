@@ -125,9 +125,9 @@ export function KontenPage({ tipe, title, icon: Icon, description }: KontenPageP
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Icon className="w-6 h-6" />
             {title}
           </h1>
@@ -151,7 +151,7 @@ export function KontenPage({ tipe, title, icon: Icon, description }: KontenPageP
             setPage(1);
           }}
           placeholder="Cari judul..."
-          className="flex-1 min-w-[240px] px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+          className="flex-1 min-w-0 basis-56 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
         />
         <div className="inline-flex border border-neutral-300 rounded-lg overflow-hidden text-sm">
           {(['all', 'published', 'draft'] as const).map((v, i) => (
@@ -280,7 +280,7 @@ function KontenCard({
         )}
       </div>
       <div className="p-3 sm:p-4 flex-1 min-w-0 flex flex-col">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <h3 className="font-semibold text-neutral-900 flex-1 min-w-0 line-clamp-2">{item.judul}</h3>
           <span
             className={`shrink-0 inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${
@@ -315,7 +315,7 @@ function KontenCard({
             ))}
           </div>
         )}
-        <div className="mt-auto pt-2 flex items-center justify-between gap-2 border-t border-neutral-100 mt-3">
+        <div className="mt-auto pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 mt-3">
           <div className="text-xs text-neutral-500 min-w-0 truncate">
             {item.author?.jemaat?.namaLengkap ?? 'Unknown'} ·{' '}
             <span className="font-mono">/{item.slug}</span>
@@ -470,7 +470,7 @@ function KontenFormModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-neutral-900">
               {isEdit ? 'Edit' : 'Tambah'} {tipe === 'news' ? 'News' : 'Renungan'}
             </h2>
@@ -479,7 +479,7 @@ function KontenFormModal({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 space-y-4">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-4">
             {/* Hero image */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">Hero Image</label>
@@ -598,7 +598,7 @@ function KontenFormModal({
             </div>
 
             {tipe === 'renungan' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-neutral-700">Tanggal Renungan</span>
                   <input
@@ -621,7 +621,7 @@ function KontenFormModal({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-sm font-medium text-neutral-700">Sinode (target)</span>
                 <select
@@ -683,7 +683,7 @@ function KontenFormModal({
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={saveMut.isPending}

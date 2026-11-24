@@ -143,8 +143,8 @@ export default function OnboardingConfigPage() {
   return (
     <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <UserCheck className="w-6 h-6" />
             Onboarding Config
           </h1>
@@ -201,14 +201,14 @@ export default function OnboardingConfigPage() {
                   </button>
                 </div>
                 {rows.length === 0 ? (
-                  <div className="px-5 py-4 text-sm text-neutral-400">Belum ada role untuk pilihan ini.</div>
+                  <div className="px-3 sm:px-5 py-4 text-sm text-neutral-400">Belum ada role untuk pilihan ini.</div>
                 ) : (
                   <div className="divide-y divide-neutral-100">
                     {rows.map((d) => {
                       const role = roleMap.get(d.roleId);
                       const sub = role?.subRoles.find((s) => s.id === d.subRoleId);
                       return (
-                        <div key={d.key} className="px-5 py-3 grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                        <div key={d.key} className="px-3 sm:px-5 py-3 grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
                           <select
                             value={d.roleId}
                             onChange={(e) => patch(d.key, { roleId: e.target.value, subRoleId: '', subRoleStatusId: '' })}
@@ -260,7 +260,7 @@ export default function OnboardingConfigPage() {
                   </div>
                 )}
                 {sec.jenis === 'TANPA_ROLE' && (
-                  <div className="px-5 py-3 border-t border-neutral-100 bg-amber-50/60">
+                  <div className="px-3 sm:px-5 py-3 border-t border-neutral-100 bg-amber-50/60">
                     {tanpaRole.isLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
                     ) : tanpaRole.data && tanpaRole.data.count === 0 ? (
@@ -384,7 +384,7 @@ function PromosiCard({
           status-nya diperbarui. Berjalan otomatis tiap 30 menit.
         </div>
       </div>
-      <div className="px-5 py-4 space-y-3">
+      <div className="px-3 sm:px-5 py-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-neutral-700">Naik setelah hadir ibadah</span>
           <input

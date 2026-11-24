@@ -98,7 +98,7 @@ export default function WorshipAlbumPage() {
             }
           }}
         />
-        <div className="flex-1 min-w-[260px] space-y-3">
+        <div className="flex-1 min-w-0 basis-64 space-y-3">
           <div className="grid sm:grid-cols-[1fr_120px] gap-3">
             <label className="text-sm">
               <span className="font-medium text-neutral-700">Judul album</span>
@@ -269,7 +269,7 @@ function AddSongModal({ albumId, tahun, onClose }: { albumId: string; tahun: num
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
           <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold">Tambah lagu</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
@@ -290,7 +290,7 @@ function AddSongModal({ albumId, tahun, onClose }: { albumId: string; tahun: num
               <input value={f.tahun} onChange={(e) => setF({ ...f, tahun: e.target.value.replace(/\D/g, '').slice(0, 4) })} className={`${ctrl} mt-1`} />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100">
             <button onClick={onClose} className="h-9 px-4 text-sm rounded-lg border border-neutral-300">
               Batal
             </button>

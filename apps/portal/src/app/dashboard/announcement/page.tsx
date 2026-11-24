@@ -72,16 +72,16 @@ export default function AnnouncementListPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <BellRing className="w-6 h-6 text-brand-500" /> Announcement
           </h1>
           <p className="text-neutral-500 mt-1 text-sm">Pengumuman ke jemaat lewat app (popup + notifikasi), WhatsApp, dan email.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 px-3 h-9 border border-neutral-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-brand-500">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <label className="flex flex-1 sm:flex-none items-center gap-2 px-3 h-9 border border-neutral-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-brand-500">
             <Search className="w-4 h-4 text-neutral-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul" className="text-sm outline-none w-40" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul" className="text-sm outline-none w-full sm:w-40 min-w-0" />
           </label>
           <Link
             href="/dashboard/announcement/new"
@@ -92,7 +92,7 @@ export default function AnnouncementListPage() {
         </div>
       </div>
 
-      <div className="flex gap-1.5 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -117,7 +117,8 @@ export default function AnnouncementListPage() {
             </Link>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>
                 <th className="text-left font-medium px-4 py-2">Judul & penerima</th>
@@ -200,6 +201,7 @@ export default function AnnouncementListPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

@@ -64,9 +64,9 @@ export default function AppVersionPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Smartphone className="w-6 h-6" />
             App Versions
           </h1>
@@ -112,7 +112,7 @@ export default function AppVersionPage() {
             <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
           </div>
         ) : (
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             {publishedRow ? (
               <div className="space-y-2">
                 <div className="text-xs uppercase tracking-wider text-green-700 font-semibold flex items-center gap-1">
@@ -228,7 +228,7 @@ function VersionRow({
     >
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
+        className="w-full flex flex-wrap items-center justify-between px-4 py-3 text-left gap-2"
       >
         <div className="flex items-center gap-3">
           {row.isPublished ? (
@@ -314,7 +314,7 @@ function VersionRow({
               </span>
             </span>
           </label>
-          <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between pt-2 border-t border-neutral-100 gap-2">
             <button
               onClick={() => setDeleting(true)}
               className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg"
@@ -390,10 +390,10 @@ function CreateModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="px-6 py-4 border-b border-neutral-100">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="text-lg font-semibold text-neutral-900">Versi Aplikasi Baru</h2>
           </div>
-          <div className="overflow-y-auto p-6 space-y-3">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-3">
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">Platform</label>
               <select
@@ -456,7 +456,7 @@ function CreateModal({
               <span className="text-neutral-700">Langsung publish (auto-unpublish versi lama)</span>
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={createMut.isPending}

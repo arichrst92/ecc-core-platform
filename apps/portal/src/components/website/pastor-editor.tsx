@@ -88,7 +88,7 @@ export function PastorEditor({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => !save.isPending && onClose()} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <div>
               <h2 className="font-semibold text-neutral-900">{section.title}</h2>
               <p className="text-xs text-neutral-500">Foto persegi, nama, jabatan, cabang. Urutan di sini = urutan tampil di halaman Tentang Kami.</p>
@@ -98,7 +98,7 @@ export function PastorEditor({
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {items.length === 0 ? (
               <div className="text-center py-10 text-sm text-neutral-500">
                 <UserRound className="w-10 h-10 mx-auto mb-2 text-neutral-300" />
@@ -153,7 +153,7 @@ export function PastorEditor({
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <span className="text-xs text-neutral-500">{items.length} orang{dirty ? ' · belum disimpan' : ''}</span>
             <div className="flex gap-2">
               <button onClick={onClose} disabled={save.isPending} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg">
@@ -231,9 +231,9 @@ function PastorForm({
     <>
       <div className="fixed inset-0 bg-black/40 z-[60]" onClick={onCancel} />
       <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100 font-semibold text-neutral-900">{isNew ? 'Tambah pastor' : 'Ubah pastor'}</div>
-          <div className="p-6 space-y-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100 font-semibold text-neutral-900">{isNew ? 'Tambah pastor' : 'Ubah pastor'}</div>
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-24 h-24 rounded-2xl overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0">
                 {uploading ? (
@@ -309,7 +309,7 @@ function PastorForm({
               </select>
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg">
               Batal
             </button>

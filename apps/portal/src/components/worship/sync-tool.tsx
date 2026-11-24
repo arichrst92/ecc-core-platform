@@ -295,7 +295,7 @@ function ElsaPanel({
         <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
           <Sparkles className="w-4 h-4" />
         </span>
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-0 basis-48">
           <div className="font-semibold text-neutral-900">Sinkronkan dengan Elsa</div>
           <div className="text-xs text-neutral-500">Elsa mendengarkan lagu lalu mencocokkan waktu tiap baris lirik. Hasilnya bisa dicek dan dirapikan.</div>
         </div>
@@ -349,7 +349,7 @@ function ElsaPanel({
 
           {job.status === 'RUNNING' ? (
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-wrap justify-between text-sm gap-2">
                 <span>{ELSA_STAGE_LABEL[job.stage ?? 'PREPARE']}</span>
                 <span className="font-semibold">{job.progress}%</span>
               </div>

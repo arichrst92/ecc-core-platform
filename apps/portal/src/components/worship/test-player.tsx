@@ -114,7 +114,7 @@ export function TestPlayer({
         <div className="h-1 rounded-full overflow-hidden" style={{ background: dark ? 'rgba(255,255,255,.25)' : '#e5e5e5' }}>
           <div className="h-1 bg-orange-500" style={{ width: dur ? `${Math.min(100, (cur / dur) * 100)}%` : '0%' }} />
         </div>
-        <div className="flex justify-between text-[11px] opacity-70">
+        <div className="flex flex-wrap justify-between text-[11px] opacity-70 gap-2">
           <span>{fmtDur(cur)}</span>
           <span>{fmtDur(dur)}</span>
         </div>

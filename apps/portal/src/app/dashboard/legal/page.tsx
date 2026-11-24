@@ -61,9 +61,9 @@ export default function LegalPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <FileText className="w-6 h-6" />
             Legal Documents
           </h1>
@@ -200,7 +200,7 @@ function Editor({
   const wordCount = content.trim().length === 0 ? 0 : content.trim().split(/\s+/).length;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       {isEmpty && lang !== 'id' && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded-lg flex items-start gap-2">
           <Plus className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -242,7 +242,7 @@ function Editor({
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
           <label className="block text-xs font-medium text-neutral-600">
             Content <span className="text-neutral-400">(markdown — mobile render via react-native-markdown-display)</span>
           </label>
@@ -269,7 +269,7 @@ function Editor({
         </span>
       </label>
 
-      <div className="flex items-center justify-between pt-4 border-t border-neutral-100">
+      <div className="flex flex-wrap items-center justify-between pt-4 border-t border-neutral-100 gap-2">
         {existing && lang !== 'id' ? (
           <button
             onClick={() => setDeleting(true)}

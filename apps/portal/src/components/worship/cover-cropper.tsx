@@ -111,8 +111,8 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={saving ? undefined : onCancel} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">{title}</h2>
             <button type="button" onClick={onCancel} className="p-1.5 rounded-lg hover:bg-neutral-100" disabled={saving}>
               <X className="w-4 h-4" />
@@ -150,7 +150,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
                     }}
                   />
                 ) : loadError ? (
-                  <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white/90">
+                  <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 text-center text-sm text-white/90">
                     Gambar tidak bisa dibuka di browser ini. Gunakan JPG, PNG, atau WebP (foto HEIC dari iPhone: ubah dulu ke JPG).
                   </div>
                 ) : (
@@ -255,7 +255,7 @@ export function CoverCropper({ file, onCancel, onDone, title = 'Atur cover', sav
             </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100">
             <button type="button" onClick={onCancel} disabled={saving} className="h-9 px-4 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
               Batal
             </button>

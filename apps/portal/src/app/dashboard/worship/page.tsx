@@ -37,8 +37,8 @@ export default function WorshipPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Music className="w-6 h-6 text-brand-500" /> ECC Worship
           </h1>
           <p className="text-sm text-neutral-500 mt-0.5">
@@ -172,7 +172,7 @@ function StatsTable() {
   const rows = q.data ?? [];
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[640px] text-sm">
         <thead className="bg-neutral-50 text-neutral-600 text-xs uppercase">
           <tr>
             <th className="px-3 py-2 text-left">Lagu</th>
@@ -258,7 +258,7 @@ function CreateModal({ tipe, onClose }: { tipe: 'ALBUM' | 'SINGLE'; onClose: () 
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
           <div className="flex flex-wrap gap-2 items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-100">
             <h2 className="font-semibold">{tipe === 'ALBUM' ? 'Album baru' : 'Single baru'}</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
@@ -288,7 +288,7 @@ function CreateModal({ tipe, onClose }: { tipe: 'ALBUM' | 'SINGLE'; onClose: () 
             ) : null}
             <p className="text-xs text-neutral-500">Dibuat sebagai draft. Cover, audio, dan lirik diatur di halaman berikutnya.</p>
           </div>
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100">
             <button onClick={onClose} className="h-9 px-4 text-sm rounded-lg border border-neutral-300">
               Batal
             </button>

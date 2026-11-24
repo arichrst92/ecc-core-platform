@@ -119,6 +119,8 @@ jemaatRouter.get('/', async (req, res) => {
     where.jemaatPelayanan = { some: { isActive: true, pelayananId } };
   }
   applyProfileFilters(req, where);
+  await applyLeaderAppFilters(req, where);
+  applyMultiStructureFilters(req, where);
   const journeySteps = await loadJourneySteps();
   applyJourneyFilter(req, where, journeySteps);
   const junk = await applySumberJunkFilter(req, where);
@@ -285,6 +287,74 @@ function stageOf(steps: JourneySteps, roles: { roleId: string; subRoleId: string
 const KOSONG = '__kosong';
 
 /** Filter pekerjaan & status pernikahan (?statusPekerjaan= / ?statusPernikahan=, '__kosong' = belum diisi). */
+/**
+ * Filter Portal 2026-11 (daftar & export):
+ *   terlibatPelayanan=ya|tidak  (+ pelayananMinLevel=N → role level ≥ N; pelayanan & role aktif)
+ *   homecellLeader=ya|tidak     PIC homecell aktif ATAU role PIC homecell di pelayanan penggembalaan
+ *   zoneLeader=ya|tidak         PIC zona aktif ATAU role PIC zona di pelayanan penggembalaan
+ *   elsApp=sudah|belum          sudah onboarding di Els App (sama dengan penerima Announcement)
+ */
+async function applyLeaderAppFilters(req: any, where: any) {
+  const and: any[] = [];
+  const terlibat = getQueryString(req, 'terlibatPelayanan');
+  const minLevelStr = getQueryString(req, 'pelayananMinLevel');
+  const minLevel = minLevelStr && /^\d+$/.test(minLevelStr) ? Number(minLevelStr) : null;
+  const activeJp = (extra: any = {}) => ({
+    isActive: true,
+    pelayanan: { isActive: true },
+    pelayananRole: { isActive: true, ...(minLevel !== null ? { level: { gte: minLevel } } : {}) },
+    ...extra,
+  });
+  if (terlibat === 'ya') and.push({ jemaatPelayanan: { some: activeJp() } });
+  else if (terlibat === 'tidak') and.push({ jemaatPelayanan: { none: { isActive: true, pelayanan: { isActive: true } } } });
+
+  const hl = getQueryString(req, 'homecellLeader');
+  const zl = getQueryString(req, 'zoneLeader');
+  if (hl === 'ya' || hl === 'tidak' || zl === 'ya' || zl === 'tidak') {
+    const pg = await resolvePenggembalaan();
+    const NONE = '00000000-0000-0000-0000-000000000000';
+    const leaderWhere = (kind: 'HOMECELL_LEADER' | 'ZONE_LEADER') => ({
+      OR: [
+        kind === 'HOMECELL_LEADER' ? { homecellPic: { some: { isActive: true } } } : { areaPic: { some: { isActive: true } } },
+        { jemaatPelayanan: { some: { isActive: true, pelayananId: pg.pelayananId ?? NONE, pelayananRoleId: pg.roleId[kind] ?? NONE } } },
+      ],
+    });
+    if (hl === 'ya') and.push(leaderWhere('HOMECELL_LEADER'));
+    else if (hl === 'tidak') and.push({ NOT: leaderWhere('HOMECELL_LEADER') });
+    if (zl === 'ya') and.push(leaderWhere('ZONE_LEADER'));
+    else if (zl === 'tidak') and.push({ NOT: leaderWhere('ZONE_LEADER') });
+  }
+
+  const elsApp = getQueryString(req, 'elsApp');
+  if (elsApp === 'sudah') and.push({ onboardedAt: { not: null } });
+  else if (elsApp === 'belum') and.push({ onboardedAt: null });
+
+  if (and.length) where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), ...and];
+}
+
+/** Daftar UUID dari query "a,b,c" (multi-select Portal). */
+function idList(req: any, key: string): string[] {
+  const raw = getQueryString(req, key);
+  if (!raw) return [];
+  return raw.split(',').map((x) => x.trim()).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200);
+}
+
+/**
+ * Multi-select Portal 2026-11: ?cabangIds=a,b (cabang jemaat), ?homecellAreaIds=a,b
+ * (anggota aktif homecell di zona tsb) & ?homecellIds=a,b (anggota aktif homecell tsb).
+ * Dipakai bersama cabangId/homecellAreaId/homecellId lama.
+ */
+function applyMultiStructureFilters(req: any, where: any) {
+  const cabangIds = idList(req, 'cabangIds');
+  const areaIds = idList(req, 'homecellAreaIds');
+  const homecellIds = idList(req, 'homecellIds');
+  const and: any[] = [];
+  if (cabangIds.length) and.push({ cabangId: { in: cabangIds } });
+  if (areaIds.length) and.push({ homecellMembership: { some: { isActive: true, homecell: { areaId: { in: areaIds } } } } });
+  if (homecellIds.length) and.push({ homecellMembership: { some: { isActive: true, homecellId: { in: homecellIds } } } });
+  if (and.length) where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), ...and];
+}
+
 function applyProfileFilters(req: any, where: any) {
   const pekerjaan = getQueryString(req, 'statusPekerjaan');
   const nikah = getQueryString(req, 'statusPernikahan');
@@ -402,12 +472,16 @@ async function fetchJemaatForExport(where: any) {
       jemaatPelayanan: {
         where: { isActive: true },
         select: {
-          pelayanan: { select: { nama: true } },
-          pelayananRole: { select: { nama: true } },
+          pelayananId: true,
+          pelayananRoleId: true,
+          pelayanan: { select: { nama: true, isActive: true } },
+          pelayananRole: { select: { nama: true, level: true, isActive: true } },
         },
-        take: 3,
       },
       user: { select: { lastLoginAt: true } },
+      // Kolom export 2026-11: pemimpin homecell/zona & level pelayanan tertinggi.
+      homecellPic: { where: { isActive: true }, select: { id: true } },
+      areaPic: { where: { isActive: true }, select: { id: true } },
       consents: {
         orderBy: { acceptedAt: 'desc' },
         take: 1,
@@ -512,6 +586,9 @@ jemaatRouter.get('/duplicates', async (_req, res) => {
 jemaatRouter.get('/export', async (req, res) => {
   const format = (getQueryString(req, 'format') ?? 'csv').toLowerCase();
   const where = buildJemaatWhereFromQuery(req);
+  await applyLeaderAppFilters(req, where);
+  applyMultiStructureFilters(req, where);
+  const pg = await resolvePenggembalaan();
   const journeySteps = await loadJourneySteps();
   applyJourneyFilter(req, where, journeySteps);
   const junk = await applySumberJunkFilter(req, where);
@@ -536,8 +613,10 @@ jemaatRouter.get('/export', async (req, res) => {
       ),
     ).join('; ');
     const ministries = (r.jemaatPelayanan ?? [])
+      .slice(0, 3)
       .map((jp: any) => `${jp.pelayanan.nama} (${jp.pelayananRole.nama})`)
       .join('; ');
+    const activeJp = (r.jemaatPelayanan ?? []).filter((jp: any) => jp.pelayanan.isActive && jp.pelayananRole.isActive);
     return {
       kode: r.kode ?? '',
       namaLengkap: r.namaLengkap ?? '',
@@ -558,6 +637,18 @@ jemaatRouter.get('/export', async (req, res) => {
       ministry: ministries,
       spiritualJourney: journeySteps.length ? stageOf(journeySteps, r.jemaatRoles ?? []).label : '',
       status: r.isActive ? 'Aktif' : 'Nonaktif',
+      elsApp: r.onboardedAt ? 'Sudah' : 'Belum',
+      homecellLeader:
+        (r.homecellPic?.length ?? 0) > 0 ||
+        activeJp.some((jp: any) => jp.pelayananId === pg.pelayananId && jp.pelayananRoleId === pg.roleId.HOMECELL_LEADER)
+          ? 'Ya'
+          : 'Tidak',
+      zoneLeader:
+        (r.areaPic?.length ?? 0) > 0 ||
+        activeJp.some((jp: any) => jp.pelayananId === pg.pelayananId && jp.pelayananRoleId === pg.roleId.ZONE_LEADER)
+          ? 'Ya'
+          : 'Tidak',
+      levelPelayanan: activeJp.length ? String(Math.max(...activeJp.map((jp: any) => jp.pelayananRole.level))) : '',
       tanggalBergabung: r.tanggalBergabung
         ? new Date(r.tanggalBergabung).toISOString().slice(0, 10)
         : '',
@@ -589,6 +680,10 @@ jemaatRouter.get('/export', async (req, res) => {
     'Ministry',
     'Spiritual Journey',
     'Status',
+    'Els App',
+    'Homecell Leader',
+    'Zone Leader',
+    'Level Pelayanan Tertinggi',
     'Tanggal Bergabung',
     'Last Login',
     'Sumber Data',
@@ -614,6 +709,10 @@ jemaatRouter.get('/export', async (req, res) => {
     'ministry',
     'spiritualJourney',
     'status',
+    'elsApp',
+    'homecellLeader',
+    'zoneLeader',
+    'levelPelayanan',
     'tanggalBergabung',
     'lastLogin',
     'sumber',
@@ -632,6 +731,34 @@ jemaatRouter.get('/export', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="jemaat-${timestamp}.csv"`);
     return res.send(bom + lines.join('\n'));
   }
+
+  // Keterangan filter baru di judul PDF.
+  const [cabNames, zonaNames, hcNames] = await Promise.all([
+    idList(req, 'cabangIds').length
+      ? prisma.cabangGereja.findMany({ where: { id: { in: idList(req, 'cabangIds') } }, select: { nama: true } })
+      : Promise.resolve([]),
+    idList(req, 'homecellAreaIds').length
+      ? prisma.homecellArea.findMany({ where: { id: { in: idList(req, 'homecellAreaIds') } }, select: { nama: true } })
+      : Promise.resolve([]),
+    idList(req, 'homecellIds').length
+      ? prisma.homecell.findMany({ where: { id: { in: idList(req, 'homecellIds') } }, select: { nama: true } })
+      : Promise.resolve([]),
+  ]);
+  const filterNote = [
+    cabNames.length ? `Cabang: ${cabNames.map((c) => c.nama).join(', ')}` : '',
+    zonaNames.length ? `Zona: ${zonaNames.map((z) => z.nama).join(', ')}` : '',
+    hcNames.length ? `Homecell: ${hcNames.map((h) => h.nama).join(', ')}` : '',
+    getQueryString(req, 'terlibatPelayanan') === 'ya'
+      ? `Terlibat pelayanan${getQueryString(req, 'pelayananMinLevel') ? ` (level ${getQueryString(req, 'pelayananMinLevel')} ke atas)` : ''}`
+      : getQueryString(req, 'terlibatPelayanan') === 'tidak'
+        ? 'Tidak terlibat pelayanan'
+        : '',
+    getQueryString(req, 'homecellLeader') === 'ya' ? 'Homecell Leader' : getQueryString(req, 'homecellLeader') === 'tidak' ? 'Bukan Homecell Leader' : '',
+    getQueryString(req, 'zoneLeader') === 'ya' ? 'Zone Leader' : getQueryString(req, 'zoneLeader') === 'tidak' ? 'Bukan Zone Leader' : '',
+    getQueryString(req, 'elsApp') === 'sudah' ? 'Sudah pakai Els App' : getQueryString(req, 'elsApp') === 'belum' ? 'Belum pakai Els App' : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   if (format === 'pdf' || format === 'html' || format === 'print') {
     // Server-side HTML print-view — user Ctrl+P → save as PDF.
@@ -658,6 +785,8 @@ jemaatRouter.get('/export', async (req, res) => {
   <td>${escapeHtml(row.ministry)}</td>
   <td>${escapeHtml(row.spiritualJourney)}</td>
   <td>${escapeHtml(row.status)}</td>
+  <td>${escapeHtml(row.elsApp)}</td>
+  <td>${escapeHtml([row.homecellLeader === 'Ya' ? 'HC Leader' : '', row.zoneLeader === 'Ya' ? 'Zone Leader' : ''].filter(Boolean).join(', '))}</td>
 </tr>`,
       )
       .join('');
@@ -705,13 +834,14 @@ ${
 </script>
 <div style="padding: 10mm;">
 <h1>Daftar Jemaat ECC</h1>
-<div class="meta">Total ${dataRows.length} jemaat · Export ${timestamp}</div>
+<div class="meta">Total ${dataRows.length} jemaat · Export ${timestamp}${filterNote ? ` · Filter: ${escapeHtml(filterNote)}` : ''}</div>
 <table>
 <thead>
 <tr>
   <th>Kode</th><th>Nama</th><th>L/P</th><th>Usia</th><th>No HP</th><th>Email</th>
   <th>Pekerjaan</th><th>Pernikahan</th>
   <th>Cabang</th><th>Zona</th><th>Homecell</th><th>Ministry</th><th>Spiritual Journey</th><th>Status</th>
+  <th>Els App</th><th>Pemimpin</th>
 </tr>
 </thead>
 <tbody>${tableBody}</tbody>

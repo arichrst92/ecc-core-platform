@@ -18,6 +18,8 @@ summary: Data jemaat & validasi isian, kartu QR, keluarga & relasi otomatis, tam
 - **Cek Duplikat**: kandidat akun ganda (no HP/email/nama+tanggal lahir sama).
 - Import CSV: template → Dry Run → Commit.
 
+- **Filter daftar Jemaat (2026-11)**: Cabang / Zona / Homecell bisa pilih banyak; **Terlibat Pelayanan** ya/tidak (pelayanan & role aktif; "ya" + level minimal mis. 5 = role level 5 ke atas); **Homecell Leader** / **Zone Leader** ya/tidak (PIC homecell/zona aktif atau role PIC di pelayanan penggembalaan); **Pakai Els App** sudah/belum (sudah onboarding). Export Excel (CSV) & PDF mengikuti semua filter, dengan kolom Els App, Homecell Leader, Zone Leader, Level Pelayanan Tertinggi.
+
 ## Edit profil & validasi (app)
 - Nama hanya huruf, spasi, titik, koma, apostrof, tanda hubung (tanpa angka/simbol). Alamat/catatan harus bermakna. Tanggal lahir tidak di masa depan.
 - Pekerjaan & status pernikahan dipilih dari daftar ("Pilih pekerjaan dari daftar yang tersedia."). Belum Bekerja / IRT / Pensiunan → nama kantor disembunyikan. Single → tanggal pernikahan disembunyikan; status lain: tanggal wajar terhadap tanggal lahir.

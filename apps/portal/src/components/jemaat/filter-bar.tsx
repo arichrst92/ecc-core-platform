@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownAZ, ArrowDownZA, Filter, X } from 'lucide-react';
+import { ArrowDownAZ, ArrowDownZA, Check, ChevronDown, Filter, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 /**
@@ -34,6 +35,18 @@ export interface JemaatFilterState {
   junk: string;
   /** Kode alasan junk tertentu ('' = semua alasan). */
   junkAlasan: string;
+  // 2026-11 — multi-select struktur (menggantikan cabangId/homecellAreaId/homecellId tunggal)
+  cabangIds?: string[];
+  homecellAreaIds?: string[];
+  homecellIds?: string[];
+  /** '' = semua, 'ya' / 'tidak' (pelayanan & role aktif) */
+  terlibatPelayanan?: '' | 'ya' | 'tidak';
+  /** Level role pelayanan minimal (≥) bila terlibat = ya; '' = semua level */
+  pelayananMinLevel?: string;
+  homecellLeader?: '' | 'ya' | 'tidak';
+  zoneLeader?: '' | 'ya' | 'tidak';
+  /** '' = semua, 'sudah' / 'belum' memakai Els App */
+  elsApp?: '' | 'sudah' | 'belum';
   sortBy: 'namaLengkap' | 'tanggalLahir' | 'tanggalBergabung' | 'cabang';
   sortOrder: 'asc' | 'desc';
 }
@@ -55,6 +68,14 @@ export const defaultJemaatFilter: JemaatFilterState = {
   sumber: '',
   junk: '',
   junkAlasan: '',
+  cabangIds: [],
+  homecellAreaIds: [],
+  homecellIds: [],
+  terlibatPelayanan: '',
+  pelayananMinLevel: '',
+  homecellLeader: '',
+  zoneLeader: '',
+  elsApp: '',
   sortBy: 'namaLengkap',
   sortOrder: 'asc',
 };
@@ -63,7 +84,13 @@ export const defaultJemaatFilter: JemaatFilterState = {
  * Encode state → params siap kirim ke backend (gabung dengan extraParams).
  * Field bernilai default tidak diikutkan supaya URL bersih.
  */
+/** Pilihan multi-select (+ nilai tunggal lama dari filter tersimpan). */
+const ids = (multi: string[] | undefined, single: string) => [...new Set([...(multi ?? []), ...(single ? [single] : [])])];
+
 export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string | undefined> {
+  const cab = ids(s.cabangIds, s.cabangId);
+  const zona = ids(s.homecellAreaIds, s.homecellAreaId);
+  const hc = ids(s.homecellIds, s.homecellId);
   return {
     jenis: s.jenis === 'jemaat' ? undefined : s.jenis,
     isActive: s.status === 'all' ? undefined : s.status,
@@ -71,10 +98,15 @@ export function toJemaatQueryParams(s: JemaatFilterState): Record<string, string
     roleId: s.roleId || undefined,
     umurMin: s.umurMin || undefined,
     umurMax: s.umurMax || undefined,
-    cabangId: s.cabangId || undefined,
-    homecellAreaId: s.homecellAreaId || undefined,
-    homecellId: s.homecellId || undefined,
+    cabangIds: cab.length ? cab.join(',') : undefined,
+    homecellAreaIds: zona.length ? zona.join(',') : undefined,
+    homecellIds: hc.length ? hc.join(',') : undefined,
     pelayananId: s.pelayananId || undefined,
+    terlibatPelayanan: s.terlibatPelayanan || undefined,
+    pelayananMinLevel: s.terlibatPelayanan === 'ya' && s.pelayananMinLevel ? s.pelayananMinLevel : undefined,
+    homecellLeader: s.homecellLeader || undefined,
+    zoneLeader: s.zoneLeader || undefined,
+    elsApp: s.elsApp || undefined,
     statusPekerjaan: s.statusPekerjaan || undefined,
     statusPernikahan: s.statusPernikahan || undefined,
     journeyStage: s.journeyStage || undefined,
@@ -97,6 +129,13 @@ export function isFilterActive(s: JemaatFilterState): boolean {
     !!s.cabangId ||
     !!s.homecellAreaId ||
     !!s.homecellId ||
+    !!s.cabangIds?.length ||
+    !!s.homecellAreaIds?.length ||
+    !!s.homecellIds?.length ||
+    !!s.terlibatPelayanan ||
+    !!s.homecellLeader ||
+    !!s.zoneLeader ||
+    !!s.elsApp ||
     !!s.pelayananId ||
     !!s.statusPekerjaan ||
     !!s.statusPernikahan ||
@@ -152,37 +191,31 @@ export function JemaatFilterBar({ value, onChange }: Props) {
     staleTime: 5 * 60_000,
   });
 
+  // Semua zona & homecell (beberapa halaman), disaring di sini sesuai cabang/zona terpilih.
   const homecellAreaQ = useQuery({
-    queryKey: ['homecell-area', 'options', value.cabangId],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
-        '/admin/homecell-area',
-        { params: { cabangId: value.cabangId || undefined, limit: 500 } },
-      );
-      const body = res.data as any;
-      return Array.isArray(body) ? body : (body?.data ?? []);
-    },
+    queryKey: ['homecell-area', 'options-all'],
+    queryFn: () => fetchAllPages<{ id: string; nama: string; cabang?: { id: string; nama: string } | null; cabangId?: string }>('/admin/homecell-area'),
     staleTime: 5 * 60_000,
   });
 
   const homecellQ = useQuery({
-    queryKey: ['homecell', 'options', value.cabangId, value.homecellAreaId],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
+    queryKey: ['homecell', 'options-all'],
+    queryFn: () =>
+      fetchAllPages<{ id: string; nama: string; areaId?: string; area?: { id: string; nama: string; cabang?: { id: string; nama: string } | null } | null }>(
         '/admin/homecell',
-        {
-          params: {
-            cabangId: value.cabangId || undefined,
-            homecellAreaId: value.homecellAreaId || undefined,
-            limit: 500,
-          },
-        },
-      );
-      const body = res.data as any;
-      return Array.isArray(body) ? body : (body?.data ?? []);
-    },
+      ),
     staleTime: 5 * 60_000,
   });
+
+  const selCabang = ids(value.cabangIds, value.cabangId);
+  const selZona = ids(value.homecellAreaIds, value.homecellAreaId);
+  const selHc = ids(value.homecellIds, value.homecellId);
+  const zonaOptions = (homecellAreaQ.data ?? [])
+    .filter((a) => !selCabang.length || selCabang.includes(a.cabang?.id ?? a.cabangId ?? ''))
+    .map((a) => ({ id: a.id, label: a.nama, sub: selCabang.length === 1 ? undefined : a.cabang?.nama }));
+  const hcOptions = (homecellQ.data ?? [])
+    .filter((h) => (!selZona.length || selZona.includes(h.area?.id ?? h.areaId ?? '')) && (!selCabang.length || selCabang.includes(h.area?.cabang?.id ?? '')))
+    .map((h) => ({ id: h.id, label: h.nama, sub: h.area?.nama }));
 
   const pelayananQ = useQuery({
     queryKey: ['pelayanan', 'options'],
@@ -252,54 +285,87 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           </select>
         </Field>
 
-        {/* Cabang */}
-        <Field label="Cabang">
-          <select
-            value={value.cabangId}
-            onChange={(e) => patch({ cabangId: e.target.value, homecellAreaId: '', homecellId: '' })}
-            className={selectCls}
-            disabled={cabangQ.isLoading}
-          >
-            <option value="">{cabangQ.isLoading ? 'Memuat...' : 'Semua Cabang'}</option>
-            {(cabangQ.data ?? []).map((c: { id: string; nama: string }) => (
-              <option key={c.id} value={c.id}>
-                {c.nama}
-              </option>
-            ))}
+        {/* Cabang (multi) */}
+        <FieldBox label="Cabang">
+          <MultiSelect
+            options={(cabangQ.data ?? []).map((c: { id: string; nama: string }) => ({ id: c.id, label: c.nama }))}
+            value={selCabang}
+            onChange={(v) => patch({ cabangIds: v, cabangId: '', homecellAreaIds: [], homecellAreaId: '', homecellIds: [], homecellId: '' })}
+            allLabel="Semua Cabang"
+            loading={cabangQ.isLoading}
+          />
+        </FieldBox>
+
+        {/* Zona (multi) */}
+        <FieldBox label="Zona">
+          <MultiSelect
+            options={zonaOptions}
+            value={selZona}
+            onChange={(v) => patch({ homecellAreaIds: v, homecellAreaId: '', homecellIds: [], homecellId: '' })}
+            allLabel="Semua Zona"
+            loading={homecellAreaQ.isLoading}
+          />
+        </FieldBox>
+
+        {/* Homecell (multi) */}
+        <FieldBox label="Homecell">
+          <MultiSelect
+            options={hcOptions}
+            value={selHc}
+            onChange={(v) => patch({ homecellIds: v, homecellId: '' })}
+            allLabel="Semua Homecell"
+            loading={homecellQ.isLoading}
+          />
+        </FieldBox>
+
+        {/* Terlibat pelayanan (+ level minimal) */}
+        <Field label="Terlibat Pelayanan">
+          <div className="flex gap-1.5">
+            <select
+              value={value.terlibatPelayanan ?? ''}
+              onChange={(e) => patch({ terlibatPelayanan: e.target.value as JemaatFilterState['terlibatPelayanan'], pelayananMinLevel: '' })}
+              className={selectCls}
+            >
+              <option value="">Semua</option>
+              <option value="ya">Ya</option>
+              <option value="tidak">Tidak</option>
+            </select>
+            {value.terlibatPelayanan === 'ya' ? (
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder="Lv ≥"
+                title="Level role pelayanan minimal (mis. 5 = level 5 ke atas). Kosong = semua level."
+                value={value.pelayananMinLevel ?? ''}
+                onChange={(e) => patch({ pelayananMinLevel: e.target.value })}
+                className={inputCls + ' w-20'}
+              />
+            ) : null}
+          </div>
+        </Field>
+
+        <Field label="Homecell Leader">
+          <select value={value.homecellLeader ?? ''} onChange={(e) => patch({ homecellLeader: e.target.value as JemaatFilterState['homecellLeader'] })} className={selectCls}>
+            <option value="">Semua</option>
+            <option value="ya">Ya</option>
+            <option value="tidak">Tidak</option>
           </select>
         </Field>
 
-        {/* Homecell Area */}
-        <Field label="Zona">
-          <select
-            value={value.homecellAreaId}
-            onChange={(e) => patch({ homecellAreaId: e.target.value, homecellId: '' })}
-            className={selectCls}
-            disabled={homecellAreaQ.isLoading}
-          >
-            <option value="">{homecellAreaQ.isLoading ? 'Memuat...' : 'Semua Zona'}</option>
-            {(homecellAreaQ.data ?? []).map((a: { id: string; nama: string }) => (
-              <option key={a.id} value={a.id}>
-                {a.nama}
-              </option>
-            ))}
+        <Field label="Zone Leader">
+          <select value={value.zoneLeader ?? ''} onChange={(e) => patch({ zoneLeader: e.target.value as JemaatFilterState['zoneLeader'] })} className={selectCls}>
+            <option value="">Semua</option>
+            <option value="ya">Ya</option>
+            <option value="tidak">Tidak</option>
           </select>
         </Field>
 
-        {/* Homecell */}
-        <Field label="Homecell">
-          <select
-            value={value.homecellId}
-            onChange={(e) => patch({ homecellId: e.target.value })}
-            className={selectCls}
-            disabled={homecellQ.isLoading}
-          >
-            <option value="">{homecellQ.isLoading ? 'Memuat...' : 'Semua Homecell'}</option>
-            {(homecellQ.data ?? []).map((h: { id: string; nama: string }) => (
-              <option key={h.id} value={h.id}>
-                {h.nama}
-              </option>
-            ))}
+        <Field label="Pakai Els App">
+          <select value={value.elsApp ?? ''} onChange={(e) => patch({ elsApp: e.target.value as JemaatFilterState['elsApp'] })} className={selectCls}>
+            <option value="">Semua</option>
+            <option value="sudah">Sudah</option>
+            <option value="belum">Belum</option>
           </select>
         </Field>
 
@@ -522,11 +588,121 @@ const controlCls =
 const selectCls = `w-full ${controlCls}`;
 const inputCls = controlCls;
 
+/** Seperti Field tapi bukan <label> — untuk kontrol berisi banyak tombol (multi-select). */
+function FieldBox({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="block">
+      <span className="block text-[11px] text-neutral-500 font-medium mb-1">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-[11px] text-neutral-500 font-medium mb-1">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Ambil semua halaman daftar (limit 500 per halaman, maks 20 halaman). */
+async function fetchAllPages<T>(url: string): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const res = await apiClient.get(url, { params: { limit: 500, page } });
+    const body = res.data as any;
+    const rows: T[] = Array.isArray(body) ? body : (body?.data ?? []);
+    out.push(...rows);
+    const totalPages = body?.meta?.totalPages ?? 1;
+    if (Array.isArray(body) || page >= totalPages || rows.length < 500) break;
+  }
+  return out;
+}
+
+/** Multi-select ringkas: tombol + daftar centang dengan pencarian. */
+function MultiSelect({
+  options,
+  value,
+  onChange,
+  allLabel,
+  loading,
+}: {
+  options: { id: string; label: string; sub?: string }[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  allLabel: string;
+  loading?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const shown = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return n ? options.filter((o) => o.label.toLowerCase().includes(n) || o.sub?.toLowerCase().includes(n)) : options;
+  }, [options, q]);
+  const names = value.map((id) => options.find((o) => o.id === id)?.label).filter(Boolean) as string[];
+  const text = loading ? 'Memuat...' : value.length === 0 ? allLabel : value.length === 1 ? names[0] ?? '1 dipilih' : `${value.length} dipilih`;
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full flex items-center justify-between gap-1 text-left ${controlCls} ${value.length ? 'text-brand-700 font-medium' : ''}`}
+      >
+        <span className="truncate">{text}</span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-neutral-500" />
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-1 w-72 max-w-[80vw] bg-white border border-neutral-200 rounded-lg shadow-lg">
+          <div className="p-2 border-b border-neutral-100 flex gap-1.5">
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cari…"
+              className="flex-1 h-8 px-2 border border-neutral-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {value.length ? (
+              <button type="button" onClick={() => onChange([])} className="px-2 text-xs text-brand-600 hover:bg-brand-50 rounded">
+                Kosongkan
+              </button>
+            ) : null}
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {shown.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-neutral-400">Tidak ada pilihan.</div>
+            ) : (
+              shown.slice(0, 300).map((o) => {
+                const on = value.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => onChange(on ? value.filter((x) => x !== o.id) : [...value, o.id])}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-50"
+                  >
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-brand-500 border-brand-500' : 'border-neutral-300'}`}>
+                      {on ? <Check className="w-3 h-3 text-white" /> : null}
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">{o.label}</span>
+                    {o.sub ? <span className="text-[11px] text-neutral-400 truncate max-w-[45%]">{o.sub}</span> : null}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

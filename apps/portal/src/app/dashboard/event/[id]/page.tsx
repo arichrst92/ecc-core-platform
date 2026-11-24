@@ -164,6 +164,19 @@ export default function EventDetailPage() {
   const [pesertaSearch, setPesertaSearch] = useState('');
   // Tab bagian detail (Peserta / Pembayaran / Pelayanan / Ulasan) — supaya halaman tidak memanjang.
   const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'ulasan'>('peserta');
+  // Saring hanya tamu (kotak "Tamu" di ringkasan).
+  const [onlyTamu, setOnlyTamu] = useState(false);
+  // Pelayanan & volunteer (cache sama dengan EventMinistrySection) — untuk badge biru di tab.
+  const pelayananQ = useQuery({
+    queryKey: ['event', eventId, 'pelayanan'],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { id: string; petugas: { canScanAttendance?: boolean }[] }[] }>(
+          `/admin/event/${eventId}/pelayanan`,
+        )
+      ).data.data,
+    enabled: !!eventId,
+  });
   const heroFileRef = useRef<HTMLInputElement>(null);
   const qrisFileRef = useRef<HTMLInputElement>(null);
 
@@ -304,6 +317,19 @@ export default function EventDetailPage() {
     {} as Partial<Record<ParticipationStatus, number>>,
   );
   const aktifCount = pesertaAll.length - (statusCount.BATAL ?? 0);
+  const tamuAktif = pesertaAll.filter((p) => p.jemaat.isTamu && p.status !== 'BATAL').length;
+  const tamuHadir = pesertaAll.filter((p) => p.jemaat.isTamu && p.status === 'HADIR').length;
+  // Pelayanan & volunteer kosong / belum ada petugas scanner → badge biru di tab.
+  const pelLinks = pelayananQ.data ?? [];
+  const pelVolunteers = pelLinks.reduce((n, l) => n + l.petugas.length, 0);
+  const pelScanners = pelLinks.reduce((n, l) => n + l.petugas.filter((v) => v.canScanAttendance).length, 0);
+  const pelayananPerluDiisi = pelayananQ.isSuccess && (pelLinks.length === 0 || pelVolunteers === 0 || pelScanners === 0);
+  const pelayananHint =
+    pelLinks.length === 0
+      ? 'Belum ada pelayanan yang bertugas di event ini'
+      : pelVolunteers === 0
+        ? 'Pelayanan sudah ditautkan tapi belum ada volunteer'
+        : 'Belum ada petugas yang berwenang scan check-in';
   const pesertaNeedle = pesertaSearch.trim().toLowerCase();
   const pesertaDigits = pesertaSearch.replace(/\D/g, '');
   // Urutan: Hadir (check-in terbaru paling atas) → Lunas → Menunggu verifikasi → Daftar → Batal.
@@ -311,6 +337,7 @@ export default function EventDetailPage() {
   const ts = (v: string | null) => (v ? Date.parse(v) : 0);
   const peserta = pesertaAll
     .filter((p) => filterStatus === 'all' || p.status === filterStatus)
+    .filter((p) => !onlyTamu || !!p.jemaat.isTamu)
     .filter(
       (p) =>
         !pesertaNeedle ||
@@ -475,10 +502,10 @@ export default function EventDetailPage() {
 
       {/* Tab bagian — Peserta · Pembayaran · Pelayanan & Volunteer · Ulasan */}
       {(() => {
-        const items: { key: typeof tab; label: string; badge?: number; warn?: boolean; show: boolean }[] = [
+        const items: { key: typeof tab; label: string; badge?: number; warn?: boolean; show: boolean; needsFill?: boolean }[] = [
           { key: 'peserta', label: 'Peserta', badge: e.pesertaCount, show: true },
           { key: 'pembayaran', label: 'Pembayaran', badge: statusCount.MENUNGGU_VERIFIKASI ?? 0, warn: true, show: isPaid },
-          { key: 'pelayanan', label: 'Pelayanan & Volunteer', show: e.butuhKehadiran },
+          { key: 'pelayanan', label: 'Pelayanan & Volunteer', show: e.butuhKehadiran, needsFill: pelayananPerluDiisi },
           { key: 'ulasan', label: 'Ulasan', show: true },
         ];
         return (
@@ -496,6 +523,7 @@ export default function EventDetailPage() {
                   }`}
                 >
                   {x.label}
+                  {x.needsFill ? <NeedsFillBadge label="Perlu diisi" hint={pelayananHint} /> : null}
                   {x.badge ? (
                     <span
                       className={`text-[11px] font-bold px-1.5 rounded-full ${
@@ -560,7 +588,7 @@ export default function EventDetailPage() {
         </div>
 
         {/* Ringkasan jumlah per status — klik untuk menyaring daftar */}
-        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-7 gap-2">
           {(
             [
               ['all', 'Terdaftar aktif', aktifCount, 'text-neutral-900', 'bg-neutral-50'],
@@ -590,6 +618,19 @@ export default function EventDetailPage() {
               <div className="text-[11px] text-neutral-600 leading-4">{label}</div>
             </button>
           ))}
+          {/* Tamu (non-anggota) — klik untuk menampilkan tamu saja */}
+          <button
+            type="button"
+            onClick={() => setOnlyTamu((v) => !v)}
+            className={`text-left rounded-lg px-3 py-2 bg-violet-50 ${onlyTamu ? 'ring-2 ring-violet-400' : 'hover:ring-1 hover:ring-neutral-300'}`}
+            title="Tamu (non-anggota) yang terdaftar & hadir — klik untuk menyaring"
+          >
+            <div className="text-lg font-bold leading-6 text-violet-700">
+              {tamuAktif.toLocaleString('id-ID')}
+              {e.butuhKehadiran ? <span className="ml-1 text-xs font-semibold opacity-70">{tamuHadir} hadir</span> : null}
+            </div>
+            <div className="text-[11px] text-neutral-600 leading-4">Tamu</div>
+          </button>
         </div>
 
         <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-2 text-xs">

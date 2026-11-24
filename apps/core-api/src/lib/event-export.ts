@@ -10,12 +10,13 @@
 import type { Request, Response } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound } from './errors.js';
-import { esc, sendCsv, sendPrintHtml, summaryCards } from './print-report.js';
+import { esc, sendCsv, summaryCards } from './print-report.js';
 import { CHECKIN_METHODS, METHOD_LABEL, type CheckinMethod } from './attendance-report.js';
 import { paymentStatusOf, type PaymentStatus } from './event-payment.js';
 import { buildReviewReport, eventReviews } from './service-review.js';
-import { reviewSectionHtml } from './service-review-html.js';
 import { eventDateLabel, jamWithZone, tzOr } from './tz.js';
+import { xi, type ExportIcon } from './export-icons.js';
+import { ideaLogoSvg } from './idea-logo.js';
 
 const STATUS_LABEL: Record<string, string> = {
   DAFTAR: 'Terdaftar',
@@ -47,6 +48,7 @@ export async function eventExportData(eventId: string) {
       jamMulai: true,
       jamSelesai: true,
       lokasi: true,
+      heroImageUrl: true,
       tipeBayar: true,
       nominal: true,
       quotaPeserta: true,
@@ -135,7 +137,12 @@ export async function eventExportData(eventId: string) {
         methodKey: method,
       };
     })
-    .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || a.nama.localeCompare(b.nama));
+    // Hadir: check-in terbaru paling atas; status lain urut nama.
+    .sort(
+      (a, b) =>
+        (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) ||
+        (a.status === 'HADIR' ? (b.hadirAt?.getTime() ?? 0) - (a.hadirAt?.getTime() ?? 0) : a.nama.localeCompare(b.nama)),
+    );
 
   const active = rows.filter((r) => r.status !== 'BATAL');
   const hadir = rows.filter((r) => r.status === 'HADIR');
@@ -302,10 +309,214 @@ export async function sendEventExport(req: Request, res: Response, eventId: stri
     ];
     return sendCsv(res, `event-${slug}.csv`, lines);
   }
-  const body = `${eventSummaryHtml(d)}
-<h2>Daftar peserta (${d.rows.length})</h2>
-${eventPesertaTableHtml(d)}
-<h2>Ulasan jemaat</h2>
-${reviewSectionHtml(d.reviews, 'Event')}`;
-  sendPrintHtml(req, res, 'Laporan Event', null, eventMeta(d), body, 'No HP → WhatsApp, email → kirim email (klik di PDF)');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderEventPdf(req, d));
+}
+
+// ============================================================ PDF (tampilan cetak)
+
+const METHOD_COLOR: Record<CheckinMethod, string> = {
+  SCAN: '#EA580C',
+  SELF: '#0EA5E9',
+  WALK_IN: '#7C3AED',
+  LATE: '#F59E0B',
+  MANUAL: '#64748B',
+  UNKNOWN: '#A3A3A3',
+};
+const STATUS_STYLE: Record<string, [string, string]> = {
+  HADIR: ['#DCFCE7', '#15803D'],
+  BAYAR: ['#DBEAFE', '#1D4ED8'],
+  MENUNGGU_VERIFIKASI: ['#FEF3C7', '#B45309'],
+  DAFTAR: ['#F1F5F9', '#334155'],
+  BATAL: ['#FEE2E2', '#B91C1C'],
+};
+
+/** Laporan satu event yang rapi untuk dicetak / disimpan PDF (A4 landscape). */
+export function renderEventPdf(req: Request, d: ExportData): string {
+  const { ev, tz, summary: s } = d;
+  const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
+  const apiBase = (process.env.PUBLIC_API_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const portalUrl = (process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '');
+  const hero = ev.heroImageUrl ? (/^https?:/.test(ev.heroImageUrl) ? ev.heroImageUrl : `${apiBase}${ev.heroImageUrl}`) : null;
+  const tgl =
+    eventDateLabel(ev.tanggalMulai, tz) +
+    (ev.tanggalSelesai && ev.tanggalSelesai.getTime() !== ev.tanggalMulai.getTime() ? ` – ${eventDateLabel(ev.tanggalSelesai, tz)}` : '');
+  const target = ev.cabang ? `Cabang ${ev.cabang.nama}` : ev.sinode ? `Sinode ${ev.sinode.nama}` : 'Semua cabang';
+  const nf = (n: number) => n.toLocaleString('id-ID');
+  const pct = (n: number, of: number) => (of ? Math.round((n / of) * 100) : 0);
+
+  const kpi = (icon: ExportIcon, color: string, label: string, value: string, sub: string, bar?: number) => `
+<div class="kpi"><div class="kpi-ic" style="background:${color}1A">${xi(icon, 16, color)}</div>
+<div class="kpi-b"><div class="kpi-v">${value}</div><div class="kpi-l">${esc(label)}</div>${sub ? `<div class="kpi-s">${sub}</div>` : ''}
+${bar != null ? `<div class="mini"><span style="width:${Math.min(100, bar)}%;background:${color}"></span></div>` : ''}</div></div>`;
+
+  const quota = ev.quotaPeserta ? ` / ${nf(ev.quotaPeserta)}` : '';
+  const kpis = [
+    kpi('users', '#EA580C', 'Terdaftar aktif', `${nf(s.terdaftar)}${quota}`, ev.quotaPeserta ? `${pct(s.terdaftar, ev.quotaPeserta)}% kuota` : 'tanpa batas kuota', ev.quotaPeserta ? pct(s.terdaftar, ev.quotaPeserta) : undefined),
+    ...(ev.butuhKehadiran
+      ? [
+          kpi('userCheck', '#15803D', 'Hadir', nf(s.hadir), `${s.persenHadir ?? 0}% dari terdaftar`, s.persenHadir ?? 0),
+          kpi('hourglass', '#B45309', 'Belum hadir', nf(s.belumHadir), ''),
+        ]
+      : []),
+    kpi('x', '#DC2626', 'Batal', nf(s.batal), ''),
+    kpi('userPlus', '#7C3AED', 'Tamu', `${nf(s.tamuHadir)} / ${nf(s.tamuTerdaftar)}`, 'hadir / terdaftar'),
+    ...(d.paid ? [kpi('wallet', '#1D4ED8', 'Terverifikasi', `Rp ${nf(s.totalConfirmed)}`, s.totalPending ? `Rp ${nf(s.totalPending)} menunggu` : `${nf(s.lunas)} lunas`)] : []),
+    ...(d.reviews.overall.count ? [kpi('star', '#F59E0B', 'Rating', `${d.reviews.overall.avg} ★`, `${d.reviews.overall.count} ulasan`)] : []),
+  ];
+
+  // Komposisi kehadiran (bar bertumpuk) + cara check-in.
+  const totalAll = Math.max(1, s.terdaftar + s.batal);
+  const seg = (n: number, color: string, label: string) =>
+    n ? `<span style="width:${(n / totalAll) * 100}%;background:${color}" title="${esc(label)} ${n}"></span>` : '';
+  const legend = (color: string, label: string, n: number) => `<span class="lg"><i style="background:${color}"></i>${esc(label)} <b>${nf(n)}</b></span>`;
+  const methodTotal = CHECKIN_METHODS.reduce((a, m) => a + s.methods[m], 0);
+  const methodRows = CHECKIN_METHODS.filter((m) => s.methods[m] > 0)
+    .map(
+      (m) => `<div class="mrow"><span class="ml">${esc(METHOD_LABEL[m])}</span><span class="mbar"><span style="width:${pct(s.methods[m], methodTotal)}%;background:${METHOD_COLOR[m]}"></span></span><span class="mv">${nf(s.methods[m])}</span></div>`,
+    )
+    .join('');
+  const panels = `
+<div class="panels">
+  <div class="panel">
+    <div class="pt">${xi('users', 12, '#9A3412')} Komposisi peserta</div>
+    <div class="stack">${seg(s.hadir, '#16A34A', 'Hadir')}${seg(s.belumHadir, '#F59E0B', 'Belum hadir')}${seg(s.batal, '#EF4444', 'Batal')}</div>
+    <div class="lgs">${ev.butuhKehadiran ? legend('#16A34A', 'Hadir', s.hadir) + legend('#F59E0B', 'Belum hadir', s.belumHadir) : legend('#F59E0B', 'Terdaftar', s.terdaftar)}${legend('#EF4444', 'Batal', s.batal)}</div>
+  </div>
+  ${
+    ev.butuhKehadiran
+      ? `<div class="panel"><div class="pt">${xi('scan', 12, '#9A3412')} Cara check-in</div>${methodRows || '<div class="muted">Belum ada yang hadir.</div>'}</div>`
+      : ''
+  }
+  ${
+    d.paid
+      ? `<div class="panel"><div class="pt">${xi('wallet', 12, '#9A3412')} Pembayaran</div>
+      <div class="mrow"><span class="ml">Lunas</span><span class="mbar"><span style="width:${pct(s.lunas, s.terdaftar)}%;background:#16A34A"></span></span><span class="mv">${nf(s.lunas)}</span></div>
+      <div class="mrow"><span class="ml">Menunggu verifikasi</span><span class="mbar"><span style="width:${pct(s.menunggu, s.terdaftar)}%;background:#F59E0B"></span></span><span class="mv">${nf(s.menunggu)}</span></div>
+      <div class="mrow"><span class="ml">Belum bayar</span><span class="mbar"><span style="width:${pct(s.belumBayar, s.terdaftar)}%;background:#EF4444"></span></span><span class="mv">${nf(s.belumBayar)}</span></div>
+      <div class="muted" style="margin-top:4px">Terverifikasi <b>Rp ${nf(s.totalConfirmed)}</b>${s.totalPending ? ` · menunggu Rp ${nf(s.totalPending)}` : ''}</div></div>`
+      : ''
+  }
+</div>`;
+
+  const dtf = (x: Date | null, withDate = true) =>
+    x
+      ? x.toLocaleString('id-ID', {
+          ...(withDate ? { day: '2-digit', month: 'short' } : {}),
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: tz,
+        })
+      : '';
+  const rowsHtml = d.rows
+    .map((r, i) => {
+      const [bg, fg] = STATUS_STYLE[r.status] ?? ['#F1F5F9', '#334155'];
+      return `<tr>
+  <td class="no">${i + 1}</td>
+  <td><div class="nm">${esc(r.nama)}</div><div class="sub">${esc(r.kode)}${r.cabang ? ` · ${esc(r.cabang)}` : ''}</div>${r.keterangan ? `<div class="tag ${r.isTamu ? 'tamu' : ''}">${esc(r.keterangan)}</div>` : ''}</td>
+  <td>${contactHtml(r.noHp, r.email, r.nama)}</td>
+  <td><span class="bd" style="background:${bg};color:${fg}">${esc(r.statusLabel)}</span><div class="sub">Daftar ${esc(dtf(r.daftar))}</div></td>
+  <td>${r.hadirAt ? `<div class="ok">${xi('check', 10, '#15803D')} ${esc(dtf(r.hadirAt))}</div><div class="sub">${esc(r.metode)}${r.petugas ? ` · ${esc(r.petugas)}` : ''}</div>` : '<span class="sub">—</span>'}</td>
+  ${d.paid ? `<td>${r.payment ? `<div>${esc(r.payment)}</div>` : ''}${r.nominalConfirmed ? `<div class="sub">Rp ${nf(r.nominalConfirmed)}</div>` : ''}${r.nominalPending ? `<div class="sub warn">Rp ${nf(r.nominalPending)} menunggu</div>` : ''}</td>` : ''}
+  <td class="sub">${esc(r.catatan)}</td>
+</tr>`;
+    })
+    .join('');
+
+  const stars = (v: number) => `<span class="stars">${'★'.repeat(Math.round(v))}<span>${'★'.repeat(5 - Math.round(v))}</span></span>`;
+  const reviews = d.reviews.overall.count
+    ? `<h2>${xi('star', 13, '#C2410C')} Ulasan jemaat</h2>
+<div class="rv-head"><div class="rv-avg">${d.reviews.overall.avg}</div><div>${stars(d.reviews.overall.avg ?? 0)}<div class="sub">${nf(d.reviews.overall.count)} ulasan · ${nf(d.reviews.overall.withComment)} dengan komentar</div></div></div>
+<div class="rv-grid">${d.reviews.comments
+        .slice(0, 24)
+        .map((c) => `<div class="rv">${stars(c.rating)}<div class="rv-t">“${esc(c.komentar ?? '')}”</div><div class="sub">— ${esc(c.isAnonim ? 'Anonim' : c.nama)}</div></div>`)
+        .join('')}</div>`
+    : '';
+
+  return `<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><title>Laporan Event — ${esc(ev.judul)}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 9.5px; color: #171717; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .wrap { padding: 8mm; }
+  .hero { display: flex; align-items: stretch; gap: 16px; padding: 14px; border-radius: 16px; background: linear-gradient(135deg, #F97316, #C2410C); color: #fff; }
+  .hero-img { width: 190px; min-height: 110px; border-radius: 12px; background: rgba(255,255,255,.15) center/contain no-repeat; flex-shrink: 0; }
+  .hero-b { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .eyebrow { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; opacity: .85; font-weight: 700; }
+  .hero h1 { font-size: 21px; margin: 3px 0 7px; line-height: 1.2; }
+  .hero .meta { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 10px; }
+  .logo { background: #fff; border-radius: 10px; padding: 6px 9px; display: flex; align-items: center; align-self: flex-start; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; margin: 12px 0; }
+  .kpi { display: flex; gap: 8px; align-items: flex-start; padding: 9px 10px; border: 1px solid #EDEDED; border-radius: 12px; background: #fff; }
+  .kpi-ic { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .kpi-b { flex: 1; min-width: 0; }
+  .kpi-v { font-size: 15px; font-weight: 800; line-height: 1.15; }
+  .kpi-l { font-size: 9px; color: #525252; font-weight: 600; }
+  .kpi-s { font-size: 8.5px; color: #A3A3A3; }
+  .mini { height: 4px; background: #F1F5F9; border-radius: 4px; margin-top: 4px; overflow: hidden; } .mini span { display: block; height: 100%; border-radius: 4px; }
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .panel { border: 1px solid #FED7AA; background: #FFF7ED; border-radius: 12px; padding: 10px 12px; }
+  .pt { font-size: 10px; font-weight: 800; color: #9A3412; text-transform: uppercase; letter-spacing: .4px; display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+  .stack { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #fff; }
+  .lgs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 7px; }
+  .lg { display: inline-flex; align-items: center; gap: 4px; color: #525252; } .lg i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+  .mrow { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .ml { width: 110px; color: #525252; } .mv { width: 34px; text-align: right; font-weight: 700; }
+  .mbar { flex: 1; height: 7px; background: #fff; border-radius: 99px; overflow: hidden; } .mbar span { display: block; height: 100%; border-radius: 99px; }
+  h2 { font-size: 12.5px; margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; color: #171717; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; border: 1px solid #EDEDED; border-radius: 12px; overflow: hidden; }
+  thead th { background: #FFF7ED; color: #9A3412; font-size: 9px; text-transform: uppercase; letter-spacing: .3px; text-align: left; padding: 6px 7px; border-bottom: 1px solid #FED7AA; }
+  thead { display: table-header-group; }
+  td { padding: 5px 7px; border-bottom: 1px solid #F5F5F5; vertical-align: top; }
+  tbody tr:nth-child(even) td { background: #FAFAFA; } tbody tr { page-break-inside: avoid; }
+  td.no { color: #A3A3A3; width: 22px; }
+  .nm { font-weight: 700; font-size: 10px; } .sub { color: #737373; font-size: 8.5px; margin-top: 1px; } .warn { color: #B45309; }
+  .tag { display: inline-block; margin-top: 2px; font-size: 8px; font-weight: 700; color: #525252; background: #F5F5F5; border-radius: 6px; padding: 0 5px; } .tag.tamu { color: #6D28D9; background: #EDE9FE; }
+  .bd { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 8.5px; font-weight: 700; }
+  .ok { display: inline-flex; align-items: center; gap: 3px; color: #15803D; font-weight: 700; }
+  a.lnk { color: #171717; text-decoration: none; } a.lnk.wa { color: #15803D; font-weight: 600; }
+  .muted { color: #737373; }
+  .rv-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; } .rv-avg { font-size: 26px; font-weight: 800; color: #C2410C; }
+  .stars { color: #F59E0B; letter-spacing: 1px; } .stars span { color: #E5E5E5; }
+  .rv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .rv { border: 1px solid #EDEDED; border-radius: 10px; padding: 8px 10px; page-break-inside: avoid; } .rv-t { margin: 3px 0; }
+  .footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 8px; border-top: 1px solid #EDEDED; font-size: 9px; color: #A3A3A3; }
+  .powered { display: flex; align-items: center; gap: 6px; color: #737373; }
+  .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; font-size: 13px; }
+  .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px; }
+  @media print { .noprint { display: none !important; } .wrap { padding: 0; } }
+</style></head><body>
+${isMobileUa ? '' : `<div class="noprint"><strong>Pratinjau — Laporan Event</strong> · Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.<button onclick="window.print()">Print / Simpan PDF</button></div>`}
+${isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : ''}
+<div class="wrap">
+<div class="hero">
+  ${hero ? `<div class="hero-img" style="background-image:url('${esc(hero)}')"></div>` : ''}
+  <div class="hero-b">
+    <div class="eyebrow">Laporan Event</div>
+    <h1>${esc(ev.judul)}</h1>
+    <div class="meta">
+      <span class="pill">${xi('calendar', 11)} ${esc(tgl)}</span>
+      <span class="pill">${xi('clock', 11)} ${esc(jamWithZone(ev.jamMulai, ev.jamSelesai, tz, ev.cabang))}</span>
+      ${ev.lokasi && ev.lokasi.trim() !== '-' ? `<span class="pill">${xi('mapPin', 11)} ${esc(ev.lokasi)}</span>` : ''}
+      <span class="pill">${xi('building', 11)} ${esc(target)}</span>
+      <span class="pill">${xi('ticket', 11)} ${esc(ev.tipeBayar === 'GRATIS' ? 'Gratis' : ev.tipeBayar === 'NOMINAL_BEBAS' ? 'Sukarela' : `Rp ${nf(Number(ev.nominal ?? 0))}`)}</span>
+    </div>
+  </div>
+  <div class="logo"><img src="${portalUrl}/logo-ecc-church.webp" alt="ECC" onerror="this.parentElement.style.display='none'" style="height:28px;width:auto"/></div>
+</div>
+<div class="kpis">${kpis.join('')}</div>
+${panels}
+<h2>${xi('users', 13, '#C2410C')} Daftar peserta (${nf(d.rows.length)})</h2>
+<table>
+<thead><tr><th>#</th><th>Peserta</th><th>Kontak</th><th>Status</th><th>Check-in</th>${d.paid ? '<th>Pembayaran</th>' : ''}<th>Catatan</th></tr></thead>
+<tbody>${rowsHtml || `<tr><td colspan="${d.paid ? 7 : 6}" style="text-align:center;color:#A3A3A3;padding:16px">Belum ada peserta.</td></tr>`}</tbody>
+</table>
+${reviews}
+<div class="footer-row">
+  <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Diekspor ${esc(new Date().toLocaleString('id-ID', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' }))} · No HP → WhatsApp, email → kirim email (klik)</div>
+  <div class="powered"><span>Powered by</span>${ideaLogoSvg(16)}</div>
+</div>
+</div>
+</body></html>`;
 }

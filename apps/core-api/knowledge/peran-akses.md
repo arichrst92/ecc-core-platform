@@ -24,7 +24,8 @@ Read = melihat antrian, **Write = menyetujui/menolak**.
 | Prayer Request (tugaskan petugas, tandai didoakan) | **Prayer Request** Write |
 | Kritik & Saran (balas) · Tamu (petugas follow-up) · Cek Duplikat jemaat | Kritik & Saran · Tamu · Jemaat Write |
 - **Pengaman darurat**: jemaat di `ROLE_ACCESS_ADMIN_JEMAAT_IDS` (.env server) selalu bisa membuka Portal & menu Role Access, supaya akses tidak terkunci bila salah atur.
-- Tanpa jalan pintas Fulltimer juga berlaku untuk: kelola group & homecell (Role Access Group / Homecell, atau PIC/asisten), katalog hadiah (menu Hadiah), dan mencari jemaat untuk check-in (admin kehadiran).
+- Tanpa jalan pintas Fulltimer juga berlaku untuk: kelola group & homecell (Role Access Group / Homecell, atau PIC/asisten) dan katalog hadiah (menu Hadiah).
+- **Pengecualian (2026-11):** Fulltimer boleh **check-in ibadah & event lewat Portal** (termasuk mencari jemaat untuk check-in & walk-in) tanpa ditunjuk sebagai petugas scan. Di app Els tetap harus petugas scan.
 - Jadwal pelayanan di Portal untuk semua cabang = **Pelayanan** Write (selain koordinator yang punya otoritas).
 
 ## Peran di app (muncul otomatis bila ditugaskan)

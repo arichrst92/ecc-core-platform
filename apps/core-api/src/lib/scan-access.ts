@@ -2,7 +2,9 @@
  * Hak akses scan kehadiran ibadah (reservasi / walk-in / checkout / pickup).
  *
  * Boleh:
- *   - Admin: Fulltimer, atau Role Access menu "Kehadiran" / "Ibadah" (Ubah) — Portal.
+ *   - Admin: Role Access menu "Kehadiran" / "Ibadah" (Ubah) — Portal.
+ *   - Fulltimer lewat PORTAL (2026-11, keputusan pengguna): check-in ibadah & event
+ *     tanpa perlu ditunjuk sebagai petugas scan. Di app Els tetap harus petugas scan.
  *   - Petugas CKids: Akses CKids "Scanner Ibadah" (atau Gift Stall) — khusus ibadah anak.
  *   - Petugas scan ibadah: IbadahPelayananPetugas canScanAttendance=true di ibadah itu
  *     (diatur di Portal / Jadwal ministry) — app Els "Mode Scanner".
@@ -13,6 +15,12 @@ import { prisma } from '@ecc/database';
 import { ckidsAllowedMenus } from '@ecc/shared-types';
 import { resolveJemaatAccess } from './menu-access.js';
 import { Forbidden, Unauthorized } from './errors.js';
+import { isMobileClient } from './client-kind.js';
+
+/** Fulltimer yang membuka Portal (bukan app Els) → boleh check-in ibadah & event. */
+export function isPortalFulltimer(req: Request): boolean {
+  return !!req.user?.isFulltimer && !isMobileClient(req);
+}
 
 type Access = { admin: boolean; ckids: Set<string>; jemaatId: string | null };
 const CACHE = Symbol('scanAccess');
@@ -28,7 +36,7 @@ export async function scanAccess(req: Request): Promise<Access> {
     access = { admin: false, ckids: new Set(), jemaatId };
   } else {
     const { menuAccess } = await resolveJemaatAccess(jemaatId);
-    const admin = !!(menuAccess['kehadiran']?.canWrite || menuAccess['ibadah']?.canWrite);
+    const admin = !!(menuAccess['kehadiran']?.canWrite || menuAccess['ibadah']?.canWrite) || isPortalFulltimer(req);
     const ckids = ckidsAllowedMenus({ isFulltimer: false, menuAccess }) as Set<string>;
     access = { admin, ckids, jemaatId };
   }

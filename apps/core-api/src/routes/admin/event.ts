@@ -11,6 +11,7 @@
  *   - Participation lifecycle (DAFTAR → MENUNGGU_VERIFIKASI → BAYAR → HADIR / BATAL)
  *   - Bukti transfer upload per participation + admin approval
  */
+import { isPortalFulltimer } from '../../lib/scan-access.js';
 import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { attendanceInfo, hadirCountByEvent, myEventStatusMap } from '../../lib/event-attendance.js';
@@ -1535,7 +1536,7 @@ eventRouter.post('/:id/peserta/batch', lockEventParam, async (req, res) => {
  */
 async function assertCanViewEventScan(req: import('express').Request, event: { id: string; judul: string }) {
   if (!req.user) throw Forbidden('User tidak terautentikasi');
-  if (await isEventManager(req)) return;
+  if (isPortalFulltimer(req) || (await isEventManager(req))) return;
   const jemaatId = req.user.jemaatId ?? null;
   const ok = jemaatId
     ? await prisma.eventPelayananPetugas.findFirst({
@@ -2789,14 +2790,19 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     select: { jemaatId: true, jemaat: { select: { namaLengkap: true } } },
   });
   if (!callerUser) throw Forbidden('User tidak terkait jemaat');
-  const isAuthorized = await prisma.eventPelayananPetugas.findFirst({
-    where: {
-      jemaatId: callerUser.jemaatId,
-      canScanAttendance: true,
-      eventPelayanan: { eventId: event.id },
-    },
-    select: { id: true },
-  });
+  // Petugas scan event ini, pengelola event (Role Access Event tulis), atau
+  // Fulltimer lewat Portal (2026-11) — tanpa perlu ditunjuk sebagai petugas scan.
+  const portalAdmin = isPortalFulltimer(req) || (await isEventManager(req));
+  const isAuthorized =
+    portalAdmin ||
+    (await prisma.eventPelayananPetugas.findFirst({
+      where: {
+        jemaatId: callerUser.jemaatId,
+        canScanAttendance: true,
+        eventPelayanan: { eventId: event.id },
+      },
+      select: { id: true },
+    }));
   if (!isAuthorized) {
     throw Forbidden(
       `${callerUser.jemaat.namaLengkap} tidak berwenang scan check-in event "${event.judul}". ` +
@@ -2814,7 +2820,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    const bypass = await isEventManager(req);
+    const bypass = portalAdmin;
     const win = eventScanWindow(event, tzOr(cab?.timezone));
     assertWalkInOpen(win, bypass);
     late = !bypass && win.phase === 'LATE';
@@ -2937,7 +2943,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
     select: { jemaatId: true },
   });
   if (!caller) throw Forbidden('User tidak terkait jemaat');
-  if (!(await isEventManager(req))) {
+  if (!isPortalFulltimer(req) && !(await isEventManager(req))) {
     const ok = await prisma.eventPelayananPetugas.findFirst({
       where: { jemaatId: caller.jemaatId, canScanAttendance: true, eventPelayanan: { eventId: event.id } },
       select: { id: true },
@@ -2949,7 +2955,7 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
     const cab = event.cabangId
       ? await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } })
       : null;
-    assertWalkInOpen(eventScanWindow(event, tzOr(cab?.timezone)), await isEventManager(req));
+    assertWalkInOpen(eventScanWindow(event, tzOr(cab?.timezone)), isPortalFulltimer(req) || (await isEventManager(req)));
   }
   const input = walkInGuestSchema.parse(req.body ?? {});
   const paid = event.tipeBayar !== 'GRATIS';

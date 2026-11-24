@@ -20,14 +20,16 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 - Ibadah/event **tanpa jam mulai** → check-in terbuka sepanjang hari itu.
 - **Event beberapa hari** → scan petugas: jendela berlaku tiap hari pada jam mulai event. **Self check-in**: satu jendela dari 15 menit sebelum mulai di hari pertama s.d. 30 menit setelah jam selesai di hari terakhir (kehadiran tetap tercatat sekali).
 - **Terlambat** (lewat 30 menit setelah mulai, di hari yang sama): scan petugas tetap diterima tetapi dicatat sebagai **walk-in** (metode WALK_IN). App menampilkan keterangan walk-in.
-- **Admin** (Role Access menu Kehadiran/Ibadah tulis; pengelola event = Role Access Event tulis — status Fulltimer saja tidak cukup) **boleh di luar jendela** — untuk koreksi lewat Portal.
+- **Admin** (Role Access menu Kehadiran/Ibadah tulis; pengelola event = Role Access Event tulis; Fulltimer lewat Portal) **boleh di luar jendela** — untuk koreksi lewat Portal.
 - Tiket ibadah tetap tampil aktif sampai 30 menit setelah ibadah selesai (hanya tampilan). Setelah itu reservasi yang tidak dipakai **dibatalkan otomatis (NO_SHOW)**. Petugas/admin tetap bisa check-in tiket yang sudah dibatalkan bila jemaat ternyata hadir.
 
 ## Siapa yang boleh scan
 - **Petugas scan ibadah**: petugas pelayanan di ibadah itu dengan tanda **"Bisa Scan" / canScanAttendance** (diatur di Portal → detail ibadah → Pelayanan → petugas, atau koordinator di app → Ministry → Atur jadwal → chip scan). Berlaku permisif: cukup ada di salah satu baris petugas link itu dengan tanda scan.
 - **Petugas scan event**: petugas pelayanan event dengan tanda scan (Portal → detail event → Pelayanan & volunteer → "Beri akses scan").
 - **Petugas CKids**: Akses CKids "Scanner Ibadah" (atau Gift Stall) — khusus ibadah anak.
-- **Admin**: Role Access menu "Kehadiran"/"Ibadah" level tulis (Portal). Status Fulltimer saja tidak memberi hak scan.
+- **Admin**: Role Access menu "Kehadiran"/"Ibadah" level tulis (Portal).
+- **Fulltimer lewat Portal** (2026-11): boleh check-in ibadah & event (scan kamera/USB, ketik kode, walk-in, lihat statistik) **tanpa** ditunjuk sebagai petugas scan pelayanan, kapan saja (seperti admin). Hanya di Portal — di app Els tetap harus petugas scan. Halaman Portal-nya tetap butuh Role Access menu Ibadah/Kehadiran/Event (baca) supaya bisa dibuka.
+- **Pengelola event** (Role Access Event tulis): boleh check-in event lewat Portal tanpa ditunjuk petugas scan.
 - Jemaat biasa **tidak** boleh scan. Menu **Mode Scanner** di app hanya muncul bila jemaat ditugaskan sebagai scanner.
 
 ## Mode Scanner di app (usher/petugas)

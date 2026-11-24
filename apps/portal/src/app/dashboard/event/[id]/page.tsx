@@ -1,5 +1,6 @@
 'use client';
 
+import { QrCamera } from '@/components/ui/qr-camera';
 import { useMenuAccess } from '@/lib/use-menu-access';
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
 import { jamZone, type CabangLabel } from '@/lib/tz-label';
@@ -29,6 +30,8 @@ import {
   ScanLine,
   AlertTriangle,
   UserPlus,
+  Camera,
+  Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -98,6 +101,9 @@ interface Peserta {
   /** Tamu: pengundang (DIUNDANG) atau null untuk walk-in. */
   invitedBy?: { id: string; namaLengkap: string } | null;
   guestSource?: 'DIUNDANG' | 'WALK_IN' | null;
+  /** 'PORTAL' = didaftarkan langsung oleh admin di Portal (ditandai walk-in). */
+  addedVia?: string | null;
+  checkinMethod?: string | null;
 }
 
 const STATUS_LABEL: Record<ParticipationStatus, string> = {
@@ -276,7 +282,17 @@ export default function EventDetailPage() {
   }
 
   const e = eventQ.data;
-  const peserta = pesertaQ.data ?? [];
+  const [pesertaSearch, setPesertaSearch] = useState('');
+  const pesertaAll = pesertaQ.data ?? [];
+  const pesertaNeedle = pesertaSearch.trim().toLowerCase();
+  const pesertaDigits = pesertaSearch.replace(/\D/g, '');
+  const peserta = pesertaNeedle
+    ? pesertaAll.filter(
+        (p) =>
+          p.jemaat.namaLengkap.toLowerCase().includes(pesertaNeedle) ||
+          (pesertaDigits.length >= 4 && (p.jemaat.noHp ?? '').replace(/\D/g, '').includes(pesertaDigits)),
+      )
+    : pesertaAll;
   const isPaid = e.tipeBayar !== 'GRATIS';
   const audPel = (e as { audiencePelayanan?: { minLevel?: number | null; cabang?: { nama: string } | null; pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
   const targetLabel =
@@ -577,6 +593,16 @@ export default function EventDetailPage() {
             <option value="HADIR">Hadir</option>
             <option value="BATAL">Batal</option>
           </select>
+          <div className="relative ml-auto w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              value={pesertaSearch}
+              onChange={(ev) => setPesertaSearch(ev.target.value)}
+              placeholder="Cari nama / no HP peserta"
+              className="w-full pl-8 pr-2 py-1 border border-neutral-300 rounded bg-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          {pesertaNeedle ? <span className="text-neutral-500">{peserta.length} ditemukan</span> : null}
         </div>
 
         <div className="p-6">
@@ -767,6 +793,14 @@ function PesertaRow({
           >
             {STATUS_LABEL[p.status]}
           </span>
+          {!p.jemaat.isTamu && (p.addedVia === 'PORTAL' || p.checkinMethod === 'WALK_IN') ? (
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800"
+              title={p.addedVia === 'PORTAL' ? 'Didaftarkan langsung oleh admin di Portal' : 'Dicatat petugas di lokasi tanpa pendaftaran'}
+            >
+              Walk-in
+            </span>
+          ) : null}
           {p.jemaat.isTamu ? (
             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-violet-100 text-violet-700">
               {p.guestSource === 'WALK_IN'
@@ -1063,6 +1097,8 @@ function CheckinModal({
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
   const inputRef = useRef<HTMLInputElement>(null);
   const [kode, setKode] = useState('');
+  // Scan QR lewat kamera laptop / HP (Portal 2026-11).
+  const [camOn, setCamOn] = useState(false);
   const [history, setHistory] = useState<CheckinResult[]>([]);
   // Track kode terakhir yg butuh force untuk override
   const [pendingForce, setPendingForce] = useState<string | null>(null);
@@ -1145,9 +1181,30 @@ function CheckinModal({
           </div>
 
           <div className="p-6 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium text-neutral-700">Scan QR kartu / tiket jemaat</span>
+              <button
+                type="button"
+                onClick={() => setCamOn((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  camOn ? 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200' : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5" /> {camOn ? 'Tutup kamera' : 'Scan pakai kamera'}
+              </button>
+            </div>
+            {camOn ? (
+              <QrCamera
+                paused={checkinMut.isPending || !!pendingForce}
+                onCode={(k) => {
+                  setKode(k);
+                  checkinMut.mutate({ kode: k, force: false });
+                }}
+              />
+            ) : null}
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">
-                Scan QR, atau ketik kode / nama / no HP jemaat
+                Atau ketik kode / nama / no HP jemaat
               </span>
               <span className="block text-[11px] text-neutral-500 mb-1">
                 Scanner hardware otomatis ngirim Enter di akhir kode.

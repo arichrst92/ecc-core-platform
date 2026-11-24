@@ -1184,6 +1184,10 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
     nominalBayar = undefined;
   }
 
+  // Didaftarkan langsung oleh admin di Portal (bukan dari app / web oleh jemaat
+  // sendiri) → ditandai walk-in di daftar peserta Portal.
+  const addedVia = !isMobileClient(req) && input.jemaatId !== req.user?.jemaatId && (await isEventManager(req)) ? 'PORTAL' : null;
+
   // Reactivate BATAL — update row existing.
   if (existing && existing.status === 'BATAL') {
     const reactivated = await prisma.eventParticipation.update({
@@ -1192,6 +1196,7 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
         status: 'DAFTAR',
         nominalBayar: nominalBayar ?? null,
         catatan: input.catatan,
+        addedVia,
         cancelledAt: null,
         cancelReason: null,
         registeredAt: new Date(),
@@ -1228,6 +1233,7 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
       status: 'DAFTAR',
       nominalBayar: nominalBayar ?? null,
       catatan: input.catatan,
+      addedVia,
     },
     include: { jemaat: { select: { namaLengkap: true } } },
   });

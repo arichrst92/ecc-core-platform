@@ -66,6 +66,8 @@ Aturan sama di app, website, dan Portal (oleh peserta sendiri):
 - Petugas tetap bisa check-in tiket yang terlanjur dibatalkan bila orangnya hadir.
 
 ## Hari H — check-in & walk-in
+- **Portal → Event → detail → Check-in**: tombol **Scan pakai kamera** (kamera laptop/HP, browser Chrome/Edge/Safari terbaru) — scan berkelanjutan, QR yang sama diabaikan beberapa detik; bisa juga scanner USB atau ketik kode/nama/no HP.
+- Daftar peserta Portal: kotak **Cari nama / no HP**; label **Walk-in** untuk jemaat yang didaftarkan langsung oleh admin di Portal (atau dicatat petugas di lokasi tanpa pendaftaran). Tamu tetap berlabel "Tamu · walk-in / dibawa …".
 - Check-in peserta terdaftar: 30 menit sebelum s.d. 30 menit setelah jam mulai; lewat itu peserta terdaftar dicatat **terlambat** (metode LATE, kolom "Scan terlambat" di laporan), tamu tanpa pendaftaran = walk-in (lihat panduan *checkin-scan*). Petugas yang scan tercatat ("oleh Anda / oleh <petugas>" di Daftar Hadir scanner 2.5.1).
 - **Walk-in / tamu di lokasi** oleh petugas: untuk event berbayar wajib pilih metode bayar tamu (**Tunai / Transfer / QRIS**) atau Gratis — langsung tercatat lunas ("Diterima petugas").
 - Pengingat event hanya dikirim untuk event **aktif**.

@@ -1683,6 +1683,8 @@ model EventParticipation {
   checkinMethod     String? @map("checkin_method") @db.VarChar(20)
   // userId petugas yang scan / mencatat walk-in (2026-11). NULL = self / data lama.
   checkedInBy       String? @map("checked_in_by") @db.Uuid
+  // 'PORTAL' = didaftarkan langsung oleh admin di Portal (ditandai walk-in di daftar peserta). NULL = app / web / data lama.
+  addedVia          String? @map("added_via") @db.VarChar(20)
 
   // Lifecycle timestamps
   registeredAt DateTime  @default(now()) @map("registered_at")

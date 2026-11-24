@@ -10,6 +10,7 @@ summary: Cara masuk app & Portal (OTP WA, email, kode sementara dari admin), pen
 ## Masuk ke app
 - **OTP WhatsApp**: pilih kode negara + nomor HP → Kirim OTP → masukkan 6 digit → masuk. Kirim ulang setelah hitungan mundur (jeda ±60 detik; terlalu cepat → "Mohon tunggu N detik sebelum meminta kode baru.").
 - **Masuk dengan Email**: link/kode login dikirim ke email yang terdaftar di akun.
+- **Link login di email tidak membuka app (2026-11)**: halaman link kini mencoba membuka Els App (Android lewat intent — Chrome, Samsung Internet, Gmail; iPhone pilih *Buka*), plus tombol **Buka di Els App** dan **Masuk lewat Els App web** (elsapp.eccchurch.global, berlaku juga di komputer). Bila link terbuka di browser dalam aplikasi (Instagram, Facebook, LINE, WhatsApp, TikTok) → ketuk ⋮ / ••• → *Buka di Chrome/Safari*, atau tombol **Salin link**. Link berlaku 15 menit & sekali pakai; bila sudah dipakai, minta link baru atau masuk dengan kode.
 - **Mode Tamu**: menjelajah tanpa akun (renungan, berita, event, Alkitab, cari homecell). Tab bawah terbatas.
 - Nomor HP disimpan format internasional (+62…, +65…); pengguna boleh mengetik 08…, 62…, +62….
 

@@ -174,12 +174,10 @@ export default function EventDetailPage() {
   });
 
   const pesertaQ = useQuery({
-    queryKey: ['event', eventId, 'peserta', filterStatus],
+    // Semua status sekaligus → ringkasan jumlah per status; filter status di klien.
+    queryKey: ['event', eventId, 'peserta', 'all'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: Peserta[] }>(
-        `/admin/event/${eventId}/peserta`,
-        { params: { status: filterStatus === 'all' ? undefined : filterStatus } },
-      );
+      const res = await apiClient.get<{ data: Peserta[] }>(`/admin/event/${eventId}/peserta`);
       return res.data.data;
     },
   });
@@ -298,15 +296,30 @@ export default function EventDetailPage() {
 
   const e = eventQ.data;
   const pesertaAll = pesertaQ.data ?? [];
+  // Ringkasan jumlah per status (dari semua peserta).
+  const statusCount = pesertaAll.reduce(
+    (acc, p) => ((acc[p.status] = (acc[p.status] ?? 0) + 1), acc),
+    {} as Partial<Record<ParticipationStatus, number>>,
+  );
+  const aktifCount = pesertaAll.length - (statusCount.BATAL ?? 0);
   const pesertaNeedle = pesertaSearch.trim().toLowerCase();
   const pesertaDigits = pesertaSearch.replace(/\D/g, '');
-  const peserta = pesertaNeedle
-    ? pesertaAll.filter(
-        (p) =>
-          p.jemaat.namaLengkap.toLowerCase().includes(pesertaNeedle) ||
-          (pesertaDigits.length >= 4 && (p.jemaat.noHp ?? '').replace(/\D/g, '').includes(pesertaDigits)),
-      )
-    : pesertaAll;
+  // Urutan: Hadir (check-in terbaru paling atas) → Lunas → Menunggu verifikasi → Daftar → Batal.
+  const ORDER: Record<ParticipationStatus, number> = { HADIR: 0, BAYAR: 1, MENUNGGU_VERIFIKASI: 2, DAFTAR: 3, BATAL: 4 };
+  const ts = (v: string | null) => (v ? Date.parse(v) : 0);
+  const peserta = pesertaAll
+    .filter((p) => filterStatus === 'all' || p.status === filterStatus)
+    .filter(
+      (p) =>
+        !pesertaNeedle ||
+        p.jemaat.namaLengkap.toLowerCase().includes(pesertaNeedle) ||
+        (pesertaDigits.length >= 4 && (p.jemaat.noHp ?? '').replace(/\D/g, '').includes(pesertaDigits)),
+    )
+    .sort(
+      (a, b) =>
+        ORDER[a.status] - ORDER[b.status] ||
+        (a.status === 'HADIR' ? ts(b.attendedAt) - ts(a.attendedAt) : ts(a.registeredAt) - ts(b.registeredAt)),
+    );
   const isPaid = e.tipeBayar !== 'GRATIS';
   const audPel = (e as { audiencePelayanan?: { minLevel?: number | null; cabang?: { nama: string } | null; pelayanan: { nama: string } }[] }).audiencePelayanan ?? [];
   const targetLabel =
@@ -601,6 +614,39 @@ export default function EventDetailPage() {
           </div>
         </div>
 
+        {/* Ringkasan jumlah per status — klik untuk menyaring daftar */}
+        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
+          {(
+            [
+              ['all', 'Terdaftar aktif', aktifCount, 'text-neutral-900', 'bg-neutral-50'],
+              ...(e.butuhKehadiran ? [['HADIR', 'Hadir', statusCount.HADIR ?? 0, 'text-green-700', 'bg-green-50']] : []),
+              ...(isPaid
+                ? [
+                    ['BAYAR', 'Lunas (belum hadir)', statusCount.BAYAR ?? 0, 'text-blue-700', 'bg-blue-50'],
+                    ['MENUNGGU_VERIFIKASI', 'Menunggu verifikasi', statusCount.MENUNGGU_VERIFIKASI ?? 0, 'text-amber-700', 'bg-amber-50'],
+                  ]
+                : []),
+              ['DAFTAR', isPaid ? 'Belum bayar' : e.butuhKehadiran ? 'Belum hadir' : 'Terdaftar', statusCount.DAFTAR ?? 0, 'text-neutral-700', 'bg-neutral-50'],
+              ['BATAL', 'Batal', statusCount.BATAL ?? 0, 'text-red-700', 'bg-red-50'],
+            ] as [typeof filterStatus, string, number, string, string][]
+          ).map(([key, label, n, fg, bg]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilterStatus(filterStatus === key ? 'all' : key)}
+              className={`text-left rounded-lg px-3 py-2 ${bg} ${filterStatus === key ? 'ring-2 ring-brand-400' : 'hover:ring-1 hover:ring-neutral-300'}`}
+            >
+              <div className={`text-lg font-bold leading-6 ${fg}`}>
+                {n.toLocaleString('id-ID')}
+                {key === 'HADIR' && aktifCount > 0 ? (
+                  <span className="ml-1 text-xs font-semibold opacity-70">{Math.round((n / aktifCount) * 100)}%</span>
+                ) : null}
+              </div>
+              <div className="text-[11px] text-neutral-600 leading-4">{label}</div>
+            </button>
+          ))}
+        </div>
+
         <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-neutral-500">Filter:</span>
           <select
@@ -655,6 +701,7 @@ export default function EventDetailPage() {
                   }
                   onDelete={() => setDeletingPeserta(p)}
                   eventId={eventId}
+                  tz={e.cabang?.timezone}
                 />
               ))}
             </div>
@@ -758,9 +805,12 @@ function PesertaRow({
   onReject,
   onChangeStatus,
   onDelete,
+  tz,
 }: {
   p: Peserta;
   apiBase: string;
+  /** Zona waktu cabang event — jam check-in ditulis di zona ini. */
+  tz?: string;
   isPaid: boolean;
   /** Role Access "Verifikasi Pembayaran Event" (tulis). */
   canVerify: boolean;
@@ -838,6 +888,18 @@ function PesertaRow({
         <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
           {p.jemaat.cabang && <span>{p.jemaat.cabang.nama}</span>}
           {p.jemaat.noHp && <span>· {p.jemaat.noHp}</span>}
+          {p.status === 'HADIR' && p.attendedAt ? (
+            <span className="font-semibold text-green-700">
+              · Check-in{' '}
+              {new Date(p.attendedAt).toLocaleString('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                ...(tz ? { timeZone: tz } : {}),
+              })}
+            </span>
+          ) : null}
           <span>· Daftar {formatTanggalShort(p.registeredAt)}</span>
           {isPaid && p.nominalBayar && (
             <span>· {formatNominal(p.nominalBayar)}</span>

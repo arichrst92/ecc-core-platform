@@ -1,3 +1,4 @@
+import { invalidatePenggembalaanCache, resolvePenggembalaan } from '../../lib/penggembalaan.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { requireAnyMenuP } from '../../middleware/require-menu.js';
@@ -83,6 +84,55 @@ pelayananRouter.get('/', async (req, res) => {
 
 // Path literal (mis. /by-kode, /role, /today) didaftarkan SETELAH route :param ini;
 // non-UUID diteruskan ke route berikutnya supaya tidak jadi query UUID invalid (P2023).
+// ===== Pengaturan pelayanan penggembalaan (homecell & zona) =====
+// Pelayanan & role dikenali dari ID → boleh di-rename. Dipakai validasi PIC zona /
+// homecell, dropdown PIC di Portal, import struktur homecell, tim pastoral website.
+const penggembalaanConfigSchema = z.object({
+  pelayananId: z.string().uuid().nullable(),
+  zoneLeaderRoleId: z.string().uuid().nullable(),
+  homecellLeaderRoleId: z.string().uuid().nullable(),
+  pastorRoleId: z.string().uuid().nullable(),
+});
+
+pelayananRouter.get('/penggembalaan-config', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan', 'homecell', 'homecell-area'], 'read');
+  const pg = await resolvePenggembalaan();
+  res.json({
+    success: true,
+    data: {
+      pelayananId: pg.pelayananId,
+      pelayananNama: pg.pelayananNama,
+      zoneLeaderRoleId: pg.roleId.ZONE_LEADER,
+      homecellLeaderRoleId: pg.roleId.HOMECELL_LEADER,
+      pastorRoleId: pg.roleId.PASTOR,
+      roleNama: pg.roleNama,
+    },
+  });
+});
+
+pelayananRouter.patch('/penggembalaan-config', async (req, res) => {
+  await requireAnyMenuP(req, ['pelayanan'], 'write');
+  const input = penggembalaanConfigSchema.parse(req.body ?? {});
+  if (input.pelayananId) {
+    const pel = await prisma.pelayanan.findUnique({ where: { id: input.pelayananId }, select: { roles: { select: { id: true } } } });
+    if (!pel) throw BadRequest('Pelayanan tidak ditemukan.');
+    const ids = new Set(pel.roles.map((r) => r.id));
+    for (const [k, v] of Object.entries({ zoneLeaderRoleId: input.zoneLeaderRoleId, homecellLeaderRoleId: input.homecellLeaderRoleId, pastorRoleId: input.pastorRoleId })) {
+      if (v && !ids.has(v)) throw BadRequest(`Role (${k}) bukan milik pelayanan yang dipilih.`);
+    }
+  }
+  const data = {
+    penggembalaanPelayananId: input.pelayananId,
+    zoneLeaderRoleId: input.zoneLeaderRoleId,
+    homecellLeaderRoleId: input.homecellLeaderRoleId,
+    pastorRoleId: input.pastorRoleId,
+  };
+  await prisma.appConfig.upsert({ where: { id: 'global' }, create: { id: 'global', ...data }, update: data });
+  invalidatePenggembalaanCache();
+  audit(req, { action: 'UPDATE', resource: 'app_config', resourceId: 'global', resourceLabel: 'Pengaturan pelayanan penggembalaan', after: data });
+  res.json({ success: true, data });
+});
+
 pelayananRouter.get('/:id', async (req, res, next) => {
   if (!UUID_PARAM.test(req.params.id)) return next(); // mis. /role
   const item = await prisma.pelayanan.findUnique({

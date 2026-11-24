@@ -36,12 +36,14 @@ import {
   type Pelayanan,
 } from '@/components/pelayanan/pelayanan-manage';
 import { usePersistentState } from '@/lib/use-persistent-state';
+import { PenggembalaanConfigPanel } from '@/components/pelayanan/penggembalaan-config';
 
 type StatusFilter = 'aktif' | 'nonaktif' | 'semua' | 'perlu-diisi';
 type SortKey = 'nama' | 'anggota' | 'permintaan';
 
 export default function PelayananPage() {
   const qc = useQueryClient();
+  const [pgOpen, setPgOpen] = useState(false);
   const [deleting, setDeleting] = useState<Pelayanan | null>(null);
   // Pelayanan masih beranggota → tawarkan hapus permanen (ketik nama).
   const [forceDel, setForceDel] = useState<{ id: string; label: string; members: number; active: number; message: string } | null>(null);
@@ -153,6 +155,13 @@ export default function PelayananPage() {
             )}
           </Link>
           <button
+            onClick={() => setPgOpen((x) => !x)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            title="Pelayanan & role untuk PIC zona / homecell"
+          >
+            Pengaturan penggembalaan
+          </button>
+          <button
             onClick={() => setAdding((x) => !x)}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg"
           >
@@ -160,6 +169,8 @@ export default function PelayananPage() {
           </button>
         </div>
       </div>
+
+      {pgOpen ? <PenggembalaanConfigPanel onClose={() => setPgOpen(false)} /> : null}
 
       {adding ? (
         <div className="bg-white border border-brand-200 rounded-xl p-3 flex flex-wrap items-center gap-2">

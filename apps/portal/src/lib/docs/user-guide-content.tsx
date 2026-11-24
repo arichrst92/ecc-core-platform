@@ -474,7 +474,7 @@ export const SECTIONS: Section[] = [
         kind: 'steps',
         title: 'Setup struktur homecell baru',
         items: [
-          'Pastikan jemaat yang akan jadi PIC sudah join Pelayanan Penggembalaan dengan role yang sesuai.',
+          'Pastikan jemaat yang akan jadi PIC sudah join Pelayanan Penggembalaan dengan role yang sesuai. Pelayanan & role-nya diatur di Pelayanan → Pengaturan penggembalaan (boleh di-rename).',
           'Buat Zona dulu (Zona → Tambah). Pilih cabang + PIC Zone Leader, dan (opsional) satu atau beberapa Pastor — ketik nama lalu pilih.',
           'Lalu buat Homecell di Homecell → Tambah → pilih zona + PIC Homecell Leader.',
           'Set jadwal pertemuan (hari + jam), alamat lokasi.',

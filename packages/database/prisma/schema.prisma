@@ -2464,6 +2464,13 @@ model AppConfig {
   emailSignupEnabled         Boolean  @default(true) @map("email_signup_enabled")
   // Provider OTP "diduga gagal" bila N OTP berturut-turut tidak dipakai.
   waSuspectThreshold         Int      @default(8) @map("wa_suspect_threshold")
+  // Pelayanan penggembalaan (homecell & zona) — dikenali dari ID, bukan nama, supaya
+  // pelayanan / role boleh di-rename. NULL = cari berdasarkan nama bawaan
+  // ("Penggembalaan", "Zone Leader", "Homecell Leader", "Pastor").
+  penggembalaanPelayananId   String?  @map("penggembalaan_pelayanan_id") @db.Uuid
+  zoneLeaderRoleId           String?  @map("zone_leader_role_id") @db.Uuid
+  homecellLeaderRoleId       String?  @map("homecell_leader_role_id") @db.Uuid
+  pastorRoleId               String?  @map("pastor_role_id") @db.Uuid
   updatedByUserId            String?  @map("updated_by_user_id") @db.Uuid
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")

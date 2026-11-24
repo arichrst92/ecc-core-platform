@@ -11,6 +11,7 @@
  *
  * Mount di app.ts sebagai `/public/*`.
  */
+import { resolvePenggembalaan } from '../lib/penggembalaan.js';
 import { appLinks, appRules, appTexts } from '../lib/app-rules.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
@@ -1006,11 +1007,13 @@ publicUnauthRouter.get('/pastors', publicBrowseLimiter, async (_req, res) => {
         : [],
     });
   }
-  // Cadangan (section belum ada): pelayanan Penggembalaan level ≥ 8.
+  // Cadangan (section belum ada): pelayanan penggembalaan (dari pengaturan, aman di-rename) level ≥ 8.
+  const pg = await resolvePenggembalaan();
   const rows = await prisma.jemaatPelayanan.findMany({
     where: {
       isActive: true,
-      pelayanan: { nama: { equals: 'Penggembalaan', mode: 'insensitive' }, isActive: true },
+      pelayananId: pg.pelayananId ?? '00000000-0000-0000-0000-000000000000',
+      pelayanan: { isActive: true },
       pelayananRole: { level: { gte: 8 }, isActive: true },
       jemaat: { isActive: true },
     },

@@ -205,10 +205,11 @@ export const homecellAreaResource: ResourceConfig<HomecellArea> = {
       type: 'relation',
       placeholder: '— Tanpa PIC (kosong) —',
       relation: {
-        endpoint: '/admin/jemaat/by-pelayanan?pelayanan=Penggembalaan&role=Zone%20Leader',
+        // Pelayanan & role dari Pelayanan → Pengaturan penggembalaan (aman di-rename).
+        endpoint: '/admin/jemaat/by-pelayanan?peran=ZONE_LEADER',
         labelKey: 'namaLengkap',
       },
-      helperText: 'Opsional. Hanya jemaat dengan Pelayanan Penggembalaan + role Zone Leader yang tampil. Pilih "Tanpa PIC" untuk mengosongkan.',
+      helperText: 'Opsional. Hanya jemaat di pelayanan penggembalaan dengan role PIC zona (Pelayanan → Pengaturan penggembalaan) yang tampil. Pilih "Tanpa PIC" untuk mengosongkan.',
     },
     {
       name: 'pastorIds',

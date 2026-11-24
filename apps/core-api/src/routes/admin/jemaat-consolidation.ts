@@ -23,6 +23,7 @@
  * dua arah di Keluarga (anak → Ayah/Ibu/Wali, orang tua → Anak). Relasi yang
  * sudah ada antara dua orang yang sama tidak diubah. Tanpa notifikasi/WA.
  */
+import { peranFromLegacyName, resolvePenggembalaan } from '../../lib/penggembalaan.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma, type Prisma } from '@ecc/database';
@@ -363,19 +364,15 @@ jemaatConsolidationRouter.post('/preview', upload.single('file'), async (req, re
  * Jemaat yang sudah aktif di Penggembalaan tidak diubah.
  */
 async function penggembalaanEnsurer(onAdded: () => void) {
-  const penggembalaan = await prisma.pelayanan.findFirst({
-    where: { nama: { equals: 'Penggembalaan', mode: 'insensitive' } },
-    select: { id: true, roles: { select: { id: true, nama: true, level: true } } },
-  });
-  const pgRole = (nama: string) =>
-    penggembalaan?.roles.find((r) => r.nama.toLowerCase() === nama.toLowerCase())?.id ??
-    [...(penggembalaan?.roles ?? [])].sort((a, b) => a.level - b.level)[0]?.id;
+  // Pelayanan & role dari pengaturan (ID) — aman bila di-rename (lib/penggembalaan.ts).
+  const pg = await resolvePenggembalaan();
+  const penggembalaan = pg.pelayananId ? { id: pg.pelayananId, roles: pg.roles } : null;
+  const lowest = () => [...pg.roles].sort((a, b) => a.level - b.level)[0]?.id;
   return async (jemaatId: string, roleNama: string, opts: { strict?: boolean } = {}) => {
     if (!penggembalaan) return;
-    // strict: hanya bila peran bernama persis ada (mis. "Pastor" — jangan jatuh ke peran terendah).
-    const roleId = opts.strict
-      ? penggembalaan.roles.find((r) => r.nama.toLowerCase() === roleNama.toLowerCase())?.id
-      : pgRole(roleNama);
+    const peran = peranFromLegacyName(roleNama);
+    // strict: hanya bila perannya ada (mis. Pastor — jangan jatuh ke peran terendah).
+    const roleId = opts.strict ? (peran ? pg.roleId[peran] : null) : (peran ? pg.roleId[peran] : null) ?? lowest();
     if (!roleId) return;
     const exists = await prisma.jemaatPelayanan.findFirst({
       where: { jemaatId, pelayananId: penggembalaan.id, isActive: true },

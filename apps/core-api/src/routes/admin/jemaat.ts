@@ -1,7 +1,8 @@
+import { peranFromLegacyName, resolvePenggembalaan } from '../../lib/penggembalaan.js';
 import { purgeJemaatPersonalData } from '../../lib/data-purge.js';
 import { Router } from 'express';
 import multer from 'multer';
-import { prisma } from '@ecc/database';
+import { prisma, type Prisma } from '@ecc/database';
 import {
   createJemaatSchema,
   updateJemaatSchema,
@@ -784,17 +785,37 @@ jemaatRouter.get('/by-pelayanan', async (req, res) => {
   const pelayananNama = typeof req.query.pelayanan === 'string' ? req.query.pelayanan : undefined;
   const roleNama = typeof req.query.role === 'string' ? req.query.role : undefined;
   const cabangId = typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined;
-  if (!pelayananNama) throw BadRequest('Query "pelayanan" wajib');
+  // ?peran=ZONE_LEADER|HOMECELL_LEADER|PASTOR → pelayanan penggembalaan dari pengaturan
+  // (ID, aman di-rename). Bentuk lama ?pelayanan=Penggembalaan&role=Zone Leader
+  // dipetakan ke pengaturan yang sama (Portal versi lama tetap jalan).
+  const peranQ = typeof req.query.peran === 'string' ? req.query.peran : undefined;
+  const peran =
+    peranQ === 'ZONE_LEADER' || peranQ === 'HOMECELL_LEADER' || peranQ === 'PASTOR'
+      ? peranQ
+      : pelayananNama?.trim().toLowerCase() === 'penggembalaan'
+        ? peranFromLegacyName(roleNama)
+        : null;
+  if (!pelayananNama && !peran) throw BadRequest('Query "pelayanan" atau "peran" wajib');
+
+  let membership: Prisma.JemaatPelayananWhereInput;
+  if (peran) {
+    const pg = await resolvePenggembalaan();
+    const NONE = '00000000-0000-0000-0000-000000000000';
+    membership = { isActive: true, pelayananId: pg.pelayananId ?? NONE, pelayananRoleId: pg.roleId[peran] ?? NONE };
+  } else if (pelayananNama?.trim().toLowerCase() === 'penggembalaan' && !roleNama) {
+    const pg = await resolvePenggembalaan();
+    membership = { isActive: true, pelayananId: pg.pelayananId ?? '00000000-0000-0000-0000-000000000000' };
+  } else {
+    membership = {
+      isActive: true,
+      pelayanan: { nama: pelayananNama },
+      ...(roleNama ? { pelayananRole: { nama: roleNama } } : {}),
+    };
+  }
 
   const where: any = {
     isActive: true,
-    jemaatPelayanan: {
-      some: {
-        isActive: true,
-        pelayanan: { nama: pelayananNama },
-        ...(roleNama ? { pelayananRole: { nama: roleNama } } : {}),
-      },
-    },
+    jemaatPelayanan: { some: membership },
   };
   if (cabangId) where.cabangId = cabangId;
 

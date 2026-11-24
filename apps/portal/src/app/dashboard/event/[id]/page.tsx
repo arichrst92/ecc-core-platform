@@ -162,6 +162,8 @@ export default function EventDetailPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | ParticipationStatus>('all');
   // Hook HARUS sebelum early return (loading / tidak ditemukan) — React #310.
   const [pesertaSearch, setPesertaSearch] = useState('');
+  // Tab bagian detail (Peserta / Pembayaran / Pelayanan / Ulasan) — supaya halaman tidak memanjang.
+  const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'ulasan'>('peserta');
   const heroFileRef = useRef<HTMLInputElement>(null);
   const qrisFileRef = useRef<HTMLInputElement>(null);
 
@@ -471,105 +473,48 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      {/* Pembayaran section */}
-      {isPaid && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
-          <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-3">
-            <CircleDollarSign className="w-4 h-4 text-amber-600" />
-            Info Pembayaran
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <div className="space-y-2 text-sm min-w-0">
-              <Row label="Tipe">
-                {e.tipeBayar === 'NOMINAL_TETAP'
-                  ? 'Nominal Tetap'
-                  : 'Sukarela / Bebas'}
-              </Row>
-              <Row label={e.tipeBayar === 'NOMINAL_BEBAS' ? 'Nominal minimum' : 'Nominal'}>
-                {e.tipeBayar === 'NOMINAL_BEBAS' && !e.nominal
-                  ? '(bebas)'
-                  : formatNominal(e.nominal)}
-              </Row>
-              {/* Tanpa rekening & QRIS, jemaat tidak tahu ke mana harus membayar. */}
-              {(() => {
-                const fill = !e.qrisImageUrl;
-                const v = (x: string | null) =>
-                  x ?? (fill ? <NeedsFillBadge hint="Event berbayar tanpa rekening maupun QRIS — jemaat tidak tahu ke mana membayar. Isi lewat Edit event, atau unggah QRIS." /> : '-');
-                return (
-                  <>
-                    <Row label="Bank">{v(e.bankNama)}</Row>
-                    <Row label="No. Rekening">{v(e.bankNomor)}</Row>
-                    <Row label="Atas Nama">{v(e.bankAtasNama)}</Row>
-                  </>
-                );
-              })()}
-            </div>
-
-            <div>
-              <div className="text-xs uppercase tracking-wider text-neutral-500 font-semibold mb-2 flex items-center gap-1">
-                <QrCode className="w-3 h-3" /> QRIS
-              </div>
-              {e.qrisImageUrl ? (
-                <div className="relative inline-block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`${apiBase}${e.qrisImageUrl}`}
-                    alt="QRIS"
-                    className="w-48 h-48 object-contain border border-neutral-200 rounded"
-                  />
-                  <button
-                    onClick={() => qrisDeleteMut.mutate()}
-                    className="absolute top-1 right-1 p-1 bg-white/90 hover:bg-white rounded text-red-600"
-                    title="Hapus QRIS"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-48 h-48 border border-dashed border-neutral-300 rounded flex items-center justify-center text-xs text-neutral-400">
-                  Belum ada QRIS
-                </div>
-              )}
-              <input
-                ref={qrisFileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                hidden
-                onChange={(ev) => {
-                  const f = ev.target.files?.[0];
-                  if (f) qrisUploadMut.mutate(f);
-                  ev.target.value = '';
-                }}
-              />
-              <button
-                onClick={() => qrisFileRef.current?.click()}
-                className="mt-2 px-3 py-1.5 text-xs font-medium border border-neutral-300 hover:bg-neutral-50 rounded inline-flex items-center gap-1"
-              >
-                <Upload className="w-3 h-3" /> {e.qrisImageUrl ? 'Ganti QRIS' : 'Upload QRIS'}
-              </button>
-              <UploadHint kind="qris" />
-            </div>
+      {/* Tab bagian — Peserta · Pembayaran · Pelayanan & Volunteer · Ulasan */}
+      {(() => {
+        const items: { key: typeof tab; label: string; badge?: number; warn?: boolean; show: boolean }[] = [
+          { key: 'peserta', label: 'Peserta', badge: e.pesertaCount, show: true },
+          { key: 'pembayaran', label: 'Pembayaran', badge: statusCount.MENUNGGU_VERIFIKASI ?? 0, warn: true, show: isPaid },
+          { key: 'pelayanan', label: 'Pelayanan & Volunteer', show: e.butuhKehadiran },
+          { key: 'ulasan', label: 'Ulasan', show: true },
+        ];
+        return (
+          <div className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 bg-neutral-50/95 backdrop-blur border-b border-neutral-200 mb-4 flex gap-1 overflow-x-auto" role="tablist">
+            {items
+              .filter((x) => x.show)
+              .map((x) => (
+                <button
+                  key={x.key}
+                  role="tab"
+                  aria-selected={tab === x.key}
+                  onClick={() => setTab(x.key)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${
+                    tab === x.key ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                  }`}
+                >
+                  {x.label}
+                  {x.badge ? (
+                    <span
+                      className={`text-[11px] font-bold px-1.5 rounded-full ${
+                        x.warn ? 'bg-red-500 text-white' : tab === x.key ? 'bg-brand-100 text-brand-700' : 'bg-neutral-200 text-neutral-600'
+                      }`}
+                    >
+                      {x.badge}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Donations / Payment History — untuk semua event paid */}
-      {isPaid && (
-        <DonationsSection
-          eventId={eventId}
-          eventTipeBayar={e.tipeBayar}
-          eventNominal={e.nominal}
-        />
-      )}
-
-      {/* Ministry & Volunteer (hanya untuk event yang butuh kehadiran) */}
-      {e.butuhKehadiran && <EventMinistrySection eventId={eventId} />}
-
-      {/* Ulasan jemaat (rating dari tiket) */}
-      <ReviewPanel kind="event" id={eventId} />
-
+      {tab === 'peserta' ? (
+        <>
       {/* Peserta section */}
-      <div className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
         <div className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-neutral-100">
           <div className="min-w-0 flex-1 basis-64">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
@@ -708,6 +653,121 @@ export default function EventDetailPage() {
           )}
         </div>
       </div>
+
+        </>
+      ) : null}
+
+      {tab === 'pembayaran' && isPaid ? (
+        <>
+      {/* Pembayaran section */}
+      {isPaid && (
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
+          <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-3">
+            <CircleDollarSign className="w-4 h-4 text-amber-600" />
+            Info Pembayaran
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div className="space-y-2 text-sm min-w-0">
+              <Row label="Tipe">
+                {e.tipeBayar === 'NOMINAL_TETAP'
+                  ? 'Nominal Tetap'
+                  : 'Sukarela / Bebas'}
+              </Row>
+              <Row label={e.tipeBayar === 'NOMINAL_BEBAS' ? 'Nominal minimum' : 'Nominal'}>
+                {e.tipeBayar === 'NOMINAL_BEBAS' && !e.nominal
+                  ? '(bebas)'
+                  : formatNominal(e.nominal)}
+              </Row>
+              {/* Tanpa rekening & QRIS, jemaat tidak tahu ke mana harus membayar. */}
+              {(() => {
+                const fill = !e.qrisImageUrl;
+                const v = (x: string | null) =>
+                  x ?? (fill ? <NeedsFillBadge hint="Event berbayar tanpa rekening maupun QRIS — jemaat tidak tahu ke mana membayar. Isi lewat Edit event, atau unggah QRIS." /> : '-');
+                return (
+                  <>
+                    <Row label="Bank">{v(e.bankNama)}</Row>
+                    <Row label="No. Rekening">{v(e.bankNomor)}</Row>
+                    <Row label="Atas Nama">{v(e.bankAtasNama)}</Row>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div>
+              <div className="text-xs uppercase tracking-wider text-neutral-500 font-semibold mb-2 flex items-center gap-1">
+                <QrCode className="w-3 h-3" /> QRIS
+              </div>
+              {e.qrisImageUrl ? (
+                <div className="relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`${apiBase}${e.qrisImageUrl}`}
+                    alt="QRIS"
+                    className="w-48 h-48 object-contain border border-neutral-200 rounded"
+                  />
+                  <button
+                    onClick={() => qrisDeleteMut.mutate()}
+                    className="absolute top-1 right-1 p-1 bg-white/90 hover:bg-white rounded text-red-600"
+                    title="Hapus QRIS"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-48 h-48 border border-dashed border-neutral-300 rounded flex items-center justify-center text-xs text-neutral-400">
+                  Belum ada QRIS
+                </div>
+              )}
+              <input
+                ref={qrisFileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={(ev) => {
+                  const f = ev.target.files?.[0];
+                  if (f) qrisUploadMut.mutate(f);
+                  ev.target.value = '';
+                }}
+              />
+              <button
+                onClick={() => qrisFileRef.current?.click()}
+                className="mt-2 px-3 py-1.5 text-xs font-medium border border-neutral-300 hover:bg-neutral-50 rounded inline-flex items-center gap-1"
+              >
+                <Upload className="w-3 h-3" /> {e.qrisImageUrl ? 'Ganti QRIS' : 'Upload QRIS'}
+              </button>
+              <UploadHint kind="qris" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Donations / Payment History — untuk semua event paid */}
+      {isPaid && (
+        <DonationsSection
+          eventId={eventId}
+          eventTipeBayar={e.tipeBayar}
+          eventNominal={e.nominal}
+        />
+      )}
+
+        </>
+      ) : null}
+
+      {tab === 'pelayanan' ? (
+        <div className="[&>section:first-child]:mt-0">
+      {/* Ministry & Volunteer (hanya untuk event yang butuh kehadiran) */}
+      {e.butuhKehadiran && <EventMinistrySection eventId={eventId} />}
+
+        </div>
+      ) : null}
+
+      {tab === 'ulasan' ? (
+        <div className="[&>section:first-child]:mt-0">
+      {/* Ulasan jemaat (rating dari tiket) */}
+      <ReviewPanel kind="event" id={eventId} />
+
+        </div>
+      ) : null}
 
       {addPesertaOpen && (
         <AddPesertaModal

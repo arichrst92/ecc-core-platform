@@ -1,5 +1,6 @@
 'use client';
 
+import { mailUrl as buildMailUrl, waUrl as buildWaUrl } from '@/lib/contact-links';
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -1925,9 +1926,6 @@ function BreakdownStat({
 }
 
 /** Normalize nomor HP ke E.164 untuk link WhatsApp (strip "+" dan non-digit). */
-function waNumber(noHp: string): string {
-  return noHp.replace(/[^\d]/g, '');
-}
 
 function ContactButtons({
   noHp,
@@ -1940,13 +1938,9 @@ function ContactButtons({
   nama: string;
   compact?: boolean;
 }) {
-  const greeting = `Halo ${nama}, `;
-  const waUrl = noHp
-    ? `https://wa.me/${waNumber(noHp)}?text=${encodeURIComponent(greeting)}`
-    : null;
-  const mailUrl = email
-    ? `mailto:${email}?subject=${encodeURIComponent('Dari Portal ECC')}&body=${encodeURIComponent(greeting)}`
-    : null;
+  // Sapaan "Hi, <nama>" (sama dengan daftar Jemaat & PDF).
+  const waUrl = buildWaUrl(noHp, nama);
+  const mailUrl = buildMailUrl(email, nama);
 
   if (compact) {
     return (

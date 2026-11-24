@@ -763,7 +763,7 @@ jemaatRouter.get('/export', async (req, res) => {
 <tr>
   <td class="no">${idx + 1}</td>
   <td><div class="nm">${escapeHtml(row.namaLengkap)}</div><div class="sub">${escapeHtml(row.kode)}${row.jenisKelamin ? ` · ${escapeHtml(String(row.jenisKelamin))}` : ''}${row.usia !== '' ? ` · ${escapeHtml(String(row.usia))} th` : ''}</div></td>
-  <td><div class="ph">${escapeHtml(row.noHp)}</div><div class="sub email">${escapeHtml(row.email)}</div></td>
+  <td>${contactLinks(row.noHp, row.email, row.namaLengkap)}</td>
   <td><div>${escapeHtml(row.cabang)}</div><div class="sub">${escapeHtml([row.homecellArea, row.homecell].filter(Boolean).join(' › '))}</div></td>
   <td>${escapeHtml(row.ministry)}${row.levelPelayanan ? `<div class="sub">Level tertinggi ${escapeHtml(row.levelPelayanan)}</div>` : ''}</td>
   <td>${escapeHtml([row.pekerjaan, row.statusPernikahan].filter(Boolean).join(' · '))}</td>
@@ -808,6 +808,10 @@ jemaatRouter.get('/export', async (req, res) => {
   .sub { color: #737373; font-size: 8.5px; margin-top: 1px; }
   .email { word-break: break-all; }
   .ph { white-space: nowrap; }
+  a.lnk { text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+  a.wa { color: #15803D; font-weight: 600; }
+  a.email { color: #C2410C; }
+  a.lnk:hover { text-decoration: underline; }
   .nm { min-width: 90px; }
   .bds { white-space: nowrap; }
   .bd { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; font-weight: 700; margin: 0 3px 3px 0; }
@@ -882,11 +886,31 @@ const EXPORT_ICONS = {
   route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+  whatsapp: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
 } as const;
 type ExportIcon = keyof typeof EXPORT_ICONS;
 const xi = (name: ExportIcon, size = 12, color = '#fff') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">${EXPORT_ICONS[name]}</svg>`;
+
+/** No HP → WhatsApp & email → mailto, dengan sapaan "Hi, <nama>" (follow-up dari PDF). */
+function contactLinks(noHp: string, email: string, nama: string): string {
+  const hi = `Hi, ${nama.trim()}`;
+  let d = (noHp ?? '').replace(/\D/g, '');
+  if (d.startsWith('0')) d = `62${d.slice(1)}`;
+  else if (d.startsWith('8')) d = `62${d}`;
+  const wa = d.length >= 8 ? `https://wa.me/${d}?text=${encodeURIComponent(`${hi} `)}` : null;
+  const phone = noHp
+    ? wa
+      ? `<a class="ph lnk wa" href="${wa}" target="_blank" rel="noopener">${xi('whatsapp', 9, '#15803D')}${escapeHtml(noHp)}</a>`
+      : `<div class="ph">${escapeHtml(noHp)}</div>`
+    : '';
+  const mail = email
+    ? `<a class="sub email lnk" href="mailto:${escapeHtml(email)}?body=${encodeURIComponent(`${hi},\n\n`)}">${xi('mail', 9, '#C2410C')}${escapeHtml(email)}</a>`
+    : '';
+  return `${phone}${mail ? `<div>${mail}</div>` : ''}`;
+}
 
 /** Ringkasan filter aktif (label manusiawi) untuk kepala PDF daftar jemaat. */
 async function exportFilterChips(req: any, steps: JourneySteps): Promise<{ icon: ExportIcon; label: string; value: string }[]> {

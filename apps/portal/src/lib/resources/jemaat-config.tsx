@@ -4,6 +4,7 @@ import { createJemaatSchema, updateJemaatSchema } from '@ecc/shared-types';
 import type { ResourceConfig } from '../crud-types';
 import { statusBadge, nestedField, calcAge } from './render-helpers';
 import { JunkBadge, type JunkReason } from '@/components/jemaat/junk-badge';
+import { mailUrl, waUrl } from '@/lib/contact-links';
 
 const API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';
 
@@ -245,14 +246,47 @@ export function buildJemaatResource(
           );
         },
       },
-      { key: 'noHp', label: 'No HP', width: '130px' },
+      {
+        key: 'noHp',
+        label: 'No HP',
+        width: '130px',
+        // Klik → WhatsApp dengan sapaan "Hi, <nama>".
+        render: (v, row) => {
+          const url = waUrl(v as string | null, String(row.namaLengkap ?? ''));
+          return v ? (
+            url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-emerald-700 hover:underline whitespace-nowrap"
+                title="Chat WhatsApp"
+              >
+                {String(v)}
+              </a>
+            ) : (
+              <span className="whitespace-nowrap">{String(v)}</span>
+            )
+          ) : (
+            <span className="text-neutral-400">—</span>
+          );
+        },
+      },
       {
         key: 'email',
         label: 'Email',
         width: '200px',
-        render: (v) =>
+        render: (v, row) =>
           v ? (
-            <span className="text-neutral-700 break-all">{String(v)}</span>
+            <a
+              href={mailUrl(String(v), String(row.namaLengkap ?? '')) ?? undefined}
+              onClick={(e) => e.stopPropagation()}
+              className="text-brand-700 hover:underline break-all"
+              title="Kirim email"
+            >
+              {String(v)}
+            </a>
           ) : (
             <span className="text-neutral-400">—</span>
           ),

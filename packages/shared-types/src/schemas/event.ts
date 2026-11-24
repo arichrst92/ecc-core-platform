@@ -249,6 +249,10 @@ export const registerEventParticipationSchema = z
     // backend bisa auto-set dari event.nominal. Untuk GRATIS, undefined.
     nominalBayar: nominalSchema.optional(),
     catatan: emptyToUndefined(z.string().trim().max(1000)),
+    // Portal (pengelola event): langsung tandai HADIR (event yang mencatat kehadiran).
+    // Event berbayar wajib menyebut pembayaran yang diterima. App tidak mengirim field ini.
+    hadir: z.boolean().optional(),
+    pembayaran: z.enum(['BELUM', 'TUNAI', 'TRANSFER', 'QRIS', 'GRATIS']).optional(),
   })
   .openapi('RegisterEventParticipationInput');
 export type RegisterEventParticipationInput = z.infer<typeof registerEventParticipationSchema>;

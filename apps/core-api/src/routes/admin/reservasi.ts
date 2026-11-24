@@ -172,20 +172,63 @@ reservasiRouter.post('/', kWrite, async (req, res) => {
     return !!existing;
   });
 
+  const { hadir: wantHadir, ...rest } = input;
+  const tanggal = new Date(input.tanggalIbadah);
+  // Ditambahkan admin di Portal → langsung HADIR (2026-11) bila tanggal ibadah
+  // hari ini / sudah lewat (zona cabang). Tanggal mendatang tetap reservasi.
+  const ib = await prisma.ibadah.findUnique({
+    where: { id: input.ibadahId },
+    select: { nama: true, isKidsIbadah: true, cabang: { select: { timezone: true } } },
+  });
+  if (!ib) throw NotFound('Ibadah tidak ditemukan');
+  const hadir = !!wantHadir && tanggal.getTime() <= todayInTz(ib.cabang?.timezone || DEFAULT_TZ).getTime();
+  const now = new Date();
+  const existing = hadir
+    ? await prisma.reservasi.findUnique({
+        where: { jemaatId_ibadahId_tanggalIbadah: { jemaatId: input.jemaatId, ibadahId: input.ibadahId, tanggalIbadah: tanggal } },
+        include: { jemaat: { select: { namaLengkap: true } } },
+      })
+    : null;
+  if (existing?.status === 'JOIN') throw BadRequest(`${existing.jemaat.namaLengkap} sudah tercatat hadir di ibadah & tanggal ini.`);
+  const pickupCode = hadir && ib.isKidsIbadah ? (existing?.pickupCode ?? (await generateUniquePickupCode(input.ibadahId, tanggal))) : null;
+  if (existing) {
+    // Sudah reservasi / batal → cukup ditandai hadir.
+    const updated = await prisma.reservasi.update({
+      where: { id: existing.id },
+      data: { status: 'JOIN', joinedAt: now, cancelledAt: null, checkinMethod: 'MANUAL', checkedInBy: req.user?.sub ?? null, pickupCode },
+    });
+    if (pickupCode && !existing.pickupCode) {
+      void notifyKidsCheckin(existing.jemaatId, existing.jemaat.namaLengkap, ib.nama, pickupCode, existing.id).catch(() => {});
+    }
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'reservasi',
+      resourceId: updated.id,
+      resourceLabel: `${existing.jemaat.namaLengkap} → ${ib.nama} @ ${input.tanggalIbadah} (ditandai hadir di Portal)`,
+      before: existing,
+      after: updated,
+    });
+    return res.json({ success: true, data: updated, meta: { markedHadir: true } });
+  }
+
   try {
     const created = await prisma.reservasi.create({
       data: {
-        ...input,
-        tanggalIbadah: new Date(input.tanggalIbadah),
+        ...rest,
+        tanggalIbadah: tanggal,
         kode,
-        status: 'RESERVE',
+        status: hadir ? 'JOIN' : 'RESERVE',
+        ...(hadir ? { joinedAt: now, checkinMethod: 'MANUAL', checkedInBy: req.user?.sub ?? null, pickupCode } : {}),
       },
       include: {
         jemaat: { select: { namaLengkap: true } },
         ibadah: { select: { nama: true } },
       },
     });
-    const label = `${created.jemaat.namaLengkap} → ${created.ibadah.nama} @ ${input.tanggalIbadah}`;
+    if (pickupCode) {
+      void notifyKidsCheckin(created.jemaatId, created.jemaat.namaLengkap, created.ibadah.nama, pickupCode, created.id).catch(() => {});
+    }
+    const label = `${created.jemaat.namaLengkap} → ${created.ibadah.nama} @ ${input.tanggalIbadah}${hadir ? ' (hadir)' : ''}`;
     audit(req, {
       action: 'CREATE',
       resource: 'reservasi',

@@ -71,10 +71,10 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
   // Ibadah
   const [ibadahId, setIbadahId] = useState('');
   const [tanggal, setTanggal] = useState(todayYmd());
-  const [aksiIbadah, setAksiIbadah] = useState<'RESERVE' | 'CHECKIN'>('RESERVE');
+  const [aksiIbadah, setAksiIbadah] = useState<'RESERVE' | 'CHECKIN'>('CHECKIN');
   // Event
   const [eventId, setEventId] = useState('');
-  const [aksiEvent, setAksiEvent] = useState<'DAFTAR' | 'CHECKIN'>('DAFTAR');
+  const [aksiEvent, setAksiEvent] = useState<'DAFTAR' | 'CHECKIN'>('CHECKIN');
   const [bayar, setBayar] = useState<Bayar>('BELUM');
   const [nominal, setNominal] = useState('');
   const [quotaFull, setQuotaFull] = useState(false);
@@ -335,6 +335,9 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
                       onChange={(e) => {
                         setEventId(e.target.value);
                         setQuotaFull(false);
+                        // Bawaan "Hadir sekarang" bila event sudah hari-H; event mendatang → Daftarkan.
+                        const ev = (eventQ.data ?? []).find((x) => x.id === e.target.value);
+                        setAksiEvent(ev && ev.tanggalMulai.slice(0, 10) <= todayYmd() ? 'CHECKIN' : 'DAFTAR');
                       }}
                       className={inputCls}
                     >

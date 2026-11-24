@@ -542,9 +542,10 @@ function CreateReservasiModal({
 
   const createMut = useMutation({
     mutationFn: async () =>
-      apiClient.post('/admin/reservasi', { ibadahId, tanggalIbadah, jemaatId }),
-    onSuccess: () => {
-      toast.success('Reservasi dibuat');
+      // Ditambahkan admin → langsung hadir bila tanggal hari ini / lewat (server yang memutuskan).
+      apiClient.post('/admin/reservasi', { ibadahId, tanggalIbadah, jemaatId, hadir: true }),
+    onSuccess: (r: any) => {
+      toast.success(r?.data?.data?.status === 'JOIN' ? 'Jemaat tercatat hadir' : 'Reservasi dibuat');
       onSuccess();
     },
     onError: (err: any) => toast.error(err.response?.data?.error?.message ?? 'Gagal'),
@@ -556,7 +557,12 @@ function CreateReservasiModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
           <div className="px-6 py-4 border-b border-neutral-100">
-            <h2 className="font-semibold text-neutral-900">Buat Reservasi</h2>
+            <h2 className="font-semibold text-neutral-900">Tambah Kehadiran / Reservasi</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              {tanggalIbadah <= todayYmd()
+                ? 'Tanggal hari ini / sudah lewat → jemaat langsung tercatat HADIR (metode Manual).'
+                : 'Tanggal mendatang → tercatat sebagai reservasi.'}
+            </p>
           </div>
           <div className="p-6 space-y-4">
             <label className="block">

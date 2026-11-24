@@ -13,6 +13,8 @@ export const createReservasiSchema = z
     ibadahId: uuidSchema,
     tanggalIbadah: z.string().date().openapi({ example: '2026-05-25' }),
     catatan: emptyToUndefined(z.string().trim()),
+    // Portal (2026-11): ditambahkan admin → langsung HADIR bila tanggal ibadah hari ini / sudah lewat.
+    hadir: z.boolean().optional(),
   })
   .openapi('CreateReservasiInput');
 export type CreateReservasiInput = z.infer<typeof createReservasiSchema>;

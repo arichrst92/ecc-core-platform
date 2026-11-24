@@ -1,5 +1,6 @@
 'use client';
 
+import { todayYmd } from '@/lib/dates';
 import { QrCamera } from '@/components/ui/qr-camera';
 import { useMenuAccess } from '@/lib/use-menu-access';
 import { NeedsFillBadge } from '@/components/ui/needs-fill-badge';
@@ -656,6 +657,8 @@ export default function EventDetailPage() {
           eventId={eventId}
           tipeBayar={e.tipeBayar}
           nominalDefault={e.nominal}
+          // Ditambahkan admin → langsung hadir bila event mencatat kehadiran & sudah hari-H.
+          hadirNow={e.butuhKehadiran && e.tanggalMulai.slice(0, 10) <= todayYmd()}
           onClose={() => setAddPesertaOpen(false)}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['event', eventId, 'peserta'] });
@@ -925,12 +928,15 @@ function AddPesertaModal({
   eventId,
   tipeBayar,
   nominalDefault,
+  hadirNow,
   onClose,
   onSuccess,
 }: {
   eventId: string;
   tipeBayar: 'GRATIS' | 'NOMINAL_TETAP' | 'NOMINAL_BEBAS';
   nominalDefault: string | null;
+  /** Event mencatat kehadiran & sudah hari pelaksanaan → peserta langsung HADIR. */
+  hadirNow: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -940,6 +946,7 @@ function AddPesertaModal({
     tipeBayar === 'NOMINAL_TETAP' ? nominalDefault ?? '' : '',
   );
   const [catatan, setCatatan] = useState('');
+  const [pembayaran, setPembayaran] = useState<'TUNAI' | 'TRANSFER' | 'QRIS' | 'GRATIS'>('TUNAI');
 
   const searchQ = useQuery({
     queryKey: ['jemaat-search', search],
@@ -959,9 +966,10 @@ function AddPesertaModal({
         nominalBayar:
           tipeBayar === 'GRATIS' ? undefined : nominal === '' ? undefined : Number(nominal),
         catatan: catatan || undefined,
+        ...(hadirNow ? { hadir: true, ...(tipeBayar !== 'GRATIS' ? { pembayaran } : {}) } : {}),
       }),
-    onSuccess: () => {
-      toast.success('Peserta ditambahkan');
+    onSuccess: (r: any) => {
+      toast.success(r?.data?.data?.status === 'HADIR' ? 'Peserta ditambahkan & tercatat hadir' : 'Peserta ditambahkan');
       onSuccess();
     },
     onError: (e: any) =>
@@ -1044,6 +1052,27 @@ function AddPesertaModal({
               </label>
             )}
 
+            {hadirNow && isPaid && (
+              <label className="block">
+                <span className="text-sm font-medium text-neutral-700">Pembayaran diterima</span>
+                <select
+                  value={pembayaran}
+                  onChange={(e) => setPembayaran(e.target.value as typeof pembayaran)}
+                  className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white"
+                >
+                  <option value="TUNAI">Tunai</option>
+                  <option value="TRANSFER">Transfer</option>
+                  <option value="QRIS">QRIS</option>
+                  <option value="GRATIS">Gratis (dibebaskan)</option>
+                </select>
+              </label>
+            )}
+            <p className={`text-xs px-3 py-2 rounded-lg ${hadirNow ? 'bg-emerald-50 text-emerald-800' : 'bg-neutral-50 text-neutral-600'}`}>
+              {hadirNow
+                ? 'Peserta yang ditambahkan di sini langsung tercatat HADIR (metode Manual).'
+                : 'Event belum dimulai / tidak mencatat kehadiran — peserta tercatat terdaftar.'}
+            </p>
+
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Catatan (opsional)</span>
               <textarea
@@ -1069,7 +1098,7 @@ function AddPesertaModal({
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg disabled:opacity-50"
             >
               {createMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Daftarkan
+              {hadirNow ? 'Tambahkan & hadir' : 'Daftarkan'}
             </button>
           </div>
         </div>

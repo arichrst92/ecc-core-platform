@@ -16,7 +16,7 @@ import { pendingPaymentByEvent } from '../../lib/event-payment-pending.js';
 import { DEFAULT_TZ, cabangKota, calendarDateOf, eventDateLabel, instantInTzLabel, todayInTz, tzOr } from '../../lib/tz.js';
 import { attendanceInfo, hadirCountByEvent, myEventStatusMap } from '../../lib/event-attendance.js';
 import { audienceLabel, eventAudienceInclude, eventAudienceStatus, eventAudienceVisibleWhereFull, saveEventAudience } from '../../lib/event-audience.js';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import {
   createEventSchema,
@@ -1092,6 +1092,56 @@ eventRouter.get('/:id/peserta', W('read'), async (req, res) => {
 //     ke upload bukti kalau status DAFTAR di event berbayar).
 //
 // Quota check: skip kalau existing non-BATAL (slot sudah ke-counted).
+/**
+ * Tandai peserta HADIR karena ditambahkan langsung oleh admin di Portal
+ * (2026-11). Metode MANUAL (bukan walk-in tamu). Event berbayar: pembayaran
+ * yang diterima di lokasi dicatat sebagai donasi terverifikasi (sama dengan
+ * walk-in tamu) supaya laporan keuangan & tiket "Lunas" konsisten.
+ */
+async function markParticipationHadir(
+  req: Request,
+  event: { id: string; judul: string; tipeBayar: string; butuhKehadiran: boolean },
+  participationId: string,
+  opt: { nominal: number; pembayaran: 'BELUM' | 'TUNAI' | 'TRANSFER' | 'QRIS' | 'GRATIS' },
+) {
+  const now = new Date();
+  const recordPay = event.tipeBayar !== 'GRATIS' && opt.pembayaran !== 'GRATIS' && opt.pembayaran !== 'BELUM' && opt.nominal > 0;
+  const updated = await prisma.eventParticipation.update({
+    where: { id: participationId },
+    data: {
+      status: 'HADIR',
+      attendedAt: now,
+      cancelledAt: null,
+      checkinMethod: 'MANUAL',
+      checkedInBy: req.user?.sub ?? null,
+      ...(recordPay ? { nominalBayar: opt.nominal, paidAt: now } : {}),
+    },
+    include: { jemaat: { select: { namaLengkap: true } } },
+  });
+  if (recordPay) {
+    await prisma.eventDonation.create({
+      data: {
+        participationId,
+        nominalBayar: opt.nominal,
+        status: 'BAYAR',
+        paidAt: now,
+        approvedBy: req.user?.jemaatId ?? null,
+        approvedAt: now,
+        catatan: `Ditambahkan di Portal — diterima admin (${opt.pembayaran})`,
+      },
+    });
+  }
+  await syncEventRoleForStatus(event, updated.jemaatId, 'HADIR');
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'event_participation',
+    resourceId: updated.id,
+    resourceLabel: `Hadir (ditambahkan di Portal): ${updated.jemaat.namaLengkap} @ ${event.judul}`,
+    metadata: { kind: 'event-portal-hadir', pembayaran: opt.pembayaran },
+  });
+  return updated;
+}
+
 eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { id: req.params.id },
@@ -1111,6 +1161,19 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
   }
 
   const input = registerEventParticipationSchema.parse(req.body);
+  // Ditambahkan admin di Portal → langsung HADIR (2026-11), bila event mencatat kehadiran.
+  const portalManager = !isMobileClient(req) && (await isEventManager(req));
+  // Hanya bila event sudah memasuki hari pelaksanaan (zona cabang); sebelum itu tetap terdaftar.
+  const evTz = tzOr(
+    event.cabangId ? (await prisma.cabangGereja.findUnique({ where: { id: event.cabangId }, select: { timezone: true } }))?.timezone : null,
+  );
+  const markHadir =
+    !!input.hadir &&
+    portalManager &&
+    event.butuhKehadiran &&
+    calendarDateOf(event.tanggalMulai, evTz).getTime() <= todayInTz(evTz).getTime();
+  const paidEvent = event.tipeBayar !== 'GRATIS';
+  const pembayaran = paidEvent ? (input.pembayaran ?? 'BELUM') : 'GRATIS';
 
   // Jemaat (bukan pengelola event) hanya boleh mendaftarkan diri & keluarga,
   // dan hanya ke event aktif yang sudah dipublikasikan.
@@ -1130,6 +1193,17 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
   // Existing non-BATAL → 409 dengan details supaya mobile bisa show error
   // yang jelas + navigate ke step berikutnya. Bukan idempotent silent karena
   // user mungkin tidak sadar mereka sudah terdaftar.
+  if (existing && existing.status !== 'BATAL' && markHadir && existing.status !== 'HADIR') {
+    const lunas = existing.status === 'BAYAR';
+    if (paidEvent && !lunas && pembayaran === 'BELUM') {
+      throw BadRequest('Event berbayar: pilih pembayaran yang diterima (Tunai/Transfer/QRIS) atau Gratis untuk mencatat hadir.');
+    }
+    const updated = await markParticipationHadir(req, event, existing.id, {
+      nominal: lunas ? 0 : (input.nominalBayar ?? Number(existing.nominalBayar ?? event.nominal ?? 0)),
+      pembayaran: lunas ? 'GRATIS' : pembayaran,
+    });
+    return res.json({ success: true, data: updated, meta: { alreadyRegistered: true, currentStatus: 'HADIR', markedHadir: true } });
+  }
   if (existing && existing.status !== 'BATAL') {
     const friendlyStatus = {
       DAFTAR: 'sudah terdaftar (belum bayar)',
@@ -1201,7 +1275,10 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
 
   // Didaftarkan langsung oleh admin di Portal (bukan dari app / web oleh jemaat
   // sendiri) → ditandai walk-in di daftar peserta Portal.
-  const addedVia = !isMobileClient(req) && input.jemaatId !== req.user?.jemaatId && (await isEventManager(req)) ? 'PORTAL' : null;
+  const addedVia = portalManager && input.jemaatId !== req.user?.jemaatId ? 'PORTAL' : null;
+  if (markHadir && paidEvent && pembayaran === 'BELUM') {
+    throw BadRequest('Event berbayar: pilih pembayaran yang diterima (Tunai/Transfer/QRIS) atau Gratis untuk mencatat hadir.');
+  }
 
   // Reactivate BATAL — update row existing.
   if (existing && existing.status === 'BATAL') {
@@ -1232,6 +1309,10 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
       after: reactivated,
       metadata: { kind: 'event-reactivate' },
     });
+    if (markHadir) {
+      const hadir = await markParticipationHadir(req, event, reactivated.id, { nominal: nominalBayar ?? 0, pembayaran });
+      return res.status(201).json({ success: true, data: hadir, meta: { reactivated: true, currentStatus: 'HADIR' } });
+    }
     await syncEventRoleForStatus(event, reactivated.jemaatId, 'DAFTAR');
     return res.status(201).json({
       success: true,
@@ -1259,6 +1340,10 @@ eventRouter.post('/:id/peserta', lockEventParam, async (req, res) => {
     resourceLabel: `${created.jemaat.namaLengkap} @ ${event.judul}`,
     after: created,
   });
+  if (markHadir) {
+    const hadir = await markParticipationHadir(req, event, created.id, { nominal: nominalBayar ?? 0, pembayaran });
+    return res.status(201).json({ success: true, data: hadir, meta: { alreadyRegistered: false, currentStatus: 'HADIR' } });
+  }
   await syncEventRoleForStatus(event, created.jemaatId, 'DAFTAR');
   void createNotification({
     jemaatId: input.jemaatId,

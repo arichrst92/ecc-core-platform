@@ -556,6 +556,7 @@ export const SECTIONS: Section[] = [
         items: [
           'Tipe bayar: Gratis (hijau) · Sukarela (biru, dulu "donasi / nominal bebas") · Berbayar nominal tetap (kuning).',
           'Pendaftaran online (app & website) ditutup saat event dimulai (atau sesuai Batas Pendaftaran Online di form event) → walk-in di lokasi lewat petugas. Pengelola event di Portal tetap bisa mendaftarkan peserta.',
+          'Tambah peserta di Portal pada hari pelaksanaan (event yang mencatat kehadiran) → peserta langsung tercatat HADIR (metode Manual); event berbayar: pilih pembayaran yang diterima. Kehadiran → Tambah Kehadiran untuk ibadah hari ini juga langsung HADIR; tanggal mendatang tetap reservasi. Tambah tamu: bawaan "Hadir sekarang".',
           'Hanya event aktif & sudah dipublikasikan yang bisa didaftari jemaat. Jemaat hanya bisa mendaftarkan diri, keluarga, dan tamunya.',
           'Berbayar wajib lunas sebelum check-in. Sukarela wajib lunas hanya bila ada nominal minimum; tanpa minimum, peserta boleh hadir walau belum memberi.',
           'Tidak hadir: tiket yang belum dibayar dibatalkan otomatis 30 menit setelah event selesai. Peserta yang sudah membayar / menunggu verifikasi TIDAK dibatalkan.',

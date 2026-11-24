@@ -29,6 +29,7 @@ summary: Cara ibadah dijadwalkan (mingguan/dua mingguan/bulanan, zona waktu caba
 - "Jemaat ini sudah reservasi untuk ibadah & tanggal yang sama" → sudah punya tiket.
 - **Batas reservasi**: bawaan saat **jam mulai**; bisa diatur per ibadah di Portal → Ibadah → *Batas reservasi (menit sebelum mulai)* (mis. 120 = ditutup 2 jam sebelum; negatif = masih bisa sesudah mulai). Hitung mundur "Reservasi ditutup dalam…" di app (semua versi) mengikuti batas ini; pesan: "Reservasi sudah ditutup (batasnya …)".
 - **Pembatalan reservasi** bisa sampai **jam mulai** ibadah ("Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai."). Hanya reservasi berstatus Terdaftar yang bisa dibatalkan; yang sudah hadir tidak bisa dibatalkan.
+- **Ditambahkan di Portal = langsung hadir (2026-11)**: Kehadiran → *Tambah Kehadiran / Reservasi* dengan tanggal hari ini / sudah lewat → jemaat langsung **HADIR** (metode Manual; ibadah anak: kode jemput otomatis & dikirim ke wali). Tanggal mendatang → tetap reservasi. Sudah reservasi/batal → ditandai hadir. Menu Tamu → Tambah tamu: bawaan *Hadir sekarang* untuk ibadah hari ini.
 - Status reservasi: **RESERVE** (terdaftar) → **JOIN** (hadir) atau **CANCEL** (batal; cancelReason NO_SHOW bila otomatis).
 
 ## Batal otomatis (no-show)

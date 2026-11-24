@@ -30,7 +30,8 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (bawaan tutup saat mulai,
 - Jemaat hanya bisa mendaftarkan **diri sendiri, keluarga, dan tamunya** ("Hanya bisa mendaftarkan diri sendiri dan anggota keluarga.").
 - Peserta yang belum memenuhi syarat usia ditandai "Belum memenuhi syarat usia" dan tidak bisa dicentang.
 - **Kuota penuh** → pendaftaran ditolak; admin di Portal bisa tetap memasukkan (force).
-- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & app 2.5.1**: sebelum check-in dibuka (bawaan 15 menit sebelum mulai, atau sesuai pengaturan event) "N terdaftar dari kuota", sesudahnya "N hadir dari kuota" (event yang mencatat kehadiran). Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
+- Hitung mundur pendaftaran (app 2.5.1): format ringkas **Tutup dalam DD:jj:mm:dd** (hari:jam:menit:detik).
+- Angka peserta di kartu/detail event: **app 2.5.0 ke bawah** "N/kuota" = jumlah **terdaftar** (tidak termasuk batal; no-show tetap dihitung). **Web & app 2.5.1**: sebelum check-in dibuka (bawaan 15 menit sebelum mulai, atau sesuai pengaturan event) jumlah **terdaftar**, sesudahnya jumlah **hadir** (event yang mencatat kehadiran) — app 2.5.1 menulis ringkas **"N/kuota"** sejajar progress bar, ikon orang = terdaftar, ikon orang-centang = hadir. Status "Kuota penuh" tetap mengikuti jumlah terdaftar. Website eccchurch.global (daftar & panel event) memakai aturan yang sama: "N/kuota terdaftar" lalu "N/kuota hadir".
 - App 2.5.1: tulisan kuota di **atas** bar (tidak terpotong).
 - Tombol **sukarela/daftar dinonaktifkan** di app bila pendaftaran sudah ditutup atau kuota penuh (untuk yang belum terdaftar).
 - "Event ini belum dibuka untuk pendaftaran." → event belum publish/aktif.

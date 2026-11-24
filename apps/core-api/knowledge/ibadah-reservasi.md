@@ -25,7 +25,7 @@ summary: Cara ibadah dijadwalkan (mingguan/dua mingguan/bulanan, zona waktu caba
 2. Setiap orang mendapat tiketnya sendiri (QR). Okupansi kursi tampil di kartu & detail ibadah (bila kapasitas kursi diisi di Portal):
    - **App 2.5.0 ke bawah**: selalu "N hadir dari X kursi" — N = yang SUDAH check-in saja (reservasi belum dihitung), jadi sebelum ibadah bisa tertulis 0.
    - **Website eccchurch.global** (Beranda & Ibadah): "N/X reservasi" lalu "N/X hadir" dengan aturan yang sama.
-   - **Web & app 2.5.1**: sebelum self check-in dibuka (bawaan 15 menit sebelum mulai, atau sesuai pengaturan ibadah) → "N reservasi dari X kursi" (reservasi aktif, termasuk yang sudah hadir); sesudahnya → "N hadir dari X kursi". Bisa > 100% (check-in tidak dibatasi kursi).
+   - **Web & app 2.5.1**: sebelum self check-in dibuka (bawaan 15 menit sebelum mulai, atau sesuai pengaturan ibadah) → jumlah **reservasi** aktif (termasuk yang sudah hadir); sesudahnya → jumlah **hadir**. App 2.5.1 menulis ringkas **"N/X"** sejajar progress bar (ikon kursi; detail ibadah menambah persentase). Bisa > 100% (check-in tidak dibatasi kursi).
 - "Jemaat ini sudah reservasi untuk ibadah & tanggal yang sama" → sudah punya tiket.
 - **Batas reservasi**: bawaan saat **jam mulai**; bisa diatur per ibadah di Portal → Ibadah → *Batas reservasi (menit sebelum mulai)* (mis. 120 = ditutup 2 jam sebelum; negatif = masih bisa sesudah mulai). Hitung mundur "Reservasi ditutup dalam…" di app (semua versi) mengikuti batas ini; pesan: "Reservasi sudah ditutup (batasnya …)".
 - **Pembatalan reservasi** bisa sampai **jam mulai** ibadah ("Reservasi tidak bisa dibatalkan karena ibadah sudah dimulai."). Hanya reservasi berstatus Terdaftar yang bisa dibatalkan; yang sudah hadir tidak bisa dibatalkan.

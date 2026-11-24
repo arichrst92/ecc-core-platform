@@ -204,7 +204,7 @@ export function AppTextsEditor() {
       {!catalog ? (
         <div className="text-sm text-neutral-400">Memuat daftar tulisan…</div>
       ) : results.length === 0 ? (
-        <div className="text-sm text-neutral-500 bg-neutral-50 border border-neutral-100 rounded-xl p-6 text-center">
+        <div className="text-sm text-neutral-500 bg-neutral-50 border border-neutral-100 rounded-xl p-4 sm:p-6 text-center">
           {section === 'changed' && !q ? 'Belum ada tulisan yang diubah. Cari tulisan di atas untuk mulai.' : 'Tidak ada tulisan yang cocok.'}
         </div>
       ) : (
@@ -292,7 +292,7 @@ export function AppTextsEditor() {
           </p>
           <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
             {Object.entries(data.appRules).map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-3 border-b border-neutral-100 py-1">
+              <div key={k} className="flex flex-wrap justify-between gap-3 border-b border-neutral-100 py-1">
                 <span className="text-neutral-600">{RULE_LABEL[k] ?? k}</span>
                 <span className="font-semibold tabular-nums">{v}</span>
               </div>

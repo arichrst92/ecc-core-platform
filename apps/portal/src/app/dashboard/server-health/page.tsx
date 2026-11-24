@@ -165,9 +165,9 @@ export default function ServerHealthPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Gauge className="w-6 h-6" />
             Server Health
           </h1>
@@ -412,7 +412,7 @@ function Row({
   small?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between text-xs gap-2">
+    <div className="flex flex-wrap items-center justify-between text-xs gap-2">
       <span className="text-neutral-500">{label}</span>
       <span
         className={`${accent ?? 'text-neutral-900'} ${small ? 'text-[11px] font-mono' : 'font-medium'} truncate max-w-[60%] text-right`}
@@ -674,7 +674,7 @@ function TroubleshootingSection() {
             <div key={g.group}>
               <button
                 onClick={() => setOpenGroup(open ? null : g.group)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 text-left"
+                className="w-full flex flex-wrap items-center justify-between px-4 py-3 hover:bg-neutral-50 text-left gap-2"
               >
                 <div className="flex items-center gap-2">
                   {open ? (

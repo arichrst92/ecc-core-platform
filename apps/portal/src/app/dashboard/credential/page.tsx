@@ -99,7 +99,7 @@ function UnlockPrompt({ onUnlocked }: { onUnlocked: (pwd: string) => void }) {
             e.preventDefault();
             if (pwd) unlockMut.mutate();
           }}
-          className="p-6 space-y-4"
+          className="p-4 sm:p-6 space-y-4"
         >
           <div>
             <label className="block text-xs font-medium text-neutral-700 mb-1">
@@ -211,8 +211,8 @@ function CredentialList({
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <KeyRound className="w-6 h-6 text-amber-500" />
             Credential Vault
           </h1>
@@ -273,7 +273,7 @@ function CredentialList({
               <button
                 key={c.id}
                 onClick={() => setDetail(c)}
-                className="w-full text-left px-4 py-3 hover:bg-neutral-50 flex items-center justify-between gap-3"
+                className="w-full text-left px-4 py-3 hover:bg-neutral-50 flex flex-wrap items-center justify-between gap-3"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-neutral-900 truncate">{c.nama}</div>
@@ -311,7 +311,7 @@ function CredentialList({
         )}
 
         {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500 gap-2">
             <div>
               Halaman {meta.page} dari {meta.totalPages} · {meta.total} total
             </div>
@@ -421,7 +421,7 @@ function DetailModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-start justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-neutral-900 truncate">{c.nama}</h2>
               <div className="text-[11px] text-neutral-500 mt-0.5">
@@ -433,7 +433,7 @@ function DetailModal({
             </button>
           </div>
 
-          <div className="overflow-y-auto px-6 py-4 space-y-2.5">
+          <div className="overflow-y-auto px-4 sm:px-6 py-4 space-y-2.5">
             {c.email && (
               <Field label="Email" icon={Mail} value={c.email} onCopy={() => copy(c.email!, 'Email')} />
             )}
@@ -472,7 +472,7 @@ function DetailModal({
             )}
             {c.catatan && (
               <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex flex-wrap items-center justify-between mb-1.5 gap-2">
                   <span className="text-xs font-medium text-neutral-700">Catatan</span>
                   <div className="flex items-center gap-1">
                     <button
@@ -513,7 +513,7 @@ function DetailModal({
               )}
           </div>
 
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex flex-wrap justify-between gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onDelete}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"
@@ -550,7 +550,7 @@ function Field({
 }) {
   return (
     <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
         <span className="text-xs font-medium text-neutral-700 flex items-center gap-1.5">
           <Icon className="w-3.5 h-3.5 text-neutral-500" />
           {label}
@@ -636,7 +636,7 @@ function CredentialFormModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="text-lg font-semibold text-neutral-900">
               {isEdit ? 'Edit Credential' : 'Tambah Credential'}
             </h2>
@@ -650,7 +650,7 @@ function CredentialFormModal({
               e.preventDefault();
               if (nama.trim()) submitMut.mutate();
             }}
-            className="overflow-y-auto p-6 space-y-3"
+            className="overflow-y-auto p-4 sm:p-6 space-y-3"
           >
             <FormField label="Nama Credential" required>
               <input

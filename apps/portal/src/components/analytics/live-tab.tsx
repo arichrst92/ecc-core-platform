@@ -34,7 +34,7 @@ export function LiveTab() {
           </div>
           <div className="mt-4">
             <Sparkline data={s.last30} />
-            <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+            <div className="flex flex-wrap justify-between text-[11px] text-neutral-400 mt-1 gap-2">
               <span>30 menit lalu</span>
               <span>sekarang</span>
             </div>

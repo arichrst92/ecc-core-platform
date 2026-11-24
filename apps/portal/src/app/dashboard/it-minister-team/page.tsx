@@ -118,9 +118,9 @@ export default function TeamITMinisterPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between mb-6 gap-4">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-brand-600" />
             Team IT Minister
           </h1>
@@ -232,7 +232,7 @@ function MemberCard({
           : 'bg-neutral-100 border-neutral-200 opacity-60'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-neutral-900 truncate">{a.jemaat.namaLengkap}</p>
           <p className="text-xs text-orange-700 font-medium">{ROLE_LABEL[a.roleTitle]}</p>
@@ -325,13 +325,13 @@ function AddModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 sticky top-0 bg-white">
+        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-200 sticky top-0 bg-white gap-2">
           <h2 className="font-semibold text-lg">Tambah Anggota IT Minister</h2>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {/* Jemaat picker */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Jemaat</label>
@@ -425,7 +425,7 @@ function AddModal({ onClose }: { onClose: () => void }) {
             />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-2 sticky bottom-0 bg-white">
+        <div className="px-4 sm:px-6 py-4 border-t border-neutral-200 flex justify-end gap-2 sticky bottom-0 bg-white">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"

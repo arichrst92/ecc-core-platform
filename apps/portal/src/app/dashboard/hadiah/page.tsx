@@ -104,8 +104,8 @@ function HadiahInner() {
   return (
     <>
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Gift className="w-6 h-6 text-kids-500" /> Katalog Hadiah
           </h1>
           <p className="text-sm text-neutral-500 mt-1">

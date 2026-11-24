@@ -129,7 +129,7 @@ export function GatewaySettings() {
 
   if (q.isLoading) {
     return (
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 mb-6 text-center">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6 text-center">
         <Loader2 className="w-5 h-5 animate-spin mx-auto text-neutral-400" />
       </div>
     );
@@ -257,7 +257,7 @@ export function GatewaySettings() {
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl mb-6 overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-start gap-3">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-start gap-3">
         <span className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
           <Router className="w-5 h-5" />
         </span>
@@ -271,7 +271,7 @@ export function GatewaySettings() {
       </div>
 
       {Object.keys(d.otpSkip ?? {}).length ? (
-        <div className="px-5 py-3 bg-red-50 border-b border-red-100 text-xs text-red-800 flex items-start gap-2">
+        <div className="px-3 sm:px-5 py-3 bg-red-50 border-b border-red-100 text-xs text-red-800 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>
             <b>OTP WhatsApp sedang dialihkan.</b>{' '}
@@ -283,7 +283,7 @@ export function GatewaySettings() {
         </div>
       ) : null}
 
-      <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-700 space-y-1">
+      <div className="px-3 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-100 text-xs text-neutral-700 space-y-1">
         <div>
           <b>Urutan OTP:</b> {otpChain.length ? otpChain.join(' → ') : <span className="text-red-600 font-semibold">tidak ada provider aktif</span>}
           {d.effective.otpEmailCopy !== 'off' ? ` · email ${d.effective.otpEmailCopy === 'always' ? '(selalu)' : '(bila WA gagal)'}` : ''}
@@ -294,7 +294,7 @@ export function GatewaySettings() {
         </div>
       </div>
 
-      <div className="px-5 divide-y divide-neutral-100">
+      <div className="px-3 sm:px-5 divide-y divide-neutral-100">
         {rows.map(([key, title, sub, st, field, env], i) => providerRow(i + 1, key, title, sub, st, field, env))}
 
         {/* OTP email */}
@@ -414,7 +414,7 @@ export function GatewaySettings() {
         </div>
       </div>
 
-      <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-[11px] text-amber-900 flex items-start gap-2">
+      <div className="px-3 sm:px-5 py-3 bg-amber-50 border-t border-amber-100 text-[11px] text-amber-900 flex items-start gap-2">
         <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span>
           Mematikan provider tidak menghapus kredensialnya. Kalau semua provider WhatsApp dimatikan / dilewati, OTP hanya terkirim lewat email (bila

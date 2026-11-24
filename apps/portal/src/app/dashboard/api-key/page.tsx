@@ -135,9 +135,9 @@ export default function ApiKeyPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Key className="w-6 h-6 text-brand-500" /> API Keys
           </h1>
           <p className="text-neutral-500 mt-1">
@@ -178,7 +178,8 @@ export default function ApiKeyPage() {
         </div>
       ) : (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Nama</th>
@@ -271,6 +272,7 @@ export default function ApiKeyPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -345,7 +347,7 @@ function ApiKeyFormModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={loading ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="text-lg font-semibold text-neutral-900">
               {editing ? 'Edit API Key' : 'Buat API Key Baru'}
             </h2>
@@ -354,7 +356,7 @@ function ApiKeyFormModal({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 space-y-4">
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-4">
             <div className="text-xs text-neutral-600 bg-blue-50 border border-blue-200 rounded p-3">
               Key bersifat <strong>global</strong> (akses semua data) dan punya{' '}
               <strong>full access</strong> ke semua endpoint API. Untuk scope yang lebih ketat,
@@ -386,7 +388,7 @@ function ApiKeyFormModal({
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={loading}
@@ -424,15 +426,15 @@ function RevealedKeyModal({ data, onClose }: { data: CreatedKey; onClose: () => 
     <>
       <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm" />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
               <Key className="w-5 h-5 text-brand-500" />
               API Key Baru
             </h2>
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="text-sm">
               <div className="font-medium text-neutral-900">{data.nama}</div>
               <div className="text-xs text-neutral-500 mt-0.5">
@@ -490,7 +492,7 @@ function RevealedKeyModal({ data, onClose }: { data: CreatedKey; onClose: () => 
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg"

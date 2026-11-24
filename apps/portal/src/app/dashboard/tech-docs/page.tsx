@@ -42,7 +42,7 @@ export default function TechDocsPage() {
     <div className="w-full">
       <div className="flex items-center gap-3 mb-2">
         <FileText className="w-7 h-7 text-brand-500" />
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900">Technical Documentation</h1>
           <p className="text-sm text-neutral-500 mt-0.5">
             Dokumentasi teknis komprehensif ECC Master Data Platform. Untuk dev + ops team.
@@ -91,7 +91,7 @@ function SectionCard({ section, open, onToggle }: { section: Section; open: bool
     <section id={`section-${section.id}`} className="bg-white border border-neutral-200 rounded-xl overflow-hidden scroll-mt-20">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-neutral-50 text-left"
+        className="w-full flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-neutral-50 text-left"
       >
         <Icon className="w-5 h-5 text-brand-500 shrink-0" />
         <div className="flex-1 min-w-0">
@@ -105,7 +105,7 @@ function SectionCard({ section, open, onToggle }: { section: Section; open: bool
         )}
       </button>
       {open && (
-        <div className="px-6 pb-6 border-t border-neutral-100 space-y-4 pt-4">
+        <div className="px-4 sm:px-6 pb-6 border-t border-neutral-100 space-y-4 pt-4">
           {section.blocks.map((b, i) => (
             <BlockRenderer key={i} block={b} />
           ))}

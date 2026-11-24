@@ -139,7 +139,7 @@ export function ItemFormModal({ kind, parentId, existing, onClose }: Props) {
         className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between p-5 border-b border-neutral-100">
+        <header className="flex flex-wrap items-center justify-between p-5 border-b border-neutral-100 gap-2">
           <h2 className="font-bold text-lg">
             {isEdit ? 'Edit' : 'Buat'} {label}
           </h2>
@@ -182,7 +182,7 @@ export function ItemFormModal({ kind, parentId, existing, onClose }: Props) {
             </label>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs font-medium text-neutral-600">Status</span>
               <select
@@ -210,7 +210,7 @@ export function ItemFormModal({ kind, parentId, existing, onClose }: Props) {
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs font-medium text-neutral-600">
                 {kind === 'epic' ? 'Owner (lead)' : 'Assignee'}

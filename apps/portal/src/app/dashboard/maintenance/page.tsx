@@ -160,9 +160,9 @@ export default function MaintenancePage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Wrench className="w-6 h-6" />
             Maintenance
           </h1>
@@ -247,7 +247,7 @@ export default function MaintenancePage() {
                   PENDING: 0,
                 };
                 return (
-                  <div key={t} className="flex items-center justify-between">
+                  <div key={t} className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-neutral-600 font-medium">
                       {t.replace('_REMINDER', '')}
                     </span>
@@ -284,7 +284,7 @@ export default function MaintenancePage() {
 
       {/* Recent notification logs */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+        <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-neutral-100 gap-2">
           <div className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
             <Filter className="w-3.5 h-3.5" />
             Recent Notification Logs (max 100)
@@ -320,7 +320,8 @@ export default function MaintenancePage() {
             Belum ada notification logs.
           </div>
         ) : (
-          <table className="w-full text-xs">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-xs">
             <thead className="bg-neutral-50 text-neutral-500 uppercase">
               <tr>
                 <th className="px-3 py-2 text-left">Created</th>
@@ -370,6 +371,7 @@ export default function MaintenancePage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

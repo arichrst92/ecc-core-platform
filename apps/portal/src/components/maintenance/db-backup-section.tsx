@@ -146,7 +146,7 @@ export function DbBackupSection() {
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl mb-6 overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3 flex-wrap">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
             <Database className="w-5 h-5 text-brand-500" /> Backup & Restore Database
@@ -175,7 +175,7 @@ export function DbBackupSection() {
         </div>
       </div>
 
-      {q.isError ? <div className="px-5 py-3 text-sm text-red-600">{errMsg(q.error)}</div> : null}
+      {q.isError ? <div className="px-3 sm:px-5 py-3 text-sm text-red-600">{errMsg(q.error)}</div> : null}
       {toolsMissing ? (
         <div className="mx-5 mt-4 flex items-start gap-2 p-3 rounded-lg bg-amber-50 text-amber-800 text-sm">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -196,21 +196,22 @@ export function DbBackupSection() {
         ) : (d?.files ?? []).length === 0 ? (
           <div className="py-10 text-center text-sm text-neutral-400">Belum ada file backup di server.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
               <tr>
-                <th className="text-left px-5 py-2 font-medium">File</th>
-                <th className="text-left px-5 py-2 font-medium">Jenis</th>
-                <th className="text-right px-5 py-2 font-medium">Ukuran</th>
-                <th className="text-left px-5 py-2 font-medium">Dibuat</th>
-                <th className="px-5 py-2" />
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">File</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Jenis</th>
+                <th className="text-right px-3 sm:px-5 py-2 font-medium">Ukuran</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Dibuat</th>
+                <th className="px-3 sm:px-5 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {d!.files.map((f) => (
                 <tr key={f.name}>
-                  <td className="px-5 py-2.5 font-mono text-xs break-all">{f.name}</td>
-                  <td className="px-5 py-2.5">
+                  <td className="px-3 sm:px-5 py-2.5 font-mono text-xs break-all">{f.name}</td>
+                  <td className="px-3 sm:px-5 py-2.5">
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${KIND_LABEL[f.kind].cls}`}>{KIND_LABEL[f.kind].label}</span>
                     {f.encrypted ? (
                       <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700" title="Terenkripsi AES-256-GCM — butuh DATA_ENCRYPTION_KEY untuk dibuka">
@@ -222,9 +223,9 @@ export function DbBackupSection() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-2.5 text-right tabular-nums">{fmtSize(f.size)}</td>
-                  <td className="px-5 py-2.5 text-neutral-600 whitespace-nowrap">{fmtDT(f.createdAt)}</td>
-                  <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                  <td className="px-3 sm:px-5 py-2.5 text-right tabular-nums">{fmtSize(f.size)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 text-neutral-600 whitespace-nowrap">{fmtDT(f.createdAt)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => download(f.name)}
                       disabled={downloading === f.name}
@@ -253,9 +254,10 @@ export function DbBackupSection() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
-      {d ? <div className="px-5 py-2 text-[11px] text-neutral-400 border-t border-neutral-100">Lokasi di server: {d.dir}</div> : null}
+      {d ? <div className="px-3 sm:px-5 py-2 text-[11px] text-neutral-400 border-t border-neutral-100">Lokasi di server: {d.dir}</div> : null}
 
       {restoreTarget ? (
         <RestoreModal
@@ -273,7 +275,7 @@ export function DbBackupSection() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setDeleting(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 pointer-events-auto max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold">Hapus file backup?</h3>
               <p className="text-xs font-mono text-neutral-600 mt-2 break-all">{deleting}</p>
               <div className="flex justify-end gap-2 mt-5">
@@ -391,7 +393,7 @@ function RestoreModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={start.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto p-6">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
               <ShieldAlert className="w-5 h-5 text-red-600" />

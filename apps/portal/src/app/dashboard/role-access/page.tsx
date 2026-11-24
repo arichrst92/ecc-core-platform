@@ -235,7 +235,7 @@ export default function RoleAccessPage() {
 
   return (
     <div className="w-full">
-      <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
         <Shield className="w-6 h-6 text-brand-500" />
         Role Access
       </h1>
@@ -405,7 +405,7 @@ function RoleCard({
 
   return (
     <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
-      <div className="flex items-center justify-between gap-3 p-4 bg-neutral-50 border-b border-neutral-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-neutral-50 border-b border-neutral-100">
         <button
           onClick={onToggleExpand}
           className="flex items-center gap-2 flex-1 min-w-0 text-left"
@@ -577,7 +577,7 @@ function RoleCard({
 
           {/* Menu access table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200">
                   <th className="text-left py-2 px-2 font-medium text-neutral-600">Menu</th>

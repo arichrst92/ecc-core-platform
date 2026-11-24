@@ -43,7 +43,7 @@ export function Panel({ title, icon: Icon, children, className = '' }: { title: 
 
 export function Row({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
+    <div className="flex flex-wrap items-baseline justify-between gap-3 py-1">
       <span className="text-neutral-400 text-sm">{label}</span>
       <span className={`text-lg font-semibold tabular-nums ${tone ?? 'text-white'}`}>{value}</span>
     </div>
@@ -125,7 +125,7 @@ export function IbadahBoard({ d, now, lang = 'id' }: { d: IbadahMonitorData; now
             <div className="flex-1 min-w-[220px]">
               {cap ? (
                 <>
-                  <div className="flex justify-between text-sm text-neutral-400 mb-1">
+                  <div className="flex flex-wrap justify-between text-sm text-neutral-400 mb-1 gap-2">
                     <span>{T.seatsFilled}</span>
                     <span className={`font-semibold ${capPct! >= 100 ? 'text-red-400' : capPct! >= 90 ? 'text-amber-300' : 'text-white'}`}>
                       {T.pctOf(capPct!, fmt(cap))}
@@ -175,7 +175,7 @@ export function IbadahBoard({ d, now, lang = 'id' }: { d: IbadahMonitorData; now
             {methods.length === 0 ? <div className="text-sm text-neutral-500">{T.noCheckin}</div> : null}
             {methods.map(([m, v]) => (
               <div key={m}>
-                <div className="flex justify-between text-sm">
+                <div className="flex flex-wrap justify-between text-sm gap-2">
                   <span className="text-neutral-300">{T.method[m] ?? m}</span>
                   <span className="tabular-nums font-semibold">{fmt(v)}</span>
                 </div>
@@ -189,7 +189,7 @@ export function IbadahBoard({ d, now, lang = 'id' }: { d: IbadahMonitorData; now
             <div className="mt-4">
               <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">{T.topScanners}</div>
               {d.scanners.map((s) => (
-                <div key={s.nama} className="flex justify-between text-sm py-0.5">
+                <div key={s.nama} className="flex flex-wrap justify-between text-sm py-0.5 gap-2">
                   <span className="text-neutral-300 truncate">{s.nama}</span>
                   <span className="tabular-nums">{fmt(s.n)}</span>
                 </div>
@@ -209,7 +209,7 @@ export function IbadahBoard({ d, now, lang = 'id' }: { d: IbadahMonitorData; now
                   <div className="text-sm text-neutral-300 truncate">
                     {c.nama} <span className="text-neutral-500">· {c.jamMulai}–{c.jamSelesai}</span>
                   </div>
-                  <div className="flex items-end justify-between mt-1">
+                  <div className="flex flex-wrap items-end justify-between mt-1 gap-2">
                     <div>
                       <div className="text-3xl font-bold tabular-nums">{fmt(c.hadir)}</div>
                       <div className="text-xs text-neutral-500">{T.kidsPresent}</div>

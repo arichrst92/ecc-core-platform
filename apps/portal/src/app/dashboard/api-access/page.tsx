@@ -143,8 +143,8 @@ export default function ApiAccessPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="min-w-0 flex-1 basis-64">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <KeyRound className="w-6 h-6 text-brand-500" /> API Access
         </h1>
         <p className="text-neutral-500 mt-1 text-sm">
@@ -186,7 +186,7 @@ export default function ApiAccessPage() {
 
       {/* Token saya */}
       <section className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm">Token saya</div>
+        <div className="px-3 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm">Token saya</div>
         <div className="p-5 space-y-4">
           {!me?.eligible ? (
             <div className="flex gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
@@ -243,7 +243,7 @@ export default function ApiAccessPage() {
       {/* Konfigurasi */}
       {me?.canManage && (
         <section className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm flex items-center gap-2">
+          <div className="px-3 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm flex items-center gap-2">
             <UsersRound className="w-4 h-4" /> Konfigurasi: role Team IT Minister yang boleh memakai API
           </div>
           <div className="p-5">
@@ -302,7 +302,7 @@ export default function ApiAccessPage() {
       {/* Semua token */}
       {me?.canManage && (
         <section className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm">Semua token</div>
+          <div className="px-3 sm:px-5 py-3 bg-neutral-50 border-b border-neutral-200 font-semibold text-sm">Semua token</div>
           <div className="p-5">
             {allQ.isLoading ? <Loader2 className="w-5 h-5 animate-spin text-neutral-400" /> : <TokenTable rows={allQ.data ?? []} onRevoke={revoke} showOwner empty="Belum ada token." />}
           </div>
@@ -320,7 +320,7 @@ function TokenTable({ rows, onRevoke, showOwner, empty }: { rows: TokenRow[]; on
   if (!rows.length) return <p className="text-sm text-neutral-500">{empty}</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[640px] text-sm">
         <thead className="text-xs text-neutral-500 uppercase">
           <tr>
             <th className="py-2 pr-3 text-left">Nama</th>

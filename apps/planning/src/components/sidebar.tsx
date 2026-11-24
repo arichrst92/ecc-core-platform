@@ -14,7 +14,7 @@ const navItems = [
   { href: '/dashboard/my-items', label: 'My Items', icon: UserCircle },
 ];
 
-export function Sidebar() {
+export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -28,8 +28,15 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
-      <div className="p-6 flex items-center gap-3 border-b border-neutral-100">
+    <aside
+      className={clsx(
+        'w-64 bg-white border-r border-neutral-200 flex flex-col',
+        // HP: laci dari kiri; desktop: kolom tetap.
+        'fixed inset-y-0 left-0 z-50 transition-transform md:static md:translate-x-0 md:min-h-screen',
+        open ? 'translate-x-0' : '-translate-x-full',
+      )}
+    >
+      <div className="p-4 sm:p-6 flex items-center gap-3 border-b border-neutral-100">
         <div className="w-9 h-9 rounded-lg bg-brand-500 text-white flex items-center justify-center font-bold">
           P
         </div>
@@ -49,6 +56,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition',
                 active

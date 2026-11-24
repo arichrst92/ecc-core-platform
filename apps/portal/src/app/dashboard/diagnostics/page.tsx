@@ -23,11 +23,11 @@ export default function DiagnosticsPage() {
   const [tab, setTab] = useState<Tab>('errors');
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
           <Activity className="w-7 h-7 text-brand-500" />
-          <div>
+          <div className="min-w-0 flex-1 basis-64">
             <h1 className="text-2xl font-bold text-neutral-900">Diagnostics</h1>
             <p className="text-sm text-neutral-500 mt-0.5">
               Observability Els App — laporan error dari aplikasi (mobile & web) dan konfigurasi aplikasi.
@@ -211,7 +211,7 @@ function ErrorEventsTab() {
       ) : null}
       {!isLoading && data && (
         <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-100 text-sm text-neutral-500">
+          <div className="px-3 sm:px-5 py-3 border-b border-neutral-100 text-sm text-neutral-500">
             {data.pagination.totalGroups.toLocaleString('id-ID')} jenis error unik ·{' '}
             {PERIODS.find((p) => p.value === days)?.label.toLowerCase()} (waktu diterima server)
           </div>
@@ -223,7 +223,7 @@ function ErrorEventsTab() {
               key={g.fingerprint}
               type="button"
               onClick={() => setSelectedFp(g.fingerprint)}
-              className="w-full text-left px-5 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition flex items-start gap-3"
+              className="w-full text-left px-3 sm:px-5 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition flex items-start gap-3"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -248,7 +248,7 @@ function ErrorEventsTab() {
             </button>
           ))}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-5 py-3 text-xs text-neutral-500">
+            <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 text-xs text-neutral-500 gap-2">
               <span>
                 Halaman {page} dari {totalPages}
               </span>
@@ -307,7 +307,7 @@ function ErrorDetailModal({ fingerprint, onClose }: { fingerprint: string; onClo
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-neutral-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="font-semibold">Detail error</h3>
             <p className="text-xs text-neutral-500 font-mono truncate">{fingerprint}</p>
@@ -316,7 +316,7 @@ function ErrorDetailModal({ fingerprint, onClose }: { fingerprint: string; onClo
             ✕
           </button>
         </div>
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5">
           {isLoading && <LoadingBlock />}
           {isError ? <div className="text-sm text-red-600">{errMsg(error)}</div> : null}
           {data && (
@@ -527,7 +527,7 @@ function ConfigField({
 }) {
   return (
     <div className="bg-white border border-neutral-200 rounded-lg p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <label className="block text-sm font-medium text-neutral-900">{label}</label>
           {hint && <p className="text-xs text-neutral-500 mt-1">{hint}</p>}

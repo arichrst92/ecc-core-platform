@@ -81,11 +81,11 @@ export default function AnalitikPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
             <Activity className="w-5 h-5 text-brand-600" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1 basis-64">
             <h1 className="text-xl font-bold text-neutral-900">Analitik</h1>
             <p className="text-sm text-neutral-500">Penggunaan Els App (iOS, Android, web) dan performa API. Anonim — tanpa data jemaat.</p>
           </div>

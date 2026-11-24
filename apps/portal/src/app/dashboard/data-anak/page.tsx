@@ -128,23 +128,23 @@ export default function DataAnakPage() {
     }
   }
   const meta = q.data?.meta;
-  const sel = 'h-9 rounded-lg border border-neutral-300 bg-white px-2.5 text-sm';
+  const sel = 'h-9 max-w-full rounded-lg border border-neutral-300 bg-white px-2.5 text-sm';
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center shrink-0">
             <Baby className="w-5 h-5 text-pink-600" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1 basis-64">
             <h1 className="text-xl font-bold text-neutral-900">Data Anak</h1>
             <p className="text-sm text-neutral-500">
               Anak di bawah 13 tahun · jumlah hadir dihitung dari check-in di ibadah anak dalam periode.
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => openPrint('qr')}
             disabled={!!opening || !meta?.total}
@@ -167,7 +167,7 @@ export default function DataAnakPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 bg-white border border-neutral-200 rounded-xl p-3">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-0 basis-56">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={searchIn}
@@ -213,7 +213,7 @@ export default function DataAnakPage() {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-3 py-2.5 text-left w-16">QR</th>
@@ -331,7 +331,7 @@ export default function DataAnakPage() {
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setQrOf(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-xs text-center pointer-events-auto relative">
+            <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-xs text-center pointer-events-auto relative max-h-[90vh] overflow-y-auto">
               <button onClick={() => setQrOf(null)} className="absolute right-3 top-3 p-1 rounded hover:bg-neutral-100">
                 <X className="w-4 h-4" />
               </button>

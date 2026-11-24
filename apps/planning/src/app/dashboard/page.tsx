@@ -30,7 +30,7 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-neutral-900">Ticketing Tools</h1>
         <p className="text-sm text-neutral-500">Ringkasan sprint aktif & item kamu.</p>
@@ -60,7 +60,7 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-neutral-700 mb-3">Sprint Aktif</h2>
             {data.activeSprint ? (
               <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-lg font-bold text-neutral-900">{data.activeSprint.nama}</div>
                     {data.activeSprint.goal && (

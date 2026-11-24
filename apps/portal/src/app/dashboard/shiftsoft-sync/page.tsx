@@ -231,8 +231,8 @@ export default function ShiftsoftSyncPage() {
 
   return (
     <div className="space-y-6 w-full">
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="min-w-0 flex-1 basis-64">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <DatabaseZap className="w-6 h-6 text-brand-500" />
           Shiftsoft Sync — Jemaat
         </h1>
@@ -284,7 +284,7 @@ export default function ShiftsoftSyncPage() {
               );
             })}
           </div>
-          <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-start gap-2 text-xs text-neutral-500">
               <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-blue-500" />
               <span>
@@ -332,7 +332,7 @@ export default function ShiftsoftSyncPage() {
           </div>
 
           {/* Meta strip */}
-          <div className="flex items-center justify-between text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center justify-between text-xs text-neutral-500 gap-2">
             <span>
               <strong>{preview.cabang.nama}</strong> · fetched {preview.fetchDurationMs}ms · preview
               expires {new Date(preview.expiresAt).toLocaleTimeString('id-ID')}
@@ -397,7 +397,7 @@ export default function ShiftsoftSyncPage() {
           )}
 
           {/* Commit bar */}
-          <div className="sticky bottom-4 bg-white border border-neutral-200 rounded-xl shadow-lg p-4 flex items-center justify-between">
+          <div className="sticky bottom-4 bg-white border border-neutral-200 rounded-xl shadow-lg p-4 flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm text-neutral-700">
               Siap import:{' '}
               <strong className="text-green-700">
@@ -435,7 +435,7 @@ export default function ShiftsoftSyncPage() {
 
       {/* STEP 3 — RESULT */}
       {step === 'done' && commitResult && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-6 space-y-4">
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 space-y-4">
           <div className="flex items-center gap-3">
             {commitResult.errors.length === 0 ? (
               <CheckCircle2 className="w-12 h-12 text-green-500" />
@@ -558,7 +558,7 @@ function SectionExpander({
     <div className="bg-white border border-neutral-200 rounded-xl">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-neutral-50"
+        className="w-full flex items-center gap-2 px-3 sm:px-5 py-3 text-left hover:bg-neutral-50"
       >
         {open ? (
           <ChevronDown className="w-4 h-4 text-neutral-500" />
@@ -589,7 +589,8 @@ function NewRecordsTable({
   const allChecked = records.length > 0 && selected.size === records.length;
   return (
     <div className="max-h-96 overflow-y-auto">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm">
         <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase sticky top-0">
           <tr>
             <th className="px-3 py-2 w-8">
@@ -631,6 +632,7 @@ function NewRecordsTable({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -648,7 +650,7 @@ function RedundantRecordsTable({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 px-5 py-2 border-b border-neutral-100 bg-neutral-50">
+      <div className="flex items-center gap-2 px-3 sm:px-5 py-2 border-b border-neutral-100 bg-neutral-50">
         <span className="text-xs text-neutral-500">Set all:</span>
         {(['SKIP', 'NULL_NOHP', 'NULL_EMAIL'] as RedundantAction[]).map((a) => (
           <button
@@ -661,7 +663,8 @@ function RedundantRecordsTable({
         ))}
       </div>
       <div className="max-h-96 overflow-y-auto">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase sticky top-0">
             <tr>
               <th className="text-left px-3 py-2 font-medium">Nama Legacy</th>
@@ -707,6 +710,7 @@ function RedundantRecordsTable({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -786,7 +790,7 @@ function AsyncJobsPanel() {
       <summary className="p-5 cursor-pointer flex items-center gap-2 font-semibold text-neutral-900">
         <Terminal className="w-4 h-4" /> Advanced: Async jobs (Group / Cleanup / Seed Cabang)
       </summary>
-      <div className="px-5 pb-5 space-y-4">
+      <div className="px-3 sm:px-5 pb-5 space-y-4">
         <p className="text-xs text-neutral-500">
           Rare-use jobs — fire-and-forget spawn script tsx. Progress via polling job status.
           Untuk Jemaat, pakai wizard preview di atas.
@@ -863,7 +867,7 @@ function AsyncJobsPanel() {
                     </span>
                   </button>
                   {expanded && (
-                    <div className="px-5 pb-3 bg-neutral-50 text-xs">
+                    <div className="px-3 sm:px-5 pb-3 bg-neutral-50 text-xs">
                       {j.errorMessage && (
                         <div className="text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-2 mt-2">
                           <strong>Error:</strong> {j.errorMessage}

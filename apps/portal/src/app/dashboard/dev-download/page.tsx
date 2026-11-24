@@ -154,7 +154,7 @@ export default function DevDownloadPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <Download className="w-6 h-6 text-brand-500" /> Download
         </h1>
         <p className="text-neutral-500 mt-1 text-sm">

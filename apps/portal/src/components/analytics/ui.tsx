@@ -64,7 +64,7 @@ export function Kpi({
 }) {
   return (
     <div className="rounded-xl bg-white border border-neutral-200 p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-neutral-500">{label}</span>
         <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${color}1a` }}>
           <Icon className="w-4 h-4" style={{ color }} />
@@ -91,7 +91,7 @@ export function Card({
 }) {
   return (
     <div className={`bg-white border border-neutral-200 rounded-xl ${className}`}>
-      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-2">
         <div>
           <div className="text-sm font-semibold text-neutral-900">{title}</div>
           {sub ? <div className="text-xs text-neutral-500 mt-0.5">{sub}</div> : null}

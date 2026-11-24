@@ -50,11 +50,11 @@ export default function CkidsAccessPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
           <ShieldCheck className="w-5 h-5 text-amber-600" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-xl font-bold text-neutral-900">Akses CKids</h1>
           <p className="text-sm text-neutral-500">
             Tentukan pelayanan dan role yang boleh membuka tiap menu di{' '}
@@ -80,7 +80,7 @@ export default function CkidsAccessPage() {
           {(q.data ?? []).map((m) => (
             <div key={m.key} className="flex flex-col md:flex-row md:items-center gap-3 px-4 py-3">
               <div className="md:w-56 shrink-0">
-                <div className="font-semibold text-neutral-900 flex items-center gap-1.5">
+                <div className="font-semibold text-neutral-900 flex flex-wrap items-center gap-1.5">
                   {m.label}
                   {m.manage ? (
                     <span className="text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">Ubah data</span>
@@ -192,7 +192,7 @@ function EditModal({ menu, onClose }: { menu: MenuRow; onClose: () => void }) {
       <div className="fixed inset-0 bg-black/40 z-40" onClick={save.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 border-b border-neutral-100 gap-2">
             <div>
               <h2 className="font-semibold text-neutral-900">Akses · {menu.label}</h2>
               <p className="text-xs text-neutral-500">{menu.desc}</p>
@@ -201,7 +201,7 @@ function EditModal({ menu, onClose }: { menu: MenuRow; onClose: () => void }) {
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="px-5 pt-3 space-y-2">
+          <div className="px-3 sm:px-5 pt-3 space-y-2">
             <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
               {(['pelayanan', 'role'] as const).map((t) => (
                 <button
@@ -270,7 +270,7 @@ function EditModal({ menu, onClose }: { menu: MenuRow; onClose: () => void }) {
                       <button
                         type="button"
                         onClick={() => setOpen((prev) => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
-                        className="flex-1 flex items-center justify-between text-left text-sm text-neutral-800"
+                        className="flex-1 flex flex-wrap items-center justify-between text-left text-sm text-neutral-800 gap-2"
                       >
                         <span>
                           {p.nama}
@@ -302,7 +302,7 @@ function EditModal({ menu, onClose }: { menu: MenuRow; onClose: () => void }) {
               })
             )}
           </div>
-          <div className="flex gap-2 px-5 py-3 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+          <div className="flex gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <button onClick={onClose} className="flex-1 h-10 rounded-lg border border-neutral-300 bg-white text-sm text-neutral-700">
               Batal
             </button>

@@ -24,7 +24,7 @@ export default function MyItemsPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <UserCircle className="w-6 h-6" />
@@ -134,7 +134,7 @@ function ItemRow({
   return (
     <div
       onClick={onClick}
-      className="bg-white border border-neutral-200 rounded-lg p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-brand-300 hover:shadow-sm transition"
+      className="bg-white border border-neutral-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:border-brand-300 hover:shadow-sm transition"
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

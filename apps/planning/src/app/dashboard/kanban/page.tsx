@@ -164,7 +164,7 @@ export default function KanbanPage() {
   }, [items]);
 
   return (
-    <div className="p-6 flex flex-col h-full">
+    <div className="p-4 sm:p-6 flex flex-col h-full">
       <header className="mb-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
@@ -285,7 +285,7 @@ function KanbanColumn({
         if (id && fromStatus !== title) onMoveItem(id, title);
       }}
     >
-      <header className="p-3 flex items-center justify-between border-b border-neutral-200">
+      <header className="p-3 flex flex-wrap items-center justify-between border-b border-neutral-200 gap-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700">{title}</h3>
         <span className="text-xs text-neutral-500 bg-white px-1.5 py-0.5 rounded">{items.length}</span>
       </header>
@@ -328,7 +328,7 @@ function KanbanCard({
       onClick={onOpenDetail}
       className="bg-white border border-neutral-200 rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-brand-300 transition"
     >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
         <span className="text-[10px] font-mono text-neutral-400">
           {LEVEL_PREFIX[level]}-{item.nomor}
         </span>
@@ -341,7 +341,7 @@ function KanbanCard({
           <strong className="text-neutral-700">{item.parentLabel}</strong>
         </div>
       )}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1 min-w-0">
           {item.assignee ? (
             <>

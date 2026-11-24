@@ -7,7 +7,7 @@ export default function NoAccessPage() {
   const user = useAuthStore((s) => s.user);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-neutral-50">
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-neutral-50">
       <div className="max-w-md w-full bg-white border border-neutral-200 rounded-xl p-8 text-center space-y-4">
         <div className="w-16 h-16 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center">
           <ShieldOff className="w-8 h-8" />

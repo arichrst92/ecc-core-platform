@@ -82,7 +82,7 @@ export function NotificationChannels() {
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl mb-6 overflow-hidden">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full px-5 py-4 flex items-start gap-3 text-left">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full px-3 sm:px-5 py-4 flex items-start gap-3 text-left">
         <span className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
           <Bell className="w-5 h-5" />
         </span>
@@ -99,7 +99,7 @@ export function NotificationChannels() {
 
       {open ? (
         <div className="border-t border-neutral-100">
-          <div className="px-5 py-3 bg-neutral-50 text-[11px] text-neutral-600 space-y-1">
+          <div className="px-3 sm:px-5 py-3 bg-neutral-50 text-[11px] text-neutral-600 space-y-1">
             <p>
               <b>Email</b> = selalu kirim email (bila jemaat punya email). <b>Email bila tanpa WA</b> = email hanya untuk jemaat yang tidak punya nomor
               WhatsApp (mis. yang daftar dengan email). Email dikirim bertahap dan mengikuti pilihan pesan jemaat di Profil → Privasi.
@@ -113,10 +113,10 @@ export function NotificationChannels() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="text-[11px] text-neutral-500 bg-white">
                   <tr className="border-b border-neutral-100">
-                    <th className="text-left font-medium px-5 py-2">Jenis</th>
+                    <th className="text-left font-medium px-3 sm:px-5 py-2">Jenis</th>
                     <th className="font-medium px-2 py-2 w-20">
                       <span className="inline-flex items-center gap-1">
                         <Smartphone className="w-3.5 h-3.5" /> In-app
@@ -139,7 +139,7 @@ export function NotificationChannels() {
                   {grouped.map(([g, rows]) => (
                     <Fragment key={g}>
                       <tr className="bg-neutral-50/70">
-                        <td colSpan={5} className="px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                        <td colSpan={5} className="px-3 sm:px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                           {GROUP_LABEL[g]}
                         </td>
                       </tr>
@@ -147,7 +147,7 @@ export function NotificationChannels() {
                         const off = !r.inApp && !r.whatsapp && !r.email && !r.waFallbackEmail;
                         return (
                           <tr key={r.key} className="border-b border-neutral-100 last:border-0">
-                            <td className="px-5 py-2">
+                            <td className="px-3 sm:px-5 py-2">
                               <span className={off ? 'text-neutral-400' : 'text-neutral-900'}>{r.label}</span>
                               {off ? <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500">Off</span> : null}
                             </td>

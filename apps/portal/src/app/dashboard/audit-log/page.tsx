@@ -72,9 +72,9 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Activity className="w-6 h-6" />
             Audit Log
           </h1>
@@ -162,7 +162,7 @@ export default function AuditLogPage() {
       {/* List */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
               <tr>
                 <th className="px-4 py-3 text-left font-medium" style={{ width: '170px' }}>Waktu</th>
@@ -223,7 +223,7 @@ export default function AuditLogPage() {
 
         {/* Pagination */}
         {list.data && list.data.meta.totalPages > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm">
+          <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm gap-2">
             <div className="text-neutral-500">
               <strong>{list.data.meta.total}</strong> catatan · halaman {list.data.meta.page} dari{' '}
               {list.data.meta.totalPages}
@@ -356,7 +356,7 @@ function DetailDrawer({ entry, onClose }: { entry: AuditEntry | null; onClose: (
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <aside className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-2xl z-50 overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-neutral-100 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900">Detail catatan audit</h2>
             <p className="text-xs text-neutral-500">{formatDateTime(entry.createdAt)}</p>
@@ -366,7 +366,7 @@ function DetailDrawer({ entry, onClose }: { entry: AuditEntry | null; onClose: (
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5">
           <SummaryCard entry={entry} />
 
           <details className="group rounded-xl border border-neutral-200">
@@ -431,7 +431,8 @@ function SummaryCard({ entry }: { entry: AuditEntry }) {
         <div className="mt-4">
           <div className="text-xs font-semibold text-neutral-600 mb-1.5">{sum.changesTitle}</div>
           <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <tbody className="divide-y divide-neutral-100">
                 {sum.changes.map((c, i) => (
                   <tr key={i}>
@@ -451,6 +452,7 @@ function SummaryCard({ entry }: { entry: AuditEntry }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

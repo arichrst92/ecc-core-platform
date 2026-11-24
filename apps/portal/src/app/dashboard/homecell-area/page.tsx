@@ -117,7 +117,7 @@ function HomecellAreaInner() {
         </button>
       </div>
       <div className="bg-white border border-neutral-200 rounded-xl p-3 mb-3">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <label className="block">
             <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cabang gereja</span>
             <select

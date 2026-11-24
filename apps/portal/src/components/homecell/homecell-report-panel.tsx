@@ -65,7 +65,7 @@ function Pct({ p }: { p: number | null }) {
 function Kpi({ icon: Icon, color, label, value, sub }: { icon: typeof Users; color: string; label: string; value: React.ReactNode; sub: string }) {
   return (
     <div className="bg-neutral-50 border border-neutral-100 rounded-xl p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{label}</span>
         <span className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: color }}>
           <Icon className="w-3.5 h-3.5 text-white" />
@@ -185,7 +185,7 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
                 <div style={{ width: `${g ? pP : 0}%`, background: '#0ea5e9' }} />
                 <div style={{ width: `${g ? 100 - pP : 0}%`, background: '#f472b6' }} />
               </div>
-              <div className="flex justify-between text-xs mt-1">
+              <div className="flex flex-wrap justify-between text-xs mt-1 gap-2">
                 <span className="text-sky-700">
                   Laki-laki <b>{pria}</b>
                   {g ? ` · ${pP}%` : ''}
@@ -216,7 +216,8 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
 
           <div className="overflow-x-auto">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">Kehadiran anggota di periode</div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-neutral-50 text-neutral-500 text-xs">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">Nama</th>
@@ -275,6 +276,7 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
                 ) : null}
               </tbody>
             </table>
+            </div>
           </div>
 
           {(s.tamus ?? []).length ? (
@@ -282,7 +284,8 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-700 mb-1.5">
                 Tamu ({s.tamus!.length}) · dicatat terpisah, tidak masuk % kehadiran
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-teal-50/60 text-neutral-500 text-xs">
                   <tr>
                     <th className="text-left font-medium px-3 py-2">Nama</th>
@@ -307,6 +310,7 @@ export function HomecellReportPanel({ homecellId }: { homecellId: string }) {
                     ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ) : null}
         </>

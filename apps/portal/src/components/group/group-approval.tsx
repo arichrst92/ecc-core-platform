@@ -54,9 +54,9 @@ export function GroupApprovalPanel({
   });
 
   return (
-    <div className="bg-amber-50 border border-amber-300 ring-2 ring-amber-100 rounded-xl px-5 py-4 flex items-start gap-3 flex-wrap">
+    <div className="bg-amber-50 border border-amber-300 ring-2 ring-amber-100 rounded-xl px-3 sm:px-5 py-4 flex items-start gap-3 flex-wrap">
       <Hourglass className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-[240px]">
+      <div className="flex-1 min-w-0 basis-60">
         <div className="font-semibold text-amber-900">Pengajuan group menunggu persetujuan</div>
         <p className="text-sm text-amber-800 mt-0.5">
           Diajukan {picNama ? <strong>{picNama}</strong> : 'jemaat'} lewat Els App pada{' '}
@@ -68,7 +68,7 @@ export function GroupApprovalPanel({
         ) : null}
       </div>
       {canWrite ? (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setRejectOpen(true)}
             className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-lg"
@@ -90,7 +90,7 @@ export function GroupApprovalPanel({
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setRejectOpen(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-6 space-y-3">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-4 sm:p-6 space-y-3 max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold text-neutral-900">Tolak pengajuan group &ldquo;{nama}&rdquo;?</h3>
               <p className="text-xs text-neutral-500">Group dinonaktifkan. Alasan dikirim ke pengaju lewat notifikasi app.</p>
               <textarea

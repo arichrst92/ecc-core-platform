@@ -57,7 +57,7 @@ export function DeleteScheduleDialog({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={mut.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-6">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center mb-3">
             <Trash2 className="w-5 h-5 text-red-600" />
           </div>

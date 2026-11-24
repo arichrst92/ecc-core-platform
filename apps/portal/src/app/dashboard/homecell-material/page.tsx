@@ -124,7 +124,7 @@ export default function HomecellMaterialPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={`${selectCls} !w-44`}>
+        <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={`${selectCls} w-full sm:!w-44`}>
           <option value="">Semua cabang</option>
           {(cabangQ.data ?? []).map((c) => (
             <option key={c.id} value={c.id}>
@@ -132,7 +132,7 @@ export default function HomecellMaterialPage() {
             </option>
           ))}
         </select>
-        <select value={bulan} onChange={(e) => setBulan(e.target.value)} className={`${selectCls} !w-44`}>
+        <select value={bulan} onChange={(e) => setBulan(e.target.value)} className={`${selectCls} w-full sm:!w-44`}>
           <option value="">Semua bulan</option>
           {months.map((m) => (
             <option key={m.v} value={m.v}>
@@ -140,13 +140,13 @@ export default function HomecellMaterialPage() {
             </option>
           ))}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as Status | '')} className={`${selectCls} !w-36`}>
+        <select value={status} onChange={(e) => setStatus(e.target.value as Status | '')} className={`${selectCls} sm:!w-36`}>
           <option value="">Semua status</option>
           <option value="TERBIT">Terbit</option>
           <option value="TERJADWAL">Terjadwal</option>
           <option value="DRAFT">Draft</option>
         </select>
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-0 basis-56">
           <Search className="w-4 h-4 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             value={search}
@@ -173,19 +173,19 @@ export default function HomecellMaterialPage() {
               const tag = fileTag(m);
               const st = STATUS_STYLE[m.status];
               return (
-                <li key={m.id} className="flex items-center gap-3 px-4 py-3">
+                <li key={m.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-3">
                   <div className={`w-10 h-11 rounded-md flex items-center justify-center text-[11px] font-bold shrink-0 ${tag.cls}`}>{tag.t}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-neutral-900 truncate">{m.judul}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
+                    <p className="text-xs text-neutral-500 mt-0.5 break-words">
                       {m.status === 'TERJADWAL' ? 'Tampil mulai ' : 'Berlaku '}
                       {fmtTgl(m.berlakuMulai)}
                       {m.berlakuSampai ? ` – ${fmtTgl(m.berlakuSampai)}` : ''} ·{' '}
                       {m.semuaCabang ? 'Semua cabang' : m.cabangs.map((c) => c.nama).join(', ')} · {fmtSize(m.fileSize)}
                     </p>
                   </div>
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${st.cls}`}>{st.label}</span>
-                  <span className="text-xs text-neutral-500 w-20 text-right whitespace-nowrap" title="Pemimpin yang sudah mengunduh">
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ml-[52px] sm:ml-0 ${st.cls}`}>{st.label}</span>
+                  <span className="text-xs text-neutral-500 sm:w-20 text-right whitespace-nowrap ml-auto sm:ml-0" title="Pemimpin yang sudah mengunduh">
                     <Download className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
                     {m.downloads}
                   </span>
@@ -304,7 +304,7 @@ function MaterialForm({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={save.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-4 border-b border-neutral-100 gap-2">
             <h2 className="text-lg font-semibold text-neutral-900">{initial ? 'Ubah material' : 'Upload material'}</h2>
             <button onClick={onClose} disabled={save.isPending} className="p-1.5 hover:bg-neutral-100 rounded-lg">
               <X className="w-4 h-4" />
@@ -352,7 +352,7 @@ function MaterialForm({
               <p className="text-xs text-neutral-500 mt-0.5">PDF, PowerPoint, Word, Excel, gambar · maks {MAX_MB} MB</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-sm font-medium text-neutral-700">Berlaku mulai</span>
                 <input type="date" value={mulai} onChange={(e) => setMulai(e.target.value)} className={inputCls} />
@@ -416,7 +416,7 @@ function MaterialForm({
 
             {err && <p className="text-sm text-red-600">{err}</p>}
           </div>
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100">
             <button onClick={onClose} disabled={save.isPending} className="px-4 py-2 text-sm rounded-lg border border-neutral-300">
               Batal
             </button>

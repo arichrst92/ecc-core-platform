@@ -70,7 +70,7 @@ export function GroupJoinRequestsSection({ groupId }: { groupId: string }) {
       id="permintaan"
       className={`bg-white border rounded-xl overflow-hidden scroll-mt-4 ${rows.length ? 'border-red-300 ring-2 ring-red-100' : 'border-neutral-200'}`}
     >
-      <div className="px-5 py-4 border-b border-neutral-100">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
           <UserPlus className="w-4 h-4 text-amber-500" /> Permintaan Bergabung
           {rows.length ? (
@@ -96,7 +96,7 @@ export function GroupJoinRequestsSection({ groupId }: { groupId: string }) {
       ) : (
         <ul className="divide-y divide-neutral-100">
           {rows.map((r) => (
-            <li key={r.id} className="flex items-start gap-3 px-5 py-3 flex-wrap">
+            <li key={r.id} className="flex items-start gap-3 px-3 sm:px-5 py-3 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-neutral-900">{r.jemaat.namaLengkap}</div>
                 <div className="text-xs text-neutral-500">
@@ -138,7 +138,7 @@ export function GroupJoinRequestsSection({ groupId }: { groupId: string }) {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setRejecting(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-6 space-y-3">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-4 sm:p-6 space-y-3 max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold text-neutral-900">Tolak permintaan {rejecting.jemaat.namaLengkap}?</h3>
               <textarea
                 value={reason}

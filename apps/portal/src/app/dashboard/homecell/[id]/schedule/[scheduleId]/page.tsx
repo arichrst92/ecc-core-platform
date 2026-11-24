@@ -92,7 +92,7 @@ export default function HomecellScheduleDetailPage() {
     );
   }
   if (!q.data) {
-    return <div className="p-6 text-center text-neutral-500">Jadwal tidak ditemukan.</div>;
+    return <div className="p-4 sm:p-6 text-center text-neutral-500">Jadwal tidak ditemukan.</div>;
   }
 
   const s = q.data;
@@ -101,18 +101,18 @@ export default function HomecellScheduleDetailPage() {
     : 0;
 
   return (
-    <div className="space-y-6 p-6 w-full">
+    <div className="space-y-6 w-full">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => router.back()}
           className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-600"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-brand-500" />
+        <div className="flex-1 min-w-0 basis-56">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex flex-wrap items-center gap-2">
+            <Calendar className="w-6 h-6 text-brand-500 shrink-0" />
             {parseYmd(s.tanggal).toLocaleDateString('id-ID', {
               weekday: 'long',
               day: 'numeric',
@@ -221,7 +221,7 @@ export default function HomecellScheduleDetailPage() {
 
       {/* Attendance list */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-neutral-100">
+        <div className="px-3 sm:px-5 py-4 border-b border-neutral-100">
           <h2 className="font-bold text-neutral-900 flex items-center gap-2">
             <UserCheck className="w-5 h-5 text-green-500" />
             Hadir ({s.attendances.length})
@@ -232,17 +232,18 @@ export default function HomecellScheduleDetailPage() {
             Belum ada absensi tercatat.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
               <tr>
-                <th className="px-5 py-2 text-left font-medium">Nama</th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium">Nama</th>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '180px' }}>
                   Kode
                 </th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '160px' }}>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '160px' }}>
                   Waktu Scan
                 </th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '180px' }}>
                   Scanner
                 </th>
               </tr>
@@ -250,7 +251,7 @@ export default function HomecellScheduleDetailPage() {
             <tbody className="divide-y divide-neutral-100">
               {s.attendances.map((a) => (
                 <tr key={a.id} className="hover:bg-neutral-50">
-                  <td className="px-5 py-2.5">
+                  <td className="px-3 sm:px-5 py-2.5">
                     <Link
                       href={`/dashboard/jemaat/${a.jemaat.id}`}
                       className="text-brand-600 hover:underline font-medium"
@@ -258,10 +259,10 @@ export default function HomecellScheduleDetailPage() {
                       {a.jemaat.namaLengkap}
                     </Link>
                   </td>
-                  <td className="px-5 py-2.5 font-mono text-xs text-neutral-500">
+                  <td className="px-3 sm:px-5 py-2.5 font-mono text-xs text-neutral-500">
                     {a.jemaat.kode}
                   </td>
-                  <td className="px-5 py-2.5 text-neutral-700 tabular-nums">
+                  <td className="px-3 sm:px-5 py-2.5 text-neutral-700 tabular-nums">
                     {new Date(a.scannedAt).toLocaleTimeString('id-ID', {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -273,7 +274,7 @@ export default function HomecellScheduleDetailPage() {
                       })}
                     </span>
                   </td>
-                  <td className="px-5 py-2.5 text-neutral-600">
+                  <td className="px-3 sm:px-5 py-2.5 text-neutral-600">
                     {a.scanner?.namaLengkap ?? '-'}
                     {a.source === 'MANUAL' && (
                       <span className="ml-1.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-xs rounded">
@@ -285,44 +286,47 @@ export default function HomecellScheduleDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
       {/* Tamu hadir — terpisah dari anggota */}
       {(s.tamuAttendances ?? []).length > 0 && (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-neutral-100">
+          <div className="px-3 sm:px-5 py-4 border-b border-neutral-100">
             <h2 className="font-bold text-neutral-900 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-teal-600" />
               Tamu Hadir ({s.tamuAttendances!.length})
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">Dicatat terpisah — tidak dihitung dalam % kehadiran anggota.</p>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
               <tr>
-                <th className="px-5 py-2 text-left font-medium">Nama</th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>No HP</th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '180px' }}>Dicatat oleh</th>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium">Nama</th>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '180px' }}>No HP</th>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '180px' }}>Dicatat oleh</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {s.tamuAttendances!.map((t) => (
                 <tr key={t.id} className="hover:bg-neutral-50">
-                  <td className="px-5 py-2.5 font-medium text-neutral-800">{t.tamu.namaLengkap}</td>
-                  <td className="px-5 py-2.5 text-neutral-600">{t.tamu.noHp ?? '-'}</td>
-                  <td className="px-5 py-2.5 text-neutral-600">{t.markedBy?.namaLengkap ?? '-'}</td>
+                  <td className="px-3 sm:px-5 py-2.5 font-medium text-neutral-800">{t.tamu.namaLengkap}</td>
+                  <td className="px-3 sm:px-5 py-2.5 text-neutral-600">{t.tamu.noHp ?? '-'}</td>
+                  <td className="px-3 sm:px-5 py-2.5 text-neutral-600">{t.markedBy?.namaLengkap ?? '-'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {/* Missing members */}
       {s.missingMembers.length > 0 && (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-neutral-100">
+          <div className="px-3 sm:px-5 py-4 border-b border-neutral-100">
             <h2 className="font-bold text-neutral-900 flex items-center gap-2">
               <UserX className="w-5 h-5 text-amber-500" />
               Tidak Hadir ({s.missingMembers.length})
@@ -331,11 +335,12 @@ export default function HomecellScheduleDetailPage() {
               Member aktif homecell yang belum scan absensi di pertemuan ini.
             </p>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
               <tr>
-                <th className="px-5 py-2 text-left font-medium">Nama</th>
-                <th className="px-5 py-2 text-left font-medium" style={{ width: '200px' }}>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium">Nama</th>
+                <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '200px' }}>
                   Kode
                 </th>
               </tr>
@@ -343,7 +348,7 @@ export default function HomecellScheduleDetailPage() {
             <tbody className="divide-y divide-neutral-100">
               {s.missingMembers.map((m) => (
                 <tr key={m.jemaatId} className="hover:bg-neutral-50">
-                  <td className="px-5 py-2.5">
+                  <td className="px-3 sm:px-5 py-2.5">
                     <Link
                       href={`/dashboard/jemaat/${m.jemaatId}`}
                       className="text-neutral-700 hover:text-brand-600 hover:underline"
@@ -351,13 +356,14 @@ export default function HomecellScheduleDetailPage() {
                       {m.namaLengkap}
                     </Link>
                   </td>
-                  <td className="px-5 py-2.5 font-mono text-xs text-neutral-500">
+                  <td className="px-3 sm:px-5 py-2.5 font-mono text-xs text-neutral-500">
                     {m.kode}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -405,7 +411,7 @@ function StatCard({
   };
   return (
     <div className={`border rounded-xl p-4 ${tones[tone]}`}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs uppercase tracking-wider opacity-70">{label}</div>
         <Icon className="w-4 h-4 opacity-60" />
       </div>

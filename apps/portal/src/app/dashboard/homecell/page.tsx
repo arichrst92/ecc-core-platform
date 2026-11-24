@@ -90,7 +90,7 @@ function HomecellInner() {
           }`}
         >
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span className="flex-1 min-w-[240px]">
+          <span className="flex-1 min-w-0 basis-60">
             {lokasiSum.serius > 0 ? (
               <>
                 <b>{lokasiSum.serius} homecell</b> titik lokasinya salah tampil di peta (

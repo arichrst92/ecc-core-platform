@@ -139,7 +139,7 @@ export default function HomecellDetailPage() {
   }
   if (!detailQ.data) {
     return (
-      <div className="p-6 text-center text-neutral-500">Homecell tidak ditemukan.</div>
+      <div className="p-4 sm:p-6 text-center text-neutral-500">Homecell tidak ditemukan.</div>
     );
   }
 
@@ -150,18 +150,18 @@ export default function HomecellDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => router.back()}
           className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-600"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <HomeIcon className="w-6 h-6 text-brand-500" /> {h.nama}
+        <div className="flex-1 min-w-0 basis-56">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-start gap-2 break-words">
+            <HomeIcon className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" /> <span className="min-w-0">{h.nama}</span>
           </h1>
-          <div className="text-sm text-neutral-500 mt-0.5">
+          <div className="text-sm text-neutral-500 mt-0.5 leading-6">
             <Link
               href={`/dashboard/homecell-area?cabangId=${h.area.cabang?.id ?? ''}`}
               className="hover:underline"
@@ -209,7 +209,7 @@ export default function HomecellDetailPage() {
 
       {/* Info card — hanya PIC. Jadwal & alamat tidak ditampilkan karena
           pertemuan homecell dibahas per minggu via kesepakatan grup. */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-5">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5">
         <div className="text-xs text-neutral-500 mb-2">PIC (Homecell Leader)</div>
         {h.picJemaat ? (
           <Link
@@ -251,7 +251,7 @@ export default function HomecellDetailPage() {
 
       {/* Members section */}
       <div className="bg-white border border-neutral-200 rounded-xl">
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
+        <div className="flex flex-wrap items-center justify-between p-5 border-b border-neutral-100 gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Users className="w-4 h-4" /> Anggota Homecell
@@ -274,21 +274,22 @@ export default function HomecellDetailPage() {
             Belum ada anggota di homecell ini.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
               <tr>
-                <th className="text-left px-5 py-2 font-medium">Nama</th>
-                <th className="text-left px-5 py-2 font-medium">No HP</th>
-                <th className="text-left px-5 py-2 font-medium">Bergabung</th>
-                <th className="text-left px-5 py-2 font-medium">Keluar</th>
-                <th className="text-left px-5 py-2 font-medium">Status</th>
-                <th className="text-right px-5 py-2 font-medium">Aksi</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Nama</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">No HP</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Bergabung</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Keluar</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Status</th>
+                <th className="text-right px-3 sm:px-5 py-2 font-medium">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {h.members.map((m) => (
                 <tr key={m.id} className={m.isActive ? '' : 'opacity-60'}>
-                  <td className="px-5 py-3">
+                  <td className="px-3 sm:px-5 py-3">
                     <Link
                       href={`/dashboard/jemaat/${m.jemaat.id}`}
                       className="text-neutral-900 hover:text-brand-600 hover:underline font-medium"
@@ -297,16 +298,16 @@ export default function HomecellDetailPage() {
                     </Link>
                     <LastAttendance date={m.lastAttendedAt ?? null} daysAgo={m.lastAttendedDaysAgo ?? null} />
                   </td>
-                  <td className="px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
-                  <td className="px-5 py-3 text-neutral-600">
+                  <td className="px-3 sm:px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
+                  <td className="px-3 sm:px-5 py-3 text-neutral-600">
                     {parseYmd(m.tanggalBergabung).toLocaleDateString('id-ID')}
                   </td>
-                  <td className="px-5 py-3 text-neutral-600">
+                  <td className="px-3 sm:px-5 py-3 text-neutral-600">
                     {m.tanggalKeluar
                       ? parseYmd(m.tanggalKeluar).toLocaleDateString('id-ID')
                       : '-'}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-3 sm:px-5 py-3">
                     {m.isActive ? (
                       <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
                         Aktif
@@ -317,7 +318,7 @@ export default function HomecellDetailPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-3 sm:px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() =>
@@ -345,6 +346,7 @@ export default function HomecellDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -538,7 +540,7 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
 
   return (
     <div className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-3 flex-wrap">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-brand-500" />
           <h2 className="font-bold text-neutral-900">Jadwal Pertemuan</h2>
@@ -562,26 +564,27 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
           Belum ada jadwal pertemuan tercatat untuk homecell ini.
         </div>
       ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-neutral-50/50 border-b border-neutral-100 text-neutral-600 uppercase text-xs">
             <tr>
-              <th className="px-5 py-2 text-left font-medium" style={{ width: '160px' }}>
+              <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '160px' }}>
                 Tanggal
               </th>
-              <th className="px-5 py-2 text-left font-medium">Lokasi</th>
-              <th className="px-5 py-2 text-left font-medium" style={{ width: '170px' }}>
+              <th className="px-3 sm:px-5 py-2 text-left font-medium">Lokasi</th>
+              <th className="px-3 sm:px-5 py-2 text-left font-medium" style={{ width: '170px' }}>
                 Dibuat oleh
               </th>
-              <th className="px-5 py-2 text-center font-medium" style={{ width: '150px' }}>
+              <th className="px-3 sm:px-5 py-2 text-center font-medium" style={{ width: '150px' }}>
                 Kehadiran
               </th>
-              <th className="px-5 py-2 text-right font-medium" style={{ width: '90px' }}></th>
+              <th className="px-3 sm:px-5 py-2 text-right font-medium" style={{ width: '90px' }}></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {schedules.map((s) => (
               <tr key={s.id} className="hover:bg-neutral-50">
-                <td className="px-5 py-3 text-neutral-700 tabular-nums">
+                <td className="px-3 sm:px-5 py-3 text-neutral-700 tabular-nums">
                   <Link
                     href={`/dashboard/homecell/${homecellId}/schedule/${s.id}`}
                     className="text-brand-600 hover:underline font-medium inline-flex items-center gap-1.5"
@@ -600,14 +603,14 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
                     ) : null}
                   </Link>
                 </td>
-                <td className="px-5 py-3 text-neutral-700">
+                <td className="px-3 sm:px-5 py-3 text-neutral-700">
                   <div className="flex items-start gap-1.5">
                     <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-neutral-400" />
                     <span className="line-clamp-1">{s.lokasi}</span>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-neutral-600">{s.creator?.namaLengkap ?? '-'}</td>
-                <td className="px-5 py-3 text-center">
+                <td className="px-3 sm:px-5 py-3 text-neutral-600">{s.creator?.namaLengkap ?? '-'}</td>
+                <td className="px-3 sm:px-5 py-3 text-center">
                   {(() => {
                     // Indikator per pertemuan: hadir / anggota aktif.
                     const pct = activeMemberCount > 0 ? Math.round((s.attendanceCount / activeMemberCount) * 100) : null;
@@ -629,7 +632,7 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
                     </span>
                   ) : null}
                 </td>
-                <td className="px-5 py-3 text-right whitespace-nowrap">
+                <td className="px-3 sm:px-5 py-3 text-right whitespace-nowrap">
                   <button
                     onClick={() => setDeleting(s)}
                     className="inline-flex items-center p-1.5 rounded text-neutral-400 hover:text-red-600 hover:bg-red-50 mr-1"
@@ -649,6 +652,7 @@ function SchedulesSection({ homecellId, activeMemberCount }: { homecellId: strin
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <DeleteScheduleDialog homecellId={homecellId} schedule={deleting} onClose={() => setDeleting(null)} />
     </div>

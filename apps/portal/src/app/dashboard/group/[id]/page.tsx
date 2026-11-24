@@ -163,7 +163,7 @@ export default function GroupDetailPage() {
     );
   }
   if (!detailQ.data) {
-    return <div className="p-6 text-center text-neutral-500">Group tidak ditemukan.</div>;
+    return <div className="p-4 sm:p-6 text-center text-neutral-500">Group tidak ditemukan.</div>;
   }
 
   const g = detailQ.data;
@@ -183,16 +183,16 @@ export default function GroupDetailPage() {
       <GroupHero groupId={g.id} nama={g.nama} heroImageUrl={g.heroImageUrl ?? null} picJemaatId={g.picJemaatId} />
 
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => router.back()}
           className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-600"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <UsersRound className="w-6 h-6 text-brand-500" /> {g.nama}
+        <div className="flex-1 min-w-0 basis-56">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-start gap-2 break-words">
+            <UsersRound className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" /> <span className="min-w-0">{g.nama}</span>
           </h1>
           <div className="text-sm text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
             <span
@@ -243,13 +243,13 @@ export default function GroupDetailPage() {
 
       {/* Info + Join code card */}
       <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 bg-white border border-neutral-200 rounded-xl p-5">
+        <div className="md:col-span-2 min-w-0 bg-white border border-neutral-200 rounded-xl p-4 sm:p-5">
           <h2 className="font-semibold text-neutral-900 mb-3">Detail Group</h2>
           <div className="space-y-2 text-sm">
             {g.deskripsi && (
               <div>
                 <div className="text-xs text-neutral-500 mb-1">Deskripsi</div>
-                <p className="text-neutral-700 whitespace-pre-line">{g.deskripsi}</p>
+                <p className="text-neutral-700 whitespace-pre-line break-words">{g.deskripsi}</p>
               </div>
             )}
             {g.alamat && (
@@ -271,7 +271,7 @@ export default function GroupDetailPage() {
               </div>
             )}
             {(g.hari || g.jam) && (
-              <div className="flex items-center gap-2 text-neutral-700">
+              <div className="flex flex-wrap items-center gap-2 text-neutral-700">
                 <Calendar className="w-4 h-4 text-neutral-400" />
                 {g.hari && <span>{g.hari.charAt(0) + g.hari.slice(1).toLowerCase()}</span>}
                 {g.jam && (
@@ -333,7 +333,7 @@ export default function GroupDetailPage() {
               <Link
                 key={c.id}
                 href={`/dashboard/group/${c.id}`}
-                className="flex items-center justify-between p-3 border border-neutral-200 rounded-lg hover:border-brand-300 hover:bg-brand-50"
+                className="flex flex-wrap items-center justify-between p-3 border border-neutral-200 rounded-lg hover:border-brand-300 hover:bg-brand-50 gap-2"
               >
                 <div className="min-w-0">
                   <div className="font-medium text-neutral-900 truncate">{c.nama}</div>
@@ -355,7 +355,7 @@ export default function GroupDetailPage() {
 
       {/* Members */}
       <div className="bg-white border border-neutral-200 rounded-xl">
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
+        <div className="flex flex-wrap items-center justify-between p-5 border-b border-neutral-100 gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Users className="w-4 h-4" /> Members ({g.memberCount})
@@ -378,19 +378,20 @@ export default function GroupDetailPage() {
             Belum ada member di group ini.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
               <tr>
-                <th className="text-left px-5 py-2 font-medium">Nama</th>
-                <th className="text-left px-5 py-2 font-medium">No HP</th>
-                <th className="text-left px-5 py-2 font-medium">Bergabung</th>
-                <th className="text-right px-5 py-2 font-medium">Aksi</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Nama</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">No HP</th>
+                <th className="text-left px-3 sm:px-5 py-2 font-medium">Bergabung</th>
+                <th className="text-right px-3 sm:px-5 py-2 font-medium">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {g.members.map((m) => (
                 <tr key={m.id}>
-                  <td className="px-5 py-3">
+                  <td className="px-3 sm:px-5 py-3">
                     <Link
                       href={`/dashboard/jemaat/${m.jemaat.id}`}
                       className="text-neutral-900 hover:text-brand-600 hover:underline font-medium"
@@ -398,11 +399,11 @@ export default function GroupDetailPage() {
                       {m.jemaat.namaLengkap}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
-                  <td className="px-5 py-3 text-neutral-600">
+                  <td className="px-3 sm:px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>
+                  <td className="px-3 sm:px-5 py-3 text-neutral-600">
                     {parseYmd(m.tanggalBergabung).toLocaleDateString('id-ID')}
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-3 sm:px-5 py-3 text-right">
                     <button
                       onClick={() => setRemovingMember(m)}
                       className="p-1.5 rounded hover:bg-red-50 text-red-600"
@@ -415,6 +416,7 @@ export default function GroupDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

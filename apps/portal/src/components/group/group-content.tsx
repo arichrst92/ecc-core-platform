@@ -150,14 +150,14 @@ function Modal({ title, onClose, children, footer }: { title: string; onClose: (
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">{title}</h2>
             <button onClick={onClose} className="p-1 hover:bg-neutral-100 rounded">
               <X className="w-4 h-4 text-neutral-500" />
             </button>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto">{children}</div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">{footer}</div>
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">{children}</div>
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">{footer}</div>
         </div>
       </div>
     </>
@@ -179,7 +179,7 @@ function SaveBtn({ onClick, disabled, loading, label = 'Simpan' }: { onClick: ()
 
 function Header({ text, onAdd, addLabel, canManage }: { text: string; onAdd: () => void; addLabel: string; canManage: boolean }) {
   return (
-    <div className="flex items-center justify-between px-5 py-3 gap-2 flex-wrap">
+    <div className="flex items-center justify-between px-3 sm:px-5 py-3 gap-2 flex-wrap">
       <p className="text-xs text-neutral-500">{text}</p>
       {canManage && (
         <button
@@ -376,7 +376,7 @@ function PollsTab({ root }: { root: string }) {
           {rows.map((p) => {
             const max = Math.max(1, ...p.options.map((o) => o.count ?? 0));
             return (
-              <li key={p.id} className="px-5 py-4">
+              <li key={p.id} className="px-3 sm:px-5 py-4">
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -390,7 +390,7 @@ function PollsTab({ root }: { root: string }) {
                     <div className="mt-3 space-y-2">
                       {p.options.map((o) => (
                         <div key={o.id}>
-                          <div className="flex justify-between text-xs text-neutral-700">
+                          <div className="flex flex-wrap justify-between text-xs text-neutral-700 gap-2">
                             <span>{o.label}</span>
                             <span className="font-semibold">{o.count ?? '–'}</span>
                           </div>
@@ -576,7 +576,7 @@ function FilesTab({ root }: { root: string }) {
           {rows.map((f) => {
             const Icon = f.fileMime.startsWith('image/') ? FileImage : FileText;
             return (
-              <li key={f.id} className="flex items-start gap-3 px-5 py-3">
+              <li key={f.id} className="flex items-start gap-3 px-3 sm:px-5 py-3">
                 <Icon className="w-5 h-5 text-brand-500 shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <a href={href(f.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-neutral-900 hover:text-brand-600 hover:underline">

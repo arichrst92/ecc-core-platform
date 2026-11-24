@@ -98,7 +98,7 @@ function PctBadge({ p }: { p: number | null }) {
 function Kpi({ icon: Icon, color, label, value, sub }: { icon: typeof Home; color: string; label: string; value: React.ReactNode; sub: string }) {
   return (
     <div className="bg-white border border-neutral-200 rounded-xl p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{label}</span>
         <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: color }}>
           <Icon className="w-4 h-4 text-white" />
@@ -130,7 +130,7 @@ function Card({ icon: Icon, color, title, sub, children }: { icon: typeof Home; 
 function Bar({ label, value, pct, color, extra }: { label: string; value: string; pct: number; color: string; extra?: string }) {
   return (
     <div className="my-2">
-      <div className="flex justify-between gap-2 text-xs text-neutral-700">
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-neutral-700">
         <span className="truncate">{label}</span>
         <span>
           <b>{value}</b>
@@ -195,9 +195,9 @@ export default function HomecellAreaDetailPage() {
         <button onClick={() => router.push('/dashboard/homecell-area')} className="p-2 rounded-lg hover:bg-neutral-100" aria-label="Kembali">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1 min-w-[200px]">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <MapPinned className="w-6 h-6 text-brand-500" /> {d?.area.nama ?? '…'}
+        <div className="flex-1 min-w-0 basis-56">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-start gap-2 break-words">
+            <MapPinned className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" /> <span className="min-w-0">{d?.area.nama ?? '…'}</span>
           </h1>
           {d ? (
             <div className="text-sm text-neutral-500 mt-0.5">
@@ -206,7 +206,7 @@ export default function HomecellAreaDetailPage() {
               {!d.area.isActive ? <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-neutral-100">Nonaktif</span> : null}
             </div>
           ) : null}
-          {d?.area.deskripsi ? <p className="text-sm text-neutral-600 mt-1">{d.area.deskripsi}</p> : null}
+          {d?.area.deskripsi ? <p className="text-sm text-neutral-600 mt-1 break-words">{d.area.deskripsi}</p> : null}
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <select value={periode} onChange={(e) => setPeriode(e.target.value as PeriodePreset)} className={selectCls}>
@@ -290,7 +290,7 @@ export default function HomecellAreaDetailPage() {
                 <div style={{ width: `${g ? pP : 0}%`, background: '#0ea5e9' }} />
                 <div style={{ width: `${g ? 100 - pP : 0}%`, background: '#f472b6' }} />
               </div>
-              <div className="flex justify-between text-xs mt-1 mb-3">
+              <div className="flex flex-wrap justify-between text-xs mt-1 mb-3 gap-2">
                 <span className="text-sky-700">
                   Laki-laki <b>{demo.pria}</b>
                   {g ? ` · ${pP}%` : ''}
@@ -333,7 +333,7 @@ export default function HomecellAreaDetailPage() {
                   <p className="text-sm text-neutral-500">Semua homecell di atas 25% kehadiran.</p>
                 ) : (
                   attention.map((h) => (
-                    <div key={h.id} className="flex justify-between gap-2 py-1.5 border-b border-dashed border-neutral-100 text-sm">
+                    <div key={h.id} className="flex flex-wrap justify-between gap-2 py-1.5 border-b border-dashed border-neutral-100 text-sm">
                       <Link href={`/dashboard/homecell/${h.id}`} className="font-medium text-neutral-800 hover:text-brand-600">
                         {h.nama}
                       </Link>
@@ -351,7 +351,8 @@ export default function HomecellAreaDetailPage() {
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
             <div className="px-4 py-3 text-sm font-semibold text-neutral-900 border-b border-neutral-100">Homecell di zona ini</div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-neutral-50 text-neutral-500 text-xs">
                 <tr>
                   <th className="text-left font-medium px-4 py-2">Homecell</th>
@@ -410,6 +411,7 @@ export default function HomecellAreaDetailPage() {
                 ) : null}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

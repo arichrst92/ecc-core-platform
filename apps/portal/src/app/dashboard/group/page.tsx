@@ -36,7 +36,7 @@ function GroupInner() {
   let banner: React.ReactNode = null;
   if (pengajuan) {
     banner = (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-amber-900">
           <Hourglass className="w-4 h-4" />
           Menampilkan <strong>pengajuan group baru</strong> dari Els App. Buka group → Setujui / Tolak (dengan alasan).
@@ -64,7 +64,7 @@ function GroupInner() {
     );
   } else if (permintaan) {
     banner = (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-red-800">
           <UserPlus className="w-4 h-4" />
           Menampilkan group yang punya <strong>permintaan bergabung menunggu</strong>. Buka group → bagian Permintaan Bergabung.
@@ -95,7 +95,7 @@ function GroupInner() {
     if (cabangId) parts.push(`cabang ${cabangQ.data?.nama ?? '...'}`);
     if (jenis) parts.push(`jenis ${jenis}`);
     banner = (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-brand-800">
           <Filter className="w-4 h-4" />
           Filter: <strong>{parts.join(' · ')}</strong>

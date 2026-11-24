@@ -203,26 +203,22 @@ export async function refreshTugasNames(lists: TugasEntry[][]): Promise<void> {
 }
 
 /**
- * Kartu tim di detail ibadah/event (app): tugas hanya terlihat oleh petugas
- * di pelayanan itu (dia & rekannya) dan koordinator pelayanan tsb untuk cabang
- * ibadah/event. Jemaat lain cukup melihat peran. Return: pelayananId yang
- * tugasnya boleh ditampilkan ke viewer.
+ * Kartu tim di detail ibadah/event (app): pelayanan yang tugasnya (Kategori ›
+ * Tugas, mis. "Camera › Operator Atas") ditampilkan ke viewer.
+ *
+ * 2026-11 — tugas petugas tampil untuk SEMUA jemaat yang login (dulu hanya
+ * petugas pelayanan itu & koordinatornya, jemaat lain hanya melihat peran →
+ * "ministry team belum memunculkan tugas pelayannya"). App 2.5.0 sudah
+ * menampilkan `tugas` bila dikirim → tidak perlu update app.
+ * Tamu / tanpa login tetap tanpa tugas.
  */
 export async function tugasVisiblePelayanan(
   viewerJemaatId: string | null | undefined,
   links: { pelayananId: string; jemaatIds: string[] }[],
-  cabangId: string | null | undefined,
+  _cabangId?: string | null,
 ): Promise<Set<string>> {
   const out = new Set<string>();
   if (!viewerJemaatId || !links.length) return out;
-  for (const l of links) if (l.jemaatIds.includes(viewerJemaatId)) out.add(l.pelayananId);
-  const rest = links.map((l) => l.pelayananId).filter((id) => !out.has(id));
-  if (rest.length && cabangId) {
-    const koord = await prisma.pelayananApprover.findMany({
-      where: { jemaatId: viewerJemaatId, cabangId, pelayananId: { in: rest } },
-      select: { pelayananId: true },
-    });
-    for (const k of koord) out.add(k.pelayananId);
-  }
+  for (const l of links) out.add(l.pelayananId);
   return out;
 }

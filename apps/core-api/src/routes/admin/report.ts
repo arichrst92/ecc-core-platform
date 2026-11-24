@@ -9,6 +9,7 @@
  * Filter: cabangId, ibadahId / eventId, periode (last_7d … custom + from/to).
  * Akses: fulltimer, atau menu "laporan-ibadah" / "laporan-event" (baca).
  */
+import { sendEventExport } from '../../lib/event-export.js';
 import { Router, type Request, type Response } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
 import { BadRequest, Forbidden, Unauthorized } from '../../lib/errors.js';
@@ -712,6 +713,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 reportRouter.get('/event/export', async (req, res) => {
   await assertAccess(req, 'laporan-event');
+  // Satu event dipilih → laporan lengkap event itu (daftar peserta, pembayaran, ulasan).
+  const oneEvent = q(req, 'eventId');
+  if (oneEvent && UUID_RE.test(oneEvent)) return sendEventExport(req, res, oneEvent, (q(req, 'format') ?? 'pdf').toLowerCase());
   const d = await eventReportData(req);
   const format = (q(req, 'format') ?? 'pdf').toLowerCase();
   if (format === 'csv') {

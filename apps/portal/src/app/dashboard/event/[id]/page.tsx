@@ -1,5 +1,6 @@
 'use client';
 
+import { ExportButtons } from '@/components/report/report-ui';
 import { todayYmd } from '@/lib/dates';
 import { QrCamera } from '@/components/ui/qr-camera';
 import { useMenuAccess } from '@/lib/use-menu-access';
@@ -388,7 +389,15 @@ export default function EventDetailPage() {
               <Megaphone className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" />
               <span className="min-w-0">{e.judul}</span>
             </h1>
-            <DuplicateEventButton eventId={e.id} judul={e.judul} variant="button" />
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Laporan event ini: ringkasan + daftar lengkap peserta (PDF / Excel). */}
+              <ExportButtons
+                endpoint={`/admin/event/${e.id}/export`}
+                params={{}}
+                filename={`event-${e.judul.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'event'}`}
+              />
+              <DuplicateEventButton eventId={e.id} judul={e.judul} variant="button" />
+            </div>
           </div>
           <div className="text-sm text-neutral-500 mt-1 break-words">{targetLabel}</div>
           {e.ringkasan && <p className="mt-3 text-neutral-700 break-words">{e.ringkasan}</p>}

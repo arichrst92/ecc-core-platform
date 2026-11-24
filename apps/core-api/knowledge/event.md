@@ -9,6 +9,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (bawaan tutup saat mulai,
 
 ## Tempat & akses
 - Portal: **Movement → Event** (`/dashboard/event`), detail event `/dashboard/event/<id>`. Laporan: **Laporan Event**.
+- **Export per event (2026-11)**: detail event → **Export Excel / Export PDF** (atau Laporan Event → pilih *Event*). Isi: ringkasan (terdaftar/kuota, hadir, % hadir, belum hadir, batal, tamu, total pembayaran terverifikasi, rating), cara check-in, **daftar lengkap peserta** (kode, no HP → WhatsApp "Hi, <nama>", email, cabang, keterangan tamu/walk-in/didaftarkan admin, status, jam daftar & hadir, cara check-in + petugas scan, status & nominal pembayaran, catatan) dan ulasan. Akses: Role Access Event (baca) atau Laporan Event.
 - Membuat/mengubah/menghapus event, melihat & mengubah peserta, menyetujui pembayaran, dan mengatur petugas butuh **akses menu Event** (tulis; hapus untuk menghapus) — diberi lewat Role Access.
 - App: Event dibuka dari Beranda / Akses Cepat (2.4.9: menu bawah tidak lagi punya tab Event). Tiket event di tab **Reservasi → Event**.
 

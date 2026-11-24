@@ -38,6 +38,7 @@ import { MAPS_URL_ERROR, mapsUrlToFields, radiusPointError } from '../../lib/geo
 import { z } from 'zod';
 import { audit } from '../../lib/audit.js';
 import { isMobileClient } from '../../lib/client-kind.js';
+import { sendEventExport } from '../../lib/event-export.js';
 import { eventCancelClosesAt, eventRegistrationClosesAt, registrationClosedMessage } from '../../lib/event-time.js';
 import {
   saveContentHero,
@@ -1038,6 +1039,16 @@ eventRouter.delete('/:id/qris', W(), async (req, res) => {
 // ============================================================
 
 // List peserta per event
+/**
+ * GET /admin/event/:id/export?format=pdf|csv — laporan satu event: ringkasan,
+ * cara check-in, daftar lengkap peserta (kontak, status, hadir, pembayaran),
+ * ulasan. Lihat lib/event-export.ts.
+ */
+eventRouter.get('/:id/export', W('read'), async (req, res) => {
+  const format = (typeof req.query.format === 'string' ? req.query.format : 'pdf').toLowerCase();
+  await sendEventExport(req, res, req.params.id!, format);
+});
+
 eventRouter.get('/:id/peserta', W('read'), async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');

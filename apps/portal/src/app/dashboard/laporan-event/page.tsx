@@ -90,8 +90,18 @@ const STATUS_LABEL: Record<string, string> = {
 export default function LaporanEventPage() {
   const [cabangId, setCabangId] = usePersistentState('laporan-event:cabangId', '');
   const [period, setPeriod] = usePersistentState<PeriodState>('laporan-event:period', { periode: 'last_30d', from: '', to: '' });
+  // Satu event (opsional) — laporan & export lengkap event itu (daftar peserta, pembayaran).
+  const [eventId, setEventId] = useState('');
   const cabangQ = useCabangOptions();
-  const params = { cabangId: cabangId || undefined, ...periodParams(period) };
+  const baseParams = { cabangId: cabangId || undefined, ...periodParams(period) };
+  const params = { ...baseParams, eventId: eventId || undefined };
+  // Pilihan event = event di cabang & periode terpilih (query tanpa eventId).
+  const optsQ = useQuery({
+    queryKey: ['report', 'event', baseParams],
+    queryFn: async () => (await apiClient.get<{ data: EventReport }>('/admin/report/event', { params: baseParams })).data.data,
+    placeholderData: (p) => p,
+  });
+  const eventOpts = optsQ.data?.events ?? [];
   const q = useQuery({
     queryKey: ['report', 'event', params],
     queryFn: async () => (await apiClient.get<{ data: EventReport }>('/admin/report/event', { params })).data.data,
@@ -112,12 +122,23 @@ export default function LaporanEventPage() {
             {d?.period ? `${d.period.label ? `${d.period.label} · ` : ''}${fmtTgl(d.period.from)} – ${fmtTgl(d.period.to)}` : ''}
           </p>
         </div>
-        <ExportButtons endpoint="/admin/report/event/export" params={params} filename={`laporan-event-${d?.period?.from ?? ''}`} />
+        <ExportButtons
+          endpoint="/admin/report/event/export"
+          params={params}
+          filename={eventId ? `laporan-event-${(eventOpts.find((x) => x.eventId === eventId)?.judul ?? 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : `laporan-event-${d?.period?.from ?? ''}`}
+        />
       </div>
 
       <FilterCard>
         <Field label="Cabang">
-          <select value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={selectCls}>
+          <select
+            value={cabangId}
+            onChange={(e) => {
+              setCabangId(e.target.value);
+              setEventId('');
+            }}
+            className={selectCls}
+          >
             <option value="">Semua cabang</option>
             {(cabangQ.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -126,8 +147,29 @@ export default function LaporanEventPage() {
             ))}
           </select>
         </Field>
-        <PeriodFields value={period} onChange={setPeriod} />
+        <PeriodFields
+          value={period}
+          onChange={(v) => {
+            setPeriod(v);
+            setEventId('');
+          }}
+        />
+        <Field label="Event">
+          <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={`${selectCls} max-w-full sm:max-w-xs`}>
+            <option value="">Semua event di periode ini</option>
+            {eventOpts.map((ev) => (
+              <option key={ev.eventId} value={ev.eventId}>
+                {fmtTgl(String(ev.tanggalMulai).slice(0, 10))} · {ev.judul}
+              </option>
+            ))}
+          </select>
+        </Field>
       </FilterCard>
+      {eventId ? (
+        <p className="text-xs text-neutral-500 -mt-2">
+          Export untuk satu event berisi daftar lengkap peserta (kontak, status, jam hadir, cara check-in, pembayaran) & ulasan.
+        </p>
+      ) : null}
 
       {q.isLoading || !d ? (
         <div className="flex justify-center py-16">

@@ -166,8 +166,9 @@ export default function JemaatDetailPage() {
     queryKey: ['pelayanan', 'with-roles'],
     enabled: assignOpen,
     queryFn: async () => {
+      // Hanya pelayanan & role aktif yang bisa dipilih untuk penugasan baru.
       const res = await apiClient.get<{ data: Pelayanan[] }>('/admin/pelayanan', {
-        params: { limit: 100 },
+        params: { limit: 500, isActive: true },
       });
       return res.data.data;
     },

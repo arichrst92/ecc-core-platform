@@ -189,7 +189,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
     queryFn: async () => {
       const res = await apiClient.get<{ data: { id: string; nama: string }[] }>(
         '/admin/pelayanan',
-        { params: { limit: 500 } },
+        { params: { limit: 500, isActive: true } },
       );
       const body = res.data as any;
       return Array.isArray(body) ? body : (body?.data ?? []);

@@ -147,7 +147,7 @@ export default function IbadahDetailPage() {
     enabled: addLinkOpen,
     queryFn: async () => {
       const res = await apiClient.get<{ data: PelayananLite[] }>('/admin/pelayanan', {
-        params: { limit: 500 },
+        params: { limit: 500, isActive: true },
       });
       return res.data.data;
     },

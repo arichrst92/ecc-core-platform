@@ -37,9 +37,13 @@ const UUID_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 pelayananRouter.get('/', async (req, res) => {
   const q = paginationQuerySchema.parse(req.query);
-  const where = q.search
-    ? { nama: { contains: q.search, mode: 'insensitive' as const } }
-    : {};
+  // ?isActive=true → hanya pelayanan aktif (+ role aktif) — untuk dropdown/selector
+  // Portal. Tanpa parameter = semua (halaman master Pelayanan butuh yang nonaktif).
+  const onlyActive = req.query.isActive === 'true';
+  const where = {
+    ...(q.search ? { nama: { contains: q.search, mode: 'insensitive' as const } } : {}),
+    ...(onlyActive ? { isActive: true } : {}),
+  };
   const [data, total] = await Promise.all([
     prisma.pelayanan.findMany({
       where,
@@ -47,7 +51,7 @@ pelayananRouter.get('/', async (req, res) => {
       take: q.limit,
       orderBy: { [q.sortBy ?? 'nama']: q.sortOrder },
       include: {
-        roles: { orderBy: { level: 'desc' } },
+        roles: { ...(onlyActive ? { where: { isActive: true } } : {}), orderBy: { level: 'desc' } },
         // Hanya anggota AKTIF yang dihitung (riwayat nonaktif tidak).
         _count: {
           select: {
@@ -455,6 +459,10 @@ pelayananRouter.post('/assign', async (req, res) => {
   if (!role || role.pelayananId !== input.pelayananId) {
     throw BadRequest('Role tidak terkait dengan pelayanan yang dipilih');
   }
+  // Pelayanan / role nonaktif tidak bisa dipakai untuk penugasan baru.
+  const pel = await prisma.pelayanan.findUnique({ where: { id: input.pelayananId }, select: { nama: true, isActive: true } });
+  if (!pel?.isActive) throw BadRequest(`Pelayanan "${pel?.nama ?? ''}" sudah nonaktif — tidak bisa menambah anggota.`);
+  if (!role.isActive) throw BadRequest(`Role "${role.nama}" sudah nonaktif — pilih role lain.`);
   // Satu jemaat boleh punya beberapa penugasan aktif di pelayanan yang sama
   // (role berbeda). Yang ditolak hanya duplikat persis: pelayanan + role sama.
   const existing = await prisma.jemaatPelayanan.findFirst({

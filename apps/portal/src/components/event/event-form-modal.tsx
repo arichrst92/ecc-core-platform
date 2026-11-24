@@ -231,7 +231,7 @@ export function EventFormModal({
     queryKey: ['pelayanan', 'options'],
     enabled: open,
     queryFn: async () =>
-      (await apiClient.get<{ data: { id: string; nama: string; isActive?: boolean; roles?: { id: string; nama: string; level: number }[] }[] }>('/admin/pelayanan', { params: { limit: 500 } })).data.data,
+      (await apiClient.get<{ data: { id: string; nama: string; isActive?: boolean; roles?: { id: string; nama: string; level: number }[] }[] }>('/admin/pelayanan', { params: { limit: 500, isActive: true } })).data.data,
     staleTime: 60_000,
   });
 

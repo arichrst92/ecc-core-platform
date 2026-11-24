@@ -197,7 +197,7 @@ export default function VisitPage() {
   });
   const pelayananQ = useQuery({
     queryKey: ['pelayanan', 'options'],
-    queryFn: async () => listOf<{ id: string; nama: string }>(await apiClient.get('/admin/pelayanan', { params: { limit: 500 } })),
+    queryFn: async () => listOf<{ id: string; nama: string }>(await apiClient.get('/admin/pelayanan', { params: { limit: 500, isActive: true } })),
     staleTime: 5 * 60_000,
   });
   const role = (roleQ.data ?? []).find((r) => r.id === f.roleId);

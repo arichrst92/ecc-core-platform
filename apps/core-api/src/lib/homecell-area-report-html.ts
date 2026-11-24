@@ -3,6 +3,7 @@
  * Hero, KPI berikon, grafik performa kehadiran per area, komposisi kategori,
  * daftar "perlu perhatian", lalu kartu tiap area + tabel homecell-nya.
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import { esc } from './print-report.js';
 import { L, fmtTglL as fmtTgl, generatedAt, setReportLang, usiaLabelL, yrs, type ReportLang } from './report-i18n.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
@@ -131,7 +132,6 @@ export function renderHomecellAreaReportHtml(
   opts: { isMobileUa: boolean; filterLabel: string; periodLabel: string; lang?: ReportLang },
 ): string {
   setReportLang(opts.lang);
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = generatedAt();
 
   // ---- ringkasan semua area
@@ -295,7 +295,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="foot">
     <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Kehadiran = total hadir anggota ÷ (anggota aktif × jumlah pertemuan) · tamu dicatat terpisah', 'Attendance = members present ÷ (active members × meetings) · guests recorded separately')}</div>
-    <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
+    <div style="display:flex;align-items:center;gap:6px">Powered by ${ideaLogoSvg(18)}</div>
   </div>
 </div>
 </body></html>`;

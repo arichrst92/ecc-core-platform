@@ -4,6 +4,7 @@
  * hadir, tren mingguan, cara check-in, ringkasan & okupansi per ibadah,
  * pertemuan tertinggi/terendah, dan tamu.
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import { esc, fmtTgl } from './print-report.js';
 import { CHECKIN_METHODS, METHOD_LABEL, type MethodCount } from './attendance-report.js';
 import { REPORT_CSS, barRow, columnChart, donut, kpi, n, pctTxt, section } from './cabang-report-html.js';
@@ -32,7 +33,6 @@ const METHOD_COLOR: Record<string, string> = {
 export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: boolean }): string {
   const s = d.summary;
   const ins = d.insights;
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
   const scope = [
     d.filters.cabang ? `Cabang ${d.filters.cabang}` : 'Semua cabang',
@@ -202,7 +202,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="foot">
     <div>Dibuat ${esc(generated)} WIB · Okupansi hanya pendataan (check-in tidak dibatasi).</div>
-    <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" style="height:16px" onerror="this.style.display='none'"/></div>
+    <div style="display:flex;align-items:center;gap:6px">Powered by ${ideaLogoSvg(16)}</div>
   </div>
 </div></body></html>`;
 }

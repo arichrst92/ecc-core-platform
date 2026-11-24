@@ -3,6 +3,7 @@
  * detail cabang di portal: kartu KPI berwarna, bar, grafik garis & donut
  * (SVG inline, ikut tercetak), dan tabel ringkas. A4 portrait.
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import { esc, fmtTgl } from './print-report.js';
 import type { CabangStats } from '../routes/admin/cabang.js';
 
@@ -167,7 +168,6 @@ export function renderCabangReportHtml(d: CabangStats, opts: { isMobileUa: boole
   const o = x.okupansi;
   const v = x.visit;
   const k = x.ckids;
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 
   const journey = x.journey.total
@@ -352,7 +352,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="foot">
     <div>Dibuat ${esc(generated)} WIB · Persentase dari jemaat aktif (anggota) cabang saat ini.</div>
-    <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" style="height:16px" onerror="this.style.display='none'"/></div>
+    <div style="display:flex;align-items:center;gap:6px">Powered by ${ideaLogoSvg(16)}</div>
   </div>
 </div></body></html>`;
 }

@@ -8,6 +8,7 @@
  *
  * RBAC menu 'compliance-sop' (Fulltimer selalu lolos).
  */
+import { ideaLogoSvg } from '../../lib/idea-logo.js';
 import { Router } from 'express';
 import { prisma } from '@ecc/database';
 import { z } from 'zod';
@@ -130,7 +131,7 @@ ${isMobileUa ? '<script>setTimeout(() => window.print(), 600);</script>' : `<div
   <div class="doc">${markdownToHtml(doc.content)}</div>
   <div class="footer">
     <span>© ${new Date().getFullYear()} Elshaddai Creative Community · Dokumen internal — jangan disebarkan di luar tim</span>
-    <span>Powered by <img src="${portal}/logo-idea.webp" alt="IDEA" onerror="this.style.display='none'" style="vertical-align:middle"/></span>
+    <span>Powered by <span style="display:inline-block;vertical-align:middle">${ideaLogoSvg(16)}</span></span>
   </div>
 </div>
 </body></html>`;

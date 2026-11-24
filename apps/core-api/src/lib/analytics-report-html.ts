@@ -4,6 +4,7 @@
  * berwarna (Baik / Cukup / Perlu perhatian), grafik, dan penjelasan istilah.
  * Anonim: tidak ada data jemaat. A4 portrait.
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import { esc, fmtTgl } from './print-report.js';
 import { REPORT_CSS, barRow, donut, lineChart, n } from './cabang-report-html.js';
 import { pageLabel } from './page-labels.js';
@@ -199,7 +200,6 @@ function todos(d: AnalyticsReportInput): string[] {
 // ------------------------------------------------------------------ render
 
 export function renderAnalyticsReportHtml(d: AnalyticsReportInput): string {
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
   const s = d.summary;
   const a = d.api.summary;
@@ -380,7 +380,7 @@ ${
 
   <div class="foot">
     <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Laporan Analitik Els App · anonim</div>
-    <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
+    <div style="display:flex;align-items:center;gap:6px">Powered by ${ideaLogoSvg(18)}</div>
   </div>
 </div>
 </body></html>`;

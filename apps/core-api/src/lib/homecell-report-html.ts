@@ -4,6 +4,7 @@
  * kategori, "perlu perhatian", lalu kartu tiap homecell + tabel anggota
  * (usia, kehadiran di periode, terakhir hadir).
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import { esc } from './print-report.js';
 import { L, fmtTglL as fmtTgl, generatedAt, setReportLang, usiaLabelL, yrs, type ReportLang } from './report-i18n.js';
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
@@ -83,7 +84,6 @@ export function renderHomecellReportHtml(
   opts: { isMobileUa: boolean; title: string; filterParts: string[]; periodLabel: string; lang?: ReportLang },
 ): string {
   setReportLang(opts.lang);
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const generated = generatedAt();
 
   const tot = rows.reduce(
@@ -258,7 +258,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="foot">
     <div>© ${new Date().getFullYear()} Elshaddai Creative Community · ${L('Terakhir hadir: hijau ≤ 7 hari, kuning ≤ 30 hari, merah &gt; 30 hari · Usia oranye = di luar rentang usia homecell', 'Last attended: green ≤ 7 days, yellow ≤ 30 days, red &gt; 30 days · Orange age = outside the homecell age range')} · ${L('Tamu dicatat terpisah, tidak masuk % kehadiran', 'Guests recorded separately, not in attendance %')}</div>
-    <div style="display:flex;align-items:center;gap:6px">Powered by <img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:18px"/></div>
+    <div style="display:flex;align-items:center;gap:6px">Powered by ${ideaLogoSvg(18)}</div>
   </div>
 </div>
 </body></html>`;

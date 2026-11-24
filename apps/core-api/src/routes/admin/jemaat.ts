@@ -1,3 +1,4 @@
+import { ideaLogoSvg } from '../../lib/idea-logo.js';
 import { peranFromLegacyName, resolvePenggembalaan } from '../../lib/penggembalaan.js';
 import { purgeJemaatPersonalData } from '../../lib/data-purge.js';
 import { Router } from 'express';
@@ -468,7 +469,15 @@ async function fetchJemaatForExport(where: any) {
           homecell: {
             select: {
               nama: true,
-              area: { select: { nama: true } },
+              // Penanggung jawab (export 2026-11): HC Leader, Zone Leader & pastor zona.
+              picJemaat: { select: { namaLengkap: true, noHp: true, isActive: true } },
+              area: {
+                select: {
+                  nama: true,
+                  picJemaat: { select: { namaLengkap: true, noHp: true, isActive: true } },
+                  pastors: { select: { jemaat: { select: { namaLengkap: true, noHp: true, isActive: true } } }, orderBy: { createdAt: 'asc' } },
+                },
+              },
             },
           },
         },
@@ -622,7 +631,25 @@ jemaatRouter.get('/export', async (req, res) => {
       .map((jp: any) => `${jp.pelayanan.nama} (${jp.pelayananRole.nama})`)
       .join('; ');
     const activeJp = (r.jemaatPelayanan ?? []).filter((jp: any) => jp.pelayanan.isActive && jp.pelayananRole.isActive);
+    // Penanggung jawab dari homecell (beberapa homecell → digabung tanpa duplikat).
+    type P = { namaLengkap: string; noHp: string | null; isActive: boolean } | null | undefined;
+    const uniq = (ps: P[]) => {
+      const m = new Map<string, { nama: string; noHp: string }>();
+      for (const p of ps) if (p && p.isActive) m.set(`${p.namaLengkap}|${p.noHp ?? ''}`, { nama: p.namaLengkap, noHp: p.noHp ?? '' });
+      return [...m.values()];
+    };
+    const hms = (r.homecellMembership ?? []) as any[];
+    const pjHc = uniq(hms.map((hm) => hm.homecell.picJemaat));
+    const pjZona = uniq(hms.map((hm) => hm.homecell.area?.picJemaat));
+    const pjPastor = uniq(hms.flatMap((hm) => (hm.homecell.area?.pastors ?? []).map((x: any) => x.jemaat)));
+    const fmt = (l: { nama: string; noHp: string }[]) => l.map((x) => (x.noHp ? `${x.nama} (${x.noHp})` : x.nama)).join('; ');
     return {
+      pjHc,
+      pjZona,
+      pjPastor,
+      pastorInCharge: fmt(pjPastor),
+      zoneLeaderInCharge: fmt(pjZona),
+      homecellLeaderInCharge: fmt(pjHc),
       kode: r.kode ?? '',
       namaLengkap: r.namaLengkap ?? '',
       jenisKelamin: r.jenisKelamin ?? '',
@@ -682,6 +709,9 @@ jemaatRouter.get('/export', async (req, res) => {
     'Role',
     'Zona',
     'Homecell',
+    'Pastor In Charge',
+    'Zone Leader In Charge',
+    'Homecell Leader In Charge',
     'Ministry',
     'Spiritual Journey',
     'Status',
@@ -711,6 +741,9 @@ jemaatRouter.get('/export', async (req, res) => {
     'roles',
     'homecellArea',
     'homecell',
+    'pastorInCharge',
+    'zoneLeaderInCharge',
+    'homecellLeaderInCharge',
     'ministry',
     'spiritualJourney',
     'status',
@@ -765,6 +798,7 @@ jemaatRouter.get('/export', async (req, res) => {
   <td><div class="nm">${escapeHtml(row.namaLengkap)}</div><div class="sub">${escapeHtml(row.kode)}${row.jenisKelamin ? ` · ${escapeHtml(String(row.jenisKelamin))}` : ''}${row.usia !== '' ? ` · ${escapeHtml(String(row.usia))} th` : ''}</div></td>
   <td>${contactLinks(row.noHp, row.email, row.namaLengkap)}</td>
   <td><div>${escapeHtml(row.cabang)}</div><div class="sub">${escapeHtml([row.homecellArea, row.homecell].filter(Boolean).join(' › '))}</div></td>
+  <td class="pj">${pjBlock('Pastor', row.pjPastor)}${pjBlock('Zone Leader', row.pjZona)}${pjBlock('HC Leader', row.pjHc)}${row.pjPastor.length || row.pjZona.length || row.pjHc.length ? '' : '<span class="sub">—</span>'}</td>
   <td>${escapeHtml(row.ministry)}${row.levelPelayanan ? `<div class="sub">Level tertinggi ${escapeHtml(row.levelPelayanan)}</div>` : ''}</td>
   <td>${escapeHtml([row.pekerjaan, row.statusPernikahan].filter(Boolean).join(' · '))}</td>
   <td>${escapeHtml(row.spiritualJourney)}</td>
@@ -808,6 +842,13 @@ jemaatRouter.get('/export', async (req, res) => {
   .sub { color: #737373; font-size: 8.5px; margin-top: 1px; }
   .email { word-break: break-all; }
   .ph { white-space: nowrap; }
+  td.pj { min-width: 150px; }
+  .pj-row { margin-bottom: 3px; }
+  .pj-row:last-child { margin-bottom: 0; }
+  .pj-l { display: block; font-size: 7.5px; font-weight: 700; color: #A3A3A3; text-transform: uppercase; letter-spacing: .3px; }
+  .pj-p { line-height: 1.25; }
+  .pj-n { font-weight: 600; font-size: 9px; }
+  .pj-hp { display: inline-flex; margin-left: 4px; font-size: 8.5px; white-space: nowrap; }
   a.lnk { text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
   a.wa { color: #15803D; font-weight: 600; }
   a.email { color: #C2410C; }
@@ -855,12 +896,12 @@ ${
   ${kpi('userCheck', '#15803D', 'Aktif', cnt((r) => r.status === 'Aktif').toLocaleString('id-ID'), pct(cnt((r) => r.status === 'Aktif')))}
 </div>
 <table>
-<thead><tr><th>#</th><th>Jemaat</th><th>Kontak</th><th>Cabang › Zona › Homecell</th><th>Pelayanan</th><th>Pekerjaan · Pernikahan</th><th>Spiritual Journey</th><th>Status</th></tr></thead>
-<tbody>${tableBody || '<tr><td colspan="8" style="text-align:center;color:#A3A3A3;padding:16px">Tidak ada jemaat yang cocok dengan filter.</td></tr>'}</tbody>
+<thead><tr><th>#</th><th>Jemaat</th><th>Kontak</th><th>Cabang › Zona › Homecell</th><th>Penanggung jawab</th><th>Pelayanan</th><th>Pekerjaan · Pernikahan</th><th>Spiritual Journey</th><th>Status</th></tr></thead>
+<tbody>${tableBody || '<tr><td colspan="9" style="text-align:center;color:#A3A3A3;padding:16px">Tidak ada jemaat yang cocok dengan filter.</td></tr>'}</tbody>
 </table>
 <div class="footer-row">
   <div>© ${new Date().getFullYear()} Elshaddai Creative Community · Data pribadi — gunakan sesuai kebijakan privasi ECC</div>
-  <div class="powered"><span>Powered by</span><img src="${portalUrl}/logo-idea.webp" alt="IDEA" onerror="this.style.display='none'" style="height:18px;width:auto;"/></div>
+  <div class="powered"><span>Powered by</span>${ideaLogoSvg(16)}</div>
 </div>
 </div>
 </body></html>`;
@@ -893,6 +934,27 @@ const EXPORT_ICONS = {
 type ExportIcon = keyof typeof EXPORT_ICONS;
 const xi = (name: ExportIcon, size = 12, color = '#fff') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">${EXPORT_ICONS[name]}</svg>`;
+
+/** Satu baris penanggung jawab: label + nama (no HP → WhatsApp "Hi, <nama>"). */
+function pjBlock(label: string, list: { nama: string; noHp: string }[]): string {
+  if (!list.length) return '';
+  const people = list
+    .map((p) => {
+      let d = p.noHp.replace(/\D/g, '');
+      if (d.startsWith('0')) d = `62${d.slice(1)}`;
+      else if (d.startsWith('8')) d = `62${d}`;
+      const wa = d.length >= 8 ? `https://wa.me/${d}?text=${encodeURIComponent(`Hi, ${p.nama.trim()} `)}` : null;
+      return `<div class="pj-p"><span class="pj-n">${escapeHtml(p.nama)}</span>${
+        p.noHp
+          ? wa
+            ? `<a class="lnk wa pj-hp" href="${wa}" target="_blank" rel="noopener">${xi('whatsapp', 8, '#15803D')}${escapeHtml(p.noHp)}</a>`
+            : `<span class="pj-hp">${escapeHtml(p.noHp)}</span>`
+          : ''
+      }</div>`;
+    })
+    .join('');
+  return `<div class="pj-row"><span class="pj-l">${escapeHtml(label)}</span>${people}</div>`;
+}
 
 /** No HP → WhatsApp & email → mailto, dengan sapaan "Hi, <nama>" (follow-up dari PDF). */
 function contactLinks(noHp: string, email: string, nama: string): string {
@@ -1688,7 +1750,6 @@ export async function renderJemaatProfileHtml(
   // IDEA logo — pakai file real dari portal public (sama dgn login page).
   // Portal URL dari env, default production.
   const portalBase = process.env.PORTAL_URL ?? 'https://portal.eccchurch.global';
-  const ideaLogoUrl = `${portalBase.replace(/\/$/, '')}/logo-idea.webp`;
 
   // === Professional CV-style layout ===
   // Sidebar (foto + QR + kontak + activity + role) | Main (anggota keluarga + histories)
@@ -2007,7 +2068,7 @@ ${
     </div>
     <div class="powered">
       <span>Powered by</span>
-      <img src="${ideaLogoUrl}" alt="IDEA" onerror="this.style.display='none'"/>
+      ${ideaLogoSvg(18)}
     </div>
   </div>
 </div>

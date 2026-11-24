@@ -2,6 +2,7 @@
  * Helper export laporan portal: CSV (Excel) & tampilan cetak HTML (Save as
  * PDF) dengan footer "Powered by IDEA". Dipakai Laporan Ibadah/Event & Visit.
  */
+import { ideaLogoSvg } from './idea-logo.js';
 import type { Request, Response } from 'express';
 
 export function esc(s: unknown): string {
@@ -40,7 +41,6 @@ export function sendPrintHtml(
 ) {
   const timestamp = new Date().toISOString().slice(0, 10);
   const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
-  const ideaLogo = `${(process.env.PORTAL_URL ?? 'https://portal.eccchurch.global').replace(/\/$/, '')}/logo-idea.webp`;
   const meta = [
     period ? `${period.label ? `${period.label} · ` : ''}${fmtTgl(period.from)} – ${fmtTgl(period.to)}` : null,
     ...filters,
@@ -77,7 +77,7 @@ ${isMobileUa ? '<script>setTimeout(() => window.print(), 600);</script>' : ''}
 ${body}
 <div class="footer-row">
   <div>© ${new Date().getFullYear()} Elshaddai Creative Community${footerNote ? ` · ${esc(footerNote)}` : ''}</div>
-  <div class="powered"><span>Powered by</span><img src="${ideaLogo}" alt="IDEA" onerror="this.style.display='none'" style="height:20px;width:auto;"/></div>
+  <div class="powered"><span>Powered by</span>${ideaLogoSvg(20)}</div>
 </div>
 </div></body></html>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

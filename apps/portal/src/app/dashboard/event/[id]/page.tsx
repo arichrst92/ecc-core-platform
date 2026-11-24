@@ -160,6 +160,8 @@ export default function EventDetailPage() {
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [deletingPeserta, setDeletingPeserta] = useState<Peserta | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | ParticipationStatus>('all');
+  // Hook HARUS sebelum early return (loading / tidak ditemukan) — React #310.
+  const [pesertaSearch, setPesertaSearch] = useState('');
   const heroFileRef = useRef<HTMLInputElement>(null);
   const qrisFileRef = useRef<HTMLInputElement>(null);
 
@@ -295,7 +297,6 @@ export default function EventDetailPage() {
   }
 
   const e = eventQ.data;
-  const [pesertaSearch, setPesertaSearch] = useState('');
   const pesertaAll = pesertaQ.data ?? [];
   const pesertaNeedle = pesertaSearch.trim().toLowerCase();
   const pesertaDigits = pesertaSearch.replace(/\D/g, '');

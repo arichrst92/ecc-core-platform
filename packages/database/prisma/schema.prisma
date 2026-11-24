@@ -585,6 +585,14 @@ model Ibadah {
   // Ibadah anak (2026-11): orang tua / wali boleh self check-in anaknya dari app
   // (kode jemput dibuat otomatis). false = check-in hanya di meja CKids.
   allowKidsSelfCheckin Boolean  @default(true) @map("allow_kids_self_checkin")
+  // Jendela per ibadah/event (2026-11). NULL = aturan bawaan.
+  //   registrasiTutupMenit : batas reservasi/daftar online = mulai − N menit (negatif = N menit SESUDAH mulai). Bawaan 0 (saat mulai).
+  //   checkinBukaMenit     : self check-in dibuka N menit sebelum mulai. Bawaan 15.
+  //   checkinTutupMenit + checkinTutupAcuan ('START' | 'END'): self check-in ditutup N menit setelah mulai / selesai. Bawaan 30 setelah selesai.
+  registrasiTutupMenit Int?    @map("registrasi_tutup_menit")
+  checkinBukaMenit     Int?    @map("checkin_buka_menit")
+  checkinTutupMenit    Int?    @map("checkin_tutup_menit")
+  checkinTutupAcuan    String? @map("checkin_tutup_acuan") @db.VarChar(5)
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -1597,6 +1605,14 @@ model Event {
   // Rating & ulasan dari tiket (2.4.5) — off = kartu ulasan tidak muncul di app.
   allowReview      Boolean @default(true) @map("allow_review")
   allowSelfCheckin Boolean @default(false) @map("allow_self_checkin")
+  // Jendela per ibadah/event (2026-11). NULL = aturan bawaan.
+  //   registrasiTutupMenit : batas reservasi/daftar online = mulai − N menit (negatif = N menit SESUDAH mulai). Bawaan 0 (saat mulai).
+  //   checkinBukaMenit     : self check-in dibuka N menit sebelum mulai. Bawaan 15.
+  //   checkinTutupMenit + checkinTutupAcuan ('START' | 'END'): self check-in ditutup N menit setelah mulai / selesai. Bawaan 30 setelah selesai.
+  registrasiTutupMenit Int?    @map("registrasi_tutup_menit")
+  checkinBukaMenit     Int?    @map("checkin_buka_menit")
+  checkinTutupMenit    Int?    @map("checkin_tutup_menit")
+  checkinTutupAcuan    String? @map("checkin_tutup_acuan") @db.VarChar(5)
 
   // Role yang diberikan otomatis ke peserta (saat HADIR; kalau event tanpa
   // absensi → saat daftar). Dicabut (diakhiri) kalau partisipasi BATAL.

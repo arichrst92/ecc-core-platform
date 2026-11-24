@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useRef, useState, useEffect } from 'react';
 import { usePersistentState } from '@/lib/use-persistent-state';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -100,6 +101,23 @@ export default function KehadiranPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  // Tautan dari Kalender Ibadah ("Lihat reservasi") → ?ibadahId=&tanggal=.
+  // Dulu parameter ini diabaikan (filter lama yang tersimpan tetap dipakai).
+  const sp = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    const ib = sp.get('ibadahId');
+    const tg = sp.get('tanggal');
+    if (!ib && !tg) return;
+    if (ib) setFilterIbadahId(ib);
+    if (tg && /^\d{4}-\d{2}-\d{2}$/.test(tg)) setFilterTanggal(tg);
+    setFilterStatus('');
+    setSearch('');
+    setPage(1);
+    router.replace('/dashboard/kehadiran');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sp]);
+
   const listQ = useQuery({
     queryKey: ['reservasi', { page, filterStatus, filterIbadahId, filterTanggal, debouncedSearch }],
     queryFn: async () => {
@@ -172,8 +190,8 @@ export default function KehadiranPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <Ticket className="w-6 h-6" />
             Kehadiran / Reservasi
@@ -182,7 +200,7 @@ export default function KehadiranPage() {
             Reservasi jemaat per ibadah & tanggal. Status: <strong>Reserve</strong> → <strong>Join</strong> (scan QR / cari nama, no HP, email) atau <strong>Cancel</strong>. Tamu bisa dicatat langsung.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setScanOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 border border-brand-300 text-brand-700 hover:bg-brand-50 text-sm font-medium rounded-lg"
@@ -210,7 +228,7 @@ export default function KehadiranPage() {
             className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
           >
             <Plus className="w-4 h-4" />
-            Buat Reservasi
+            Tambah Kehadiran
           </button>
         </div>
       </div>
@@ -235,7 +253,7 @@ export default function KehadiranPage() {
 
       {/* Filters */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-0 basis-56">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Cari nama / no HP / email / kode</label>
           <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
             <Search className="w-3.5 h-3.5 text-neutral-400" />
@@ -246,12 +264,12 @@ export default function KehadiranPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="flex-1 py-1.5 outline-none text-sm"
+              className="flex-1 min-w-0 py-1.5 outline-none text-sm"
               placeholder="..."
             />
           </div>
         </div>
-        <div>
+        <div className="min-w-0 max-w-full">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Ibadah</label>
           <select
             value={filterIbadahId}
@@ -259,7 +277,7 @@ export default function KehadiranPage() {
               setFilterIbadahId(e.target.value);
               setPage(1);
             }}
-            className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white min-w-[200px]"
+            className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white w-full sm:w-auto sm:min-w-[200px] max-w-full sm:max-w-xs"
           >
             <option value="">Semua ibadah</option>
             {ibadahQ.data?.map((i) => (
@@ -311,7 +329,9 @@ export default function KehadiranPage() {
 
       {/* Table */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+        {/* HP: tabel digeser ke samping (dulu kolom Aksi terpotong & tak terjangkau). */}
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
             <tr>
               <th className="px-4 py-2.5 text-left font-medium" style={{ width: '100px' }}>Kode</th>
@@ -439,9 +459,10 @@ export default function KehadiranPage() {
             )}
           </tbody>
         </table>
+        </div>
 
         {listQ.data && listQ.data.meta.totalPages > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm">
+          <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm gap-2">
             <div className="text-neutral-500">
               <strong>{listQ.data.meta.total}</strong> reservasi · hal {listQ.data.meta.page}/{listQ.data.meta.totalPages}
             </div>
@@ -555,8 +576,8 @@ function CreateReservasiModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Tambah Kehadiran / Reservasi</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               {tanggalIbadah <= todayYmd()
@@ -564,7 +585,7 @@ function CreateReservasiModal({
                 : 'Tanggal mendatang → tercatat sebagai reservasi.'}
             </p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Ibadah</span>
               <select
@@ -631,7 +652,7 @@ function CreateReservasiModal({
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={createMut.isPending}
@@ -852,7 +873,7 @@ function CheckinIbadahModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[92vh] flex flex-col">
-          <div className="px-6 py-4 border-b border-neutral-100 flex items-start justify-between gap-3">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <ScanLine className="w-4 h-4 text-green-600" />
@@ -867,7 +888,7 @@ function CheckinIbadahModal({
             </button>
           </div>
 
-          <div className="p-6 space-y-3 border-b border-neutral-100">
+          <div className="p-4 sm:p-6 space-y-3 border-b border-neutral-100">
             <div className="grid grid-cols-[1fr_150px] gap-2">
               <label className="block">
                 <span className="text-xs font-medium text-neutral-600">Ibadah</span>
@@ -918,7 +939,7 @@ function CheckinIbadahModal({
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> Mencari…
                   </div>
                 ) : (hitsQ.data ?? []).length === 0 ? (
-                  <div className="px-3 py-3 text-xs text-neutral-500 flex items-center justify-between gap-2">
+                  <div className="px-3 py-3 text-xs text-neutral-500 flex flex-wrap items-center justify-between gap-2">
                     <span>Tidak ditemukan.</span>
                     <button
                       onClick={() => {
@@ -1004,7 +1025,7 @@ function CheckinIbadahModal({
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="px-6 py-2 text-[11px] uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-white border-b border-neutral-100">
+            <div className="px-4 sm:px-6 py-2 text-[11px] uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-white border-b border-neutral-100">
               Riwayat sesi ini ({log.length})
             </div>
             {log.length === 0 ? (
@@ -1029,7 +1050,7 @@ function CheckinIbadahModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-3 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-3 border-t border-neutral-100 bg-neutral-50">
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg">
               Selesai
             </button>
@@ -1064,8 +1085,8 @@ function ScanKodeCheckoutModal({ onClose, onSuccess }: { onClose: () => void; on
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <ScanLine className="w-4 h-4 text-amber-600" />
               Checkout via Kode
@@ -1075,7 +1096,7 @@ function ScanKodeCheckoutModal({ onClose, onSuccess }: { onClose: () => void; on
               ibadah dgn <code>requiresCheckout=true</code>.
             </p>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <input
               type="text"
               value={kode}
@@ -1087,7 +1108,7 @@ function ScanKodeCheckoutModal({ onClose, onSuccess }: { onClose: () => void; on
               maxLength={20}
             />
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
@@ -1137,8 +1158,8 @@ function PickupAnakModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               🧒 Pickup Anak
             </h2>
@@ -1147,7 +1168,7 @@ function PickupAnakModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               untuk disambiguation.
             </p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">
                 Kode Jemput (6 digit) *
@@ -1181,7 +1202,7 @@ function PickupAnakModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg"
@@ -1213,8 +1234,8 @@ function QrPreviewModal({ item, onClose }: { item: ReservasiItem; onClose: () =>
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <QrCode className="w-4 h-4" />
               Kode Reservasi
@@ -1223,7 +1244,7 @@ function QrPreviewModal({ item, onClose }: { item: ReservasiItem; onClose: () =>
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 text-center">
+          <div className="p-4 sm:p-6 text-center">
             <div className="text-sm text-neutral-700 mb-1">{item.jemaat.namaLengkap}</div>
             <div className="text-xs text-neutral-500 mb-4">
               {item.ibadah.nama} —{' '}

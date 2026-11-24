@@ -35,7 +35,7 @@ export function useCabangOptions() {
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">{label}</span>
       {children}
     </label>
@@ -76,7 +76,7 @@ export function PeriodFields({
       </Field>
       {value.periode === 'custom' ? (
         <Field label="Dari – Sampai">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0 [&>input]:min-w-0">
             <input type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} className={selectCls} />
             <span className="text-neutral-400 text-xs">–</span>
             <input type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} className={selectCls} />
@@ -93,7 +93,7 @@ export function FilterCard({ children }: { children: React.ReactNode }) {
       <div className="flex items-center gap-2 mb-2 text-xs text-neutral-500 font-medium uppercase tracking-wider">
         <Filter className="w-3.5 h-3.5" /> Filter
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">{children}</div>
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-4 gap-2 items-end">{children}</div>
     </div>
   );
 }

@@ -211,7 +211,7 @@ export function VirtualDataTable<T extends { id: string } & Record<string, unkno
       </div>
 
       {/* Footer status */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-t border-neutral-100 text-xs text-neutral-500">
+      <div className="flex flex-wrap items-center justify-between px-4 py-2.5 border-t border-neutral-100 text-xs text-neutral-500 gap-2">
         <span>
           Menampilkan <strong>{rows.length}</strong>
           {total !== undefined && (

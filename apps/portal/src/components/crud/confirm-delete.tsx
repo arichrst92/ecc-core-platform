@@ -24,7 +24,7 @@ export function ConfirmDelete({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={loading ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 pointer-events-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-4 sm:p-6 pointer-events-auto max-h-[90vh] overflow-y-auto">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-5 h-5" />

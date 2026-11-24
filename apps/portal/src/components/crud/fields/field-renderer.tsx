@@ -484,7 +484,7 @@ function RelationSearchPicker({ field }: { field: FieldConfig }) {
   return (
     <div className="mt-1" onClick={(e) => e.preventDefault()}>
       {value ? (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border border-brand-200 bg-brand-50 rounded-lg mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border border-brand-200 bg-brand-50 rounded-lg mb-2">
           <span className="text-sm font-medium text-brand-800 truncate">{label || '(data saat ini)'}</span>
           <button
             type="button"
@@ -578,7 +578,7 @@ function JemaatSinglePicker({ field }: { field: FieldConfig }) {
   return (
     <div className="mt-1" onClick={(e) => e.preventDefault()}>
       {value ? (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border border-brand-200 bg-brand-50 rounded-lg mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border border-brand-200 bg-brand-50 rounded-lg mb-2">
           <span className="text-sm font-medium text-brand-800 truncate">{label || 'Jemaat terpilih'}</span>
           <button
             type="button"

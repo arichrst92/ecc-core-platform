@@ -96,7 +96,7 @@ export function CrudPage<T extends { id: string } & Record<string, unknown>>({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">{config.label}</h1>
           {config.labelPlural && (
@@ -268,7 +268,7 @@ function CardGrid<T extends { id: string }>({
         ))}
       </div>
       {totalPages > 1 ? (
-        <div className="flex items-center justify-between mt-4 text-xs text-neutral-500">
+        <div className="flex flex-wrap items-center justify-between mt-4 text-xs text-neutral-500 gap-2">
           <div>
             Halaman {page} dari {totalPages} · {total} total
           </div>

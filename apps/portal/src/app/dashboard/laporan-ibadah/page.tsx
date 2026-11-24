@@ -50,7 +50,7 @@ function OccupancyBar({ pct, hadir, seat }: { pct: number | null; hadir?: number
   const color = over ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
   return (
     <div className="min-w-[140px]">
-      <div className="flex items-center justify-between text-xs mb-1">
+      <div className="flex flex-wrap items-center justify-between text-xs mb-1 gap-2">
         <span className={`font-semibold ${over ? 'text-red-600' : 'text-neutral-800'}`}>{fmtPct(pct)}</span>
         {hadir != null ? (
           <span className="text-neutral-500">
@@ -91,7 +91,7 @@ function KidsSection({ k }: { k: KidsData }) {
   const pct = (a: number, b: number) => (b ? Math.round((a * 1000) / b) / 10 : 0);
   return (
     <div className="bg-white border border-violet-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 bg-violet-50 border-b border-violet-100">
+      <div className="px-3 sm:px-5 py-3 bg-violet-50 border-b border-violet-100">
         <h2 className="font-semibold text-violet-900 flex items-center gap-2">
           <Baby className="w-4 h-4" /> Ibadah Anak (CKids)
         </h2>
@@ -99,7 +99,7 @@ function KidsSection({ k }: { k: KidsData }) {
           {k.ibadah.join(', ')} · {k.kehadiran.toLocaleString('id-ID')} kehadiran · {k.pertemuan} pertemuan
         </p>
       </div>
-      <div className="p-5 grid lg:grid-cols-3 gap-5">
+      <div className="p-3 sm:p-5 grid lg:grid-cols-3 gap-5">
         <div className="grid grid-cols-2 gap-2 content-start">
           {[
             { v: k.anakHadirUnik, l: `Anak hadir · ${fmtPct(k.jangkauanPct)}` },
@@ -140,7 +140,7 @@ function KidsSection({ k }: { k: KidsData }) {
                 { l: 'Belum checkout / dijemput', v: k.checkout.belum, c: k.checkout.belum ? 'bg-red-500' : 'bg-neutral-300' },
               ].map((x) => (
                 <div key={x.l}>
-                  <div className="flex justify-between mb-0.5">
+                  <div className="flex flex-wrap justify-between mb-0.5 gap-2">
                     <span className="text-neutral-600">{x.l}</span>
                     <b>
                       {x.v} <span className="text-neutral-400 font-normal">· {fmtPct(pct(x.v, k.checkout.wajib))}</span>
@@ -158,7 +158,7 @@ function KidsSection({ k }: { k: KidsData }) {
           )}
           <div className="text-xs font-semibold text-neutral-500 uppercase mt-4 mb-1.5">Per ibadah anak</div>
           {k.perIbadah.map((p) => (
-            <div key={p.nama + p.jamMulai} className="flex justify-between text-xs py-0.5 gap-2">
+            <div key={p.nama + p.jamMulai} className="flex flex-wrap justify-between text-xs py-0.5 gap-2">
               <span className="truncate">
                 {p.nama} <span className="text-neutral-400">{p.jamMulai}</span>
               </span>
@@ -323,7 +323,7 @@ export default function LaporanIbadahPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-brand-500" /> Laporan Ibadah
           </h1>
@@ -425,7 +425,7 @@ export default function LaporanIbadahPage() {
               <div className="h-2.5 bg-neutral-100 rounded-full overflow-hidden mt-2">
                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, d.insights.jangkauan.pct)}%` }} />
               </div>
-              <div className="flex justify-between text-xs mt-1.5 text-neutral-600">
+              <div className="flex flex-wrap justify-between text-xs mt-1.5 text-neutral-600 gap-2">
                 <span>
                   Hadir <b>{d.insights.jangkauan.hadirUnik.toLocaleString('id-ID')}</b>
                 </span>
@@ -446,7 +446,7 @@ export default function LaporanIbadahPage() {
                   const max = Math.max(1, ...d.insights.frekuensi.map((z) => z.count));
                   return (
                     <div key={f.label}>
-                      <div className="flex justify-between text-xs mb-0.5">
+                      <div className="flex flex-wrap justify-between text-xs mb-0.5 gap-2">
                         <span className="text-neutral-600">{f.label}</span>
                         <b>{f.count.toLocaleString('id-ID')} jemaat</b>
                       </div>
@@ -469,7 +469,7 @@ export default function LaporanIbadahPage() {
               </h2>
               <div className="text-[11px] font-semibold text-neutral-500 uppercase mb-1">Tertinggi</div>
               {d.insights.tertinggi.map((o) => (
-                <div key={`t-${o.ibadah}-${o.tanggal}`} className="flex justify-between text-xs py-0.5 gap-2">
+                <div key={`t-${o.ibadah}-${o.tanggal}`} className="flex flex-wrap justify-between text-xs py-0.5 gap-2">
                   <span className="truncate">
                     {o.ibadah} <span className="text-neutral-400">{o.jam} · {fmtTgl(o.tanggal)}</span>
                   </span>
@@ -478,7 +478,7 @@ export default function LaporanIbadahPage() {
               ))}
               <div className="text-[11px] font-semibold text-neutral-500 uppercase mt-3 mb-1">Terendah</div>
               {d.insights.terendah.map((o) => (
-                <div key={`r-${o.ibadah}-${o.tanggal}`} className="flex justify-between text-xs py-0.5 gap-2">
+                <div key={`r-${o.ibadah}-${o.tanggal}`} className="flex flex-wrap justify-between text-xs py-0.5 gap-2">
                   <span className="truncate">
                     {o.ibadah} <span className="text-neutral-400">{o.jam} · {fmtTgl(o.tanggal)}</span>
                   </span>
@@ -497,14 +497,14 @@ export default function LaporanIbadahPage() {
 
           {/* Ringkasan per ibadah */}
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <Church className="w-4 h-4 text-brand-600" /> Ringkasan per ibadah
               </h2>
               <p className="text-xs text-neutral-500 mt-0.5">Diurutkan dari total kehadiran terbanyak · vs lalu = total dibanding periode sebelumnya.</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Ibadah</th>
@@ -595,7 +595,7 @@ export default function LaporanIbadahPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <Armchair className="w-4 h-4 text-emerald-600" /> Okupansi per ibadah
               </h2>
@@ -605,7 +605,7 @@ export default function LaporanIbadahPage() {
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Ibadah</th>
@@ -661,7 +661,7 @@ export default function LaporanIbadahPage() {
 
           <div className="grid lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 bg-white border border-neutral-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
                 <h2 className="font-semibold text-neutral-900">Tren mingguan</h2>
                 <div className="flex gap-3 text-xs text-neutral-500">
                   <span className="flex items-center gap-1">
@@ -704,14 +704,14 @@ export default function LaporanIbadahPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between gap-2 flex-wrap">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100 flex items-center justify-between gap-2 flex-wrap">
               <h2 className="font-semibold text-neutral-900">Per pertemuan ({occ.length})</h2>
               <label className="flex items-center gap-2 text-xs text-neutral-600">
                 <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} /> Sembunyikan yang tanpa kehadiran
               </label>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Tanggal</th>
@@ -761,14 +761,14 @@ export default function LaporanIbadahPage() {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100">
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-violet-600" /> Daftar tamu ({d.guests.length})
               </h2>
               <p className="text-xs text-neutral-500 mt-0.5">Untuk tindak lanjut tim penyambutan. Tamu baru = pertama kali datang di periode ini.</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Nama</th>

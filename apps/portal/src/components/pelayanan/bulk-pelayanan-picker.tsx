@@ -65,14 +65,14 @@ export function BulkPelayananPicker({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={submitting ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">{title}</h2>
             <button onClick={onClose} disabled={submitting} className="p-1 rounded hover:bg-neutral-100 disabled:opacity-40">
               <X className="w-4 h-4 text-neutral-500" />
             </button>
           </div>
 
-          <div className="px-6 pt-4 space-y-3">
+          <div className="px-4 sm:px-6 pt-4 space-y-3">
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -82,7 +82,7 @@ export function BulkPelayananPicker({
                 className="w-full pl-9 pr-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex flex-wrap items-center justify-between text-sm gap-2">
               <button
                 type="button"
                 onClick={toggleAll}
@@ -98,7 +98,7 @@ export function BulkPelayananPicker({
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3">
             {loading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -137,7 +137,7 @@ export function BulkPelayananPicker({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl">
             <span className="text-xs text-neutral-500">
               {submitting && progress ? `Menautkan ${progress.done}/${progress.total}…` : ''}
             </span>

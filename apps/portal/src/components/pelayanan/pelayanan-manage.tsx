@@ -148,14 +148,14 @@ export function RoleManager({
           {sorted.map((r, i) => {
             const n = memberCountByRole.get(r.id) ?? 0;
             return (
-              <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50">
+              <div key={r.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2.5 hover:bg-neutral-50">
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${roleTone(r.level)}`}>
                   {i === 0 && r.level > 0 ? <Crown className="w-3 h-3" /> : null}
                   {r.nama}
                 </span>
                 <span className="text-[11px] text-neutral-400">Level {r.level}</span>
-                <span className="flex-1 text-xs text-neutral-500 truncate">{r.deskripsi ?? ''}</span>
-                <span className="text-xs text-neutral-600 w-24 text-right">{n} anggota</span>
+                <span className="order-last sm:order-none basis-full sm:basis-auto flex-1 min-w-0 text-xs text-neutral-500 truncate">{r.deskripsi ?? ''}</span>
+                <span className="text-xs text-neutral-600 sm:w-24 text-right ml-auto sm:ml-0">{n} anggota</span>
                 <button onClick={() => setEditing(r)} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500" title="Ubah peran">
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -228,14 +228,14 @@ function EditRoleModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">Ubah Peran</h2>
             <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Nama peran</span>
               <input
@@ -270,7 +270,7 @@ function EditRoleModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={updateMut.isPending}
@@ -366,7 +366,7 @@ export function EditPelayananModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2">
               <PelayananIcon ikon={ikon} warna={warna} size={28} /> Ubah Pelayanan
             </h2>
@@ -374,7 +374,7 @@ export function EditPelayananModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
             <label className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -446,7 +446,7 @@ export function EditPelayananModal({
               <div className="text-xs text-neutral-500 mt-1.5">Ikon & warna tampil di app (daftar, detail, jadwal, profil) dan di Portal.</div>
             </div>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100">
             <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg hover:bg-neutral-100">
               Batal
             </button>
@@ -490,8 +490,8 @@ export function ForceDeleteModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-red-700 inline-flex items-center gap-2">
               <Trash2 className="w-4 h-4" /> Hapus permanen pelayanan?
             </h2>
@@ -499,7 +499,7 @@ export function ForceDeleteModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-4 text-sm">
+          <div className="p-4 sm:p-6 space-y-4 text-sm">
             <p className="text-neutral-700">{target.message}</p>
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-800 space-y-1">
               <p className="font-semibold">Yang ikut terhapus dan tidak bisa dikembalikan:</p>
@@ -525,7 +525,7 @@ export function ForceDeleteModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100">
             <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg hover:bg-neutral-100">
               Batal
             </button>

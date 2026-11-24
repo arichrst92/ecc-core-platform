@@ -179,7 +179,7 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <h2 className="text-lg font-semibold text-neutral-900 min-w-[180px] text-center">
+          <h2 className="text-base sm:text-lg font-semibold text-neutral-900 min-w-[140px] sm:min-w-[180px] text-center">
             {BULAN_NAMA[cursor.getMonth()]} {cursor.getFullYear()}
           </h2>
           <button
@@ -190,7 +190,7 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Badge cabang aktif (hanya saat filter spesifik) */}
           {activeCabangName && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200 rounded-lg">
@@ -236,15 +236,25 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 auto-rows-[110px]">
+          <div className="grid grid-cols-7 auto-rows-[64px] sm:auto-rows-[110px]">
             {cells.map((cell) => {
               const events = eventsByDate.get(cell.iso) ?? [];
               const isSelected = selectedDate === cell.iso;
               return (
-                <button
+                // div (bukan <button>): chip ibadah di dalamnya juga tombol — tombol
+                // bersarang tidak valid & di HP ketukan bisa salah sasaran.
+                <div
                   key={cell.iso}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedDate(isSelected ? null : cell.iso)}
-                  className={`text-left p-1.5 border-b border-r border-neutral-100 overflow-hidden transition ${
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      setSelectedDate(isSelected ? null : cell.iso);
+                    }
+                  }}
+                  className={`text-left p-1 sm:p-1.5 border-b border-r border-neutral-100 overflow-hidden transition cursor-pointer min-w-0 ${
                     !cell.inMonth ? 'bg-neutral-50/50' : 'bg-white hover:bg-brand-50/30'
                   } ${isSelected ? 'ring-2 ring-brand-500 ring-inset bg-brand-50/50' : ''}`}
                 >
@@ -261,7 +271,15 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
                   >
                     {cell.date.getDate()}
                   </div>
-                  <div className="mt-1 space-y-0.5 overflow-hidden">
+                  {/* HP: cukup jumlah ibadah — ketuk tanggal untuk daftar lengkap di bawah. */}
+                  {events.length ? (
+                    <div className="sm:hidden mt-1">
+                      <span className="inline-block px-1.5 rounded-full bg-brand-100 text-brand-800 text-[10px] font-semibold">
+                        {events.length}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="hidden sm:block mt-1 space-y-0.5 overflow-hidden">
                     {events.slice(0, 3).map((e, i) => (
                       <EventChip
                         key={`${e.ibadahId}-${i}`}
@@ -278,7 +296,7 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
                       </div>
                     )}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -300,8 +318,8 @@ export function CalendarView({ cabangFilter = 'all', cabangOptions: _cabangOptio
 
       {/* Selected date detail panel */}
       {selectedDate && selectedEvents.length > 0 && (
-        <div className="mt-4 bg-white border border-neutral-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mt-4 bg-white border border-neutral-200 rounded-xl p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
             <h3 className="font-semibold text-neutral-900">
               {parseYmd(selectedDate).toLocaleDateString('id-ID', {
                 weekday: 'long',
@@ -380,9 +398,9 @@ function EventActionPopup({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-start justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold text-neutral-900 truncate">{event.nama}</h2>
               <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -407,7 +425,7 @@ function EventActionPopup({
           </div>
 
           {/* Info badges */}
-          <div className="px-6 pt-4 pb-1 flex items-center gap-2 flex-wrap text-xs text-neutral-600">
+          <div className="px-4 sm:px-6 pt-4 pb-1 flex items-center gap-2 flex-wrap text-xs text-neutral-600">
             <span className="inline-block px-1.5 py-0.5 bg-neutral-100 rounded font-medium">
               {event.kategoriIbadah.nama}
             </span>
@@ -429,7 +447,7 @@ function EventActionPopup({
           </div>
 
           {/* Action buttons */}
-          <div className="p-6 space-y-2">
+          <div className="p-4 sm:p-6 space-y-2">
             <Link
               href={`/dashboard/ibadah/${event.ibadahId}?tanggal=${tanggal}`}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition"
@@ -504,7 +522,7 @@ function EventDetailRow({
   const [cancelOpen, setCancelOpen] = useState(false);
   return (
     <>
-      <div className="flex items-start gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
+      <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
         <div className="text-xs font-mono tabular-nums text-neutral-700 mt-0.5 shrink-0">
           {event.jamMulai}
           <br />
@@ -543,7 +561,7 @@ function EventDetailRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2 w-full sm:w-auto sm:shrink-0">
           <Link
             href={`/dashboard/kehadiran?ibadahId=${event.ibadahId}&tanggal=${tanggal}`}
             className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 hover:bg-brand-50 rounded"
@@ -647,8 +665,8 @@ function CancelOccurrenceModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-600" />
               Konfirmasi tiadakan ibadah
@@ -657,7 +675,7 @@ function CancelOccurrenceModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-3 text-sm">
+          <div className="p-4 sm:p-6 space-y-3 text-sm">
             {/* Prompt eksplisit "Apakah Anda yakin?" sesuai request user */}
             <div className="text-base font-medium text-neutral-900">
               Apakah Anda yakin akan meniadakan ibadah ini?
@@ -682,7 +700,7 @@ function CancelOccurrenceModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={mut.isPending}

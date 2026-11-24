@@ -113,7 +113,7 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
   });
   return (
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-b border-neutral-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-neutral-100">
         <div>
           <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
             <MessageSquareQuote className="w-4 h-4" />
@@ -129,7 +129,7 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
           </select>
         )}
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {q.isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>
         ) : !q.data || q.data.summary.count === 0 ? (
@@ -139,8 +139,7 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
             <ReviewSummaryBlock s={q.data.summary} />
             {q.data.perTanggal && q.data.perTanggal.length > 1 && (
               <div className="overflow-x-auto">
-                <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+                <table className="w-full text-sm">
                   <thead className="text-xs text-neutral-500 uppercase"><tr><th className="text-left py-1.5">Tanggal</th><th className="text-right">Ulasan</th><th className="text-right">Rata-rata</th><th /></tr></thead>
                   <tbody>
                     {q.data.perTanggal.map((p) => (
@@ -153,7 +152,6 @@ export function ReviewPanel({ kind, id }: { kind: 'ibadah' | 'event'; id: string
                     ))}
                   </tbody>
                 </table>
-            </div>
               </div>
             )}
             <ReviewList items={q.data.items} />
@@ -184,7 +182,8 @@ export function ReviewReportCard({
         <div className="space-y-5">
           <ReviewSummaryBlock s={data.overall} />
           {data.perItem.length > 1 && (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[360px] text-sm">
               <thead className="text-xs text-neutral-500 uppercase"><tr><th className="text-left py-1.5">{itemHeader}</th><th className="text-right">Ulasan</th><th className="text-right">Rata-rata</th><th /></tr></thead>
               <tbody>
                 {[...data.perItem].sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0)).map((p) => (
@@ -197,6 +196,7 @@ export function ReviewReportCard({
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           <ReviewList items={data.comments} showLabel />
         </div>

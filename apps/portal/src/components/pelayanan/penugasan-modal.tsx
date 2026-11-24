@@ -184,11 +184,11 @@ export function PenugasanModal({
         >
           {/* Header */}
           {embedded ? (
-            <div className="px-6 py-3 border-b border-neutral-100 text-sm text-neutral-600">
+            <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 text-sm text-neutral-600">
               Pilih ibadah / event tempat pelayanan ini bertugas. Petugas per tanggal diatur di detail ibadah / event, atau oleh koordinator di app.
             </div>
           ) : (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2 min-w-0">
               {data ? <PelayananIcon ikon={data.pelayanan.ikon} warna={data.pelayanan.warna} size={28} /> : null}
               <span className="truncate">Penugasan {data?.pelayanan.nama ?? ''}</span>
@@ -200,7 +200,7 @@ export function PenugasanModal({
           )}
 
           {/* Tab + filter */}
-          <div className="px-6 pt-4 space-y-3 border-b border-neutral-100 pb-3">
+          <div className="px-4 sm:px-6 pt-4 space-y-3 border-b border-neutral-100 pb-3">
             <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
               {(['ibadah', 'event'] as const).map((t) => (
                 <button
@@ -262,20 +262,20 @@ export function PenugasanModal({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-neutral-50 text-xs uppercase text-neutral-500">
                   <tr>
-                    <th className="w-10 px-4 py-2 text-left">
+                    <th className="w-10 px-2 sm:px-4 py-2 text-left">
                       <input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Pilih semua" className="w-4 h-4 accent-brand-600" />
                     </th>
                     <th className="py-2 text-left font-medium">
                       {tab === 'ibadah' ? 'Ibadah' : 'Event'} <span className="normal-case text-neutral-400">({rows.length})</span>
                     </th>
-                    <th className="py-2 text-left font-medium">Cabang</th>
-                    <th className="px-4 py-2 text-left font-medium">Status</th>
+                    <th className="py-2 text-left font-medium hidden sm:table-cell">Cabang</th>
+                    <th className="px-2 sm:px-4 py-2 text-left font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {rows.map((r) => (
                     <tr key={r.id} onClick={() => toggle(r.id)} className={`cursor-pointer hover:bg-brand-50/40 ${sel.has(r.id) ? 'bg-brand-50/60' : ''}`}>
-                      <td className="px-4 py-2.5">
+                      <td className="px-2 sm:px-4 py-2.5">
                         <input
                           type="checkbox"
                           checked={sel.has(r.id)}
@@ -285,14 +285,15 @@ export function PenugasanModal({
                         />
                       </td>
                       <td className="py-2.5 pr-3">
-                        <div className="font-medium text-neutral-900 flex items-center gap-2">
+                        <div className="font-medium text-neutral-900 flex flex-wrap items-center gap-x-2 break-words">
                           {r.title}
                           {r.draft ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">Draft</span> : null}
                         </div>
                         <div className="text-xs text-neutral-500">{r.sub}</div>
+                        <div className="text-xs text-neutral-500 sm:hidden">{r.cabangNama}</div>
                       </td>
-                      <td className="py-2.5 pr-3 text-neutral-700">{r.cabangNama}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="py-2.5 pr-3 text-neutral-700 hidden sm:table-cell">{r.cabangNama}</td>
+                      <td className="px-2 sm:px-4 py-2.5">
                         {r.linked ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
                             <Link2 className="w-3 h-3" /> Ditugaskan
@@ -310,7 +311,7 @@ export function PenugasanModal({
           </div>
 
           {/* Aksi */}
-          <div className="border-t border-neutral-100 px-6 py-3">
+          <div className="border-t border-neutral-100 px-4 sm:px-6 py-3">
             {confirmUnassign ? (
               <div className="flex flex-wrap items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />

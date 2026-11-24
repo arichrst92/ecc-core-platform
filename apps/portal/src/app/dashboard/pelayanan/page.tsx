@@ -132,7 +132,7 @@ export default function PelayananPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <HandHeart className="w-6 h-6" />
             Pelayanan (Ministry)
@@ -141,7 +141,7 @@ export default function PelayananPage() {
             Klik <b>Kelola</b> untuk mengatur anggota, peran, tugas petugas, pendaftaran & koordinator, dan penugasan ibadah/event.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/pelayanan/join-requests"
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-300 bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50"
@@ -180,7 +180,7 @@ export default function PelayananPage() {
             onChange={(e) => setNewNama(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && newNama.trim() && createPelayanan.mutate(newNama.trim())}
             placeholder="Nama pelayanan, mis. Drama"
-            className="flex-1 min-w-[220px] px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            className="flex-1 min-w-0 basis-56 px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
           <button
             onClick={() => createPelayanan.mutate(newNama.trim())}
@@ -212,7 +212,7 @@ export default function PelayananPage() {
 
       {/* Toolbar */}
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-0 basis-56">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={search}

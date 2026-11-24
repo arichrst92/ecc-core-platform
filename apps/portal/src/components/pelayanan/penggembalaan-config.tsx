@@ -73,7 +73,7 @@ export function PenggembalaanConfigPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="bg-white border border-brand-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold text-neutral-900">Pelayanan penggembalaan (homecell &amp; zona)</h2>
           <p className="text-xs text-neutral-500 mt-0.5">

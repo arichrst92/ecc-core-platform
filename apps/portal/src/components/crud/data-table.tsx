@@ -35,7 +35,7 @@ export function DataTable<T extends { id: string }>({
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
             <tr>
               {columns.map((col, idx) => (
@@ -124,7 +124,7 @@ export function DataTable<T extends { id: string }>({
       </div>
 
       {totalPages > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm">
+        <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-sm gap-2">
           <div className="text-neutral-500">
             Menampilkan <strong>{startItem}-{endItem}</strong> dari <strong>{total}</strong>
           </div>

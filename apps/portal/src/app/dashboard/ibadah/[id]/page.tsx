@@ -246,8 +246,8 @@ export default function IbadahDetailPage() {
       {/* Header */}
       <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900">{i.nama}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 break-words">{i.nama}</h1>
             <div className="text-sm text-neutral-500 mt-1">
               {i.cabang?.nama && <span>{i.cabang.nama}</span>}
               {i.kategoriIbadah?.nama && <span> · {i.kategoriIbadah.nama}</span>}
@@ -277,7 +277,7 @@ export default function IbadahDetailPage() {
               </button>
             </div>
             <button
-              onClick={() => router.push(`/dashboard/ibadah`)}
+              onClick={() => router.push(`/dashboard/ibadah?edit=${i.id}`)}
               className="px-3 py-1.5 border border-neutral-300 hover:bg-neutral-50 rounded-lg text-sm"
             >
               Edit Ibadah
@@ -311,13 +311,13 @@ export default function IbadahDetailPage() {
           )}
         </div>
         {i.deskripsi && (
-          <p className="mt-4 text-sm text-neutral-600 border-t border-neutral-100 pt-3">{i.deskripsi}</p>
+          <p className="mt-4 text-sm text-neutral-600 border-t border-neutral-100 pt-3 whitespace-pre-line break-words">{i.deskripsi}</p>
         )}
       </div>
 
       {/* Pelayanan section */}
       <section className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <HandHeart className="w-4 h-4" />
@@ -336,7 +336,7 @@ export default function IbadahDetailPage() {
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {links.length === 0 ? (
             <p className="text-sm text-neutral-400 italic text-center py-6">
               Belum ada pelayanan yang dilink ke ibadah ini.
@@ -358,7 +358,7 @@ export default function IbadahDetailPage() {
 
       {/* Tanggal Ditiadakan section */}
       <section id="cancelled" className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
           <div>
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <CalendarX className="w-4 h-4 text-red-600" />
@@ -370,7 +370,7 @@ export default function IbadahDetailPage() {
             </p>
           </div>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {cancelledQ.isLoading ? (
             <div className="flex justify-center py-4">
               <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
@@ -544,10 +544,10 @@ function PelayananLinkCard({
   return (
     <div id="petugas" className="border border-neutral-200 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 p-3 bg-neutral-50">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-neutral-50">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-white/50 rounded-md px-1 py-0.5"
+          className="flex flex-wrap items-center gap-2 flex-1 basis-56 min-w-0 text-left hover:bg-white/50 rounded-md px-1 py-0.5"
         >
           {expanded ? (
             <ChevronDown className="w-4 h-4 text-neutral-400" />
@@ -575,7 +575,7 @@ function PelayananLinkCard({
             />
           )}
         </button>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
           <button
             onClick={() => {
               setExpanded(true);
@@ -599,7 +599,7 @@ function PelayananLinkCard({
 
       {/* Body: petugas list, grouped by default vs override per tanggal */}
       {expanded && (
-        <div className="p-4 space-y-4">
+        <div className="p-2 sm:p-4 space-y-4">
           {petugasQ.isLoading ? (
             <div className="flex justify-center py-4">
               <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
@@ -612,7 +612,7 @@ function PelayananLinkCard({
             <>
               {/* Default petugas — berlaku tiap minggu yang tidak punya override */}
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
                   <div className="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
                     Petugas Default
                   </div>
@@ -651,7 +651,7 @@ function PelayananLinkCard({
                 const items = overridesByDate.get(iso) ?? [];
                 return (
                   <div key={iso} className="border-t border-neutral-100 pt-3">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
                       <div className="flex items-center gap-2">
                         <CalendarDays className="w-3.5 h-3.5 text-amber-600" />
                         <span className="text-xs uppercase tracking-wider text-amber-700 font-semibold">
@@ -761,7 +761,7 @@ function PetugasRow({
           : 'bg-blue-50 text-blue-700';
   return (
     <div
-      className={`flex items-center gap-2.5 p-2.5 border rounded-md ${
+      className={`flex flex-wrap items-center gap-2.5 p-2.5 border rounded-md ${
         p.canScanAttendance
           ? 'border-green-200 bg-green-50/30'
           : 'border-neutral-100 hover:bg-neutral-50'
@@ -997,7 +997,7 @@ function AddPetugasModal({
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="px-6 py-4 border-b border-neutral-100">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Tambah Petugas</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               Centang member <strong>{pelayanan.nama}</strong> yang akan bertugas di ibadah ini.
@@ -1006,7 +1006,7 @@ function AddPetugasModal({
           </div>
 
           {/* Mode toggle: default vs khusus tanggal */}
-          <div className="px-6 pt-4">
+          <div className="px-4 sm:px-6 pt-4">
             <div className="text-xs font-medium text-neutral-700 mb-1.5">
               Petugas berlaku untuk:
             </div>
@@ -1060,7 +1060,7 @@ function AddPetugasModal({
           </div>
 
           {/* Search */}
-          <div className="px-6 pt-3">
+          <div className="px-4 sm:px-6 pt-3">
             <input
               type="text"
               value={search}
@@ -1077,7 +1077,7 @@ function AddPetugasModal({
           </div>
 
           {/* List */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
             {pelayananQ.isLoading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
@@ -1171,7 +1171,7 @@ function AddPetugasModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={batchMut.isPending}
@@ -1214,9 +1214,9 @@ function Info({
   return (
     <div className={full ? 'md:col-span-3' : ''}>
       <div className="text-[10px] uppercase text-neutral-400 font-semibold">{label}</div>
-      <div className="flex items-center gap-1.5 text-neutral-700 mt-0.5">
-        <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate">{children}</span>
+      <div className="flex items-start gap-1.5 text-neutral-700 mt-0.5 min-w-0">
+        <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0 mt-0.5" />
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
       </div>
     </div>
   );

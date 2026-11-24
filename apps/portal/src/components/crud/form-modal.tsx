@@ -124,7 +124,7 @@ export function FormModal<T extends Record<string, unknown>>({
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
             <button
               onClick={onClose}
@@ -154,13 +154,13 @@ export function FormModal<T extends Record<string, unknown>>({
               )}
               className="overflow-y-auto"
             >
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 {intro}
                 {visibleFields.map((field) => (
                   <ConditionalField key={field.name} field={field} />
                 ))}
               </div>
-              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+              <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
                 <button
                   type="button"
                   onClick={onClose}

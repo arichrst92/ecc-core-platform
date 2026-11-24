@@ -216,14 +216,14 @@ function PelayananDetail() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <PelayananIcon ikon={pel?.ikon} warna={pel?.warna} size={48} />
-          <div className="flex-1 min-w-[220px]">
+          <div className="flex-1 min-w-0 basis-40">
             <div className="text-xs text-neutral-500">
               <Link href="/dashboard/pelayanan" className="hover:underline">
                 Pelayanan
               </Link>{' '}
               / {pel?.nama ?? '…'}
             </div>
-            <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex flex-wrap items-center gap-2 break-words">
               {pel?.nama ?? '…'}
               {pel && !pel.isActive ? (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-neutral-200 text-neutral-600">Nonaktif</span>
@@ -231,7 +231,7 @@ function PelayananDetail() {
             </h1>
             {tagline ? <p className="text-sm text-neutral-500 mt-0.5">{tagline}</p> : null}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setEditing(true)}
               disabled={!pel}
@@ -266,8 +266,8 @@ function PelayananDetail() {
             href={`/dashboard/pelayanan/join-requests?pelayananId=${id}`}
             className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 hover:bg-amber-100"
           >
-            <UserPlus className="w-4 h-4" />
-            <b>{pending}</b> permintaan bergabung menunggu persetujuan
+            <UserPlus className="w-4 h-4 shrink-0" />
+            <span className="min-w-0"><b>{pending}</b> permintaan bergabung menunggu persetujuan</span>
             <span className="ml-auto inline-flex items-center gap-0.5 font-semibold">
               Tinjau <ChevronRight className="w-4 h-4" />
             </span>
@@ -333,7 +333,7 @@ function PelayananDetail() {
       ) : (
         <>
           <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[220px]">
+            <div className="relative flex-1 min-w-0 basis-56">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 value={search}
@@ -396,7 +396,7 @@ function PelayananDetail() {
                   <div key={g.cabang.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
                     <button
                       onClick={() => setClosed((c) => ({ ...c, [g.cabang.id]: !c[g.cabang.id] }))}
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-neutral-50 border-b border-neutral-100"
+                      className="w-full flex flex-wrap items-center justify-between px-4 py-2.5 bg-neutral-50 border-b border-neutral-100 gap-2"
                     >
                       <span className="font-semibold text-neutral-900 inline-flex items-center gap-2">
                         <Building2 className="w-4 h-4 text-brand-500" /> {g.cabang.nama}
@@ -407,7 +407,7 @@ function PelayananDetail() {
                     {isClosed ? null : (
                       <div className="divide-y divide-neutral-100">
                         {g.list.map((m) => (
-                          <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50">
+                          <div key={m.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1.5 px-3 sm:px-4 py-2.5 hover:bg-neutral-50">
                             <Avatar nama={m.jemaat.namaLengkap} foto={m.jemaat.fotoUrl} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -416,7 +416,7 @@ function PelayananDetail() {
                                 </Link>
                                 {m.approvalCabang?.length ? (
                                   <span
-                                    className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800"
+                                    className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 break-words"
                                     title={`Koordinator untuk: ${m.approvalCabang.map((c) => c.nama).join(', ')}`}
                                   >
                                     Koordinator · {m.approvalCabang.map((c) => c.nama).join(', ')}
@@ -429,6 +429,7 @@ function PelayananDetail() {
                                   .join(' · ')}
                               </div>
                             </div>
+                            <div className="flex items-center gap-1 ml-auto shrink-0">
                             <select
                               value={m.pelayananRole.id}
                               onChange={(e) => changeRole.mutate({ assignId: m.id, pelayananRoleId: e.target.value })}
@@ -459,6 +460,7 @@ function PelayananDetail() {
                             >
                               <UserMinus className="w-4 h-4" />
                             </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -494,7 +496,7 @@ function PelayananDetail() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={remove.isPending ? undefined : () => setRemoving(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 pointer-events-auto">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 pointer-events-auto max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold text-neutral-900">Keluarkan dari pelayanan?</h3>
               <p className="text-sm text-neutral-600 mt-1">
                 <b>{removing.jemaat.namaLengkap}</b> dikeluarkan dari <b>{pel?.nama}</b>. Riwayat keanggotaan tetap tersimpan
@@ -574,7 +576,7 @@ function KoordinatorPanel({
         <div className="divide-y divide-neutral-100">
           {rows.map(([cid, r]) => (
             <div key={cid} className="px-4 py-2.5 flex flex-wrap items-center gap-2">
-              <span className="font-medium text-neutral-900 w-40">{r.nama}</span>
+              <span className="font-medium text-neutral-900 w-full sm:w-40 min-w-0 break-words">{r.nama}</span>
               <span className="text-xs text-neutral-500 w-24">{r.anggota} anggota</span>
               {r.koordinator.length ? (
                 r.koordinator.map((k) => (
@@ -635,13 +637,13 @@ function AddMemberModal({
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">Tambah anggota · {pelayananNama}</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="px-5 py-3 space-y-2 border-b border-neutral-100">
+          <div className="px-3 sm:px-5 py-3 space-y-2 border-b border-neutral-100">
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -665,16 +667,16 @@ function AddMemberModal({
           </div>
           <div className="overflow-y-auto divide-y divide-neutral-100">
             {dq.trim().length < 2 ? (
-              <div className="p-6 text-center text-sm text-neutral-400">Ketik minimal 2 karakter.</div>
+              <div className="p-4 sm:p-6 text-center text-sm text-neutral-400">Ketik minimal 2 karakter.</div>
             ) : q.isLoading ? (
-              <div className="p-6 flex justify-center">
+              <div className="p-4 sm:p-6 flex justify-center">
                 <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
               </div>
             ) : (q.data ?? []).length === 0 ? (
-              <div className="p-6 text-center text-sm text-neutral-400">Tidak ada jemaat yang cocok.</div>
+              <div className="p-4 sm:p-6 text-center text-sm text-neutral-400">Tidak ada jemaat yang cocok.</div>
             ) : (
               q.data!.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-5 py-2.5">
+                <div key={c.id} className="flex items-center gap-3 px-3 sm:px-5 py-2.5">
                   <Avatar nama={c.namaLengkap} foto={c.fotoUrl} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-neutral-900 truncate">{c.namaLengkap}</div>
@@ -740,7 +742,7 @@ function ApprovalModal({
       <div className="fixed inset-0 bg-black/40 z-40" onClick={save.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 inline-flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" /> Otoritas approval
             </h2>
@@ -748,11 +750,11 @@ function ApprovalModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="px-5 py-3 text-sm text-neutral-600 border-b border-neutral-100">
+          <div className="px-3 sm:px-5 py-3 text-sm text-neutral-600 border-b border-neutral-100">
             <b>{member.jemaat.namaLengkap}</b> boleh menyetujui / menolak request bergabung <b>{pelayananNama}</b> dari jemaat
             di cabang yang dicentang, termasuk mengatur jadwal pelayanan di app. Di app, Fulltimer pun hanya bisa sesuai otoritasnya.
           </div>
-          <div className="overflow-y-auto px-5 py-2">
+          <div className="overflow-y-auto px-3 sm:px-5 py-2">
             {cabangQ.isLoading ? (
               <div className="py-6 flex justify-center">
                 <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -767,7 +769,7 @@ function ApprovalModal({
               ))
             )}
           </div>
-          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 py-3 border-t border-neutral-100">
             <button
               onClick={() => setPicked(new Set())}
               disabled={!picked.size || save.isPending}
@@ -858,7 +860,7 @@ function PendaftaranPanel({ pelayananId, embedded = false }: { pelayananId: stri
           </p>
           {rows.map((r) => (
             <div key={r.cabangId} className="px-4 py-2.5 flex flex-wrap items-center gap-2">
-              <span className="font-medium text-neutral-900 w-40">{r.cabangNama}</span>
+              <span className="font-medium text-neutral-900 w-full sm:w-40 min-w-0 break-words">{r.cabangNama}</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_PEND[r.status].cls}`}>{STATUS_PEND[r.status].label}</span>
               <span className="text-xs text-neutral-500 flex-1 min-w-[120px] truncate">
                 {r.catatan ?? ''}
@@ -889,7 +891,7 @@ function PendaftaranPanel({ pelayananId, embedded = false }: { pelayananId: stri
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEdit(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 pointer-events-auto space-y-3">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 pointer-events-auto space-y-3 max-h-[90vh] overflow-y-auto">
               <h3 className="font-semibold text-neutral-900">Buka pendaftaran · {edit.cabangNama}</h3>
               <label className="block text-sm">
                 <span className="text-neutral-700">Catatan untuk calon pendaftar (opsional)</span>

@@ -248,9 +248,9 @@ function JoinRequestsContent() {
       </div>
 
       <div className="mb-5 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <UserPlus className="w-6 h-6" />
+        <div className="min-w-0 flex-1 basis-64">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2 break-words">
+            <UserPlus className="w-6 h-6 shrink-0" />
             Permintaan Volunteer{selectedMinistry ? ` · ${selectedMinistry.nama}` : ''}
           </h1>
           <p className="text-neutral-500 mt-1 text-sm">
@@ -290,7 +290,7 @@ function JoinRequestsContent() {
         <>
           {/* Filter pemohon */}
           <div className="bg-white border border-neutral-200 rounded-lg p-3 mb-3 flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-0 basis-56">
               <span className="block text-[11px] text-neutral-500 font-medium mb-0.5">Cari pemohon</span>
               <div className="relative">
                 <Search className="w-4 h-4 text-neutral-400 absolute left-2 top-1/2 -translate-y-1/2" />
@@ -488,7 +488,7 @@ function RequestCard({
     : null;
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-4">
+    <div className="bg-white border border-neutral-200 rounded-xl p-3 sm:p-4">
       <div className="flex flex-col md:flex-row md:items-start gap-4">
         {/* Pemohon */}
         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -538,7 +538,7 @@ function RequestCard({
             {req.motivasi && (
               <p className="mt-2 text-sm text-neutral-700 bg-neutral-50 rounded-lg px-3 py-2 flex gap-2">
                 <MessageSquareQuote className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <span className="whitespace-pre-wrap">{req.motivasi}</span>
+                <span className="whitespace-pre-wrap break-words min-w-0">{req.motivasi}</span>
               </p>
             )}
           </div>

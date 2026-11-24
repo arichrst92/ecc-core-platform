@@ -134,7 +134,7 @@ export function TugasKategoriPanel({
     <div className="bg-white border border-neutral-200 rounded-xl">
       <button
         onClick={() => !embedded && setOpen((x) => !x)}
-        className={`w-full flex items-center justify-between px-4 py-3 ${embedded ? 'cursor-default' : ''}`}
+        className={`w-full flex items-center justify-between gap-2 px-3 sm:px-4 py-3 text-left ${embedded ? 'cursor-default' : ''}`}
       >
         <span className="font-semibold text-neutral-900">
           Kategori &amp; tugas petugas
@@ -151,7 +151,7 @@ export function TugasKategoriPanel({
       {open ? (
         <div className="border-t border-neutral-100">
           <div className="px-4 py-2 text-xs text-neutral-500 bg-neutral-50 flex flex-wrap items-center gap-2">
-            <span className="flex-1 min-w-[240px]">
+            <span className="flex-1 min-w-0 basis-60">
               Pilihan bagian yang ditetapkan koordinator untuk tiap petugas di jadwal ibadah / event. Klik nama untuk mengubah, panah untuk
               mengatur urutan, ikon untuk menggantinya.
             </span>
@@ -182,7 +182,7 @@ export function TugasKategoriPanel({
                 const tugas = showInactive ? k.tugas : k.tugas.filter((t) => t.isActive !== false);
                 const moveTargets = activeKat.filter((x) => x.id !== k.id);
                 return (
-                  <div key={k.id} className={`px-4 py-3 space-y-2 ${inactive ? 'opacity-60' : ''}`}>
+                  <div key={k.id} className={`px-3 sm:px-4 py-3 space-y-2 ${inactive ? 'opacity-60' : ''}`}>
                     {/* Header kategori */}
                     <div className="flex items-center gap-2">
                       <div className="flex flex-col">
@@ -234,7 +234,7 @@ export function TugasKategoriPanel({
                         value={k.nama}
                         maxLength={60}
                         disabled={inactive}
-                        className="font-semibold text-neutral-900"
+                        className="font-semibold text-neutral-900 min-w-0 break-words text-left"
                         onSave={(nama) => rename('kategori', k.id, nama)}
                       />
                       {inactive ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">nonaktif</span> : null}
@@ -264,7 +264,7 @@ export function TugasKategoriPanel({
                     </div>
 
                     {/* Daftar tugas */}
-                    <div className="ml-14 space-y-1">
+                    <div className="ml-6 sm:ml-14 space-y-1 min-w-0">
                       {tugas.map((t, ti) => {
                         const tIn = t.isActive === false;
                         const kUrl = `/admin/pelayanan/tugas-kategori/${k.id}/urutan`;
@@ -344,7 +344,7 @@ export function TugasKategoriPanel({
                             onKeyDown={(e) => e.key === 'Enter' && addTugas(k)}
                             placeholder="Tugas baru…"
                             maxLength={80}
-                            className="w-56 px-2.5 py-1 border border-neutral-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                            className="flex-1 min-w-0 sm:flex-none sm:w-56 px-2.5 py-1 border border-neutral-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500"
                           />
                           <button
                             onClick={() => addTugas(k)}
@@ -456,7 +456,7 @@ function IconGrid({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute left-0 top-9 z-40 w-[296px] bg-white border border-neutral-200 rounded-xl shadow-lg p-2">
+      <div className="absolute left-0 top-9 z-40 w-[296px] max-w-[calc(100vw-2rem)] bg-white border border-neutral-200 rounded-xl shadow-lg p-2">
         <div className="grid grid-cols-8 gap-1">
           {PELAYANAN_IKON.map((ik) => (
             <button
@@ -606,7 +606,7 @@ export function TugasEditModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 pointer-events-auto space-y-3">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 pointer-events-auto space-y-3 max-h-[90vh] overflow-y-auto">
           <div>
             <h3 className="font-semibold text-neutral-900">Tugas · {nama}</h3>
             <p className="text-xs text-neutral-500">Pilih kategori, lalu tugas (opsional). Boleh lebih dari satu, atau kosongkan.</p>
@@ -619,7 +619,7 @@ export function TugasEditModal({
           {legacyKept.length ? (
             <p className="text-[11px] text-neutral-500">Tetap tersimpan (pilihan sudah nonaktif): {tugasText(legacyKept)}</p>
           ) : null}
-          <div className="flex justify-between gap-2 pt-1">
+          <div className="flex flex-wrap justify-between gap-2 pt-1">
             <button onClick={() => setValue([])} className="px-3 py-1.5 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100">
               Kosongkan
             </button>

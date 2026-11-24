@@ -50,7 +50,7 @@ const KATEGORI: Record<string, string> = {
   LAINNYA: 'Lainnya',
 };
 const fmt = (d: string) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-const selectCls = 'px-2 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
+const selectCls = 'max-w-full px-2 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
 
 export default function FeedbackPage() {
   const [status, setStatus] = useState<Status | ''>('BARU');
@@ -149,7 +149,7 @@ export default function FeedbackPage() {
               </option>
             ))}
           </select>
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-0 basis-56">
             <Search className="w-4 h-4 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               value={search}
@@ -163,7 +163,7 @@ export default function FeedbackPage() {
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Daftar */}
-        <div className="lg:col-span-2 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="lg:col-span-2 min-w-0 bg-white border border-neutral-200 rounded-xl overflow-hidden">
           {listQ.isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -177,7 +177,11 @@ export default function FeedbackPage() {
               {rows.map((r) => (
                 <li key={r.id}>
                   <button
-                    onClick={() => setSelected(r.id)}
+                    onClick={() => {
+                      setSelected(r.id);
+                      // HP/tablet: detail ada di bawah daftar → gulir ke sana.
+                      if (window.innerWidth < 1024) setTimeout(() => document.getElementById('feedback-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                    }}
                     className={`w-full text-left px-4 py-3 hover:bg-neutral-50 ${selected === r.id ? 'bg-brand-50' : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
@@ -205,7 +209,7 @@ export default function FeedbackPage() {
             </ul>
           )}
           {meta && meta.totalPages > 1 ? (
-            <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-100 text-sm">
+            <div className="flex flex-wrap items-center justify-between px-4 py-2 border-t border-neutral-100 text-sm gap-2">
               <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-2 py-1 rounded hover:bg-neutral-100 disabled:opacity-40">
                 ‹ Sebelumnya
               </button>
@@ -224,7 +228,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* Detail */}
-        <div className="lg:col-span-3">
+        <div id="feedback-detail" className="lg:col-span-3 min-w-0 scroll-mt-4">
           {selected ? (
             <FeedbackDetail id={selected} />
           ) : (
@@ -283,7 +287,7 @@ function FeedbackDetail({ id }: { id: string }) {
   const f = q.data;
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-start gap-3 flex-wrap">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-start gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-neutral-900">{f.jemaat.namaLengkap}</div>
           <div className="text-xs text-neutral-500">

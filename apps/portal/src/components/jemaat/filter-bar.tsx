@@ -263,7 +263,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
 
   return (
     <div className="bg-white border border-neutral-200 rounded-lg p-3 mb-4">
-      <div className="flex items-center gap-2 mb-2 text-xs text-neutral-500 font-medium uppercase tracking-wider">
+      <div className="flex flex-wrap items-center gap-2 mb-2 text-xs text-neutral-500 font-medium uppercase tracking-wider">
         <Filter className="w-3.5 h-3.5" />
         Filter & Sort
         {isFilterActive(value) && (
@@ -276,7 +276,7 @@ export function JemaatFilterBar({ value, onChange }: Props) {
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
         {/* Jenis: anggota / tamu */}
         <Field label="Jenis">
           <select
@@ -590,7 +590,7 @@ const inputCls = controlCls;
 /** Seperti Field tapi bukan <label> — untuk kontrol berisi banyak tombol (multi-select). */
 function FieldBox({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="block">
+    <div className="block min-w-0">
       <span className="block text-[11px] text-neutral-500 font-medium mb-1">{label}</span>
       {children}
     </div>
@@ -599,7 +599,7 @@ function FieldBox({ label, children }: { label: string; children: React.ReactNod
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="block text-[11px] text-neutral-500 font-medium mb-1">{label}</span>
       {children}
     </label>
@@ -662,7 +662,7 @@ function MultiSelect({
         <ChevronDown className="w-3.5 h-3.5 shrink-0 text-neutral-500" />
       </button>
       {open ? (
-        <div className="absolute z-30 mt-1 w-72 max-w-[80vw] bg-white border border-neutral-200 rounded-lg shadow-lg">
+        <div className="absolute z-30 mt-1 w-full sm:w-72 max-w-[calc(100vw-2rem)] bg-white border border-neutral-200 rounded-lg shadow-lg">
           <div className="p-2 border-b border-neutral-100 flex gap-1.5">
             <input
               autoFocus

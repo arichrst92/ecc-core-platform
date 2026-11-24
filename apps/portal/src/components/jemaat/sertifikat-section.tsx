@@ -199,14 +199,14 @@ function SertifikatFormModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={saveMut.isPending ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">{item ? 'Ubah Sertifikat' : 'Tambah Sertifikat'}</h2>
             <button onClick={onClose} className="p-1 hover:bg-neutral-100 rounded">
               <X className="w-4 h-4 text-neutral-500" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Nama Sertifikat</span>
               <input
@@ -246,7 +246,7 @@ function SertifikatFormModal({
               </button>
             </div>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={saveMut.isPending}

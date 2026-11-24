@@ -44,7 +44,7 @@ export function PurgePersonalDataButton({ jemaatId, nama }: { jemaatId: string; 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
           <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <h2 className="text-lg font-bold text-neutral-900">Hapus data pribadi permanen</h2>
               <button onClick={() => setOpen(false)} className="text-neutral-400 hover:text-neutral-700">
                 <X className="w-5 h-5" />

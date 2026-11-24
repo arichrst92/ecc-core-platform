@@ -88,7 +88,7 @@ export default function RolePage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Master Role, Sub-Role & Status</h1>
           <p className="text-neutral-500 mt-1">
@@ -110,12 +110,12 @@ export default function RolePage() {
         <div className="space-y-3">
           {data?.map((role) => (
             <div key={role.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 bg-brand-50/50 border-b border-neutral-100">
+              <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-3 bg-brand-50/50 border-b border-neutral-100 gap-2">
                 <button
                   onClick={() =>
                     setEditing({ kind: 'role', id: role.id, nama: role.nama, deskripsi: role.deskripsi })
                   }
-                  className="flex items-center gap-2 text-left hover:bg-brand-100/50 px-1.5 py-0.5 rounded transition group"
+                  className="flex flex-wrap items-center gap-x-2 text-left hover:bg-brand-100/50 px-1.5 py-0.5 rounded transition group min-w-0 flex-1"
                 >
                   <ChevronRight className="w-4 h-4 text-brand-600" />
                   <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 transition" />
@@ -132,10 +132,10 @@ export default function RolePage() {
                 </button>
               </div>
 
-              <div className="p-4 space-y-3">
+              <div className="p-2 sm:p-4 space-y-3">
                 {role.subRoles.map((sr) => (
                   <div key={sr.id} className="border border-neutral-100 rounded-lg">
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-neutral-50">
+                    <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-neutral-50 gap-2">
                       <button
                         onClick={() =>
                           setEditing({
@@ -145,7 +145,7 @@ export default function RolePage() {
                             deskripsi: sr.deskripsi,
                           })
                         }
-                        className="flex items-center gap-1.5 text-left hover:bg-neutral-100 px-1.5 py-0.5 rounded transition group"
+                        className="flex flex-wrap items-center gap-x-1.5 text-left hover:bg-neutral-100 px-1.5 py-0.5 rounded transition group min-w-0 flex-1"
                       >
                         <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50" />
                         <span className="font-medium text-neutral-800">{sr.nama}</span>
@@ -281,14 +281,14 @@ function EditModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900">Edit {labelMap[target.kind]}</h2>
             <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Nama</span>
               <input
@@ -310,7 +310,7 @@ function EditModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={updateMut.isPending}
@@ -351,7 +351,7 @@ function AddInline({
     setVal('');
   }
   return (
-    <div className={compact ? 'inline-flex items-center gap-1' : 'flex items-center gap-2'}>
+    <div className={compact ? 'inline-flex flex-wrap items-center gap-1' : 'flex flex-wrap items-center gap-2'}>
       <input
         type="text"
         value={val}
@@ -361,7 +361,7 @@ function AddInline({
         className={
           compact
             ? 'px-2 py-1 text-xs border border-neutral-300 rounded focus:ring-1 focus:ring-brand-500 outline-none'
-            : 'flex-1 px-3 py-1.5 text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none'
+            : 'flex-1 min-w-0 basis-48 px-3 py-1.5 text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none'
         }
       />
       <button

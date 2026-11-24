@@ -46,11 +46,11 @@ export default function Bible365Page() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0 flex-1 basis-64">
+          <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
             <BookOpen className="w-5 h-5 text-brand-600" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold text-neutral-900">Bible 365</h1>
             <p className="text-sm text-neutral-500">Program baca Alkitab 365 hari dari Els App. Catatan renungan jemaat bersifat pribadi.</p>
           </div>
@@ -58,7 +58,7 @@ export default function Bible365Page() {
         <select
           value={cabangId}
           onChange={(e) => setCabangId(e.target.value)}
-          className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm"
+          className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm max-w-full"
         >
           <option value="">Semua cabang</option>
           {(cabangQ.data ?? []).map((c) => (

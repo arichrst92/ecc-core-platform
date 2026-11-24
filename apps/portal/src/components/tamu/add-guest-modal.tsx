@@ -181,7 +181,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               {tujuan && !result ? (
                 <button onClick={() => setTujuan(null)} className="p-1 -ml-1 hover:bg-neutral-100 rounded" title="Kembali">
@@ -199,7 +199,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
 
           {!tujuan ? (
             /* Langkah 1 — pilih tujuan */
-            <div className="p-6 space-y-3">
+            <div className="p-4 sm:p-6 space-y-3">
               <p className="text-sm text-neutral-600">Tamu ini untuk:</p>
               <ChoiceCard
                 icon={<Church className="w-5 h-5" />}
@@ -215,7 +215,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
               />
             </div>
           ) : result ? (
-            <div className="p-6 space-y-3 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-3 overflow-y-auto">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
                 <div className="text-sm text-neutral-800">{result.message}</div>
@@ -240,7 +240,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
               ) : null}
             </div>
           ) : (
-            <div className="p-6 space-y-4 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
               <div>
                 <span className="text-sm font-medium text-neutral-700">Jenis tamu</span>
                 <div className="mt-1 flex gap-2">
@@ -433,7 +433,7 @@ export function AddGuestModal({ onClose, onSuccess }: { onClose: () => void; onS
           )}
 
           {tujuan ? (
-            <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
               {result ? (
                 <>
                   <button onClick={resetPerson} className="px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 rounded-lg">
@@ -489,7 +489,7 @@ function ChoiceCard({ icon, title, desc, onClick }: { icon: React.ReactNode; tit
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className="flex flex-wrap justify-between gap-3">
       <span className="text-neutral-500">{label}</span>
       <span className={`font-medium text-neutral-900 text-right ${mono ? 'font-mono tracking-wider' : ''}`}>{value}</span>
     </div>

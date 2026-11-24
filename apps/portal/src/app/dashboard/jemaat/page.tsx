@@ -53,7 +53,7 @@ function JemaatPageInner() {
 
   const banner =
     cabangId || sinodeId ? (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm">
         <div className="flex items-center gap-2 text-brand-800">
           <Filter className="w-4 h-4" />
           Filter:{' '}

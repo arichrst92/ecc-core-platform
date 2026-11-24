@@ -264,14 +264,14 @@ export default function JemaatDetailPage() {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
         <Link
           href="/dashboard/jemaat"
           className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
         >
           <ArrowLeft className="w-3 h-3" /> Kembali ke daftar jemaat
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={async () => {
             // Buka tab dulu di user-gesture context (iOS Safari popup fix)
@@ -315,8 +315,8 @@ export default function JemaatDetailPage() {
           apiBase={apiBase}
           readOnly={!!j.dataPurgedAt}
         />
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2 flex-wrap break-words">
             {j.namaLengkap}
             {j.isTamu ? (
               <span
@@ -458,7 +458,7 @@ export default function JemaatDetailPage() {
                 style={{ width: `${Math.round((j.spiritualJourney.stage / j.spiritualJourney.total) * 100)}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-neutral-800 whitespace-nowrap">{j.spiritualJourney.label}</span>
+            <span className="text-sm font-semibold text-neutral-800 max-w-[55%] text-right">{j.spiritualJourney.label}</span>
           </div>
           <ol className="flex flex-wrap gap-2">
             {j.spiritualJourney.steps.map((st) => (
@@ -508,7 +508,7 @@ export default function JemaatDetailPage() {
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {/* Active assignments */}
           <div>
             <div className="text-xs uppercase text-neutral-500 mb-2 font-semibold flex items-center gap-1">
@@ -572,7 +572,7 @@ export default function JemaatDetailPage() {
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {(() => {
             const allRoles = j.jemaatRoles ?? [];
             const activeRoles = allRoles.filter((r) => r.isActive);
@@ -730,7 +730,7 @@ function Info({
   return (
     <div className={full ? 'md:col-span-2' : ''}>
       <div className="text-[10px] uppercase text-neutral-400 font-semibold">{label}</div>
-      <div className="flex items-center gap-1.5 text-neutral-700">
+      <div className="flex flex-wrap items-center gap-1.5 text-neutral-700 min-w-0 break-words [overflow-wrap:anywhere]">
         <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
         {children}
       </div>
@@ -758,11 +758,11 @@ function AssignmentRow({
           ? 'bg-neutral-100 text-neutral-500'
           : 'bg-blue-50 text-blue-700';
   return (
-    <div className="flex items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
+    <div className="flex flex-wrap items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <PelayananIcon ikon={a.pelayanan.ikon} warna={a.pelayanan.warna} size={22} />
-          <span className="font-medium text-neutral-900">{a.pelayanan.nama}</span>
+          <span className="font-medium text-neutral-900 break-words min-w-0">{a.pelayanan.nama}</span>
           <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${levelColor}`}>
             {a.pelayananRole.nama}
           </span>
@@ -775,7 +775,7 @@ function AssignmentRow({
           {a.catatan && <span className="italic"> · {a.catatan}</span>}
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1 shrink-0 ml-auto">
         {isActive && onEnd && (
           <button
             onClick={onEnd}
@@ -836,11 +836,11 @@ function AssignPelayananModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Tambah Penugasan Pelayanan</h2>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Pelayanan</span>
               <select
@@ -889,7 +889,7 @@ function AssignPelayananModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={assignMut.isPending}
@@ -1012,7 +1012,7 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
         </button>
       </div>
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {relasiQ.isLoading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -1026,7 +1026,7 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
             {relasi.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50"
               >
                 {r.jemaatTerkait.fotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1047,7 +1047,7 @@ function RelasiSection({ jemaatId }: { jemaatId: string }) {
                   >
                     {r.jemaatTerkait.namaLengkap}
                   </Link>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
                     <span className="inline-block px-2 py-0.5 bg-pink-50 text-pink-700 text-xs rounded">
                       {r.tipeRelasi.nama}
                     </span>
@@ -1202,14 +1202,14 @@ function AddRelasiModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Tambah Relasi Keluarga</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               Tip: relasi <em>satu arah</em> — A → suami B berarti B adalah suami dari A.
             </p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Tipe Relasi</span>
               <select
@@ -1286,7 +1286,7 @@ function AddRelasiModal({
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={createMut.isPending}
@@ -1323,7 +1323,7 @@ function JemaatRoleRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
+    <div className="flex flex-wrap items-center justify-between gap-3 p-3 border border-neutral-100 rounded-lg hover:bg-neutral-50">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-neutral-900">{r.role.nama}</span>
@@ -1356,7 +1356,7 @@ function JemaatRoleRow({
           {r.catatan && <span className="italic"> · {r.catatan}</span>}
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1 shrink-0 ml-auto">
         {isActive && onEnd && (
           <button
             onClick={onEnd}
@@ -1441,14 +1441,14 @@ function AddJemaatRoleModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto">
-          <div className="px-6 py-4 border-b border-neutral-100">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900">Tambah Role</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               Role → Sub-Role wajib; Status opsional kalau Sub-Role punya tingkatan status.
             </p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-neutral-700">Role</span>
               <select
@@ -1541,7 +1541,7 @@ function AddJemaatRoleModal({
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+          <div className="flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50">
             <button
               onClick={onClose}
               disabled={createMut.isPending}
@@ -1583,7 +1583,7 @@ function JemaatQrCard({ kode, nama }: { kode: string; nama: string }) {
 
   return (
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-neutral-100">
+      <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
           <QrCode className="w-4 h-4 text-brand-500" />
           Kartu QR Jemaat
@@ -1593,7 +1593,7 @@ function JemaatQrCard({ kode, nama }: { kode: string; nama: string }) {
           Cetak atau kirim QR ini ke jemaat.
         </p>
       </div>
-      <div className="p-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
+      <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={qrUrl}
@@ -1801,7 +1801,7 @@ function JemaatHistorySections({ jemaatId }: { jemaatId: string }) {
   if (!q.data) {
     // Jangan diam-diam kosong — tampilkan error supaya ketahuan kalau gagal.
     return (
-      <div className="mt-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between gap-3">
+      <div className="mt-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <span>Gagal memuat riwayat (homecell, event, ibadah, group).</span>
         <button onClick={() => q.refetch()} className="text-xs font-semibold underline">
           Coba lagi
@@ -1850,15 +1850,15 @@ function ActivityIndicator({ activity }: { activity: JemaatProfileData['activity
 
   return (
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-neutral-100">
+      <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2 text-sm">
           <span className="text-base">{current.emoji}</span>
           Indikator Keaktifan — 3 Bulan Terakhir
         </h2>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Current tier label */}
-        <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
             <div className={`inline-block px-3 py-1.5 rounded-lg border text-sm font-bold ${current.color}`}>
               {current.label}
@@ -1879,7 +1879,7 @@ function ActivityIndicator({ activity }: { activity: JemaatProfileData['activity
             style={{ width: `${pct}%` }}
           />
         </div>
-        <div className="flex justify-between text-[10px] text-neutral-500">
+        <div className="flex flex-wrap justify-between text-[10px] text-neutral-500 gap-2">
           {ACTIVITY_TIERS.map((t, i) => (
             <span
               key={t.key}
@@ -2042,8 +2042,8 @@ function VisitSection({
         const isInitiator = v.initiatorJemaatId === selfJemaatId;
         const other = isInitiator ? v.target : v.initiator;
         return (
-          <div key={v.id} className="px-5 py-3">
-            <div className="flex items-start justify-between gap-2">
+          <div key={v.id} className="px-3 sm:px-5 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-neutral-900 truncate">{v.judul}</p>
                 <div className="flex items-center gap-1.5 text-xs text-neutral-600 mt-1">
@@ -2136,7 +2136,7 @@ function HistoryCard({
       </div>
       <div className="divide-y divide-neutral-100 max-h-96 overflow-y-auto">
         {count === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-neutral-400">{emptyLabel}</div>
+          <div className="px-3 sm:px-5 py-8 text-center text-sm text-neutral-400">{emptyLabel}</div>
         ) : (
           children
         )}
@@ -2149,7 +2149,7 @@ function ZonaSection({ zonas }: { zonas: NonNullable<JemaatProfileData['zonas']>
   return (
     <HistoryCard title="Zona yang dipimpin" icon={HomeIcon} count={zonas.length} emptyLabel="Tidak memimpin zona" color="from-orange-500 to-orange-600">
       {zonas.map((z) => (
-        <div key={z.id} className="px-5 py-3 flex items-start justify-between gap-2">
+        <div key={z.id} className="px-3 sm:px-5 py-3 flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <Link
               href={`/dashboard/homecell-area?search=${encodeURIComponent(z.nama)}`}
@@ -2188,8 +2188,8 @@ function HomecellSection({ homecells }: { homecells: JemaatProfileData['homecell
       color="from-blue-600 to-blue-700"
     >
       {homecells.map((h) => (
-        <div key={h.id} className="px-5 py-3">
-          <div className="flex items-start justify-between gap-2">
+        <div key={h.id} className="px-3 sm:px-5 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <Link
                 href={`/dashboard/homecell/${h.homecell.id}`}
@@ -2265,9 +2265,9 @@ function EventHistorySection({ events }: { events: JemaatProfileData['events'] }
         <Link
           key={e.id}
           href={`/dashboard/event/${e.event.id}`}
-          className="block px-5 py-3 hover:bg-neutral-50"
+          className="block px-3 sm:px-5 py-3 hover:bg-neutral-50"
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
                 {e.event.judul}
@@ -2326,9 +2326,9 @@ function IbadahHistorySection({ ibadah }: { ibadah: JemaatProfileData['ibadah'] 
         <Link
           key={r.id}
           href={`/dashboard/ibadah/${r.ibadah.id}`}
-          className="block px-5 py-3 hover:bg-neutral-50"
+          className="block px-3 sm:px-5 py-3 hover:bg-neutral-50"
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
                 {r.ibadah.nama}
@@ -2385,9 +2385,9 @@ function GroupSection({ groups }: { groups: JemaatProfileData['groups'] }) {
         <Link
           key={g.id}
           href={`/dashboard/group/${g.group.id}`}
-          className="block px-5 py-3 hover:bg-neutral-50"
+          className="block px-3 sm:px-5 py-3 hover:bg-neutral-50"
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
                 {g.group.nama}
@@ -2427,9 +2427,9 @@ function BusinessSection({ businesses }: { businesses: JemaatProfileData['busine
         <Link
           key={b.id}
           href={`/dashboard/local-business?search=${encodeURIComponent(b.nama)}`}
-          className="block px-5 py-3 hover:bg-neutral-50"
+          className="block px-3 sm:px-5 py-3 hover:bg-neutral-50"
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
                 {b.nama}

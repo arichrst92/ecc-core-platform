@@ -69,7 +69,7 @@ export function WalkInGuestModal({
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto flex flex-col max-h-[90vh]">
-          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-100 gap-2">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-violet-600" /> Tamu Walk-in
             </h2>

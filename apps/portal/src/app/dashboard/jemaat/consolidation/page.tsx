@@ -591,7 +591,7 @@ export default function JemaatConsolidationPage() {
                 <b>Ayah, Ibu, Wali</b> dicocokkan ke jemaat yang ada (atau dibuat baru) lalu dihubungkan di Keluarga.
               </p>
               <div className="space-y-3">
-                {visibleRows.length === 0 && <div className="text-sm text-neutral-500 p-6 text-center">Tidak ada baris.</div>}
+                {visibleRows.length === 0 && <div className="text-sm text-neutral-500 p-4 sm:p-6 text-center">Tidak ada baris.</div>}
                 {visibleRows.map((r) => (
                   <RowCard
                     key={r.rowNo}
@@ -638,8 +638,8 @@ export default function JemaatConsolidationPage() {
           )}
 
           {tab === 'ministry' && (
-            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-neutral-50 text-neutral-600 text-xs uppercase">
                   <tr>
                     <th className="px-3 py-2 text-left">Ministry di sheet</th>
@@ -760,7 +760,7 @@ export default function JemaatConsolidationPage() {
                   applyMut.mutate();
                 }}
                 disabled={applyMut.isPending || stats.included === 0}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg"
+                className="inline-flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg"
               >
                 {applyMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 {applyMut.isPending ? 'Menerapkan…' : 'Apply ke Database'}
@@ -772,7 +772,7 @@ export default function JemaatConsolidationPage() {
 
       {result && data && (
         <div className="bg-white border border-neutral-200 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
             <h2 className="font-semibold text-neutral-900">Hasil Konsolidasi</h2>
             <button
               onClick={() => file && previewMut.mutate({ f: file, sheet: data.sheet })}
@@ -925,7 +925,7 @@ function RowCard({
       )}
       {creating && (
         <div className="overflow-x-auto mt-1">
-          <table className="w-full text-xs">
+          <table className="w-full min-w-[560px] text-xs">
             <thead className="text-neutral-500">
               <tr>
                 <th className="text-left font-medium py-1 pr-2 w-28">Field</th>
@@ -969,7 +969,7 @@ function RowCard({
 
       {target && (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full min-w-[560px] text-xs">
             <thead className="text-neutral-500">
               <tr>
                 <th className="text-left font-medium py-1 pr-2 w-28">Field</th>
@@ -1057,7 +1057,7 @@ function DuplicatePanel({
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs bg-white rounded border border-red-100">
+        <table className="w-full min-w-[560px] text-xs bg-white rounded border border-red-100">
           <thead className="text-neutral-500">
             <tr>
               <th className="text-left font-medium px-2 py-1 w-10">Baris</th>
@@ -1238,7 +1238,7 @@ function LeaderTable({
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
       <div className="px-3 py-2 bg-neutral-50 text-sm font-semibold">{title}</div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-3 py-2 text-left">Nama</th>
@@ -1336,7 +1336,7 @@ function JourneyTab({
   const journeys = data.journeys ?? [];
   if (journeys.length === 0) {
     return (
-      <div className="bg-white border border-neutral-200 rounded-xl p-6 text-sm text-neutral-500">
+      <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-6 text-sm text-neutral-500">
         Sheet tidak punya kolom <b>Spiritual Journey</b> (atau semua kosong). Tambahkan kolom bernama &quot;Spiritual Journey&quot;
         berisi nama tahap, mis. &quot;Expand&quot;.
       </div>
@@ -1349,8 +1349,8 @@ function JourneyTab({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white border border-neutral-200 rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-neutral-50 text-neutral-600 text-xs uppercase">
             <tr>
               <th className="px-3 py-2 text-left">Nilai di sheet</th>

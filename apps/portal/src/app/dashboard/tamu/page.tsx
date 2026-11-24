@@ -174,7 +174,7 @@ export default function TamuPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-      <div>
+      <div className="min-w-0 flex-1 basis-64">
         <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <Contact className="w-6 h-6 text-brand-500" /> Tamu
         </h1>
@@ -184,7 +184,7 @@ export default function TamuPage() {
           hadir, dan ke <i>Sudah terdaftar</i> saat tamu mendaftar Els App.
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <ExportButtons endpoint="/admin/tamu/export" params={filterParams} filename={`tamu-${todayYmd()}`} />
         <button
           onClick={() => setAdding(true)}
@@ -246,7 +246,7 @@ export default function TamuPage() {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-xl p-3 flex flex-wrap gap-2 items-center">
-        <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 flex-1 min-w-[220px]">
+        <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 flex-1 min-w-0 basis-full sm:basis-56">
           <Search className="w-3.5 h-3.5 text-neutral-400" />
           <input
             value={search}
@@ -255,7 +255,7 @@ export default function TamuPage() {
               setPage(1);
             }}
             placeholder="Cari nama tamu / no HP / pengundang / homecell"
-            className="flex-1 py-1.5 outline-none text-sm"
+            className="flex-1 min-w-0 py-1.5 outline-none text-sm"
           />
         </div>
         <select
@@ -264,7 +264,7 @@ export default function TamuPage() {
             setCabangId(e.target.value);
             setPage(1);
           }}
-          className={`${selectCls} w-48`}
+          className={`${selectCls} sm:!w-48`}
         >
           <option value="">Semua cabang</option>
           {(cabangQ.data ?? []).map((c) => (
@@ -279,7 +279,7 @@ export default function TamuPage() {
             setFollowupBy(e.target.value);
             setPage(1);
           }}
-          className={`${selectCls} w-56`}
+          className={`${selectCls} sm:!w-56`}
         >
           <option value="">Semua petugas follow-up</option>
           <option value="none">Belum ada petugas follow-up</option>
@@ -295,7 +295,7 @@ export default function TamuPage() {
             setSumber(e.target.value);
             setPage(1);
           }}
-          className={`${selectCls} w-44`}
+          className={`${selectCls} sm:!w-44`}
         >
           <option value="">Semua sumber</option>
           <option value="homecell">Tamu homecell</option>
@@ -310,7 +310,7 @@ export default function TamuPage() {
         ) : rows.length === 0 ? (
           <div className="text-center py-16 text-sm text-neutral-400">Tidak ada tamu.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1000px] text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500 uppercase">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Tamu</th>
@@ -474,7 +474,7 @@ export default function TamuPage() {
           </table>
         )}
         {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center justify-between px-4 py-3 border-t border-neutral-100 text-xs text-neutral-500 gap-2">
             <span>
               Halaman {meta.page} dari {meta.totalPages} · {meta.total} tamu
             </span>
@@ -533,8 +533,8 @@ function NoteModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-5">
-          <div className="flex items-start justify-between mb-3">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-5 max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-start justify-between mb-3 gap-2">
             <div>
               <h2 className="font-semibold">Catatan follow-up</h2>
               <p className="text-xs text-neutral-500">{tamu.namaLengkap} · hanya terlihat oleh tim ECC</p>
@@ -600,8 +600,8 @@ function AssignModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-5">
-          <div className="flex items-start justify-between mb-3">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto p-5 max-h-[90vh] overflow-y-auto">
+          <div className="flex flex-wrap items-start justify-between mb-3 gap-2">
             <div>
               <h2 className="font-semibold flex items-center gap-2">
                 <UserCheck className="w-4 h-4 text-brand-500" /> Petugas follow-up
@@ -615,7 +615,7 @@ function AssignModal({
             </button>
           </div>
           {tamu.followupBy ? (
-            <div className="flex items-center justify-between bg-neutral-50 rounded-lg px-3 py-2 mb-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between bg-neutral-50 rounded-lg px-3 py-2 mb-3 text-sm gap-2">
               <span>
                 Saat ini: <b>{tamu.followupBy.namaLengkap}</b>
               </span>
@@ -651,7 +651,7 @@ function AssignModal({
                     key={j.id}
                     onClick={() => onSave(j.id)}
                     disabled={saving}
-                    className="w-full text-left px-2 py-2.5 hover:bg-brand-50 rounded flex items-center justify-between gap-2"
+                    className="w-full text-left px-2 py-2.5 hover:bg-brand-50 rounded flex flex-wrap items-center justify-between gap-2"
                   >
                     <span className="text-sm font-medium text-neutral-900">{j.namaLengkap}</span>
                     <span className="text-[11px] text-neutral-500">

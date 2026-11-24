@@ -80,7 +80,7 @@ export function RegistrationDuplicates() {
     <div className="bg-white border border-neutral-200 rounded-xl mb-6 overflow-hidden">
       <div className="px-4 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-3">
         <UserPlus className="w-5 h-5 text-brand-600" />
-        <div className="flex-1 min-w-[220px]">
+        <div className="flex-1 min-w-0 basis-56">
           <h2 className="font-semibold text-neutral-900">
             Dari pendaftaran app{q.data?.meta.openCount ? <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{q.data.meta.openCount} perlu ditinjau</span> : null}
           </h2>
@@ -88,7 +88,7 @@ export function RegistrationDuplicates() {
             Pendaftar baru yang mirip data jemaat lama, atau nomor HP yang ternyata milik data tamu. Satukan datanya di halaman jemaat, lalu tandai di sini.
           </p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {(['OPEN', 'MERGED', 'DISMISSED'] as Status[]).map((s) => (
             <button
               key={s}
@@ -109,10 +109,10 @@ export function RegistrationDuplicates() {
       ) : (
         <div className="divide-y divide-neutral-100">
           {rows.map((r) => (
-            <div key={r.id} className="px-4 py-3 grid gap-3 md:grid-cols-[1fr_1fr_auto] items-start">
+            <div key={r.id} className="px-3 sm:px-4 py-3 grid gap-3 md:grid-cols-[1fr_1fr_auto] items-start min-w-0">
               <PersonCell p={r.baru} label={`Akun baru · ${tgl(r.createdAt)}`} />
               <PersonCell p={r.lama} label={r.lama.isTamu ? 'Data tamu' : 'Data lama'} />
-              <div className="flex md:flex-col gap-2 md:items-end">
+              <div className="flex flex-wrap md:flex-col gap-2 md:items-end">
                 <span className="text-[11px] text-neutral-500 md:text-right max-w-[220px]">{r.reason}</span>
                 {r.status === 'OPEN' ? (
                   <div className="flex gap-1.5">

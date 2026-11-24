@@ -79,7 +79,7 @@ const STATUS_CLS: Record<PrayerDisplayStatus, string> = {
 };
 const katLabel = (k: string) => PRAYER_KATEGORI_LABEL[k as PrayerKategori]?.id ?? k;
 const fmt = (d: string) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-const ctrl = 'h-9 px-3 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
+const ctrl = 'h-9 max-w-full px-3 border border-neutral-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500';
 const errMsg = (e: any, d: string) => e?.response?.data?.error?.message ?? d;
 
 function untukText(r: Pick<PrayerRow, 'untuk' | 'untukNama'>) {
@@ -202,7 +202,7 @@ export default function PrayerRequestPage() {
               </option>
             ))}
           </select>
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-0 basis-56">
             <Search className="w-4 h-4 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               value={search}
@@ -215,7 +215,7 @@ export default function PrayerRequestPage() {
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-2 bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        <div className="lg:col-span-2 min-w-0 bg-white border border-neutral-200 rounded-xl overflow-hidden">
           {listQ.isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
@@ -229,7 +229,11 @@ export default function PrayerRequestPage() {
               {rows.map((r) => (
                 <li key={r.id}>
                   <button
-                    onClick={() => setSelected(r.id)}
+                    onClick={() => {
+                      setSelected(r.id);
+                      // HP/tablet: detail ada di bawah daftar → gulir ke sana.
+                      if (window.innerWidth < 1024) setTimeout(() => document.getElementById('prayer-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                    }}
                     className={`w-full text-left px-4 py-3 hover:bg-neutral-50 ${selected === r.id ? 'bg-brand-50' : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
@@ -257,7 +261,7 @@ export default function PrayerRequestPage() {
             </ul>
           )}
           {meta && meta.totalPages > 1 ? (
-            <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-100 text-sm">
+            <div className="flex flex-wrap items-center justify-between px-4 py-2 border-t border-neutral-100 text-sm gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
@@ -279,7 +283,7 @@ export default function PrayerRequestPage() {
           ) : null}
         </div>
 
-        <div className="lg:col-span-3">
+        <div id="prayer-detail" className="lg:col-span-3 min-w-0 scroll-mt-4">
           {selected ? (
             <PrayerDetail id={selected} onDeleted={() => setSelected(null)} />
           ) : (
@@ -386,7 +390,7 @@ function PrayerDetail({ id, onDeleted }: { id: string; onDeleted: () => void }) 
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-start gap-3 flex-wrap">
+      <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-start gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
             {p.jemaat.namaLengkap}
@@ -664,7 +668,7 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-lg pointer-events-auto">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+          <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-4 border-b border-neutral-100 gap-2">
             <div>
               <h2 className="font-semibold text-neutral-900">Konfigurasi Petugas Doa</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
@@ -795,7 +799,7 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </div>
-          <div className="flex justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+          <div className="flex justify-end gap-2 px-3 sm:px-5 py-4 border-t border-neutral-100">
             <button onClick={onClose} className="h-9 px-4 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
               Batal
             </button>

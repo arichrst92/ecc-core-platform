@@ -42,7 +42,7 @@ export function RelasiModal({ jemaatId, jemaatNama, onClose }: Props) {
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto max-h-[80vh] flex flex-col">
-          <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
                 <Heart className="w-4 h-4" />
@@ -57,7 +57,7 @@ export function RelasiModal({ jemaatId, jemaatNama, onClose }: Props) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             {relasiQ.isLoading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-5 h-5 mx-auto animate-spin text-neutral-400" />
@@ -111,7 +111,7 @@ export function RelasiModal({ jemaatId, jemaatNama, onClose }: Props) {
             )}
           </div>
 
-          <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-neutral-500">
               {relasi.length} relasi tercatat
             </span>

@@ -254,7 +254,7 @@ export function HomecellStructureImport({ file, sheet }: { file: File; sheet?: s
 
   if (summary) {
     return (
-      <div className="bg-white border border-green-200 rounded-xl p-6">
+      <div className="bg-white border border-green-200 rounded-xl p-4 sm:p-6">
         <h2 className="text-lg font-bold text-green-700 flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5" /> Struktur homecell diterapkan — {data.cabang?.nama}
         </h2>
@@ -336,7 +336,7 @@ export function HomecellStructureImport({ file, sheet }: { file: File; sheet?: s
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
             <div className="px-3 py-2 bg-neutral-50 text-sm font-semibold">Zona → Area ({data.areas.length})</div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="px-3 py-2 text-left">Zona</th>
@@ -397,7 +397,7 @@ export function HomecellStructureImport({ file, sheet }: { file: File; sheet?: s
 
           {/* Homecell */}
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-3 py-2 bg-neutral-50 text-sm font-semibold flex items-center justify-between gap-3">
+            <div className="px-3 py-2 bg-neutral-50 text-sm font-semibold flex flex-wrap items-center justify-between gap-3">
               <span>Homecell ({data.homecells.length})</span>
               <label className="text-xs font-normal text-neutral-600 flex items-center gap-1.5">
                 <input type="checkbox" checked={useUsia} onChange={(e) => setUseUsia(e.target.checked)} />
@@ -405,7 +405,7 @@ export function HomecellStructureImport({ file, sheet }: { file: File; sheet?: s
               </label>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="text-xs text-neutral-500 uppercase">
                   <tr>
                     <th className="px-3 py-2 text-left">Homecell</th>

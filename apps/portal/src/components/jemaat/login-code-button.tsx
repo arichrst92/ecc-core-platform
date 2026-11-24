@@ -49,7 +49,7 @@ export function LoginCodeButton({ jemaatId, nama, disabled }: { jemaatId: string
       {confirm || code ? (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !make.isPending && (setConfirm(false), setCode(null))}>
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center gap-2">
+            <div className="px-3 sm:px-5 py-4 border-b border-neutral-100 flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-amber-600" />
               <h3 className="font-semibold text-neutral-900 flex-1">Kode masuk sementara</h3>
               <button onClick={() => (setConfirm(false), setCode(null))} className="p-1 rounded hover:bg-neutral-100" aria-label="Tutup">
@@ -57,7 +57,7 @@ export function LoginCodeButton({ jemaatId, nama, disabled }: { jemaatId: string
               </button>
             </div>
             {!code ? (
-              <div className="px-5 py-4 space-y-3 text-sm text-neutral-700">
+              <div className="px-3 sm:px-5 py-4 space-y-3 text-sm text-neutral-700">
                 <p>
                   Buat kode untuk <b>{nama}</b>? Pakai hanya bila jemaat tidak bisa menerima OTP WhatsApp / email, dan Anda sudah
                   memastikan orangnya (tatap muka atau telepon ke nomor yang Anda kenal).
@@ -82,9 +82,9 @@ export function LoginCodeButton({ jemaatId, nama, disabled }: { jemaatId: string
                 </div>
               </div>
             ) : (
-              <div className="px-5 py-4 space-y-3 text-sm text-neutral-700">
+              <div className="px-3 sm:px-5 py-4 space-y-3 text-sm text-neutral-700">
                 <div className="text-center">
-                  <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50">
+                  <div className="inline-flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50">
                     <span className="text-3xl font-extrabold tracking-[0.3em] text-amber-800 font-mono">{code.kode}</span>
                     <button
                       onClick={() => navigator.clipboard?.writeText(code.kode).then(() => toast.success('Kode disalin'))}

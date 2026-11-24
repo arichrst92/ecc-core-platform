@@ -103,7 +103,7 @@ export default function ImportJemaatPage() {
       >
         <ArrowLeft className="w-3 h-3" /> Kembali ke daftar jemaat
       </Link>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Import Jemaat dari CSV</h1>
           <p className="text-neutral-500 mt-1">
@@ -138,7 +138,7 @@ export default function ImportJemaatPage() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={previewMut.isPending}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg"
+            className="inline-flex items-center gap-2 px-4 sm:px-6 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg"
           >
             {previewMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             {previewMut.isPending ? 'Mem-parse...' : 'Pilih File CSV'}
@@ -153,7 +153,7 @@ export default function ImportJemaatPage() {
 
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase text-xs">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium" style={{ width: '50px' }}>#</th>
@@ -209,7 +209,7 @@ export default function ImportJemaatPage() {
             <button
               onClick={commit}
               disabled={commitMut.isPending || preview.summary.valid === 0}
-              className="flex items-center gap-2 px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+              className="flex items-center gap-2 px-3 sm:px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
             >
               {commitMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Commit {preview.summary.valid} jemaat valid
@@ -259,7 +259,7 @@ function SummaryBar({
   onReset: () => void;
 }) {
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex items-center justify-between">
+    <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-6 text-sm">
         <Stat label="Total Row" value={summary.total} />
         <Stat label="Valid" value={summary.valid} color="text-green-600" />

@@ -564,6 +564,9 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
     [...byPel].map(([pelayananId, jemaatIds]) => ({ pelayananId, jemaatIds })),
     item.cabangId,
   );
+  const myPelEvent = new Set(
+    petugasRows.filter((p) => viewer && p.jemaatId === viewer).map((p) => p.eventPelayanan.pelayanan.nama),
+  );
   const petugas = petugasRows
     .map((p) => ({
       id: p.id,
@@ -576,10 +579,19 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
       ...(tugasFor.has(p.eventPelayanan.pelayanan.id) ? { tugas: parseTugas(p.tugas) } : {}),
       ...(viewer && p.jemaatId === viewer ? { isMe: true } : {}),
     }))
-    .sort(
-      (a, b) =>
-        a.pelayananNama.localeCompare(b.pelayananNama) || b.level - a.level || a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap),
-    )
+    .sort((a, b) => {
+      // 2026-11: pelayanan tempat viewer bertugas paling atas & dirinya paling depan
+      // (app meringkas tim besar — dulu petugas tidak menemukan tugasnya).
+      const ma = myPelEvent.has(a.pelayananNama) ? 0 : 1;
+      const mb = myPelEvent.has(b.pelayananNama) ? 0 : 1;
+      return (
+        ma - mb ||
+        a.pelayananNama.localeCompare(b.pelayananNama) ||
+        (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1) ||
+        b.level - a.level ||
+        a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap)
+      );
+    })
     .map(({ level: _l, ...r }) => r);
   await refreshTugasNames(petugas.flatMap((p) => (p.tugas ? [p.tugas] : [])));
 

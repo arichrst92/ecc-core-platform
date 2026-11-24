@@ -383,9 +383,17 @@ ibadahRouter.get('/:id', async (req, res) => {
 
   // Sort: by pelayanan nama (alphabetical) lalu role level DESC (Leader dulu),
   // lalu nama jemaat. Lebih natural untuk display.
+  // 2026-11: pelayanan tempat VIEWER bertugas tampil paling atas & dirinya
+  // paling depan — app (termasuk 2.5.0) meringkas tim besar ("Lihat semua"),
+  // dulu petugas tidak menemukan dirinya & tugasnya.
+  const myPel = new Set(petugas.filter((p) => p.isMe).map((p) => p.pelayananNama));
   petugas.sort((a, b) => {
+    const ma = myPel.has(a.pelayananNama) ? 0 : 1;
+    const mb = myPel.has(b.pelayananNama) ? 0 : 1;
+    if (ma !== mb) return ma - mb;
     if (a.pelayananNama !== b.pelayananNama)
       return a.pelayananNama.localeCompare(b.pelayananNama);
+    if (!!a.isMe !== !!b.isMe) return a.isMe ? -1 : 1;
     if (a.role !== b.role) return a.role.localeCompare(b.role);
     return a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap);
   });

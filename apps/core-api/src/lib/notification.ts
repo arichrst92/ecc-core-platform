@@ -67,7 +67,10 @@ export type InAppNotifType =
   | 'BIRTHDAY_GREETING'
   | 'HOMECELL_MATERIAL'
   | 'EVENT_PAYMENT_REJECTED'
-  | 'EVENT_CANCELLED_BY_ADMIN';
+  | 'EVENT_CANCELLED_BY_ADMIN'
+  | 'FORM_REMINDER'
+  | 'FORM_NEEDS_FIX'
+  | 'FORM_REJECTED';
 
 interface CreateNotifArgs {
   jemaatId: string;

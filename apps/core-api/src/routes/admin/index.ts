@@ -25,6 +25,7 @@ import { ministryRouter } from './ministry.js';
 import { itMinisterTeamRouter } from './it-minister-team.js';
 import { waConfigRouter } from './wa-config.js';
 import { announcementRouter } from './announcement.js';
+import { universalFormRouter } from './universal-form.js';
 import { jemaatPublicRouter } from './jemaat-public.js';
 import { visitRouter } from './visit.js';
 import { localBusinessRouter } from './local-business.js';
@@ -112,6 +113,7 @@ adminRouter.use('/it-minister-team', itMinisterTeamGuard, itMinisterTeamRouter);
 adminRouter.use('/wa-config', fullGuard('wa-config'), waConfigRouter);
 // Broadcast → Announcement (menu 'announcement').
 adminRouter.use('/announcement', announcementRouter);
+adminRouter.use('/universal-form', universalFormRouter);
 // Badge menu Portal — jumlah request menunggu tindakan admin.
 adminRouter.use('/pending-counts', pendingCountsRouter);
 adminRouter.use('/needs-fill-counts', needsFillCountsRouter);

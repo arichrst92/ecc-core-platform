@@ -14,6 +14,7 @@
  * dedup-by-unique-key membuat aman idempotent — hanya boros query.
  * Untuk skala lebih besar, pindah ke external cron (k8s CronJob).
  */
+import { runUniversalFormJob } from './universal-form-jobs.js';
 import { calendarDateOf, jamWithZone, tzOr } from './tz.js';
 import { runDataRetention } from './data-purge.js';
 import { encryptLegacyCredentials } from './credential-crypto.js';
@@ -551,7 +552,10 @@ export function startScheduledJobs() {
   // Homecell Material terjadwal → notifikasi in-app saat mulai tampil.
   const materialJob = wrap('homecell-material-notif', dispatchHomecellMaterialNotifications);
   const h15 = setInterval(() => void materialJob(), 30 * 60_000);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15]) {
+  // Universal Form: pengingat batas isi, pembatalan otomatis, retensi file (2026-12).
+  const ufJob = wrap('universal-form', runUniversalFormJob);
+  const h16 = setInterval(() => void ufJob(), 15 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16]) {
     h.unref?.();
     intervalHandles.push(h);
   }

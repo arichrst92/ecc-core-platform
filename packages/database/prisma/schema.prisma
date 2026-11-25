@@ -2350,6 +2350,10 @@ enum InAppNotifType {
   // Event: bukti bayar ditolak admin / pendaftaran dibatalkan admin (2026-11)
   EVENT_PAYMENT_REJECTED
   EVENT_CANCELLED_BY_ADMIN
+  // Universal Form (2026-12)
+  FORM_REMINDER
+  FORM_NEEDS_FIX
+  FORM_REJECTED
 
   @@map("in_app_notif_type")
 }
@@ -4688,4 +4692,166 @@ model HomecellMaterialDownload {
   @@unique([materialId, jemaatId])
   @@index([jemaatId])
   @@map("homecell_material_download")
+}
+
+// ============================================================
+// UNIVERSAL FORM (2026-12) — form isian yang disematkan di News / Event /
+// Announcement. Dibuat admin di Portal (Broadcast → Universal Form), diisi
+// jemaat di app 2.5.1 / Els App web. Event: diisi per peserta terdaftar.
+// Sumber konten (News/Event/Announcement) disimpan sebagai id polimorfik
+// tanpa FK supaya tabel konten tidak berubah.
+// ============================================================
+model UniversalForm {
+  id               String    @id @default(uuid()) @db.Uuid
+  judul            String    @db.VarChar(200)
+  deskripsi        String?   @db.Text
+  // DRAFT | OPEN | CLOSED | ARCHIVED
+  status           String    @default("DRAFT") @db.VarChar(10)
+  // Anonim: jemaat tetap login (cegah isi berulang), identitas disembunyikan di hasil.
+  anonim           Boolean   @default(false)
+  bukaAt           DateTime? @map("buka_at")
+  tutupAt          DateTime? @map("tutup_at")
+  multiResponse    Boolean   @default(false) @map("multi_response")
+  allowEdit        Boolean   @default(true) @map("allow_edit")
+  kuota            Int?
+  pesanTerimaKasih String?   @map("pesan_terima_kasih") @db.Text
+  createdById      String?   @map("created_by_id") @db.Uuid
+  updatedById      String?   @map("updated_by_id") @db.Uuid
+  // File lampiran dihapus otomatis setelah tanggal ini (tutup + 1 tahun).
+  filesPurgedAt    DateTime? @map("files_purged_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  fields    UniversalFormField[]
+  embeds    UniversalFormEmbed[]
+  responses UniversalFormResponse[]
+  files     UniversalFormFile[]
+
+  @@index([status])
+  @@map("universal_form")
+}
+
+model UniversalFormField {
+  id        String   @id @default(uuid()) @db.Uuid
+  formId    String   @map("form_id") @db.Uuid
+  urutan    Int      @default(0)
+  // TEXT | TEXTAREA | RICHTEXT | FILE | EMAIL | URL | PHONE | DATE | DATE_RANGE
+  // | DATETIME | SELECT | RADIO | CHECKBOX | NUMBER | BOOLEAN | SIGNATURE | INFO
+  tipe      String   @db.VarChar(12)
+  label     String   @db.VarChar(300)
+  petunjuk  String?  @db.Text
+  wajib     Boolean  @default(false)
+  // Pilihan (SELECT/RADIO/CHECKBOX): ["S","M",...]
+  opsi      Json     @default("[]")
+  // Aturan per jenis: minLength, maxLength, min, max, minDate, maxDate, maxDays,
+  // maxFiles, maxSizeMb, accept[], domains[], minSelect, maxSelect, integer, notPast, notFuture
+  validasi  Json     @default("{}")
+  // Sumber autofill dari data jemaat (NAMA, KODE, NO_HP, ...). NULL = diisi jemaat.
+  autofill  String?  @db.VarChar(20)
+  // INFO: gaya HEADING | TEXT | INFO | WARNING; isi = teks blok / pernyataan SIGNATURE.
+  gaya      String?  @db.VarChar(10)
+  isi       String?  @db.Text
+  // Disembunyikan (field yang sudah punya jawaban tidak dihapus).
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  form UniversalForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId, urutan])
+  @@map("universal_form_field")
+}
+
+model UniversalFormEmbed {
+  id         String    @id @default(uuid()) @db.Uuid
+  formId     String    @map("form_id") @db.Uuid
+  // NEWS | EVENT | ANNOUNCEMENT
+  sourceType String    @map("source_type") @db.VarChar(12)
+  sourceId   String    @map("source_id") @db.Uuid
+  // Batas pengisian khusus konten ini (NULL = tutupAt form).
+  batasAt    DateTime? @map("batas_at")
+  // EVENT: batalkan pendaftaran (gratis/sukarela) yang belum mengisi / belum memperbaiki saat batas lewat.
+  autoCancel Boolean   @default(false) @map("auto_cancel")
+  urutan     Int       @default(0)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  form UniversalForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, sourceType, sourceId])
+  @@index([sourceType, sourceId])
+  @@map("universal_form_embed")
+}
+
+model UniversalFormResponse {
+  id              String    @id @default(uuid()) @db.Uuid
+  formId          String    @map("form_id") @db.Uuid
+  embedId         String?   @map("embed_id") @db.Uuid
+  sourceType      String?   @map("source_type") @db.VarChar(12)
+  sourceId        String?   @map("source_id") @db.Uuid
+  // Pengisi (akun login) & subjek (peserta event yang diisikan; = pengisi untuk news/announcement).
+  jemaatId        String    @map("jemaat_id") @db.Uuid
+  subjekJemaatId  String    @map("subjek_jemaat_id") @db.Uuid
+  // app | web | portal
+  clientKind      String    @default("app") @map("client_kind") @db.VarChar(10)
+  appVersion      String?   @map("app_version") @db.VarChar(40)
+  ip              String?   @db.VarChar(64)
+  // SUBMITTED | NEEDS_FIX | REJECTED
+  status          String    @default("SUBMITTED") @db.VarChar(12)
+  statusAlasan    String?   @map("status_alasan") @db.Text
+  perbaikiSebelum DateTime? @map("perbaiki_sebelum")
+  statusById      String?   @map("status_by_id") @db.Uuid
+  statusAt        DateTime? @map("status_at")
+  jawaban         Json      @default("{}")
+  autofill        Json      @default("{}")
+  // SHA-256 isi (jawaban + autofill + subjek) — pengikat tanda tangan.
+  jawabanHash     String    @map("jawaban_hash") @db.VarChar(64)
+  editCount       Int       @default(0) @map("edit_count")
+  submittedAt     DateTime  @default(now()) @map("submitted_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  form  UniversalForm       @relation(fields: [formId], references: [id], onDelete: Cascade)
+  files UniversalFormFile[]
+
+  @@index([formId, sourceType, sourceId])
+  @@index([jemaatId])
+  @@index([subjekJemaatId])
+  @@index([embedId])
+  @@map("universal_form_response")
+}
+
+model UniversalFormFile {
+  id               String    @id @default(uuid()) @db.Uuid
+  formId           String    @map("form_id") @db.Uuid
+  fieldId          String    @map("field_id") @db.Uuid
+  responseId       String?   @map("response_id") @db.Uuid
+  uploaderJemaatId String    @map("uploader_jemaat_id") @db.Uuid
+  // FILE | SIGNATURE
+  kind             String    @default("FILE") @db.VarChar(10)
+  storageName      String    @map("storage_name") @db.VarChar(200)
+  originalName     String    @map("original_name") @db.VarChar(255)
+  mime             String    @db.VarChar(120)
+  sizeBytes        Int       @map("size_bytes")
+  // SIGNATURE: bukti (penanda tangan, waktu, ip, perangkat, hash isi).
+  meta             Json?
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  form     UniversalForm          @relation(fields: [formId], references: [id], onDelete: Cascade)
+  response UniversalFormResponse? @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@index([formId])
+  @@map("universal_form_file")
+}
+
+// Pengingat batas pengisian yang sudah dikirim (dedup per sematan × peserta × jenis).
+model UniversalFormReminder {
+  id             String   @id @default(uuid()) @db.Uuid
+  embedId        String   @map("embed_id") @db.Uuid
+  subjekJemaatId String   @map("subjek_jemaat_id") @db.Uuid
+  // H3 | H1 | J3 | FIX
+  kind           String   @db.VarChar(5)
+  sentAt         DateTime @default(now()) @map("sent_at")
+
+  @@unique([embedId, subjekJemaatId, kind])
+  @@map("universal_form_reminder")
 }

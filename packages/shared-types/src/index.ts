@@ -50,3 +50,4 @@ export * from './schemas/planning.js';
 export * from './schemas/prayer.js';
 export * from './schemas/worship.js';
 export * from './schemas/announcement-markdown.js';
+export * from './schemas/universal-form.js';

@@ -83,6 +83,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'renungan', label: 'Renungan', href: '/dashboard/renungan', group: 'Broadcast' },
   { key: 'ecc-worship', label: 'ECC Worship', href: '/dashboard/worship', group: 'Broadcast' },
   { key: 'announcement', label: 'Announcement', href: '/dashboard/announcement', group: 'Broadcast' },
+  { key: 'universal-form', label: 'Universal Form', href: '/dashboard/universal-form', group: 'Broadcast' },
 
   // Developer Tools / Access Control
   { key: 'api-key', label: 'API Keys', href: '/dashboard/api-key', group: 'Developer Tools' },

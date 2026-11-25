@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Universal Form di Els App 2.5.1</title>
+<style>
+  :root{--b5:#F97316;--b6:#EA580C;--b7:#C2410C;--b50:#FFF7ED;--b100:#FFEDD5;--b200:#FED7AA;--ink:#171717;--n5:#737373;--n4:#A3A3A3;--n3:#D4D4D4;--n2:#E5E5E5;--n1:#F5F5F5;--n50:#FAFAFA;--g:linear-gradient(135deg,#F97316,#C2410C)}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#EDEDED;color:var(--ink)}
+  .page{max-width:1400px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px} .lead{color:#525252;font-size:14px;margin:0 0 22px;max-width:880px;line-height:1.5}
+  .row{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+  .item{width:300px}
+  .cap{font-size:12.5px;color:#404040;margin-top:10px;line-height:1.45}
+  .cap b{display:block;font-size:13.5px;color:var(--ink);margin-bottom:2px}
+  .phone{width:300px;height:640px;border-radius:38px;background:#111;padding:9px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  .scr{width:100%;height:100%;border-radius:30px;overflow:hidden;background:var(--n50);position:relative;display:flex;flex-direction:column;font-size:12px}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:600;flex:none}
+  .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:86px;height:22px;background:#111;border-radius:12px}
+  .hdr{background:#fff;border-bottom:1px solid var(--n1);padding:6px 12px 10px;display:flex;align-items:center;gap:8px;flex:none}
+  .hdr .t{font-weight:700;font-size:14px}.hdr .s{font-size:10.5px;color:var(--n5)}
+  .body{flex:1;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .card{background:#fff;border:1px solid var(--n1);border-radius:16px;padding:12px}
+  .muted{color:var(--n5)} .faint{color:var(--n4)} .small{font-size:10.5px}
+  .lbl{font-size:11.5px;font-weight:600;color:#262626;margin-bottom:5px;display:flex;gap:4px;align-items:center}
+  .req{color:#DC2626}
+  .inp{background:#fff;border:1px solid var(--n2);border-radius:12px;padding:9px 10px;font-size:12px;min-height:36px}
+  .inp.ph{color:var(--n4)} .inp.err{border-color:#F87171;background:#FEF2F2}
+  .errt{color:#DC2626;font-size:10.5px;margin-top:4px;display:flex;gap:4px;align-items:center}
+  .hint{color:var(--n5);font-size:10.5px;margin-top:4px}
+  .btn{background:var(--g);color:#fff;border-radius:14px;padding:11px;text-align:center;font-weight:700;font-size:13px}
+  .btn2{background:#fff;border:1px solid var(--n2);border-radius:14px;padding:10px;text-align:center;font-weight:600;font-size:12.5px;color:#262626}
+  .chip{border:1px solid var(--n2);background:#fff;border-radius:999px;padding:5px 11px;font-size:11px;font-weight:600;color:#404040}
+  .chip.on{background:var(--g);color:#fff;border-color:transparent}
+  .pill{display:inline-flex;align-items:center;gap:3px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700}
+  .ok{background:#DCFCE7;color:#15803D}.warn{background:#FEF3C7;color:#B45309}.bad{background:#FEE2E2;color:#B91C1C}.info{background:#E0F2FE;color:#0369A1}.neu{background:var(--n1);color:#525252}
+  .ic{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  .ic.lg{width:18px;height:18px}.ic.xl{width:28px;height:28px}
+  .lock{background:var(--n50);border:1px dashed var(--n3);border-radius:12px;padding:9px 10px;color:#404040}
+  .sticky{flex:none;background:#fff;border-top:1px solid var(--n1);padding:10px 12px 16px}
+  .tb{display:flex;gap:2px;border-bottom:1px solid var(--n1);padding:4px 6px;color:#404040}
+  .tb span{width:24px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-weight:700;font-size:11px}
+  .file{display:flex;align-items:center;gap:8px;border:1px solid var(--n2);border-radius:12px;padding:7px 8px;background:#fff}
+  .thumb{width:32px;height:32px;border-radius:8px;background:var(--b100);display:flex;align-items:center;justify-content:center;color:var(--b7);flex:none}
+  .bar{height:4px;border-radius:2px;background:var(--n1);margin-top:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+  .sec{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--n5);text-transform:uppercase}
+  .tog{width:34px;height:20px;border-radius:10px;background:var(--g);position:relative;flex:none}.tog:after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+  .tog.off{background:var(--n3)}.tog.off:after{left:2px;right:auto}
+  .cb{width:16px;height:16px;border-radius:5px;border:2px solid var(--n3);flex:none;display:flex;align-items:center;justify-content:center}
+  .cb.on{background:var(--g);border-color:transparent;color:#fff}
+  .rd{width:16px;height:16px;border-radius:50%;border:2px solid var(--n3);flex:none}.rd.on{border:5px solid var(--b6)}
+  .person{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--n1)}
+  .av{width:28px;height:28px;border-radius:50%;background:var(--b100);color:var(--b7);font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none}
+  .hero{height:120px;background:linear-gradient(135deg,#FDBA74,#C2410C);display:flex;align-items:flex-end;padding:10px;color:#fff;flex:none}
+  .banner{border-radius:12px;padding:9px 10px;display:flex;gap:8px;align-items:flex-start}
+  .note{font-size:12px;color:#525252;background:#fff;border:1px solid #E5E5E5;border-radius:12px;padding:12px 14px;margin:6px 0 26px;max-width:880px;line-height:1.5}
+  h2{font-size:16px;margin:30px 0 12px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-form" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 12-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 17v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3l2 5-2 1a11 11 0 0 0 6 6l1-2 5 2z"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></symbol>
+</svg>
+<svg width="0" height="0"></svg>
+
+<div class="page">
+<h1>Universal Form di Els App 2.5.1 — mockup layar</h1>
+<p class="lead">Gambaran tampilan untuk didiskusikan (data contoh). Form tampil sebagai kartu di bawah isi Event, News, dan Announcement. Di event, kartu hanya muncul untuk pendaftar (event berbayar: yang sudah lunas) dan diisi <b>per peserta</b>. Field yang terisi otomatis dari profil terkunci; jemaat hanya mengisi sisanya.</p>
+
+<h2>1. Kartu formulir di halaman konten</h2>
+<div class="row">
+
+<!-- Event detail -->
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hero"><div><div class="small" style="opacity:.9">Event · ECC Jakarta</div><div style="font-weight:800;font-size:15px">Youth Camp 2026: Rooted</div></div></div>
+ <div class="body">
+  <div class="card" style="padding:10px 12px"><div class="muted"><svg class="ic"><use href="#i-cal"/></svg> Jum, 12 – Min, 14 Des 2026</div><div class="muted" style="margin-top:4px">Villa Kinasih, Bogor</div></div>
+  <div class="card" style="border-color:var(--b200)">
+   <div style="display:flex;gap:9px;align-items:center">
+    <div style="width:34px;height:34px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ic lg"><use href="#i-form"/></svg></div>
+    <div style="flex:1"><div style="font-weight:700;font-size:13px">Data peserta Youth Camp</div><div class="small muted">Wajib diisi tiap peserta · tutup 10 Des</div></div>
+   </div>
+   <div style="margin-top:8px">
+    <div class="person"><div class="av">DW</div><div style="flex:1"><div style="font-weight:600">Daniel Wijaya</div><div class="small faint">Saya</div></div><span class="pill ok"><svg class="ic" style="width:10px;height:10px"><use href="#i-check"/></svg>Terkirim</span></div>
+    <div class="person"><div class="av">NW</div><div style="flex:1"><div style="font-weight:600">Nathan Wijaya</div><div class="small faint">Anak</div></div><span class="pill neu">Belum diisi</span><svg class="ic" style="color:var(--n4)"><use href="#i-right"/></svg></div>
+    <div class="person"><div class="av">SW</div><div style="flex:1"><div style="font-weight:600">Sarah Wijaya</div><div class="small faint">Istri</div></div><span class="pill warn">Perlu diperbaiki</span><svg class="ic" style="color:var(--n4)"><use href="#i-right"/></svg></div>
+   </div>
+  </div>
+  <div class="card" style="padding:10px 12px"><div style="font-weight:700">Tentang event</div><div class="muted" style="margin-top:4px">Retreat 3 hari untuk pemuda usia 15–25…</div></div>
+ </div>
+</div></div>
+<div class="cap"><b>Detail Event — per peserta</b>Satu baris per peserta yang Anda daftarkan, dengan statusnya. Ketuk baris untuk mengisi atau membuka jawaban. Kartu tidak tampil sebelum mendaftar / melunasi.</div></div>
+
+<!-- News / Announcement -->
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-back"/></svg><div><div class="t">Berita</div></div></div>
+ <div class="body">
+  <div style="height:110px;border-radius:14px;background:linear-gradient(135deg,#93C5FD,#1D4ED8)"></div>
+  <div style="font-weight:800;font-size:15px;line-height:1.3">Survei Kebutuhan Pelayanan Anak 2027</div>
+  <div class="muted" style="line-height:1.5">Bantu kami merencanakan pelayanan CKids tahun depan dengan mengisi survei singkat di bawah ini…</div>
+  <div class="card">
+   <div style="display:flex;gap:9px;align-items:center">
+    <div style="width:34px;height:34px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ic lg"><use href="#i-form"/></svg></div>
+    <div style="flex:1"><div style="font-weight:700;font-size:13px">Survei Pelayanan Anak</div><div class="small muted">8 pertanyaan · ± 3 menit · tutup 31 Des</div></div>
+   </div>
+   <div class="banner" style="background:#F5F3FF;color:#6D28D9;margin-top:9px"><svg class="ic"><use href="#i-shield"/></svg><div class="small" style="line-height:1.4"><b>Anonim</b> — nama Anda tidak terlihat oleh pengelola form.</div></div>
+   <div class="btn" style="margin-top:9px">Isi formulir</div>
+  </div>
+  <div class="card">
+   <div style="display:flex;gap:9px;align-items:center">
+    <div style="width:34px;height:34px;border-radius:10px;background:#DCFCE7;display:flex;align-items:center;justify-content:center;color:#15803D"><svg class="ic lg"><use href="#i-check"/></svg></div>
+    <div style="flex:1"><div style="font-weight:700;font-size:13px">Pendaftaran Relawan Natal</div><div class="small muted">Terkirim 24 Nov, 19.02</div></div>
+   </div>
+   <div style="display:flex;gap:8px;margin-top:9px"><div class="btn2" style="flex:1"><svg class="ic"><use href="#i-eye"/></svg> Lihat jawaban</div><div class="btn2" style="flex:1"><svg class="ic"><use href="#i-edit"/></svg> Ubah</div></div>
+  </div>
+ </div>
+</div></div>
+<div class="cap"><b>Detail News / Announcement</b>Satu kartu per form yang disematkan. Status "Isi formulir" / "Terkirim" / "Ditutup". Form anonim diberi keterangan ungu.</div></div>
+
+<!-- States -->
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-back"/></svg><div><div class="t">Status kartu formulir</div></div></div>
+ <div class="body">
+  <div class="sec">Belum dibuka</div>
+  <div class="card"><div style="font-weight:700">Evaluasi Retreat</div><div class="small muted" style="margin-top:3px">Dibuka 15 Des, 08.00</div><div class="btn2" style="margin-top:8px;color:var(--n4)">Belum dibuka</div></div>
+  <div class="sec">Ditutup / kuota penuh</div>
+  <div class="card"><div style="font-weight:700">Pendaftaran Paduan Suara</div><div class="small muted" style="margin-top:3px">Ditutup 20 Nov · Anda tidak mengisi</div><div class="btn2" style="margin-top:8px;color:var(--n4)">Formulir ditutup</div></div>
+  <div class="sec">Perlu diperbaiki</div>
+  <div class="card" style="border-color:#FCD34D"><div style="font-weight:700">Data peserta Youth Camp</div>
+   <div class="banner warn" style="margin-top:7px"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.4"><b>Perlu diperbaiki</b><br>"Foto kartu pelajar buram, mohon unggah ulang." — Admin ECC Jakarta</div></div>
+   <div class="btn" style="margin-top:8px">Perbaiki jawaban</div></div>
+  <div class="sec">Ditolak</div>
+  <div class="card" style="border-color:#FCA5A5"><div style="font-weight:700">Pendaftaran Relawan</div>
+   <div class="banner bad" style="margin-top:7px"><svg class="ic"><use href="#i-ban"/></svg><div class="small" style="line-height:1.4"><b>Ditolak</b> — "Usia belum memenuhi syarat."</div></div></div>
+ </div>
+</div></div>
+<div class="cap"><b>Status lain</b>Belum dibuka, ditutup / kuota penuh, perlu diperbaiki (dengan alasan admin), dan ditolak.</div></div>
+</div>
+
+<h2>2. Layar pengisian (per peserta)</h2>
+<div class="row">
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Youth Camp 2026: Rooted</div></div></div>
+ <div style="background:#fff;padding:8px 12px;display:flex;gap:6px;border-bottom:1px solid var(--n1);flex:none"><span class="chip">Daniel ✓</span><span class="chip on">Nathan</span><span class="chip">Sarah</span></div>
+ <div class="body">
+  <div class="muted" style="line-height:1.45">Lengkapi data berikut sebelum 10 Des. Pertanyaan bertanda <span class="req">*</span> wajib diisi.</div>
+  <div class="lock">
+   <div class="small" style="font-weight:700;display:flex;gap:5px;align-items:center;color:#525252"><svg class="ic"><use href="#i-lock"/></svg>Terisi dari profil Nathan</div>
+   <div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px">
+    <span class="faint">Nama</span><b>Nathan Wijaya</b>
+    <span class="faint">Tgl lahir</span><b>3 Agt 2011 (15 th)</b>
+    <span class="faint">Cabang</span><b>ECC Jakarta</b>
+    <span class="faint">Homecell</span><b>Little Lights Kemang</b>
+   </div>
+   <div class="small faint" style="margin-top:6px">Data ini ikut dikirim ke pengelola form. Salah? Ubah di profil.</div>
+  </div>
+  <div><div class="lbl">Nama panggilan</div><div class="inp">Nate</div></div>
+  <div><div class="lbl">Riwayat alergi / kondisi khusus</div><div class="inp ph" style="height:54px">Tulis bila ada…</div><div class="hint" style="text-align:right">0/500</div></div>
+  <div><div class="lbl">Motivasi ikut camp <span class="req">*</span></div>
+   <div class="inp" style="padding:0"><div class="tb"><span>B</span><span><i>I</i></span><span>•</span><span>1.</span><span><svg class="ic" style="width:12px;height:12px"><use href="#i-link"/></svg></span></div><div style="padding:8px 10px">Ingin <b>bertumbuh</b> bersama teman komsel…</div></div></div>
+ </div>
+ <div class="sticky"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span class="small muted">Draf tersimpan di HP</span><span class="small muted">3/9 terisi</span></div><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Bagian atas</b>Chip peserta di atas (✓ = sudah terkirim). Kotak terkunci berisi data autofill. Teks pendek, teks panjang (penghitung karakter), rich text (tebal, miring, daftar, link — tanpa gambar). Draf disimpan otomatis.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div><div class="lbl">Email orang tua <span class="req">*</span></div><div class="inp" style="display:flex;gap:6px;align-items:center"><svg class="ic" style="color:var(--n4)"><use href="#i-mail"/></svg>daniel@email.com</div></div>
+  <div><div class="lbl">No HP darurat <span class="req">*</span></div><div class="inp" style="display:flex;gap:6px;align-items:center"><span style="font-weight:600">🇮🇩 +62</span><span style="color:var(--n3)">|</span>812-9988-7766</div></div>
+  <div><div class="lbl">Link akun Instagram</div><div class="inp ph" style="display:flex;gap:6px;align-items:center"><svg class="ic"><use href="#i-link"/></svg>https://instagram.com/…</div></div>
+  <div><div class="lbl">Ukuran kaos <span class="req">*</span></div><div style="display:flex;gap:6px"><span class="chip">S</span><span class="chip on">M</span><span class="chip">L</span><span class="chip">XL</span></div></div>
+  <div><div class="lbl">Ikut sesi pilihan (boleh lebih dari satu)</div>
+   <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:7px;align-items:center"><span class="cb on"><svg class="ic" style="width:10px;height:10px"><use href="#i-check"/></svg></span>Worship & musik</div><div style="display:flex;gap:7px;align-items:center"><span class="cb"></span>Fotografi</div><div style="display:flex;gap:7px;align-items:center"><span class="cb on"><svg class="ic" style="width:10px;height:10px"><use href="#i-check"/></svg></span>Outbound</div></div></div>
+  <div><div class="lbl">Transportasi</div><div class="inp" style="display:flex;justify-content:space-between">Bus dari gereja<svg class="ic" style="color:var(--n4)"><use href="#i-down"/></svg></div></div>
+  <div style="display:flex;gap:10px"><div style="flex:1"><div class="lbl">Jumlah saudara ikut</div><div class="inp" style="display:flex;justify-content:space-between;align-items:center"><span style="color:var(--b6);font-weight:800">−</span><b>1</b><span style="color:var(--b6);font-weight:800">+</span></div></div>
+   <div style="flex:1"><div class="lbl">Bisa berenang?</div><div style="display:flex;gap:6px"><span class="chip on">Ya</span><span class="chip">Tidak</span></div></div></div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Bagian tengah</b>Email, nomor HP (kode negara seperti di profil), link, pilihan tunggal (chip / dropdown untuk opsi panjang), centang (banyak pilihan), angka (− / +), dan ya / tidak.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div><div class="lbl">Tanggal tiba <span class="req">*</span></div><div class="inp" style="display:flex;gap:6px;align-items:center"><svg class="ic" style="color:var(--b6)"><use href="#i-cal"/></svg>Jum, 12 Des 2026</div></div>
+  <div><div class="lbl">Rentang tanggal izin sekolah</div><div style="display:flex;gap:6px;align-items:center"><div class="inp" style="flex:1">12 Des</div><span class="faint">–</span><div class="inp" style="flex:1">15 Des 2026</div></div><div class="hint">4 hari</div></div>
+  <div><div class="lbl">Jadwal jemput</div><div class="inp" style="display:flex;gap:6px;align-items:center"><svg class="ic" style="color:var(--b6)"><use href="#i-clock"/></svg>Min, 14 Des 2026 · 16.30 <span class="faint">Waktu Jakarta</span></div></div>
+  <div><div class="lbl">Foto kartu pelajar & surat izin <span class="req">*</span></div>
+   <div style="display:flex;flex-direction:column;gap:6px">
+    <div class="file"><div class="thumb"><svg class="ic"><use href="#i-img"/></svg></div><div style="flex:1;min-width:0"><div style="font-weight:600">kartu-pelajar.jpg</div><div class="small faint">820 KB</div></div><svg class="ic" style="color:var(--n4)"><use href="#i-trash"/></svg></div>
+    <div class="file"><div class="thumb" style="background:#FEE2E2;color:#B91C1C"><svg class="ic"><use href="#i-file"/></svg></div><div style="flex:1;min-width:0"><div style="font-weight:600">surat-izin.pdf</div><div class="bar"><i style="width:62%"></i></div></div><span class="small muted">62%</span></div>
+    <div style="display:flex;gap:6px"><div class="btn2" style="flex:1;padding:8px;font-size:11px"><svg class="ic"><use href="#i-cam"/></svg> Kamera</div><div class="btn2" style="flex:1;padding:8px;font-size:11px"><svg class="ic"><use href="#i-img"/></svg> Galeri</div><div class="btn2" style="flex:1;padding:8px;font-size:11px"><svg class="ic"><use href="#i-file"/></svg> File</div></div>
+    <div class="hint">2 dari maks 5 file · gambar / PDF · maks 5 MB per file</div>
+   </div></div>
+ </div>
+ <div class="sticky"><div class="btn" style="opacity:.6">Mengunggah…</div></div>
+</div></div>
+<div class="cap"><b>Bagian bawah</b>Tanggal, rentang tanggal (jumlah hari), tanggal + jam (zona cabang). Upload <b>banyak file</b>: kamera / galeri / file, daftar file dengan progres, hapus per file, batas jumlah, jenis & ukuran.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div class="banner bad"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.4"><b>2 isian perlu diperbaiki.</b> Ketuk untuk melompat ke isian pertama.</div></div>
+  <div><div class="lbl">Email orang tua <span class="req">*</span></div><div class="inp err">daniel@email</div><div class="errt"><svg class="ic" style="width:12px;height:12px"><use href="#i-alert"/></svg>Format email belum benar.</div></div>
+  <div><div class="lbl">Motivasi ikut camp <span class="req">*</span></div><div class="inp err ph" style="height:46px">Tulis motivasi…</div><div class="errt"><svg class="ic" style="width:12px;height:12px"><use href="#i-alert"/></svg>Wajib diisi (min. 20 karakter).</div></div>
+  <div><div class="lbl">Tanggal tiba <span class="req">*</span></div><div class="inp" style="display:flex;gap:6px;align-items:center"><svg class="ic" style="color:var(--b6)"><use href="#i-cal"/></svg>Jum, 12 Des 2026</div><div class="hint">Antara 12–14 Des 2026</div></div>
+  <div><div class="lbl">Link akun Instagram</div><div class="inp">https://instagram.com/nate</div></div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Pesan salah</b>Dicek langsung di HP (aturan sama dengan server): wajib, format email / link / HP, panjang min–maks, rentang tanggal, jenis & ukuran file. Ringkasan di atas melompat ke isian pertama yang salah.</div></div>
+</div>
+
+<h2>3. Setelah kirim, perbaikan, dan pembatalan</h2>
+<div class="row">
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="body" style="align-items:center;justify-content:center;text-align:center;gap:12px">
+  <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,#10B981,#047857);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 20px rgba(16,185,129,.35)"><svg class="ic xl" style="width:40px;height:40px;stroke-width:2.5"><use href="#i-check"/></svg></div>
+  <div style="font-weight:800;font-size:17px">Formulir terkirim</div>
+  <div class="muted" style="line-height:1.5;padding:0 14px">Terima kasih, data Nathan untuk Youth Camp sudah kami terima. Sampai jumpa di camp!</div>
+  <div class="card" style="width:100%;text-align:left"><div class="small muted">Masih ada yang belum diisi</div><div class="person" style="border:none;padding-bottom:0"><div class="av">SW</div><div style="flex:1;font-weight:600">Sarah Wijaya</div><span class="pill warn">Perlu diperbaiki</span></div></div>
+  <div style="width:100%;display:flex;flex-direction:column;gap:8px"><div class="btn">Isi untuk Sarah</div><div class="btn2">Lihat jawaban Nathan</div><div class="small muted">Jawaban bisa diubah sampai 10 Des.</div></div>
+ </div>
+</div></div>
+<div class="cap"><b>Terkirim</b>Pesan terima kasih dari pengaturan form. Bila ada peserta lain yang belum mengisi, langsung ditawarkan.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-back"/></svg><div style="flex:1"><div class="t">Jawaban Sarah</div><div class="s">Data peserta Youth Camp</div></div></div>
+ <div class="body">
+  <div class="banner warn" style="border:1px solid #FCD34D"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.45"><b>Perlu diperbaiki</b><br>"Foto kartu pelajar buram, mohon unggah ulang yang jelas."<br><span class="faint">Admin ECC Jakarta · 25 Nov, 10.12</span></div></div>
+  <div class="card" style="display:flex;flex-direction:column;gap:8px">
+   <div><div class="small faint">Nama panggilan</div><div style="font-weight:600">Sarah</div></div>
+   <div><div class="small faint">Ukuran kaos</div><div style="font-weight:600">S</div></div>
+   <div><div class="small faint">Tanggal tiba</div><div style="font-weight:600">Jum, 12 Des 2026</div></div>
+   <div><div class="small faint">Foto kartu pelajar</div><div class="file" style="margin-top:4px;border-color:#FCD34D"><div class="thumb"><svg class="ic"><use href="#i-img"/></svg></div><div style="flex:1"><div style="font-weight:600">IMG_2041.jpg</div><div class="small" style="color:#B45309">Perlu diganti</div></div></div></div>
+  </div>
+  <div class="small muted">Dikirim 24 Nov, 18.40 lewat app</div>
+ </div>
+ <div class="sticky"><div class="btn">Perbaiki jawaban</div></div>
+</div></div>
+<div class="cap"><b>Lihat jawaban / perlu diperbaiki</b>Jawaban tampil hanya-baca. Bila admin meminta perbaikan, alasannya tampil di atas dan tombol "Perbaiki jawaban" membuka form dengan isian lama.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-back"/></svg><div><div class="t">Notifikasi</div></div></div>
+ <div class="body">
+  <div class="sec">Hari ini</div>
+  <div class="card" style="display:flex;gap:9px"><div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#F59E0B,#B45309);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ic"><use href="#i-form"/></svg></div><div style="flex:1"><div style="font-weight:700">Formulir perlu diperbaiki</div><div class="muted small" style="line-height:1.4;margin-top:2px">Data peserta Youth Camp (Sarah): Foto kartu pelajar buram, mohon unggah ulang.</div><div class="small faint" style="margin-top:3px">5 mnt</div></div></div>
+  <div class="card" style="display:flex;gap:9px"><div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#EF4444,#B91C1C);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ic"><use href="#i-ban"/></svg></div><div style="flex:1"><div style="font-weight:700">Pendaftaran dibatalkan</div><div class="muted small" style="line-height:1.4;margin-top:2px">Pendaftaran Kevin di Youth Camp dibatalkan admin: usia belum memenuhi syarat (min. 15 tahun).</div><div class="small faint" style="margin-top:3px">1 jam</div></div></div>
+  <div class="card" style="display:flex;gap:9px"><div style="width:32px;height:32px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ic"><use href="#i-bell"/></svg></div><div style="flex:1"><div style="font-weight:700">Lengkapi formulir</div><div class="muted small" style="line-height:1.4;margin-top:2px">Data peserta Youth Camp untuk Nathan belum diisi. Ditutup 3 hari lagi.</div><div class="small faint" style="margin-top:3px">3 jam</div></div></div>
+ </div>
+</div></div>
+<div class="cap"><b>Notifikasi</b>Perlu diperbaiki (membuka jawaban), pendaftaran dibatalkan beserta alasannya, dan pengingat H-3 bagi peserta yang belum mengisi.</div></div>
+</div>
+
+<h2>4. Tanda tangan digital</h2>
+<div class="row">
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div><div class="lbl">Foto kartu pelajar <span class="req">*</span></div><div class="file"><div class="thumb"><svg class="ic"><use href="#i-img"/></svg></div><div style="flex:1"><div style="font-weight:600">kartu-pelajar.jpg</div><div class="small faint">820 KB</div></div></div></div>
+  <div><div class="lbl">Persetujuan orang tua / wali <span class="req">*</span></div>
+   <div class="card" style="padding:10px;background:var(--b50);border-color:var(--b200);line-height:1.45">Saya, orang tua/wali dari <b>Nathan Wijaya</b>, mengizinkan anak saya mengikuti Youth Camp 12–14 Des 2026 dan menyatakan data di atas benar.</div>
+   <div style="margin-top:8px;height:110px;border:1.5px dashed var(--b200);border-radius:14px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--b6)">
+    <svg class="ic xl"><use href="#i-edit"/></svg><div style="font-weight:700">Ketuk untuk tanda tangan</div><div class="small faint">Tanda tangan sebagai: Daniel Wijaya</div></div>
+  </div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Field tanda tangan</b>Admin bisa menambahkan pernyataan yang harus disetujui (nama peserta & event terisi otomatis). Yang menandatangani = akun yang mengisi (mis. orang tua untuk anak).</div></div>
+
+<div class="item"><div class="phone"><div class="scr" style="background:#fff"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr" style="border:none"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Tanda tangan</div><div class="s">Gunakan jari di area di bawah</div></div><span style="color:var(--b6);font-weight:700;font-size:12px">Ulangi</span></div>
+ <div class="body" style="padding:12px 12px 0">
+  <div style="flex:1;border:1px solid var(--n2);border-radius:18px;background:var(--n50);position:relative;overflow:hidden">
+   <svg viewBox="0 0 260 300" style="position:absolute;inset:0;width:100%;height:100%"><path d="M30 190 C 45 120, 70 110, 72 160 S 95 230, 110 170 S 135 110, 140 165 S 160 215, 175 160 C 182 135, 195 130, 205 150 S 220 190, 240 150" fill="none" stroke="#171717" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M60 205 L 230 200" fill="none" stroke="#171717" stroke-width="2.4" stroke-linecap="round"/></svg>
+   <div style="position:absolute;left:18px;right:18px;bottom:46px;border-top:1px solid var(--n3)"></div>
+   <div class="small faint" style="position:absolute;left:18px;bottom:26px">✕ Daniel Wijaya</div>
+  </div>
+  <div class="small muted" style="text-align:center;padding:8px 4px;line-height:1.4">Dengan menekan Gunakan, Anda menyetujui pernyataan di formulir ini.</div>
+ </div>
+ <div class="sticky" style="display:flex;gap:8px"><div class="btn2" style="flex:1">Batal</div><div class="btn" style="flex:2">Gunakan tanda tangan</div></div>
+</div></div>
+<div class="cap"><b>Area tanda tangan</b>Layar penuh dengan garis dasar & nama penanda tangan. "Ulangi" menghapus coretan. Tombol aktif setelah ada goresan yang cukup panjang (bukan titik).</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div><div class="lbl">Persetujuan orang tua / wali <span class="req">*</span></div>
+   <div class="card" style="padding:10px;background:var(--b50);border-color:var(--b200);line-height:1.45">Saya, orang tua/wali dari <b>Nathan Wijaya</b>, mengizinkan anak saya mengikuti Youth Camp 12–14 Des 2026 dan menyatakan data di atas benar.</div>
+   <div style="margin-top:8px;border:1px solid var(--n2);border-radius:14px;background:#fff;padding:8px 10px">
+    <svg viewBox="0 0 260 90" style="width:100%;height:78px"><path d="M20 60 C 32 20, 50 15, 52 45 S 68 85, 80 50 S 98 15, 102 48 S 118 78, 128 48 C 133 33, 142 30, 150 42 S 162 66, 178 42" fill="none" stroke="#171717" stroke-width="2.6" stroke-linecap="round"/><path d="M40 70 L 170 67" fill="none" stroke="#171717" stroke-width="2" stroke-linecap="round"/></svg>
+    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--n1);padding-top:6px">
+     <div><div style="font-weight:700">Daniel Wijaya</div><div class="small faint">Ditandatangani 25 Nov 2026, 10.24 WIB</div></div>
+     <span style="color:var(--b6);font-weight:700;font-size:11px">Ulangi</span></div>
+   </div>
+  </div>
+  <div class="banner info"><svg class="ic"><use href="#i-shield"/></svg><div class="small" style="line-height:1.4">Tanda tangan dikunci bersama isi jawaban saat dikirim. Bila jawaban diubah, Anda diminta tanda tangan ulang.</div></div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Sudah ditandatangani</b>Pratinjau tanda tangan + nama & waktu. Mengubah jawaban setelah dikirim → tanda tangan lama gugur dan harus ditandatangani ulang.</div></div>
+</div>
+
+<h2>5. Blok informasi (bukan isian)</h2>
+<div class="row">
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div class="body">
+  <div style="font-weight:800;font-size:14px;margin-top:2px">Bagian 1 · Data diri</div>
+  <div class="muted" style="line-height:1.45;margin-top:-4px">Isi sesuai kartu identitas peserta.</div>
+  <div><div class="lbl">Nama panggilan</div><div class="inp">Nate</div></div>
+  <div style="border-top:1px solid var(--n2);margin:2px 0"></div>
+  <div style="font-weight:800;font-size:14px">Bagian 2 · Kesehatan</div>
+  <div class="banner info" style="border:1px solid #BAE6FD"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.45"><b>Info</b><br>Tim medis berjaga 24 jam selama camp. Obat rutin peserta <b>dibawa sendiri</b> dan diserahkan ke panitia saat registrasi ulang.</div></div>
+  <div><div class="lbl">Riwayat alergi</div><div class="inp ph">Tulis bila ada…</div></div>
+  <div class="banner warn" style="border:1px solid #FCD34D"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.45"><b>Penting</b><br>Peserta tanpa surat izin orang tua tidak dapat berangkat. Lihat <span style="color:#1D4ED8;text-decoration:underline">ketentuan lengkap</span>.</div></div>
+  <div class="card" style="padding:10px;line-height:1.5"><div style="font-weight:700">Yang perlu dibawa</div><div class="muted">• Alkitab & alat tulis<br>• Baju ganti 3 hari<br>• Perlengkapan mandi</div></div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Judul bagian, info, penting, teks biasa</b>Ditempatkan di antara field seperti field biasa (bisa diseret). Isi mendukung tebal, miring, daftar, dan link. Tidak ada isian & tidak ikut di hasil / ekspor.</div></div>
+</div>
+
+<h2>6. Batas waktu pengisian & pembatalan otomatis</h2>
+<div class="row">
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hero" style="height:90px"><div><div class="small" style="opacity:.9">Event · ECC Jakarta</div><div style="font-weight:800;font-size:15px">Youth Camp 2026: Rooted</div></div></div>
+ <div class="body">
+  <div class="card" style="border-color:var(--b200)">
+   <div style="display:flex;gap:9px;align-items:center">
+    <div style="width:34px;height:34px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ic lg"><use href="#i-form"/></svg></div>
+    <div style="flex:1"><div style="font-weight:700;font-size:13px">Data peserta Youth Camp</div><div class="small muted">Wajib diisi tiap peserta</div></div>
+   </div>
+   <div style="margin-top:9px;background:var(--b50);border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+    <svg class="ic" style="color:var(--b6)"><use href="#i-clock"/></svg>
+    <div style="flex:1"><div class="small muted">Batas pengisian</div><div style="font-weight:800;color:var(--b7);font-size:14px;font-variant-numeric:tabular-nums">02:14:36:09</div></div>
+    <div class="small faint" style="text-align:right">Rab, 10 Des<br>23.59 WIB</div>
+   </div>
+   <div class="banner bad" style="margin-top:8px"><svg class="ic"><use href="#i-alert"/></svg><div class="small" style="line-height:1.4">Pendaftaran peserta yang <b>belum mengisi</b> atau <b>belum melengkapi perbaikan</b> akan <b>dibatalkan otomatis</b> saat batas waktu habis.</div></div>
+   <div style="margin-top:6px">
+    <div class="person"><div class="av">DW</div><div style="flex:1;font-weight:600">Daniel Wijaya</div><span class="pill ok">Terkirim</span></div>
+    <div class="person"><div class="av">NW</div><div style="flex:1;font-weight:600">Nathan Wijaya</div><span class="pill neu">Belum diisi</span><svg class="ic" style="color:var(--n4)"><use href="#i-right"/></svg></div>
+    <div class="person"><div class="av">SW</div><div style="flex:1"><div style="font-weight:600">Sarah Wijaya</div><div class="small" style="color:#B45309">Perbaiki sebelum 26 Nov, 10.12 · 23:41:05</div></div><span class="pill warn">Perlu diperbaiki</span></div>
+   </div>
+  </div>
+ </div>
+</div></div>
+<div class="cap"><b>Kartu dengan hitung mundur</b>Hitung mundur DD:jj:mm:dd (format yang sama dengan kartu event). Peringatan merah bila pembatalan otomatis aktif. Perbaikan punya batas sendiri (diatur admin saat meminta perbaikan) dengan hitung mundurnya.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-x"/></svg><div style="flex:1"><div class="t">Data peserta Youth Camp</div><div class="s">Untuk: Nathan Wijaya</div></div></div>
+ <div style="background:#FEF2F2;border-bottom:1px solid #FECACA;padding:8px 12px;display:flex;gap:8px;align-items:center;flex:none;color:#B91C1C">
+  <svg class="ic"><use href="#i-clock"/></svg><div style="flex:1" class="small"><b>Sisa waktu 02:14:36:09</b> · lewat batas, pendaftaran Nathan dibatalkan</div></div>
+ <div class="body">
+  <div class="lock"><div class="small" style="font-weight:700;color:#525252"><svg class="ic"><use href="#i-lock"/></svg> Terisi dari profil Nathan</div><div style="margin-top:5px"><span class="faint">Nama</span> <b>Nathan Wijaya</b></div></div>
+  <div><div class="lbl">Nama panggilan</div><div class="inp">Nate</div></div>
+  <div><div class="lbl">Ukuran kaos <span class="req">*</span></div><div style="display:flex;gap:6px"><span class="chip">S</span><span class="chip on">M</span><span class="chip">L</span></div></div>
+ </div>
+ <div class="sticky"><div class="btn">Kirim</div></div>
+</div></div>
+<div class="cap"><b>Pita sisa waktu di layar isi</b>Selalu tampil di atas selama form dibuka. Menjadi merah di 24 jam terakhir.</div></div>
+
+<div class="item"><div class="phone"><div class="scr"><div class="notch"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="hdr"><svg class="ic lg"><use href="#i-back"/></svg><div><div class="t">Notifikasi</div></div></div>
+ <div class="body">
+  <div class="card" style="display:flex;gap:9px"><div style="width:32px;height:32px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ic"><use href="#i-clock"/></svg></div><div style="flex:1"><div style="font-weight:700">Sisa 1 hari mengisi formulir</div><div class="muted small" style="line-height:1.4;margin-top:2px">Data peserta Youth Camp untuk Nathan belum diisi. Lewat Rab 10 Des 23.59, pendaftarannya dibatalkan otomatis.</div><div class="small faint" style="margin-top:3px">Juga dikirim lewat WhatsApp dengan link isi formulir</div></div></div>
+  <div class="card" style="display:flex;gap:9px"><div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#EF4444,#B91C1C);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ic"><use href="#i-ban"/></svg></div><div style="flex:1"><div style="font-weight:700">Pendaftaran dibatalkan otomatis</div><div class="muted small" style="line-height:1.4;margin-top:2px">Pendaftaran Nathan di Youth Camp dibatalkan karena formulir data peserta tidak diisi sampai batas waktu.</div><div class="small faint" style="margin-top:3px">11 Des, 00.00</div></div></div>
+ </div>
+</div></div>
+<div class="cap"><b>Pengingat & pembatalan</b>Pengingat H-3, H-1, dan 3 jam sebelum batas (app + WhatsApp berisi link). Setelah lewat: pendaftaran dibatalkan, kuota kembali, notifikasi berisi alasan.</div></div>
+</div>
+
+<div class="note"><b>Catatan</b> — Form anonim: kotak terkunci (autofill) tidak ada, dan kartu menampilkan keterangan ungu "nama Anda tidak terlihat oleh pengelola form". App 2.5.0: form di Announcement tampil sebagai tombol link ke Els App web; di News & Event baru terlihat setelah update ke 2.5.1.</div>
+</div>
+</body>
+</html>

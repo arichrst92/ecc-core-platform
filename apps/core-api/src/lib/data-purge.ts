@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { deleteUfFile } from './universal-form.js';
 import path from 'node:path';
 /**
  * Penghapusan / penyamaran data pribadi (kepatuhan no. 5 & 14).
@@ -49,6 +50,7 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
   if (j.dataPurgedAt) return { purged: false as const, reason: 'already-purged' };
 
   const now = new Date();
+  let ufFiles: { storageName: string }[] = [];
   await prisma.$transaction(async (tx) => {
     await tx.jemaat.update({
       where: { id: j.id },
@@ -117,6 +119,13 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     // Bukti transfer
     await tx.eventParticipation.updateMany({ where: { jemaatId: j.id }, data: { buktiTransferUrl: null, catatan: null } });
     await tx.eventDonation.updateMany({ where: { participation: { jemaatId: j.id } }, data: { buktiTransferUrl: null } });
+    // Universal Form: jawaban milik / tentang jemaat ini dihapus (file ikut, lewat cascade + disk di bawah).
+    ufFiles = await tx.universalFormFile.findMany({
+      where: { OR: [{ uploaderJemaatId: j.id }, { response: { OR: [{ jemaatId: j.id }, { subjekJemaatId: j.id }] } }] },
+      select: { storageName: true },
+    });
+    await tx.universalFormFile.deleteMany({ where: { uploaderJemaatId: j.id } });
+    await tx.universalFormResponse.deleteMany({ where: { OR: [{ jemaatId: j.id }, { subjekJemaatId: j.id }] } });
     await tx.otpVerification.deleteMany({ where: { jemaatId: j.id } });
     await tx.duplicateCandidate.deleteMany({ where: { OR: [{ newJemaatId: j.id }, { oldJemaatId: j.id }] } });
     if (j.email) await tx.otpVerification.deleteMany({ where: { email: j.email } });
@@ -138,6 +147,7 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     if (p.buktiTransferUrl) files.push(deleteEventBuktiTransfer(p.id));
     for (const d of p.donations) if (d.buktiTransferUrl) files.push(deleteEventDonationBukti(d.id));
   }
+  for (const f of ufFiles) files.push(deleteUfFile(f.storageName));
   const results = await Promise.allSettled(files);
   const fileErrors = results.filter((r) => r.status === 'rejected').length;
   if (fileErrors) logger.warn({ jemaatId: j.id, fileErrors }, 'purge: sebagian file gagal dihapus');

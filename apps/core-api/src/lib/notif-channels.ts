@@ -96,6 +96,10 @@ export const NOTIF_CATALOG: NotifCatalogItem[] = [
   I('BUSINESS_PARTNER_ACCEPTED', 'Partner usaha menerima', 'other'),
   I('BUSINESS_PARTNER_REJECTED', 'Partner usaha menolak', 'other'),
   I('BUSINESS_PARTNER_REMOVED', 'Partner usaha dikeluarkan', 'other'),
+  // Universal Form (2026-12)
+  I('FORM_REMINDER', 'Pengingat isi formulir', 'other', true),
+  I('FORM_NEEDS_FIX', 'Formulir perlu diperbaiki', 'other'),
+  I('FORM_REJECTED', 'Formulir ditolak', 'other'),
 ];
 
 const byKey = new Map(NOTIF_CATALOG.map((c) => [c.key, c]));

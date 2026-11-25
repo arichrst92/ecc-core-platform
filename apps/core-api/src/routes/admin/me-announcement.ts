@@ -8,6 +8,8 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { parseLinks, publicPageUrl } from '../../lib/announcement.js';
+import { isLegacyApp } from '../../lib/client-kind.js';
+import { ufWebUrl } from '../../lib/universal-form.js';
 
 export const meAnnouncementRouter = Router();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,7 +68,18 @@ meAnnouncementRouter.get('/:id', async (req, res) => {
   });
   if (!r || !['SENDING', 'SENT'].includes(r.announcement.status)) throw NotFound('Pengumuman tidak ditemukan');
   if (!r.readAt) await prisma.announcementRecipient.update({ where: { id: r.id }, data: { readAt: new Date() } });
-  res.json({ success: true, data: view(r.announcement) });
+  const data = view(r.announcement);
+  // Universal Form (2026-12): app ≤ 2.5.0 belum punya kartu formulir → tombol link
+  // ke Els App web (app 2.5.1 menampilkan kartu formulir sendiri).
+  if (isLegacyApp(req)) {
+    const embeds = await prisma.universalFormEmbed.findMany({
+      where: { sourceType: 'ANNOUNCEMENT', sourceId: id, form: { status: 'OPEN' } },
+      orderBy: { urutan: 'asc' },
+      select: { formId: true, form: { select: { judul: true } } },
+    });
+    for (const e of embeds) data.links.push({ label: `Isi formulir: ${e.form.judul}`.slice(0, 80), url: ufWebUrl(e.formId, 'ANNOUNCEMENT', id) });
+  }
+  res.json({ success: true, data });
 });
 
 meAnnouncementRouter.post('/:id/dismiss', async (req, res) => {

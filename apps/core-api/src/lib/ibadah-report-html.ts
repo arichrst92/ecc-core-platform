@@ -5,6 +5,7 @@
  * pertemuan tertinggi/terendah, dan tamu.
  */
 import { ideaLogoSvg } from './idea-logo.js';
+import { reportIcon } from './report-icons.js';
 import { esc, fmtTgl } from './print-report.js';
 import { CHECKIN_METHODS, METHOD_LABEL, type MethodCount } from './attendance-report.js';
 import { REPORT_CSS, barRow, columnChart, donut, kpi, n, pctTxt, section } from './cabang-report-html.js';
@@ -129,7 +130,7 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
             okupansi: number | null;
             growth: number | null;
           }) =>
-            `<tr><td><b>${esc(p.ibadah.nama)}</b> <span class="muted">${esc(p.ibadah.jamMulai)}${p.ibadah.isKidsIbadah ? ' · 🧒' : ''}${
+            `<tr><td><b>${esc(p.ibadah.nama)}</b> <span class="muted">${esc(p.ibadah.jamMulai)}${p.ibadah.isKidsIbadah ? ' · Anak' : ''}${
               d.filters.cabang ? '' : p.ibadah.cabang ? ` · ${esc(p.ibadah.cabang)}` : ''
             }</span></td><td class="r">${p.pertemuan}/${p.terjadwal}</td><td class="r b">${n(p.total)}</td><td><div class="br-t"><div class="br-f" style="width:${
               (p.total / perMax) * 100
@@ -180,7 +181,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     <div class="eyebrow">Laporan Ibadah · Ringkasan Eksekutif</div>
     <h1>${d.filters.kidsOnly ? 'Kehadiran Ibadah Anak' : 'Kehadiran Ibadah'}</h1>
     <div class="meta">${esc(scope)}</div>
-    <div class="period">📅 ${d.period.label ? `${esc(d.period.label)} · ` : ''}${fmtTgl(d.period.from)} – ${fmtTgl(d.period.to)}</div>
+    <div class="period">${reportIcon('calendar', 11)} ${d.period.label ? `${esc(d.period.label)} · ` : ''}${fmtTgl(d.period.from)} – ${fmtTgl(d.period.to)}</div>
   </div>
 
   <h2 class="sec">Ringkasan</h2>

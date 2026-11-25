@@ -6,6 +6,7 @@
  *   volunteer       Permintaan Volunteer   PENDING (sesuai otoritas approval)
  *   feedback        Kritik & Saran         BARU (belum dibalas)
  *   prayer          Prayer Request         BARU (belum ditugaskan)
+ *   konseling       Konseling              permintaan BARU (belum ada konselor)
  *   tamu            Tamu                   belum ada petugas follow-up
  *   jemaatDuplicate Jemaat → Cek Duplikat  kandidat akun ganda OPEN
  *   sjRequest       Spiritual Journey      request langkah rohani PENDING
@@ -43,6 +44,7 @@ pendingCountsRouter.get('/', async (req, res) => {
   }
   if (can('feedback')) jobs.feedback = () => prisma.feedback.count({ where: { status: 'BARU' } });
   if (can('prayer-request')) jobs.prayer = () => prisma.prayerRequest.count({ where: { status: 'BARU', deletedAt: null } });
+  if (can('konseling')) jobs.konseling = () => prisma.konselingRequest.count({ where: { status: 'BARU' } });
   if (can('tamu')) {
     jobs.tamu = () =>
       prisma.jemaat.count({

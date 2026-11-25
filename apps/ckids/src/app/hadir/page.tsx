@@ -292,8 +292,8 @@ function HadirRow({ r }: { r: HadirItem }) {
               </span>
             )}
             {isKids && (
-              <span className="bg-kids-100 text-kids-700 text-[10px] px-1.5 rounded">
-                🧒
+              <span className="bg-kids-100 text-kids-700 text-[10px] px-1.5 py-0.5 rounded inline-flex items-center">
+                <Baby className="w-3 h-3" />
               </span>
             )}
           </div>

@@ -21,7 +21,7 @@ import {
   UserPlus,
   User as UserIcon,
   Users,
-  Check,
+  Check, Baby
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -221,7 +221,7 @@ export default function KehadiranPage() {
             className="flex items-center gap-2 px-3 py-1.5 border border-pink-300 text-pink-700 hover:bg-pink-50 text-sm font-medium rounded-lg"
             title="Ibadah anak — verify 6-digit kode jemput dari parent"
           >
-            🧒 Pickup Anak
+            <Baby className="w-4 h-4" /> Pickup Anak
           </button>
           <button
             onClick={() => setCreateOpen(true)}
@@ -1161,7 +1161,7 @@ function PickupAnakModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
           <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
             <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
-              🧒 Pickup Anak
+              <Baby className="w-5 h-5 text-pink-600" /> Pickup Anak
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               Input 6-digit kode jemput dari parent. Optional: scan QR anak juga

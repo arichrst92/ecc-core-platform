@@ -376,7 +376,7 @@ export default function LaporanIbadahPage() {
             {ibadahOptions.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.nama}
-                {i.isKidsIbadah ? ' 🧒' : ''}
+                {i.isKidsIbadah ? ' · Anak' : ''}
               </option>
             ))}
           </select>
@@ -526,7 +526,7 @@ export default function LaporanIbadahPage() {
                         </Link>{' '}
                         <span className="text-xs text-neutral-400">
                           {p.ibadah.jamMulai}
-                          {p.ibadah.isKidsIbadah ? ' · 🧒' : ''}
+                          {p.ibadah.isKidsIbadah ? ' · Anak' : ''}
                           {!d.filters.cabang && p.ibadah.cabang ? ` · ${p.ibadah.cabang}` : ''}
                         </span>
                       </td>

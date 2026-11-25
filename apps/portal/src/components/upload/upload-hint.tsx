@@ -15,7 +15,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, ImageIcon, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, Copy, ImageIcon, Sparkles, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export type UploadKind =
@@ -265,7 +265,7 @@ export function UploadHint({ kind, context, className }: UploadHintProps) {
 {prompt}
               </pre>
               <div className="mt-2 text-[11px] text-neutral-500 leading-relaxed">
-                💡 Tips: edit konteks "judul" / "ringkasan" / "tag" di form di atas, lalu buka kembali prompt ini — akan auto-update sesuai context terbaru. Upload hasilnya pakai tombol di atas.
+                <Lightbulb className="w-3 h-3 inline -mt-0.5 mr-1" />Tips: edit konteks "judul" / "ringkasan" / "tag" di form di atas, lalu buka kembali prompt ini — akan auto-update sesuai context terbaru. Upload hasilnya pakai tombol di atas.
               </div>
             </div>
           ) : null}

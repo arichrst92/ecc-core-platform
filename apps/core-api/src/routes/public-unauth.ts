@@ -1195,6 +1195,12 @@ publicUnauthRouter.get('/videos', publicBrowseLimiter, async (_req, res) => {
   res.json({ success: true, data: await publicCatalog() });
 });
 
+/** Ringan untuk tile Media di Beranda app: cukup jumlah video tayang. */
+publicUnauthRouter.get('/videos/summary', publicBrowseLimiter, async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=120');
+  res.json({ success: true, data: { total: await prisma.video.count({ where: publicVideoWhere() }) } });
+});
+
 publicUnauthRouter.get('/videos/:id', publicBrowseLimiter, async (req, res) => {
   const id = String(req.params.id ?? '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw NotFound('Video tidak ditemukan');
@@ -1206,5 +1212,5 @@ publicUnauthRouter.get('/videos/:id', publicBrowseLimiter, async (req, res) => {
     orderBy: [{ tayangAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     take: 12,
   });
-  res.json({ success: true, data: { ...videoView(v), related: related.map(videoView) } });
+  res.json({ success: true, data: { ...videoView(v), related: related.map((r) => videoView(r, { shortDesc: true })) } });
 });

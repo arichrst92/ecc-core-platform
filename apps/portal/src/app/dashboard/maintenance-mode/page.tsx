@@ -183,7 +183,8 @@ export default function MaintenanceModePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-neutral-900">
-                  {status.isEnabled ? '🔴 Maintenance AKTIF' : '🟢 Normal (maintenance off)'}
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${status.isEnabled ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                  {status.isEnabled ? 'Maintenance AKTIF' : 'Normal (maintenance off)'}
                 </div>
                 <div className="text-xs text-neutral-600 mt-1">
                   {status.isEnabled

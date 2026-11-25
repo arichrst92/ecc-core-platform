@@ -26,7 +26,7 @@ import {
   Power,
   Trash2,
   AlertCircle,
-  CheckCircle2,
+  CheckCircle2, MapPin, Clock
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { RegistrationDuplicates } from '@/components/jemaat/registration-duplicates';
@@ -159,7 +159,7 @@ export default function JemaatDuplicatesPage() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
               <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
               <p className="text-sm font-medium text-emerald-800">
-                Tidak ada duplikat ditemukan 🎉
+                Tidak ada duplikat ditemukan
               </p>
             </div>
           ) : (
@@ -208,7 +208,7 @@ export default function JemaatDuplicatesPage() {
                               {j.kode && <span>#{j.kode}</span>}
                               {j.noHp && <span>{j.noHp}</span>}
                               {j.email && <span>{j.email}</span>}
-                              {j.cabang && <span>📍 {j.cabang.nama}</span>}
+                              {j.cabang && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{j.cabang.nama}</span>}
                               <span
                                 className={
                                   j.user?.lastLoginAt
@@ -221,7 +221,8 @@ export default function JemaatDuplicatesPage() {
                                     : undefined
                                 }
                               >
-                                🕐 {formatRelative(j.user?.lastLoginAt)}
+                                <Clock className="w-3 h-3 inline -mt-0.5 mr-1" />
+                                {formatRelative(j.user?.lastLoginAt)}
                               </span>
                               <span className="text-neutral-400">
                                 Dibuat {new Date(j.createdAt).toLocaleDateString('id-ID')}

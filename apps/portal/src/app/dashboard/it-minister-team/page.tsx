@@ -19,7 +19,7 @@ import {
   Trash2,
   Power,
   PowerOff,
-  X,
+  X, MapPin, Package
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -236,8 +236,8 @@ function MemberCard({
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-neutral-900 truncate">{a.jemaat.namaLengkap}</p>
           <p className="text-xs text-orange-700 font-medium">{ROLE_LABEL[a.roleTitle]}</p>
-          {a.cabang && <p className="text-[11px] text-neutral-500 mt-0.5">📍 {a.cabang.nama}</p>}
-          {a.productArea && <p className="text-[11px] text-neutral-500 mt-0.5">📦 {a.productArea}</p>}
+          {a.cabang && <p className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" />{a.cabang.nama}</p>}
+          {a.productArea && <p className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-1"><Package className="w-3 h-3" />{a.productArea}</p>}
           {a.jemaat.noHp && (
             <p className="text-[11px] text-neutral-500 mt-0.5">{a.jemaat.noHp}</p>
           )}

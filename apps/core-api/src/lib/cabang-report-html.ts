@@ -4,6 +4,7 @@
  * (SVG inline, ikut tercetak), dan tabel ringkas. A4 portrait.
  */
 import { ideaLogoSvg } from './idea-logo.js';
+import { reportIcon } from './report-icons.js';
 import { esc, fmtTgl } from './print-report.js';
 import type { CabangStats } from '../routes/admin/cabang.js';
 
@@ -11,7 +12,7 @@ export const n = (v: number | null | undefined) => (v ?? 0).toLocaleString('id-I
 export const pctTxt = (v: number | null | undefined) => (v == null ? '—' : `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`);
 
 export function kpi(icon: string, label: string, value: string, sub: string, color: string) {
-  return `<div class="kpi"><div class="kpi-top"><span class="kpi-label">${esc(label)}</span><span class="kpi-ic" style="background:${color}">${icon}</span></div>
+  return `<div class="kpi"><div class="kpi-top"><span class="kpi-label">${esc(label)}</span><span class="kpi-ic" style="background:${color}">${reportIcon(icon, 12)}</span></div>
   <div class="kpi-v">${esc(value)}</div><div class="kpi-s">${esc(sub)}</div></div>`;
 }
 
@@ -22,7 +23,7 @@ export function barRow(label: string, value: string, pct: number, color: string,
 }
 
 export function section(title: string, icon: string, color: string, inner: string, sub = '') {
-  return `<div class="card"><div class="card-h"><span class="card-ic" style="background:${color}">${icon}</span><div><div class="card-t">${esc(title)}</div>${
+  return `<div class="card"><div class="card-h"><span class="card-ic" style="background:${color}">${reportIcon(icon, 13)}</span><div><div class="card-t">${esc(title)}</div>${
     sub ? `<div class="card-s">${esc(sub)}</div>` : ''
   }</div></div>${inner}</div>`;
 }
@@ -287,7 +288,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
     <div class="eyebrow">Laporan Cabang · Ringkasan Eksekutif</div>
     <h1>${esc(d.cabang.nama)}<span class="code">${esc(d.cabang.kode)}</span></h1>
     <div class="meta">Sinode ${esc(d.cabang.sinode.nama)}${d.cabang.alamat ? ` · ${esc(d.cabang.alamat)}` : ''}</div>
-    <div class="period">📅 ${fmtTgl(d.periode.from)} – ${fmtTgl(d.periode.to)} · ${d.periode.days} hari</div>
+    <div class="period">${reportIcon('calendar', 11)} ${fmtTgl(d.periode.from)} – ${fmtTgl(d.periode.to)} · ${d.periode.days} hari</div>
   </div>
 
   <h2 class="sec">Ringkasan</h2>

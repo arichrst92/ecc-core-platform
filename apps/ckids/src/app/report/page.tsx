@@ -106,7 +106,7 @@ function ReportContent() {
       {/* Top hadiah */}
       {topHadiah.length > 0 && (
         <div className="bg-white border border-neutral-200 rounded-xl p-4">
-          <h2 className="font-semibold text-neutral-900 mb-3">🏆 Top 5 Hadiah Hari Ini</h2>
+          <h2 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-600" /> Top 5 Hadiah Hari Ini</h2>
           <div className="space-y-2">
             {topHadiah.map((h, i) => (
               <div key={h.nama} className="flex items-center gap-2">

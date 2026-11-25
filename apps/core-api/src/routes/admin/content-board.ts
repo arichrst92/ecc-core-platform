@@ -186,7 +186,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
       select: announcementSelect,
     });
     if (body.notify !== false) {
-      void notify(a, scope.notif.announcement, `📢 ${a.ownerNama}: ${created.judul}`, created.isi, {
+      void notify(a, scope.notif.announcement, `${a.ownerNama}: ${created.judul}`, created.isi, {
         announcementId: created.id,
       });
     }
@@ -273,7 +273,7 @@ export function buildBoardRouter(scope: BoardScope): Router {
       include: pollInclude(true),
     });
     if (body.notify !== false) {
-      void notify(a, scope.notif.poll, `🗳️ Voting baru di ${a.ownerNama}`, created.pertanyaan, { pollId: created.id });
+      void notify(a, scope.notif.poll, `Voting baru di ${a.ownerNama}`, created.pertanyaan, { pollId: created.id });
     }
     audit(req, {
       action: 'CREATE',

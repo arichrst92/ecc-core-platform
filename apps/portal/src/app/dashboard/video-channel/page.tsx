@@ -252,7 +252,11 @@ function VideoModal({ video, kategori, onClose }: { video: Video | null; kategor
   });
   useEffect(() => {
     if (durl.trim().length < 8) return;
-    if (video && durl === video.url) return;
+    if (video && durl === video.url) {
+      setResolveErr(null);
+      setInfo(null);
+      return;
+    }
     resolve.mutate(durl.trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durl]);

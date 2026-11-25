@@ -137,7 +137,7 @@ async function videoDetails(ids: string[], parts: string): Promise<Map<string, V
   const map = new Map<string, VidItem>();
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
-    const j = await yt<{ items: VidItem[] }>(`videos?part=${parts}&maxHeight=360&id=${chunk.join(',')}`);
+    const j = await yt<{ items: VidItem[] }>(`videos?part=${parts}${parts.includes('player') ? '&maxHeight=360' : ''}&id=${chunk.join(',')}`);
     for (const v of j.items) map.set(v.id, v);
   }
   return map;
@@ -177,6 +177,9 @@ export async function runYoutubeSync(trigger: 'AUTO' | 'MANUAL', byId?: string |
     await refreshYoutubeSources();
     const sources = await prisma.videoYoutubeSource.findMany({ where: { isEnabled: true, missingAt: null }, orderBy: [{ urutan: 'asc' }] });
     r.playlists = sources.length;
+    // Kategori yang sudah dihapus → video masuk tanpa kategori (hindari gagal FK).
+    const katIds = new Set((await prisma.videoKategori.findMany({ select: { id: true } })).map((k) => k.id));
+    for (const s of sources) if (s.kategoriId && !katIds.has(s.kategoriId)) s.kategoriId = null;
 
     // videoId → playlist pertama (prioritas urutan)
     const pick = new Map<string, (typeof sources)[number]>();

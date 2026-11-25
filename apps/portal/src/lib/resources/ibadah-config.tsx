@@ -252,7 +252,7 @@ export const ibadahResource: ResourceConfig<Ibadah> = {
     { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
     {
       name: 'isKidsIbadah',
-      label: 'Ibadah Anak? 🧒',
+      label: 'Ibadah Anak?',
       type: 'switch',
       defaultValue: false,
       helperText:

@@ -91,6 +91,7 @@ videoChannelRouter.delete('/kategori/:id', D, async (req, res) => {
   const id = pid(req.params.id, 'Kategori');
   const k = await prisma.videoKategori.delete({ where: { id } }).catch(() => null);
   if (!k) throw NotFound('Kategori tidak ditemukan');
+  await prisma.videoYoutubeSource.updateMany({ where: { kategoriId: id }, data: { kategoriId: null } });
   audit(req, { action: 'DELETE', resource: 'video_kategori', resourceId: id, resourceLabel: k.nama });
   res.json({ success: true, data: { deleted: true } });
 });
@@ -98,6 +99,13 @@ videoChannelRouter.delete('/kategori/:id', D, async (req, res) => {
 // ------------------------------------------------------------------ sinkron YouTube
 
 videoChannelRouter.get('/youtube', R, async (_req, res) => {
+  // Sinkron yang terputus (server restart) jangan terlihat "berjalan" selamanya.
+  if (!isYoutubeSyncRunning()) {
+    await prisma.videoSyncRun.updateMany({
+      where: { status: 'RUNNING', startedAt: { lt: new Date(Date.now() - 30 * 60_000) } },
+      data: { status: 'ERROR', finishedAt: new Date(), message: 'Sinkron terhenti (server dimulai ulang). Coba lagi.' },
+    });
+  }
   const [sources, runs, ignoredCount, counts] = await Promise.all([
     prisma.videoYoutubeSource.findMany({ orderBy: [{ urutan: 'asc' }] }),
     prisma.videoSyncRun.findMany({ orderBy: { startedAt: 'desc' }, take: 10 }),

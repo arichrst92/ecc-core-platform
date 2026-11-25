@@ -216,7 +216,7 @@ function ErrorEventsTab() {
             {PERIODS.find((p) => p.value === days)?.label.toLowerCase()} (waktu diterima server)
           </div>
           {data.groups.length === 0 && (
-            <div className="p-8 text-center text-neutral-400">Tidak ada laporan di periode ini. Aplikasi sehat 🎉</div>
+            <div className="p-8 text-center text-neutral-400">Tidak ada laporan di periode ini. Aplikasi sehat.</div>
           )}
           {data.groups.map((g) => (
             <button

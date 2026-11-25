@@ -36,7 +36,7 @@ import {
   MessageCircle,
   Handshake,
   MapPinned,
-  FileText,
+  FileText, Moon, Meh, Smile, ThumbsUp, Flame
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
@@ -1852,7 +1852,10 @@ function ActivityIndicator({ activity }: { activity: JemaatProfileData['activity
     <section className="mt-6 bg-white border border-neutral-200 rounded-xl overflow-hidden">
       <div className="px-4 sm:px-6 py-4 border-b border-neutral-100">
         <h2 className="font-semibold text-neutral-900 flex items-center gap-2 text-sm">
-          <span className="text-base">{current.emoji}</span>
+          {(() => {
+            const I = { PASIF: Moon, KURANG_AKTIF: Meh, CUKUP_AKTIF: Smile, AKTIF: ThumbsUp, SANGAT_AKTIF: Flame }[current.key as 'PASIF'] ?? Smile;
+            return <I className="w-4 h-4 text-neutral-500" />;
+          })()}
           Indikator Keaktifan — 3 Bulan Terakhir
         </h2>
       </div>

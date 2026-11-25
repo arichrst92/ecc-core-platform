@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Info,
   RefreshCw,
-  Smartphone,
+  Smartphone, AlertTriangle
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { GatewaySettings } from '@/components/wa/gateway-settings';
@@ -147,7 +147,7 @@ function ConfigCard({ config }: { config: WaConfig }) {
       const d = res.data.data as { noHp: string; pengirim?: string | null; peringatan?: string[] };
       // "Terkirim" dari Fonnte = masuk antrean; pengiriman dilakukan HP pengirim.
       toast.success(`Masuk antrean Fonnte → ${d.noHp}${d.pengirim ? ` (dari ${d.pengirim})` : ''}`, { duration: 5000 });
-      for (const w of d.peringatan ?? []) toast(w, { icon: '⚠️', duration: 9000 });
+      for (const w of d.peringatan ?? []) toast(w, { icon: <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />, duration: 9000 });
       void qc.invalidateQueries({ queryKey: ['wa-config', 'device'] });
     },
     onError: (e: any) => {

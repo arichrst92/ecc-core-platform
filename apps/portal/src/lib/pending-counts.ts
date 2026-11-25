@@ -15,6 +15,7 @@ export type PendingKey =
   | 'volunteer'
   | 'feedback'
   | 'prayer'
+  | 'konseling'
   | 'tamu'
   | 'jemaatDuplicate'
   | 'sjRequest'
@@ -29,6 +30,7 @@ export const PENDING_META: Record<PendingKey, { label: string; target: string }>
   volunteer: { label: 'permintaan volunteer menunggu', target: '/dashboard/pelayanan/join-requests' },
   feedback: { label: 'kritik & saran belum dibalas', target: '/dashboard/feedback' },
   prayer: { label: 'prayer request belum ditugaskan', target: '/dashboard/prayer-request' },
+  konseling: { label: 'permintaan konseling belum ada konselor', target: '/dashboard/konseling' },
   tamu: { label: 'tamu belum ada petugas follow-up', target: '/dashboard/tamu?followupBy=none' },
   jemaatDuplicate: { label: 'kandidat akun ganda perlu ditinjau', target: '/dashboard/jemaat/duplicates' },
   sjRequest: { label: 'request spiritual journey menunggu', target: '/dashboard/spiritual-journey/request' },

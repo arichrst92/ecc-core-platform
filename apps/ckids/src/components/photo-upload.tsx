@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Upload, Loader2, X, ImagePlus } from 'lucide-react';
+import { Upload, Loader2, X, ImagePlus, Info } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { CropModal } from './crop-modal';
@@ -61,7 +61,7 @@ export function PhotoUpload({
 
     if (!existingId) {
       toast('Simpan hadiah dulu, baru upload foto via Edit tab', {
-        icon: 'ℹ️',
+        icon: <Info className="w-4 h-4 text-sky-600 shrink-0" />,
       });
       return;
     }

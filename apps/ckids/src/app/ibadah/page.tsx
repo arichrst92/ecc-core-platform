@@ -815,7 +815,7 @@ function ActionPanel({
                   }`}
                   title={`Tanggal lahir: ${jemaat.tanggalLahir}`}
                 >
-                  {umur}th{umur < 18 && ' 🧒'}
+                  {umur}th
                 </span>
               )}
             </div>

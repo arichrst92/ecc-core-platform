@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Filter,
+  Filter, Hourglass
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -254,7 +254,7 @@ export default function MaintenancePage() {
                     <span className="flex gap-2">
                       <span className="text-green-600">✓{stats.SENT ?? 0}</span>
                       <span className="text-red-600">✗{stats.FAILED ?? 0}</span>
-                      <span className="text-amber-600">⏳{stats.PENDING ?? 0}</span>
+                      <span className="text-amber-600 inline-flex items-center gap-0.5"><Hourglass className="w-3 h-3" />{stats.PENDING ?? 0}</span>
                     </span>
                   </div>
                 );

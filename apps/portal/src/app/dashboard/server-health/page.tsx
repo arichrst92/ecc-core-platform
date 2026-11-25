@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Bell,
   Settings,
-  Music,
+  Music, Hourglass
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -342,7 +342,7 @@ export default function ServerHealthPage() {
                     <div className="flex gap-2 text-neutral-500">
                       <span className="text-green-600">✓ {s.SENT ?? 0}</span>
                       <span className="text-red-600">✗ {s.FAILED ?? 0}</span>
-                      <span className="text-amber-600">⏳ {s.PENDING ?? 0}</span>
+                      <span className="text-amber-600 inline-flex items-center gap-0.5"><Hourglass className="w-3 h-3" /> {s.PENDING ?? 0}</span>
                     </div>
                   </div>
                 );
@@ -457,7 +457,7 @@ interface Case {
 
 const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
   {
-    group: '🔥 Performance',
+    group: 'Performance',
     cases: [
       {
         symptom: 'CPU load 1m > cores × 1.5 (sustained)',
@@ -504,7 +504,7 @@ const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
     ],
   },
   {
-    group: '💾 Storage',
+    group: 'Storage',
     cases: [
       {
         symptom: 'Uploads size > 10GB',
@@ -533,7 +533,7 @@ const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
     ],
   },
   {
-    group: '📨 WhatsApp / Notifications',
+    group: 'WhatsApp / Notifications',
     cases: [
       {
         symptom: 'WA reminder tidak ke-kirim (FAILED tinggi)',
@@ -562,7 +562,7 @@ const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
     ],
   },
   {
-    group: '🔐 Auth & Sessions',
+    group: 'Auth & Sessions',
     cases: [
       {
         symptom: 'User tiba-tiba ter-logout (force logout)',
@@ -602,7 +602,7 @@ const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
     ],
   },
   {
-    group: '🗄️ Database',
+    group: 'Database',
     cases: [
       {
         symptom: 'Connection count > 100',
@@ -629,7 +629,7 @@ const TROUBLESHOOTING: { group: string; cases: Case[] }[] = [
     ],
   },
   {
-    group: '⚙️ Deployment',
+    group: 'Deployment',
     cases: [
       {
         symptom: 'GitHub Actions deploy fail',

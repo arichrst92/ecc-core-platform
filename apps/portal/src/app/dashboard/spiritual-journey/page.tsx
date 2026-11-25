@@ -158,7 +158,7 @@ export default function SpiritualJourneyPage() {
             >
               <div className="flex flex-col items-center">
                 <div className="w-10 h-10 rounded-full bg-brand-50 text-brand-700 font-bold flex items-center justify-center text-lg">
-                  {s.ikon || i + 1}
+                  {i + 1}
                 </div>
                 <div className="text-[10px] text-neutral-400 mt-1">Tahap {i + 1}</div>
               </div>
@@ -294,7 +294,7 @@ const inputCls =
 function StepForm({ step, onClose }: { step: Step | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [judul, setJudul] = useState(step?.judul ?? '');
-  const [ikon, setIkon] = useState(step?.ikon ?? '');
+  const ikon = step?.ikon ?? '';
   const [deskripsi, setDeskripsi] = useState(step?.deskripsi ?? '');
   const [cara, setCara] = useState(step?.caraMendapatkan ?? '');
   const [roleId, setRoleId] = useState(step?.roleId ?? '');
@@ -349,14 +349,10 @@ function StepForm({ step, onClose }: { step: Step | null; onClose: () => void })
             </button>
           </div>
           <div className="overflow-y-auto p-4 sm:p-6 space-y-4">
-            <div className="grid grid-cols-[1fr_90px] gap-3">
-              <Lbl label="Judul *">
-                <input value={judul} onChange={(e) => setJudul(e.target.value)} className={inputCls} placeholder="Expand Class" />
-              </Lbl>
-              <Lbl label="Ikon">
-                <input value={ikon} onChange={(e) => setIkon(e.target.value)} className={inputCls} placeholder="🌱" maxLength={16} />
-              </Lbl>
-            </div>
+            {/* Ikon emoji tidak lagi ditampilkan (ikon monokrom) — tahap memakai nomor urut. */}
+            <Lbl label="Judul *">
+              <input value={judul} onChange={(e) => setJudul(e.target.value)} className={inputCls} placeholder="Expand Class" />
+            </Lbl>
             <div className="rounded-xl border border-neutral-200 p-3 space-y-3">
               <div className="text-xs font-semibold text-neutral-500 uppercase">Syarat</div>
               <Lbl label="Role *">

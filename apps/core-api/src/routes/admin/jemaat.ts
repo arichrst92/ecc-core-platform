@@ -28,6 +28,7 @@ import {
 import { generateUniqueKode } from '../../lib/kode-reservasi.js';
 import { logger } from '../../lib/logger.js';
 import { jemaatWhereForStage, journeyProgress, journeyStage, journeyStageLabel } from '../../lib/spiritual-journey.js';
+import { reportIcon } from '../../lib/report-icons.js';
 
 // Helper: generate kode jemaat unik (mirip pattern reservasi).
 async function generateUniqueKodeJemaat(): Promise<string> {
@@ -1750,9 +1751,9 @@ export async function renderJemaatProfileHtml(
       <div class="family-info">
         <div class="family-name">${escapeHtml(r.jemaatTerkait.namaLengkap)} ${sexBadge}</div>
         <div class="family-role">${escapeHtml(r.tipeRelasi.nama)}${usia ? ` · ${usia}` : ''}</div>
-        ${!ctx.selfCopy && r.jemaatTerkait.noHp ? `<div class="family-contact">📱 ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
-        ${!ctx.selfCopy && r.jemaatTerkait.email ? `<div class="family-contact">✉ ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
-        ${!ctx.selfCopy && r.jemaatTerkait.tanggalLahir ? `<div class="family-contact">🎂 ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.noHp ? `<div class="family-contact">${reportIcon('phone', 11)} ${escapeHtml(r.jemaatTerkait.noHp)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.email ? `<div class="family-contact">${reportIcon('mail', 11)} ${escapeHtml(r.jemaatTerkait.email)}</div>` : ''}
+        ${!ctx.selfCopy && r.jemaatTerkait.tanggalLahir ? `<div class="family-contact">${reportIcon('cake', 11)} ${fmtDate(r.jemaatTerkait.tanggalLahir)}</div>` : ''}
       </div>
     </div>`;
     })
@@ -1913,7 +1914,7 @@ ${
       </section>
 
       <section>
-        <h3>Keaktifan 3 Bulan ${expActTier.emoji}</h3>
+        <h3>Keaktifan 3 Bulan ${reportIcon(expActTier.emoji, 14, expActTier.color)}</h3>
         <div class="activity-score" style="color:${expActTier.color};">${expActScore}</div>
         <div class="activity-tier" style="color:${expActTier.color};">${expActTier.label}</div>
         <div class="activity-bar-wrap">

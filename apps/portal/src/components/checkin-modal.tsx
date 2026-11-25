@@ -8,7 +8,7 @@ import {
   Loader2,
   AlertTriangle,
   Check,
-  User as UserIcon,
+  User as UserIcon, Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -95,7 +95,7 @@ export function CheckinModal({
         : walkIn
           ? `${nama} berhasil check-in (walk-in)`
           : `${nama} berhasil check-in`;
-      if (isAlready) toast(msg, { icon: 'ℹ️' });
+      if (isAlready) toast(msg, { icon: <Info className="w-4 h-4 text-sky-600 shrink-0" /> });
       else toast.success(msg);
       setHistory((h) =>
         [

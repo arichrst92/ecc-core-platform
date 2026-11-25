@@ -384,7 +384,7 @@ meUniversalFormRouter.post('/:formId/submit', async (req, res) => {
   const raw = (req.body?.jawaban ?? {}) as Record<string, unknown>;
   const { jawaban, errors } = validateAnswers(fields, raw, fileMap, existing?.id ?? null);
   if (Object.keys(errors).length) {
-    res.status(422).json({ success: false, error: { code: 'VALIDATION', message: 'Ada isian yang perlu diperbaiki.', fields: errors } });
+    res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Ada isian yang perlu diperbaiki.', details: { fieldErrors: Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, [v]])) } } });
     return;
   }
   const keys = ctx.form.anonim ? [] : (fields.filter((f) => f.autofill).map((f) => f.autofill) as UfAutofill[]);
@@ -396,7 +396,7 @@ meUniversalFormRouter.post('/:formId/submit', async (req, res) => {
     for (const sf of sigFields) {
       const oldSig = (existing.jawaban as Record<string, unknown>)?.[sf.id];
       if (oldSig && jawaban[sf.id] === oldSig) {
-        res.status(422).json({ success: false, error: { code: 'VALIDATION', message: 'Jawaban berubah — tanda tangani ulang.', fields: { [sf.id]: 'Jawaban berubah. Tanda tangani ulang.' } } });
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Jawaban berubah — tanda tangani ulang.', details: { fieldErrors: { [sf.id]: ['Jawaban berubah. Tanda tangani ulang.'] } } } });
         return;
       }
     }

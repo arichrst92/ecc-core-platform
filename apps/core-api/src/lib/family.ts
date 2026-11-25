@@ -36,3 +36,26 @@ export async function familyOf(jemaatId: string): Promise<Map<string, string>> {
   return out;
 }
 
+
+/**
+ * Anggota keluarga (bukan tamu) untuk tab per anggota di halaman Homecell &
+ * Zona app (2026-11). Urutan = urutan daftar keluarga (relasi langsung, lewat
+ * pasangan, tanggungan). Tamu (relasi "Tamu" / jemaat isTamu) & jemaat
+ * nonaktif tidak ikut.
+ */
+export async function familyMembersNonGuest(
+  jemaatId: string,
+): Promise<{ id: string; namaLengkap: string; fotoUrl: string | null; relasi: string }[]> {
+  const fam = await familyOf(jemaatId);
+  const ids = [...fam.entries()].filter(([, rel]) => rel !== 'Tamu').map(([id]) => id);
+  if (!ids.length) return [];
+  const rows = await prisma.jemaat.findMany({
+    where: { id: { in: ids }, isTamu: false, isActive: true },
+    select: { id: true, namaLengkap: true, fotoUrl: true },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.flatMap((id) => {
+    const r = byId.get(id);
+    return r ? [{ ...r, relasi: fam.get(id)! }] : [];
+  });
+}

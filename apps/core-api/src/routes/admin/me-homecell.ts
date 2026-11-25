@@ -44,6 +44,7 @@ import { isMobileClient } from '../../lib/client-kind.js';
 import { sendWaIfEnabled } from '../../lib/wa-notif.js';
 import { MAPS_URL_ERROR, distanceKm, type LatLng } from '../../lib/geo.js';
 import { scheduleFileSelect } from './homecell-schedule.js';
+import { familyMembersNonGuest } from '../../lib/family.js';
 
 export const meHomecellRouter = Router();
 
@@ -217,6 +218,63 @@ meHomecellRouter.get('/', async (req, res) => {
       })),
       pendingRequests: pending,
     },
+  });
+});
+
+// ------------------------------------------------------------------ keluarga (2026-11)
+
+/**
+ * GET /admin/me/homecell/family — homecell anggota keluarga saya (bukan tamu),
+ * untuk tab per anggota di halaman Homecell app 2.5.1. Hanya lihat: homecell
+ * yang ia ikuti / pimpin (status relatif terhadap anggota itu) + permintaan
+ * bergabung yang masih menunggu.
+ */
+meHomecellRouter.get('/family', async (req, res) => {
+  const jemaatId = me(req).jemaatId;
+  const fam = await familyMembersNonGuest(jemaatId);
+  if (!fam.length) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const ids = fam.map((f) => f.id);
+  const [members, led, pending] = await Promise.all([
+    prisma.homecellMember.findMany({
+      where: { jemaatId: { in: ids }, isActive: true, homecell: { isActive: true } },
+      select: { jemaatId: true, homecell: { select: listSelect } },
+      orderBy: { tanggalBergabung: 'desc' },
+    }),
+    prisma.homecell.findMany({
+      where: { picJemaatId: { in: ids }, isActive: true },
+      select: { ...listSelect, picJemaatId: true },
+      orderBy: { nama: 'asc' },
+    }),
+    prisma.homecellJoinRequest.findMany({
+      where: { jemaatId: { in: ids }, status: 'PENDING' },
+      select: { id: true, jemaatId: true, createdAt: true, homecell: { select: { id: true, nama: true } } },
+    }),
+  ]);
+  const lastMap = await getLastMeetingMap([...new Set([...members.map((m) => m.homecell.id), ...led.map((h) => h.id)])]);
+  res.json({
+    success: true,
+    data: fam.map((f) => {
+      const status = new Map<string, 'MEMBER' | 'PENDING' | 'LEADER'>();
+      const rows: ListRow[] = [];
+      for (const { picJemaatId, ...h } of led.filter((h) => h.picJemaatId === f.id)) {
+        status.set(h.id, 'LEADER');
+        rows.push(h);
+      }
+      for (const m of members.filter((m) => m.jemaatId === f.id)) {
+        if (status.has(m.homecell.id)) continue;
+        status.set(m.homecell.id, 'MEMBER');
+        rows.push(m.homecell);
+      }
+      return {
+        jemaat: { id: f.id, namaLengkap: f.namaLengkap, fotoUrl: f.fotoUrl },
+        relasi: f.relasi,
+        homecells: rows.map((r) => toListItem(r, null, status, lastMap)),
+        pendingRequests: pending.filter((p) => p.jemaatId === f.id).map(({ jemaatId: _j, ...p }) => p),
+      };
+    }),
   });
 });
 

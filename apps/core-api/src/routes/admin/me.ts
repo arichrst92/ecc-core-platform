@@ -14,6 +14,7 @@
  *   - GET    /admin/me/homecell-managed         → homecell user-nya PIC (M9)
  *   - GET    /admin/me/homecell-area-managed    → area user-nya PIC (M9)
  *   - GET    /admin/me/zona-saya                → zona homecell yang saya ikuti (2.4.6)
+ *   - GET    /admin/me/zona-keluarga            → zona anggota keluarga (bukan tamu) (2026-11)
  *
  *   - GET    /admin/me/family                   → list family network
  *   - POST   /admin/me/family/link-by-kode      → link via scan QR kode
@@ -99,7 +100,7 @@ import { todayWib } from '../../lib/last-attendance.js';
 import { canCancelCheckin, canCancelReservasi } from '../../lib/reservasi-window.js';
 import { CHECKIN_CFG_SELECT, ibadahTicketCheckin, venueInfo, venuePoint } from '../../lib/self-checkin.js';
 import { isLegacyApp } from '../../lib/client-kind.js';
-import { familyOf } from '../../lib/family.js';
+import { familyMembersNonGuest, familyOf } from '../../lib/family.js';
 import { sertifikatSelect } from './jemaat-sertifikat.js';
 import { meBusinessRouter, meLocalMarketRouter } from './me-business.js';
 import { mePrayerRouter } from './me-prayer.js';
@@ -1119,6 +1120,26 @@ meRouter.get('/calendar-extra', async (req, res) => {
  */
 meRouter.get('/zona-saya', async (req, res) => {
   const jemaatId = assertJemaatId(req);
+  res.json({ success: true, data: await zonaOf(jemaatId) });
+});
+
+/**
+ * Zona anggota keluarga saya (bukan tamu) — tab per anggota di halaman Zona
+ * app 2.5.1 (2026-11). Bentuk zona sama dengan /zona-saya; `isMine` = homecell
+ * anggota keluarga itu.
+ *   GET /admin/me/zona-keluarga
+ */
+meRouter.get('/zona-keluarga', async (req, res) => {
+  const jemaatId = assertJemaatId(req);
+  const fam = await familyMembersNonGuest(jemaatId);
+  const data = [];
+  for (const f of fam) {
+    data.push({ jemaat: { id: f.id, namaLengkap: f.namaLengkap, fotoUrl: f.fotoUrl }, relasi: f.relasi, zonas: await zonaOf(f.id) });
+  }
+  res.json({ success: true, data });
+});
+
+async function zonaOf(jemaatId: string) {
   const [memberOf, ledHc] = await Promise.all([
     prisma.homecellMember.findMany({
       where: { jemaatId, isActive: true, homecell: { isActive: true } },
@@ -1128,10 +1149,7 @@ meRouter.get('/zona-saya', async (req, res) => {
   ]);
   const myHc = new Set([...memberOf.map((m) => m.homecellId), ...ledHc.map((h) => h.id)]);
   const areaIds = [...new Set([...memberOf.map((m) => m.homecell.areaId), ...ledHc.map((h) => h.areaId)])];
-  if (!areaIds.length) {
-    res.json({ success: true, data: [] });
-    return;
-  }
+  if (!areaIds.length) return [];
   const areas = await prisma.homecellArea.findMany({
     where: { id: { in: areaIds }, isActive: true },
     orderBy: { nama: 'asc' },
@@ -1159,16 +1177,13 @@ meRouter.get('/zona-saya', async (req, res) => {
       },
     },
   });
-  res.json({
-    success: true,
-    data: areas.map(({ pastors, homecells, ...a }) => ({
-      ...a,
-      pastors: pastors.map((p) => p.jemaat),
-      homecellCount: homecells.length,
-      homecells: homecells.map(({ _count, ...h }) => ({ ...h, memberCount: _count.members, isMine: myHc.has(h.id) })),
-    })),
-  });
-});
+  return areas.map(({ pastors, homecells, ...a }) => ({
+    ...a,
+    pastors: pastors.map((p) => p.jemaat),
+    homecellCount: homecells.length,
+    homecells: homecells.map(({ _count, ...h }) => ({ ...h, memberCount: _count.members, isMine: myHc.has(h.id) })),
+  }));
+}
 
 // ============================================================
 //  Family management (M5, auto-verify)

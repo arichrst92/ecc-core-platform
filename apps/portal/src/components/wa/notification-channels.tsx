@@ -38,8 +38,11 @@ const GROUP_LABEL: Record<Group, string> = {
 };
 const KEY = ['wa-config', 'channels'];
 
-function Check({ on, disabled, onChange, title }: { on: boolean; disabled?: boolean; onChange: (v: boolean) => void; title: string }) {
+function Check({ on, disabled, implied, onChange, title }: { on: boolean; disabled?: boolean; implied?: boolean; onChange: (v: boolean) => void; title: string }) {
   if (disabled) return <span className="text-neutral-300 text-xs" title="Tidak tersedia untuk jenis ini">—</span>;
+  // "Email bila tanpa WA" sudah tercakup bila Email selalu dikirim.
+  if (implied)
+    return <input type="checkbox" checked readOnly disabled title="Sudah tercakup: Email selalu dikirim" aria-label={title} className="w-4 h-4 accent-brand-600 opacity-40" />;
   return (
     <input
       type="checkbox"
@@ -163,7 +166,8 @@ export function NotificationChannels() {
                             <td className="text-center px-2">
                               <Check
                                 on={r.waFallbackEmail}
-                                disabled={!r.supports.email || r.email}
+                                disabled={!r.supports.email}
+                                implied={r.email}
                                 onChange={(v) => set(r, 'waFallbackEmail', v)}
                                 title={`Email bila tanpa WhatsApp: ${r.label}`}
                               />

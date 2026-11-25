@@ -52,11 +52,14 @@ waConfigRouter.get('/', async (_req, res) => {
  * nomor, tersambung/terputus, kuota, masa aktif. Didaftarkan sebelum /:type.
  */
 waConfigRouter.get('/device', async (_req, res) => {
+  // Fonnte tidak dipasang / dimatikan di Gateway → bukan kondisi darurat.
+  if (!waProviderStatus().fonnte.configured) return res.json({ success: true, data: { notConfigured: true } });
+  const disabled = waRuntimeSettings().waFonnteEnabled === false;
   try {
     const d = await getFonnteDevice();
-    res.json({ success: true, data: { ...d, device: d.device ? `+${d.device.replace(/^\+/, '')}` : null } });
+    res.json({ success: true, data: { ...d, device: d.device ? `+${d.device.replace(/^\+/, '')}` : null, disabled } });
   } catch (err) {
-    res.json({ success: true, data: { error: (err as Error).message } });
+    res.json({ success: true, data: { error: (err as Error).message, disabled } });
   }
 });
 
@@ -224,8 +227,13 @@ waConfigRouter.patch('/:type', async (req, res) => {
 
   const data: Record<string, unknown> = {};
   if (typeof body.isEnabled === 'boolean') data.isEnabled = body.isEnabled;
-  if (typeof body.template === 'string' && body.template.trim()) {
+  if (typeof body.template === 'string') {
+    // Dulu template kosong diabaikan diam-diam padahal Portal menulis "Template disimpan".
+    if (!body.template.trim()) throw BadRequest('Template tidak boleh kosong.');
     data.template = body.template.trim();
+  }
+  if (data.isEnabled === true && !String(data.template ?? before.template ?? '').trim()) {
+    throw BadRequest('Isi template WhatsApp dulu sebelum menyalakan.');
   }
   if (!req.user) throw Unauthorized();
   data.updatedById = req.user.jemaatId;
@@ -280,6 +288,14 @@ waConfigRouter.post('/:type/test', async (req, res) => {
 
   // Dummy placeholders — gabung default + user-provided
   const defaults: Record<string, string> = {
+    // Universal Form (FORM_REMINDER)
+    form: 'Formulir Peserta Camp',
+    peserta: 'Jemaat Test',
+    konten: 'Youth Camp 2026',
+    aksi: 'diisi',
+    batas: '12 Des 2026 17.00 WIB',
+    link: 'https://elsapp.eccchurch.global',
+    catatan: '',
     nama: 'Jemaat Test',
     event_judul: 'Event Sample',
     event_tanggal: '12 Oktober 2026',
@@ -303,18 +319,25 @@ waConfigRouter.post('/:type/test', async (req, res) => {
     groupNama: 'Group Sample',
     pemohon: 'Dewi',
   };
-  const placeholders = { ...defaults, ...(body.placeholders ?? {}) };
-  const message = renderTemplate(row.template, placeholders);
+  // Placeholder tanpa contoh → "[contoh nama_placeholder]" supaya tidak terkirim mentah {..}.
+  const fallback = Object.fromEntries((row.placeholders ?? []).map((p) => [p, `[contoh ${p}]`]));
+  const placeholders = { ...fallback, ...defaults, ...(body.placeholders ?? {}) };
+  // Tes memakai isi editor yang belum disimpan bila dikirim (tidak disimpan ke database).
+  const template = typeof body.template === 'string' && body.template.trim() ? body.template : row.template;
+  const message = renderTemplate(template, placeholders);
 
   // Diagnosa sebelum kirim: Fonnte menjawab "terkirim" begitu pesan masuk antrean,
   // padahal pesan bisa tidak sampai (HP pengirim terputus, nomor tujuan tidak
   // ber-WhatsApp, atau tujuan = nomor pengirim sendiri).
   const peringatan: string[] = [];
   let device: Awaited<ReturnType<typeof getFonnteDevice>> | null = null;
-  try {
-    device = await getFonnteDevice();
-  } catch {
-    device = null;
+  // Cek perangkat hanya bila Fonnte dipakai (saklar di Gateway) — provider lain tidak butuh perangkat.
+  if (waRuntimeSettings().waFonnteEnabled !== false) {
+    try {
+      device = await getFonnteDevice();
+    } catch {
+      device = null;
+    }
   }
   if (device && !device.connected) {
     return res.status(503).json({

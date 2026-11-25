@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import {
@@ -55,8 +55,9 @@ export default function WaConfigPage() {
   });
 
   const configs = q.data ?? [];
+  // Kategori dinormalisasi huruf besar (data lama sempat tersimpan "event").
   const grouped = configs.reduce<Record<string, WaConfig[]>>((acc, c) => {
-    (acc[c.category] ??= []).push(c);
+    (acc[(c.category || 'LAINNYA').toUpperCase()] ??= []).push(c);
     return acc;
   }, {});
 
@@ -114,6 +115,20 @@ function ConfigCard({ config }: { config: WaConfig }) {
   const [open, setOpen] = useState(false);
   const [template, setTemplate] = useState(config.template);
   const [testNoHp, setTestNoHp] = useState('');
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const dirty = template !== config.template;
+  // Template diubah dari tempat lain (admin lain / saluran) dan editor belum disentuh → ikuti.
+  const lastSynced = useRef(config.template);
+  useEffect(() => {
+    if (template === lastSynced.current) setTemplate(config.template);
+    lastSynced.current = config.template;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.template]);
+  // Placeholder yang tidak dikenal untuk jenis ini → terkirim mentah "{...}" ke jemaat.
+  const unknown = useMemo(() => {
+    const known = new Set(config.placeholders);
+    return Array.from(new Set(Array.from(template.matchAll(/\{(\w+)\}/g), (m) => m[1]!))).filter((p) => !known.has(p));
+  }, [template, config.placeholders]);
 
   const toggleMut = useMutation({
     mutationFn: async () =>
@@ -128,9 +143,10 @@ function ConfigCard({ config }: { config: WaConfig }) {
   });
 
   const saveMut = useMutation({
-    mutationFn: async () =>
-      apiClient.patch(`/admin/wa-config/${config.type}`, { template }),
-    onSuccess: () => {
+    mutationFn: async () => (await apiClient.patch<{ data: WaConfig }>(`/admin/wa-config/${config.type}`, { template })).data.data,
+    onSuccess: (row) => {
+      setTemplate(row.template);
+      lastSynced.current = row.template;
       qc.invalidateQueries({ queryKey: ['wa-config'] });
       toast.success('Template disimpan');
     },
@@ -139,7 +155,8 @@ function ConfigCard({ config }: { config: WaConfig }) {
 
   const testMut = useMutation({
     mutationFn: async () => {
-      const body: Record<string, string> = {};
+      // Tes memakai isi editor (termasuk yang belum disimpan).
+      const body: Record<string, string> = { template };
       if (testNoHp.trim()) body.noHp = testNoHp.trim();
       return apiClient.post(`/admin/wa-config/${config.type}/test`, body);
     },
@@ -211,10 +228,16 @@ function ConfigCard({ config }: { config: WaConfig }) {
                 <button
                   key={p}
                   onClick={() => {
-                    const pos = (document.getElementById(`tmpl-${config.id}`) as HTMLTextAreaElement)?.selectionStart ?? template.length;
+                    const el = ref.current;
+                    const pos = el && document.activeElement === el ? el.selectionStart : template.length;
                     const token = `{${p}}`;
                     setTemplate(template.slice(0, pos) + token + template.slice(pos));
+                    requestAnimationFrame(() => {
+                      el?.focus();
+                      el?.setSelectionRange(pos + token.length, pos + token.length);
+                    });
                   }}
+                  onMouseDown={(e) => e.preventDefault()}
                   className="inline-block bg-neutral-100 hover:bg-emerald-100 px-1.5 py-0.5 mr-1 mb-1 rounded font-mono text-[11px]"
                   title={`Insert {${p}}`}
                 >
@@ -228,11 +251,19 @@ function ConfigCard({ config }: { config: WaConfig }) {
             <label className="block text-xs font-medium text-neutral-700 mb-1">Template</label>
             <textarea
               id={`tmpl-${config.id}`}
+              ref={ref}
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
               rows={8}
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm font-mono"
             />
+            {unknown.length ? (
+              <p className="text-xs text-amber-700 mt-1">
+                Placeholder tidak dikenal untuk jenis ini: {unknown.map((u) => `{${u}}`).join(', ')} — akan terkirim apa adanya.
+              </p>
+            ) : null}
+            {!template.trim() ? <p className="text-xs text-red-600 mt-1">Template tidak boleh kosong.</p> : null}
+            {dirty ? <p className="text-xs text-neutral-500 mt-1">Ada perubahan yang belum disimpan. Test Kirim memakai isi editor ini.</p> : null}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 justify-end">
@@ -253,7 +284,7 @@ function ConfigCard({ config }: { config: WaConfig }) {
             </button>
             <button
               onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || template === config.template}
+              disabled={saveMut.isPending || !dirty || !template.trim()}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
@@ -267,6 +298,8 @@ function ConfigCard({ config }: { config: WaConfig }) {
 }
 
 interface FonnteDevice {
+  notConfigured?: boolean;
+  disabled?: boolean;
   device?: string | null;
   connected?: boolean;
   name?: string | null;
@@ -285,6 +318,17 @@ function DeviceStatus() {
   });
   const d = q.data;
   const ok = !!d && !d.error && d.connected;
+  if (d?.notConfigured) return null; // Fonnte tidak dipasang → tidak relevan.
+  if (d?.disabled && !ok) {
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 mb-6 text-xs text-neutral-600 flex items-start gap-3">
+        <Smartphone className="w-5 h-5 shrink-0 text-neutral-400" />
+        <span>
+          Fonnte sedang <b>dimatikan</b> di Gateway WhatsApp di atas{d.device ? ` (perangkat ${d.device})` : ''} — status perangkat tidak memengaruhi pengiriman.
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className={`rounded-xl border p-4 mb-6 ${

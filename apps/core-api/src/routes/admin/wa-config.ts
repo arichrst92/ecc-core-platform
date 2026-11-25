@@ -37,6 +37,8 @@ import { otpChannelStats, tickWaOtpHealth, waOtpHealthState } from '../../lib/wa
 import { appVersionStats } from '../../lib/app-version-stats.js';
 import { catalogByKey, listNotifChannels, saveNotifChannel } from '../../lib/notif-channels.js';
 import { notifEmailQueueSize } from '../../lib/notif-email.js';
+import { effectiveSender, emailHealth, loadEmailRuntime, saveEmailRuntime, senderVerified, sendgridStatus } from '../../lib/email-runtime.js';
+import { sendEmail } from '../../lib/sendgrid.js';
 
 export const waConfigRouter = Router();
 
@@ -161,6 +163,97 @@ waConfigRouter.post('/gateway/test', async (req, res) => {
     res.json({ success: true, data: { ok: true, provider, to: `+${r.to}`, messageId: r.messageId, gateway: await gatewayView() } });
   } catch (err) {
     res.json({ success: true, data: { ok: false, provider, error: (err as Error).message, gateway: await gatewayView() } });
+  }
+});
+
+/**
+ * Email (SendGrid):
+ *   GET   /admin/wa-config/email        status koneksi, pengirim, kredit, statistik 7 hari, kirim terakhir
+ *   PATCH /admin/wa-config/email        { emailFromAddress?, emailFromName?, emailReplyTo? } (null = ikuti .env)
+ *   POST  /admin/wa-config/email/test   { to? } → kirim email tes (default email akun Anda)
+ */
+async function emailView() {
+  const settings = await loadEmailRuntime(true);
+  return {
+    settings,
+    env: { emailFrom: process.env.EMAIL_FROM || null, emailFromName: process.env.EMAIL_FROM_NAME || null },
+    status: await sendgridStatus(),
+    health: emailHealth(),
+    queue: notifEmailQueueSize(),
+  };
+}
+
+waConfigRouter.get('/email', async (_req, res) => {
+  res.json({ success: true, data: await emailView() });
+});
+
+const emailSettingsSchema = z
+  .object({
+    emailFromAddress: z.string().trim().toLowerCase().email('Alamat pengirim tidak valid.').max(255).nullable(),
+    emailFromName: z.string().trim().min(2).max(150).nullable(),
+    emailReplyTo: z.string().trim().toLowerCase().email('Alamat balasan tidak valid.').max(255).nullable(),
+  })
+  .partial();
+
+waConfigRouter.patch('/email', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  // String kosong = kembali ke .env
+  for (const k of ['emailFromAddress', 'emailFromName', 'emailReplyTo']) if (raw[k] === '') raw[k] = null;
+  const patch = emailSettingsSchema.parse(raw);
+  // Pengirim yang belum terverifikasi di SendGrid → semua email gagal. Tolak bila pasti belum.
+  if (patch.emailFromAddress) {
+    const v = await senderVerified(patch.emailFromAddress);
+    if (v.verified === false) {
+      throw BadRequest(
+        `${patch.emailFromAddress} belum terverifikasi di SendGrid (Single Sender / domain). Verifikasi dulu di dashboard SendGrid, lalu simpan lagi.`,
+      );
+    }
+  }
+  const before = await loadEmailRuntime(true);
+  const after = await saveEmailRuntime(patch, req.user.sub ?? null);
+  audit(req, {
+    action: 'UPDATE',
+    resource: 'email_sender_config',
+    resourceId: 'global',
+    resourceLabel: 'Pengirim email (SendGrid)',
+    before,
+    after,
+  });
+  res.json({ success: true, data: await emailView() });
+});
+
+waConfigRouter.post('/email/test', async (req, res) => {
+  if (!req.user) throw Unauthorized();
+  let to = typeof req.body?.to === 'string' ? req.body.to.trim().toLowerCase() : '';
+  if (to && !z.string().email().safeParse(to).success) throw BadRequest('Alamat email tujuan tidak valid.');
+  if (!to) {
+    const self = await prisma.jemaat.findUnique({ where: { id: req.user.jemaatId }, select: { email: true } });
+    to = self?.email ?? '';
+  }
+  if (!to) throw BadRequest('Akun Anda belum punya email — isi alamat tujuan tes.');
+  await loadEmailRuntime(true);
+  const snd = effectiveSender();
+  const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' });
+  try {
+    await sendEmail({
+      to,
+      subject: 'Tes email Els App',
+      html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:24px auto;padding:24px;border:1px solid #eee;border-radius:12px">
+<h2 style="margin:0 0 8px;color:#C2410C">Tes email berhasil</h2>
+<p style="margin:0 0 12px;color:#374151">Email ini dikirim dari Portal → WhatsApp &amp; Email Config untuk memastikan pengiriman lewat SendGrid berjalan.</p>
+<p style="margin:0;color:#6b7280;font-size:13px">Pengirim: ${snd.name} &lt;${snd.email}&gt;${snd.replyTo ? `<br>Balasan ke: ${snd.replyTo}` : ''}<br>Waktu: ${now} WIB</p></div>`,
+    });
+    audit(req, {
+      action: 'UPDATE',
+      resource: 'email_sender_config',
+      resourceId: 'global',
+      resourceLabel: `TEST email → ${to}`,
+      metadata: { kind: 'email-test', to },
+    });
+    res.json({ success: true, data: { ok: true, to, from: snd.email, view: await emailView() } });
+  } catch (err) {
+    res.json({ success: true, data: { ok: false, to, error: (err as Error).message, view: await emailView() } });
   }
 });
 

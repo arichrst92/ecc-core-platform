@@ -40,6 +40,7 @@ export interface AuditSummary {
 // ------------------------------------------------------------------ kamus
 
 export const RESOURCE_LABEL: Record<string, string> = {
+  email_sender_config: 'pengirim email (SendGrid)',
   announcement: 'announcement',
   api_access_config: 'pengaturan akses API',
   api_token: 'token API pribadi',

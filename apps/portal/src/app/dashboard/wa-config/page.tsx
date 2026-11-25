@@ -18,6 +18,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { GatewaySettings } from '@/components/wa/gateway-settings';
 import { NotificationChannels } from '@/components/wa/notification-channels';
+import { EmailSettings } from '@/components/wa/email-settings';
 
 interface WaConfig {
   id: string;
@@ -66,7 +67,7 @@ export default function WaConfigPage() {
       <div className="mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <MessageCircle className="w-6 h-6 text-emerald-600" />
-          Konfigurasi Notifikasi WhatsApp
+          Konfigurasi Notifikasi WhatsApp &amp; Email
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
           Aktifkan/matikan WA notif per jenis event + edit template pesannya. Perubahan langsung berlaku (cache 60s).
@@ -82,6 +83,8 @@ export default function WaConfigPage() {
       </div>
 
       <GatewaySettings />
+
+      <EmailSettings />
 
       <NotificationChannels />
 

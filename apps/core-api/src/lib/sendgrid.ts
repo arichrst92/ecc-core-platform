@@ -15,8 +15,11 @@
  */
 import sgMail from '@sendgrid/mail';
 import { logger } from './logger.js';
+import { effectiveSender, loadEmailRuntime, markEmailFailed, markEmailSent } from './email-runtime.js';
 
 let initialized = false;
+// Muat pengirim dari Portal sejak awal (nama brand dipakai template sebelum sendEmail).
+void loadEmailRuntime().catch(() => undefined);
 
 function ensureInitialized(): void {
   if (initialized) return;
@@ -52,20 +55,22 @@ export async function sendEmail(args: SendEmailArgs): Promise<void> {
   }
   ensureInitialized();
 
-  const from = {
-    email: process.env.EMAIL_FROM || 'noreply@eccchurch.global',
-    name: process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community',
-  };
+  // Pengirim dari Portal (WhatsApp & Email Config) → .env → bawaan.
+  await loadEmailRuntime();
+  const snd = effectiveSender();
+  const from = { email: snd.email, name: snd.name };
 
   try {
     await sgMail.send({
       to: args.to,
       from,
+      ...(snd.replyTo ? { replyTo: snd.replyTo } : {}),
       subject: args.subject,
       html: args.html,
       text: args.text || stripHtml(args.html),
     });
     logger.info({ to: args.to, subject: args.subject }, '[sendgrid] sent');
+    markEmailSent(args.to, args.subject);
   } catch (err) {
     const anyErr = err as { response?: { body?: unknown }; message?: string };
     logger.error(
@@ -77,9 +82,9 @@ export async function sendEmail(args: SendEmailArgs): Promise<void> {
       },
       '[sendgrid] send FAILED',
     );
-    throw new Error(
-      `SendGrid send failed: ${anyErr.message ?? 'unknown error'}`,
-    );
+    const bodyErr = (anyErr.response?.body as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message;
+    markEmailFailed(args.to, args.subject, bodyErr ?? anyErr.message ?? 'unknown error');
+    throw new Error(`SendGrid send failed: ${bodyErr ?? anyErr.message ?? 'unknown error'}`);
   }
 }
 
@@ -117,7 +122,7 @@ interface MagicLinkEmailArgs {
  * Header + logo + CTA button + fallback text URL + expiry note.
  */
 export async function sendMagicLinkEmail(args: MagicLinkEmailArgs): Promise<void> {
-  const brandName = process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community';
+  const brandName = effectiveSender().name;
   const subject = `Login ke aplikasi ECC — link masuk Anda`;
 
   const html = `<!DOCTYPE html>
@@ -212,7 +217,7 @@ export async function sendOtpEmail(args: {
   expiresInMinutes: number;
   kind?: OtpEmailKind;
 }): Promise<void> {
-  const brandName = process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community';
+  const brandName = effectiveSender().name;
   const copy = OTP_EMAIL_COPY[args.kind ?? 'wa-fallback'];
   const subject = `${copy.subject}: ${args.otp}`;
   const note = copy.note;
@@ -278,7 +283,7 @@ ${brandName}`;
  * kode lagi (kode baru ikut dikirim ke email). TIDAK berisi kode OTP.
  */
 export async function sendOtpRetryNoticeEmail(args: { to: string; namaLengkap: string }): Promise<void> {
-  const brandName = process.env.EMAIL_FROM_NAME || 'Elshaddai Creative Community';
+  const brandName = effectiveSender().name;
   const subject = 'Kode OTP login ECC Anda tertunda — silakan minta kode lagi';
   const note =
     'Pengiriman OTP lewat WhatsApp sedang dalam antrean, sehingga kode yang Anda minta sebelumnya mungkin belum sampai.';

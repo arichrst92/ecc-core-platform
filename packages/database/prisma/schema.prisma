@@ -2494,6 +2494,11 @@ model AppConfig {
   emailSignupEnabled         Boolean  @default(true) @map("email_signup_enabled")
   // Provider OTP "diduga gagal" bila N OTP berturut-turut tidak dipakai.
   waSuspectThreshold         Int      @default(8) @map("wa_suspect_threshold")
+  // Pengirim email (SendGrid) dari Portal → WhatsApp & Email Config. NULL = ikuti .env
+  // (EMAIL_FROM / EMAIL_FROM_NAME). Alamat harus terverifikasi di SendGrid.
+  emailFromAddress           String?  @map("email_from_address") @db.VarChar(255)
+  emailFromName              String?  @map("email_from_name") @db.VarChar(150)
+  emailReplyTo               String?  @map("email_reply_to") @db.VarChar(255)
   // Pelayanan penggembalaan (homecell & zona) — dikenali dari ID, bukan nama, supaya
   // pelayanan / role boleh di-rename. NULL = cari berdasarkan nama bawaan
   // ("Penggembalaan", "Zone Leader", "Homecell Leader", "Pastor").

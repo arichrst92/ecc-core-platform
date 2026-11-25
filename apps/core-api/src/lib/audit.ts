@@ -38,36 +38,148 @@ interface AuditInput {
   userName?: string;
 }
 
+/**
+ * Supaya Audit Log tidak penuh catatan berulang (tetap informatif):
+ *  1. UPDATE hanya menyimpan isian yang BENAR-BENAR berubah (before/after dipangkas).
+ *     Simpan ulang tanpa perubahan & tanpa metadata → tidak dicatat.
+ *  2. UPDATE / UPLOAD_PHOTO beruntun oleh orang yang sama pada data yang sama dalam
+ *     AUDIT_MERGE_MINUTES (bawaan 10) → digabung ke satu catatan: nilai awal tetap,
+ *     nilai akhir terbaru, metadata.mergedCount & firstAt.
+ *  3. LOGIN berulang (akun, IP & perangkat sama) dalam 60 menit → digabung.
+ * CREATE / DELETE / LOGOUT / wajah selalu dicatat apa adanya.
+ */
+const MERGE_MS = Number(process.env.AUDIT_MERGE_MINUTES ?? 10) * 60_000;
+const LOGIN_MERGE_MS = 60 * 60_000;
+const DIFF_IGNORE = /^(updatedAt|createdAt|lastSeenAt|lastLoginAt|version)$/;
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date);
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** Pangkas before/after ke kunci yang berubah. null = bukan pasangan objek (tidak dipangkas). */
+function diffOnly(before: unknown, after: unknown): { before: Obj; after: Obj } | null {
+  if (!isObj(before) || !isObj(after)) return null;
+  const b: Obj = {};
+  const a: Obj = {};
+  for (const k of Object.keys(after)) {
+    if (DIFF_IGNORE.test(k)) continue;
+    if (!same(before[k], after[k])) {
+      b[k] = before[k] ?? null;
+      a[k] = after[k];
+    }
+  }
+  return { before: b, after: a };
+}
+
+const hasKeys = (o: unknown) => isObj(o) && Object.keys(o).length > 0;
+
 export function audit(req: Request, input: AuditInput): void {
+  void writeAudit(req, input).catch((err) => {
+    logger.warn({ err, input: { action: input.action, resource: input.resource } }, 'audit log insert failed (non-fatal)');
+  });
+}
+
+async function writeAudit(req: Request, input: AuditInput): Promise<void> {
   const userId = input.userId ?? req.user?.sub ?? null;
   const userName = input.userName ?? null;
 
   // Sanitize sensitive fields sebelum simpan
-  const before = sanitize(input.before);
-  const after = sanitize(input.after);
+  let before = sanitize(input.before);
+  let after = sanitize(input.after);
+  // Lewat token API pribadi → catat token yang dipakai (otomasi / agentic AI).
+  const metadata = (req.pat
+    ? { ...((input.metadata as Obj | undefined) ?? {}), viaApiToken: req.pat.nama, apiTokenId: req.pat.id }
+    : input.metadata) as Obj | undefined;
+  const ipAddress = req.ip ?? null;
+  const userAgent = req.get('user-agent') ?? null;
 
-  prisma.auditLog
-    .create({
-      data: {
+  if (input.action === 'UPDATE') {
+    const d = diffOnly(before, after);
+    if (d) {
+      if (!hasKeys(d.after) && !hasKeys(metadata)) return; // disimpan ulang tanpa perubahan
+      before = hasKeys(d.after) ? d.before : undefined;
+      after = hasKeys(d.after) ? d.after : undefined;
+    }
+  }
+
+  // ---- gabung catatan beruntun
+  const mergeable =
+    !!userId &&
+    ((input.action === 'UPDATE' || input.action === 'UPLOAD_PHOTO') ? !!input.resourceId : input.action === 'LOGIN');
+  if (mergeable) {
+    const windowMs = input.action === 'LOGIN' ? LOGIN_MERGE_MS : MERGE_MS;
+    const prev = await prisma.auditLog.findFirst({
+      where: {
         userId,
-        userName,
         action: input.action,
         resource: input.resource,
-        resourceId: input.resourceId ?? null,
-        resourceLabel: input.resourceLabel ?? null,
-        before: before as Prisma.InputJsonValue | undefined,
-        after: after as Prisma.InputJsonValue | undefined,
-        // Lewat token API pribadi → catat token yang dipakai (otomasi / agentic AI).
-        metadata: (req.pat
-          ? { ...((input.metadata as Record<string, unknown> | undefined) ?? {}), viaApiToken: req.pat.nama, apiTokenId: req.pat.id }
-          : input.metadata) as Prisma.InputJsonValue | undefined,
-        ipAddress: req.ip ?? null,
-        userAgent: req.get('user-agent') ?? null,
+        createdAt: { gte: new Date(Date.now() - windowMs) },
+        ...(input.action === 'LOGIN' ? { ipAddress, userAgent } : { resourceId: input.resourceId }),
       },
-    })
-    .catch((err) => {
-      logger.warn({ err, input }, 'audit log insert failed (non-fatal)');
+      orderBy: { createdAt: 'desc' },
     });
+    // Hanya gabung tindakan yang sama persis: label (mis. "Konseling dijadwalkan" vs
+    // "Konseling selesai") & metadata (alasan, cara, token API) harus sama.
+    const prevMeta = (isObj(prev?.metadata) ? prev!.metadata : {}) as Obj;
+    const { mergedCount: _mc, firstAt: _fa, ...prevCore } = prevMeta;
+    const sameKind =
+      !!prev &&
+      (input.resourceLabel ?? prev.resourceLabel) === prev.resourceLabel &&
+      same(prevCore, metadata ?? {});
+    if (prev && sameKind) {
+      let mb: Obj | undefined;
+      let ma: Obj | undefined;
+      if (isObj(prev.after) || isObj(after)) {
+        const pb = (isObj(prev.before) ? prev.before : {}) as Obj;
+        const pa = (isObj(prev.after) ? prev.after : {}) as Obj;
+        const nb = (isObj(before) ? before : {}) as Obj;
+        const na = (isObj(after) ? after : {}) as Obj;
+        // Nilai awal = yang pertama tercatat; nilai akhir = yang terbaru.
+        const fb: Obj = { ...nb, ...pb };
+        const fa: Obj = { ...pa, ...na };
+        mb = {};
+        ma = {};
+        for (const k of Object.keys(fa)) {
+          if (!same(fb[k], fa[k])) {
+            mb[k] = fb[k] ?? null;
+            ma[k] = fa[k];
+          }
+        }
+      }
+      const { mergedCount, firstAt, ...restPrev } = prevMeta;
+      await prisma.auditLog.update({
+        where: { id: prev.id },
+        data: {
+          createdAt: new Date(),
+          resourceLabel: input.resourceLabel ?? prev.resourceLabel,
+          ...(mb ? { before: mb as Prisma.InputJsonValue, after: ma as Prisma.InputJsonValue } : {}),
+          metadata: {
+            ...restPrev,
+            ...(metadata ?? {}),
+            mergedCount: (typeof mergedCount === 'number' ? mergedCount : 1) + 1,
+            firstAt: typeof firstAt === 'string' ? firstAt : prev.createdAt.toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return;
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId,
+      userName,
+      action: input.action,
+      resource: input.resource,
+      resourceId: input.resourceId ?? null,
+      resourceLabel: input.resourceLabel ?? null,
+      before: before as Prisma.InputJsonValue | undefined,
+      after: after as Prisma.InputJsonValue | undefined,
+      metadata: metadata as Prisma.InputJsonValue | undefined,
+      ipAddress,
+      userAgent,
+    },
+  });
 }
 
 /**

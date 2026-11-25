@@ -546,7 +546,14 @@ export function summarizeAudit(e: AuditLike): AuditSummary {
 
   // Metadata → catatan (cara, alasan, jumlah orang, dll.)
   const meta = isObj(e.metadata) ? e.metadata : {};
+  // Catatan beruntun yang digabung server (lib/audit.ts): tampilkan sekali di depan.
+  const merged = typeof meta.mergedCount === 'number' ? meta.mergedCount : 0;
+  if (merged > 1) {
+    const first = typeof meta.firstAt === 'string' ? fmtDate(meta.firstAt, true) : null;
+    notes.push(`Digabung dari ${merged} ${e.action === 'LOGIN' ? 'kali masuk' : 'perubahan'} beruntun${first ? ` (mulai ${first})` : ''}; nilai awal → nilai terakhir.`);
+  }
   for (const [k, v] of Object.entries(meta)) {
+    if (k === 'mergedCount' || k === 'firstAt' || k === 'lastAt') continue;
     if (HIDDEN.test(k) || v === null || v === undefined || v === '') continue;
     if (typeof v === 'string' && UUID.test(v)) continue;
     if (/Id$/.test(k)) continue;

@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   ArrowRight,
   Info,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Layers,
   Eye,
   Filter,
   Loader2,
@@ -53,12 +55,15 @@ export default function AuditLogPage() {
   const [filters, setFilters] = useState<Filters>({});
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<AuditEntry | null>(null);
+  // Kelompokkan aktivitas beruntun (orang, tindakan & jenis data sama, berjarak ≤ 10 menit).
+  const [grouped, setGrouped] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const debouncedSearch = useDebounce(search, 300);
 
   const list = useQuery({
     queryKey: ['audit-log', page, filters, debouncedSearch],
     queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit: 25 };
+      const params: Record<string, string | number> = { page, limit: 50 };
       if (filters.action) params.action = filters.action;
       if (filters.resource) params.resource = filters.resource;
       if (filters.from) params.from = filters.from;
@@ -69,6 +74,7 @@ export default function AuditLogPage() {
     },
     placeholderData: (prev) => prev,
   });
+  const blocks = useMemo(() => groupEntries(list.data?.data ?? [], grouped), [list.data, grouped]);
 
   return (
     <div>
@@ -79,9 +85,13 @@ export default function AuditLogPage() {
             Audit Log
           </h1>
           <p className="text-neutral-500 mt-1">
-            Catatan semua tindakan penting — siapa, kapan, apa.
+            Catatan semua tindakan penting — siapa, kapan, apa. Perubahan berulang pada data yang sama digabung, dan simpan ulang tanpa perubahan tidak dicatat.
           </p>
         </div>
+        <label className="flex items-center gap-2 text-sm text-neutral-700 select-none">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} className="w-4 h-4 accent-brand-500" />
+          <Layers className="w-4 h-4 text-neutral-500" /> Kelompokkan aktivitas beruntun
+        </label>
       </div>
 
       {/* Filters bar */}
@@ -188,34 +198,49 @@ export default function AuditLogPage() {
                   </td>
                 </tr>
               ) : (
-                list.data?.data.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-neutral-50">
-                    <td className="px-4 py-3 text-neutral-500 whitespace-nowrap text-xs">
-                      {formatDateTime(entry.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <UserCell user={entry.userDisplay} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ActionBadge action={entry.action} />
-                    </td>
-                    <td className="px-4 py-3 text-neutral-700 text-xs" title={entry.resource}>
-                      {RESOURCE_LABEL[entry.resource] ?? entry.resource}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-900">
-                      {entry.resourceLabel ?? <span className="text-neutral-400">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => setDetail(entry)}
-                        className="p-1.5 rounded hover:bg-brand-50 text-neutral-600 hover:text-brand-600"
-                        title="Lihat detail"
+                blocks.map((b) =>
+                  b.items.length === 1 ? (
+                    <Row key={b.items[0]!.id} entry={b.items[0]!} onOpen={setDetail} />
+                  ) : (
+                    <Fragment key={b.key}>
+                      <tr
+                        className="bg-neutral-50/70 hover:bg-neutral-100 cursor-pointer"
+                        onClick={() =>
+                          setOpenGroups((s) => {
+                            const n = new Set(s);
+                            if (n.has(b.key)) n.delete(b.key);
+                            else n.add(b.key);
+                            return n;
+                          })
+                        }
                       >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                        <td className="px-4 py-3 text-neutral-500 whitespace-nowrap text-xs">
+                          {formatTime(b.items[b.items.length - 1]!.createdAt)}–{formatTime(b.items[0]!.createdAt)}
+                          <div className="text-[11px] text-neutral-400">{formatDay(b.items[0]!.createdAt)}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <UserCell user={b.items[0]!.userDisplay} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <ActionBadge action={b.items[0]!.action} />
+                        </td>
+                        <td className="px-4 py-3 text-neutral-700 text-xs">{RESOURCE_LABEL[b.items[0]!.resource] ?? b.items[0]!.resource}</td>
+                        <td className="px-4 py-3 text-neutral-900">
+                          <span className="inline-flex items-center gap-1.5 font-medium">
+                            <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${openGroups.has(b.key) ? '' : '-rotate-90'}`} />
+                            {b.items.length} catatan beruntun
+                          </span>
+                          <div className="text-xs text-neutral-500 truncate max-w-[520px]">
+                            {Array.from(new Set(b.items.map((e) => e.resourceLabel).filter(Boolean))).slice(0, 4).join(' · ')}
+                            {b.items.length > 4 ? ' · …' : ''}
+                          </div>
+                        </td>
+                        <td />
+                      </tr>
+                      {openGroups.has(b.key) ? b.items.map((e) => <Row key={e.id} entry={e} onOpen={setDetail} nested />) : null}
+                    </Fragment>
+                  ),
+                )
               )}
             </tbody>
           </table>
@@ -254,6 +279,81 @@ export default function AuditLogPage() {
 }
 
 // ============== Sub-components ==============
+
+const GROUP_GAP_MS = 10 * 60_000;
+
+/** Gabungkan baris berurutan (sudah urut terbaru dulu) dengan orang, tindakan & jenis data sama. */
+function groupEntries(rows: AuditEntry[], enabled: boolean): { key: string; items: AuditEntry[] }[] {
+  const out: { key: string; items: AuditEntry[] }[] = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    const prev = last?.items[last.items.length - 1];
+    const who = (e: AuditEntry) => e.userDisplay?.jemaatId ?? e.userDisplay?.namaLengkap ?? '';
+    if (
+      enabled &&
+      prev &&
+      who(prev) === who(r) &&
+      prev.action === r.action &&
+      prev.resource === r.resource &&
+      new Date(prev.createdAt).getTime() - new Date(r.createdAt).getTime() <= GROUP_GAP_MS
+    ) {
+      last!.items.push(r);
+    } else {
+      out.push({ key: r.id, items: [r] });
+    }
+  }
+  // Kelompok kecil (2 baris) tetap tampil biasa.
+  return out.flatMap((g) => (g.items.length >= 3 ? [g] : g.items.map((e) => ({ key: e.id, items: [e] }))));
+}
+
+function Row({ entry, onOpen, nested }: { entry: AuditEntry; onOpen: (e: AuditEntry) => void; nested?: boolean }) {
+  const sum = summarizeAudit(entry);
+  const merged = (entry.metadata as { mergedCount?: number } | null)?.mergedCount ?? 0;
+  const changed = entry.action === 'UPDATE' ? sum.changes.map((c) => c.label) : [];
+  return (
+    <tr className={`hover:bg-neutral-50 cursor-pointer ${nested ? 'bg-white' : ''}`} onClick={() => onOpen(entry)}>
+      <td className={`px-4 py-3 text-neutral-500 whitespace-nowrap text-xs ${nested ? 'pl-8' : ''}`}>{formatDateTime(entry.createdAt)}</td>
+      <td className="px-4 py-3">
+        <UserCell user={entry.userDisplay} />
+      </td>
+      <td className="px-4 py-3">
+        <ActionBadge action={entry.action} />
+      </td>
+      <td className="px-4 py-3 text-neutral-700 text-xs" title={entry.resource}>
+        {RESOURCE_LABEL[entry.resource] ?? entry.resource}
+      </td>
+      <td className="px-4 py-3 text-neutral-900">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span>{entry.resourceLabel ?? <span className="text-neutral-400">—</span>}</span>
+          {merged > 1 ? (
+            <span className="px-1.5 py-0.5 rounded-full bg-neutral-100 text-[10.5px] font-semibold text-neutral-600" title="Perubahan beruntun digabung">
+              ×{merged}
+            </span>
+          ) : null}
+        </div>
+        {changed.length ? (
+          <div className="text-xs text-neutral-500 mt-0.5 truncate max-w-[520px]">
+            Diubah: {changed.slice(0, 4).join(', ')}
+            {changed.length > 4 ? ` +${changed.length - 4}` : ''}
+          </div>
+        ) : null}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <span className="p-1.5 rounded inline-flex text-neutral-500" title="Lihat detail">
+          <Eye className="w-4 h-4" />
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 function UserCell({ user }: { user: AuditEntry['userDisplay'] }) {
   const apiBase = process.env.NEXT_PUBLIC_CORE_API_URL ?? '';

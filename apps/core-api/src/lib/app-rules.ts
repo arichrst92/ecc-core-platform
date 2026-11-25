@@ -124,11 +124,11 @@ export function appTexts(overrides: unknown): AppTexts {
 /**
  * Tautan dokumen untuk app (menu Profil → User Manual), per bahasa app.
  * Bisa diganti lewat .env tanpa build app: APP_MANUAL_URL_ID / APP_MANUAL_URL_EN.
- * Manual English belum ada → sementara memakai manual Bahasa Indonesia.
+ * Manual English (2026-11): portal /download/manual-en.pdf.
  */
 export function appLinks() {
   const id = process.env.APP_MANUAL_URL_ID || 'https://portal.eccchurch.global/download/manual.pdf';
   return {
-    manual: { id, en: process.env.APP_MANUAL_URL_EN || id },
+    manual: { id, en: process.env.APP_MANUAL_URL_EN || 'https://portal.eccchurch.global/download/manual-en.pdf' },
   };
 }

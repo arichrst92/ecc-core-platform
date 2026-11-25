@@ -22,10 +22,17 @@ const nextConfig = {
    */
   async rewrites() {
     const planningTarget = process.env.PLANNING_DEV_URL ?? 'http://localhost:3400';
-    return [
-      { source: '/planning', destination: `${planningTarget}/planning` },
-      { source: '/planning/:path*', destination: `${planningTarget}/planning/:path*` },
-    ];
+    return {
+      afterFiles: [
+        { source: '/planning', destination: `${planningTarget}/planning` },
+        { source: '/planning/:path*', destination: `${planningTarget}/planning/:path*` },
+      ],
+      // Manual per bahasa (2026-11): `/download/manual-<bahasa>.pdf` (mis.
+      // manual-en.pdf dari APP_MANUAL_URL_EN) yang BELUM ada → manual Bahasa
+      // Indonesia, bukan 404. Fallback hanya berjalan bila file public tidak
+      // ditemukan, jadi begitu manual-en.pdf diunggah, file itu yang dipakai.
+      fallback: [{ source: '/download/manual-:lang.pdf', destination: '/download/manual.pdf' }],
+    };
   },
   webpack: (config, { isServer }) => {
     // Resolve `.js` import paths ke `.ts`/`.tsx` (NodeNext-style imports kita

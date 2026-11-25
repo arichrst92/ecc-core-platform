@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GUI — Media (ECC Worship + Video Channel) · Els App 2.5.1</title>
+<style>
+  :root{--b5:#F97316;--b6:#EA580C;--b7:#C2410C;--b50:#FFF7ED;--b100:#FFEDD5;--ink:#171717;--n7:#404040;--n6:#525252;--n5:#737373;--n4:#A3A3A3;--n3:#D4D4D4;--n2:#E5E5E5;--n1:#F5F5F5;--n50:#FAFAFA;--g:linear-gradient(135deg,#F97316,#C2410C)}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#ECECEC;color:var(--ink)}
+  .page{max-width:1480px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:34px 0 4px}
+  .lead{color:var(--n6);font-size:14px;margin:0 0 22px;max-width:900px;line-height:1.5}
+  .row{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+  .item{width:310px}
+  .cap{font-size:12.5px;color:var(--n7);margin-top:10px;line-height:1.45}
+  .cap b{display:block;font-size:13.5px;color:var(--ink);margin-bottom:2px}
+  .phone{width:310px;height:660px;border-radius:40px;background:#111;padding:9px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  .scr{width:100%;height:100%;border-radius:32px;overflow:hidden;background:var(--n50);position:relative;display:flex;flex-direction:column;font-size:12px}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:600;flex:none;background:#fff}
+  .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:86px;height:22px;background:#111;border-radius:12px;z-index:5}
+  .ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ic.s{width:13px;height:13px}.ic.l{width:20px;height:20px}.ic.xl{width:24px;height:24px}
+  .fill{fill:currentColor}
+  /* header */
+  .hdr{background:#fff;display:flex;align-items:center;gap:6px;padding:4px 12px 6px;flex:none}
+  .hb{width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .ht{font-weight:700;font-size:14.5px;flex:1}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--n1);flex:none}
+  .tabs div{flex:1;text-align:center;padding:9px 0 8px;font-weight:600;font-size:12.5px;color:var(--n5);border-bottom:2px solid transparent}
+  .tabs div.on{color:var(--b6);border-color:var(--b5)}
+  .chips{display:flex;gap:7px;align-items:center;padding:9px 12px;background:#fff;border-bottom:1px solid var(--n1);flex:none;overflow:hidden;white-space:nowrap;position:relative}
+  .chips .sr{position:absolute;right:0;top:0;bottom:0;width:42px;background:#fff;border-left:1px solid var(--n1);display:flex;align-items:center;justify-content:center;box-shadow:-8px 0 10px -4px #fff}
+  .chip{border:1px solid var(--n3);background:#fff;border-radius:999px;padding:5px 11px;font-size:11px;font-weight:600;color:var(--n7)}
+  .chip.on{background:var(--g);color:#fff;border-color:transparent}
+  .body{flex:1;overflow:hidden;position:relative}
+  .pad{padding:12px}
+  .sec{font-size:12.5px;font-weight:700;margin:2px 0 8px}
+  .muted{color:var(--n5)} .faint{color:var(--n4)}
+  /* bottom tab bar */
+  .tbar{flex:none;background:#fff;border-top:1px solid var(--n2);display:flex;padding:6px 4px 16px}
+  .tbar div{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9.5px;color:var(--n5);font-weight:500}
+  .tbar div.on{color:var(--b5)}
+  /* quick access */
+  .qa{display:grid;grid-template-columns:repeat(4,1fr);row-gap:12px;padding:4px 10px}
+  .qa .t{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--n7);text-align:center;line-height:1.15}
+  .qa .bx{width:50px;height:50px;border-radius:16px;background:var(--b50);display:flex;align-items:center;justify-content:center;color:var(--b6);position:relative}
+  .qa .t.hl .bx{outline:2.5px solid var(--b5);outline-offset:2px;box-shadow:0 6px 14px -6px rgba(234,88,12,.6)}
+  .qa .t.hl{color:var(--b7)}
+  .new{position:absolute;top:-7px;right:-12px;background:#16A34A;color:#fff;font-size:8px;font-weight:800;border-radius:999px;padding:1px 5px}
+  .badge{position:absolute;top:-4px;right:-4px;background:#EF4444;color:#fff;font-size:8px;font-weight:800;border-radius:999px;min-width:15px;padding:1px 3px;text-align:center}
+  /* worship */
+  .btnrow{display:flex;gap:8px;margin-bottom:12px}
+  .pb{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:999px;padding:8px 0;font-weight:600;font-size:12px}
+  .pb.p{background:var(--g);color:#fff}.pb.s{background:#fff;border:1px solid var(--n3);color:var(--ink)}
+  .albums{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cover{aspect-ratio:1;border-radius:12px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:9px;color:#fff;font-weight:800;font-size:13px;letter-spacing:.2px}
+  .at{font-size:12px;font-weight:600;margin-top:5px}.as{font-size:10.5px;color:var(--n5)}
+  .song{display:flex;align-items:center;gap:9px;padding:7px 0}
+  .song .n{width:16px;text-align:center;color:var(--n4);font-size:11.5px}
+  .song .tt{font-size:12.5px}.song .ss{font-size:10.5px;color:var(--n5)}
+  .mini{position:absolute;left:8px;right:8px;bottom:8px;background:#fff;border:1px solid var(--n2);border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.12);overflow:hidden}
+  .mini .r{display:flex;align-items:center;gap:9px;padding:7px 9px}
+  .mini .cv{width:34px;height:34px;border-radius:8px}
+  .prog{height:3px;background:var(--n1)}.prog i{display:block;height:100%;width:38%;background:var(--b5)}
+  /* video */
+  .th{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;flex:none}
+  .th .pl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .th .pl span{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff}
+  .th .cap2{position:absolute;left:9px;bottom:8px;right:9px;color:#fff;font-weight:800;font-size:11px;line-height:1.15;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .feat{display:flex;gap:10px;padding:0 12px;overflow:hidden}
+  .feat .c{width:262px;flex:none}
+  .feat .c .th{border-radius:14px}
+  .vt{font-size:12.5px;font-weight:600;margin-top:6px;line-height:1.3}
+  .vm{font-size:10.5px;color:var(--n5);margin-top:2px}
+  .vrow{display:flex;gap:10px;margin-bottom:11px}
+  .vrow .th{width:132px}
+  .vrow .tx{flex:1;min-width:0;padding-top:1px}
+  .vrow .tx .vt{margin-top:0;font-size:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .search{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid var(--n1);flex:none}
+  .search .in{flex:1;background:var(--n1);border-radius:12px;padding:8px 10px;font-size:12px}
+  mark{background:#FFEDD5;color:inherit;border-radius:3px;padding:0 1px}
+  /* player */
+  .player{background:#000;aspect-ratio:16/9;position:relative;flex:none;overflow:hidden}
+  .player .ov{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,0) 30%,rgba(0,0,0,0) 65%,rgba(0,0,0,.55))}
+  .player .ctl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:30px;color:#fff}
+  .player .bar{position:absolute;left:10px;right:10px;bottom:9px;display:flex;align-items:center;gap:8px;color:#fff;font-size:9.5px}
+  .player .bar .tr{flex:1;height:3px;background:rgba(255,255,255,.35);border-radius:2px;position:relative}
+  .player .bar .tr i{position:absolute;left:0;top:0;bottom:0;width:22%;background:#fff;border-radius:2px}
+  .player .bar .tr b{position:absolute;left:22%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#fff}
+  .player .tl{position:absolute;left:10px;top:8px;right:40px;color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .link{display:inline-flex;align-items:center;gap:5px;color:var(--b6);font-weight:600;font-size:11.5px}
+  .desc{font-size:12px;color:var(--n7);line-height:1.5}
+  .note{position:absolute;left:10px;right:10px;background:#111827;color:#fff;border-radius:10px;padding:7px 9px;font-size:10.5px;line-height:1.35;display:flex;gap:7px;align-items:flex-start;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  /* gradients for thumbs/covers (tanpa logo/merek) */
+  .g1{background:radial-gradient(120% 90% at 20% 10%,#FDBA74 0,transparent 45%),radial-gradient(90% 80% at 85% 90%,#7C2D12 0,transparent 60%),linear-gradient(135deg,#EA580C,#431407)}
+  .g2{background:radial-gradient(70% 60% at 70% 25%,#FDE68A 0,transparent 55%),linear-gradient(160deg,#1E3A8A,#0F172A 75%)}
+  .g3{background:radial-gradient(80% 70% at 30% 80%,#A7F3D0 0,transparent 55%),linear-gradient(135deg,#047857,#064E3B)}
+  .g4{background:radial-gradient(60% 60% at 50% 30%,#F5D0FE 0,transparent 55%),linear-gradient(135deg,#7C3AED,#2E1065)}
+  .g5{background:radial-gradient(70% 70% at 75% 25%,#FEF3C7 0,transparent 50%),linear-gradient(135deg,#F59E0B,#B45309)}
+  .g6{background:radial-gradient(80% 60% at 25% 30%,#BAE6FD 0,transparent 55%),linear-gradient(135deg,#0284C7,#0C4A6E)}
+  .g7{background:radial-gradient(60% 60% at 60% 40%,#FECACA 0,transparent 55%),linear-gradient(135deg,#DC2626,#450A0A)}
+  .g8{background:linear-gradient(135deg,#262626,#0A0A0A)}
+  .rays::after{content:"";position:absolute;inset:0;background:repeating-conic-gradient(from 200deg at 50% -10%,rgba(255,255,255,.10) 0 6deg,transparent 6deg 14deg);mix-blend-mode:screen}
+  .crowd::before{content:"";position:absolute;left:-5%;right:-5%;bottom:-8%;height:38%;background:radial-gradient(14px 16px at 6% 30%,#000 98%,transparent),radial-gradient(14px 16px at 16% 40%,#000 98%,transparent),radial-gradient(14px 16px at 27% 28%,#000 98%,transparent),radial-gradient(14px 16px at 38% 42%,#000 98%,transparent),radial-gradient(14px 16px at 50% 30%,#000 98%,transparent),radial-gradient(14px 16px at 61% 40%,#000 98%,transparent),radial-gradient(14px 16px at 72% 28%,#000 98%,transparent),radial-gradient(14px 16px at 83% 42%,#000 98%,transparent),radial-gradient(14px 16px at 94% 30%,#000 98%,transparent),linear-gradient(transparent 55%,#000 55%);opacity:.55}
+  /* portal */
+  .desk{width:100%;max-width:1180px;background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.12);overflow:hidden;display:flex;font-size:12.5px;position:relative}
+  .side{width:200px;background:var(--n50);border-right:1px solid var(--n2);padding:14px 10px;flex:none}
+  .side .g{font-size:10px;font-weight:700;color:var(--n4);text-transform:uppercase;letter-spacing:.5px;margin:12px 8px 6px}
+  .side .m{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;color:var(--n7)}
+  .side .m.on{background:var(--b50);color:var(--b7);font-weight:700}
+  .main{flex:1;padding:18px 22px;min-width:0}
+  .ptabs{display:flex;gap:4px;border-bottom:1px solid var(--n2);margin:12px 0 14px}
+  .ptabs div{padding:8px 12px;font-weight:600;color:var(--n5);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .ptabs div.on{color:var(--b7);border-color:var(--b5)}
+  .filters{display:flex;gap:8px;margin-bottom:12px}
+  .fi{border:1px solid var(--n3);border-radius:8px;padding:7px 10px;color:var(--n5);background:#fff}
+  .pbtn{background:var(--b5);color:#fff;border-radius:8px;padding:7px 12px;font-weight:700;display:flex;align-items:center;gap:5px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .vc{border:1px solid var(--n2);border-radius:12px;overflow:hidden}
+  .vc .th{border-radius:0}
+  .vc .b{padding:9px 11px}
+  .st{position:absolute;top:7px;left:7px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700}
+  .tay{background:#ECFDF5;color:#047857}.jad{background:#F5F3FF;color:#6D28D9}.dr{background:var(--n1);color:var(--n6)}
+  .ung{position:absolute;top:7px;right:7px;background:#FBBF24;color:#fff;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700}
+  .modal{position:absolute;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+  .mbox{width:470px;background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.3);overflow:hidden}
+  .mbox .h{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--n1);font-weight:700;font-size:14px}
+  .mbox .c{padding:14px 16px;display:flex;flex-direction:column;gap:9px}
+  .fl{font-size:11px;font-weight:700;color:var(--n6);margin-bottom:3px}
+  .fv{border:1px solid var(--n3);border-radius:8px;padding:7px 10px}
+  .ok2{font-size:10.5px;color:#047857;margin-top:3px;display:flex;gap:4px;align-items:center}
+  .mbox .f{display:flex;justify-content:flex-end;gap:8px;padding:10px 16px;border-top:1px solid var(--n1)}
+  .legend{font-size:12.5px;color:var(--n6);margin-top:10px;max-width:1180px;line-height:1.5}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l.9 1.3"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></symbol>
+    <!-- quick access -->
+    <symbol id="q-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/></symbol>
+    <symbol id="q-church" viewBox="0 0 24 24"><path d="M10 9h4"/><path d="M12 7v5"/><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 22V5.6a1 1 0 0 0-.5-.9L12 2 6.5 4.7a1 1 0 0 0-.5.9V22"/><path d="m18 9 3.5 1.8a1 1 0 0 1 .5.9V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.3a1 1 0 0 1 .5-.9L6 10"/></symbol>
+    <symbol id="q-house" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="q-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/></symbol>
+    <symbol id="q-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="q-usersr" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></symbol>
+    <symbol id="q-clap" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="q-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+    <symbol id="q-pray" viewBox="0 0 24 24"><path d="M11 12h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 14"/><path d="m7 18 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 13 6 6"/></symbol>
+    <symbol id="q-give" viewBox="0 0 24 24"><path d="M11 14h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 15 6 6"/><path d="M19.5 8.5c.7-.7 1.5-1.6 1.5-2.7A2.73 2.73 0 0 0 16 4a2.78 2.78 0 0 0-5 1.8c0 1.2.8 2 1.5 2.8L16 12Z"/></symbol>
+    <symbol id="q-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></symbol>
+    <symbol id="q-news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+    <symbol id="q-map" viewBox="0 0 24 24"><path d="M18 8c0 3.6-4 7.5-5.4 8.7a1 1 0 0 1-1.2 0C10 15.5 6 11.6 6 8a6 6 0 0 1 12 0"/><circle cx="12" cy="8" r="2"/><path d="M8.7 14.1 3.5 15.5a1 1 0 0 0-.5 1v3.4a1 1 0 0 0 1.3.9l3.7-1a1 1 0 0 1 .6 0l6.8 1.8a1 1 0 0 0 .6 0l4.5-1.4a1 1 0 0 0 .7-.9v-3.4a1 1 0 0 0-1.3-.9l-3.6 1.1"/></symbol>
+    <symbol id="q-hand" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+    <symbol id="q-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M14.8 7.5a1.84 1.84 0 0 0-2.6 0l-.2.3-.3-.3a1.84 1.84 0 1 0-2.4 2.8L12 13l2.7-2.7c.9-.9.8-2.1.1-2.8"/></symbol>
+    <symbol id="q-store" viewBox="0 0 24 24"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/></symbol>
+    <!-- tab bar -->
+    <symbol id="t-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="t-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="t-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+    <symbol id="t-baby" viewBox="0 0 24 24"><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/></symbol>
+    <symbol id="t-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+    <!-- portal -->
+    <symbol id="p-monitor" viewBox="0 0 24 24"><path d="M10 7.75a.75.75 0 0 1 1.14-.64l3.6 2.25a.75.75 0 0 1 0 1.28l-3.6 2.25a.75.75 0 0 1-1.14-.64z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></symbol>
+    <symbol id="p-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="p-mega" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+    <symbol id="p-clip" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <h1>Media — ECC Worship + Video Channel (Els App 2.5.1)</h1>
+  <p class="lead">Tampilan app sesuai kode yang sudah dibuat: tile <b>Media</b> menggantikan Worship di Akses Cepat Beranda. Layar Media punya dua tab — <b>ECC Worship</b> (isi sama persis dengan sebelumnya) dan <b>Video Channel</b> (video YouTube dari Portal, per kategori). Video diputar di dalam app. Thumbnail &amp; sampul di mockup ini hanya ilustrasi; di app memakai thumbnail asli dari YouTube dan sampul album ECC Worship.</p>
+
+  <div class="row">
+    <!-- 1. Beranda -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr" style="padding:6px 16px 10px">
+          <div style="flex:1"><div class="muted" style="font-size:11px">Selamat pagi,</div><div style="font-weight:800;font-size:16px">Ari Christian</div></div>
+          <div class="hb"><svg class="ic l"><use href="#i-scan"/></svg></div>
+          <div class="hb" style="position:relative"><svg class="ic l"><use href="#i-bell"/></svg><span class="badge" style="top:3px;right:3px">3</span></div>
+        </div>
+        <div class="body" style="background:#fff">
+          <div style="margin:4px 14px 14px;border-radius:16px;padding:14px;color:#fff;background:var(--g)">
+            <div style="font-size:10.5px;opacity:.85">Ibadah berikutnya</div>
+            <div style="font-weight:800;font-size:14px;margin-top:2px">Ibadah Raya 1 · Minggu 09.00</div>
+            <div style="font-size:10.5px;opacity:.85;margin-top:2px">ECC Jakarta · Waktu Jakarta</div>
+          </div>
+          <div class="qa">
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-sparkles"/></svg></div>Alkitab</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-church"/></svg></div>Ibadah</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-house"/></svg></div>Homecell</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-heart"/></svg></div>Ministry</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-users"/></svg></div>Keluarga</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-usersr"/></svg></div>Group</div>
+            <div class="t hl"><div class="bx"><svg class="ic xl"><use href="#q-clap"/></svg><span class="new">BARU</span></div>Media</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-book"/></svg></div>Renungan</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-pray"/></svg></div>Doa</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-give"/></svg></div>Beri</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-cal"/></svg></div>Event</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-news"/></svg></div>Berita</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-map"/></svg></div>Zona</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-hand"/></svg></div>Visit</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-msg"/></svg></div>Konseling</div>
+            <div class="t"><div class="bx"><svg class="ic xl"><use href="#q-store"/></svg></div>Local Market</div>
+          </div>
+        </div>
+        <div class="tbar">
+          <div class="on"><svg class="ic l"><use href="#t-home"/></svg>Beranda</div>
+          <div><svg class="ic l"><use href="#t-target"/></svg>Resolusi</div>
+          <div><svg class="ic l"><use href="#t-ticket"/></svg>Reservasi</div>
+          <div><svg class="ic l"><use href="#t-baby"/></svg>CKids</div>
+          <div><svg class="ic l"><use href="#t-user"/></svg>Profil</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>1 · Beranda — tile Media</b>Posisi sama dengan tile Worship lama (setelah Group). Tile tampil bila ECC Worship <i>atau</i> Video Channel sudah berisi. Label "BARU" hanya penanda di mockup.</div>
+    </div>
+
+    <!-- 2. Media · ECC Worship -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr"><div class="hb"><svg class="ic l"><use href="#i-back"/></svg></div><div class="ht">Media</div></div>
+        <div class="tabs"><div class="on">ECC Worship</div><div>Video Channel</div></div>
+        <div class="chips">
+          <span class="chip on">Album</span><span class="chip">Single</span><span class="chip">Disukai</span><span class="chip">Unduhan</span>
+          <span style="margin-left:auto;display:flex"><svg class="ic"><use href="#i-search"/></svg></span>
+        </div>
+        <div class="body"><div class="pad">
+          <div class="btnrow">
+            <div class="pb p"><svg class="ic s fill"><use href="#i-play"/></svg>Putar semua</div>
+            <div class="pb s"><svg class="ic s"><use href="#i-shuffle"/></svg>Acak semua</div>
+          </div>
+          <div class="albums">
+            <div><div class="cover g1 rays">Terang-Mu</div><div class="at">Terang-Mu</div><div class="as">2026 · 10 lagu</div></div>
+            <div><div class="cover g4">Kasih Setia</div><div class="at">Kasih Setia</div><div class="as">2025 · 8 lagu</div></div>
+          </div>
+          <div class="sec" style="margin-top:14px">Single</div>
+          <div class="song"><div class="cover g6" style="width:38px;height:38px;padding:0;border-radius:8px"></div><div style="flex:1"><div class="tt">Bapa Engkau Baik</div><div class="ss">Single · ECC Worship</div></div><svg class="ic faint"><use href="#i-dots"/></svg></div>
+          <div class="song"><div class="cover g5" style="width:38px;height:38px;padding:0;border-radius:8px"></div><div style="flex:1"><div class="tt">Di Hadirat-Mu</div><div class="ss">Single · ECC Worship</div></div><svg class="ic faint"><use href="#i-dots"/></svg></div>
+        </div>
+          <div class="mini"><div class="r">
+            <div class="cv g1"></div>
+            <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600">Terang-Mu</div><div style="font-size:10.5px;color:var(--n5)">Terang-Mu · Vokal</div></div>
+            <svg class="ic l fill"><use href="#i-pause"/></svg><svg class="ic l fill" style="margin-left:6px"><use href="#i-next"/></svg>
+          </div><div class="prog"><i></i></div></div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2 · Media → tab ECC Worship</b>Isi persis sama dengan ECC Worship sekarang (album, single, disukai, unduhan, putar/acak, paling sering diputar). Tombol cari pindah ke ujung baris pilihan karena judul layar kini "Media". Pemutar mini tetap tampil.</div>
+    </div>
+
+    <!-- 3. Media · Video Channel -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr"><div class="hb"><svg class="ic l"><use href="#i-back"/></svg></div><div class="ht">Media</div></div>
+        <div class="tabs"><div>ECC Worship</div><div class="on">Video Channel</div></div>
+        <div class="chips">
+          <span class="chip on">Semua</span><span class="chip">Khotbah</span><span class="chip">Kesaksian</span><span class="chip">Pujian</span><span class="chip">CKids</span>
+          <span class="sr"><svg class="ic"><use href="#i-search"/></svg></span>
+        </div>
+        <div class="body" style="padding-top:12px">
+          <div class="sec" style="padding:0 12px">Video unggulan</div>
+          <div class="feat">
+            <div class="c"><div class="th g1 crowd"><div class="pl"><span><svg class="ic fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div>
+              <div class="vt">Ibadah Natal 2026 — Terang yang Sejati</div><div class="vm">Ibadah Spesial · 24 Des 2026</div></div>
+            <div class="c"><div class="th g2 rays"></div></div>
+          </div>
+          <div class="pad" style="padding-top:14px">
+            <div class="sec">Terbaru</div>
+            <div class="vrow"><div class="th g7"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div>
+              <div class="tx"><div class="vt">Iman yang Bertumbuh di Tengah Badai</div><div class="vm">Khotbah · 22 Nov 2026</div></div></div>
+            <div class="vrow"><div class="th g3"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div>
+              <div class="tx"><div class="vt">Kesaksian: Pemulihan Keluarga Kami</div><div class="vm">Kesaksian · 18 Nov 2026</div></div></div>
+            <div class="vrow"><div class="th g4 rays"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div>
+              <div class="tx"><div class="vt">Worship Night — Kudus Kudus Kudus</div><div class="vm">Pujian · 15 Nov 2026</div></div></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap"><b>3 · Media → tab Video Channel</b>Pilihan kategori (urutan dari Portal) + ikon cari di ujung. Video unggulan bisa digeser ke samping, lalu daftar terbaru (urut tanggal tayang). Tab tanpa isi disembunyikan.</div>
+    </div>
+
+    <!-- 4. Kategori -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr"><div class="hb"><svg class="ic l"><use href="#i-back"/></svg></div><div class="ht">Media</div></div>
+        <div class="tabs"><div>ECC Worship</div><div class="on">Video Channel</div></div>
+        <div class="chips">
+          <span class="chip">Semua</span><span class="chip on">Khotbah</span><span class="chip">Kesaksian</span><span class="chip">Pujian</span><span class="chip">CKids</span>
+          <span class="sr"><svg class="ic"><use href="#i-search"/></svg></span>
+        </div>
+        <div class="body"><div class="pad">
+          <div class="vrow"><div class="th g7"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Iman yang Bertumbuh di Tengah Badai</div><div class="vm">Khotbah · 22 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g5 rays"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Hidup dalam Kasih Karunia</div><div class="vm">Khotbah · 15 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g6"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Setia dalam Perkara Kecil</div><div class="vm">Khotbah · 8 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g2"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Doa yang Mengubahkan</div><div class="vm">Khotbah · 1 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g1"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Membangun Rumah di Atas Batu</div><div class="vm">Khotbah · 25 Okt 2026</div></div></div>
+          <div class="vrow"><div class="th g3 rays"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Sukacita yang Tidak Tergoyahkan</div><div class="vm">Khotbah · 18 Okt 2026</div></div></div>
+        </div></div>
+      </div></div>
+      <div class="cap"><b>4 · Satu kategori dipilih</b>Ketuk "Khotbah" → hanya video kategori itu (tanpa bagian unggulan). Tarik ke bawah untuk memuat ulang.</div>
+    </div>
+
+    <!-- 5. Cari -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr"><div class="hb"><svg class="ic l"><use href="#i-back"/></svg></div><div class="ht">Media</div></div>
+        <div class="tabs"><div>ECC Worship</div><div class="on">Video Channel</div></div>
+        <div class="search"><div class="in">kasih<span style="border-left:1.5px solid var(--b5);margin-left:1px"></span></div><div class="hb" style="width:28px"><svg class="ic l"><use href="#i-x"/></svg></div></div>
+        <div class="body"><div class="pad">
+          <div class="vrow"><div class="th g5 rays"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Hidup dalam <mark>Kasih</mark> Karunia</div><div class="vm">Khotbah · 15 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g4"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt"><mark>Kasih</mark> Setia-Mu — Live Session</div><div class="vm">Pujian · 3 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g3"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">CKids: <mark>Kasih</mark> Allah untuk Semua Anak</div><div class="vm">CKids · 27 Okt 2026</div></div></div>
+          <div style="text-align:center;color:var(--n4);font-size:11px;margin-top:16px">3 video cocok</div>
+        </div></div>
+<div style="flex:none;background:#D1D5DB;display:flex;flex-direction:column;gap:8px;padding:8px 3px 22px"><div style="display:flex;gap:4px;justify-content:center"><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">q</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">w</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">e</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">r</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">t</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">y</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">u</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">i</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">o</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">p</span></div><div style="display:flex;gap:4px;justify-content:center"><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">a</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">s</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">d</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">f</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">g</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">h</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">j</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">k</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">l</span></div><div style="display:flex;gap:4px;justify-content:center"><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">z</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">x</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">c</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">v</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">b</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">n</span><span style="width:24px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">m</span></div><div style="display:flex;gap:4px;justify-content:center"><span style="width:40px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">123</span><span style="width:150px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">spasi</span><span style="width:60px;height:34px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 0 #9CA3AF">cari</span></div></div>
+      </div></div>
+      <div class="cap"><b>5 · Cari video</b>Ikon cari → kolom cari menggantikan pilihan kategori; mencari judul &amp; nama kategori di semua video. Tombol ✕ kembali ke daftar.</div>
+    </div>
+
+    <!-- 6. Putar video -->
+    <div class="item">
+      <div class="phone"><div class="scr">
+        <div class="notch"></div>
+        <div class="status"><span>09.41</span><span>●●● 5G ▮</span></div>
+        <div class="hdr"><div class="hb"><svg class="ic l"><use href="#i-back"/></svg></div><div class="ht">Video Channel</div><div class="hb"><svg class="ic"><use href="#i-share"/></svg></div></div>
+        <div class="player g7">
+          <div class="ov"></div>
+          <div class="tl">Iman yang Bertumbuh di Tengah Badai</div>
+          <div class="ctl"><svg class="ic fill" style="width:34px;height:34px"><use href="#i-pause"/></svg></div>
+          <div class="bar"><span>12:40</span><div class="tr"><i></i><b></b></div><span>57:12</span><svg class="ic s"><use href="#i-max"/></svg></div>
+        </div>
+        <div class="body"><div class="pad" style="display:flex;flex-direction:column;gap:11px">
+          <div><div style="font-weight:700;font-size:14px;line-height:1.3">Iman yang Bertumbuh di Tengah Badai</div>
+            <div class="vm">Khotbah · ECC Church · 22 Nov 2026</div></div>
+          <div class="desc">Khotbah Ibadah Raya Minggu. Bagaimana iman kita tetap bertumbuh ketika menghadapi masa sulit — belajar dari kisah murid-murid di tengah danau.</div>
+          <div class="link"><svg class="ic s"><use href="#i-ext"/></svg>Buka di YouTube</div>
+          <div class="sec" style="margin:4px 0 0">Lainnya di Khotbah</div>
+          <div class="vrow"><div class="th g5 rays"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Hidup dalam Kasih Karunia</div><div class="vm">Khotbah · 15 Nov 2026</div></div></div>
+          <div class="vrow"><div class="th g6"><div class="pl"><span><svg class="ic s fill" style="margin-left:2px"><use href="#i-play"/></svg></span></div></div><div class="tx"><div class="vt">Setia dalam Perkara Kecil</div><div class="vm">Khotbah · 8 Nov 2026</div></div></div>
+        </div></div>
+      </div></div>
+      <div class="cap"><b>6 · Putar video</b>Pemutar YouTube resmi di dalam app (kontrol bawaan pemutar YouTube: putar/jeda, geser waktu, ketuk ⛶ untuk layar penuh/landscape). Lagu Worship yang sedang diputar otomatis dijeda. Bagikan (pojok kanan atas), Buka di YouTube, dan video lain sekategori.</div>
+    </div>
+
+    <!-- 7. Layar penuh -->
+    <div class="item" style="width:660px">
+      <div class="phone" style="width:660px;height:310px"><div class="scr" style="background:#000">
+        <div class="player g7" style="aspect-ratio:auto;height:100%">
+          <div class="ov"></div>
+          <div class="tl" style="left:28px;top:14px;font-size:12px">Iman yang Bertumbuh di Tengah Badai</div>
+          <div class="ctl" style="gap:54px"><svg class="ic fill" style="width:44px;height:44px"><use href="#i-pause"/></svg></div>
+          <div class="bar" style="left:28px;right:28px;bottom:16px;font-size:11px"><span>12:40</span><div class="tr"><i></i><b></b></div><span>57:12</span><svg class="ic"><use href="#i-max"/></svg></div>
+        </div>
+      </div></div>
+      <div class="cap"><b>7 · Layar penuh (HP dimiringkan)</b>Memakai layar penuh bawaan pemutar; kembali ke layar video saat keluar dari layar penuh.</div>
+    </div>
+  </div>
+
+  <h2>Portal — Broadcast → Video Channel</h2>
+  <p class="lead" style="margin-bottom:12px">Tempat admin menambah video &amp; mengatur kategori. Hak akses lewat Role Access menu <b>Video Channel</b>.</p>
+  <div class="desk">
+    <div class="side">
+      <div style="font-weight:800;color:var(--b7);padding:0 8px 6px">ECC Portal</div>
+      <div class="g">Broadcast</div>
+      <div class="m"><svg class="ic"><use href="#q-news"/></svg>News</div>
+      <div class="m"><svg class="ic"><use href="#q-book"/></svg>Renungan</div>
+      <div class="m"><svg class="ic"><use href="#p-music"/></svg>ECC Worship</div>
+      <div class="m on"><svg class="ic"><use href="#p-monitor"/></svg>Video Channel</div>
+      <div class="m"><svg class="ic"><use href="#p-mega"/></svg>Announcement</div>
+      <div class="m"><svg class="ic"><use href="#p-clip"/></svg>Universal Form</div>
+    </div>
+    <div class="main">
+      <div style="font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px"><svg class="ic xl" style="color:var(--b5)"><use href="#p-monitor"/></svg>Video Channel</div>
+      <div class="muted" style="margin-top:4px">Video YouTube untuk semua cabang — tampil di Els App (Beranda → Media → Video Channel, app 2.5.1) dan website.</div>
+      <div class="ptabs"><div class="on">Video</div><div>Kategori</div></div>
+      <div class="filters">
+        <div class="fi" style="flex:1;display:flex;gap:6px;align-items:center"><svg class="ic s"><use href="#i-search"/></svg>Cari judul</div>
+        <div class="fi">Semua kategori ▾</div><div class="fi">Semua status ▾</div>
+        <div class="pbtn"><svg class="ic s"><use href="#i-plus"/></svg>Tambah video</div>
+      </div>
+      <div class="grid">
+        <div class="vc"><div class="th g1 crowd"><span class="st tay">Tayang</span><span class="ung">★ Unggulan</span></div><div class="b"><div style="font-weight:700">Ibadah Natal 2026 — Terang yang Sejati</div><div class="vm">Ibadah Spesial · ECC Church</div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;color:var(--n5)"><svg class="ic s"><use href="#i-ext"/></svg><svg class="ic s"><use href="#i-pencil"/></svg><svg class="ic s" style="color:#DC2626"><use href="#i-trash"/></svg></div></div></div>
+        <div class="vc"><div class="th g7"><span class="st tay">Tayang</span></div><div class="b"><div style="font-weight:700">Iman yang Bertumbuh di Tengah Badai</div><div class="vm">Khotbah · ECC Church</div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;color:var(--n5)"><svg class="ic s"><use href="#i-ext"/></svg><svg class="ic s"><use href="#i-pencil"/></svg><svg class="ic s" style="color:#DC2626"><use href="#i-trash"/></svg></div></div></div>
+        <div class="vc"><div class="th g4 rays"><span class="st jad">Terjadwal</span></div><div class="b"><div style="font-weight:700">Worship Night Desember</div><div class="vm">Pujian · Tayang 6 Des 2026 19.00 WIB</div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;color:var(--n5)"><svg class="ic s"><use href="#i-ext"/></svg><svg class="ic s"><use href="#i-pencil"/></svg><svg class="ic s" style="color:#DC2626"><use href="#i-trash"/></svg></div></div></div>
+      </div>
+    </div>
+    <div class="modal">
+      <div class="mbox">
+        <div class="h"><span style="flex:1">Tambah video</span><svg class="ic"><use href="#i-x"/></svg></div>
+        <div class="c">
+          <div><div class="fl">Link YouTube *</div><div class="fv">https://www.youtube.com/watch?v=Ab3dE5fG7h9</div><div class="ok2"><svg class="ic s"><use href="#i-check"/></svg>Judul &amp; thumbnail terbaca otomatis</div></div>
+          <div class="th g7" style="border-radius:10px"></div>
+          <div><div class="fl">Judul *</div><div class="fv">Iman yang Bertumbuh di Tengah Badai</div></div>
+          <div style="display:flex;gap:10px"><div style="flex:1"><div class="fl">Kategori</div><div class="fv">Khotbah ▾</div></div><div style="flex:1"><div class="fl">Jadwal tayang (WIB, opsional)</div><div class="fv faint">dd/mm/yyyy --:--</div></div></div>
+          <div style="display:flex;gap:18px"><span>☑ Terbitkan</span><span>☐ Unggulan (tampil di atas)</span></div>
+          <div style="font-size:10.5px;color:#B91C1C">Link Shorts, live, dan playlist ditolak — hanya video biasa.</div>
+        </div>
+        <div class="f"><span class="fi" style="border:none">Batal</span><span class="pbtn">Simpan</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="legend">Tab <b>Kategori</b>: tambah, ubah nama, urutkan (panah naik/turun), aktif/nonaktif — urutan = urutan pilihan kategori di app &amp; website. Status video: <b>Tayang</b>, <b>Terjadwal</b>, <b>Draft</b>.</p>
+</div>
+</body>
+</html>

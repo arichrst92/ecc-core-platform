@@ -24,9 +24,23 @@ summary: Menu Media di Beranda app (ECC Worship + Video Channel), cara menonton 
 - **Tambah video**: tempel link YouTube → judul & thumbnail terisi otomatis (judul bisa diubah). Pilih **satu kategori** (atau tanpa kategori), deskripsi, **Terbitkan**, **Unggulan** (tampil di atas), dan **Jadwal tayang** (opsional, WIB — video baru tampil setelah waktu itu; juga menentukan urutan terbaru).
 - Hanya **video YouTube biasa**: link Shorts, siaran live, dan playlist ditolak dengan pesan. Satu video hanya boleh ditambahkan sekali.
 - Tab **Kategori**: tambah, ubah nama, atur urutan (panah naik/turun), aktif/nonaktif. Kategori nonaktif beserta videonya tidak ditampilkan. Menghapus kategori membuat videonya menjadi tanpa kategori.
-- Status video: **Tayang**, **Terjadwal**, **Draft**.
+- Status video: **Tayang**, **Terjadwal**, **Draft**. Filter sumber: *Sinkron YouTube* / *Ditambah manual*.
+
+## Sinkron otomatis dari channel YouTube ECC
+Tab **Sinkron YouTube** di Portal → Video Channel. Sumber: **@ECCChurchChannel** dan **@ECCWorship**.
+- **Muat playlist** menampilkan semua playlist kedua channel (+ "Semua unggahan" per channel untuk video di luar playlist). Playlist baru selalu **nonaktif** sampai dicentang.
+- Centang playlist yang mau diimpor dan pilih **kategorinya** (atau "Kategori baru: nama playlist"; mencentang tanpa kategori otomatis membuat kategori bernama playlist). Mengganti kategori playlist ikut memindahkan video yang sudah diimpor dari playlist itu.
+- **Urutan playlist = prioritas**: video yang ada di beberapa playlist masuk kategori playlist paling atas.
+- Sinkron berjalan **otomatis tiap 6 jam**, atau tekan **Sinkronkan sekarang**. Video baru langsung **Tayang**, tanggal tayang = tanggal unggah/siaran di YouTube.
+- Dilewati: **Shorts** (video tegak, ≤ 60 detik, atau playlist "Shorts"), siaran yang sedang/akan live, video privat, video yang tidak boleh disematkan. Rekaman live yang sudah selesai ikut diimpor.
+- Judul, deskripsi, kategori, unggulan, atau Draft yang diubah admin **tidak ditimpa** sinkron.
+- Video yang dihapus/diprivat di YouTube otomatis disembunyikan (label "Tidak tersedia di YouTube") dan tampil lagi bila tersedia kembali.
+- **Hapus** video hasil sinkron = tidak diimpor ulang (daftar "video yang dihapus" bisa dipulihkan dengan **Impor lagi**). Untuk sekadar menyembunyikan, ubah ke Draft.
+- Butuh **YOUTUBE_API_KEY** di server; tanpa itu Portal menampilkan peringatan dan sinkron tidak berjalan.
 
 ## Troubleshooting
+- Sinkron gagal "Kuota harian YouTube API habis" → otomatis dicoba lagi pada jadwal berikutnya.
+- Video baru belum muncul → cek playlist sudah dicentang, tunggu sinkron berikutnya (≤ 6 jam) atau tekan Sinkronkan sekarang; Shorts memang dilewati.
 - Judul tidak terisi otomatis → video privat atau tidak boleh disematkan; isi judul manual dan pastikan video publik/unlisted dengan izin sematan aktif.
 - Video tidak muncul di app/website → cek status Terbit, jadwal tayang, dan kategori aktif. Website memperbarui daftar setiap ±5 menit.
 - Video tidak bisa diputar di app → pemilik video menonaktifkan sematan; gunakan **Buka di YouTube**.

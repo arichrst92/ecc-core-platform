@@ -18,12 +18,12 @@ export function publicVideoWhere(now = new Date()): Prisma.VideoWhereInput {
 
 type Row = Prisma.VideoGetPayload<{ include: { kategori: { select: { id: true; nama: true } } } }>;
 
-export function videoView(v: Row) {
+export function videoView(v: Row, opts: { shortDesc?: boolean } = {}) {
   return {
     id: v.id,
     youtubeId: v.youtubeId,
     judul: v.judul,
-    deskripsi: v.deskripsi,
+    deskripsi: opts.shortDesc && v.deskripsi && v.deskripsi.length > 300 ? v.deskripsi.slice(0, 300).trimEnd() + '…' : v.deskripsi,
     kategori: v.kategori ? { id: v.kategori.id, nama: v.kategori.nama } : null,
     channelNama: v.channelNama,
     isFeatured: v.isFeatured,
@@ -33,7 +33,7 @@ export function videoView(v: Row) {
 }
 
 /** Katalog publik: kategori aktif yang berisi video + daftar video terbaru dulu. */
-export async function publicCatalog(limit = 500) {
+export async function publicCatalog(limit = 3000) {
   const [kategori, videos] = await Promise.all([
     prisma.videoKategori.findMany({ where: { isActive: true }, orderBy: [{ urutan: 'asc' }, { nama: 'asc' }], select: { id: true, nama: true } }),
     prisma.video.findMany({
@@ -43,7 +43,7 @@ export async function publicCatalog(limit = 500) {
       take: limit,
     }),
   ]);
-  const items = videos.map(videoView).sort((a, b) => +new Date(b.tayangAt) - +new Date(a.tayangAt));
+  const items = videos.map((v) => videoView(v, { shortDesc: true })).sort((a, b) => +new Date(b.tayangAt) - +new Date(a.tayangAt));
   const used = new Set(items.map((v) => v.kategori?.id).filter(Boolean));
   return {
     kategori: kategori.filter((k) => used.has(k.id)),

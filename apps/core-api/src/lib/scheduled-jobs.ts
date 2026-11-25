@@ -15,6 +15,7 @@
  * Untuk skala lebih besar, pindah ke external cron (k8s CronJob).
  */
 import { runUniversalFormJob } from './universal-form-jobs.js';
+import { youtubeSyncJob } from './video-youtube-sync.js';
 import { calendarDateOf, jamWithZone, tzOr } from './tz.js';
 import { runDataRetention } from './data-purge.js';
 import { encryptLegacyCredentials } from './credential-crypto.js';
@@ -555,7 +556,12 @@ export function startScheduledJobs() {
   // Universal Form: pengingat batas isi, pembatalan otomatis, retensi file (2026-12).
   const ufJob = wrap('universal-form', runUniversalFormJob);
   const h16 = setInterval(() => void ufJob(), 15 * 60_000);
-  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16]) {
+  // Video Channel: sinkron channel YouTube ECC tiap 6 jam (butuh YOUTUBE_API_KEY & playlist aktif).
+  const ytJob = wrap('video-youtube-sync', youtubeSyncJob);
+  const y0 = setTimeout(() => void ytJob(), STARTUP_DELAY_MS + 5 * 60_000);
+  y0.unref?.();
+  const h17 = setInterval(() => void ytJob(), 6 * 60 * 60_000);
+  for (const h of [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17]) {
     h.unref?.();
     intervalHandles.push(h);
   }

@@ -26,6 +26,8 @@ export function VideoChannelBrowser({ data }: { data: VideoCatalog }) {
   const [kat, setKat] = useState('all');
   const [q, setQ] = useState('');
   const [playing, setPlaying] = useState<VideoItem | null>(null);
+  const [limit, setLimit] = useState(48);
+  useEffect(() => setLimit(48), [kat, q]);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -125,11 +127,18 @@ export function VideoChannelBrowser({ data }: { data: VideoCatalog }) {
           <div className="bg-white rounded-3xl border border-orange-100 p-8 text-center text-sm text-neutral-600">{L('Tidak ada video yang cocok.', 'No matching videos.')}</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-            {videos.map((v) => (
+            {videos.slice(0, limit).map((v) => (
               <Card key={v.id} v={v} />
             ))}
           </div>
         )}
+        {videos.length > limit ? (
+          <div className="text-center mt-4">
+            <button type="button" onClick={() => setLimit((n) => n + 48)} className="btn-secondary !py-2 text-sm">
+              {L('Tampilkan lebih banyak', 'Show more')} ({videos.length - limit})
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {playing ? (

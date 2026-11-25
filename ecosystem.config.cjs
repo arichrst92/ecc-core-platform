@@ -64,6 +64,8 @@ loadEnvFile(path.resolve(__dirname, '.env'));
 // `...process.env`) supaya tidak bawa PATH/HOME/dll yang seharusnya dari
 // PM2 user environment.
 const sharedEnv = {
+  // YouTube Data API v3 — sinkron Video Channel (core-api) & halaman /youtube (landing).
+  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
   NODE_ENV: process.env.NODE_ENV || 'production',
   DATABASE_URL: process.env.DATABASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,

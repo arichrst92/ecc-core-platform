@@ -13,7 +13,16 @@
  *   GET    /:id
  *   POST   /                     videoInputSchema
  *   PATCH  /:id                  videoInputSchema
- *   DELETE /:id
+ *   DELETE /:id                  (video hasil sinkron → dicatat agar tidak diimpor ulang)
+ *
+ *   Sinkron channel YouTube ECC (lib/video-youtube-sync.ts):
+ *   GET    /youtube              { configured, running, sources, lastRun, runs, ignoredCount }
+ *   POST   /youtube/playlists    muat ulang daftar playlist channel
+ *   PATCH  /youtube/sources/:id  { isEnabled?, kategoriId? | '__new__' } (kategori baru = nama playlist)
+ *   PUT    /youtube/sources/order { ids } — prioritas kategori
+ *   POST   /youtube/sync         jalankan sinkron sekarang (berjalan di latar)
+ *   GET    /youtube/ignored      video yang dihapus admin (tidak diimpor ulang)
+ *   DELETE /youtube/ignored/:youtubeId  izinkan diimpor lagi pada sinkron berikutnya
  */
 import { Router, type Request } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
@@ -22,6 +31,8 @@ import { requireMenu } from '../../middleware/require-menu.js';
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
 import { UUID_RE, youtubeOembed } from '../../lib/video-channel.js';
+import { isYoutubeSyncRunning, refreshYoutubeSources, runYoutubeSync, youtubeKey, YT_SYNC_CHANNELS } from '../../lib/video-youtube-sync.js';
+import { logger } from '../../lib/logger.js';
 
 export const videoChannelRouter = Router();
 const MENU = 'video-channel';
@@ -84,6 +95,96 @@ videoChannelRouter.delete('/kategori/:id', D, async (req, res) => {
   res.json({ success: true, data: { deleted: true } });
 });
 
+// ------------------------------------------------------------------ sinkron YouTube
+
+videoChannelRouter.get('/youtube', R, async (_req, res) => {
+  const [sources, runs, ignoredCount, counts] = await Promise.all([
+    prisma.videoYoutubeSource.findMany({ orderBy: [{ urutan: 'asc' }] }),
+    prisma.videoSyncRun.findMany({ orderBy: { startedAt: 'desc' }, take: 10 }),
+    prisma.videoYoutubeIgnore.count(),
+    prisma.video.groupBy({ by: ['sourcePlaylistId'], where: { sumber: 'YOUTUBE' }, _count: { _all: true } }),
+  ]);
+  const imported = new Map(counts.map((c) => [c.sourcePlaylistId, c._count._all]));
+  res.json({
+    success: true,
+    data: {
+      configured: !!youtubeKey(),
+      running: isYoutubeSyncRunning(),
+      channels: YT_SYNC_CHANNELS,
+      sources: sources.map((s) => ({ ...s, imported: imported.get(s.playlistId) ?? 0 })),
+      lastRun: runs[0] ?? null,
+      runs,
+      ignoredCount,
+    },
+  });
+});
+
+videoChannelRouter.post('/youtube/playlists', W, async (req, res) => {
+  if (!youtubeKey()) throw BadRequest('YOUTUBE_API_KEY belum diisi di server.');
+  const r = await refreshYoutubeSources().catch((e: Error) => {
+    throw BadRequest(e.message);
+  });
+  audit(req, { action: 'UPDATE', resource: 'video_youtube_source', resourceLabel: 'Muat ulang playlist YouTube' });
+  res.json({ success: true, data: r });
+});
+
+videoChannelRouter.put('/youtube/sources/order', W, async (req, res) => {
+  const { ids } = videoKategoriOrderSchema.parse(req.body ?? {});
+  await prisma.$transaction(ids.map((id, i) => prisma.videoYoutubeSource.updateMany({ where: { id, isUploads: false }, data: { urutan: i + 1 } })));
+  res.json({ success: true, data: { ok: true } });
+});
+
+videoChannelRouter.patch('/youtube/sources/:id', W, async (req, res) => {
+  const id = pid(req.params.id, 'Playlist');
+  const src = await prisma.videoYoutubeSource.findUnique({ where: { id } });
+  if (!src) throw NotFound('Playlist tidak ditemukan');
+  const body = (req.body ?? {}) as { isEnabled?: unknown; kategoriId?: unknown };
+  const data: { isEnabled?: boolean; kategoriId?: string | null } = {};
+  if (typeof body.isEnabled === 'boolean') data.isEnabled = body.isEnabled;
+  if (body.kategoriId !== undefined) {
+    if (body.kategoriId === null || body.kategoriId === '') data.kategoriId = null;
+    else if (body.kategoriId === '__new__') {
+      const nama = src.judul.replace(/^Semua unggahan — /, '').slice(0, 100);
+      const found = await prisma.videoKategori.findFirst({ where: { nama: { equals: nama, mode: 'insensitive' } } });
+      if (found) data.kategoriId = found.id;
+      else {
+        const max = await prisma.videoKategori.aggregate({ _max: { urutan: true } });
+        data.kategoriId = (await prisma.videoKategori.create({ data: { nama, urutan: (max._max.urutan ?? 0) + 1 } })).id;
+      }
+    } else if (typeof body.kategoriId === 'string' && UUID_RE.test(body.kategoriId) && (await prisma.videoKategori.count({ where: { id: body.kategoriId } }))) {
+      data.kategoriId = body.kategoriId;
+    } else throw BadRequest('Kategori tidak ditemukan.');
+  }
+  const u = await prisma.videoYoutubeSource.update({ where: { id }, data });
+  // Kategori playlist berubah → video yang diimpor dari playlist ini ikut pindah.
+  let moved = 0;
+  if (data.kategoriId !== undefined && data.kategoriId !== src.kategoriId) {
+    moved = (await prisma.video.updateMany({ where: { sumber: 'YOUTUBE', sourcePlaylistId: src.playlistId }, data: { kategoriId: data.kategoriId } })).count;
+  }
+  audit(req, { action: 'UPDATE', resource: 'video_youtube_source', resourceId: id, resourceLabel: src.judul, metadata: { ...data, moved } });
+  res.json({ success: true, data: { ...u, moved } });
+});
+
+videoChannelRouter.post('/youtube/sync', W, async (req, res) => {
+  if (!youtubeKey()) throw BadRequest('YOUTUBE_API_KEY belum diisi di server.');
+  if (isYoutubeSyncRunning()) throw Conflict('Sinkron sedang berjalan.');
+  if (!(await prisma.videoYoutubeSource.count({ where: { isEnabled: true } }))) throw BadRequest('Belum ada playlist yang diaktifkan.');
+  void runYoutubeSync('MANUAL', req.user?.jemaatId ?? null).catch((err) => logger.warn({ err }, 'manual youtube sync failed'));
+  audit(req, { action: 'UPDATE', resource: 'video_sync_run', resourceLabel: 'Sinkron YouTube manual' });
+  res.status(202).json({ success: true, data: { started: true } });
+});
+
+videoChannelRouter.get('/youtube/ignored', R, async (_req, res) => {
+  const rows = await prisma.videoYoutubeIgnore.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+  res.json({ success: true, data: rows });
+});
+
+videoChannelRouter.delete('/youtube/ignored/:youtubeId', W, async (req, res) => {
+  const yid = String(req.params.youtubeId ?? '');
+  await prisma.videoYoutubeIgnore.deleteMany({ where: { youtubeId: yid } });
+  res.json({ success: true, data: { ok: true } });
+});
+
 // ------------------------------------------------------------------ video
 
 videoChannelRouter.post('/resolve', W, async (req, res) => {
@@ -119,9 +220,11 @@ videoChannelRouter.get('/', R, async (req, res) => {
   const q = str(req, 'q');
   const kategoriId = str(req, 'kategoriId');
   const status = str(req, 'status');
+  const sumber = str(req, 'sumber');
   const now = new Date();
   const where: Prisma.VideoWhereInput = {
     ...(q ? { judul: { contains: q, mode: 'insensitive' } } : {}),
+    ...(sumber === 'YOUTUBE' || sumber === 'MANUAL' ? { sumber } : {}),
     ...(kategoriId === 'none' ? { kategoriId: null } : kategoriId && UUID_RE.test(kategoriId) ? { kategoriId } : {}),
     ...(status === 'draft'
       ? { isPublished: false }
@@ -131,7 +234,7 @@ videoChannelRouter.get('/', R, async (req, res) => {
           ? { isPublished: true, OR: [{ tayangAt: null }, { tayangAt: { lte: now } }] }
           : {}),
   };
-  const rows = await prisma.video.findMany({ where, include: inc, orderBy: [{ createdAt: 'desc' }], take: 1000 });
+  const rows = await prisma.video.findMany({ where, include: inc, orderBy: [{ createdAt: 'desc' }], take: 2000 });
   res.json({ success: true, data: rows.map(serialize) });
 });
 
@@ -185,6 +288,10 @@ videoChannelRouter.delete('/:id', D, async (req, res) => {
   const id = pid(req.params.id);
   const v = await prisma.video.delete({ where: { id } }).catch(() => null);
   if (!v) throw NotFound('Video tidak ditemukan');
+  // Video hasil sinkron YouTube → jangan diimpor ulang pada sinkron berikutnya.
+  if (v.sumber === 'YOUTUBE') {
+    await prisma.videoYoutubeIgnore.upsert({ where: { youtubeId: v.youtubeId }, update: {}, create: { youtubeId: v.youtubeId, judul: v.judul } });
+  }
   audit(req, { action: 'DELETE', resource: 'video', resourceId: id, resourceLabel: v.judul });
   res.json({ success: true, data: { deleted: true } });
 });

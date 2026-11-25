@@ -4948,6 +4948,12 @@ model Video {
   /// Tanggal tayang: video baru tampil setelah waktu ini (null = langsung saat terbit).
   tayangAt     DateTime? @map("tayang_at")
   createdById  String?   @map("created_by_id") @db.Uuid
+  /// MANUAL (ditambah admin) | YOUTUBE (hasil sinkron channel).
+  sumber       String    @default("MANUAL") @db.VarChar(10)
+  /// Playlist asal (sinkron YouTube) — dipakai saat pemetaan kategori playlist diubah.
+  sourcePlaylistId String? @map("source_playlist_id") @db.VarChar(64)
+  /// Diisi bila video sudah dihapus/diprivat di YouTube (otomatis disembunyikan).
+  ytUnavailableAt  DateTime? @map("yt_unavailable_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -4956,5 +4962,57 @@ model Video {
   @@unique([youtubeId])
   @@index([isPublished, tayangAt])
   @@index([kategoriId])
+  @@index([sumber, sourcePlaylistId])
   @@map("video")
+}
+
+/// Playlist channel YouTube ECC (sinkron Video Channel). Baru terdeteksi = nonaktif.
+model VideoYoutubeSource {
+  id            String    @id @default(uuid()) @db.Uuid
+  channelKey    String    @map("channel_key") @db.VarChar(20)
+  channelId     String    @map("channel_id") @db.VarChar(64)
+  playlistId    String    @unique @map("playlist_id") @db.VarChar(64)
+  judul         String    @db.VarChar(200)
+  thumbnailUrl  String?   @map("thumbnail_url") @db.Text
+  itemCount     Int       @default(0) @map("item_count")
+  /// true = playlist "Semua unggahan" channel (video di luar playlist).
+  isUploads     Boolean   @default(false) @map("is_uploads")
+  isEnabled     Boolean   @default(false) @map("is_enabled")
+  kategoriId    String?   @map("kategori_id") @db.Uuid
+  /// Prioritas: video di beberapa playlist memakai kategori playlist dengan urutan terkecil.
+  urutan        Int       @default(0)
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  missingAt     DateTime? @map("missing_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([isEnabled, urutan])
+  @@map("video_youtube_source")
+}
+
+/// Video YouTube yang dihapus admin — tidak diimpor ulang saat sinkron.
+model VideoYoutubeIgnore {
+  youtubeId String   @id @map("youtube_id") @db.VarChar(20)
+  judul     String?  @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("video_youtube_ignore")
+}
+
+/// Riwayat sinkron YouTube (status di Portal).
+model VideoSyncRun {
+  id         String    @id @default(uuid()) @db.Uuid
+  trigger    String    @db.VarChar(10)
+  status     String    @db.VarChar(10)
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  added      Int       @default(0)
+  skipped    Int       @default(0)
+  hidden     Int       @default(0)
+  playlists  Int       @default(0)
+  message    String?   @db.Text
+  byId       String?   @map("by_id") @db.Uuid
+
+  @@index([startedAt])
+  @@map("video_sync_run")
 }

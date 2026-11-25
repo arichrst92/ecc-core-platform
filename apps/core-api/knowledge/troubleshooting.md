@@ -45,7 +45,7 @@ summary: Indeks cepat masalah yang sering terjadi di lapangan (login, scan, rese
 | Pilih tahun di tanggal lahir (Android) tidak bisa | Dialog kalender bawaan HP | App 2.5.1 kolom Tanggal · Bulan · Tahun | akun-login |
 | Header scanner hanya "/33" | Server lama tidak mengirim jumlah hadir | Deploy server terbaru | checkin-scan |
 | Parent group tidak ada di pilihan | Dulu dropdown dibatasi 100 | Ketik nama di kotak cari | group |
-| Notifikasi WA tidak terkirim | Jenis notif nonaktif / saluran / gateway / jemaat mematikan WA | WhatsApp Notif Config, Server Health | doa-konten-notifikasi |
+| Notifikasi WA tidak terkirim | Jenis notif nonaktif / saluran / gateway / jemaat mematikan WA | Message Provider, Server Health | doa-konten-notifikasi |
 | Menu Portal tidak terlihat / "tidak punya akses" | Role Access belum memberi menu/level | Developer Tools → Role Access | peran-akses |
 | Fitur tidak ada di HP jemaat | Versi app lama | Cek pembaruan; lihat perbedaan versi | versi-app |
 | Data di app tidak terbaru | Cache | Tarik layar ke bawah; keluar-masuk app | versi-app |

@@ -23,7 +23,7 @@ summary: Cara masuk app & Portal (OTP WA, email, kode sementara dari admin), pen
 ## OTP tidak masuk — urutan cek
 1. WhatsApp aktif & ada internet; nomor benar beserta kode negara.
 2. Nomor di Portal (detail jemaat) benar. "Nomor HP belum terdaftar sebagai jemaat" → belum ada akun dengan nomor itu (mungkin daftar pakai email → *Masuk dengan email*).
-3. Gateway WhatsApp: Portal → Developer Tools → **Server Health** / **WhatsApp Notif Config → Gateway & OTP** (statistik OTP).
+3. Gateway WhatsApp: Portal → Developer Tools → **Server Health** / **Message Provider → Gateway & OTP** (statistik OTP).
 4. Pakai email, atau beri **kode masuk sementara**.
 
 ## Daftar akun baru (app)

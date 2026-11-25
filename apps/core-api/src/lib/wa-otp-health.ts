@@ -87,7 +87,7 @@ async function alertAdmins(subject: string, body: string) {
         html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;max-width:560px">
 <div style="background:#ea580c;color:#fff;padding:14px 18px;border-radius:10px 10px 0 0;font-weight:bold">${subject}</div>
 <div style="border:1px solid #fed7aa;border-top:0;padding:16px 18px;border-radius:0 0 10px 10px">${body}
-<p style="font-size:12px;color:#9ca3af">Dikirim otomatis oleh Els App. Lihat Portal → WhatsApp Config → Gateway &amp; OTP.</p></div></div>`,
+<p style="font-size:12px;color:#9ca3af">Dikirim otomatis oleh Els App. Lihat Portal → Message Provider → Gateway &amp; OTP.</p></div></div>`,
       }).catch((err) => logger.warn({ err, to: addr }, '[wa-otp-health] email peringatan gagal'));
     }
   } catch (err) {

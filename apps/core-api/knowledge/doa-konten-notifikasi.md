@@ -37,13 +37,13 @@ summary: Alur prayer request & petugas doa, kritik & saran, konten broadcast (be
 
 ## Notifikasi
 - **In-app** (lonceng di app; app memeriksa berkala ±30 detik). Ketuk notifikasi → membuka halaman terkait. *Tandai semua* = sudah dibaca.
-- **WhatsApp & Email** per jenis notifikasi diatur di Portal → Developer Tools → **WhatsApp Notif Config**: aktif/nonaktif, edit template (placeholder mis. {nama}, {event_judul}), **Test** ke nomor sendiri, dan **Saluran notifikasi** per jenis (In-app / WhatsApp / Email / Email bila tanpa WA). Jenis baru default WA nonaktif. Perubahan berlaku ≤60 detik.
+- **WhatsApp & Email** per jenis notifikasi diatur di Portal → Developer Tools → **Message Provider**: aktif/nonaktif, edit template (placeholder mis. {nama}, {event_judul}), **Test** ke nomor sendiri, dan **Saluran notifikasi** per jenis (In-app / WhatsApp / Email / Email bila tanpa WA). Jenis baru default WA nonaktif. Perubahan berlaku ≤60 detik.
 - Jenis penting: CKIDS_CHECKIN/PICKUP, GIFT_REDEEMED, POINT_EARNED/ADJUSTED, FAMILY_LINKED, GROUP_MEMBER_ADDED/REMOVED/DISMISSED, EVENT_REGISTERED/APPROVED/CHECKED_IN/PAYMENT_REJECTED/CANCELLED_BY_ADMIN, HOMECELL_ATTENDED, VISIT_RECORDED, BRANCH_CHANGE_APPROVED/REJECTED, MINISTRY_JOIN_REQUESTED/APPROVED/REJECTED, MINISTRY_DUTY_ASSIGNED/REMOVED (termasuk "tugas diperbarui"), HOMECELL_MATERIAL, pengingat ibadah/event, ulang tahun.
 - Jemaat bisa mematikan pesan WhatsApp (pengingat, ucapan, info) di Pengaturan → Privasi → Pesan WhatsApp; OTP tetap terkirim.
 - Pengingat WA bisa dipicu manual di Developer Tools → **Maintenance**.
 
 ## Kasus umum
-- **"Notifikasi WA tidak terkirim"** → cek jenis notif aktif di WhatsApp Notif Config, saluran notifikasi, gateway (Server Health), dan apakah jemaat mematikan pesan WA.
+- **"Notifikasi WA tidak terkirim"** → cek jenis notif aktif di Message Provider, saluran notifikasi, gateway (Server Health), dan apakah jemaat mematikan pesan WA.
 - **"Petugas doa tidak melihat tab tugas"** → ia belum cocok dengan Konfigurasi Petugas (role/ministry).
 - **"Gambar berita tidak bisa diunggah"** → simpan konten dulu.
 - **"Renungan tidak muncul di Beranda"** → di 2.5.1 hanya renungan bertanggal hari ini yang tampil; pastikan tanggal renungan = hari ini & Published.

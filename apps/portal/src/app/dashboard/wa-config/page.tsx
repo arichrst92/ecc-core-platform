@@ -67,10 +67,10 @@ export default function WaConfigPage() {
       <div className="mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-center gap-2">
           <MessageCircle className="w-6 h-6 text-emerald-600" />
-          Konfigurasi Notifikasi WhatsApp &amp; Email
+          Message Provider
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Aktifkan/matikan WA notif per jenis event + edit template pesannya. Perubahan langsung berlaku (cache 60s).
+          Penyedia pengiriman pesan — WhatsApp (Fonnte / Resmi.ID) &amp; email (SendGrid): status koneksi, saluran per jenis notifikasi, dan template WhatsApp. Perubahan langsung berlaku (cache 60 detik).
         </p>
       </div>
 

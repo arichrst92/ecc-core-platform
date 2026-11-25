@@ -101,7 +101,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'dev-download', label: 'Download', href: '/dashboard/dev-download', group: 'Developer Tools' },
   { key: 'api-access', label: 'API Access', href: '/dashboard/api-access', group: 'Developer Tools' },
   { key: 'it-minister-team', label: 'Team IT Minister', href: '/dashboard/it-minister-team', group: 'Developer Tools' },
-  { key: 'wa-config', label: 'WhatsApp Notif Config', href: '/dashboard/wa-config', group: 'Developer Tools' },
+  { key: 'wa-config', label: 'Message Provider', href: '/dashboard/wa-config', group: 'Developer Tools' },
   // External subdomain apps — buka new tab; login SSO via cookie shared di .eccchurch.global
   // ops-tickets tetap di catalog (RBAC row tidak hilang) tapi menu disembunyikan
   // dari sidebar + bottom-dock sampai apps/operations dibangun (2026-10-11).

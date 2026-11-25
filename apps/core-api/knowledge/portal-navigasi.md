@@ -41,7 +41,7 @@ summary: Daftar menu Portal beserta alamat halamannya (untuk tombol navigasi) da
 | CKids | Katalog Hadiah, Data Anak, Akses CKids | /dashboard/hadiah, /dashboard/data-anak, /dashboard/ckids-access |
 | Website | Konten Website | /dashboard/website |
 | App Settings | Legal Docs, App Versions, Maintenance Mode, Onboarding Config | /dashboard/legal, /dashboard/app-version, /dashboard/maintenance-mode, /dashboard/onboarding-config |
-| Developer Tools | Role Access, Audit Log, Server Health, WhatsApp Notif Config, Maintenance, Analitik App, Diagnostics (tab **Tulisan di App** = ubah label Els App 2.5.1+ tanpa build), Shiftsoft Sync | /dashboard/role-access, /dashboard/audit-log, /dashboard/server-health, /dashboard/wa-config, /dashboard/maintenance, /dashboard/analitik, /dashboard/diagnostics, /dashboard/shiftsoft-sync |
+| Developer Tools | Role Access, Audit Log, Server Health, Message Provider, Maintenance, Analitik App, Diagnostics (tab **Tulisan di App** = ubah label Els App 2.5.1+ tanpa build), Shiftsoft Sync | /dashboard/role-access, /dashboard/audit-log, /dashboard/server-health, /dashboard/wa-config, /dashboard/maintenance, /dashboard/analitik, /dashboard/diagnostics, /dashboard/shiftsoft-sync |
 | — | Profil & Keamanan | /dashboard/profile |
 
 - **Badge merah** di dock = request menunggu tindakan (Spiritual Journey, Tamu tanpa petugas follow-up, Prayer Request baru, Permintaan Volunteer, Kritik & Saran baru, kandidat akun ganda, bukti transfer event, permintaan bergabung group, **pengajuan group baru**, homecell dengan lokasi bermasalah). Diperbarui tiap 60 detik.

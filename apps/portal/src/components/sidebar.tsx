@@ -196,7 +196,7 @@ const groups: NavGroup[] = [
       { href: '/dashboard/credential', label: 'Credential', icon: KeyRound, menuKey: 'credential' },
       { href: '/dashboard/diagnostics', label: 'Diagnostics', icon: Stethoscope, menuKey: 'diagnostics' },
       { href: '/dashboard/shiftsoft-sync', label: 'Shiftsoft Sync', icon: DatabaseZap, menuKey: 'shiftsoft-sync' },
-      { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: MessageCircle, menuKey: 'wa-config' },
+      { href: '/dashboard/wa-config', label: 'Message Provider', icon: MessageCircle, menuKey: 'wa-config' },
       { href: '/dashboard/tech-docs', label: 'Technical Documentation', icon: BookOpen, menuKey: 'tech-docs' },
       { href: '/dashboard/dev-download', label: 'Download', icon: Download, menuKey: 'dev-download' },
       { href: '/dashboard/api-access', label: 'API Access', icon: KeyRound, menuKey: 'api-access' },

@@ -239,7 +239,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/dev-download', label: 'Download', icon: Download, menuKey: 'dev-download' },
       { href: '/dashboard/api-access', label: 'API Access', icon: KeyRound, menuKey: 'api-access' },
       { href: '/dashboard/it-minister-team', label: 'Team IT Minister', icon: UsersRound, menuKey: 'it-minister-team' },
-      { href: '/dashboard/wa-config', label: 'WhatsApp Notif Config', icon: FileText, menuKey: 'wa-config' },
+      { href: '/dashboard/wa-config', label: 'Message Provider', icon: FileText, menuKey: 'wa-config' },
       // Operations Tickets — DISEMBUNYIKAN sampai apps/operations dibangun (2026-10-11).
       // { href: '/operations', label: 'Operations Tickets', icon: Activity, menuKey: 'ops-tickets', external: true },
       { href: '/planning', label: 'Ticketing Tools', icon: Ticket, menuKey: 'planning-backlog', external: true },

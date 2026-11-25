@@ -100,6 +100,10 @@ export const NOTIF_CATALOG: NotifCatalogItem[] = [
   I('FORM_REMINDER', 'Pengingat isi formulir', 'other', true),
   I('FORM_NEEDS_FIX', 'Formulir perlu diperbaiki', 'other'),
   I('FORM_REJECTED', 'Formulir ditolak', 'other'),
+  // Konseling (2026-12)
+  I('KONSELING_ASSIGNED', 'Konseling ditugaskan (konselor)', 'rohani'),
+  I('KONSELING_SCHEDULED', 'Jadwal konseling ditetapkan', 'rohani'),
+  I('KONSELING_UPDATED', 'Kabar permintaan konseling', 'rohani'),
 ];
 
 const byKey = new Map(NOTIF_CATALOG.map((c) => [c.key, c]));

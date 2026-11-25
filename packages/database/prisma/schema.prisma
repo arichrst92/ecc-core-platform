@@ -2354,6 +2354,10 @@ enum InAppNotifType {
   FORM_REMINDER
   FORM_NEEDS_FIX
   FORM_REJECTED
+  // Konseling (2026-12)
+  KONSELING_ASSIGNED
+  KONSELING_SCHEDULED
+  KONSELING_UPDATED
 
   @@map("in_app_notif_type")
 }
@@ -4854,4 +4858,61 @@ model UniversalFormReminder {
 
   @@unique([embedId, subjekJemaatId, kind])
   @@map("universal_form_reminder")
+}
+
+// ============================================================
+// KONSELING (2026-12) — permintaan konseling dari app (Profil → Konseling).
+// Admin Portal (menu Konseling) menugaskan konselor = anggota pelayanan yang
+// dikonfigurasi (KonselingKonselorPelayanan). Isi hanya untuk konselor yang
+// ditugaskan & admin menu Konseling. Kontak jemaat dibagikan ke konselor atas
+// persetujuan (kontakDisetujuiAt).
+// ============================================================
+model KonselingRequest {
+  id                 String    @id @default(uuid()) @db.Uuid
+  jemaatId           String    @map("jemaat_id") @db.Uuid
+  // Snapshot cabang saat mengajukan (saringan Portal & pilihan konselor).
+  cabangId           String?   @map("cabang_id") @db.Uuid
+  pokokMasalah       String    @map("pokok_masalah") @db.Text
+  harapan            String    @db.Text
+  jadwalUsulan       DateTime? @map("jadwal_usulan")
+  catatanJadwal      String?   @map("catatan_jadwal") @db.Text
+  // SAME = konselor sesama jenis kelamin; ANY = bebas.
+  preferensiGender   String    @default("ANY") @map("preferensi_gender") @db.VarChar(4)
+  // Kontak yang disetujui dibagikan ke konselor (snapshot saat mengajukan).
+  kontakNoHp         String?   @map("kontak_no_hp") @db.VarChar(20)
+  kontakEmail        String?   @map("kontak_email") @db.VarChar(255)
+  kontakDisetujuiAt  DateTime  @map("kontak_disetujui_at")
+  // BARU | DITUGASKAN | DIJADWALKAN | SELESAI | DIBATALKAN
+  status             String    @default("BARU") @db.VarChar(12)
+  konselorId         String?   @map("konselor_id") @db.Uuid
+  assignedById       String?   @map("assigned_by_id") @db.Uuid
+  assignedAt         DateTime? @map("assigned_at")
+  jadwalFinal        DateTime? @map("jadwal_final")
+  // Catatan konselor untuk jemaat (lokasi / link pertemuan, dll.).
+  catatanKonselor    String?   @map("catatan_konselor") @db.Text
+  selesaiAt          DateTime? @map("selesai_at")
+  dibatalkanAt       DateTime? @map("dibatalkan_at")
+  // JEMAAT | ADMIN | KONSELOR
+  dibatalkanOleh     String?   @map("dibatalkan_oleh") @db.VarChar(10)
+  alasanBatal        String?   @map("alasan_batal") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([jemaatId])
+  @@index([konselorId, status])
+  @@index([status, createdAt])
+  @@index([cabangId])
+  @@map("konseling_request")
+}
+
+// Pelayanan (ministry) yang anggotanya boleh ditugaskan sebagai konselor.
+// pelayananRoleId NULL = semua anggota aktif pelayanan tsb.
+model KonselingKonselorPelayanan {
+  id              String   @id @default(uuid()) @db.Uuid
+  pelayananId     String   @map("pelayanan_id") @db.Uuid
+  pelayananRoleId String?  @map("pelayanan_role_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([pelayananId, pelayananRoleId])
+  @@map("konseling_konselor_pelayanan")
 }

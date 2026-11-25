@@ -86,6 +86,7 @@ import { meFeedbackRouter } from './me-feedback.js';
 import { meTamuRouter } from './me-tamu.js';
 import { meHomecellRouter } from './me-homecell.js';
 import { meUniversalFormRouter } from './me-universal-form.js';
+import { meKonselingRouter } from './me-konseling.js';
 import { mePrivacyRouter } from './me-privacy.js';
 import { meConsentRouter } from './me-consent.js';
 import { meExportRouter } from './me-export.js';
@@ -119,6 +120,7 @@ meRouter.use('/visits', meVisitRouter);
 // Homecell untuk semua jemaat: browse, terdekat, join request, approve (leader).
 meRouter.use('/homecell', meHomecellRouter);
 meRouter.use('/forms', meUniversalFormRouter);
+meRouter.use('/konseling', meKonselingRouter);
 // Materi homecell dari Portal — Pastor zona, Zone Leader, PIC, Asisten.
 meRouter.use('/homecell-material', meHomecellMaterialRouter);
 meRouter.use('/privacy', mePrivacyRouter);

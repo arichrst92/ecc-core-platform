@@ -126,6 +126,9 @@ export async function purgeJemaatPersonalData(jemaatId: string, reason: string) 
     });
     await tx.universalFormFile.deleteMany({ where: { uploaderJemaatId: j.id } });
     await tx.universalFormResponse.deleteMany({ where: { OR: [{ jemaatId: j.id }, { subjekJemaatId: j.id }] } });
+    // Konseling: permintaan milik jemaat ini dihapus; sebagai konselor → dilepas.
+    await tx.konselingRequest.deleteMany({ where: { jemaatId: j.id } });
+    await tx.konselingRequest.updateMany({ where: { konselorId: j.id }, data: { konselorId: null } });
     await tx.otpVerification.deleteMany({ where: { jemaatId: j.id } });
     await tx.duplicateCandidate.deleteMany({ where: { OR: [{ newJemaatId: j.id }, { oldJemaatId: j.id }] } });
     if (j.email) await tx.otpVerification.deleteMany({ where: { email: j.email } });

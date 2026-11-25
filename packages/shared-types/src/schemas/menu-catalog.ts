@@ -60,6 +60,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'feedback', label: 'Kritik & Saran', href: '/dashboard/feedback', group: 'People', approval: 'Write = membalas & mengubah status kritik / saran' },
   { key: 'tamu', label: 'Tamu', href: '/dashboard/tamu', group: 'People', approval: 'Write = mengatur status & petugas follow-up tamu' },
   { key: 'prayer-request', label: 'Prayer Request', href: '/dashboard/prayer-request', group: 'People', approval: 'Write = menugaskan petugas doa & menandai sudah didoakan' },
+  { key: 'konseling', label: 'Konseling', href: '/dashboard/konseling', group: 'People', approval: 'Read = lihat permintaan & isi konseling (data sensitif) · Write = tugaskan konselor, batalkan, atur pelayanan konselor' },
   { key: 'bible365', label: 'Bible 365', href: '/dashboard/bible365', group: 'People' },
 
   // Community

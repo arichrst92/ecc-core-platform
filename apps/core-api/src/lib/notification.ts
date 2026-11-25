@@ -70,7 +70,10 @@ export type InAppNotifType =
   | 'EVENT_CANCELLED_BY_ADMIN'
   | 'FORM_REMINDER'
   | 'FORM_NEEDS_FIX'
-  | 'FORM_REJECTED';
+  | 'FORM_REJECTED'
+  | 'KONSELING_ASSIGNED'
+  | 'KONSELING_SCHEDULED'
+  | 'KONSELING_UPDATED';
 
 interface CreateNotifArgs {
   jemaatId: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -21,9 +21,8 @@ import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
 import { RESOURCE_LABEL, summarizeAudit } from '@/lib/audit-summary';
 
-const RESOURCE_OPTIONS = Object.entries(RESOURCE_LABEL)
-  .map(([value, label]) => ({ value, label: label.charAt(0).toUpperCase() + label.slice(1) }))
-  .sort((a, b) => a.label.localeCompare(b.label, 'id'));
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const resourceName = (r: string) => cap(RESOURCE_LABEL[r] ?? r.replace(/[_-]/g, ' '));
 
 type ActionKey = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'ENROLL_FACE' | 'RESET_FACE' | 'UPLOAD_PHOTO';
 
@@ -58,10 +57,18 @@ export default function AuditLogPage() {
   // Kelompokkan aktivitas beruntun (orang, tindakan & jenis data sama, berjarak ≤ 10 menit).
   const [grouped, setGrouped] = useState(true);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  // Tutup panel detail dengan Esc.
+  useEffect(() => {
+    if (!detail) return;
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && setDetail(null);
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [detail]);
   const debouncedSearch = useDebounce(search, 300);
 
   const list = useQuery({
     queryKey: ['audit-log', page, filters, debouncedSearch],
+    enabled: !(filters.from && filters.to && filters.from > filters.to),
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit: 50 };
       if (filters.action) params.action = filters.action;
@@ -74,6 +81,20 @@ export default function AuditLogPage() {
     },
     placeholderData: (prev) => prev,
   });
+  // Jenis data = yang benar-benar pernah tercatat (otomatis ikut menu baru).
+  const resQ = useQuery({
+    queryKey: ['audit-log', 'resources'],
+    queryFn: async () => (await apiClient.get<{ data: { resource: string; count: number }[] }>('/admin/audit-log/resources')).data.data,
+    staleTime: 5 * 60_000,
+  });
+  const resourceOptions = useMemo(
+    () =>
+      (resQ.data ?? Object.keys(RESOURCE_LABEL).map((resource) => ({ resource, count: 0 })))
+        .map((r) => ({ value: r.resource, label: resourceName(r.resource) }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'id')),
+    [resQ.data],
+  );
+  const rangeInvalid = !!(filters.from && filters.to && filters.from > filters.to);
   const blocks = useMemo(() => groupEntries(list.data?.data ?? [], grouped), [list.data, grouped]);
 
   return (
@@ -134,14 +155,18 @@ export default function AuditLogPage() {
             setFilters((f) => ({ ...f, resource: v || undefined }));
             setPage(1);
           }}
-          options={RESOURCE_OPTIONS}
+          options={resourceOptions}
         />
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">Dari</label>
           <input
             type="date"
             value={filters.from ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined }))}
+            max={filters.to}
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, from: e.target.value || undefined }));
+              setPage(1);
+            }}
             className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
@@ -150,11 +175,16 @@ export default function AuditLogPage() {
           <input
             type="date"
             value={filters.to ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined }))}
+            min={filters.from}
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, to: e.target.value || undefined }));
+              setPage(1);
+            }}
             className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
-        {Object.values(filters).some(Boolean) && (
+        {rangeInvalid ? <span className="text-xs text-red-600 self-center">Tanggal "Dari" melewati "Sampai".</span> : null}
+        {(Object.values(filters).some(Boolean) || search) && (
           <button
             onClick={() => {
               setFilters({});
@@ -224,7 +254,7 @@ export default function AuditLogPage() {
                         <td className="px-4 py-3">
                           <ActionBadge action={b.items[0]!.action} />
                         </td>
-                        <td className="px-4 py-3 text-neutral-700 text-xs">{RESOURCE_LABEL[b.items[0]!.resource] ?? b.items[0]!.resource}</td>
+                        <td className="px-4 py-3 text-neutral-700 text-xs">{resourceName(b.items[0]!.resource)}</td>
                         <td className="px-4 py-3 text-neutral-900">
                           <span className="inline-flex items-center gap-1.5 font-medium">
                             <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${openGroups.has(b.key) ? '' : '-rotate-90'}`} />
@@ -320,7 +350,7 @@ function Row({ entry, onOpen, nested }: { entry: AuditEntry; onOpen: (e: AuditEn
         <ActionBadge action={entry.action} />
       </td>
       <td className="px-4 py-3 text-neutral-700 text-xs" title={entry.resource}>
-        {RESOURCE_LABEL[entry.resource] ?? entry.resource}
+        {resourceName(entry.resource)}
       </td>
       <td className="px-4 py-3 text-neutral-900">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -363,7 +393,7 @@ function UserCell({ user }: { user: AuditEntry['userDisplay'] }) {
       {user.fotoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`${apiBase}${user.fotoUrl}`}
+          src={/^https?:/.test(user.fotoUrl) ? user.fotoUrl : `${apiBase}${user.fotoUrl}`}
           alt={user.namaLengkap}
           className="w-6 h-6 rounded-full object-cover"
         />

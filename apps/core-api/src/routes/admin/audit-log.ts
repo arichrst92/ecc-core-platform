@@ -34,19 +34,18 @@ auditLogRouter.get('/', async (req, res) => {
   if (q.action) where.action = q.action;
   if (q.resource) where.resource = q.resource;
   if (q.userId) where.userId = q.userId;
+  // Tanggal dari Portal = tanggal WIB (bukan UTC / zona server).
   if (q.from || q.to) {
     where.createdAt = {};
-    if (q.from) where.createdAt.gte = new Date(q.from);
-    if (q.to) {
-      const end = new Date(q.to);
-      end.setHours(23, 59, 59, 999);
-      where.createdAt.lte = end;
-    }
+    if (q.from) where.createdAt.gte = new Date(`${q.from}T00:00:00.000+07:00`);
+    if (q.to) where.createdAt.lte = new Date(`${q.to}T23:59:59.999+07:00`);
   }
   if (q.search) {
+    // Nama pengguna kebanyakan tidak tersimpan di userName → cari juga di nama jemaat akunnya.
     where.OR = [
       { resourceLabel: { contains: q.search, mode: 'insensitive' } },
       { userName: { contains: q.search, mode: 'insensitive' } },
+      { user: { jemaat: { namaLengkap: { contains: q.search, mode: 'insensitive' } } } },
     ];
   }
 
@@ -92,8 +91,15 @@ auditLogRouter.get('/', async (req, res) => {
   });
 });
 
+/** GET /admin/audit-log/resources — jenis data yang pernah tercatat (untuk saringan). */
+auditLogRouter.get('/resources', async (_req, res) => {
+  const rows = await prisma.auditLog.groupBy({ by: ['resource'], _count: { _all: true } });
+  res.json({ success: true, data: rows.map((r) => ({ resource: r.resource, count: r._count._all })) });
+});
+
 /** GET /admin/audit-log/:id — detail single entry dengan before/after lengkap */
 auditLogRouter.get('/:id', async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) throw NotFound('Audit log tidak ditemukan');
   const item = await prisma.auditLog.findUnique({
     where: { id: req.params.id },
     include: {

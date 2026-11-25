@@ -179,6 +179,7 @@ const GROUPS: NavGroup[] = [
       { href: '/dashboard/renungan', label: 'Renungan', icon: BookOpen, menuKey: 'renungan' },
       { href: '/dashboard/worship', label: 'ECC Worship', icon: Music, menuKey: 'ecc-worship' },
       { href: '/dashboard/announcement', label: 'Announcement', icon: BellRing, menuKey: 'announcement' },
+      { href: '/dashboard/universal-form', label: 'Universal Form', icon: ClipboardList, menuKey: 'universal-form' },
     ],
   },
   {

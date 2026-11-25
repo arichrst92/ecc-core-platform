@@ -1,5 +1,6 @@
 'use client';
 
+import { ContentFormsTab } from '@/components/universal-form/embed';
 import { ExportButtons } from '@/components/report/report-ui';
 import { todayYmd } from '@/lib/dates';
 import { QrCamera } from '@/components/ui/qr-camera';
@@ -163,7 +164,7 @@ export default function EventDetailPage() {
   // Hook HARUS sebelum early return (loading / tidak ditemukan) — React #310.
   const [pesertaSearch, setPesertaSearch] = useState('');
   // Tab bagian detail (Peserta / Pembayaran / Pelayanan / Ulasan) — supaya halaman tidak memanjang.
-  const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'ulasan'>('peserta');
+  const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'formulir' | 'ulasan'>('peserta');
   // Saring hanya tamu (kotak "Tamu" di ringkasan).
   const [onlyTamu, setOnlyTamu] = useState(false);
   // Pelayanan & volunteer (cache sama dengan EventMinistrySection) — untuk badge biru di tab.
@@ -506,6 +507,7 @@ export default function EventDetailPage() {
           { key: 'peserta', label: 'Peserta', badge: e.pesertaCount, show: true },
           { key: 'pembayaran', label: 'Pembayaran', badge: statusCount.MENUNGGU_VERIFIKASI ?? 0, warn: true, show: isPaid },
           { key: 'pelayanan', label: 'Pelayanan & Volunteer', show: e.butuhKehadiran, needsFill: pelayananPerluDiisi },
+          { key: 'formulir', label: 'Formulir', show: true },
           { key: 'ulasan', label: 'Ulasan', show: true },
         ];
         return (
@@ -801,6 +803,8 @@ export default function EventDetailPage() {
 
         </div>
       ) : null}
+
+      {tab === 'formulir' ? <ContentFormsTab sourceType="EVENT" sourceId={eventId} /> : null}
 
       {tab === 'ulasan' ? (
         <div className="[&>section:first-child]:mt-0">

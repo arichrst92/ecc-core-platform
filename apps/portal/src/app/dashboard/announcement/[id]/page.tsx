@@ -4,6 +4,7 @@
  * Buat / ubah Announcement (id = "new" untuk baru) — dan laporan kirim setelah terkirim.
  * Urutan form: Banner → Judul & isi (Markdown) → Tombol link → Penerima → Kanal → Waktu kirim.
  */
+import { ContentFormsTab, FormEmbedSection, useFormEmbeds } from '@/components/universal-form/embed';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -128,6 +129,8 @@ export default function AnnouncementEditPage() {
   const [sendMode, setSendMode] = useState<'now' | 'schedule'>('now');
   const [when, setWhen] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
   const [confirm, setConfirm] = useState(false);
+  // Universal Form (2026-12): sematan formulir di announcement ini.
+  const embedCtl = useFormEmbeds('ANNOUNCEMENT', id);
   const [showSample, setShowSample] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const names = useRef(new Map<string, string>()).current;
@@ -209,10 +212,12 @@ export default function AnnouncementEditPage() {
     try {
       if (id) {
         await apiClient.patch(`/admin/announcement/${id}`, payload());
+        if (embedCtl.dirty) await embedCtl.save(id).catch((e) => toast.error(`Sematan form gagal: ${errMsg(e, 'coba lagi')}`));
         return id;
       }
       const res = await apiClient.post<{ data: AnnouncementItem }>('/admin/announcement', payload());
       const newId = res.data.data.id;
+      if (embedCtl.value.length) await embedCtl.save(newId).catch((e) => toast.error(`Sematan form gagal: ${errMsg(e, 'coba lagi')}`));
       setId(newId);
       window.history.replaceState(null, '', `/dashboard/announcement/${newId}`);
       return newId;
@@ -426,6 +431,17 @@ export default function AnnouncementEditPage() {
           ) : null}
         </div>
       </Card>
+
+      {readOnly && id ? (
+        <section className="mb-4">
+          <ContentFormsTab sourceType="ANNOUNCEMENT" sourceId={id} />
+        </section>
+      ) : (
+        <section className="mb-4">
+          <FormEmbedSection sourceType="ANNOUNCEMENT" ctl={embedCtl} />
+          <p className="text-[11px] text-neutral-500 mt-1">App 2.5.0 menampilkan form sebagai tombol "Isi formulir" (dibuka di Els App web).</p>
+        </section>
+      )}
 
       </div>
       <div className="min-w-0">

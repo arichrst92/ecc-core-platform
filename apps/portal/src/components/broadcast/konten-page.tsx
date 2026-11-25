@@ -1,5 +1,6 @@
 'use client';
 
+import { FormEmbedSection, useFormEmbeds } from '@/components/universal-form/embed';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -407,6 +408,8 @@ function KontenFormModal({
     staleTime: 60_000,
   });
 
+  // Universal Form (2026-12): sematan formulir (News saja).
+  const embedCtl = useFormEmbeds('NEWS', tipe === 'news' ? existing?.id : null);
   const saveMut = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -424,12 +427,18 @@ function KontenFormModal({
           .filter(Boolean),
         isPublished,
       };
-      if (isEdit && existing) {
-        const res = await apiClient.patch<{ data: KontenItem }>(`${endpoint}/${existing.id}`, payload);
-        return res.data.data;
+      const saved =
+        isEdit && existing
+          ? (await apiClient.patch<{ data: KontenItem }>(`${endpoint}/${existing.id}`, payload)).data.data
+          : (await apiClient.post<{ data: KontenItem }>(endpoint, payload)).data.data;
+      if (tipe === 'news' && saved?.id && (embedCtl.dirty || (!isEdit && embedCtl.value.length))) {
+        try {
+          await embedCtl.save(saved.id);
+        } catch (e: any) {
+          toast.error(`Tersimpan, tapi sematan form gagal: ${e?.response?.data?.error?.message ?? 'coba lagi'}`);
+        }
       }
-      const res = await apiClient.post<{ data: KontenItem }>(endpoint, payload);
-      return res.data.data;
+      return saved;
     },
     onSuccess: () => {
       toast.success(isEdit ? 'Tersimpan' : 'Dibuat');
@@ -668,6 +677,8 @@ function KontenFormModal({
                 className="mt-1 w-full px-3 py-2 border border-neutral-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
               />
             </label>
+
+            {tipe === 'news' ? <FormEmbedSection sourceType="NEWS" ctl={embedCtl} /> : null}
 
             <label className="flex items-center gap-2 text-sm">
               <input

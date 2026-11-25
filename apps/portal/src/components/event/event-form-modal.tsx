@@ -1,7 +1,9 @@
 'use client';
 
+import { FormEmbedSection, useFormEmbeds } from '@/components/universal-form/embed';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { X, Loader2, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { todayYmd } from '@/lib/dates';
@@ -131,6 +133,12 @@ export function EventFormModal({
   const [grant, setGrant] = useState<RoleTriple>(EMPTY_TRIPLE);
   const [roleConfigReady, setRoleConfigReady] = useState(false);
   const editId = isEdit ? ((defaultValues as { id?: string } | undefined)?.id ?? null) : null;
+  // Universal Form (2026-12): sematan formulir untuk event ini.
+  const embedCtl = useFormEmbeds('EVENT', editId);
+  useEffect(() => {
+    if (open) embedCtl.setValue(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const rolesQ = useQuery({
     queryKey: ['role', 'with-subroles'],
@@ -323,7 +331,14 @@ export function EventFormModal({
       payload.grantSubRoleId = grant.roleId ? grant.subRoleId : null;
       payload.grantSubRoleStatusId = grant.roleId ? grant.subRoleStatusId : null;
     }
-    onSubmit(payload).catch(() => {});
+    onSubmit(payload)
+      .then(async (res) => {
+        const id = editId ?? (res as { data?: { data?: { id?: string } } })?.data?.data?.id;
+        if (id && (embedCtl.dirty || (!editId && embedCtl.value.length))) {
+          await embedCtl.save(id).catch((e) => toast.error(`Event tersimpan, tapi sematan form gagal: ${e?.response?.data?.error?.message ?? 'coba lagi'}`));
+        }
+      })
+      .catch(() => {});
   }
 
   const grupKode = (values.grupSesi ?? '').trim().toLowerCase().replace(/\s+/g, '-');
@@ -877,6 +892,8 @@ export function EventFormModal({
                 </div>
               </label>
             </Section>
+
+            <FormEmbedSection sourceType="EVENT" ctl={embedCtl} />
 
             {/* Syarat & role peserta */}
             <Section

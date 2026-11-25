@@ -481,6 +481,8 @@ homecellRouter.get('/:id', async (req, res) => {
               jenisKelamin: true,
               // Hanya dipakai untuk menghitung usia (tanggal lahir tidak dikirim).
               tanggalLahir: true,
+              // Sudah memakai Els App (selesai onboarding) — dikirim sebagai boolean `pakaiApp`.
+              onboardedAt: true,
             },
           },
         },
@@ -555,10 +557,11 @@ homecellRouter.get('/:id', async (req, res) => {
       ...rest,
       picJemaat: rest.picJemaat ? hp(rest.picJemaat) : null,
       members: members.map((m) => {
-        const { tanggalLahir, ...jemaat } = m.jemaat;
+        const { tanggalLahir, onboardedAt, ...jemaat } = m.jemaat;
         return withLastAttendance(
           m.jemaatId,
-          { ...m, jemaat: { ...hp(jemaat), usia: usiaOf(m.jemaat.id, tanggalLahir) } },
+          // 2026-12: `pakaiApp` = sudah memakai Els App (app ≤ 2.5.0 mengabaikan field ini).
+          { ...m, jemaat: { ...hp(jemaat), usia: usiaOf(m.jemaat.id, tanggalLahir), pakaiApp: !!onboardedAt } },
           lastMap,
         );
       }),

@@ -61,7 +61,7 @@ interface Homecell {
     tanggalBergabung: string;
     tanggalKeluar: string | null;
     catatan: string | null;
-    jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null };
+    jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null; pakaiApp?: boolean };
     /** Tanggal pertemuan terakhir yang dihadiri (YYYY-MM-DD) di homecell ini. */
     lastAttendedAt?: string | null;
     lastAttendedDaysAgo?: number | null;
@@ -296,6 +296,11 @@ export default function HomecellDetailPage() {
                     >
                       {m.jemaat.namaLengkap}
                     </Link>
+                    {m.isActive && m.jemaat.pakaiApp === false ? (
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 text-[10px] font-semibold" title="Belum menyelesaikan pendaftaran di Els App">
+                        Belum pakai Els App
+                      </span>
+                    ) : null}
                     <LastAttendance date={m.lastAttendedAt ?? null} daysAgo={m.lastAttendedDaysAgo ?? null} />
                   </td>
                   <td className="px-3 sm:px-5 py-3 text-neutral-600">{m.jemaat.noHp ?? '-'}</td>

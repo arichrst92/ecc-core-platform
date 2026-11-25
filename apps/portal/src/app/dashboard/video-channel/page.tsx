@@ -151,7 +151,7 @@ function VideoTab() {
       ) : rows.length === 0 ? (
         <div className="py-16 text-center text-sm text-neutral-500 bg-white border border-neutral-200 rounded-xl">Belum ada video.</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           {rows.slice(0, limit).map((v) => (
             <div key={v.id} className="bg-white border border-neutral-200 rounded-xl overflow-hidden flex flex-col">
               <div className="relative aspect-video bg-neutral-100">
@@ -403,11 +403,11 @@ function KategoriTab() {
   };
 
   return (
-    <div className="max-w-2xl space-y-3">
+    <div className="space-y-3">
       <p className="text-sm text-neutral-500">Urutan kategori = urutan pilihan di app & website. Kategori nonaktif beserta videonya tidak ditampilkan.</p>
       {canWrite ? (
         <div className="flex gap-2">
-          <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Nama kategori baru (mis. Khotbah)" maxLength={100} className={inputCls} />
+          <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Nama kategori baru (mis. Khotbah)" maxLength={100} className={`${inputCls} sm:max-w-md`} />
           <button
             disabled={nama.trim().length < 2 || add.isPending}
             onClick={() => add.mutate()}
@@ -572,7 +572,7 @@ function YoutubeTab() {
   const run = d.lastRun;
 
   const Row = ({ s, i }: { s: Source; i?: number }) => (
-    <div className={`flex items-center gap-3 px-3 py-2 ${s.missingAt ? 'opacity-50' : ''}`}>
+    <div className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-3 py-2 ${s.missingAt ? 'opacity-50' : ''}`}>
       {canWrite && i !== undefined ? (
         <div className="flex flex-col">
           <button disabled={i === 0 || order.isPending} onClick={() => move(i, -1)} className="p-0.5 text-neutral-400 hover:text-neutral-800 disabled:opacity-30">
@@ -600,7 +600,7 @@ function YoutubeTab() {
         <div className="w-16 aspect-video rounded bg-neutral-100 shrink-0" />
       )}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-neutral-900 truncate">{s.judul}</div>
+        <div className="text-sm font-medium text-neutral-900 truncate" title={s.judul}>{s.judul}</div>
         <div className="text-[11px] text-neutral-500">
           {[
             `${s.itemCount} video di YouTube`,
@@ -616,7 +616,7 @@ function YoutubeTab() {
         value={s.kategoriId ?? ''}
         disabled={!canWrite}
         onChange={(e) => patch.mutate({ id: s.id, kategoriId: e.target.value || null })}
-        className="h-8 px-2 border border-neutral-300 rounded-lg text-xs bg-white w-44 shrink-0"
+        className="h-8 px-2 border border-neutral-300 rounded-lg text-xs bg-white w-full sm:w-52 shrink-0"
       >
         <option value="">Tanpa kategori</option>
         {(kq.data ?? []).map((k) => (
@@ -630,7 +630,7 @@ function YoutubeTab() {
   );
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4">
       {!d.configured ? (
         <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900 flex gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -688,6 +688,7 @@ function YoutubeTab() {
           <p className="text-xs text-neutral-500">
             Centang playlist yang diimpor dan pilih kategorinya (mencentang playlist tanpa kategori otomatis membuat kategori bernama playlist). Urutan = prioritas: video yang ada di beberapa playlist masuk kategori playlist yang paling atas. Mengganti kategori playlist ikut memindahkan video yang sudah diimpor dari playlist itu.
           </p>
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start">
           {d.channels.map((c) => {
             const list = pls.filter((p) => p.channelKey === c.key);
             if (!list.length) return null;
@@ -704,6 +705,7 @@ function YoutubeTab() {
               </div>
             );
           })}
+          </div>
           {ups.length ? (
             <div>
               <div className="text-xs font-bold text-neutral-500 uppercase tracking-wide mb-1.5">Video di luar playlist (prioritas terakhir)</div>

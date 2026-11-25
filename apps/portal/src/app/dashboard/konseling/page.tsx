@@ -394,7 +394,7 @@ function Pengaturan() {
     onError: (e) => toast.error(errMsg(e)),
   });
   return (
-    <div className="max-w-2xl bg-white border border-neutral-200 rounded-xl p-4 space-y-4">
+    <div className="bg-white border border-neutral-200 rounded-xl p-4 space-y-4">
       <div className="flex items-start gap-2">
         <Settings2 className="w-5 h-5 text-brand-500 mt-0.5" />
         <div>
@@ -405,7 +405,7 @@ function Pengaturan() {
           {cfg.data ? <p className="text-xs text-emerald-700 mt-1">{cfg.data.konselorCount} konselor saat ini.</p> : null}
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
         {items.length === 0 ? <p className="text-sm text-neutral-500">Belum ada pelayanan konselor.</p> : null}
         {items.map((i, idx) => (
           <div key={`${i.pelayananId}:${i.pelayananRoleId ?? ''}`} className="flex items-center gap-2 border border-neutral-200 rounded-lg px-3 py-2">
@@ -420,7 +420,7 @@ function Pengaturan() {
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex flex-wrap gap-2 items-center lg:max-w-3xl">
         <select value={pel} onChange={(e) => { setPel(e.target.value); setRole(''); }} className="flex-1 min-w-[180px] px-2 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white">
           <option value="">Pilih pelayanan…</option>
           {(opts.data ?? []).map((p) => (

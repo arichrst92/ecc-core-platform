@@ -107,6 +107,27 @@ function toListItem(
   };
 }
 
+/**
+ * 2.5.1 — "Cari homecell untuk {anggota keluarga}": `forJemaatId` (query / body)
+ * = anggota keluarga (bukan tamu) yang dicarikan homecell. Tanpa parameter =
+ * diri sendiri (app 2.5.0 tidak mengirim → perilaku lama).
+ */
+type Subject = { jemaatId: string; self: boolean; nama?: string; relasi?: string };
+async function subjectOf(req: Request): Promise<Subject> {
+  const myId = me(req).jemaatId;
+  const raw =
+    (typeof req.query.forJemaatId === 'string' ? req.query.forJemaatId : '') ||
+    (req.body && typeof (req.body as Record<string, unknown>).forJemaatId === 'string'
+      ? String((req.body as Record<string, unknown>).forJemaatId)
+      : '');
+  if (!raw || raw === myId) return { jemaatId: myId, self: true };
+  if (!UUID_RE.test(raw)) throw BadRequest('Anggota keluarga tidak valid.');
+  const fam = await familyMembersNonGuest(myId);
+  const f = fam.find((x) => x.id === raw);
+  if (!f) throw Forbidden('Hanya bisa mencarikan homecell untuk anggota keluarga Anda.');
+  return { jemaatId: f.id, self: false, nama: f.namaLengkap, relasi: f.relasi };
+}
+
 /** Status saya per homecell (anggota / pending / leader). */
 async function myStatusMap(jemaatId: string) {
   const [members, pending, led] = await Promise.all([
@@ -281,7 +302,7 @@ meHomecellRouter.get('/family', async (req, res) => {
 // ------------------------------------------------------------------ daftar & terdekat
 
 meHomecellRouter.get('/browse', async (req, res) => {
-  const jemaatId = me(req).jemaatId;
+  const { jemaatId } = await subjectOf(req);
   const from = parseLatLng(req.query as Record<string, unknown>);
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   const kat = req.query.kategori;
@@ -314,7 +335,7 @@ meHomecellRouter.get('/browse', async (req, res) => {
 });
 
 meHomecellRouter.get('/nearest', async (req, res) => {
-  const jemaatId = me(req).jemaatId;
+  const { jemaatId } = await subjectOf(req);
   const from = parseLatLng(req.query as Record<string, unknown>);
   if (!from) throw BadRequest('Lokasi (lat, lng) wajib dikirim.');
   const limit = Math.min(10, Math.max(1, Number(req.query.limit) || 3));
@@ -578,8 +599,10 @@ meHomecellRouter.post('/guest-requests/:reqId/reject', async (req, res) => {
 // ------------------------------------------------------------------ detail (read-only)
 
 meHomecellRouter.get('/:id', async (req, res) => {
-  const jemaatId = me(req).jemaatId;
+  const myId = me(req).jemaatId;
   if (!UUID_RE.test(req.params.id)) throw NotFound('Homecell tidak ditemukan');
+  // Status, pending & akses daftar anggota mengikuti subjek (diri / anggota keluarga).
+  const { jemaatId } = await subjectOf(req);
   const hc = await prisma.homecell.findFirst({
     where: { id: req.params.id, isActive: true },
     select: listSelect,
@@ -613,7 +636,7 @@ meHomecellRouter.get('/:id', async (req, res) => {
           .then(async (p) => {
             // Ikuti pengaturan privasi PIC (default: anggota homecell boleh lihat).
             if (!p) return null;
-            const gate = await privacyGate(jemaatId, [p.id]);
+            const gate = await privacyGate(myId, [p.id]);
             return gate.can(p.id, 'noHp') ? p : { ...p, noHp: null };
           })
       : Promise.resolve(null),
@@ -633,7 +656,7 @@ meHomecellRouter.get('/:id', async (req, res) => {
       members: members.map((m) => withLastAttendance(m.jemaat.id, { ...m.jemaat, isAsisten: m.isAsisten }, lastMap)),
       myPendingRequest: myPending,
       // Saya asisten homecell ini (2.4.7) → boleh buka halaman kelola terbatas.
-      isAsisten: members.some((m) => m.jemaat.id === jemaatId && m.isAsisten),
+      isAsisten: jemaatId === myId && members.some((m) => m.jemaat.id === jemaatId && m.isAsisten),
     },
   });
 });
@@ -686,8 +709,17 @@ const joinSchema = z.object({
 });
 
 meHomecellRouter.post('/:id/join-request', async (req, res) => {
-  const jemaatId = me(req).jemaatId;
-  const { pesan } = joinSchema.parse(req.body ?? {});
+  const subject = await subjectOf(req);
+  const jemaatId = subject.jemaatId;
+  const { pesan: pesanIn } = joinSchema.parse(req.body ?? {});
+  const requester = subject.self
+    ? null
+    : await prisma.jemaat.findUnique({ where: { id: me(req).jemaatId }, select: { namaLengkap: true } });
+  // Diajukan oleh anggota keluarga → dicatat di pesan (tampil di Portal & app PIC semua versi).
+  const pesan = requester
+    ? `[Diajukan oleh ${requester.namaLengkap} (${subject.relasi})]${pesanIn ? ` ${pesanIn}` : ''}`.slice(0, 500)
+    : pesanIn;
+  const siapa = subject.self ? 'Anda' : subject.nama!;
   const hc = await prisma.homecell.findFirst({
     where: { id: req.params.id, isActive: true },
     select: { id: true, nama: true, picJemaat: { select: { id: true, namaLengkap: true, noHp: true } } },
@@ -699,7 +731,7 @@ meHomecellRouter.post('/:id/join-request', async (req, res) => {
     select: { homecell: { select: { nama: true } } },
   });
   if (active) {
-    throw new ApiError(409, 'ALREADY_IN_HOMECELL', `Anda sudah tergabung di homecell ${active.homecell.nama}.`);
+    throw new ApiError(409, 'ALREADY_IN_HOMECELL', `${siapa} sudah tergabung di homecell ${active.homecell.nama}.`);
   }
   const pending = await prisma.homecellJoinRequest.findFirst({
     where: { jemaatId, status: 'PENDING' },
@@ -709,7 +741,7 @@ meHomecellRouter.post('/:id/join-request', async (req, res) => {
     throw new ApiError(
       409,
       'JOIN_REQUEST_PENDING',
-      `Anda masih punya permintaan bergabung ke ${pending.homecell.nama}. Batalkan dulu kalau ingin memilih homecell lain.`,
+      `${siapa} masih punya permintaan bergabung ke ${pending.homecell.nama}. Batalkan dulu kalau ingin memilih homecell lain.`,
     );
   }
 
@@ -721,14 +753,16 @@ meHomecellRouter.post('/:id/join-request', async (req, res) => {
     action: 'CREATE',
     resource: 'homecell_join_request',
     resourceId: created.id,
-    resourceLabel: `Request join homecell: ${created.jemaat.namaLengkap} @ ${hc.nama}`,
+    resourceLabel: `Request join homecell: ${created.jemaat.namaLengkap} @ ${hc.nama}${requester ? ` (oleh ${requester.namaLengkap})` : ''}`,
   });
   if (hc.picJemaat) {
     void createNotification({
       jemaatId: hc.picJemaat.id,
       type: 'HOMECELL_JOIN_REQUESTED',
       title: `Permintaan bergabung: ${hc.nama}`,
-      body: `${created.jemaat.namaLengkap} ingin bergabung ke homecell Anda.${pesan ? ` Pesan: ${pesan}` : ''}`,
+      body: requester
+        ? `${created.jemaat.namaLengkap} ingin bergabung ke homecell Anda (diajukan oleh ${requester.namaLengkap}, ${subject.relasi?.toLowerCase()}).${pesanIn ? ` Pesan: ${pesanIn}` : ''}`
+        : `${created.jemaat.namaLengkap} ingin bergabung ke homecell Anda.${pesan ? ` Pesan: ${pesan}` : ''}`,
       actionUrl: '/homecell/requests',
       metadata: { homecellId: hc.id, requestId: created.id },
     });
@@ -741,12 +775,15 @@ meHomecellRouter.post('/:id/join-request', async (req, res) => {
   res.status(201).json({
     success: true,
     data: { requestId: created.id, status: 'PENDING', homecell: { id: hc.id, nama: hc.nama } },
-    message: `Permintaan bergabung ke ${hc.nama} terkirim. Menunggu persetujuan pemimpin homecell.`,
+    message: subject.self
+      ? `Permintaan bergabung ke ${hc.nama} terkirim. Menunggu persetujuan pemimpin homecell.`
+      : `Permintaan bergabung ${subject.nama} ke ${hc.nama} terkirim. Menunggu persetujuan pemimpin homecell.`,
   });
 });
 
 meHomecellRouter.delete('/:id/join-request', async (req, res) => {
-  const jemaatId = me(req).jemaatId;
+  const subject = await subjectOf(req);
+  const jemaatId = subject.jemaatId;
   const pending = await prisma.homecellJoinRequest.findFirst({
     where: { jemaatId, homecellId: req.params.id, status: 'PENDING' },
     select: { id: true },
@@ -760,7 +797,7 @@ meHomecellRouter.delete('/:id/join-request', async (req, res) => {
     action: 'UPDATE',
     resource: 'homecell_join_request',
     resourceId: pending.id,
-    resourceLabel: 'Cancel join homecell (self)',
+    resourceLabel: subject.self ? 'Cancel join homecell (self)' : `Cancel join homecell: ${subject.nama} (oleh keluarga)`,
   });
   res.json({ success: true, data: { id: pending.id, status: 'CANCELLED' } });
 });

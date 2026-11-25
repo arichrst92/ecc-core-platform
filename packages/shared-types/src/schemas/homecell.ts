@@ -48,11 +48,30 @@ export type UpdateHomecellAreaInput = z.infer<typeof updateHomecellAreaSchema>;
 // di form/UI.
 
 // Kategori + rentang usia homecell. '' / null = kosong (umum / semua usia).
-export const HOMECELL_KATEGORI = ['SINGLE', 'COUPLE'] as const;
-export const HOMECELL_KATEGORI_LABEL: Record<(typeof HOMECELL_KATEGORI)[number], string> = {
+// 2026-11: + ANAK (homecell anak). App ≤ 2.5.0 tidak mengenal ANAK → badge
+// tampil "Umum" & tidak ada filter Anak (lihat kontrak di CLAUDE.md).
+export const HOMECELL_KATEGORI = ['SINGLE', 'COUPLE', 'ANAK'] as const;
+export type HomecellKategoriKey = (typeof HOMECELL_KATEGORI)[number];
+export const HOMECELL_KATEGORI_LABEL: Record<HomecellKategoriKey, string> = {
   SINGLE: 'Single',
   COUPLE: 'Couple',
+  ANAK: 'Anak',
 };
+/** Kelas badge Tailwind per kategori (Portal). */
+export const HOMECELL_KATEGORI_BADGE: Record<HomecellKategoriKey, string> = {
+  SINGLE: 'bg-sky-50 text-sky-700',
+  COUPLE: 'bg-pink-50 text-pink-700',
+  ANAK: 'bg-amber-50 text-amber-700',
+};
+/** Warna grafik/peta per kategori (+ UMUM = tanpa kategori). */
+export const HOMECELL_KATEGORI_COLOR: Record<HomecellKategoriKey | 'UMUM', string> = {
+  SINGLE: '#0ea5e9',
+  COUPLE: '#ec4899',
+  ANAK: '#f59e0b',
+  UMUM: '#10b981',
+};
+export const isHomecellKategori = (v: unknown): v is HomecellKategoriKey =>
+  typeof v === 'string' && (HOMECELL_KATEGORI as readonly string[]).includes(v);
 const kategoriField = z.preprocess((v) => (v === '' ? null : v), z.enum(HOMECELL_KATEGORI).nullable()).optional();
 const usiaField = z
   .preprocess(

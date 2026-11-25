@@ -1276,6 +1276,7 @@ model HomecellAreaPastor {
 enum HomecellKategori {
   SINGLE
   COUPLE
+  ANAK // homecell anak (2026-11)
 }
 
 model Homecell {
@@ -1286,7 +1287,7 @@ model Homecell {
   alamat      String?     @db.Text // lokasi pertemuan
   hari        HariMinggu? // jadwal hari pertemuan
   jam         String?     @db.VarChar(5) // HH:mm
-  // Segmen homecell: SINGLE / COUPLE + rentang usia anggota (tahun). Opsional.
+  // Segmen homecell: SINGLE / COUPLE / ANAK + rentang usia anggota (tahun). Opsional.
   kategori    HomecellKategori?
   usiaMin     Int?        @map("usia_min")
   usiaMax     Int?        @map("usia_max")

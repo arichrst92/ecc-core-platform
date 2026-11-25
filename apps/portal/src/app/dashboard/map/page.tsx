@@ -62,7 +62,7 @@ export default function MapViewPage() {
   const [showJemaat, setShowJemaat] = useState(false);
   const heatRef = useRef<any[]>([]);
   const [cabangId, setCabangId] = useState('');
-  const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'UMUM'>('');
+  const [kategori, setKategori] = useState<'' | 'SINGLE' | 'COUPLE' | 'ANAK' | 'UMUM'>('');
   // Lihat satu area / satu homecell saja.
   const [areaId, setAreaId] = useState('');
   const [homecellId, setHomecellId] = useState('');
@@ -824,6 +824,7 @@ export default function MapViewPage() {
           <option value="">Semua kategori homecell</option>
           <option value="SINGLE">Single</option>
           <option value="COUPLE">Couple</option>
+          <option value="ANAK">Anak</option>
           <option value="UMUM">Umum</option>
         </select>
         <select

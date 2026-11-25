@@ -27,7 +27,7 @@ import {
   type LastMeeting,
 } from '../../lib/homecell-last-attendance.js';
 import { Router, type Request } from 'express';
-import { homecellSegmenSchema, meUpdateHomecellSchema } from '@ecc/shared-types';
+import { homecellSegmenSchema, isHomecellKategori, meUpdateHomecellSchema } from '@ecc/shared-types';
 import { createReportToken, REPORT_LINK_TTL_SEC } from '../../lib/report-link.js';
 import { kategoriKey, memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
 import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
@@ -232,7 +232,7 @@ meHomecellRouter.get('/browse', async (req, res) => {
     where: {
       isActive: true,
       area: { cabangId, isActive: true },
-      ...(kat === 'SINGLE' || kat === 'COUPLE' ? { kategori: kat } : {}),
+      ...(isHomecellKategori(kat) ? { kategori: kat } : {}),
       ...(q
         ? {
             OR: [
@@ -990,7 +990,7 @@ meHomecellRouter.patch('/:id', async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-// Pemimpin homecell mengatur kategori (Single/Couple) + rentang usia anggota.
+// Pemimpin homecell mengatur kategori (Single/Couple/Anak) + rentang usia anggota.
 meHomecellRouter.patch('/:id/segmen', async (req, res) => {
   await assertLeaderOf(req, req.params.id);
   const input = homecellSegmenSchema.parse(req.body ?? {});

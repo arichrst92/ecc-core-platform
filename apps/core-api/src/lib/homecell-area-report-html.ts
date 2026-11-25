@@ -102,7 +102,7 @@ export const EXTRA_CSS = `
   .kpis.six { grid-template-columns: repeat(3, 1fr); }
   .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-weight: 800; font-size: 9px; }
   .seg { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 5px; font-size: 8px; font-weight: 700; background: #f1f5f9; color: #475569; }
-  .seg.single { background: #e0f2fe; color: #0369a1; } .seg.couple { background: #fce7f3; color: #be185d; }
+  .seg.single { background: #e0f2fe; color: #0369a1; } .seg.couple { background: #fce7f3; color: #be185d; } .seg.anak { background: #fef3c7; color: #b45309; }
   .area { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; margin-top: 10px; overflow: hidden; break-inside: avoid; }
   .area-h { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(90deg, #fff7ed, #fff); border-bottom: 1px solid #fde4cc; }
   .area-ic { width: 30px; height: 30px; border-radius: 9px; background: #f97316; display: inline-flex; align-items: center; justify-content: center; }
@@ -148,12 +148,13 @@ export function renderHomecellAreaReportHtml(
       }
       a.kat.SINGLE += r.stat.kategori.SINGLE;
       a.kat.COUPLE += r.stat.kategori.COUPLE;
+      a.kat.ANAK += r.stat.kategori.ANAK;
       a.kat.UMUM += r.stat.kategori.UMUM;
       a.tamuVisits += r.stat.tamuVisits;
       a.tamuUnique += r.stat.tamuUnique;
       return a;
     },
-    { hc: 0, mem: 0, meet: 0, ageKnown: 0, ageSum: 0, hadir: 0, pot: 0, tamuVisits: 0, tamuUnique: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
+    { hc: 0, mem: 0, meet: 0, ageKnown: 0, ageSum: 0, hadir: 0, pot: 0, tamuVisits: 0, tamuUnique: 0, kat: { SINGLE: 0, COUPLE: 0, ANAK: 0, UMUM: 0 } },
   );
   const avgAge = tot.ageKnown ? Math.round(tot.ageSum / tot.ageKnown) : null;
   const avgPct = tot.pot ? Math.min(100, Math.round((tot.hadir / tot.pot) * 100)) : null;
@@ -182,6 +183,7 @@ export function renderHomecellAreaReportHtml(
     [
       { label: 'Single', value: tot.kat.SINGLE, color: '#0ea5e9' },
       { label: 'Couple', value: tot.kat.COUPLE, color: '#ec4899' },
+      { label: L('Anak', 'Kids'), value: tot.kat.ANAK, color: '#f59e0b' },
       { label: L('Umum', 'General'), value: tot.kat.UMUM, color: '#94a3b8' },
     ],
     n(tot.hc),
@@ -265,7 +267,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   <h2 class="sec">${L('Ringkasan', 'Summary')}</h2>
   <div class="kpis six">
     ${kpiBox('mapPinned', '#f97316', 'Zona', n(rows.length), L('zona dalam laporan', 'zones in this report'))}
-    ${kpiBox('home', '#8b5cf6', L('Homecell aktif', 'Active homecells'), n(tot.hc), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
+    ${kpiBox('home', '#8b5cf6', L('Homecell aktif', 'Active homecells'), n(tot.hc), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.ANAK)} ${L('anak', 'kids')} · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
     ${kpiBox('users', '#0ea5e9', L('Anggota aktif', 'Active members'), n(tot.mem), L('anggota homecell aktif', 'active homecell members'))}
     ${kpiBox('cake', '#f59e0b', L('Usia rata-rata', 'Average age'), avgAge != null ? `${avgAge} ${yrs()}` : '—', L(`dari ${n(tot.ageKnown)} anggota dengan tanggal lahir`, `from ${n(tot.ageKnown)} members with a birth date`))}
     ${kpiBox('calendarCheck', '#3b82f6', L('Pertemuan', 'Meetings'), n(tot.meet), L('jadwal pertemuan di periode', 'meetings in the period'))}
@@ -279,7 +281,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="grid2">
     ${demografiCard(mergeDemografi(rows.map((r) => r.stat.demografi)), L('Gender & kelompok usia anggota aktif', 'Gender & age groups of active members'))}
-    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori homecell', 'Homecell categories')}</div><div class="card-s">Single · Couple · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
+    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori homecell', 'Homecell categories')}</div><div class="card-s">Single · Couple · ${L('Anak', 'Kids')} · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
   </div>
   <div class="grid2">
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>

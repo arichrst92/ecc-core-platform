@@ -18,7 +18,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { prisma, type Prisma } from '@ecc/database';
-import { noHpSchema } from '@ecc/shared-types';
+import { isHomecellKategori, noHpSchema } from '@ecc/shared-types';
 import { z } from 'zod';
 import { namaOrangSchema } from '@ecc/shared-types';
 import { ApiError, BadRequest, NotFound } from '../lib/errors.js';
@@ -90,7 +90,7 @@ publicHomecellRouter.get('/browse', publicBrowseLimiter, async (req, res) => {
   const rows = await prisma.homecell.findMany({
     where: {
       ...activeWhere(cabangId),
-      ...(kat === 'SINGLE' || kat === 'COUPLE' ? { kategori: kat } : {}),
+      ...(isHomecellKategori(kat) ? { kategori: kat } : {}),
       ...(search
         ? {
             OR: [

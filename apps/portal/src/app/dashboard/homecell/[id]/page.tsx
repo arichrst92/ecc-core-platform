@@ -28,7 +28,7 @@ import { DeleteScheduleDialog } from '@/components/homecell/delete-schedule-dial
 import { HomecellReportPanel } from '@/components/homecell/homecell-report-panel';
 import { HomecellBoardSection } from '@/components/group/group-content';
 import { todayYmd, parseYmd } from '@/lib/dates';
-import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
+import { HOMECELL_KATEGORI_BADGE, HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
 import { ATTENDANCE_TIER_CLASS } from '@/lib/resources/homecell-config';
 import { LokasiIssueBox, type LokasiIssue } from '@/components/homecell/lokasi-issue';
 
@@ -37,7 +37,7 @@ interface Homecell {
   nama: string;
   deskripsi: string | null;
   isActive: boolean;
-  kategori?: 'SINGLE' | 'COUPLE' | null;
+  kategori?: 'SINGLE' | 'COUPLE' | 'ANAK' | null;
   usiaMin?: number | null;
   usiaMax?: number | null;
   mapsUrl?: string | null;
@@ -175,7 +175,7 @@ export default function HomecellDetailPage() {
             {h.kategori ? (
               <span
                 className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                  h.kategori === 'COUPLE' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'
+                  HOMECELL_KATEGORI_BADGE[h.kategori]
                 }`}
               >
                 {HOMECELL_KATEGORI_LABEL[h.kategori]}

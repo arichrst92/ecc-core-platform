@@ -13,7 +13,7 @@ summary: Struktur zona → homecell, peran PIC/asisten/pastor zona dan batas hak
 
 ## Struktur & peran
 - **Zona** (dulu "Area") per cabang. **PIC zona = Zone Leader** (dari Pelayanan Penggembalaan). **Pastor zona** boleh kosong atau lebih dari satu.
-- **Homecell** di bawah zona; **PIC homecell = pemimpin**. Kategori Single / Couple / Umum + rentang usia, jadwal (hari & jam), lokasi (link Google Maps).
+- **Homecell** di bawah zona; **PIC homecell = pemimpin**. Kategori Single / Couple / **Anak** / Umum + rentang usia (kategori Anak sejak 2026-11; diatur admin di Portal atau pemimpin homecell di app → Edit homecell; app ≤ 2.5.0 menampilkan homecell Anak sebagai "Umum" dan belum punya filter Anak — update ke 2.5.1), jadwal (hari & jam), lokasi (link Google Maps).
 - PIC zona/homecell harus jemaat di Pelayanan Penggembalaan. Bila ia keluar dari pelayanan, PIC **tidak** otomatis kosong — admin menunjuk ulang.
 - Pelayanan & role penggembalaan diatur di Portal → **Pelayanan → Pengaturan penggembalaan** (pelayanan, role PIC zona, role PIC homecell, role pastor). Sistem mengenalinya dari pilihan ini, jadi pelayanan "Penggembalaan" dan role-nya **boleh di-rename**. Dropdown PIC kosong / "PIC harus punya pelayanan …" padahal orangnya benar → cek pengaturan ini.
 - **Pastor zona** punya hak yang sama dengan PIC zona di setiap homecell dalam zonanya (kelola jadwal, anggota, laporan, potensial member) — kecuali memproses permintaan bergabung, yang hanya oleh PIC homecell.

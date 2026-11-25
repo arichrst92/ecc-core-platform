@@ -15,7 +15,7 @@ export interface HomecellFilterState {
   cabangId: string;
   areaId: string;
   status: '' | 'aktif' | 'nonaktif';
-  kategori: '' | 'SINGLE' | 'COUPLE' | 'UMUM';
+  kategori: '' | 'SINGLE' | 'COUPLE' | 'ANAK' | 'UMUM';
   periode: PeriodePreset;
   from: string; // YYYY-MM-DD (periode=custom)
   to: string;
@@ -152,6 +152,7 @@ export function HomecellFilterBar({
             <option value="">Semua</option>
             <option value="SINGLE">Single</option>
             <option value="COUPLE">Couple</option>
+            <option value="ANAK">Anak</option>
             <option value="UMUM">Umum (tanpa kategori)</option>
           </select>
         </Field>

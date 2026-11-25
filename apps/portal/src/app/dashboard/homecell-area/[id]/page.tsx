@@ -24,7 +24,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
+import { HOMECELL_KATEGORI_BADGE, HOMECELL_KATEGORI_LABEL, homecellAttendanceTier, homecellUsiaLabel } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { PERIODE_OPTIONS, type PeriodePreset } from '@/components/homecell/homecell-filter-bar';
 import { ATTENDANCE_TIER_CLASS } from '@/lib/resources/homecell-config';
@@ -42,7 +42,7 @@ interface Demografi {
 interface HcStat {
   id: string;
   nama: string;
-  kategori: 'SINGLE' | 'COUPLE' | null;
+  kategori: 'SINGLE' | 'COUPLE' | 'ANAK' | null;
   usiaMin: number | null;
   usiaMax: number | null;
   pic: string | null;
@@ -77,7 +77,7 @@ interface StatsResp {
     meetingCount: number;
     attendancePercent: number | null;
     homecellNoMeeting: number;
-    kategori: { SINGLE: number; COUPLE: number; UMUM: number };
+    kategori: { SINGLE: number; COUPLE: number; ANAK?: number; UMUM: number };
     homecells: HcStat[];
     demografi: Demografi;
     tamuVisits?: number;
@@ -185,7 +185,7 @@ export default function HomecellAreaDetailPage() {
   const pP = g && demo ? Math.round((demo.pria / g) * 100) : 0;
   const ageKnown = demo ? demo.total - demo.ageUnknown : 0;
   const maxAge = Math.max(1, ...(demo?.groups ?? [1]));
-  const katTotal = s ? s.kategori.SINGLE + s.kategori.COUPLE + s.kategori.UMUM : 0;
+  const katTotal = s ? s.kategori.SINGLE + s.kategori.COUPLE + (s.kategori.ANAK ?? 0) + s.kategori.UMUM : 0;
   const ranked = [...(s?.homecells ?? [])].sort((a, b) => (b.attendancePercent ?? -1) - (a.attendancePercent ?? -1));
   const attention = ranked.filter((h) => h.attendanceTotal === 0 || (h.attendancePercent ?? 0) <= 25).reverse();
 
@@ -246,7 +246,7 @@ export default function HomecellAreaDetailPage() {
           ) : null}
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi icon={Home} color="#8b5cf6" label="Homecell aktif" value={s.homecellCount} sub={`${s.kategori.SINGLE} single · ${s.kategori.COUPLE} couple · ${s.kategori.UMUM} umum`} />
+            <Kpi icon={Home} color="#8b5cf6" label="Homecell aktif" value={s.homecellCount} sub={`${s.kategori.SINGLE} single · ${s.kategori.COUPLE} couple · ${s.kategori.ANAK ?? 0} anak · ${s.kategori.UMUM} umum`} />
             <Kpi icon={Users} color="#0ea5e9" label="Anggota aktif" value={s.memberCount} sub={`${demo.pria} laki-laki · ${demo.wanita} perempuan`} />
             <Kpi icon={Cake} color="#f59e0b" label="Usia rata-rata" value={s.avgAge != null ? `${s.avgAge} th` : '—'} sub={`dari ${s.ageKnown} anggota dengan tanggal lahir`} />
             <Kpi icon={CalendarCheck} color="#3b82f6" label="Pertemuan" value={s.meetingCount} sub={`${s.homecellNoMeeting} homecell tanpa pertemuan`} />
@@ -317,11 +317,12 @@ export default function HomecellAreaDetailPage() {
             </Card>
 
             <div className="space-y-4">
-              <Card icon={Layers} color="#ec4899" title="Komposisi kategori" sub="Single · Couple · Umum">
+              <Card icon={Layers} color="#ec4899" title="Komposisi kategori" sub="Single · Couple · Anak · Umum">
                 {(
                   [
                     ['Single', s.kategori.SINGLE, '#0ea5e9'],
                     ['Couple', s.kategori.COUPLE, '#ec4899'],
+                    ['Anak', s.kategori.ANAK ?? 0, '#f59e0b'],
                     ['Umum', s.kategori.UMUM, '#94a3b8'],
                   ] as const
                 ).map(([l, v, c]) => (
@@ -375,7 +376,7 @@ export default function HomecellAreaDetailPage() {
                       </Link>
                       <div className="flex gap-1 mt-0.5">
                         {h.kategori ? (
-                          <span className={`px-1.5 rounded text-[10px] font-semibold ${h.kategori === 'COUPLE' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'}`}>
+                          <span className={`px-1.5 rounded text-[10px] font-semibold ${HOMECELL_KATEGORI_BADGE[h.kategori]}`}>
                             {HOMECELL_KATEGORI_LABEL[h.kategori]}
                           </span>
                         ) : null}

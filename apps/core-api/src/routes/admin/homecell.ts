@@ -6,6 +6,7 @@ import {
   createHomecellSchema,
   updateHomecellSchema,
   HOMECELL_KATEGORI_LABEL,
+  isHomecellKategori,
   homecellAttendanceTier,
   homecellUsiaLabel,
   addHomecellMemberSchema,
@@ -82,7 +83,7 @@ function homecellFilter(req: import('express').Request, search?: string) {
   const homecellId = str('homecellId');
   if (homecellId) where.id = homecellId;
   const kategori = str('kategori');
-  if (kategori === 'SINGLE' || kategori === 'COUPLE') where.kategori = kategori;
+  if (isHomecellKategori(kategori)) where.kategori = kategori;
   if (kategori === 'UMUM') where.kategori = null;
   if (status === 'aktif') where.isActive = true;
   if (status === 'nonaktif') where.isActive = false;
@@ -406,7 +407,7 @@ homecellRouter.get('/export', async (req, res) => {
   const kat = str('kategori');
   const filterParts = [
     area ? `Area: ${area.nama}` : null,
-    kat === 'SINGLE' ? 'Kategori: Single' : kat === 'COUPLE' ? 'Kategori: Couple' : kat === 'UMUM' ? 'Kategori: Umum' : null,
+    isHomecellKategori(kat) ? `Kategori: ${HOMECELL_KATEGORI_LABEL[kat]}` : kat === 'UMUM' ? 'Kategori: Umum' : null,
     str('pertemuan') === 'ada' ? 'Ada pertemuan' : str('pertemuan') === 'tidak' ? 'Tidak ada pertemuan' : null,
     str('status') === 'aktif' ? 'Status: aktif' : str('status') === 'nonaktif' ? 'Status: nonaktif' : null,
     search ? `Cari: "${search}"` : null,

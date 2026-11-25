@@ -23,7 +23,7 @@ export interface HomecellItem {
   deskripsi: string | null;
   hari: string | null;
   jam: string | null;
-  kategori: 'SINGLE' | 'COUPLE' | null;
+  kategori: 'SINGLE' | 'COUPLE' | 'ANAK' | null;
   usiaMin: number | null;
   usiaMax: number | null;
   memberCount: number;
@@ -95,7 +95,7 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
         : h.usiaMax != null
           ? `≤ ${h.usiaMax} ${L('th', 'yrs')}`
           : L('Semua usia', 'All ages');
-  const kategori = (h: HomecellItem) => (h.kategori === 'COUPLE' ? 'Couple' : h.kategori === 'SINGLE' ? 'Single' : L('Umum', 'General'));
+  const kategori = (h: HomecellItem) => (h.kategori === 'COUPLE' ? 'Couple' : h.kategori === 'SINGLE' ? 'Single' : h.kategori === 'ANAK' ? L('Anak', 'Kids') : L('Umum', 'General'));
 
   const show = (hc: HomecellItem, zona: HomecellZona) => {
     setSel({ hc, zona });
@@ -187,7 +187,9 @@ export function HomecellBrowser({ zonas }: { zonas: HomecellZona[] }) {
                           ? 'bg-pink-50 text-pink-700'
                           : h.kategori === 'SINGLE'
                             ? 'bg-sky-50 text-sky-700'
-                            : 'bg-neutral-100 text-neutral-600'
+                            : h.kategori === 'ANAK'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-neutral-100 text-neutral-600'
                       }`}
                     >
                       <Heart className="w-3 h-3" />

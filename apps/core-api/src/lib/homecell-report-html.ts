@@ -10,7 +10,7 @@ import { L, fmtTglL as fmtTgl, generatedAt, setReportLang, usiaLabelL, yrs, type
 import { REPORT_CSS, barRow, donut, n } from './cabang-report-html.js';
 import { EXTRA_CSS, ICON_PATHS, TIER, demografiCard, demografiLine, ic, pctBadge, tamuCard, tierOf } from './homecell-area-report-html.js';
 import { addDemografi, mergeDemografi, newDemografi, type Demografi } from './homecell-area-stats.js';
-import { HOMECELL_KATEGORI_LABEL, type HomecellAttendanceTier } from '@ecc/shared-types';
+import { HOMECELL_KATEGORI_LABEL, type HomecellAttendanceTier, type HomecellKategoriKey } from '@ecc/shared-types';
 
 export interface HcMemberRow {
   nama: string;
@@ -41,7 +41,7 @@ export interface HcReportRow {
   area: string;
   cabang: string;
   pic: string | null;
-  kategori: 'SINGLE' | 'COUPLE' | null;
+  kategori: HomecellKategoriKey | null;
   usiaMin: number | null;
   usiaMax: number | null;
   meetingCount: number;
@@ -73,7 +73,7 @@ const relHari = (d: number | null) => {
   return `<span class="rel ${cls}">${t}</span>`;
 };
 
-const segChips = (k: 'SINGLE' | 'COUPLE' | null, min: number | null, max: number | null) =>
+const segChips = (k: HomecellKategoriKey | null, min: number | null, max: number | null) =>
   [
     k ? `<span class="seg ${k.toLowerCase()}">${HOMECELL_KATEGORI_LABEL[k]}</span>` : '',
     usiaLabelL(min, max) ? `<span class="seg">${esc(usiaLabelL(min, max))}</span>` : '',
@@ -99,7 +99,7 @@ export function renderHomecellReportHtml(
       a.tamuUnique += r.tamus.filter((t) => t.hadir > 0).length;
       return a;
     },
-    { tamuVisits: 0, tamuUnique: 0, mem: 0, meet: 0, hadir: 0, pot: 0, ageSum: 0, ageKnown: 0, noMeet: 0, kat: { SINGLE: 0, COUPLE: 0, UMUM: 0 } },
+    { tamuVisits: 0, tamuUnique: 0, mem: 0, meet: 0, hadir: 0, pot: 0, ageSum: 0, ageKnown: 0, noMeet: 0, kat: { SINGLE: 0, COUPLE: 0, ANAK: 0, UMUM: 0 } },
   );
   // Demografi per homecell + gabungan.
   const demoOf = new Map<HcReportRow, Demografi>();
@@ -138,6 +138,7 @@ export function renderHomecellReportHtml(
     [
       { label: 'Single', value: tot.kat.SINGLE, color: '#0ea5e9' },
       { label: 'Couple', value: tot.kat.COUPLE, color: '#ec4899' },
+      { label: L('Anak', 'Kids'), value: tot.kat.ANAK, color: '#f59e0b' },
       { label: L('Umum', 'General'), value: tot.kat.UMUM, color: '#94a3b8' },
     ],
     n(rows.length),
@@ -231,7 +232,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <h2 class="sec">${L('Ringkasan', 'Summary')}</h2>
   <div class="kpis six">
-    ${kpiBox('home', '#8b5cf6', 'Homecell', n(rows.length), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
+    ${kpiBox('home', '#8b5cf6', 'Homecell', n(rows.length), `${n(tot.kat.SINGLE)} single · ${n(tot.kat.COUPLE)} couple · ${n(tot.kat.ANAK)} ${L('anak', 'kids')} · ${n(tot.kat.UMUM)} ${L('umum', 'general')}`)}
     ${kpiBox('users', '#0ea5e9', L('Anggota aktif', 'Active members'), n(tot.mem), rows.length ? L(`rata-rata ${Math.round(tot.mem / rows.length)} per homecell`, `avg ${Math.round(tot.mem / rows.length)} per homecell`) : '')}
     ${kpiBox('cake', '#f59e0b', L('Usia rata-rata', 'Average age'), avgAge != null ? `${avgAge} ${yrs()}` : '—', L(`dari ${n(tot.ageKnown)} anggota dengan tanggal lahir`, `from ${n(tot.ageKnown)} members with a birth date`))}
     ${kpiBox('calendarCheck', '#3b82f6', L('Pertemuan', 'Meetings'), n(tot.meet), L('jadwal pertemuan di periode', 'meetings in the period'))}
@@ -246,7 +247,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
 
   <div class="grid2">
     ${demografiCard(demoAll, L('Gender & kelompok usia anggota aktif', 'Gender & age groups of active members'))}
-    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori', 'Categories')}</div><div class="card-s">Single · Couple · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
+    <div class="card"><div class="card-h"><span class="card-ic" style="background:#ec4899">${ic('layers', 12)}</span><div><div class="card-t">${L('Komposisi kategori', 'Categories')}</div><div class="card-s">Single · Couple · ${L('Anak', 'Kids')} · ${L('Umum', 'General')}</div></div></div>${komposisi}</div>
   </div>
   <div class="grid2">
     <div class="card"><div class="card-h"><span class="card-ic" style="background:#ef4444">${ic('alertTriangle', 12)}</span><div><div class="card-t">${L('Perlu perhatian', 'Needs attention')}</div><div class="card-s">${L('Kehadiran ≤ 25% atau belum ada pertemuan', 'Attendance ≤ 25% or no meetings yet')}</div></div></div>${attentionBody}</div>

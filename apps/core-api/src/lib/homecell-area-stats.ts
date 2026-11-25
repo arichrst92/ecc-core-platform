@@ -105,7 +105,7 @@ export interface AreaStat {
   attendancePercent: number | null;
   tier: ReturnType<typeof homecellAttendanceTier> | null;
   homecellNoMeeting: number;
-  kategori: { SINGLE: number; COUPLE: number; UMUM: number };
+  kategori: { SINGLE: number; COUPLE: number; ANAK: number; UMUM: number };
   homecells: HomecellStat[];
   demografi: Demografi;
   tamuVisits: number;
@@ -156,7 +156,7 @@ export async function computeAreaStats(areaIds: string[], period: Period, now = 
       attendancePercent: null,
       tier: null,
       homecellNoMeeting: 0,
-      kategori: { SINGLE: 0, COUPLE: 0, UMUM: 0 },
+      kategori: { SINGLE: 0, COUPLE: 0, ANAK: 0, UMUM: 0 },
       homecells: [],
       demografi: newDemografi(),
       tamuVisits: 0,

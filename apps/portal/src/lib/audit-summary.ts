@@ -394,6 +394,7 @@ const VALUE: Record<string, string> = {
   PEREMPUAN: 'Perempuan',
   SINGLE: 'Single',
   COUPLE: 'Couple',
+  ANAK: 'Anak',
   VISITOR: 'Visitor saja',
   NEW_COMER: 'New Comer',
   GRATIS: 'Gratis',

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Eye, Users, CalendarDays, TrendingUp } from 'lucide-react';
 import {
+  HOMECELL_KATEGORI_BADGE,
   HOMECELL_KATEGORI_LABEL,
   createHomecellSchema,
   homecellAttendanceTier,
@@ -18,7 +19,7 @@ interface Homecell extends Record<string, unknown> {
   nama: string;
   deskripsi: string | null;
   picJemaatId: string | null;
-  kategori?: 'SINGLE' | 'COUPLE' | null;
+  kategori?: 'SINGLE' | 'COUPLE' | 'ANAK' | null;
   usiaMin?: number | null;
   usiaMax?: number | null;
   isActive: boolean;
@@ -98,7 +99,7 @@ export const homecellResource: ResourceConfig<Homecell> = {
             {row.kategori ? (
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                  row.kategori === 'COUPLE' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'
+                  HOMECELL_KATEGORI_BADGE[row.kategori]
                 }`}
               >
                 {HOMECELL_KATEGORI_LABEL[row.kategori]}
@@ -214,9 +215,10 @@ export const homecellResource: ResourceConfig<Homecell> = {
       type: 'select',
       defaultValue: '',
       options: [
-        { value: '', label: 'Umum (single & couple)' },
+        { value: '', label: 'Umum (semua kalangan)' },
         { value: 'SINGLE', label: 'Single' },
         { value: 'COUPLE', label: 'Couple' },
+        { value: 'ANAK', label: 'Anak' },
       ],
       helperText: 'Tampil di app saat jemaat mencari homecell.',
     },

@@ -89,7 +89,7 @@ export interface MapHomecell {
   alamat: string | null;
   hari: string | null;
   jam: string | null;
-  kategori: 'SINGLE' | 'COUPLE' | null;
+  kategori: 'SINGLE' | 'COUPLE' | 'ANAK' | null;
   usiaMin: number | null;
   usiaMax: number | null;
   latitude: number;
@@ -269,7 +269,9 @@ export function homecellPopup(h: MapHomecell): string {
       ? badge('Single', '#E0F2FE', '#0369A1')
       : h.kategori === 'COUPLE'
         ? badge('Couple', '#FCE7F3', '#BE185D')
-        : badge('Umum', '#D1FAE5', '#047857');
+        : h.kategori === 'ANAK'
+          ? badge('Anak', '#FEF3C7', '#B45309')
+          : badge('Umum', '#D1FAE5', '#047857');
   const jadwal = [h.hari ? HARI[h.hari] ?? h.hari : null, h.jam].filter(Boolean).join(', ');
   const wa = h.picJemaat?.noHp ? h.picJemaat.noHp.replace(/\D/g, '') : null;
   const pic = h.picJemaat

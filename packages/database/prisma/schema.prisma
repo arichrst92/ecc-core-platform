@@ -4916,3 +4916,45 @@ model KonselingKonselorPelayanan {
   @@unique([pelayananId, pelayananRoleId])
   @@map("konseling_konselor_pelayanan")
 }
+
+// ============================================================
+//  Video Channel (2026-12) — video YouTube per kategori, universal
+//  (semua cabang). Portal: Broadcast → Video Channel. App 2.5.1: Media.
+// ============================================================
+
+model VideoKategori {
+  id        String   @id @default(uuid()) @db.Uuid
+  nama      String   @db.VarChar(100)
+  urutan    Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  videos Video[]
+
+  @@index([isActive, urutan])
+  @@map("video_kategori")
+}
+
+model Video {
+  id           String    @id @default(uuid()) @db.Uuid
+  youtubeId    String    @map("youtube_id") @db.VarChar(20)
+  judul        String    @db.VarChar(200)
+  deskripsi    String?   @db.Text
+  kategoriId   String?   @map("kategori_id") @db.Uuid
+  channelNama  String?   @map("channel_nama") @db.VarChar(150)
+  isFeatured   Boolean   @default(false) @map("is_featured")
+  isPublished  Boolean   @default(false) @map("is_published")
+  /// Tanggal tayang: video baru tampil setelah waktu ini (null = langsung saat terbit).
+  tayangAt     DateTime? @map("tayang_at")
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  kategori VideoKategori? @relation(fields: [kategoriId], references: [id], onDelete: SetNull)
+
+  @@unique([youtubeId])
+  @@index([isPublished, tayangAt])
+  @@index([kategoriId])
+  @@map("video")
+}

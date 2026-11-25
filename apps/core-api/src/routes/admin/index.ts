@@ -47,6 +47,7 @@ import { bible365AdminRouter } from './bible365.js';
 import { analyticsRouter } from './analytics.js';
 import { jemaatResolusiRouter } from './jemaat-resolusi.js';
 import { worshipAdminRouter } from './worship.js';
+import { videoChannelRouter } from './video-channel.js';
 import { reportRouter } from './report.js';
 import { spiritualJourneyRouter } from './spiritual-journey.js';
 import { spiritualJourneyRequestRouter } from './spiritual-journey-request.js';
@@ -143,6 +144,7 @@ adminRouter.use('/bible365', bible365AdminRouter);
 adminRouter.use('/analytics', analyticsRouter);
 // ECC Worship — album, lagu, sinkron lirik (Elsa), statistik.
 adminRouter.use('/worship', worshipAdminRouter);
+adminRouter.use('/video-channel', videoChannelRouter);
 // Laporan kehadiran ibadah & event (ringkasan, tren, tamu, export).
 adminRouter.use('/report', reportRouter);
 adminRouter.use('/spiritual-journey-request', spiritualJourneyRequestRouter);

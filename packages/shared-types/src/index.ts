@@ -52,3 +52,4 @@ export * from './schemas/worship.js';
 export * from './schemas/announcement-markdown.js';
 export * from './schemas/universal-form.js';
 export * from './schemas/konseling.js';
+export * from './schemas/video-channel.js';

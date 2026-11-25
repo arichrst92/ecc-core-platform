@@ -29,6 +29,7 @@ import {
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { hargaLabel, hitView, publicItemsOf, serializeItem } from '../lib/local-market.js';
 import { publicBrowseLimiter } from '../middleware/rate-limit.js';
+import { publicCatalog, publicVideoWhere, videoView } from '../lib/video-channel.js';
 import { parseLinks } from '../lib/announcement.js';
 import { generateOccurrences } from '../lib/ibadah-occurrences.js';
 import { selfCheckinOpensAt } from '../lib/self-checkin.js';
@@ -1182,4 +1183,28 @@ publicUnauthRouter.get('/worship/songs/:id', publicBrowseLimiter, async (req, re
   const base = (process.env.PUBLIC_API_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   const cover = s.album.coverUrl ? (/^https?:/i.test(s.album.coverUrl) ? s.album.coverUrl : `${base}${s.album.coverUrl}`) : null;
   res.json({ success: true, data: { ...s, album: { ...s.album, coverUrl: cover } } });
+});
+
+// ============================================================
+//  Video Channel (2026-12) — universal, untuk app 2.5.1 (Media) & website.
+//  GET /public/videos       { kategori, featured, videos, total }
+//  GET /public/videos/:id   detail + video lain sekategori
+// ============================================================
+publicUnauthRouter.get('/videos', publicBrowseLimiter, async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.json({ success: true, data: await publicCatalog() });
+});
+
+publicUnauthRouter.get('/videos/:id', publicBrowseLimiter, async (req, res) => {
+  const id = String(req.params.id ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw NotFound('Video tidak ditemukan');
+  const v = await prisma.video.findFirst({ where: { id, ...publicVideoWhere() }, include: { kategori: { select: { id: true, nama: true } } } });
+  if (!v) throw NotFound('Video tidak ditemukan');
+  const related = await prisma.video.findMany({
+    where: { ...publicVideoWhere(), id: { not: v.id }, ...(v.kategoriId ? { kategoriId: v.kategoriId } : {}) },
+    include: { kategori: { select: { id: true, nama: true } } },
+    orderBy: [{ tayangAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+    take: 12,
+  });
+  res.json({ success: true, data: { ...videoView(v), related: related.map(videoView) } });
 });

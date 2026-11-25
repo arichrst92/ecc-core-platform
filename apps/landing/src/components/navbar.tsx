@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { DictKey } from '@/lib/i18n';
 import { LangSwitch, useLang } from './lang-provider';
 import {
+  MonitorPlay,
   Menu,
   X,
   House,
@@ -39,6 +40,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: '/event', label: 'nav.event', Icon: CalendarHeart },
   { href: '/news', label: 'nav.news', Icon: Newspaper },
   { href: '/renungan', label: 'nav.renungan', Icon: BookHeart },
+  { href: '/video', label: 'nav.video', Icon: MonitorPlay },
   { href: '/ministry', label: 'nav.ministry', Icon: HandHeart },
   { href: '/local-market', label: 'nav.market', Icon: Store },
   { href: '/about', label: 'nav.about', Icon: Info },

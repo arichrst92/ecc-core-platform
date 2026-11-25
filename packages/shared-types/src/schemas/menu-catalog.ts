@@ -83,6 +83,7 @@ export const MENU_CATALOG: MenuItem[] = [
   { key: 'news', label: 'News', href: '/dashboard/news', group: 'Broadcast' },
   { key: 'renungan', label: 'Renungan', href: '/dashboard/renungan', group: 'Broadcast' },
   { key: 'ecc-worship', label: 'ECC Worship', href: '/dashboard/worship', group: 'Broadcast' },
+  { key: 'video-channel', label: 'Video Channel', href: '/dashboard/video-channel', group: 'Broadcast' },
   { key: 'announcement', label: 'Announcement', href: '/dashboard/announcement', group: 'Broadcast' },
   { key: 'universal-form', label: 'Universal Form', href: '/dashboard/universal-form', group: 'Broadcast' },
 

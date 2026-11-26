@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Relayout Detail News & Detail Renungan — usulan GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--b50:#FFF7ED;--b100:#FFEDD5;--b200:#FED7AA;--b500:#F97316;--b600:#EA580C;--b700:#C2410C;--b800:#9A3412;
+    --ink:#171717;--n700:#404040;--n600:#525252;--n500:#737373;--n400:#A3A3A3;--n300:#D4D4D4;--n200:#E5E5E5;--n100:#F5F5F5;--n50:#FAFAFA;
+    --grad:linear-gradient(135deg,#F97316,#C2410C)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:#F3EEE8;color:var(--ink);padding:36px 28px 60px}
+  h1{font-size:26px;letter-spacing:-.02em}
+  h2{font-size:18px;margin:40px 0 4px;letter-spacing:-.01em}
+  .lead{color:var(--n600);font-size:14px;margin-top:6px;max-width:900px;line-height:1.55}
+  .row{display:flex;gap:30px;flex-wrap:wrap;margin-top:22px;align-items:flex-start}
+  .col{display:flex;flex-direction:column;gap:10px;width:340px}
+  .cap{font-size:13px;font-weight:700;color:var(--n700)}
+  .cap small{display:block;font-weight:400;color:var(--n500);margin-top:3px;line-height:1.45}
+  .ph{width:340px;height:720px;border-radius:44px;background:#111;padding:10px;box-shadow:0 18px 40px #0002}
+  .sc{width:100%;height:100%;border-radius:35px;overflow:hidden;background:#fff;position:relative;display:flex;flex-direction:column}
+  .sb{position:absolute;left:0;right:0;top:0;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600;color:#fff;z-index:5}
+  .sb.dk{color:var(--ink)}
+  .sb .isl{width:96px;height:26px;background:#111;border-radius:20px}
+  .sb .bt{display:flex;gap:4px;align-items:center}.sb .bt i{display:block;width:16px;height:9px;border-radius:2px;background:currentColor}.sb .bt b{display:block;width:22px;height:10px;border-radius:3px;border:1.5px solid currentColor}
+  svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .tb{position:absolute;left:12px;right:12px;top:44px;display:flex;justify-content:space-between;z-index:5}
+  .tb .g{display:flex;gap:8px}
+  .cb{width:34px;height:34px;border-radius:17px;background:#0006;color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+  .cb.lt{background:#fff;color:var(--ink);box-shadow:0 1px 4px #0002}
+  .img{position:relative;width:100%;aspect-ratio:3/2;flex:none}
+  .img .p{position:absolute;inset:0}
+  .n1{background:radial-gradient(circle at 70% 35%,#FDE68A,#EA580C 45%,#431407)}
+  .r1{background:radial-gradient(circle at 30% 30%,#FED7AA,#C2410C 50%,#1c0a04)}
+  .img .sh{position:absolute;inset:0;background:linear-gradient(180deg,#0000 45%,#000a 100%)}
+  .img .on{position:absolute;left:18px;right:18px;bottom:30px;color:#fff}
+  .kick{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+  .sheet{background:#fff;border-radius:22px 22px 0 0;margin-top:-18px;position:relative;padding:18px 20px 0;flex:1;overflow:hidden}
+  .ttl{font-size:21px;line-height:1.25;font-weight:800;letter-spacing:-.02em}
+  .meta{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .av{width:30px;height:30px;border-radius:15px;background:linear-gradient(135deg,#FDBA74,#C2410C);flex:none}
+  .meta b{font-size:12px;display:block}.meta span{font-size:11px;color:var(--n500)}
+  .rt{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--n600);background:var(--n100);border-radius:99px;padding:4px 9px;display:flex;gap:4px;align-items:center}
+  .rt svg{width:12px;height:12px}
+  .ldp{margin-top:14px;padding:2px 0 2px 12px;border-left:3px solid var(--b500);font-size:14px;line-height:1.55;color:var(--n700);font-weight:500}
+  .body{margin-top:14px;font-size:14px;line-height:1.7;color:#262626}
+  .body p{margin-bottom:10px}
+  .body h4{font-size:15px;margin:12px 0 6px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .tag{font-size:10.5px;font-weight:700;color:var(--b700);background:var(--b50);border:1px solid var(--b100);border-radius:99px;padding:3px 9px}
+  .prog{position:absolute;left:0;right:0;top:0;height:3px;z-index:6}.prog i{display:block;height:100%;width:38%;background:var(--grad)}
+  .stick{position:absolute;left:0;right:0;top:0;z-index:4;background:#fffffff2;border-bottom:1px solid var(--n100);padding:42px 12px 8px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(8px)}
+  .stick .t{flex:1;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card{border:1px solid var(--n100);border-radius:16px;padding:12px 14px;background:#fff}
+  .form{border-color:var(--b200)}
+  .form .h{display:flex;gap:10px;align-items:center}
+  .ib{width:34px;height:34px;border-radius:11px;background:var(--b50);color:var(--b600);display:flex;align-items:center;justify-content:center;flex:none}
+  .btn{height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;font-weight:800}
+  .btn.p{background:var(--grad);color:#fff}.btn.s{background:#fff;border:1px solid var(--n200)}
+  .endrow{display:flex;gap:8px;margin-top:14px}
+  .endrow .btn{flex:1}
+  .sec{font-size:14px;font-weight:800;margin:18px 0 10px}
+  .rel{display:flex;gap:10px;margin-bottom:10px}
+  .rel .t{width:78px;height:56px;border-radius:10px;flex:none}
+  .rel b{font-size:12.5px;line-height:1.35;display:block}
+  .rel span{font-size:10.5px;color:var(--n500)}
+  /* renungan */
+  .date{position:absolute;left:18px;bottom:28px;color:#fff;display:flex;align-items:flex-end;gap:10px}
+  .date .d{font-size:40px;font-weight:800;line-height:.9;letter-spacing:-.03em}
+  .date .m{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.9;line-height:1.3}
+  .verse{margin-top:14px;border-radius:18px;padding:14px 16px;background:linear-gradient(160deg,#FFF7ED,#FFEDD5);border:1px solid var(--b200);position:relative}
+  .verse .q{position:absolute;right:12px;top:4px;font-size:54px;font-weight:800;color:#F9731622;line-height:1}
+  .verse .rf{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--b700)}
+  .verse .tx{font-size:14px;line-height:1.6;color:#431407;margin-top:6px;font-style:italic}
+  .verse .ref{font-size:12px;font-weight:800;color:var(--b800);margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+  .verse .ref a{font-size:11px;color:var(--b600);text-decoration:none;display:flex;gap:3px;align-items:center}
+  .pn{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--n100);padding:10px 12px 22px;display:flex;gap:8px;z-index:4}
+  .pn div{flex:1;border-radius:14px;border:1px solid var(--n200);padding:8px 10px}
+  .pn .l{font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--n500);display:flex;gap:4px;align-items:center}
+  .pn .l svg{width:11px;height:11px}
+  .pn b{font-size:11.5px;display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pn .r{text-align:right}.pn .r .l{justify-content:flex-end}
+  .reflect{margin-top:12px;background:var(--n50);border-radius:16px;padding:12px 14px}
+  .reflect .k{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--n500)}
+  .home{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:120px;height:5px;border-radius:3px;background:#111;z-index:9}
+  .notes{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;max-width:1460px}
+  .note{background:#fff;border-radius:18px;padding:18px 20px;border:1px solid #0000000d}
+  .note h3{font-size:14px;margin-bottom:10px;display:flex;gap:8px;align-items:center}
+  .note h3 span{width:22px;height:22px;border-radius:11px;background:var(--grad);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+  .note li{font-size:13px;line-height:1.55;color:var(--n700);margin:0 0 6px 18px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="bm" viewBox="0 0 24 24"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="form" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="chevl" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></symbol>
+</svg>
+
+<h1>Relayout Detail News & Detail Renungan — usulan GUI</h1>
+<p class="lead">Arah: <b>editorial yang tenang</b> — gambar utama penuh, isi di lembar putih membulat, tipografi lebih lega (16/26), dan aksen oranye ECC secukupnya. Informasi sama dengan sekarang (judul, tanggal, cabang, tag, ringkasan, isi, formulir, ayat, sebelumnya/berikutnya); tambahan bertanda ★ di catatan.</p>
+
+<h2>Detail News</h2>
+<div class="row">
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="sb"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+      <div class="tb"><span class="cb"><svg class="i"><use href="#back"/></svg></span><span class="g"><span class="cb"><svg class="i"><use href="#bm"/></svg></span><span class="cb"><svg class="i"><use href="#share"/></svg></span></span></div>
+      <div class="img"><div class="p n1"></div><div class="sh"></div>
+        </div>
+      <div class="sheet">
+        <div class="ttl">Baptisan Air 120 Jemaat Baru di Ibadah Raya Minggu</div>
+        <div class="meta"><span style="font-size:12px;color:var(--n600);font-weight:600">Kamis, 26 Nov 2026</span><span class="rt"><svg class="i"><use href="#clock"/></svg>4 menit baca</span></div>
+        <div class="ldp">Minggu lalu 120 jemaat memberi diri dibaptis air — momen sukacita bagi keluarga besar ECC Bandung.</div>
+        <div class="body"><p>Ibadah Raya 2 dipenuhi sukacita ketika satu per satu jemaat melangkah ke kolam baptisan. Ps. David menyampaikan firman tentang hidup baru di dalam Kristus…</p>
+          <h4>Jadwal baptisan berikutnya</h4><p>Pendaftaran baptisan bulan Desember dibuka mulai hari ini melalui menu Event.</p></div>
+      </div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">News — tampilan pertama<small>Gambar 3:2 tetap (sama dengan unggahan Portal) dengan kicker "Berita · cabang" di atas gambar. Judul di lembar putih yang menumpang ke gambar. Baris tanggal + perkiraan waktu baca ★ (tanpa penulis). Ringkasan jadi <b>lead</b> dengan garis oranye (bukan miring abu-abu). Isi 16/26.</small></div>
+  </div>
+
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="prog"><i style="width:100%"></i></div>
+      <div class="stick"><span class="cb lt"><svg class="i"><use href="#back"/></svg></span><span class="t">Baptisan Air 120 Jemaat Baru di Ibadah…</span><span class="cb lt"><svg class="i"><use href="#bm"/></svg></span><span class="cb lt"><svg class="i"><use href="#share"/></svg></span></div>
+      <div class="sb dk"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+      <div style="padding:96px 20px 0">
+        <div class="body" style="margin-top:0"><p>…Setelah ibadah, keluarga dan sahabat menyambut para jemaat baru dengan bunga dan foto bersama.</p></div>
+        <div class="card form"><div class="h"><span class="ib"><svg class="i"><use href="#form"/></svg></span><div style="flex:1"><b style="font-size:13px">Pendaftaran Baptisan Desember</b><div style="font-size:11px;color:var(--n500)">6 pertanyaan · batas 03:14:22</div></div></div>
+          <div class="btn p" style="margin-top:10px">Isi formulir</div></div>
+        <div class="tags"><span class="tag">#baptisan</span><span class="tag">#jemaatbaru</span><span class="tag">#ibadahraya</span></div>
+        <div class="endrow"><div class="btn s"><svg class="i"><use href="#bm"/></svg>Simpan</div><div class="btn p"><svg class="i"><use href="#share"/></svg>Bagikan</div></div>
+        <div class="sec">Berita lainnya ★</div>
+        <div class="rel"><span class="t" style="background:linear-gradient(135deg,#93C5FD,#1E3A8A)"></span><div><b>Natal Bersama 2026: Terang yang Sejati</b><span>24 Nov 2026</span></div></div>
+        <div class="rel"><span class="t" style="background:linear-gradient(135deg,#A7F3D0,#047857)"></span><div><b>Bakti Sosial Ciroyom: 300 Paket Sembako</b><span>20 Nov 2026</span></div></div>
+      </div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">News — akhir artikel<small>Saat digulir, bilah atas putih berisi judul + Simpan & Bagikan, dengan <b>garis progres baca</b> oranye ★. Di akhir: kartu formulir (bila ada), tag, tombol Simpan/Bagikan, dan "Berita lainnya" (3 berita terbaru dari daftar yang sudah dimuat) ★.</small></div>
+  </div>
+</div>
+
+<h2>Detail Renungan</h2>
+<div class="row">
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="sb"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+      <div class="tb"><span class="cb"><svg class="i"><use href="#back"/></svg></span><span class="g"><span class="cb"><svg class="i"><use href="#bm"/></svg></span><span class="cb"><svg class="i"><use href="#share"/></svg></span></span></div>
+      <div class="img"><div class="p r1"></div><div class="sh"></div>
+        <div class="date"><span class="d">26</span><span class="m">Kamis<br>Nov 2026</span></div></div>
+      <div class="sheet">
+        <div class="kick" style="color:var(--b600)">Renungan Harian</div>
+        <div class="ttl" style="margin-top:6px">Tetap Berakar di Tengah Badai</div>
+        <div class="verse"><span class="q">“</span><div class="rf">AYAT HARI INI</div>
+          <div class="tx">Ia akan seperti pohon yang ditanam di tepi aliran air, yang menghasilkan buahnya pada musimnya…</div>
+          <div class="ref"><span>Mazmur 1:3 · TB</span><a>Baca pasal <svg class="i" style="width:12px;height:12px"><use href="#chev"/></svg></a></div></div>
+        <div class="ldp">Akar yang dalam tidak terlihat, tetapi menentukan apakah pohon tetap berdiri saat angin datang.</div>
+        <div class="body"><p>Di musim kering, pohon dengan akar dangkal cepat layu…</p></div>
+      </div>
+      <div class="pn"><div><div class="l"><svg class="i"><use href="#chevl"/></svg>SEBELUMNYA · 25 NOV</div><b>Kasih yang Tidak Berkesudahan</b></div><div class="r"><div class="l">BERIKUTNYA · 27 NOV<svg class="i"><use href="#chev"/></svg></div><b>Damai Sejahtera di Pagi Hari</b></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Renungan — tampilan pertama<small>Gambar dengan <b>tanggal besar</b> (26 / Kamis Nov 2026). Kartu <b>Ayat hari ini</b> berisi <b>teks ayat</b> ★ (diambil dari Alkitab offline di app, versi pilihan jemaat) + "Baca pasal" → pembaca Alkitab. Ringkasan jadi lead. Navigasi bawah menampilkan <b>judul & tanggal</b> renungan sebelum/sesudahnya ★ (dari daftar yang sudah dimuat).</small></div>
+  </div>
+
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="prog"><i style="width:82%"></i></div>
+      <div class="stick"><span class="cb lt"><svg class="i"><use href="#back"/></svg></span><span class="t">Tetap Berakar di Tengah Badai</span><span class="cb lt"><svg class="i"><use href="#bm"/></svg></span><span class="cb lt"><svg class="i"><use href="#share"/></svg></span></div>
+      <div class="sb dk"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+      <div style="padding:96px 20px 0">
+        <div class="body" style="margin-top:0"><p>…Hari ini, luangkan waktu sejenak untuk memeriksa “akar” hidup kita: apa yang paling sering kita andalkan ketika keadaan sulit?</p>
+          <h4>Doa</h4><p>Tuhan, tanamkan akarku dalam firman-Mu…</p></div>
+        <div class="reflect"><div class="k">REFLEKSI ★</div><div style="font-size:13px;margin-top:4px;color:var(--n700)">Tulis satu hal yang Tuhan bicarakan kepadamu hari ini.</div>
+          <div class="btn s" style="margin-top:10px"><svg class="i"><use href="#pen"/></svg>Tulis di Catatan Saya</div></div>
+        <div class="endrow"><div class="btn s"><svg class="i"><use href="#bm"/></svg>Simpan</div><div class="btn p"><svg class="i"><use href="#share"/></svg>Bagikan</div></div>
+      </div>
+      <div class="pn"><div><div class="l"><svg class="i"><use href="#chevl"/></svg>SEBELUMNYA · 25 NOV</div><b>Kasih yang Tidak Berkesudahan</b></div><div class="r"><div class="l">BERIKUTNYA · 27 NOV<svg class="i"><use href="#chev"/></svg></div><b>Damai Sejahtera di Pagi Hari</b></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Renungan — akhir<small>Progres baca di atas. Di akhir: kartu <b>Refleksi</b> ★ → membuka <b>Catatan Saya</b> (fitur yang sudah ada) dengan judul & ayat renungan terisi. Simpan / Bagikan (kartu share yang sama).</small></div>
+  </div>
+</div>
+
+<div class="notes">
+  <div class="note"><h3><span>1</span>Tetap sama</h3><ul>
+    <li>Gambar 3:2, judul, tanggal, cabang, tag, ringkasan, isi markdown, formulir (News), ayat, sebelumnya/berikutnya (Renungan).</li>
+    <li>Simpan (bookmark) & Bagikan dengan kartu share yang sama; tautan & deep link tidak berubah.</li>
+    <li>Tanpa perubahan server/API — aman untuk 2.5.1; app 2.5.0 tidak terdampak.</li>
+  </ul></div>
+  <div class="note"><h3><span>2</span>Tambahan ★ (semua dari data yang sudah ada di app)</h3><ul>
+    <li>Perkiraan waktu baca (dihitung dari panjang isi) & garis progres baca.</li>
+    <li>News: "Berita lainnya" (3 terbaru). Tanpa penulis.</li>
+    <li>Renungan: teks ayat dari Alkitab offline + "Baca pasal"; judul & tanggal di tombol sebelum/sesudah; kartu Refleksi → Catatan Saya.</li>
+  </ul></div>
+  <div class="note"><h3><span>3</span>Perlu keputusan Anda</h3><ul>
+    <li>Tambahan ★ mana yang dipakai: waktu baca, progres baca, berita lainnya, teks ayat, refleksi → catatan?</li>
+    <li>Teks ayat: versi Alkitab mengikuti pilihan jemaat di menu Alkitab (usulan) atau versi tetap (TB)?</li>
+    <li>Kicker di atas gambar News: "Berita · cabang" atau tag pertama?</li>
+  </ul></div>
+</div>
+</body>
+</html>

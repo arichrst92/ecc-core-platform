@@ -71,6 +71,7 @@ import {
   tugasSig,
 } from '../../lib/pelayanan-tugas.js';
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
+import { createWalkInParticipation, walkInAllowed } from '../../lib/event-walkin.js';
 import {
   assertEventEligible,
   isEligible,
@@ -714,6 +715,7 @@ eventRouter.post('/', W(), async (req, res) => {
       tags: input.tags ?? [],
       butuhKehadiran: input.butuhKehadiran ?? false,
       allowSelfCheckin: input.allowSelfCheckin ?? false,
+      wajibDaftar: input.wajibDaftar ?? true,
       registrasiTutupMenit: input.registrasiTutupMenit ?? null,
       checkinBukaMenit: input.checkinBukaMenit ?? null,
       checkinTutupMenit: input.checkinTutupMenit ?? null,
@@ -798,6 +800,7 @@ eventRouter.post('/:id/duplicate', async (req, res) => {
         butuhKehadiran: src.butuhKehadiran,
         allowReview: src.allowReview,
         allowSelfCheckin: src.allowSelfCheckin,
+        wajibDaftar: src.wajibDaftar,
         registrasiTutupMenit: src.registrasiTutupMenit,
         checkinBukaMenit: src.checkinBukaMenit,
         checkinTutupMenit: src.checkinTutupMenit,
@@ -907,6 +910,7 @@ eventRouter.patch('/:id', W(), async (req, res) => {
     tags: input.tags,
     butuhKehadiran: input.butuhKehadiran,
     allowSelfCheckin: input.allowSelfCheckin,
+    wajibDaftar: input.wajibDaftar,
     registrasiTutupMenit: input.registrasiTutupMenit,
     checkinBukaMenit: input.checkinBukaMenit,
     checkinTutupMenit: input.checkinTutupMenit,
@@ -2973,6 +2977,36 @@ eventRouter.post('/:id/checkin', async (req, res) => {
   const partisipasi = await prisma.eventParticipation.findUnique({
     where: { eventId_jemaatId: { eventId: event.id, jemaatId: jemaat.id } },
   });
+  // Event tidak wajib daftar (2026-11): belum terdaftar / batal → langsung dicatat hadir.
+  if ((!partisipasi || partisipasi.status === 'BATAL') && walkInAllowed(event)) {
+    const created = await createWalkInParticipation(event, jemaat.id, 'WALK_IN', {
+      checkedInBy: req.user?.sub ?? null,
+      who: jemaat.namaLengkap,
+    });
+    const updated = await prisma.eventParticipation.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } } },
+    });
+    const tamu = await scanTamuInfo(jemaat.id, updated.invitedByJemaatId);
+    audit(req, {
+      action: 'CREATE',
+      resource: 'event_participation',
+      resourceId: updated.id,
+      resourceLabel: `checkin tanpa daftar ${jemaat.namaLengkap} @ ${event.judul}`,
+      metadata: { kind: 'event-checkin-walkin', kode: input.kode },
+    });
+    void createNotification({
+      jemaatId: jemaat.id,
+      type: 'EVENT_CHECKED_IN',
+      title: `Kehadiran tercatat: ${event.judul}`,
+      body: `Anda sudah check-in di event "${event.judul}". Terima kasih atas partisipasinya.`,
+      actionUrl: `/event/${event.id}`,
+      metadata: { eventId: event.id, eventJudul: event.judul, participationId: updated.id },
+    });
+    void sendWaIfEnabled('EVENT_CHECKED_IN', jemaat.noHp, { nama: jemaat.namaLengkap, judul: event.judul });
+    res.json({ success: true, data: { ...updated, tamu }, meta: { alreadyCheckedIn: false, walkIn: true, late: false } });
+    return;
+  }
   if (!partisipasi) {
     // Grup sesi: mungkin datang ke sesi yang salah → sebutkan sesinya.
     const lain = event.grupSesi ? await sesiConflict(event, jemaat.id) : null;

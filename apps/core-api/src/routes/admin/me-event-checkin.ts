@@ -32,6 +32,7 @@ import {
 import { tzOr } from '../../lib/tz.js';
 import { isLegacyApp } from '../../lib/client-kind.js';
 import { paymentOkForCheckin } from '../../lib/event-payment.js';
+import { createWalkInParticipation, walkInAllowed } from '../../lib/event-walkin.js';
 
 export const meEventCheckinRouter = Router();
 
@@ -55,6 +56,8 @@ async function loadEvent(eventId: string) {
       nominal: true,
       butuhKehadiran: true,
       allowSelfCheckin: true,
+      wajibDaftar: true,
+      grupSesi: true,
       tanggalMulai: true,
       tanggalSelesai: true,
       jamMulai: true,
@@ -71,8 +74,15 @@ async function loadEvent(eventId: string) {
   return { event, tz, window: eventSelfCheckinWindow(event, new Date(), tz) };
 }
 
-/** Saya + keluarga yang terdaftar (bukan BATAL) di event ini. */
-async function registeredMembers(jemaatId: string, event: { id: string; tipeBayar: string; nominal?: unknown }) {
+/**
+ * Saya + keluarga yang terdaftar (bukan BATAL) di event ini. Event tidak wajib
+ * daftar (walkInAllowed) → keluarga yang belum terdaftar ikut tampil
+ * (participationId null); saat check-in dibuatkan partisipasi HADIR.
+ */
+async function registeredMembers(
+  jemaatId: string,
+  event: { id: string; tipeBayar: string; nominal?: unknown; butuhKehadiran: boolean; wajibDaftar: boolean },
+) {
   const fam = await familyOf(jemaatId);
   const ids = [jemaatId, ...fam.keys()];
   const parts = await prisma.eventParticipation.findMany({
@@ -84,7 +94,7 @@ async function registeredMembers(jemaatId: string, event: { id: string; tipeBaya
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isActive: true } },
     },
   });
-  return parts
+  const registered = parts
     .filter((p) => p.jemaat.isActive)
     .sort((a, b) => (a.jemaat.id === jemaatId ? -1 : b.jemaat.id === jemaatId ? 1 : a.jemaat.namaLengkap.localeCompare(b.jemaat.namaLengkap)))
     .map((p) => ({
@@ -103,6 +113,31 @@ async function registeredMembers(jemaatId: string, event: { id: string; tipeBaya
         disabledReason: paymentOkForCheckin(event, p.status) ? null : 'Pembayaran belum terverifikasi',
       },
     }));
+  if (!walkInAllowed(event)) return registered;
+  // Tanpa daftar: keluarga yang belum terdaftar (atau batal) → boleh langsung check-in.
+  const have = new Set(registered.map((r) => r.member.id));
+  const rest = await prisma.jemaat.findMany({
+    where: { id: { in: ids.filter((x) => !have.has(x)) }, isActive: true },
+    select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true },
+  });
+  const walkIns = rest.map((j) => ({
+    participationId: null as string | null,
+    partStatus: null as string | null,
+    noHp: j.noHp,
+    member: {
+      id: j.id,
+      namaLengkap: j.namaLengkap,
+      fotoUrl: j.fotoUrl,
+      isSelf: j.id === jemaatId,
+      relasi: j.id === jemaatId ? null : (fam.get(j.id) ?? null),
+      status: 'NONE' as 'JOIN' | 'NONE',
+      checkedInAt: null as Date | null,
+      disabledReason: null as string | null,
+    },
+  }));
+  return [...registered, ...walkIns].sort((a, b) =>
+    a.member.isSelf ? -1 : b.member.isSelf ? 1 : a.member.namaLengkap.localeCompare(b.member.namaLengkap),
+  );
 }
 
 meEventCheckinRouter.get('/:eventId', async (req, res) => {
@@ -179,6 +214,24 @@ meEventCheckinRouter.post('/:eventId', async (req, res) => {
     }
     if (r.member.disabledReason) {
       results.push({ jemaatId: id, namaLengkap: nama, result: 'FAILED', message: r.member.disabledReason });
+      continue;
+    }
+    if (!r.participationId) {
+      // Event tidak wajib daftar → buat partisipasi HADIR langsung.
+      try {
+        const p = await createWalkInParticipation(event, id, 'SELF', { who: nama });
+        void createNotification({
+          jemaatId: id,
+          type: 'EVENT_CHECKED_IN',
+          title: `Kehadiran tercatat: ${event.judul}`,
+          body: `Check-in mandiri di event "${event.judul}" berhasil. Terima kasih atas partisipasinya.`,
+          actionUrl: `/event/${event.id}`,
+          metadata: { eventId: event.id, eventJudul: event.judul, participationId: p.id, via: 'self-checkin' },
+        });
+        results.push({ jemaatId: id, namaLengkap: nama, result: 'CHECKED_IN' });
+      } catch (e) {
+        results.push({ jemaatId: id, namaLengkap: nama, result: 'FAILED', message: e instanceof Error ? e.message : 'Gagal check-in.' });
+      }
       continue;
     }
     // Klaim atomik: hanya ubah kalau belum HADIR/BATAL (hindari dobel dgn scan petugas).

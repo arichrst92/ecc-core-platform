@@ -23,6 +23,7 @@ summary: Membuat event, tipe bayar, aturan pendaftaran (bawaan tutup saat mulai,
 6. **Butuh Kehadiran** — nyalakan bila ada scan QR/absensi di hari H (tanpa ini scan ditolak "Event ini tidak mencatat kehadiran").
 7. **Grup sesi** (opsional) — lihat bagian Grup sesi.
 8. **Izinkan self check-in** + radius lokasi, rating & ulasan on/off.
+   - **Wajib daftar sebelum hadir** (bawaan aktif). Matikan untuk event dadakan: jemaat boleh langsung datang tanpa daftar — **self check-in** di app (dirinya + keluarga) dan **scan QR oleh usher** langsung mencatatnya **Hadir** (dibuatkan partisipasi otomatis). Hanya untuk event yang butuh kehadiran & **tidak berbayar** (gratis / sukarela tanpa minimum). Kuota tidak membatasi kehadiran; syarat peserta & grup sesi tetap berlaku. Pendaftaran online tetap bisa dipakai. Di app 2.5.1 detail event bertuliskan "Boleh langsung datang tanpa daftar".
 8b. **Syarat peserta** (role tertentu) dan **beri role otomatis** kepada peserta (mis. tahap Spiritual Journey / kelas) — opsional.
 9. **Publish** → event tampil di app. Hanya event **aktif & dipublikasikan** yang bisa didaftari.
 

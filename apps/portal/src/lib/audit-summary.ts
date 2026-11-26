@@ -268,6 +268,7 @@ const FIELD: Record<string, string> = {
   joinedAt: 'Waktu hadir',
   attendedAt: 'Waktu hadir',
   allowSelfCheckin: 'Boleh self check-in',
+  wajibDaftar: 'Wajib daftar sebelum hadir',
   butuhKehadiran: 'Mencatat kehadiran',
   selfCheckinRadiusM: 'Radius self check-in (m)',
   size: 'Ukuran berkas',

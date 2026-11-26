@@ -1606,6 +1606,10 @@ model Event {
   // Rating & ulasan dari tiket (2.4.5) — off = kartu ulasan tidak muncul di app.
   allowReview      Boolean @default(true) @map("allow_review")
   allowSelfCheckin Boolean @default(false) @map("allow_self_checkin")
+  // 2026-11: false = jemaat boleh langsung datang tanpa daftar — self check-in &
+  // scan usher membuat partisipasi HADIR. Hanya berlaku bila butuhKehadiran &
+  // event tidak berbayar tetap (lib/event-walkin.ts walkInAllowed).
+  wajibDaftar      Boolean @default(true) @map("wajib_daftar")
   // Jendela per ibadah/event (2026-11). NULL = aturan bawaan.
   //   registrasiTutupMenit : batas reservasi/daftar online = mulai − N menit (negatif = N menit SESUDAH mulai). Bawaan 0 (saat mulai).
   //   checkinBukaMenit     : self check-in dibuka N menit sebelum mulai. Bawaan 15.

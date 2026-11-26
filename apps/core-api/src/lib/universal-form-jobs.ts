@@ -140,6 +140,7 @@ export async function runUniversalFormJob() {
     for (const p of eligible) {
       const r = byS.get(p.jemaatId);
       if (r && (r.status === 'SUBMITTED' || r.status === 'REJECTED')) continue;
+      // Sudah hadir (termasuk datang tanpa daftar) → tidak pernah dibatal otomatis.
       const base = {
         formId: e.formId,
         judul: e.form.judul,
@@ -159,7 +160,7 @@ export async function runUniversalFormJob() {
             await sendReminder({ ...base, batas: dl, fix: false });
             reminders++;
           }
-        } else if (toDl <= 0 && e.autoCancel && !paidEvent) {
+        } else if (toDl <= 0 && e.autoCancel && !paidEvent && p.status !== 'HADIR') {
           if (await cancelParticipation(e.sourceId, p.jemaatId, p.invitedByJemaatId ?? p.jemaatId, `formulir "${e.form.judul}" belum diisi sampai batas waktu`, 'FORM_AUTO')) cancelled++;
         }
       } else if (r.status === 'NEEDS_FIX' && r.perbaikiSebelum) {
@@ -167,7 +168,7 @@ export async function runUniversalFormJob() {
         if (toFix > 0 && toFix <= 12 * HOUR && (await remind(e.id, p.jemaatId, 'FIX'))) {
           await sendReminder({ ...base, batas: r.perbaikiSebelum, fix: true });
           reminders++;
-        } else if (toFix <= 0 && e.autoCancel && !paidEvent) {
+        } else if (toFix <= 0 && e.autoCancel && !paidEvent && p.status !== 'HADIR') {
           if (await cancelParticipation(e.sourceId, p.jemaatId, r.jemaatId, `perbaikan formulir "${e.form.judul}" belum dilengkapi sampai batas waktu`, 'FORM_AUTO')) cancelled++;
         }
       }

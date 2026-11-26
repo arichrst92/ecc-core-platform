@@ -36,6 +36,8 @@ export type EventFormValues = {
   butuhKehadiran?: boolean;
   /** Peserta boleh self check-in dari aplikasi (butuh butuhKehadiran). */
   allowSelfCheckin?: boolean;
+  /** false = boleh langsung hadir tanpa daftar (self check-in & scan usher). */
+  wajibDaftar?: boolean;
   /** Rating & ulasan peserta dari tiket di app. */
   allowReview?: boolean;
   /** Radius self check-in (meter). '' / null = di mana saja. */
@@ -104,6 +106,7 @@ const EMPTY: EventFormValues = {
   tags: [],
   butuhKehadiran: false,
   allowSelfCheckin: false,
+  wajibDaftar: true,
   allowReview: true,
   isPublished: false,
 };
@@ -217,6 +220,7 @@ export function EventFormModal({
         tags: (dv.tags as string[]) ?? [],
         butuhKehadiran: (dv.butuhKehadiran as boolean) ?? false,
         allowSelfCheckin: (dv.allowSelfCheckin as boolean) ?? false,
+        wajibDaftar: (dv.wajibDaftar as boolean | undefined) ?? true,
         allowReview: (dv.allowReview as boolean) ?? true,
         selfCheckinRadiusM: (dv.selfCheckinRadiusM as number | null | undefined) ?? '',
         registrasiTutupMenit: (dv.registrasiTutupMenit as number | null | undefined) ?? '',
@@ -814,6 +818,35 @@ export function EventFormModal({
                   </div>
                 </div>
               </label>
+              {/* Wajib daftar (2026-11): event dadakan → jemaat boleh langsung datang */}
+              {(() => {
+                const paid = values.tipeBayar === 'NOMINAL_TETAP' || (values.tipeBayar === 'NOMINAL_BEBAS' && Number(values.nominal || 0) > 0);
+                const can = !!values.butuhKehadiran && !paid;
+                return (
+                  <label
+                    className={`flex items-start gap-2 p-3 border border-neutral-200 rounded-lg mt-2 ${
+                      can ? 'cursor-pointer hover:bg-neutral-50' : 'opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!can || values.wajibDaftar !== false}
+                      disabled={!can}
+                      onChange={(e) => patch({ wajibDaftar: e.target.checked })}
+                      className="w-4 h-4 accent-brand-500 mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-neutral-900">Wajib daftar sebelum hadir</div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
+                        Matikan untuk event dadakan: jemaat boleh langsung datang tanpa daftar — <b>self check-in</b> di app (dirinya +
+                        keluarga) dan <b>scan QR oleh usher</b> langsung mencatatnya hadir. Kuota tidak membatasi kehadiran; syarat peserta &
+                        grup sesi tetap berlaku. Pendaftaran online tetap bisa dipakai.
+                        {paid ? ' Tidak tersedia untuk event berbayar (wajib daftar & lunas).' : !values.butuhKehadiran ? ' Aktifkan "Event ini butuh kehadiran" dulu.' : ''}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })()}
               {values.butuhKehadiran && values.allowSelfCheckin ? (
                 <div className="mt-2 p-3 border border-neutral-200 rounded-lg space-y-2">
                   <div className="text-sm font-medium text-neutral-900">Jam self check-in</div>

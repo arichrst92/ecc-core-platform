@@ -10,7 +10,7 @@ summary: Menu Media di Beranda app (ECC Worship + Video Channel), cara menonton 
 ## Di app
 - **App 2.5.1**: tile **Media** di Beranda (menggantikan tile Worship). Isinya dua tab:
   - **ECC Worship** — sama persis dengan sebelumnya (album, single, disukai, unduhan, cari, putar/acak).
-  - **Video Channel** — video unggulan, pilihan kategori, cari judul, daftar video terbaru. Ketuk video untuk menonton **langsung di dalam app** (bisa layar penuh), lihat deskripsi, bagikan, atau **Buka di YouTube**, plus video lain dari kategori yang sama.
+  - **Video Channel** — tab dipilih lewat tombol ECC Worship | Video Channel di atas. Isinya: **video unggulan** besar (geser, tombol **Tonton sekarang**), chip kategori, rak **Terbaru** dan satu rak per kategori (**Lihat semua** → halaman kategori dengan saringan Terbaru / Terlama / tahun). Ikon **cari** di header membuka layar **Cari video** (riwayat pencarian tersimpan di HP, kata yang cocok disorot). Ketuk video untuk menonton **langsung di dalam app** (bisa layar penuh); di bawah pemutar ada tombol **Bagikan**, **Salin tautan**, **YouTube**, deskripsi (**Selengkapnya**), dan **Berikutnya di {kategori}**.
 - Tab yang belum berisi disembunyikan; tile Media tampil bila Worship atau Video Channel berisi.
 - Lagu ECC Worship yang sedang diputar otomatis dijeda saat video dibuka.
 - **App 2.5.0** masih menampilkan tile **Worship** (tanpa Video Channel) — perlu update ke 2.5.1 untuk menonton video di app. Video tetap bisa ditonton di website.

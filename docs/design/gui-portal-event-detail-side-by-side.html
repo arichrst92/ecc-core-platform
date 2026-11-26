@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Portal — Detail Event 2 kolom (usulan)</title>
+<style>
+  :root{--b50:#FFF7ED;--b100:#FFEDD5;--b200:#FED7AA;--b500:#F97316;--b600:#EA580C;--b700:#C2410C;
+    --ink:#171717;--n700:#404040;--n600:#525252;--n500:#737373;--n400:#A3A3A3;--n300:#D4D4D4;--n200:#E5E5E5;--n100:#F5F5F5;--n50:#FAFAFA}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:#ECE7E1;color:var(--ink);padding:30px}
+  h1{font-size:24px;letter-spacing:-.02em}
+  .lead{color:var(--n600);font-size:14px;margin:6px 0 22px;max-width:980px;line-height:1.55}
+  .lap{width:1360px;border-radius:14px;background:#1f1f1f;padding:12px 12px 22px;box-shadow:0 20px 40px #0003}
+  .scr{border-radius:6px;overflow:hidden;background:var(--n50);display:flex;height:820px}
+  .side{width:208px;background:#fff;border-right:1px solid var(--n200);padding:14px 12px;flex:none}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:16px}
+  .logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F97316,#C2410C)}
+  .nav div{font-size:12.5px;color:var(--n600);padding:7px 10px;border-radius:8px;margin-bottom:2px}
+  .nav .on{background:var(--b50);color:var(--b700);font-weight:700}
+  .main{flex:1;padding:18px 22px;overflow:hidden}
+  .back{font-size:12px;color:var(--n500);margin-bottom:10px}
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:18px;align-items:start}
+  .card{background:#fff;border:1px solid var(--n200);border-radius:14px;overflow:hidden}
+  /* left */
+  .hero{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#FED7AA,#EA580C 55%,#7C2D12)}
+  .hero .acts{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+  .hero .acts span{font-size:10.5px;font-weight:600;background:#ffffffe6;border-radius:6px;padding:4px 8px}
+  .hero .dr{position:absolute;top:8px;left:8px;font-size:9.5px;font-weight:700;background:#404040;color:#fff;border-radius:4px;padding:2px 6px}
+  .lp{padding:14px 16px}
+  .ttl{font-size:18px;font-weight:800;line-height:1.3;letter-spacing:-.01em}
+  .tgt{font-size:11.5px;color:var(--n500);margin-top:4px}
+  .btns{display:flex;gap:6px;margin-top:10px}
+  .b{font-size:11px;font-weight:700;border:1px solid var(--n200);border-radius:8px;padding:6px 9px;background:#fff}
+  .b.p{background:linear-gradient(135deg,#F97316,#C2410C);color:#fff;border:0}
+  .rs{font-size:12.5px;color:var(--n700);margin-top:10px;line-height:1.5}
+  .info{margin-top:12px;border:1px solid var(--n100);border-radius:12px}
+  .info .r{display:flex;gap:10px;padding:9px 12px;font-size:12px}
+  .info .r+.r{border-top:1px solid var(--n100)}
+  .info .k{width:70px;color:var(--n500);font-size:11px;flex:none}
+  .info b{font-weight:700}
+  .bar{height:6px;background:var(--n100);border-radius:3px;margin-top:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--b500)}
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}.tags span{font-size:10.5px;background:var(--n100);border-radius:4px;padding:2px 7px}
+  .desc{margin-top:10px;font-size:11px;font-weight:700;color:var(--n500);letter-spacing:.05em}
+  /* right */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--n200);margin-bottom:12px}
+  .tabs div{font-size:12.5px;font-weight:700;color:var(--n500);padding:9px 12px;border-bottom:2px solid transparent;display:flex;gap:6px;align-items:center}
+  .tabs .on{color:var(--b700);border-color:var(--b500)}
+  .tabs em{font-style:normal;font-size:10px;padding:0 6px;border-radius:99px;background:var(--n200)}
+  .tabs .on em{background:var(--b100);color:var(--b700)}.tabs em.w{background:#EF4444;color:#fff}
+  .stats{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:12px 14px;border-bottom:1px solid var(--n100)}
+  .st{border-radius:9px;padding:7px 9px}.st b{font-size:16px;display:block}.st span{font-size:10px;color:var(--n600)}
+  .flt{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--n100);font-size:11px}
+  .flt .in{margin-left:auto;width:220px;border:1px solid var(--n300);border-radius:6px;padding:5px 8px;color:var(--n400)}
+  .row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--n100);font-size:12px}
+  .av{width:32px;height:32px;border-radius:16px;background:var(--b100);color:var(--b700);font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+  .row .n{flex:1}.row .n b{display:block;font-size:12.5px}.row .n span{color:var(--n500);font-size:11px}
+  .pill{font-size:10px;font-weight:700;border-radius:99px;padding:3px 9px}
+  .notes{margin-top:28px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1360px}
+  .note{background:#fff;border-radius:16px;padding:16px 18px}
+  .note h3{font-size:14px;margin-bottom:8px}
+  .note li{font-size:12.5px;line-height:1.55;color:var(--n700);margin:0 0 5px 16px}
+</style>
+</head>
+<body>
+<h1>Portal — Detail Event: 2 kolom berdampingan (usulan)</h1>
+<p class="lead">Kiri: <b>kartu event</b> (hero, judul, tombol, info, tag, deskripsi) — lebar tetap ±380px dan <b>tetap terlihat (sticky)</b> saat kanan digulir. Kanan: <b>tab</b> Peserta · Pembayaran · Pelayanan & Volunteer · Formulir · Ulasan dengan isi yang sama seperti sekarang. Layar &lt; 1280px (laptop kecil / tablet / HP) otomatis kembali bertumpuk seperti sekarang.</p>
+
+<div class="lap"><div class="scr">
+  <div class="side"><div class="logo"><i></i>ECC Portal</div>
+    <div class="nav"><div>Dashboard</div><div>Ibadah</div><div class="on">Event</div><div>Jemaat</div><div>Homecell</div><div>Broadcast</div><div>Laporan</div></div></div>
+  <div class="main">
+    <div class="back">← Kembali ke daftar event</div>
+    <div class="grid">
+      <!-- KIRI -->
+      <div class="card">
+        <div class="hero"><span class="dr">DRAFT</span><div class="acts"><span>⇪ Ganti hero</span><span style="color:#DC2626">Hapus</span></div></div>
+        <div class="lp">
+          <div class="ttl">Youth Camp 2026: Rooted</div>
+          <div class="tgt">Cabang · ECC Bandung · Pelayanan Youth level 1+</div>
+          <div class="btns"><span class="b">PDF</span><span class="b">Excel</span><span class="b">Duplikat</span></div>
+          <div class="rs">Tiga hari retreat untuk pemuda 15–25 tahun: ibadah, kelas, outbound, dan api unggun.</div>
+          <div class="info">
+            <div class="r"><span class="k">Tanggal</span><div><b>12 – 14 Des 2026</b><div style="color:var(--n500);font-size:11px">08.00–17.00 Waktu Bandung</div></div></div>
+            <div class="r"><span class="k">Lokasi</span><b>Villa Istana Bunga, Lembang</b></div>
+            <div class="r"><span class="k">Peserta</span><div style="flex:1"><b>86 / 120</b><div class="bar"><i style="width:72%"></i></div></div></div>
+            <div class="r"><span class="k">Biaya</span><b>Rp 750.000</b></div>
+            <div class="r"><span class="k">Teaser</span><span style="color:var(--b600);font-weight:700">youtube.com/watch… ↗</span></div>
+          </div>
+          <div class="tags"><span>youth</span><span>retreat</span><span>rooted2026</span></div>
+          <div class="desc">▸ DESKRIPSI LENGKAP</div>
+        </div>
+      </div>
+      <!-- KANAN -->
+      <div>
+        <div class="tabs"><div class="on">Peserta <em>86</em></div><div>Pembayaran <em class="w">3</em></div><div>Pelayanan & Volunteer</div><div>Formulir</div><div>Ulasan</div></div>
+        <div class="card">
+          <div class="stats">
+            <div class="st" style="background:var(--n50)"><b>83</b><span>Terdaftar aktif</span></div>
+            <div class="st" style="background:#F0FDF4"><b style="color:#15803D">0 <small style="font-size:10px">0%</small></b><span>Hadir</span></div>
+            <div class="st" style="background:#EFF6FF"><b style="color:#1D4ED8">71</b><span>Lunas (belum hadir)</span></div>
+            <div class="st" style="background:#FFFBEB"><b style="color:#B45309">3</b><span>Menunggu verifikasi</span></div>
+            <div class="st" style="background:var(--n50)"><b>9</b><span>Belum bayar</span></div>
+            <div class="st" style="background:#FEF2F2"><b style="color:#B91C1C">3</b><span>Batal</span></div>
+            <div class="st" style="background:#F5F3FF"><b style="color:#6D28D9">4</b><span>Tamu</span></div>
+          </div>
+          <div class="flt">Filter: <span class="b" style="padding:3px 8px">Semua status ▾</span><span class="in">Cari nama / no HP peserta</span></div>
+          <div class="row"><span class="av">AW</span><div class="n"><b>Andreas Wijaya</b><span>0812-xxxx-1234 · daftar 2 hari lalu</span></div><span class="pill" style="background:#DBEAFE;color:#1D4ED8">Lunas</span><span class="b">⋯</span></div>
+          <div class="row"><span class="av">KW</span><div class="n"><b>Kevin Wijaya</b><span>Anak · bukti transfer diunggah 1 jam lalu</span></div><span class="b" style="color:#15803D">Terima</span><span class="b" style="color:#DC2626">Tolak</span><span class="pill" style="background:#FEF3C7;color:#B45309">Verifikasi</span></div>
+          <div class="row"><span class="av">DS</span><div class="n"><b>Daniel Saputra</b><span>Tamu · daftar 3 hari lalu</span></div><span class="pill" style="background:var(--n100);color:var(--n700)">Belum bayar</span><span class="b">⋯</span></div>
+          <div class="row"><span class="av">MS</span><div class="n"><b>Maria Susanti</b><span>0813-xxxx-9876 · daftar 4 hari lalu</span></div><span class="pill" style="background:#DBEAFE;color:#1D4ED8">Lunas</span><span class="b">⋯</span></div>
+          <div class="row"><span class="av">GL</span><div class="n"><b>Grace Lim</b><span>0857-xxxx-4433 · daftar 5 hari lalu</span></div><span class="pill" style="background:#DBEAFE;color:#1D4ED8">Lunas</span><span class="b">⋯</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="notes">
+  <div class="note"><h3>Tetap sama</h3><ul>
+    <li>Semua isi & tombol: ganti/hapus hero, petunjuk unggah, PDF/Excel, Duplikat, info, teaser, tag, deskripsi lengkap.</li>
+    <li>Isi tiap tab (peserta, verifikasi pembayaran, pelayanan, formulir, ulasan) tidak berubah.</li>
+  </ul></div>
+  <div class="note"><h3>Berubah</h3><ul>
+    <li>Layar ≥ 1280px: 2 kolom; kartu kiri sticky (ikut terlihat saat menggulir daftar peserta panjang).</li>
+    <li>Info Tanggal / Lokasi / Peserta / Biaya / Teaser jadi baris berlabel (bukan 3 kotak), kuota dengan bar.</li>
+    <li>Tab bar ada di atas kolom kanan (tetap sticky).</li>
+  </ul></div>
+  <div class="note"><h3>Perlu keputusan</h3><ul>
+    <li>Lebar kolom kiri: ±380px (usulan) atau ±1/3 layar?</li>
+    <li>Deskripsi lengkap: tetap dilipat (usulan) atau tampil langsung?</li>
+  </ul></div>
+</div>
+</body>
+</html>

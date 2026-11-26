@@ -34,7 +34,7 @@ import {
   AlertTriangle,
   UserPlus,
   Camera,
-  Search, Info
+  Search, Info, Receipt, HandHeart, ClipboardList, Star,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -365,9 +365,12 @@ export default function EventDetailPage() {
         <ArrowLeft className="w-3 h-3" /> Kembali ke daftar event
       </Link>
 
+      {/* ≥ 1280px: 2 kolom — kartu event (kiri, sticky) | tab (kanan). Lebih kecil → bertumpuk. */}
+      <div className="xl:grid xl:grid-cols-[380px_minmax(0,1fr)] xl:gap-5 xl:items-start">
+      <aside className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:rounded-xl">
       {/* Hero */}
-      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden mb-6">
-        <div className="relative aspect-[16/9] sm:aspect-[3/1] bg-neutral-100">
+      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden mb-6 xl:mb-0">
+        <div className="relative aspect-[16/9] sm:aspect-[3/1] xl:aspect-[16/9] bg-neutral-100">
           {e.heroImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -429,7 +432,7 @@ export default function EventDetailPage() {
 
         <div className="p-4 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 flex items-start gap-2 min-w-0 break-words">
+            <h1 className="text-xl sm:text-2xl xl:text-xl font-bold text-neutral-900 flex items-start gap-2 min-w-0 break-words">
               <Megaphone className="w-6 h-6 text-brand-500 shrink-0 mt-0.5" />
               <span className="min-w-0">{e.judul}</span>
             </h1>
@@ -446,7 +449,7 @@ export default function EventDetailPage() {
           <div className="text-sm text-neutral-500 mt-1 break-words">{targetLabel}</div>
           {e.ringkasan && <p className="mt-3 text-neutral-700 break-words">{e.ringkasan}</p>}
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-1 gap-3 text-sm">
             <InfoBlock icon={Calendar} label="Tanggal">
               {formatTanggalShort(e.tanggalMulai)}
               {e.tanggalSelesai && e.tanggalSelesai !== e.tanggalMulai && (
@@ -462,6 +465,17 @@ export default function EventDetailPage() {
             <InfoBlock icon={Users} label="Peserta">
               {e.pesertaCount}
               {e.quotaPeserta != null ? ` / ${e.quotaPeserta}` : ''}
+              {e.quotaPeserta ? (
+                <span className="block h-1.5 mt-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                  <span
+                    className={`block h-full rounded-full ${e.pesertaCount >= e.quotaPeserta ? 'bg-red-500' : 'bg-gradient-to-r from-brand-500 to-brand-700'}`}
+                    style={{ width: `${Math.min(100, Math.round((e.pesertaCount / e.quotaPeserta) * 100))}%` }}
+                  />
+                </span>
+              ) : null}
+            </InfoBlock>
+            <InfoBlock icon={CircleDollarSign} label="Biaya">
+              {e.tipeBayar === 'GRATIS' ? 'Gratis' : e.tipeBayar === 'NOMINAL_BEBAS' ? 'Sukarela' : `Rp ${Number(e.nominal ?? 0).toLocaleString('id-ID')}`}
             </InfoBlock>
           </div>
 
@@ -501,14 +515,17 @@ export default function EventDetailPage() {
         </div>
       </div>
 
+      </aside>
+
+      <div className="min-w-0">
       {/* Tab bagian — Peserta · Pembayaran · Pelayanan & Volunteer · Ulasan */}
       {(() => {
-        const items: { key: typeof tab; label: string; badge?: number; warn?: boolean; show: boolean; needsFill?: boolean }[] = [
-          { key: 'peserta', label: 'Peserta', badge: e.pesertaCount, show: true },
-          { key: 'pembayaran', label: 'Pembayaran', badge: statusCount.MENUNGGU_VERIFIKASI ?? 0, warn: true, show: isPaid },
-          { key: 'pelayanan', label: 'Pelayanan & Volunteer', show: e.butuhKehadiran, needsFill: pelayananPerluDiisi },
-          { key: 'formulir', label: 'Formulir', show: true },
-          { key: 'ulasan', label: 'Ulasan', show: true },
+        const items: { key: typeof tab; label: string; Icon: typeof Users; badge?: number; warn?: boolean; show: boolean; needsFill?: boolean }[] = [
+          { key: 'peserta', label: 'Peserta', Icon: Users, badge: e.pesertaCount, show: true },
+          { key: 'pembayaran', label: 'Pembayaran', Icon: Receipt, badge: statusCount.MENUNGGU_VERIFIKASI ?? 0, warn: true, show: isPaid },
+          { key: 'pelayanan', label: 'Pelayanan & Volunteer', Icon: HandHeart, show: e.butuhKehadiran, needsFill: pelayananPerluDiisi },
+          { key: 'formulir', label: 'Formulir', Icon: ClipboardList, show: true },
+          { key: 'ulasan', label: 'Ulasan', Icon: Star, show: true },
         ];
         return (
           <div className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 bg-neutral-50/95 backdrop-blur border-b border-neutral-200 mb-4 flex gap-1 overflow-x-auto" role="tablist">
@@ -520,10 +537,18 @@ export default function EventDetailPage() {
                   role="tab"
                   aria-selected={tab === x.key}
                   onClick={() => setTab(x.key)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${
+                  className={`inline-flex items-center gap-2 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${
                     tab === x.key ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'
                   }`}
                 >
+                  {/* Ikon tab dalam kotak: aktif = gradien brand, lainnya netral */}
+                  <span
+                    className={`w-6 h-6 rounded-md inline-flex items-center justify-center shrink-0 ${
+                      tab === x.key ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm' : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    <x.Icon className="w-3.5 h-3.5" />
+                  </span>
                   {x.label}
                   {x.needsFill ? <NeedsFillBadge label="Perlu diisi" hint={pelayananHint} /> : null}
                   {x.badge ? (
@@ -590,7 +615,7 @@ export default function EventDetailPage() {
         </div>
 
         {/* Ringkasan jumlah per status — klik untuk menyaring daftar */}
-        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-7 gap-2">
+        <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-7 xl:grid-cols-4 2xl:grid-cols-7 gap-2">
           {(
             [
               ['all', 'Terdaftar aktif', aktifCount, 'text-neutral-900', 'bg-neutral-50'],
@@ -814,6 +839,9 @@ export default function EventDetailPage() {
         </div>
       ) : null}
 
+      </div>
+      </div>
+
       {addPesertaOpen && (
         <AddPesertaModal
           eventId={eventId}
@@ -881,11 +909,13 @@ function InfoBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase text-neutral-400 font-semibold">{label}</div>
-      <div className="flex items-start gap-1.5 text-neutral-700 mt-0.5 min-w-0">
-        <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0 mt-0.5" />
-        <span className="min-w-0 break-words">{children}</span>
+    <div className="flex items-start gap-2.5 min-w-0">
+      <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white inline-flex items-center justify-center shrink-0 shadow-sm">
+        <Icon className="w-4 h-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] uppercase text-neutral-400 font-semibold">{label}</div>
+        <div className="text-neutral-800 font-medium mt-0.5 min-w-0 break-words">{children}</div>
       </div>
     </div>
   );

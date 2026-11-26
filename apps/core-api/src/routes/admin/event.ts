@@ -3020,10 +3020,27 @@ eventRouter.post('/:id/checkin', async (req, res) => {
         : `${jemaat.namaLengkap} belum terdaftar sebagai peserta event "${event.judul}".`,
     );
   }
-  if (partisipasi.status === 'BATAL') {
-    throw BadRequest(
-      `Partisipasi ${jemaat.namaLengkap} sudah dibatalkan — tidak bisa check-in.`,
+  // Pendaftaran batal (dibatal sendiri / admin / otomatis) tapi orangnya datang:
+  // dulu ditolak tanpa jalan keluar. Sekarang 409 → scanner menawarkan
+  // "Tetap check-in" (force) yang mengaktifkan lagi pendaftarannya sebagai HADIR.
+  const reactivate = partisipasi.status === 'BATAL';
+  if (reactivate && !input.force) {
+    const why =
+      partisipasi.cancelReason === 'FORM_AUTO'
+        ? ' otomatis karena formulir belum diisi'
+        : partisipasi.cancelReason === 'FORM_ADMIN'
+          ? ' oleh admin (formulir)'
+          : partisipasi.cancelReason === 'NO_SHOW'
+            ? ' otomatis (tidak hadir / belum bayar)'
+            : '';
+    throw Conflict(
+      `Pendaftaran ${jemaat.namaLengkap} sudah dibatalkan${why}. Bila orangnya datang, tekan "Tetap check-in" untuk mencatat hadir.`,
     );
+  }
+  if (reactivate) {
+    // Diaktifkan lagi → tetap tidak boleh bentrok dengan sesi lain di grup yang sama.
+    const c = await sesiConflict(event, jemaat.id);
+    if (c) throw BadRequest(`${jemaat.namaLengkap}: ${sesiMessage(c)}`);
   }
 
   // Tamu? → badge Tamu + kategori + pengundang di layar hasil scan.
@@ -3039,7 +3056,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
   }
 
   // Untuk event berbayar, wajib sudah BAYAR — kecuali admin force.
-  if (!paymentOkForCheckin(event, partisipasi.status) && !input.force) {
+  if (!reactivate && !paymentOkForCheckin(event, partisipasi.status) && !input.force) {
     throw Conflict(
       `${jemaat.namaLengkap} belum melakukan pembayaran (status: ${partisipasi.status}). ` +
         `Approve bukti transfer dulu, atau kirim ulang dengan force=true untuk override.`,
@@ -3053,8 +3070,10 @@ eventRouter.post('/:id/checkin', async (req, res) => {
       status: 'HADIR',
       attendedAt: now,
       // Terdaftar tapi terlambat → LATE (bukan WALK_IN = tamu/tanpa pendaftaran).
-      checkinMethod: late ? 'LATE' : 'SCAN',
+      // Batal lalu dicatat hadir (force) → WALK_IN & alasan batal dihapus.
+      checkinMethod: reactivate ? 'WALK_IN' : late ? 'LATE' : 'SCAN',
       checkedInBy: req.user?.sub ?? null,
+      ...(reactivate ? { cancelledAt: null, cancelReason: null } : {}),
     },
     include: {
       jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } },
@@ -3159,21 +3178,30 @@ eventRouter.post('/:id/walk-in-guest', async (req, res) => {
   const participation = existing
     ? await prisma.eventParticipation.update({
         where: { id: existing.id },
-        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, checkinMethod: 'WALK_IN', checkedInBy: req.user?.sub ?? null, ...(paid ? { paidAt: now } : {}), ...guestData },
+        data: { status: 'HADIR', attendedAt: now, cancelledAt: null, cancelReason: null, checkinMethod: 'WALK_IN', checkedInBy: req.user?.sub ?? null, ...(paid ? { paidAt: now } : {}), ...guestData },
       })
-    : await prisma.eventParticipation.create({
-        data: {
-          eventId: event.id,
-          jemaatId: tamu.id,
-          status: 'HADIR',
-          attendedAt: now,
-          checkinMethod: 'WALK_IN',
-          checkedInBy: req.user?.sub ?? null,
-          nominalBayar: paid ? nominal : null,
-          ...(paid ? { paidAt: now } : {}),
-          ...guestData,
-        },
-      });
+    : await prisma.eventParticipation
+        .create({
+          data: {
+            eventId: event.id,
+            jemaatId: tamu.id,
+            status: 'HADIR',
+            attendedAt: now,
+            checkinMethod: 'WALK_IN',
+            checkedInBy: req.user?.sub ?? null,
+            nominalBayar: paid ? nominal : null,
+            ...(paid ? { paidAt: now } : {}),
+            ...guestData,
+          },
+        })
+        .catch(async (e: { code?: string }) => {
+          // Dicatat bersamaan oleh petugas lain → pakai baris yang ada.
+          if (e.code !== 'P2002') throw e;
+          return prisma.eventParticipation.update({
+            where: { eventId_jemaatId: { eventId: event.id, jemaatId: tamu.id } },
+            data: { status: 'HADIR', attendedAt: now, cancelledAt: null, cancelReason: null, checkinMethod: 'WALK_IN', checkedInBy: req.user?.sub ?? null },
+          });
+        });
   if (paid && input.pembayaran && input.pembayaran !== 'GRATIS' && nominal > 0) {
     await prisma.eventDonation.create({
       data: {

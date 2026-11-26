@@ -30,6 +30,8 @@ Semua jam memakai **jam dinding zona waktu cabang** (bukan jam HP petugas). Tang
 ## Siapa yang boleh scan
 - **Petugas scan ibadah**: petugas pelayanan di ibadah itu dengan tanda **"Bisa Scan" / canScanAttendance** (diatur di Portal → detail ibadah → Pelayanan → petugas, atau koordinator di app → Ministry → Atur jadwal → chip scan). Berlaku permisif: cukup ada di salah satu baris petugas link itu dengan tanda scan.
 - **Petugas scan event**: petugas pelayanan event dengan tanda scan (Portal → detail event → Pelayanan & volunteer → "Beri akses scan").
+- **Event — pendaftaran sudah batal tapi orangnya datang** (dibatal sendiri, oleh admin, atau otomatis karena formulir belum diisi): scan menampilkan **"Konflik — Konfirmasi Perlu"** dengan alasannya → tekan **Tetap check-in** untuk mengaktifkan lagi pendaftarannya sebagai **Hadir** (tercatat walk-in). Tetap ditolak bila ia terdaftar di sesi lain dalam grup sesi yang sama.
+- **Event tidak wajib daftar** (Portal → form event → Kehadiran → *Wajib daftar sebelum hadir* dimatikan; hanya event tidak berbayar): jemaat yang belum terdaftar langsung tercatat **Hadir (walk-in)** saat discan atau self check-in.
 - **Petugas CKids**: Akses CKids "Scanner Ibadah" (atau Gift Stall) — khusus ibadah anak.
 - **Admin**: Role Access menu "Kehadiran"/"Ibadah" level tulis (Portal).
 - **Fulltimer lewat Portal** (2026-11): boleh check-in ibadah & event (scan kamera/USB, ketik kode, walk-in, lihat statistik) **tanpa** ditunjuk sebagai petugas scan pelayanan, kapan saja (seperti admin). Hanya di Portal — di app Els tetap harus petugas scan. Halaman Portal-nya tetap butuh Role Access menu Ibadah/Kehadiran/Event (baca) supaya bisa dibuka.

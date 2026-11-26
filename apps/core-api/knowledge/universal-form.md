@@ -20,7 +20,14 @@ summary: Membuat formulir di Portal (Broadcast → Universal Form), menyematkan 
 ## Jenis field
 Teks pendek, teks panjang, rich text (tebal, miring, daftar, link — tanpa gambar), upload file (**banyak file**: jumlah maks 1–10, jenis gambar/PDF/Word/Excel/PowerPoint/teks, ukuran per file maks 20 MB), email, link, nomor HP, tanggal, rentang tanggal, tanggal + jam, dropdown, pilihan ganda, centang, angka, ya/tidak, **tanda tangan digital**, dan **Informasi** (judul bagian / teks / info biru / penting kuning — bukan isian, `{nama_peserta}` & `{event}` diganti otomatis).
 - Validasi: wajib, panjang min/maks, angka min/maks/bulat, tanggal min/maks/tidak lewat/tidak di masa depan, rentang maks N hari, domain email/link, jumlah pilihan min/maks, jenis & ukuran file. Dicek di app **dan** server.
-- **Autofill** (hanya Teks pendek): nama, kode, no HP, email, tanggal lahir, usia, jenis kelamin, cabang, homecell, zona, alamat, pekerjaan, status nikah. Terkunci di app; nilainya diambil ulang di server saat kirim.
+- **Autofill** (Portal → field → "Autofill dari data jemaat", dikelompokkan):
+  - **Peserta**: nama, kode, no HP, email, tanggal lahir, usia, jenis kelamin, cabang, homecell, zona, pemimpin homecell + no HP-nya, alamat, pekerjaan, nama & alamat kantor, pendidikan terakhir, status & tanggal pernikahan, sudah baptis air / Roh Kudus + tanggalnya, tahap Spiritual Journey, tanggal bergabung gereja, bapa rohani, pelayanan yang diikuti.
+  - **Pasangan (suami/istri)** — dari relasi Suami/Istri di menu Keluarga peserta: nama, kode, no HP, email, tanggal lahir, usia, pekerjaan, homecell, sudah baptis air.
+  - **Orang tua / wali**: nama & no HP ayah, nama & no HP ibu, nama / no HP / email orang tua-wali (wali utama tanggungan → ayah → ibu), kontak darurat (wali → pasangan).
+  - Tipe field: Teks pendek/panjang = semua data; No HP = nomor-nomor HP; Email = email; Tanggal = tanggal-tanggal; Angka = usia; Ya/Tidak = status baptis; Pilihan/Radio = jenis kelamin, status nikah, pendidikan, cabang, Spiritual Journey, status baptis.
+  - Terkunci di app bila datanya ada; nilainya diambil ulang di server saat kirim. **Data kosong** (mis. belum punya pasangan di Keluarga, tanggal baptis belum tercatat) → field **terbuka diisi manual** (centang "Wajib diisi bila data profil kosong" bila perlu). Di hasil tertulis "diisi manual".
+  - Event: pasangan & wali dibaca dari **peserta** yang diisikan (mis. form anak → orang tua anak itu).
+  - Data yang tidak ada di profil (ukuran kaos, golongan darah, alergi, NIK, dll.) tetap diisi manual.
 - Field yang sudah punya jawaban tidak bisa dihapus (otomatis **disembunyikan**) dan jenisnya tidak bisa diubah.
 
 ## Tanda tangan digital

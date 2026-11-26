@@ -382,13 +382,13 @@ meUniversalFormRouter.post('/:formId/submit', async (req, res) => {
   });
   const fileMap = new Map<string, UfFileRef>(myFiles.map((f) => [f.id, f]));
   const raw = (req.body?.jawaban ?? {}) as Record<string, unknown>;
-  const { jawaban, errors } = validateAnswers(fields, raw, fileMap, existing?.id ?? null);
+  const keys = ctx.form.anonim ? [] : (fields.filter((f) => f.autofill).map((f) => f.autofill) as UfAutofill[]);
+  const autofill = await autofillFor(subject.jemaatId, keys);
+  const { jawaban, errors } = validateAnswers(fields, raw, fileMap, existing?.id ?? null, autofill);
   if (Object.keys(errors).length) {
     res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Ada isian yang perlu diperbaiki.', details: { fieldErrors: Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, [v]])) } } });
     return;
   }
-  const keys = ctx.form.anonim ? [] : (fields.filter((f) => f.autofill).map((f) => f.autofill) as UfAutofill[]);
-  const autofill = await autofillFor(subject.jemaatId, keys);
   const hash = hashJawaban({ formId, subjekJemaatId: subject.jemaatId, jawaban, autofill });
   // Tanda tangan diikat ke isi: jawaban berubah → tanda tangan lama tidak berlaku.
   const sigFields = fields.filter((f) => f.tipe === 'SIGNATURE');

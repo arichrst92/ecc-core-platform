@@ -28,6 +28,7 @@ import {
   UF_RESPONSE_STATUS_LABEL,
   UF_SOURCE_LABEL,
   UF_SOURCE_TYPES,
+  ufAutofillAllowed,
   ufEmbedListSchema,
   ufFormInputSchema,
   ufReviewSchema,
@@ -41,7 +42,7 @@ import { createNotification } from '../../lib/notification.js';
 import { paymentStatusOf, requiresPayment } from '../../lib/event-payment.js';
 import { esc, sendCsv, sendPrintHtml } from '../../lib/print-report.js';
 import {
-  answerText,
+  autofillOrAnswer,
   deleteUfFile,
   sourceTitles,
   ufDeadline,
@@ -81,7 +82,7 @@ function fieldData(f: UfFieldInput, urutan: number) {
     wajib: f.tipe === 'INFO' ? false : f.wajib,
     opsi: f.opsi as Prisma.InputJsonValue,
     validasi: f.validasi as Prisma.InputJsonValue,
-    autofill: f.tipe === 'TEXT' ? f.autofill ?? null : null,
+    autofill: ufAutofillAllowed(f.tipe, f.autofill) ? f.autofill ?? null : null,
     gaya: f.tipe === 'INFO' ? f.gaya ?? 'TEXT' : null,
     isi: f.tipe === 'INFO' || f.tipe === 'SIGNATURE' ? f.isi ?? null : null,
     hidden: f.hidden,
@@ -401,7 +402,7 @@ async function loadResults(formId: string, filter: ResultFilter) {
       const jaw = (r.jawaban ?? {}) as Record<string, unknown>;
       const af = (r.autofill ?? {}) as Record<string, string>;
       const answers: Record<string, string> = {};
-      for (const f of inputFields) answers[f.id] = f.autofill ? af[f.autofill] ?? '' : answerText(f, jaw[f.id], fileNames);
+      for (const f of inputFields) answers[f.id] = autofillOrAnswer(f, af, jaw, fileNames);
       const subj = jm.get(r.subjekJemaatId);
       return {
         id: r.id,
@@ -579,8 +580,10 @@ universalFormRouter.get('/:id/responses/:rid', R, async (req, res) => {
           isi: f.isi,
           autofill: f.autofill,
           autofillLabel: f.autofill ? UF_AUTOFILL_LABEL[f.autofill as UfAutofill] : null,
-          value: f.autofill ? af[f.autofill] ?? '' : jaw[f.id] ?? null,
-          text: f.autofill ? af[f.autofill] ?? '' : answerText(f, jaw[f.id], new Map(r.files.map((x) => [x.id, x.originalName]))),
+          // Data profil kosong saat dikirim → jemaat mengisi manual.
+          autofillManual: !!f.autofill && !af[f.autofill],
+          value: f.autofill && af[f.autofill] ? af[f.autofill] : jaw[f.id] ?? null,
+          text: autofillOrAnswer(f, af, jaw, new Map(r.files.map((x) => [x.id, x.originalName]))),
           files: r.files.filter((x) => x.fieldId === f.id).map((x) => ({ id: x.id, originalName: x.originalName, mime: x.mime, sizeBytes: x.sizeBytes, kind: x.kind, meta: x.meta })),
         })),
     },

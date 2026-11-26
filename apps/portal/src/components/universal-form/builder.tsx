@@ -33,7 +33,8 @@ import {
   WholeWord,
 } from 'lucide-react';
 import {
-  UF_AUTOFILL,
+  UF_AUTOFILL_GROUPS,
+  ufAutofillFor,
   UF_AUTOFILL_LABEL,
   UF_FIELD_LABEL,
   UF_FILE_ACCEPT,
@@ -344,25 +345,38 @@ function FieldSettings({ f, set, anonim, locked }: { f: UfField; set: (p: Partia
           <input value={f.petunjuk ?? ''} onChange={(e) => set({ petunjuk: e.target.value || null })} maxLength={1000} className={inputCls} />
         </label>
       )}
-      {f.tipe !== 'INFO' ? <Check label="Wajib diisi" checked={f.wajib} onChange={(w) => set({ wajib: w })} disabled={!!f.autofill} /> : null}
+      {f.tipe !== 'INFO' ? (
+        <Check label={f.autofill ? 'Wajib diisi bila data profil kosong' : 'Wajib diisi'} checked={f.wajib} onChange={(w) => set({ wajib: w })} />
+      ) : null}
 
-      {f.tipe === 'TEXT' ? (
+      {ufAutofillFor(f.tipe).length ? (
         <label className="block">
           <span className="text-xs text-neutral-600">Autofill dari data jemaat</span>
           <select
             value={f.autofill ?? ''}
             disabled={anonim}
-            onChange={(e) => set({ autofill: (e.target.value || null) as UfField['autofill'], wajib: false })}
+            onChange={(e) => set({ autofill: (e.target.value || null) as UfField['autofill'] })}
             className={inputCls}
           >
             <option value="">Tidak — jemaat mengisi sendiri</option>
-            {UF_AUTOFILL.map((a) => (
-              <option key={a} value={a}>
-                {UF_AUTOFILL_LABEL[a]}
-              </option>
-            ))}
+            {UF_AUTOFILL_GROUPS.map((g) => {
+              const keys = g.keys.filter((k) => ufAutofillFor(f.tipe).includes(k));
+              return keys.length ? (
+                <optgroup key={g.label} label={g.label}>
+                  {keys.map((a) => (
+                    <option key={a} value={a}>
+                      {UF_AUTOFILL_LABEL[a]}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
           </select>
-          <span className="text-[11px] text-neutral-400">{anonim ? 'Form anonim tidak memakai autofill.' : 'Tampil terkunci di app; diambil dari data peserta saat dikirim.'}</span>
+          <span className="text-[11px] text-neutral-400">
+            {anonim
+              ? 'Form anonim tidak memakai autofill.'
+              : 'Tampil terkunci di app, diambil dari data peserta saat dikirim. Bila datanya belum ada (mis. belum punya pasangan di menu Keluarga), jemaat mengisi manual. Data pasangan & orang tua/wali dibaca dari menu Keluarga peserta.'}
+          </span>
         </label>
       ) : null}
 

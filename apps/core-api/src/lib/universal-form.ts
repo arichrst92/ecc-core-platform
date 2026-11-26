@@ -158,37 +158,92 @@ function usia(d: Date | null): number | null {
   return a;
 }
 
-/** Nilai autofill untuk satu jemaat (hanya kunci yang diminta). */
+const personSelect = {
+  id: true,
+  namaLengkap: true,
+  kode: true,
+  noHp: true,
+  email: true,
+  tanggalLahir: true,
+  jenisKelamin: true,
+  alamat: true,
+  statusPekerjaan: true,
+  namaKantor: true,
+  alamatKantor: true,
+  pendidikanTerakhir: true,
+  statusPernikahan: true,
+  tanggalPernikahan: true,
+  sudahBaptisAir: true,
+  tanggalBaptisAir: true,
+  sudahBaptisRohKudus: true,
+  tanggalBaptisRohKudus: true,
+  spiritualJourneyLevel: true,
+  tanggalBergabungGereja: true,
+  primaryGuardianId: true,
+  cabang: { select: { nama: true } },
+  bapaRohani: { select: { namaLengkap: true } },
+} as const;
+
+type HcInfo = { nama: string; area: { nama: string }; picJemaat: { namaLengkap: string; noHp: string | null } | null } | null;
+
+async function homecellOf(jemaatId: string): Promise<HcInfo> {
+  const sel = { nama: true, area: { select: { nama: true } }, picJemaat: { select: { namaLengkap: true, noHp: true } } } as const;
+  const m = await prisma.homecellMember.findFirst({
+    where: { jemaatId, isActive: true, homecell: { isActive: true } },
+    orderBy: { tanggalBergabung: 'desc' },
+    select: { homecell: { select: sel } },
+  });
+  if (m) return m.homecell;
+  return prisma.homecell.findFirst({ where: { picJemaatId: jemaatId, isActive: true }, select: sel });
+}
+
+const yaBelum = (b: boolean | null | undefined) => (b === true ? 'Sudah' : b === false ? 'Belum' : null);
+const pekerjaan = (p: { statusPekerjaan: string | null; namaKantor: string | null } | null) =>
+  p ? [p.statusPekerjaan, p.namaKantor].filter(Boolean).join(' · ') || null : null;
+
+/**
+ * Nilai autofill untuk satu jemaat (hanya kunci yang diminta), sebagai teks
+ * tampilan. Kosong ('') = data belum ada → app membuka field untuk diisi manual.
+ * Pasangan / ayah / ibu / wali dibaca relatif terhadap jemaat ini (peserta
+ * event bisa anak → wali = orang tuanya).
+ */
 export async function autofillFor(jemaatId: string, keys: UfAutofill[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   if (!keys.length) return out;
-  const j = await prisma.jemaat.findUnique({
-    where: { id: jemaatId },
-    select: {
-      namaLengkap: true,
-      kode: true,
-      noHp: true,
-      email: true,
-      tanggalLahir: true,
-      jenisKelamin: true,
-      alamat: true,
-      statusPekerjaan: true,
-      namaKantor: true,
-      statusPernikahan: true,
-      cabang: { select: { nama: true } },
-    },
-  });
+  const j = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: personSelect });
   if (!j) return out;
-  let hc: { nama: string; area: { nama: string } } | null = null;
-  if (keys.includes('HOMECELL') || keys.includes('ZONA')) {
-    const m = await prisma.homecellMember.findFirst({
-      where: { jemaatId, isActive: true, homecell: { isActive: true } },
-      orderBy: { tanggalBergabung: 'desc' },
-      select: { homecell: { select: { nama: true, area: { select: { nama: true } } } } },
-    });
-    const led = m ? null : await prisma.homecell.findFirst({ where: { picJemaatId: jemaatId, isActive: true }, select: { nama: true, area: { select: { nama: true } } } });
-    hc = m?.homecell ?? led ?? null;
-  }
+  const need = (re: RegExp) => keys.some((k) => re.test(k));
+
+  // Homecell peserta / pasangan
+  const hc = need(/^(HOMECELL|ZONA|PIC_HOMECELL)/) ? await homecellOf(jemaatId) : null;
+
+  // Relasi keluarga langsung (dua arah otomatis: A→B "Istri" ⇔ B→A "Suami").
+  const rel = need(/^(PSG_|AYAH_|IBU_|WALI_|DARURAT_)/)
+    ? await prisma.jemaatRelasi.findMany({
+        where: { jemaatId, tipeRelasi: { nama: { in: ['Suami', 'Istri', 'Ayah', 'Ibu'] } } },
+        select: { tipeRelasi: { select: { nama: true } }, jemaatTerkait: { select: personSelect } },
+      })
+    : [];
+  const by = (n: string[]) => rel.find((r) => n.includes(r.tipeRelasi.nama) && r.jemaatTerkait)?.jemaatTerkait ?? null;
+  const psg = by(['Suami', 'Istri']);
+  const ayah = by(['Ayah']);
+  const ibu = by(['Ibu']);
+  const guardian =
+    need(/^(WALI_|DARURAT_)/) && j.primaryGuardianId
+      ? await prisma.jemaat.findUnique({ where: { id: j.primaryGuardianId }, select: personSelect })
+      : null;
+  const wali = guardian ?? ayah ?? ibu;
+  const darurat = wali ?? psg;
+  const psgHc = keys.includes('PSG_HOMECELL') && psg ? await homecellOf(psg.id) : null;
+
+  const pelayanan = keys.includes('PELAYANAN')
+    ? await prisma.jemaatPelayanan.findMany({
+        where: { jemaatId, isActive: true },
+        select: { pelayanan: { select: { nama: true } }, pelayananRole: { select: { nama: true } } },
+        orderBy: { tanggalMulai: 'asc' },
+      })
+    : [];
+
   for (const k of keys) {
     let v: string | null | undefined = null;
     switch (k) {
@@ -202,9 +257,41 @@ export async function autofillFor(jemaatId: string, keys: UfAutofill[]): Promise
       case 'CABANG': v = j.cabang?.nama; break;
       case 'HOMECELL': v = hc?.nama; break;
       case 'ZONA': v = hc?.area.nama; break;
+      case 'PIC_HOMECELL': v = hc?.picJemaat?.namaLengkap; break;
+      case 'PIC_HOMECELL_HP': v = hc?.picJemaat?.noHp; break;
       case 'ALAMAT': v = j.alamat; break;
-      case 'PEKERJAAN': v = [j.statusPekerjaan, j.namaKantor].filter(Boolean).join(' · ') || null; break;
+      case 'PEKERJAAN': v = pekerjaan(j); break;
+      case 'NAMA_KANTOR': v = j.namaKantor; break;
+      case 'ALAMAT_KANTOR': v = j.alamatKantor; break;
+      case 'PENDIDIKAN': v = j.pendidikanTerakhir; break;
       case 'STATUS_NIKAH': v = j.statusPernikahan; break;
+      case 'TGL_NIKAH': v = j.tanggalPernikahan ? fmtTgl(j.tanggalPernikahan) : null; break;
+      case 'BAPTIS_AIR': v = yaBelum(j.sudahBaptisAir); break;
+      case 'TGL_BAPTIS_AIR': v = j.tanggalBaptisAir ? fmtTgl(j.tanggalBaptisAir) : null; break;
+      case 'BAPTIS_RK': v = yaBelum(j.sudahBaptisRohKudus); break;
+      case 'TGL_BAPTIS_RK': v = j.tanggalBaptisRohKudus ? fmtTgl(j.tanggalBaptisRohKudus) : null; break;
+      case 'SPIRITUAL_JOURNEY': v = j.spiritualJourneyLevel; break;
+      case 'TGL_BERGABUNG': v = j.tanggalBergabungGereja ? fmtTgl(j.tanggalBergabungGereja) : null; break;
+      case 'BAPA_ROHANI': v = j.bapaRohani?.namaLengkap; break;
+      case 'PELAYANAN': v = pelayanan.map((p) => `${p.pelayanan.nama} (${p.pelayananRole.nama})`).join(', ') || null; break;
+      case 'PSG_NAMA': v = psg?.namaLengkap; break;
+      case 'PSG_KODE': v = psg?.kode; break;
+      case 'PSG_NO_HP': v = psg?.noHp; break;
+      case 'PSG_EMAIL': v = psg?.email; break;
+      case 'PSG_TGL_LAHIR': v = psg?.tanggalLahir ? fmtTgl(psg.tanggalLahir) : null; break;
+      case 'PSG_USIA': { const u = usia(psg?.tanggalLahir ?? null); v = u != null ? `${u} tahun` : null; break; }
+      case 'PSG_PEKERJAAN': v = pekerjaan(psg); break;
+      case 'PSG_HOMECELL': v = psgHc?.nama; break;
+      case 'PSG_BAPTIS_AIR': v = yaBelum(psg?.sudahBaptisAir); break;
+      case 'AYAH_NAMA': v = ayah?.namaLengkap; break;
+      case 'AYAH_NO_HP': v = ayah?.noHp; break;
+      case 'IBU_NAMA': v = ibu?.namaLengkap; break;
+      case 'IBU_NO_HP': v = ibu?.noHp; break;
+      case 'WALI_NAMA': v = wali?.namaLengkap; break;
+      case 'WALI_NO_HP': v = wali?.noHp; break;
+      case 'WALI_EMAIL': v = wali?.email; break;
+      case 'DARURAT_NAMA': v = darurat?.namaLengkap; break;
+      case 'DARURAT_NO_HP': v = darurat?.noHp; break;
     }
     out[k] = v ?? '';
   }
@@ -351,11 +438,14 @@ export function validateAnswers(
   raw: Record<string, unknown>,
   files: Map<string, UfFileRef>,
   responseId: string | null,
+  /** Nilai autofill peserta — field autofill yang datanya kosong diisi manual (divalidasi). */
+  autofill: Record<string, string> = {},
 ): { jawaban: Record<string, unknown>; errors: Record<string, string> } {
   const jawaban: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
   for (const f of fields) {
-    if (f.tipe === 'INFO' || f.hidden || f.autofill) continue;
+    if (f.tipe === 'INFO' || f.hidden) continue;
+    if (f.autofill && autofill[f.autofill]) continue;
     const v = valOf(f);
     let x = raw[f.id];
     if (typeof x === 'string') x = x.trim();
@@ -479,6 +569,16 @@ export function hashJawaban(input: { formId: string; subjekJemaatId: string; jaw
   const norm = (v: unknown): unknown =>
     Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, norm((v as Record<string, unknown>)[k])])) : v;
   return crypto.createHash('sha256').update(JSON.stringify(norm(input))).digest('hex');
+}
+
+/** Teks field autofill: data profil, atau isian manual bila data profil kosong. */
+export function autofillOrAnswer(
+  f: { tipe: string; autofill?: string | null; id: string },
+  af: Record<string, string>,
+  jaw: Record<string, unknown>,
+  fileNames?: Map<string, string>,
+): string {
+  return (f.autofill ? af[f.autofill] : '') || answerText(f, jaw[f.id], fileNames);
 }
 
 /** Nilai jawaban sebagai teks (hasil & ekspor). */

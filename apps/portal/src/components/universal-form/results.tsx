@@ -300,6 +300,7 @@ type Detail = {
     isi: string | null;
     autofill: string | null;
     autofillLabel: string | null;
+    autofillManual?: boolean;
     text: string;
     files: { id: string; originalName: string; mime: string; sizeBytes: number; kind: string; meta: Record<string, unknown> | null }[];
   }[];
@@ -436,6 +437,7 @@ function ResponseDrawer({ formId, rid, onClose }: { formId: string; rid: string;
                       {it.autofill ? (
                         <span className="inline-flex items-center gap-0.5 text-sky-700">
                           <Lock className="w-3 h-3" /> {it.autofillLabel}
+                          {it.autofillManual ? <span className="text-amber-700">· diisi manual</span> : null}
                         </span>
                       ) : null}
                     </div>

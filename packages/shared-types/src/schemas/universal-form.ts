@@ -59,8 +59,15 @@ export const UF_INFO_STYLE_LABEL: Record<UfInfoStyle, string> = {
   WARNING: 'Penting (kuning)',
 };
 
-/** Sumber autofill dari data jemaat (read-only di app). */
+/**
+ * Sumber autofill dari data jemaat (read-only di app). Kunci ≤ 20 karakter
+ * (kolom universal_form_field.autofill VarChar(20)).
+ * Data kosong (mis. belum punya pasangan) → field terbuka diisi manual.
+ * Pasangan = relasi Suami/Istri; Ayah/Ibu = relasi keluarga; Wali = wali utama
+ * (tanggungan) → Ayah → Ibu; Kontak darurat = wali → pasangan.
+ */
 export const UF_AUTOFILL = [
+  // Peserta
   'NAMA',
   'KODE',
   'NO_HP',
@@ -71,9 +78,43 @@ export const UF_AUTOFILL = [
   'CABANG',
   'HOMECELL',
   'ZONA',
+  'PIC_HOMECELL',
+  'PIC_HOMECELL_HP',
   'ALAMAT',
   'PEKERJAAN',
+  'NAMA_KANTOR',
+  'ALAMAT_KANTOR',
+  'PENDIDIKAN',
   'STATUS_NIKAH',
+  'TGL_NIKAH',
+  'BAPTIS_AIR',
+  'TGL_BAPTIS_AIR',
+  'BAPTIS_RK',
+  'TGL_BAPTIS_RK',
+  'SPIRITUAL_JOURNEY',
+  'TGL_BERGABUNG',
+  'BAPA_ROHANI',
+  'PELAYANAN',
+  // Pasangan (suami / istri)
+  'PSG_NAMA',
+  'PSG_KODE',
+  'PSG_NO_HP',
+  'PSG_EMAIL',
+  'PSG_TGL_LAHIR',
+  'PSG_USIA',
+  'PSG_PEKERJAAN',
+  'PSG_HOMECELL',
+  'PSG_BAPTIS_AIR',
+  // Orang tua / wali
+  'AYAH_NAMA',
+  'AYAH_NO_HP',
+  'IBU_NAMA',
+  'IBU_NO_HP',
+  'WALI_NAMA',
+  'WALI_NO_HP',
+  'WALI_EMAIL',
+  'DARURAT_NAMA',
+  'DARURAT_NO_HP',
 ] as const;
 export type UfAutofill = (typeof UF_AUTOFILL)[number];
 export const UF_AUTOFILL_LABEL: Record<UfAutofill, string> = {
@@ -87,10 +128,84 @@ export const UF_AUTOFILL_LABEL: Record<UfAutofill, string> = {
   CABANG: 'Cabang',
   HOMECELL: 'Homecell',
   ZONA: 'Zona',
+  PIC_HOMECELL: 'Pemimpin homecell',
+  PIC_HOMECELL_HP: 'No HP pemimpin homecell',
   ALAMAT: 'Alamat',
   PEKERJAAN: 'Pekerjaan',
+  NAMA_KANTOR: 'Nama kantor / usaha',
+  ALAMAT_KANTOR: 'Alamat kantor',
+  PENDIDIKAN: 'Pendidikan terakhir',
   STATUS_NIKAH: 'Status pernikahan',
+  TGL_NIKAH: 'Tanggal pernikahan',
+  BAPTIS_AIR: 'Sudah baptis air',
+  TGL_BAPTIS_AIR: 'Tanggal baptis air',
+  BAPTIS_RK: 'Sudah baptis Roh Kudus',
+  TGL_BAPTIS_RK: 'Tanggal baptis Roh Kudus',
+  SPIRITUAL_JOURNEY: 'Tahap Spiritual Journey',
+  TGL_BERGABUNG: 'Tanggal bergabung gereja',
+  BAPA_ROHANI: 'Bapa rohani',
+  PELAYANAN: 'Pelayanan yang diikuti',
+  PSG_NAMA: 'Nama pasangan',
+  PSG_KODE: 'Kode jemaat pasangan',
+  PSG_NO_HP: 'No HP pasangan',
+  PSG_EMAIL: 'Email pasangan',
+  PSG_TGL_LAHIR: 'Tanggal lahir pasangan',
+  PSG_USIA: 'Usia pasangan',
+  PSG_PEKERJAAN: 'Pekerjaan pasangan',
+  PSG_HOMECELL: 'Homecell pasangan',
+  PSG_BAPTIS_AIR: 'Pasangan sudah baptis air',
+  AYAH_NAMA: 'Nama ayah',
+  AYAH_NO_HP: 'No HP ayah',
+  IBU_NAMA: 'Nama ibu',
+  IBU_NO_HP: 'No HP ibu',
+  WALI_NAMA: 'Nama orang tua / wali',
+  WALI_NO_HP: 'No HP orang tua / wali',
+  WALI_EMAIL: 'Email orang tua / wali',
+  DARURAT_NAMA: 'Kontak darurat (nama)',
+  DARURAT_NO_HP: 'Kontak darurat (No HP)',
 };
+
+export const UF_AUTOFILL_GROUPS: { label: string; keys: UfAutofill[] }[] = [
+  { label: 'Peserta', keys: UF_AUTOFILL.filter((k) => !/^(PSG_|AYAH_|IBU_|WALI_|DARURAT_)/.test(k)) },
+  { label: 'Pasangan (suami / istri)', keys: UF_AUTOFILL.filter((k) => k.startsWith('PSG_')) },
+  { label: 'Orang tua / wali', keys: UF_AUTOFILL.filter((k) => /^(AYAH_|IBU_|WALI_|DARURAT_)/.test(k)) },
+];
+
+const AF_PHONE: UfAutofill[] = ['NO_HP', 'PIC_HOMECELL_HP', 'PSG_NO_HP', 'AYAH_NO_HP', 'IBU_NO_HP', 'WALI_NO_HP', 'DARURAT_NO_HP'];
+const AF_EMAIL: UfAutofill[] = ['EMAIL', 'PSG_EMAIL', 'WALI_EMAIL'];
+const AF_DATE: UfAutofill[] = ['TANGGAL_LAHIR', 'TGL_NIKAH', 'TGL_BAPTIS_AIR', 'TGL_BAPTIS_RK', 'TGL_BERGABUNG', 'PSG_TGL_LAHIR'];
+const AF_NUMBER: UfAutofill[] = ['USIA', 'PSG_USIA'];
+const AF_BOOL: UfAutofill[] = ['BAPTIS_AIR', 'BAPTIS_RK', 'PSG_BAPTIS_AIR'];
+const AF_CHOICE: UfAutofill[] = ['JENIS_KELAMIN', 'STATUS_NIKAH', 'PENDIDIKAN', 'CABANG', 'SPIRITUAL_JOURNEY', 'BAPTIS_AIR', 'BAPTIS_RK', 'PSG_BAPTIS_AIR'];
+
+/**
+ * Data autofill yang cocok untuk tiap tipe field. Teks pendek/panjang: semua.
+ * Tipe lain hanya data yang formatnya sesuai (Tanggal → tanggal, No HP → nomor, …).
+ */
+export function ufAutofillFor(tipe: string): UfAutofill[] {
+  switch (tipe) {
+    case 'TEXT':
+    case 'TEXTAREA':
+      return [...UF_AUTOFILL];
+    case 'PHONE':
+      return AF_PHONE;
+    case 'EMAIL':
+      return AF_EMAIL;
+    case 'DATE':
+      return AF_DATE;
+    case 'NUMBER':
+      return AF_NUMBER;
+    case 'BOOLEAN':
+      return AF_BOOL;
+    case 'SELECT':
+    case 'RADIO':
+      return AF_CHOICE;
+    default:
+      return [];
+  }
+}
+export const ufAutofillAllowed = (tipe: string, key: string | null | undefined) =>
+  !!key && (ufAutofillFor(tipe) as string[]).includes(key);
 
 /** Kategori jenis file untuk field FILE. */
 export const UF_FILE_ACCEPT = ['image', 'pdf', 'doc', 'sheet', 'slide', 'text'] as const;
@@ -187,8 +302,8 @@ export const ufFieldInputSchema = z
     if (f.tipe === 'INFO' && !f.label && !f.isi) ctx.addIssue({ code: 'custom', path: ['isi'], message: 'Isi blok informasi masih kosong.' });
     if (UF_OPTION_TYPES.includes(f.tipe) && f.opsi.length < 1)
       ctx.addIssue({ code: 'custom', path: ['opsi'], message: 'Tambahkan minimal 1 pilihan.' });
-    if (f.autofill && f.tipe !== 'TEXT')
-      ctx.addIssue({ code: 'custom', path: ['autofill'], message: 'Autofill hanya untuk field Teks pendek.' });
+    if (f.autofill && !ufAutofillAllowed(f.tipe, f.autofill))
+      ctx.addIssue({ code: 'custom', path: ['autofill'], message: 'Data autofill ini tidak cocok dengan tipe field.' });
     const v = f.validasi;
     if (v.minLength != null && v.maxLength != null && v.minLength > v.maxLength)
       ctx.addIssue({ code: 'custom', path: ['validasi', 'maxLength'], message: 'Panjang minimal melebihi maksimal.' });

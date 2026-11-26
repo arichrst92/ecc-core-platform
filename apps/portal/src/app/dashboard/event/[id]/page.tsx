@@ -1349,6 +1349,7 @@ function CheckinModal({
   const [history, setHistory] = useState<CheckinResult[]>([]);
   // Track kode terakhir yg butuh force untuk override
   const [pendingForce, setPendingForce] = useState<string | null>(null);
+  const [forceMsg, setForceMsg] = useState('');
 
   // Auto-focus input — fokus kembali setelah setiap check-in supaya scanner
   // hardware bisa langsung kirim kode berikutnya tanpa klik.
@@ -1385,12 +1386,14 @@ function CheckinModal({
       const errBody = err.response?.data?.error;
       const message = errBody?.message ?? 'Gagal check-in';
       // 409 dengan code CONSTRAINT atau hint force → tawarkan override
+      // + pendaftaran sudah batal tapi orangnya datang (2026-11) → "Tetap check-in" mengaktifkan lagi.
       const needsForce =
         status === 409 &&
-        isPaid &&
-        message.toLowerCase().includes('belum melakukan pembayaran');
+        ((isPaid && message.toLowerCase().includes('belum melakukan pembayaran')) ||
+          message.toLowerCase().includes('sudah dibatalkan'));
       if (needsForce) {
         setPendingForce(vars.kode);
+        setForceMsg(message);
       } else {
         setKode('');
       }
@@ -1487,8 +1490,7 @@ function CheckinModal({
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p>
-                      Kode <strong>{pendingForce}</strong> belum melakukan pembayaran.
-                      Admin bisa override (mark HADIR walau belum BAYAR).
+                      Kode <strong>{pendingForce}</strong>: {forceMsg || 'belum melakukan pembayaran.'}
                     </p>
                     <div className="mt-2 flex gap-2">
                       <button

@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Relayout Detail Ibadah & Detail Event — usulan GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--b50:#FFF7ED;--b100:#FFEDD5;--b200:#FED7AA;--b500:#F97316;--b600:#EA580C;--b700:#C2410C;--b800:#9A3412;
+    --ink:#171717;--n700:#404040;--n600:#525252;--n500:#737373;--n400:#A3A3A3;--n300:#D4D4D4;--n200:#E5E5E5;--n100:#F5F5F5;--n50:#FAFAFA;
+    --grad:linear-gradient(135deg,#F97316,#C2410C);--em:#059669;--em50:#ECFDF5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:#F3EEE8;color:var(--ink);padding:36px 28px 60px}
+  h1{font-size:26px;letter-spacing:-.02em}
+  h2{font-size:18px;margin:40px 0 4px;letter-spacing:-.01em}
+  .lead{color:var(--n600);font-size:14px;margin-top:6px;max-width:900px;line-height:1.55}
+  .row{display:flex;gap:30px;flex-wrap:wrap;margin-top:22px;align-items:flex-start}
+  .col{display:flex;flex-direction:column;gap:10px;width:340px}
+  .cap{font-size:13px;font-weight:700;color:var(--n700)}
+  .cap small{display:block;font-weight:400;color:var(--n500);margin-top:3px;line-height:1.45}
+  .ph{width:340px;height:720px;border-radius:44px;background:#111;padding:10px;box-shadow:0 18px 40px #0002}
+  .sc{width:100%;height:100%;border-radius:35px;overflow:hidden;background:var(--n50);position:relative;display:flex;flex-direction:column}
+  .sb{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600;flex:none;color:#fff}
+  .sb .isl{width:96px;height:26px;background:#111;border-radius:20px}
+  .sb .bt{display:flex;gap:4px;align-items:center}.sb .bt i{display:block;width:16px;height:9px;border-radius:2px;background:currentColor}.sb .bt b{display:block;width:22px;height:10px;border-radius:3px;border:1.5px solid currentColor}
+  .scroll{flex:1;min-height:0;overflow:visible;position:relative;z-index:1}
+  svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  /* hero ibadah */
+  .hero{background:var(--grad);color:#fff;padding:0 18px 54px;border-radius:0 0 26px 26px;position:relative;flex:none}
+  .hero .top{display:flex;align-items:center;gap:8px;height:44px}
+  .cbtn{width:34px;height:34px;border-radius:17px;background:#ffffff2e;display:flex;align-items:center;justify-content:center}
+  .hero .t{flex:1;text-align:center;font-weight:700;font-size:14px}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:99px;background:#ffffff2e}
+  .hero h3{font-size:21px;line-height:1.2;margin-top:8px;letter-spacing:-.015em}
+  .hero .sub{font-size:12px;color:#FFEDD5;margin-top:3px}
+  /* summary card overlapping */
+  .sum{margin:-42px 14px 0;background:#fff;border-radius:20px;box-shadow:0 8px 20px #9A341222;border:1px solid #0000000a;position:relative}
+  .sum .r{display:flex;gap:10px;padding:10px 14px;align-items:flex-start}
+  .sum .r + .r{border-top:1px solid var(--n100)}
+  .ib{width:30px;height:30px;border-radius:10px;background:var(--b50);color:var(--b600);display:flex;align-items:center;justify-content:center;flex:none}
+  .sum .k{font-size:10px;color:var(--n500);font-weight:600;letter-spacing:.02em}
+  .sum .v{font-size:12.5px;font-weight:700;margin-top:1px;line-height:1.3}
+  .sum .v small{font-weight:500;color:var(--n500);font-size:11px}
+  .occ{padding:10px 14px 12px;border-top:1px solid var(--n100)}
+  .occ .l{display:flex;justify-content:space-between;font-size:10.5px;color:var(--n600);font-weight:600}
+  .bar{height:5px;border-radius:3px;background:var(--n100);margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--em);border-radius:3px}
+  .live{display:flex;align-items:center;gap:6px;margin:0 14px 12px;padding:8px 12px;border-radius:12px;background:var(--em50);color:#047857;font-size:11.5px;font-weight:700}
+  /* duty strip */
+  .duty{margin:10px 14px 0;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:14px;background:var(--b50);border:1px solid var(--b200);font-size:11.5px;color:var(--b800)}
+  .duty b{font-weight:800}
+  /* section title */
+  .st{display:flex;align-items:baseline;justify-content:space-between;padding:14px 16px 8px}
+  .st b{font-size:14px;letter-spacing:-.01em}.st span{font-size:11px;color:var(--n500);font-weight:600}
+  /* ticket carousel */
+  .tix{display:flex;gap:10px;padding:0 16px;overflow:hidden}
+  .tk{width:268px;flex:none;background:#fff;border-radius:18px;border:1px solid var(--n200);overflow:hidden}
+  .tk .h{display:flex;gap:10px;padding:12px}
+  .qr{width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(90deg,#111 0 3px,#fff 3px 6px),#111;flex:none;border:3px solid #fff;outline:1px solid var(--n200)}
+  .tk .nm{font-size:13px;font-weight:800}.tk .rl{font-size:9.5px;font-weight:700;color:#0369A1;background:#E0F2FE;border-radius:5px;padding:1px 6px;margin-left:4px}
+  .tk .cd{font-size:10px;color:var(--n500);letter-spacing:.06em;margin-top:2px}
+  .st2{margin-left:auto;font-size:9.5px;font-weight:800;color:#1D4ED8;background:#DBEAFE;border-radius:99px;padding:3px 8px;height:fit-content}
+  .swipe{margin:0 12px 12px;height:38px;border-radius:19px;background:var(--n100);display:flex;align-items:center;padding:4px;gap:8px;font-size:11px;font-weight:700;color:var(--n500)}
+  .swipe i{width:30px;height:30px;border-radius:15px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--n400)}
+  .swipe.ok{background:var(--em);color:#fff}.swipe.ok i{color:var(--em)}
+  .dots{display:flex;gap:5px;justify-content:center;margin-top:8px}.dots i{width:6px;height:6px;border-radius:3px;background:var(--n300)}.dots i.on{width:16px;background:var(--b500)}
+  /* tabs */
+  .tabs{display:flex;gap:6px;margin:14px 16px 0;background:var(--n100);border-radius:12px;padding:4px}
+  .tabs div{flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:7px 0;border-radius:9px;color:var(--n500)}
+  .tabs .on{background:#fff;color:var(--ink);box-shadow:0 1px 3px #0001}
+  .tabs em{font-style:normal;font-size:9px;background:var(--b500);color:#fff;border-radius:99px;padding:1px 5px;margin-left:3px}
+  .pane{margin:10px 16px 0;background:#fff;border:1px solid var(--n100);border-radius:16px;padding:12px 14px;font-size:12px;line-height:1.55;color:var(--n700)}
+  .more{color:var(--b600);font-weight:700;font-size:11.5px;display:block;margin-top:4px}
+  .team{display:flex;align-items:center;gap:10px}
+  .av{display:flex}.av i{width:26px;height:26px;border-radius:13px;border:2px solid #fff;margin-left:-8px;display:block}
+  .av i:first-child{margin-left:0}
+  /* bottom bar */
+  .bb{flex:none;position:relative;z-index:3;background:#fff;border-top:1px solid var(--n100);padding:10px 14px 22px}
+  .dl{display:flex;align-items:center;gap:8px;background:#FFF7ED;border:1px solid var(--b100);border-radius:12px;padding:7px 10px;margin-bottom:8px;font-size:11px;color:var(--b800)}
+  .dl b{font-variant-numeric:tabular-nums;font-size:13px}
+  .btns{display:flex;gap:8px}
+  .btn{flex:1;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:800}
+  .btn.p{background:var(--grad);color:#fff}.btn.s{background:#fff;border:1px solid var(--n200)}
+  .home{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:120px;height:5px;border-radius:3px;background:#111}
+  /* event hero */
+  .ehero{position:relative;flex:none;height:250px;overflow:hidden}
+  .ehero .bg{position:absolute;inset:-20px;background:radial-gradient(circle at 30% 30%,#FDBA74,#9A3412 55%,#2a1206);filter:blur(16px);opacity:.9}
+  .ehero .poster{position:absolute;left:50%;top:44px;transform:translateX(-50%);width:150px;height:188px;border-radius:12px;background:linear-gradient(160deg,#FED7AA,#EA580C 55%,#7C2D12);box-shadow:0 10px 24px #0006}
+  .ehero .poster:after{content:"";position:absolute;left:18px;right:18px;bottom:18px;height:34px;border-radius:6px;background:#ffffff40}
+  .ehero .top{position:absolute;left:12px;right:12px;top:42px;display:flex;justify-content:space-between}
+  .ehero .full{position:absolute;right:14px;bottom:12px;font-size:10px;font-weight:700;color:#fff;background:#0007;border-radius:99px;padding:4px 9px}
+  .esum{margin:-18px 14px 0;background:#fff;border-radius:20px;box-shadow:0 8px 20px #9A341222;position:relative;padding:14px}
+  .esum h3{font-size:18px;line-height:1.25;letter-spacing:-.015em;margin-top:6px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .chip{font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:99px;background:var(--b50);color:var(--b700);border:1px solid var(--b100)}
+  .chip.g{background:var(--em50);color:#047857;border-color:#A7F3D0}
+  .facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .fact{background:var(--n50);border-radius:12px;padding:8px 10px}
+  .fact .k{font-size:9.5px;color:var(--n500);font-weight:600;display:flex;gap:4px;align-items:center}
+  .fact .k svg{width:11px;height:11px}
+  .fact .v{font-size:11.5px;font-weight:800;margin-top:2px;line-height:1.3}
+  .fact.w{grid-column:1/-1}
+  .acc{margin:10px 14px 0;background:#fff;border:1px solid var(--n100);border-radius:16px}
+  .acc .r{display:flex;align-items:center;gap:10px;padding:11px 12px;font-size:12px}
+  .acc .r + .r{border-top:1px solid var(--n100)}
+  .acc .r b{flex:1;font-size:12.5px}
+  .acc .r small{font-size:10.5px;color:var(--n500)}
+  .ok{font-size:9.5px;font-weight:800;color:#047857;background:var(--em50);border-radius:99px;padding:2px 8px}
+  .warn{font-size:9.5px;font-weight:800;color:#92400E;background:#FEF3C7;border-radius:99px;padding:2px 8px}
+  .chev{color:var(--n400)}
+  .fam .r{gap:10px}.fam .a{width:30px;height:30px;border-radius:15px;flex:none}
+  .stt{font-size:9.5px;font-weight:800;border-radius:99px;padding:3px 8px}
+  .grp{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--n100)}
+  .grp:first-child{border-top:0}
+  .grp b{flex:1;font-size:12.5px}.grp span{font-size:11px;color:var(--n500)}
+  .mem{display:flex;align-items:center;gap:10px;padding:7px 14px}
+  .ph2{width:38px;height:38px;border-radius:19px;flex:none;position:relative;overflow:hidden;border:1px solid #0000000f}
+  .ph2:before{content:"";position:absolute;left:50%;top:22%;width:42%;height:42%;transform:translateX(-50%);border-radius:50%;background:#ffffffb0}
+  .ph2:after{content:"";position:absolute;left:50%;bottom:-30%;width:84%;height:62%;transform:translateX(-50%);border-radius:50%;background:#ffffffb0}
+  .mem .n{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.25}
+  .mem .r{font-size:11px;color:var(--n500);line-height:1.3}
+  .mem .me{font-size:9px;font-weight:800;color:var(--b700);background:var(--b50);border:1px solid var(--b100);border-radius:99px;padding:1px 6px;margin-left:4px}
+  .md{font-size:12px;line-height:1.6;color:var(--n700)}
+  .md b{color:var(--ink)}
+  .md ul{margin:4px 0 0 16px}
+  .fadeout{position:relative;max-height:118px;overflow:hidden}
+  .fadeout:after{content:"";position:absolute;left:0;right:0;bottom:0;height:36px;background:linear-gradient(#fff0,#fff)}
+  .vt{margin-top:10px;border-radius:14px;overflow:hidden;position:relative;aspect-ratio:16/9;background:radial-gradient(circle at 70% 30%,#FCA5A5,#7F1D1D 55%,#1c0606)}
+  .vt .pl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:22px;background:#ffffffeb;display:flex;align-items:center;justify-content:center}
+  .vt .pl svg{width:16px;height:16px;fill:#171717;stroke:none;margin-left:2px}
+  .vt .lb{position:absolute;left:10px;bottom:10px;right:10px;color:#fff;font-size:11px;font-weight:700;display:flex;justify-content:space-between}
+  .tag{display:inline-block;font-size:10.5px;font-weight:600;color:var(--n600);background:var(--n100);border-radius:99px;padding:3px 9px;margin:6px 4px 0 0}
+  .notes{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;max-width:1460px}
+  .note{background:#fff;border-radius:18px;padding:18px 20px;border:1px solid #0000000d}
+  .note h3{font-size:14px;margin-bottom:10px;display:flex;gap:8px;align-items:center}
+  .note h3 span{width:22px;height:22px;border-radius:11px;background:var(--grad);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+  .note li{font-size:13px;line-height:1.55;color:var(--n700);margin:0 0 6px 18px}
+  table.cmp{border-collapse:collapse;font-size:12.5px;margin-top:8px;width:100%}
+  table.cmp td,table.cmp th{border-bottom:1px solid var(--n100);padding:6px 6px;text-align:left}
+  table.cmp th{color:var(--n500);font-weight:600;font-size:11px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="ref" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="tix" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M13 6v12"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M12 22s7-6.3 7-12a7 7 0 0 0-14 0c0 5.7 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="rep" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="seat" viewBox="0 0 24 24"><path d="M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"/><path d="M3 11h18v5H3zM6 16v4M18 16v4"/></symbol>
+  <symbol id="live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></symbol>
+  <symbol id="hand" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7-6.5-4.5L5.5 20l2-7L2 9h7z"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 20h1M17 20h1M20 17h1"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M12 10v6M9 13h6M16 2v4M8 2v4"/></symbol>
+  <symbol id="timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+</svg>
+
+<h1>Relayout Detail Ibadah & Detail Event — usulan GUI</h1>
+<p class="lead">Tujuan: <b>scroll jauh lebih pendek</b> tanpa menghilangkan informasi atau mengubah alur (reservasi, geser check-in, batalkan, bayar, formulir tetap sama). Caranya: kartu-kartu kecil dilebur jadi <b>satu kartu ringkasan</b>, tiket keluarga jadi <b>carousel geser</b>, dan konten panjang (deskripsi, tim pelayanan, formulir) masuk <b>tab</b>. Palet ECC (oranye → oranye tua, krem, Inter, ikon garis satu warna).</p>
+
+<h2>Detail Ibadah</h2>
+<div class="row">
+  <!-- I1 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="hero">
+        <div class="sb" style="padding:0 6px"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn"><svg class="i"><use href="#back"/></svg></span><span class="t">Detail Ibadah</span><span class="cbtn"><svg class="i"><use href="#ref"/></svg></span><span class="cbtn"><svg class="i"><use href="#tix"/></svg></span></div>
+        <span class="pill">CKids</span>
+        <h3>CKIDS (0–7 thn) 3</h3>
+        <div class="sub">ECC Bandung</div>
+      </div>
+      <div class="scroll">
+        <div class="sum">
+          <div class="r"><span class="ib"><svg class="i"><use href="#cal"/></svg></span><div><div class="k">TANGGAL & JAM</div><div class="v">Minggu, 29 Nov 2026 · 11.30–13.00 <small>Waktu Bandung</small></div></div></div>
+          <div class="r"><span class="ib"><svg class="i"><use href="#pin"/></svg></span><div style="flex:1"><div class="k">LOKASI</div><div class="v">CKIDS HALL (D'Botanica Mall Lt 3 P2)</div></div></div>
+          <div class="r"><span class="ib"><svg class="i"><use href="#rep"/></svg></span><div><div class="k">JADWAL</div><div class="v">Setiap Minggu</div></div></div>
+          <div class="occ"><div class="l"><span>Okupansi kursi</span><span>2/145 · 1,4%</span></div><div class="bar"><i style="width:3%"></i></div></div>
+        </div>
+        <div class="duty"><svg class="i"><use href="#hand"/></svg><span style="flex:1">Anda bertugas: <b>Usher · Pintu Utama</b></span><svg class="i chev"><use href="#chev"/></svg></div>
+        <div class="st"><b>Tiket Saya</b><span>1 dari 3 · geser</span></div>
+        <div class="tix">
+          <div class="tk"><div class="h"><span class="qr"></span><div><div class="nm">Adlyn Selvia T. <span class="rl">Anak</span></div><div class="cd">Z8AZN7FC</div></div><span class="st2">Terdaftar</span></div>
+            <div class="swipe"><i><svg class="i"><use href="#lock"/></svg></i>Check-in dibuka 29 Nov, 11:15</div>
+            <div style="display:flex;justify-content:space-between;padding:0 14px 12px;font-size:10.5px"><span style="color:var(--n500)">Kode jemput muncul setelah check-in</span><span style="color:#DC2626;font-weight:700">Batalkan</span></div></div>
+          <div class="tk"><div class="h"><span class="qr"></span><div><div class="nm">Kevin T. <span class="rl">Anak</span></div><div class="cd">K29QX0PL</div></div></div></div>
+        </div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <div class="tabs"><div class="on">Tentang</div><div>Tim pelayanan</div></div>
+        <div class="pane">Ibadah anak usia 0–7 tahun dengan pujian, cerita Alkitab, dan aktivitas kreatif…<span class="more">Selengkapnya</span></div>
+      </div>
+      <div class="bb">
+        <div class="dl"><svg class="i"><use href="#timer"/></svg><span style="flex:1">Batas reservasi</span><b>03:12:55:57</b></div>
+        <div class="btns"><div class="btn p"><svg class="i"><use href="#qr"/></svg>QR Saya</div><div class="btn s"><svg class="i"><use href="#plus"/></svg>Reservasi</div></div>
+      </div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Ibadah — tampilan pertama<small>Ringkasan menumpang di header: tanggal & jam, lokasi, jadwal, dan okupansi jadi <b>satu kartu</b> (tadinya 4 kartu). Tugas saya jadi satu baris (ketuk → rincian). Tiket keluarga jadi carousel (1 dari 3). Deskripsi & Tim pelayanan masuk tab. Semua kelihatan dalam ±1,3 layar.</small></div>
+  </div>
+
+  <!-- I2 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="hero" style="padding-bottom:16px">
+        <div class="sb" style="padding:0 6px"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn"><svg class="i"><use href="#back"/></svg></span><span class="t">Ibadah Raya 2</span><span class="cbtn"><svg class="i"><use href="#ref"/></svg></span><span class="cbtn"><svg class="i"><use href="#tix"/></svg></span></div>
+      </div>
+      <div class="scroll">
+        <div class="st" style="padding-top:12px"><b>Tiket Saya</b><span>2 dari 2 · geser</span></div>
+        <div class="tix">
+          <div class="tk"><div class="h"><span class="qr"></span><div><div class="nm">Sarah W. <span class="rl">Istri</span></div><div class="cd">A7K2M9QE</div></div><span class="st2" style="color:#047857;background:#D1FAE5">Hadir</span></div>
+            <div class="swipe ok"><i><svg class="i"><use href="#check"/></svg></i>Sudah check-in · 10:58</div></div>
+          <div class="tk"></div>
+        </div>
+        <div class="dots"><i></i><i class="on"></i></div>
+        <div class="tabs"><div>Tentang</div><div class="on">Tim pelayanan <em>12</em></div></div>
+        <div class="pane" style="padding:4px 0 8px">
+          <div class="grp"><span class="ib"><svg class="i"><use href="#users"/></svg></span><b>Worship</b><span>3 orang</span></div>
+          <div class="mem"><span class="ph2" style="background:#FDBA74"></span><div><div class="n">Andre Gunawan</div><div class="r">Worship Leader</div></div></div>
+          <div class="mem"><span class="ph2" style="background:#93C5FD"></span><div><div class="n">Kevin Pratama</div><div class="r">Gitar · Keyboard</div></div></div>
+          <div class="mem"><span class="ph2" style="background:#F9A8D4"></span><div><div class="n">Maria Susanti</div><div class="r">Singer</div></div></div>
+          <div class="grp"><span class="ib"><svg class="i"><use href="#users"/></svg></span><b>Usher</b><span>2 orang</span></div>
+          <div class="mem"><span class="ph2" style="background:#A7F3D0"></span><div><div class="n">Andreas Wijaya<span class="me">Anda</span></div><div class="r">Usher · Pintu Utama</div></div></div>
+          <div class="mem"><span class="ph2" style="background:#C4B5FD"></span><div><div class="n">Siti Rahma</div><div class="r">Usher · Balkon</div></div></div>
+          <div class="grp"><span class="ib"><svg class="i"><use href="#users"/></svg></span><b>Multimedia</b><span>3 orang</span><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+      <div class="bb">
+        <div class="dl" style="background:var(--em50);border-color:#A7F3D0;color:#047857"><svg class="i"><use href="#clock"/></svg><span style="flex:1">Self check-in berakhir dalam</span><b>24:10</b></div>
+        <div class="btns"><div class="btn s"><svg class="i"><use href="#qr"/></svg>QR Saya</div><div class="btn p" style="background:linear-gradient(135deg,#10B981,#047857)"><svg class="i"><use href="#check"/></svg>Sudah Check-in</div></div>
+      </div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Ibadah — setelah digulir<small>Header menyusut jadi bilah tipis berisi nama ibadah. Tab <b>Tim pelayanan</b>: per kelompok pelayanan, tiap petugas tampil dengan <b>foto profil</b> sejajar dua baris — <b>nama</b> dan <b>tugas</b> di bawahnya (Anda ditandai). Ketuk nama → profil seperti sekarang. Kelompok panjang bisa dilipat. Bilah bawah tidak berubah.</small></div>
+  </div>
+
+  <!-- I3 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="hero" style="padding-bottom:16px">
+        <div class="sb" style="padding:0 6px"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn"><svg class="i"><use href="#back"/></svg></span><span class="t">Ibadah Raya 2</span><span class="cbtn"><svg class="i"><use href="#ref"/></svg></span><span class="cbtn"><svg class="i"><use href="#tix"/></svg></span></div>
+      </div>
+      <div class="scroll">
+        <div class="tabs" style="margin-top:12px"><div class="on">Tentang</div><div>Tim pelayanan <em>12</em></div></div>
+        <div class="pane">
+          <div class="md fadeout"><b>Ibadah Raya 2</b> adalah ibadah umum hari Minggu untuk seluruh keluarga.<br>Yang perlu disiapkan:<ul><li>Datang 15 menit lebih awal</li><li>Bawa Alkitab / buka Els App</li><li>Anak 0–12 th diantar ke CKids</li></ul>Parkir tersedia di basement B1–B2 mulai pukul 09.30.</div>
+          <span class="more">Selengkapnya</span>
+        </div>
+        <div class="pane" style="margin-top:8px;display:flex;align-items:center;gap:10px"><span class="ib" style="background:var(--em50);color:#047857"><svg class="i"><use href="#live"/></svg></span><div style="flex:1"><b style="font-size:12.5px;color:var(--ink)">Ibadah online</b><div style="font-size:10.5px;color:var(--n500)">YouTube · mulai 10.00</div></div><span class="btn p" style="flex:none;height:32px;padding:0 12px;font-size:11.5px;background:linear-gradient(135deg,#10B981,#047857)">Tonton</span></div>
+      </div>
+      <div class="bb"><div class="btns"><div class="btn p"><svg class="i"><use href="#qr"/></svg>QR Saya</div><div class="btn s"><svg class="i"><use href="#plus"/></svg>Reservasi</div></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Ibadah — tab Tentang (deskripsi)<small>Deskripsi <b>utuh, format tetap</b> (tebal, poin, tautan), hanya dilipat ±6 baris dengan pudar di bawah → <b>Selengkapnya</b> membuka seluruhnya di tempat (bukan layar baru), <b>Sembunyikan</b> untuk melipat lagi. Deskripsi pendek tampil utuh tanpa tombol. Bila ibadah punya siaran online, kartunya ikut di tab ini juga (selain di ringkasan).</small></div>
+  </div>
+</div>
+
+<h2>Detail Event</h2>
+<div class="row">
+  <!-- E1 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="ehero"><div class="bg"></div><div class="poster"></div>
+        <div class="sb" style="position:absolute;left:0;right:0;top:0"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn" style="color:#fff"><svg class="i"><use href="#back"/></svg></span><span class="cbtn" style="color:#fff"><svg class="i"><use href="#share"/></svg></span></div>
+        <span class="full"><svg class="i" style="width:10px;height:10px;vertical-align:-1px"><use href="#max"/></svg> Lihat gambar</span></div>
+      <div class="scroll">
+        <div class="esum">
+          <div class="chips"><span class="chip">Retreat</span><span class="chip">Sinode</span><span class="chip g">Terdaftar</span></div>
+          <h3>Youth Camp 2026: Rooted</h3>
+          <div class="facts">
+            <div class="fact"><div class="k"><svg class="i"><use href="#cal"/></svg>TANGGAL</div><div class="v">12–14 Des 2026<br><span style="font-weight:500;color:var(--n500)">3 hari</span></div></div>
+            <div class="fact"><div class="k"><svg class="i"><use href="#clock"/></svg>JAM</div><div class="v">08.00–17.00<br><span style="font-weight:500;color:var(--n500)">Waktu Bandung</span></div></div>
+            <div class="fact w"><div class="k"><svg class="i"><use href="#pin"/></svg>LOKASI</div><div class="v">Villa Istana Bunga, Lembang</div></div>
+          </div>
+          <div class="occ" style="padding:10px 0 0;border:0"><div class="l"><span>86 terdaftar</span><span>kuota 120</span></div><div class="bar"><i style="width:72%;background:var(--b500)"></i></div></div>
+        </div>
+        <div class="acc">
+          <div class="r"><span class="ib"><svg class="i"><use href="#list"/></svg></span><b>Syarat ikut</b><span class="ok">Memenuhi</span><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="r"><span class="ib"><svg class="i"><use href="#card"/></svg></span><div style="flex:1"><b style="display:block">Pembayaran</b><small>Rp 750.000 · Transfer / QRIS</small></div><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+        <div class="st"><b>Pendaftaran keluarga</b><span>3 orang</span></div>
+        <div class="acc fam" style="margin-top:0">
+          <div class="r"><span class="a" style="background:#FDBA74"></span><div style="flex:1"><b style="display:block">Andreas W. <small>· Saya</small></b><small>Lunas · Rp 750.000</small></div><span class="stt" style="background:#D1FAE5;color:#047857">Terdaftar</span><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="r"><span class="a" style="background:#93C5FD"></span><div style="flex:1"><b style="display:block">Kevin W. <small>· Anak</small></b><small>Menunggu verifikasi</small></div><span class="stt" style="background:#FEF3C7;color:#92400E">Verifikasi</span><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="r"><span class="a" style="background:#C4B5FD"></span><div style="flex:1"><b style="display:block">Daniel S. <small>· Tamu</small></b><small>Belum bayar</small></div><span class="stt" style="background:var(--b100);color:var(--b800)">Bayar</span><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+      <div class="bb"><div class="btns"><div class="btn s"><svg class="i"><use href="#tix"/></svg>Tiket (2)</div><div class="btn p"><svg class="i"><use href="#plus"/></svg>Daftarkan lagi</div></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Event — tampilan pertama<small>Gambar utama tetap <b>utuh</b> (tidak terpotong) tapi tingginya dibatasi, dengan latar blur; ketuk “Lihat gambar” untuk layar penuh. Tanggal/jam/lokasi/kuota jadi kotak ringkas. Syarat & Pembayaran jadi baris yang bisa dibuka. Satu kartu per peserta → <b>satu daftar</b> (ketuk → popup rincian yang sama seperti sekarang).</small></div>
+  </div>
+
+  <!-- E2 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="hero" style="padding-bottom:14px"><div class="sb" style="padding:0 6px"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn"><svg class="i"><use href="#back"/></svg></span><span class="t">Youth Camp 2026: Rooted</span><span class="cbtn"><svg class="i"><use href="#share"/></svg></span></div></div>
+      <div class="scroll">
+        <div class="duty"><svg class="i"><use href="#hand"/></svg><span style="flex:1">Anda bertugas: <b>Konsumsi · Koordinator</b></span><svg class="i chev"><use href="#chev"/></svg></div>
+        <div class="st"><b>Tiket Saya</b><span>1 dari 2 · geser</span></div>
+        <div class="tix">
+          <div class="tk"><div class="h"><span class="qr"></span><div><div class="nm">Andreas W. <span class="rl">Saya</span></div><div class="cd">Rp 750.000 · Lunas</div></div></div>
+            <div class="swipe"><i><svg class="i"><use href="#lock"/></svg></i>Check-in dibuka 12 Des, 07:30</div></div>
+          <div class="tk"></div>
+        </div>
+        <div class="dots"><i class="on"></i><i></i></div>
+        <div class="tabs"><div>Tentang</div><div class="on">Formulir <em>1</em></div><div>Tim</div></div>
+        <div class="pane" style="padding:12px">
+          <div style="font-weight:800;font-size:13px;color:var(--ink)">Formulir Peserta Camp</div>
+          <div style="font-size:10.5px;color:var(--n500)">Wajib diisi setiap peserta · Batas isi 03:14:22</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between"><span>Andreas W.</span><span class="ok">Terkirim</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Kevin W.</span><span class="warn">Perlu diperbaiki</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Daniel S.</span><span style="font-size:9.5px;font-weight:800;color:var(--n600);background:var(--n100);border-radius:99px;padding:2px 8px">Belum diisi</span></div>
+          </div>
+          <div class="btn p" style="height:38px;margin-top:10px;font-size:12px">Isi formulir untuk Daniel</div>
+        </div>
+      </div>
+      <div class="bb"><div class="btns"><div class="btn s"><svg class="i"><use href="#tix"/></svg>Tiket (2)</div><div class="btn p"><svg class="i"><use href="#plus"/></svg>Daftarkan lagi</div></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Event — setelah digulir<small>Header menyusut. Tab <b>Tentang</b> (deskripsi + video teaser + tag), <b>Formulir</b> (badge = yang belum diisi/perlu diperbaiki), <b>Tim</b>. Tab Formulir tampil hanya bila event punya formulir.</small></div>
+  </div>
+
+  <!-- E3 -->
+  <div class="col">
+    <div class="ph"><div class="sc">
+      <div class="hero" style="padding-bottom:14px"><div class="sb" style="padding:0 6px"><span>9:41</span><span class="isl"></span><span class="bt"><i></i><b></b></span></div>
+        <div class="top"><span class="cbtn"><svg class="i"><use href="#back"/></svg></span><span class="t">Youth Camp 2026: Rooted</span><span class="cbtn"><svg class="i"><use href="#share"/></svg></span></div></div>
+      <div class="scroll">
+        <div class="tabs" style="margin-top:12px"><div class="on">Tentang</div><div>Formulir <em>1</em></div><div>Tim</div></div>
+        <div class="pane">
+          <div class="md fadeout"><b>Rooted</b> — tiga hari retreat untuk pemuda usia 15–25 tahun: ibadah, kelas, outbound, dan malam api unggun.<ul><li>Bawa perlengkapan mandi & jaket</li><li>Transport dari gereja pukul 06.00</li><li>Biaya sudah termasuk makan 8× & penginapan</li></ul></div>
+          <span class="more">Selengkapnya</span>
+          <div class="vt"><span class="pl"><svg><use href="#play"/></svg></span><div class="lb"><span>Video teaser</span><span style="display:flex;gap:4px;align-items:center"><svg class="i" style="width:12px;height:12px"><use href="#ext"/></svg>YouTube</span></div></div>
+          <div><span class="tag">#youth</span><span class="tag">#retreat</span><span class="tag">#rooted2026</span></div>
+        </div>
+      </div>
+      <div class="bb"><div class="btns"><div class="btn s"><svg class="i"><use href="#tix"/></svg>Tiket (2)</div><div class="btn p"><svg class="i"><use href="#plus"/></svg>Daftarkan lagi</div></div></div>
+      <div class="home"></div>
+    </div></div>
+    <div class="cap">Event — tab Tentang (deskripsi, video teaser, tag)<small>Deskripsi sama seperti ibadah (format markdown utuh, dilipat → Selengkapnya). <b>Video teaser</b> naik kelas dari tombol merah polos jadi <b>kartu pratinjau 16:9</b> dengan thumbnail & tombol putar — ketuk membuka link seperti sekarang (YouTube → bisa juga diputar di pemutar Video Channel bila mau). Tag di bawahnya.</small></div>
+  </div>
+</div>
+
+<div class="notes">
+  <div class="note"><h3><span>1</span>Perkiraan panjang halaman</h3>
+    <table class="cmp">
+      <tr><th>Kasus</th><th>Sekarang</th><th>Usulan</th></tr>
+      <tr><td>Ibadah, 3 tiket keluarga, tim 12 orang</td><td>±4,5 layar</td><td>±1,3 layar</td></tr>
+      <tr><td>Event berbayar, 3 peserta, formulir</td><td>±6 layar</td><td>±1,8 layar</td></tr>
+      <tr><td>Ibadah tanpa tiket</td><td>±2 layar</td><td>±1 layar</td></tr>
+    </table></div>
+  <div class="note"><h3><span>2</span>Tetap sama (alur & informasi)</h3><ul>
+    <li>Semua data yang sekarang tampil tetap ada — hanya dipindah ke ringkasan, baris yang bisa dibuka, atau tab.</li>
+    <li>Geser check-in, Batalkan, kode jemput CKids, popup rincian peserta, bayar/unggah bukti, isi formulir: tidak berubah.</li>
+    <li>Bilah bawah (hitung mundur, QR, Reservasi / Self check-in / Daftar) tidak berubah.</li>
+    <li>Data dari server sama; tidak ada perubahan API → aman untuk 2.5.1, app 2.5.0 tidak terdampak.</li>
+  </ul></div>
+  <div class="note"><h3><span>3</span>Perlu keputusan Anda</h3><ul>
+    <li><b>Tiket keluarga</b>: carousel geser (usulan) atau tetap bertumpuk tapi versi ringkas?</li>
+    <li><b>Gambar event</b>: dibatasi tinggi + latar blur (gambar tetap utuh) — setuju? Sebelumnya diputuskan “rasio asli, tidak terpotong”.</li>
+    <li><b>Tab</b> vs <b>bagian yang bisa dibuka-tutup</b> (accordion) untuk Deskripsi / Formulir / Tim?</li>
+    <li>Syarat & Pembayaran: tertutup bawaan, kecuali syarat <i>belum dipenuhi</i> → otomatis terbuka?</li>
+    <li><b>Video teaser</b>: tetap membuka link di luar (seperti sekarang), atau bila link YouTube diputar di dalam app memakai pemutar Video Channel?</li>
+  </ul></div>
+</div>
+</body>
+</html>

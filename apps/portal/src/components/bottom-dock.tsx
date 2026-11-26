@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   LayoutDashboard,
+  ChevronDown,
   Building2,
   Church,
   Users,
@@ -261,6 +262,25 @@ export function BottomDock() {
   const { user } = useAuthStore();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  // Dock bisa disembunyikan → tinggal gelembung logo ECC di tengah bawah.
+  // Pilihan diingat per browser (localStorage).
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setHidden(localStorage.getItem(DOCK_HIDDEN_KEY) === '1');
+    } catch {
+      /* abaikan */
+    }
+  }, []);
+  const setDockHidden = (v: boolean) => {
+    setHidden(v);
+    setOpenGroup(null);
+    try {
+      localStorage.setItem(DOCK_HIDDEN_KEY, v ? '1' : '0');
+    } catch {
+      /* abaikan */
+    }
+  };
 
   // NOTE: Outside-click detection via backdrop overlay saja (di render bawah).
   // Sebelumnya pakai document mousedown listener yg check `dockRef.contains(target)` —
@@ -276,7 +296,8 @@ export function BottomDock() {
     if (!el || typeof ResizeObserver === 'undefined') return;
     const root = document.documentElement;
     const update = () => {
-      const h = el.getBoundingClientRect().height;
+      // Tersembunyi → ruang bawah cukup untuk gelembung (56px).
+      const h = hidden ? 56 : el.getBoundingClientRect().height;
       root.style.setProperty('--dock-space', `${Math.ceil(h + 16 + 24)}px`);
     };
     update();
@@ -287,7 +308,7 @@ export function BottomDock() {
       ro.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, []);
+  }, [hidden]);
 
   // Close popover on route change
   useEffect(() => {
@@ -297,6 +318,8 @@ export function BottomDock() {
   // Badge request menunggu tindakan (grup + menu tujuan).
   const pending = usePendingCounts();
   const fill = useNeedsFillCounts();
+  // Total menunggu tindakan (untuk badge di gelembung saat dock disembunyikan).
+  const pendingTotal = Object.values(pending ?? {}).reduce<number>((n, v) => n + (typeof v === 'number' ? v : 0), 0);
 
   // Filter groups berdasarkan menuAccess
   const visibleGroups = GROUPS.map((g) => {
@@ -323,9 +346,36 @@ export function BottomDock() {
         />
       )}
 
+      {/* Gelembung logo ECC (dock tersembunyi) — klik untuk membuka menu lagi */}
+      <button
+        type="button"
+        onClick={() => setDockHidden(false)}
+        aria-label="Tampilkan menu"
+        title="Tampilkan menu"
+        aria-hidden={!hidden}
+        tabIndex={hidden ? 0 : -1}
+        className={`fixed left-1/2 z-30 w-14 h-14 rounded-full bg-white border border-neutral-200 flex items-center justify-center transition-all duration-300 ease-out hover:scale-110 hover:ring-4 hover:ring-brand-100 ${
+          hidden ? 'opacity-100 -translate-x-1/2 translate-y-0' : 'opacity-0 -translate-x-1/2 translate-y-8 pointer-events-none'
+        }`}
+        style={{
+          bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+          boxShadow: '0 12px 28px -8px rgba(234,88,12,0.35), 0 4px 12px -4px rgba(0,0,0,0.12)',
+        }}
+      >
+        <Image src="/logo-ecc-church.webp" alt="ECC Church" width={27} height={36} className="h-8 w-auto" />
+        {pendingTotal > 0 ? (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+            {pendingTotal > 99 ? '99+' : pendingTotal}
+          </span>
+        ) : null}
+      </button>
+
       <div
         ref={dockRef}
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll"
+        aria-hidden={hidden}
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-end gap-1.5 px-3 py-2.5 bg-white border border-neutral-200 rounded-2xl shadow-2xl max-w-[calc(100vw-1rem)] overflow-x-auto md:overflow-visible md:max-w-none elsa-dock-scroll transition-all duration-300 ease-out ${
+          hidden ? 'opacity-0 translate-y-[120%] pointer-events-none' : 'opacity-100 translate-y-0'
+        }`}
         style={{
           boxShadow: '0 20px 40px -12px rgba(0,0,0,0.15), 0 4px 12px -4px rgba(0,0,0,0.08)',
           bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
@@ -393,10 +443,26 @@ export function BottomDock() {
             active={isItemActive(pathname, item.href)}
           />
         ))}
+
+        {/* Sembunyikan menu → gelembung logo ECC */}
+        <button
+          type="button"
+          onClick={() => setDockHidden(true)}
+          title="Sembunyikan menu"
+          aria-label="Sembunyikan menu"
+          className="group flex flex-col items-center gap-1 shrink-0 self-center"
+        >
+          <span className="w-8 h-8 rounded-full bg-neutral-100 text-neutral-500 flex items-center justify-center group-hover:bg-brand-50 group-hover:text-brand-600 transition">
+            <ChevronDown className="w-4 h-4" />
+          </span>
+          <span className="text-[10px] leading-tight font-medium text-neutral-500 group-hover:text-brand-600">Sembunyikan</span>
+        </button>
       </div>
     </>
   );
 }
+
+const DOCK_HIDDEN_KEY = 'portal_dock_hidden';
 
 // ============================================================
 // DockItem — standalone icon

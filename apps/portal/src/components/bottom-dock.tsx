@@ -318,8 +318,6 @@ export function BottomDock() {
   // Badge request menunggu tindakan (grup + menu tujuan).
   const pending = usePendingCounts();
   const fill = useNeedsFillCounts();
-  // Total menunggu tindakan (untuk badge di gelembung saat dock disembunyikan).
-  const pendingTotal = Object.values(pending ?? {}).reduce<number>((n, v) => n + (typeof v === 'number' ? v : 0), 0);
 
   // Filter groups berdasarkan menuAccess
   const visibleGroups = GROUPS.map((g) => {
@@ -363,11 +361,6 @@ export function BottomDock() {
         }}
       >
         <Image src="/logo-ecc-church.webp" alt="ECC Church" width={27} height={36} className="h-8 w-auto" />
-        {pendingTotal > 0 ? (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-            {pendingTotal > 99 ? '99+' : pendingTotal}
-          </span>
-        ) : null}
       </button>
 
       <div

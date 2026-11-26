@@ -2979,7 +2979,7 @@ eventRouter.post('/:id/checkin', async (req, res) => {
   });
   // Event tidak wajib daftar (2026-11): belum terdaftar / batal → langsung dicatat hadir.
   if ((!partisipasi || partisipasi.status === 'BATAL') && walkInAllowed(event)) {
-    const created = await createWalkInParticipation(event, jemaat.id, 'WALK_IN', {
+    const { participation: created, already } = await createWalkInParticipation(event, jemaat.id, 'WALK_IN', {
       checkedInBy: req.user?.sub ?? null,
       who: jemaat.namaLengkap,
     });
@@ -2988,6 +2988,10 @@ eventRouter.post('/:id/checkin', async (req, res) => {
       include: { jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true } } },
     });
     const tamu = await scanTamuInfo(jemaat.id, updated.invitedByJemaatId);
+    if (already) {
+      res.json({ success: true, data: { ...updated, tamu }, meta: { alreadyCheckedIn: true } });
+      return;
+    }
     audit(req, {
       action: 'CREATE',
       resource: 'event_participation',

@@ -219,7 +219,11 @@ meEventCheckinRouter.post('/:eventId', async (req, res) => {
     if (!r.participationId) {
       // Event tidak wajib daftar → buat partisipasi HADIR langsung.
       try {
-        const p = await createWalkInParticipation(event, id, 'SELF', { who: nama });
+        const { participation: p, already } = await createWalkInParticipation(event, id, 'SELF', { who: nama });
+        if (already) {
+          results.push({ jemaatId: id, namaLengkap: nama, result: 'ALREADY' });
+          continue;
+        }
         void createNotification({
           jemaatId: id,
           type: 'EVENT_CHECKED_IN',

@@ -47,14 +47,31 @@ export async function createWalkInParticipation(
     status: 'HADIR' as const,
     attendedAt: now,
     cancelledAt: null,
+    cancelReason: null,
     checkinMethod: method,
     checkedInBy: opts.checkedInBy ?? null,
   };
-  const p = await prisma.eventParticipation.upsert({
-    where: { eventId_jemaatId: { eventId: event.id, jemaatId } },
-    create: { eventId: event.id, jemaatId, registeredAt: now, ...data },
-    update: data,
-  });
-  await syncEventRoleForStatus(event, jemaatId, 'HADIR');
-  return p;
+  const where = { eventId_jemaatId: { eventId: event.id, jemaatId } };
+  let already = false;
+  let p;
+  try {
+    p = await prisma.eventParticipation.upsert({
+      where,
+      create: { eventId: event.id, jemaatId, registeredAt: now, ...data },
+      update: data,
+    });
+  } catch (e) {
+    // Dua scan / self check-in bersamaan → baris dibuat duluan oleh yang lain
+    // (unique eventId+jemaatId). Jangan gagal: pakai baris yang ada.
+    if ((e as { code?: string }).code !== 'P2002') throw e;
+    const cur = await prisma.eventParticipation.findUniqueOrThrow({ where });
+    if (cur.status === 'HADIR') {
+      already = true;
+      p = cur;
+    } else {
+      p = await prisma.eventParticipation.update({ where, data });
+    }
+  }
+  if (!already) await syncEventRoleForStatus(event, jemaatId, 'HADIR');
+  return { participation: p, already };
 }

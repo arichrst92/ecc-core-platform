@@ -20,6 +20,8 @@ import { esc, fmtTgl, sendCsv, sendPrintHtml, summaryCards } from '../../lib/pri
 import { buildReviewReport, eventReviews, ibadahReviews } from '../../lib/service-review.js';
 import { reviewSectionHtml } from '../../lib/service-review-html.js';
 import { renderIbadahReportHtml } from '../../lib/ibadah-report-html.js';
+import { buildIbadahVisual } from '../../lib/ibadah-visual.js';
+import { ibadahVisualHtml } from '../../lib/visual-html.js';
 import {
   CHECKIN_METHODS,
   METHOD_LABEL,
@@ -198,6 +200,7 @@ async function ibadahReportData(req: Request) {
 
   return {
     period: { from: ymd(period.from), to: ymd(period.to), preset: period.preset, label: PERIOD_LABEL[period.preset] ?? '' },
+    ibadahIds: ids,
     reviews,
     summary: { ...report.summary, okupansi: occ.overall },
     insights,
@@ -602,8 +605,19 @@ reportRouter.get('/ibadah/export', async (req, res) => {
     return sendCsv(res, `laporan-ibadah-${d.period.from}_${d.period.to}.csv`, lines);
   }
   const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
+  // Visualisasi Daftar & Absen (gabungan pertemuan di periode). Gagal → laporan tetap jadi.
+  let visualHtml = '';
+  try {
+    if (d.ibadahIds.length) {
+      visualHtml = ibadahVisualHtml(
+        await buildIbadahVisual(d.ibadahIds, new Date(`${d.period.from}T00:00:00.000Z`), new Date(`${d.period.to}T00:00:00.000Z`)),
+      );
+    }
+  } catch {
+    visualHtml = '';
+  }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(renderIbadahReportHtml(d, { isMobileUa }));
+  res.send(renderIbadahReportHtml(d, { isMobileUa, visualHtml }));
 });
 
 // ============================================================

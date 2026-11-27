@@ -270,3 +270,5 @@ export async function buildEventVisual(eventId: string, dayParam?: string) {
     cabang,
   };
 }
+
+export type EventVisual = Awaited<ReturnType<typeof buildEventVisual>>;

@@ -8,6 +8,7 @@ import { ideaLogoSvg } from './idea-logo.js';
 import { reportIcon } from './report-icons.js';
 import { esc, fmtTgl } from './print-report.js';
 import { CHECKIN_METHODS, METHOD_LABEL, type MethodCount } from './attendance-report.js';
+import { VISUAL_CSS } from './visual-svg.js';
 import { REPORT_CSS, barRow, columnChart, donut, kpi, n, pctTxt, section } from './cabang-report-html.js';
 import { reviewSectionHtml } from './service-review-html.js';
 
@@ -31,7 +32,7 @@ const METHOD_COLOR: Record<string, string> = {
   UNKNOWN: '#cbd5e1',
 };
 
-export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: boolean }): string {
+export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: boolean; visualHtml?: string }): string {
   const s = d.summary;
   const ins = d.insights;
   const generated = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
@@ -171,7 +172,7 @@ export function renderIbadahReportHtml(d: IbadahReportData, opts: { isMobileUa: 
 
   return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><title>Laporan Ibadah — ${d.period.from} s.d. ${d.period.to}</title>
-<style>${REPORT_CSS}
+<style>${REPORT_CSS}${VISUAL_CSS}
   .gb { display: inline-block; margin-top: 4px; font-size: 8.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
   .gb-up { background: #dcfce7; color: #15803d; } .gb-down { background: #fee2e2; color: #b91c1c; } .gb-n { background: #f1f5f9; color: #94a3b8; }
 </style></head><body>
@@ -189,6 +190,7 @@ ${opts.isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : 
   <p class="muted small">Pembanding: periode sebelumnya dengan panjang sama (${fmtTgl(ins.prev.from)} – ${fmtTgl(ins.prev.to)}) — total ${n(ins.prev.totalHadir)}, jemaat unik ${n(ins.prev.uniqueJemaat)}, rata-rata ${n(ins.prev.rataRata)}.</p>
 
   ${section('Tren Mingguan', '📈', '#f97316', trend, 'Total kehadiran (jemaat + tamu) per minggu')}
+  ${opts.visualHtml ? section('Visualisasi Daftar & Absen', 'chart', '#f97316', opts.visualHtml, 'Kapan jemaat reservasi, kapan datang, dan bagaimana tercatat hadir') : ''}
 
   <div class="grid2">
     ${section(d.filters.kidsOnly ? 'Jangkauan Anak' : 'Jangkauan Jemaat', '🎯', '#3b82f6', jangkauan, `${d.filters.kidsOnly ? 'Anak ≤13 th' : 'Jemaat aktif'} ${d.filters.cabang ? `cabang ${d.filters.cabang}` : 'semua cabang'}`)}

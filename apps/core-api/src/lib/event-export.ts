@@ -16,6 +16,9 @@ import { paymentStatusOf, type PaymentStatus } from './event-payment.js';
 import { buildReviewReport, eventReviews } from './service-review.js';
 import { eventDateLabel, jamWithZone, tzOr } from './tz.js';
 import { xi, type ExportIcon } from './export-icons.js';
+import { buildEventVisual } from './event-visual.js';
+import { eventVisualHtml } from './visual-html.js';
+import { VISUAL_CSS } from './visual-svg.js';
 import { ideaLogoSvg } from './idea-logo.js';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -309,8 +312,21 @@ export async function sendEventExport(req: Request, res: Response, eventId: stri
     ];
     return sendCsv(res, `event-${slug}.csv`, lines);
   }
+  // Visualisasi Daftar & Absen (sama dengan tab di Portal). Gagal → laporan tetap jadi.
+  let visual = '';
+  try {
+    const v = await buildEventVisual(eventId);
+    const days = v.event.butuhKehadiran ? v.absensi.hari.filter((h) => h.hadir > 0).slice(0, 3) : [];
+    const per =
+      days.length <= 1
+        ? [v.absensi]
+        : await Promise.all(days.map((h) => (h.tanggal === v.absensi.tanggal ? v.absensi : buildEventVisual(eventId, h.tanggal).then((x) => x.absensi))));
+    visual = eventVisualHtml(v, per);
+  } catch {
+    visual = '';
+  }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(renderEventPdf(req, d));
+  res.send(renderEventPdf(req, d, visual));
 }
 
 // ============================================================ PDF (tampilan cetak)
@@ -332,7 +348,7 @@ const STATUS_STYLE: Record<string, [string, string]> = {
 };
 
 /** Laporan satu event yang rapi untuk dicetak / disimpan PDF (A4 landscape). */
-export function renderEventPdf(req: Request, d: ExportData): string {
+export function renderEventPdf(req: Request, d: ExportData, visualHtml = ''): string {
   const { ev, tz, summary: s } = d;
   const isMobileUa = /mobi|android|iphone|ipad|ipod/.test((req.get('user-agent') ?? '').toLowerCase());
   const apiBase = (process.env.PUBLIC_API_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
@@ -486,6 +502,7 @@ ${bar != null ? `<div class="mini"><span style="width:${Math.min(100, bar)}%;bac
   .noprint { padding: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; font-size: 13px; }
   .noprint button { padding: 6px 12px; background: #ea580c; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px; }
   @media print { .noprint { display: none !important; } .wrap { padding: 0; } }
+${VISUAL_CSS}
 </style></head><body>
 ${isMobileUa ? '' : `<div class="noprint"><strong>Pratinjau — Laporan Event</strong> · Tekan <kbd>Ctrl/Cmd + P</kbd> untuk simpan sebagai PDF.<button onclick="window.print()">Print / Simpan PDF</button></div>`}
 ${isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : ''}
@@ -507,6 +524,7 @@ ${isMobileUa ? '<script>setTimeout(() => window.print(), 800);</script>' : ''}
 </div>
 <div class="kpis">${kpis.join('')}</div>
 ${panels}
+${visualHtml ? `<h2>${xi('chart', 13, '#C2410C')} Visualisasi Daftar &amp; Absen</h2>${visualHtml}` : ''}
 <h2>${xi('users', 13, '#C2410C')} Daftar peserta (${nf(d.rows.length)})</h2>
 <table>
 <thead><tr><th>#</th><th>Peserta</th><th>Kontak</th><th>Status</th><th>Check-in</th>${d.paid ? '<th>Pembayaran</th>' : ''}<th>Catatan</th></tr></thead>

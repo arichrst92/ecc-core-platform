@@ -98,3 +98,12 @@ EVENT_REGISTERED (daftar diterima), EVENT_APPROVED (pembayaran disetujui), EVENT
 
 ## Diagnosis (untuk Elsa)
 - `event` (audiencePelayanan → event_audience_pelayanan, isActive, isPublished, tanggalMulai/Selesai, jamMulai, butuhKehadiran, grupSesi, kuota, tipe bayar) → `event_participation` (status DAFTAR/HADIR/BATAL, filter eventId + jemaatId) → `event_donation` (status MENUNGGU_VERIFIKASI/BAYAR/BATAL per participationId) → `event_pelayanan_petugas` untuk hak scan petugas.
+
+## Visualisasi Daftar & Absen (Portal, 2026-11)
+- Detail event → tab **Visualisasi Daftar & Absen** (`GET /admin/event/:id/visualisasi`, pengelola event). Diperbarui otomatis tiap menit.
+- **Ringkasan**: terdaftar aktif (vs kuota), batal, hadir (% dari terdaftar), belum/tidak hadir, tamu aktif (New Comer · Visitor), datang tanpa daftar.
+- **Pendaftaran harian** H-30 s/d hari terakhir event: batang atas = daftar, bawah = batal, dipisah Jemaat / New Comer / Visitor; garis = pendaftar aktif kumulatif; hari acara diarsir.
+- **Absensi per 15 menit** dari 720 menit sebelum mulai s/d 60 menit setelah selesai (event beberapa hari: pilih hari); tampilan per cara absen atau per jemaat/tamu; garis kumulatif; jam puncak.
+- **Proporsi cara absen**: Self check-in · Scan petugas (termasuk scan terlambat & walk-in) · Absen Portal (manual admin).
+- Tambahan: komposisi yang hadir, ketepatan waktu (sebelum mulai / telat ≤ 15 / > 15 menit), corong daftar → lunas → hadir, petugas scan teraktif, alasan batal, hadir per cabang.
+- Tamu tanpa kategori dihitung Visitor (sama dengan laporan event).

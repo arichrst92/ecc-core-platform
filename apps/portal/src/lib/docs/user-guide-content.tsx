@@ -776,6 +776,7 @@ export const SECTIONS: Section[] = [
           'Form event → Batas Pendaftaran Online (menit sebelum mulai; 1440 = sehari sebelumnya) dan Jam self check-in (dibuka N menit sebelum mulai, ditutup N menit setelah event dimulai / selesai). Kosong = bawaan. Peserta yang belum hadir dibatalkan otomatis setelah self check-in ditutup (paling cepat saat event selesai).',
           'Lokasi atau jam yang dikosongkan tampil "-" di app.',
           'Laporan Event: peserta, kehadiran, tamu, ulasan — PDF/Excel.',
+          'Detail event → tab Visualisasi Daftar & Absen: grafik pendaftaran harian H-30 (daftar/batal per Jemaat, New Comer, Visitor + pendaftar aktif kumulatif), absensi per 15 menit dari 12 jam sebelum mulai sampai 1 jam setelah selesai (per cara absen atau jemaat/tamu), proporsi Self check-in / Scan petugas / Absen Portal, ketepatan waktu, corong peserta, petugas scan teraktif, alasan batal, dan hadir per cabang. Arahkan kursor ke batang untuk rincian.',
           'Detail event → tab Peserta: kotak Tamu menampilkan jumlah New Comers & Visitor (tamu yang kategorinya belum ditentukan dihitung Visitor). Klik Tamu, New Comers, atau Visitor (atau pilih di filter di atas daftar) untuk menyaring; tiap tamu berlabel New Comer / Visitor. Kategori diubah di menu Tamu.',
           'Export per event: detail event → Export Excel / PDF (atau Laporan Event → pilih Event) — ringkasan + daftar lengkap peserta (kontak WhatsApp/email bisa diklik, status, jam hadir, cara check-in & petugas, pembayaran) + ulasan.',
         ],

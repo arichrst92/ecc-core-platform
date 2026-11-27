@@ -34,8 +34,9 @@ import {
   AlertTriangle,
   UserPlus,
   Camera,
-  Search, Info, Receipt, HandHeart, ClipboardList, Star,
+  Search, Info, Receipt, HandHeart, ClipboardList, Star, BarChart3,
 } from 'lucide-react';
+import { EventVisualTab } from '@/components/event/event-visual-tab';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { JemaatSuggestions } from '@/components/jemaat-suggestions';
@@ -166,7 +167,7 @@ export default function EventDetailPage() {
   // Hook HARUS sebelum early return (loading / tidak ditemukan) — React #310.
   const [pesertaSearch, setPesertaSearch] = useState('');
   // Tab bagian detail (Peserta / Pembayaran / Pelayanan / Ulasan) — supaya halaman tidak memanjang.
-  const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'formulir' | 'ulasan'>('peserta');
+  const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'formulir' | 'ulasan' | 'visual'>('peserta');
   // Saring tamu (kotak "Tamu" di ringkasan): semua tamu / New Comer / Visitor.
   const [tamuFilter, setTamuFilter] = useState<'none' | 'all' | 'NEW_COMER' | 'VISITOR'>('none');
   // Pelayanan & volunteer (cache sama dengan EventMinistrySection) — untuk badge biru di tab.
@@ -535,6 +536,7 @@ export default function EventDetailPage() {
           { key: 'pelayanan', label: 'Pelayanan & Volunteer', Icon: HandHeart, show: e.butuhKehadiran, needsFill: pelayananPerluDiisi },
           { key: 'formulir', label: 'Formulir', Icon: ClipboardList, show: true },
           { key: 'ulasan', label: 'Ulasan', Icon: Star, show: true },
+          { key: 'visual', label: 'Visualisasi Daftar & Absen', Icon: BarChart3, show: true },
         ];
         return (
           <div className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 bg-neutral-50/95 backdrop-blur border-b border-neutral-200 mb-4 flex gap-1 overflow-x-auto" role="tablist">
@@ -874,6 +876,8 @@ export default function EventDetailPage() {
       ) : null}
 
       {tab === 'formulir' ? <ContentFormsTab sourceType="EVENT" sourceId={eventId} /> : null}
+
+      {tab === 'visual' ? <EventVisualTab eventId={eventId} /> : null}
 
       {tab === 'ulasan' ? (
         <div className="[&>section:first-child]:mt-0">

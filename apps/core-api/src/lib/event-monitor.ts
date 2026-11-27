@@ -38,7 +38,7 @@ type EventRow = {
 };
 
 /** Jendela waktu event pada hari `day` (untuk event beberapa hari: jam yang sama tiap hari). */
-function windowOf(ev: EventRow, tz: string, day?: Date) {
+export function windowOf(ev: EventRow, tz: string, day?: Date) {
   const d0 = calendarDateOf(ev.tanggalMulai, tz);
   const d1 = ev.tanggalSelesai ? calendarDateOf(ev.tanggalSelesai, tz) : d0;
   const today = day ?? todayInTz(tz);

@@ -72,6 +72,7 @@ import {
 } from '../../lib/pelayanan-tugas.js';
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import { createWalkInParticipation, walkInAllowed } from '../../lib/event-walkin.js';
+import { buildEventVisual } from '../../lib/event-visual.js';
 import {
   assertEventEligible,
   isEligible,
@@ -1675,6 +1676,13 @@ async function assertCanViewEventScan(req: import('express').Request, event: { i
     : null;
   if (!ok) throw Forbidden(`Anda tidak berwenang melihat data scan event "${event.judul}".`);
 }
+
+// Visualisasi Daftar & Absen (Portal → detail event): grafik pendaftaran harian,
+// absensi per 15 menit, proporsi cara check-in, dan ringkasan pendukung.
+eventRouter.get('/:id/visualisasi', W('read'), async (req, res) => {
+  const hari = typeof req.query.hari === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.hari) ? req.query.hari : undefined;
+  res.json({ success: true, data: await buildEventVisual(req.params.id, hari) });
+});
 
 eventRouter.get('/:id/checkin/stats', async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });

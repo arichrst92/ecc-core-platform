@@ -47,7 +47,8 @@ const MODE: { v: ModeFilter; l: string }[] = [
 
 export default function AnalitikPage() {
   const [tab, setTab] = useState<Tab>('halaman');
-  const [pagesFilter, setPagesFilter] = useState<AnalyticsFilter>({ periode: '30d', platform: 'all', mode: 'all' });
+  // Tab Halaman: default "Hari Ini" (2026-11, sebelumnya 30 hari).
+  const [pagesFilter, setPagesFilter] = useState<AnalyticsFilter>({ periode: 'today', platform: 'all', mode: 'all' });
   // Performa API: default "Hari Ini" — rentang panjang berat dimuat (data per 5 menit).
   const [apiFilter, setApiFilter] = useState<AnalyticsFilter>({ periode: 'today', platform: 'all', mode: 'all' });
   const filter = tab === 'api' ? apiFilter : pagesFilter;

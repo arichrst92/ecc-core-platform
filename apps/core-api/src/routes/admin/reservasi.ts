@@ -26,6 +26,7 @@ import {
   createNotificationBatch,
   resolveGuardianJemaatIds,
 } from '../../lib/notification.js';
+import { ibadahPanel, upcomingIbadah } from '../../lib/ibadah-panel.js';
 
 export const reservasiRouter = Router();
 
@@ -50,6 +51,18 @@ function reservasiWhere(req: { query: Record<string, unknown> }, search?: string
   if (ibadahId) where.ibadahId = ibadahId;
   if (jemaatId) where.jemaatId = jemaatId;
   if (tanggal) where.tanggalIbadah = new Date(`${tanggal}T00:00:00.000Z`);
+  // ?tamu=all|NEW_COMER|VISITOR — tamu = data tamu atau datang sebagai tamu; kategori kosong = Visitor.
+  const tamu = typeof req.query.tamu === 'string' ? req.query.tamu : '';
+  if (tamu === 'all' || tamu === 'NEW_COMER' || tamu === 'VISITOR') {
+    const isGuest: Prisma.ReservasiWhereInput = { OR: [{ jemaat: { isTamu: true } }, { guestSource: { not: null } }] };
+    const kat: Prisma.ReservasiWhereInput | null =
+      tamu === 'NEW_COMER'
+        ? { jemaat: { tamuKategori: 'NEW_COMER' } }
+        : tamu === 'VISITOR'
+          ? { OR: [{ jemaat: { tamuKategori: null } }, { jemaat: { tamuKategori: { not: 'NEW_COMER' } } }] }
+          : null;
+    where.AND = [isGuest, ...(kat ? [kat] : [])];
+  }
   const q = search?.trim();
   if (q) {
     where.OR = [
@@ -80,7 +93,7 @@ reservasiRouter.get('/', kRead, async (req, res) => {
       take: q.limit,
       orderBy: [{ tanggalIbadah: 'desc' }, { reservedAt: 'desc' }],
       include: {
-        jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isTamu: true } },
+        jemaat: { select: { id: true, namaLengkap: true, fotoUrl: true, noHp: true, isTamu: true, tamuKategori: true } },
         ibadah: { select: { id: true, nama: true } },
       },
     }),
@@ -94,6 +107,16 @@ reservasiRouter.get('/', kRead, async (req, res) => {
   });
 });
 
+// ===== Panel halaman Kehadiran: ibadah yang dituju, aturan, petugas scan =====
+// GET /admin/reservasi/upcoming?cabangId= — pertemuan hari ini s/d 6 hari ke depan.
+reservasiRouter.get('/upcoming', kRead, async (req, res) => {
+  res.json({ success: true, data: await upcomingIbadah(typeof req.query.cabangId === 'string' ? req.query.cabangId : undefined) });
+});
+// GET /admin/reservasi/panel?ibadahId=&tanggal=
+reservasiRouter.get('/panel', kRead, async (req, res) => {
+  res.json({ success: true, data: await ibadahPanel(String(req.query.ibadahId ?? ''), String(req.query.tanggal ?? '')) });
+});
+
 // ===== Ringkasan (halaman Kehadiran) =====
 // GET /admin/reservasi/summary?ibadahId=&tanggal=&search=
 // Jumlah per status + tamu yang hadir, dengan filter yang sama seperti list
@@ -104,9 +127,10 @@ reservasiRouter.get('/summary', kRead, async (req, res) => {
   const tamuWhere: Prisma.ReservasiWhereInput = {
     AND: [where, { status: 'JOIN' }, { OR: [{ jemaat: { isTamu: true } }, { guestSource: { not: null } }] }],
   };
-  const [byStatus, tamuHadir] = await Promise.all([
+  const [byStatus, tamuHadir, newComerHadir] = await Promise.all([
     prisma.reservasi.groupBy({ by: ['status'], where, _count: { _all: true } }),
     prisma.reservasi.count({ where: tamuWhere }),
+    prisma.reservasi.count({ where: { AND: [tamuWhere, { jemaat: { tamuKategori: 'NEW_COMER' } }] } }),
   ]);
   const n = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
   const reserve = n('RESERVE');
@@ -120,6 +144,8 @@ reservasiRouter.get('/summary', kRead, async (req, res) => {
       hadir: join,
       hadirJemaat: join - tamuHadir,
       tamu: tamuHadir, // tamu yang hadir
+      newComer: newComerHadir, // tamu hadir kategori New Comer
+      visitor: tamuHadir - newComerHadir, // sisanya (termasuk belum ditentukan) = Visitor
       batal: cancel,
     },
   });

@@ -66,3 +66,10 @@ summary: Cara ibadah dijadwalkan (mingguan/dua mingguan/bulanan, zona waktu caba
 - Jam ibadah/event ditulis dengan label kota cabang, mis. ECC Bali → **Waktu Bali** (dulu "Waktu Makassar" dari zona Asia/Makassar).
 - Kota diambil dari kolom **Kota (label jam)** di Portal → Cabang; bila kosong, dari nama cabang tanpa "ECC". Cabang yang namanya bukan kota (mis. "ECC Kelapa Gading") → isi kolom Kota.
 - App ≤ 2.5.0 masih menulis nama kota zona waktu sampai jemaat update; Portal, pengingat & pesan server sudah memakai kota cabang.
+
+## Halaman Kehadiran Portal (2026-11)
+- Judul **Kehadiran Ibadah**. Bagian atas **Ibadah yang dituju**: pilih ibadah & tanggal, atau klik kartu **Terdekat** (hari ini s/d 6 hari ke depan, berstatus Akan datang / Berlangsung / Selesai / Dibatalkan). Saat pertama dibuka, ibadah terdekat dipilih otomatis; **Lihat semua** menampilkan semua ibadah.
+- Pertemuan terpilih menampilkan jam, cabang, lokasi, jam self check-in, kapasitas, dan tombol buka-tutup **Aturan ibadah ini** (reservasi sampai kapan, self check-in, scan petugas, tamu, penjemputan anak, batal otomatis, membatalkan, wewenang admin — jam dari server).
+- Kotak **Berwenang scan check-in**: petugas pelayanan aktif dengan izin scan (tetap / khusus tanggal ini); kosong → peringatan kuning + tombol ke detail ibadah.
+- Tombol berketerangan: **Check-in** (scan QR / kode / cari nama; tamu baru juga di sini), **Tambah Kehadiran** (jemaat yang sudah punya data; hari ini = langsung hadir), **Pickup Anak** & **Checkout via Kode** (hanya tampil untuk ibadah anak / wajib checkout, atau saat melihat semua ibadah).
+- Ringkasan bisa diklik untuk menyaring: Semua, Reservasi (belum datang), Hadir, Batal, Tamu hadir (+ New Comers / Visitor). Filter tambahan: status & jemaat/tamu. Status kini berbahasa Indonesia (Reservasi / Hadir / Batal) dan baris hadir menampilkan caranya (Self check-in, Scan petugas, Scan terlambat, Tanpa reservasi, Absen Portal).

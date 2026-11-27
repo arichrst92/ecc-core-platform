@@ -21,8 +21,10 @@ import {
   UserPlus,
   User as UserIcon,
   Users,
-  Check, Baby
+  Check, Baby, CalendarDays, ChevronDown, ClipboardList, LogOut,
 } from 'lucide-react';
+import { RulesList, type Rule } from '@/components/event/event-rules-panel';
+import { ScanAccessCard } from '@/components/event/scan-access-card';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
@@ -43,9 +45,75 @@ interface ReservasiItem {
   cancelReason?: string | null;
   catatan: string | null;
   guestSource?: string | null;
-  jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null; isTamu?: boolean };
+  checkinMethod?: string | null;
+  jemaat: { id: string; namaLengkap: string; fotoUrl: string | null; noHp: string | null; isTamu?: boolean; tamuKategori?: string | null };
   ibadah: { id: string; nama: string };
 }
+
+type TamuFilter = '' | 'all' | 'NEW_COMER' | 'VISITOR';
+type OccStatus = 'AKAN' | 'BERLANGSUNG' | 'SELESAI' | 'DIBATALKAN' | 'TIDAK_DIJADWALKAN';
+interface Upcoming {
+  ibadahId: string;
+  nama: string;
+  cabang: string | null;
+  tanggal: string;
+  jamMulai: string;
+  jamSelesai: string;
+  startAt: string;
+  status: OccStatus;
+  isKidsIbadah: boolean;
+}
+interface Panel {
+  ibadah: {
+    id: string;
+    nama: string;
+    cabang: string | null;
+    tanggal: string;
+    jamMulai: string;
+    jamSelesai: string;
+    lokasi: string | null;
+    isOnline: boolean;
+    isKidsIbadah: boolean;
+    requiresCheckout: boolean;
+    kapasitasSeat: number | null;
+    status: OccStatus;
+    startLabel: string;
+    selfCheckinOpens: string | null;
+    selfCheckinCloses: string | null;
+  };
+  aturan: Rule[];
+  scanners: { id: string; nama: string; fotoUrl: string | null; pelayanan: string; peran: string | null; khususTanggal?: boolean }[];
+}
+
+const OCC_LABEL: Record<OccStatus, [string, string]> = {
+  AKAN: ['Akan datang', 'bg-sky-100 text-sky-800'],
+  BERLANGSUNG: ['Berlangsung', 'bg-green-100 text-green-800'],
+  SELESAI: ['Selesai', 'bg-neutral-200 text-neutral-700'],
+  DIBATALKAN: ['Dibatalkan', 'bg-red-100 text-red-700'],
+  TIDAK_DIJADWALKAN: ['Tidak ada jadwal', 'bg-amber-100 text-amber-800'],
+};
+function StatusPill({ status }: { status: OccStatus }) {
+  const [l, c] = OCC_LABEL[status];
+  return <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${c}`}>{l}</span>;
+}
+/** "Hari ini" / "Besok" / "Sab, 30 Nov". */
+function dayLabel(ymd: string): string {
+  const t = todayWib();
+  const d = new Date(`${ymd}T00:00:00Z`);
+  const diff = Math.round((d.getTime() - new Date(`${t}T00:00:00Z`).getTime()) / 86_400_000);
+  if (diff === 0) return 'Hari ini';
+  if (diff === 1) return 'Besok';
+  if (diff === -1) return 'Kemarin';
+  return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+/** Cara check-in (kolom checkinMethod). */
+const METHOD_LABEL: Record<string, [string, string]> = {
+  SELF: ['Self check-in', 'bg-orange-50 text-orange-700'],
+  SCAN: ['Scan petugas', 'bg-violet-50 text-violet-700'],
+  LATE: ['Scan terlambat', 'bg-amber-50 text-amber-700'],
+  WALK_IN: ['Tanpa reservasi', 'bg-violet-50 text-violet-700'],
+  MANUAL: ['Absen Portal', 'bg-sky-50 text-sky-700'],
+};
 
 interface Ibadah {
   id: string;
@@ -60,6 +128,8 @@ interface KehadiranSummary {
   hadir: number;
   hadirJemaat: number;
   tamu: number;
+  newComer?: number;
+  visitor?: number;
   batal: number;
 }
 
@@ -75,9 +145,9 @@ const STATUS_COLOR: Record<ReservasiStatus, string> = {
   CANCEL: 'bg-red-100 text-red-700',
 };
 const STATUS_LABEL: Record<ReservasiStatus, string> = {
-  RESERVE: 'Reserve',
-  JOIN: 'Join',
-  CANCEL: 'Cancel',
+  RESERVE: 'Reservasi',
+  JOIN: 'Hadir',
+  CANCEL: 'Batal',
 };
 const STATUS_ICON: Record<ReservasiStatus, typeof Clock> = {
   RESERVE: Clock,
@@ -91,11 +161,15 @@ export default function KehadiranPage() {
   const [filterStatus, setFilterStatus] = usePersistentState<ReservasiStatus | ''>('kehadiran:filterStatus', '');
   const [filterIbadahId, setFilterIbadahId] = usePersistentState('kehadiran:filterIbadahId', '');
   const [filterTanggal, setFilterTanggal] = usePersistentState('kehadiran:filterTanggal', '');
+  const [filterTamu, setFilterTamu] = usePersistentState<TamuFilter>('kehadiran:filterTamu', '');
+  // Sekali per tab: pilih otomatis ibadah terdekat. "Semua ibadah" mematikannya.
+  const [autoPick, setAutoPick] = usePersistentState('kehadiran:autoPick', true);
   const [search, setSearch] = usePersistentState('kehadiran:search', '');
   const [createOpen, setCreateOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [checkoutScanOpen, setCheckoutScanOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [showKode, setShowKode] = useState<ReservasiItem | null>(null);
   const [deleting, setDeleting] = useState<ReservasiItem | null>(null);
 
@@ -112,19 +186,22 @@ export default function KehadiranPage() {
     if (ib) setFilterIbadahId(ib);
     if (tg && /^\d{4}-\d{2}-\d{2}$/.test(tg)) setFilterTanggal(tg);
     setFilterStatus('');
+    setFilterTamu('');
     setSearch('');
     setPage(1);
+    setAutoPick(false);
     router.replace('/dashboard/kehadiran');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sp]);
 
   const listQ = useQuery({
-    queryKey: ['reservasi', { page, filterStatus, filterIbadahId, filterTanggal, debouncedSearch }],
+    queryKey: ['reservasi', { page, filterStatus, filterIbadahId, filterTanggal, filterTamu, debouncedSearch }],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit: 25 };
       if (filterStatus) params.status = filterStatus;
       if (filterIbadahId) params.ibadahId = filterIbadahId;
       if (filterTanggal) params.tanggal = filterTanggal;
+      if (filterTamu) params.tamu = filterTamu;
       if (debouncedSearch) params.search = debouncedSearch;
       const res = await apiClient.get<{
         data: ReservasiItem[];
@@ -158,6 +235,38 @@ export default function KehadiranPage() {
     staleTime: 60_000,
   });
 
+  // Pertemuan terdekat (hari ini s/d 6 hari) — "Ibadah yang dituju".
+  const upcomingQ = useQuery({
+    queryKey: ['reservasi', 'upcoming'],
+    queryFn: async () => (await apiClient.get<{ data: Upcoming[] }>('/admin/reservasi/upcoming')).data.data,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  useEffect(() => {
+    if (!autoPick || filterIbadahId || filterTanggal) return;
+    const first = upcomingQ.data?.find((u) => u.status !== 'DIBATALKAN');
+    if (!first) return;
+    setFilterIbadahId(first.ibadahId);
+    setFilterTanggal(first.tanggal);
+    setPage(1);
+    setAutoPick(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upcomingQ.data, autoPick]);
+
+  const selected = !!filterIbadahId && !!filterTanggal;
+  const panelQ = useQuery({
+    queryKey: ['reservasi', 'panel', filterIbadahId, filterTanggal],
+    enabled: selected,
+    queryFn: async () =>
+      (await apiClient.get<{ data: Panel }>('/admin/reservasi/panel', { params: { ibadahId: filterIbadahId, tanggal: filterTanggal } })).data
+        .data,
+    staleTime: 30_000,
+  });
+  const panel = selected ? panelQ.data : undefined;
+  const selIbadah = ibadahQ.data?.find((i) => i.id === filterIbadahId);
+  const kidsMode = panel ? panel.ibadah.isKidsIbadah || panel.ibadah.requiresCheckout : !!selIbadah?.isKidsIbadah;
+  const showKidsActions = !filterIbadahId || kidsMode;
+
   const statusMut = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: ReservasiStatus }) =>
       apiClient.patch(`/admin/reservasi/${id}/status`, { status }),
@@ -180,79 +289,293 @@ export default function KehadiranPage() {
 
   const items = listQ.data?.data ?? [];
 
-  function resetFilter() {
+  function pickOcc(ibadahId: string, tanggal: string) {
+    setFilterIbadahId(ibadahId);
+    setFilterTanggal(tanggal);
     setFilterStatus('');
+    setFilterTamu('');
+    setPage(1);
+    setAutoPick(false);
+  }
+  function showAll() {
     setFilterIbadahId('');
     setFilterTanggal('');
+    setPage(1);
+    setAutoPick(false);
+  }
+  function resetFilter() {
+    setFilterStatus('');
+    setFilterTamu('');
     setSearch('');
     setPage(1);
   }
+  const toggleStatus = (s: ReservasiStatus | '') => {
+    setFilterStatus(filterStatus === s ? '' : s);
+    setPage(1);
+  };
+  const toggleTamu = (t: TamuFilter) => {
+    setFilterTamu(filterTamu === t ? '' : t);
+    setPage(1);
+  };
+  const sm = summaryQ.data;
+
+  const actions = [
+    {
+      key: 'checkin',
+      onClick: () => setScanOpen(true),
+      cls: 'bg-green-600 hover:bg-green-700',
+      Icon: ScanLine,
+      label: 'Check-in',
+      desc: 'Untuk menandai hadir: scan QR / ketik kode, atau cari nama. Tamu baru juga dicatat di sini',
+      show: true,
+    },
+    {
+      key: 'tambah',
+      onClick: () => setCreateOpen(true),
+      cls: 'bg-brand-500 hover:bg-brand-600',
+      Icon: Plus,
+      label: 'Tambah Kehadiran',
+      desc: 'Untuk jemaat yang sudah punya data: buat reservasi, atau langsung hadir bila tanggalnya hari ini',
+      show: true,
+    },
+    {
+      key: 'pickup',
+      onClick: () => setPickupOpen(true),
+      cls: 'bg-pink-600 hover:bg-pink-700',
+      Icon: Baby,
+      label: 'Pickup Anak',
+      desc: 'Untuk ibadah anak: cocokkan kode jemput 6 angka saat orang tua menjemput',
+      show: showKidsActions,
+    },
+    {
+      key: 'checkout',
+      onClick: () => setCheckoutScanOpen(true),
+      cls: 'bg-amber-600 hover:bg-amber-700',
+      Icon: LogOut,
+      label: 'Checkout via Kode',
+      desc: 'Untuk ibadah yang wajib checkout: ketik kode reservasi saat anak / jemaat pulang',
+      show: showKidsActions,
+    },
+  ].filter((a) => a.show);
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between mb-6 gap-2">
-        <div className="min-w-0 flex-1 basis-64">
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <Ticket className="w-6 h-6" />
-            Kehadiran / Reservasi
-          </h1>
-          <p className="text-neutral-500 mt-1">
-            Reservasi jemaat per ibadah & tanggal. Status: <strong>Reserve</strong> → <strong>Join</strong> (scan QR / cari nama, no HP, email) atau <strong>Cancel</strong>. Tamu bisa dicatat langsung.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setScanOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 border border-brand-300 text-brand-700 hover:bg-brand-50 text-sm font-medium rounded-lg"
-          >
-            <ScanLine className="w-4 h-4" />
-            Check-in
-          </button>
-          <button
-            onClick={() => setCheckoutScanOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 text-sm font-medium rounded-lg"
-            title="Untuk ibadah dengan requiresCheckout=true (biasanya ibadah anak)"
-          >
-            <ScanLine className="w-4 h-4" />
-            Checkout via Kode
-          </button>
-          <button
-            onClick={() => setPickupOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 border border-pink-300 text-pink-700 hover:bg-pink-50 text-sm font-medium rounded-lg"
-            title="Ibadah anak — verify 6-digit kode jemput dari parent"
-          >
-            <Baby className="w-4 h-4" /> Pickup Anak
-          </button>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Tambah Kehadiran
-          </button>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+          <Ticket className="w-6 h-6" />
+          Kehadiran Ibadah
+        </h1>
+        <p className="text-neutral-500 mt-1 text-sm">
+          Pilih ibadah yang dituju, lalu catat kehadiran. Status: <strong>Reservasi</strong> (sudah reservasi, belum datang) →{' '}
+          <strong>Hadir</strong>, atau <strong>Batal</strong>.
+        </p>
       </div>
 
-      {/* Ringkasan sesuai filter (ibadah, tanggal, pencarian) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <SummaryCard label="Total terdaftar" value={summaryQ.data?.total} hint="reservasi + hadir + batal" tone="neutral" icon={Users} />
-        <SummaryCard label="Reservasi" value={summaryQ.data?.reservasi} hint="sudah reservasi, belum hadir" tone="amber" icon={Clock} />
-        <SummaryCard
-          label="Hadir"
-          value={summaryQ.data?.hadir}
-          hint={summaryQ.data ? `${summaryQ.data.hadirJemaat} jemaat + ${summaryQ.data.tamu} tamu` : undefined}
-          tone="green"
-          icon={CheckCircle2}
+      {/* 1. Ibadah yang dituju */}
+      <section className="bg-white border border-neutral-200 rounded-xl mb-4 overflow-hidden">
+        <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[14rem]">
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Ibadah yang dituju</div>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={filterIbadahId}
+                onChange={(e) => {
+                  setFilterIbadahId(e.target.value);
+                  if (e.target.value && !filterTanggal) setFilterTanggal(todayWib());
+                  setPage(1);
+                  setAutoPick(false);
+                }}
+                className="px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white flex-1 min-w-[12rem] max-w-md"
+                aria-label="Ibadah"
+              >
+                <option value="">Semua ibadah</option>
+                {ibadahQ.data?.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.nama}
+                    {i.cabang?.nama ? ` — ${i.cabang.nama}` : ''}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={filterTanggal}
+                onChange={(e) => {
+                  setFilterTanggal(e.target.value);
+                  setPage(1);
+                  setAutoPick(false);
+                }}
+                className="px-3 py-2 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                aria-label="Tanggal"
+              />
+              {filterIbadahId || filterTanggal ? (
+                <button onClick={showAll} className="text-xs text-neutral-600 hover:text-neutral-900 px-2 py-2 inline-flex items-center gap-1">
+                  <X className="w-3 h-3" /> Lihat semua
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {/* Pilihan cepat: pertemuan terdekat */}
+        {(upcomingQ.data ?? []).length ? (
+          <div className="px-4 sm:px-5 pb-3">
+            <div className="text-[11px] text-neutral-500 mb-1.5">Terdekat — klik untuk memilih</div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {upcomingQ.data!.slice(0, 12).map((u) => {
+                const on = u.ibadahId === filterIbadahId && u.tanggal === filterTanggal;
+                return (
+                  <button
+                    key={`${u.ibadahId}|${u.tanggal}`}
+                    onClick={() => pickOcc(u.ibadahId, u.tanggal)}
+                    className={`shrink-0 text-left rounded-lg border px-3 py-2 w-48 ${on ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'border-neutral-200 hover:border-neutral-300 bg-white'}`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <StatusPill status={u.status} />
+                      {u.isKidsIbadah ? <span className="text-[10px] font-semibold text-pink-700 bg-pink-50 px-1.5 rounded">Anak</span> : null}
+                    </div>
+                    <div className="text-[13px] font-semibold text-neutral-900 truncate mt-1">{u.nama}</div>
+                    <div className="text-[11px] text-neutral-500 truncate">
+                      {dayLabel(u.tanggal)} · {u.jamMulai}–{u.jamSelesai}
+                      {u.cabang ? ` · ${u.cabang}` : ''}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Pertemuan terpilih */}
+        {selected ? (
+          panel ? (
+            <div className="border-t border-neutral-100 bg-gradient-to-r from-brand-50/60 to-white px-4 sm:px-5 py-3">
+              <div className="flex flex-wrap items-start gap-3">
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-5 h-5" />
+                </span>
+                <div className="flex-1 min-w-[14rem]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/dashboard/ibadah/${panel.ibadah.id}`} className="font-semibold text-neutral-900 hover:text-brand-700 hover:underline">
+                      {panel.ibadah.nama}
+                    </Link>
+                    <StatusPill status={panel.ibadah.status} />
+                    {panel.ibadah.isKidsIbadah ? <span className="text-[10px] font-semibold text-pink-700 bg-pink-50 px-1.5 py-0.5 rounded">Ibadah anak</span> : null}
+                  </div>
+                  <div className="text-xs text-neutral-600 mt-0.5">
+                    {dayLabel(panel.ibadah.tanggal)} · {panel.ibadah.jamMulai}–{panel.ibadah.jamSelesai}
+                    {panel.ibadah.cabang ? ` · ${panel.ibadah.cabang}` : ''}
+                    {panel.ibadah.lokasi ? ` · ${panel.ibadah.lokasi}` : ''}
+                  </div>
+                  <div className="text-xs text-neutral-500 mt-0.5">
+                    {panel.ibadah.selfCheckinOpens
+                      ? `Self check-in: ${panel.ibadah.selfCheckinOpens} s/d ${panel.ibadah.selfCheckinCloses}`
+                      : 'Check-in anak di meja CKids'}
+                    {panel.ibadah.kapasitasSeat ? ` · Kapasitas ${panel.ibadah.kapasitasSeat.toLocaleString('id-ID')} kursi` : ''}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRulesOpen((v) => !v)}
+                  aria-expanded={rulesOpen}
+                  className="text-xs font-semibold text-brand-700 hover:bg-brand-50 border border-brand-200 rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 shrink-0"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Aturan ibadah ini
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+              {rulesOpen ? (
+                <div className="mt-3 pt-3 border-t border-neutral-200/70">
+                  <RulesList rules={panel.aturan} />
+                  <p className="text-[11px] text-neutral-400 mt-3">Jam mengikuti zona waktu cabang. Ubah pengaturan di menu Ibadah → Edit ibadah.</p>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="border-t border-neutral-100 px-5 py-4 text-neutral-400 flex justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          )
+        ) : (
+          <div className="border-t border-neutral-100 px-4 sm:px-5 py-3 text-xs text-neutral-500">
+            Menampilkan <strong>semua ibadah</strong>
+            {filterTanggal ? ` di tanggal ${dayLabel(filterTanggal)}` : ''}. Pilih satu ibadah & tanggal untuk melihat aturan, petugas scan, dan jumlah per pertemuan.
+          </div>
+        )}
+      </section>
+
+      {/* 2. Petugas berwenang scan (pertemuan terpilih) */}
+      {panel ? (
+        <ScanAccessCard
+          loading={false}
+          kind="ibadah"
+          scanners={panel.scanners}
+          manageLabel="Buka detail ibadah"
+          onManage={() => router.push(`/dashboard/ibadah/${panel.ibadah.id}`)}
         />
-        <SummaryCard label="Batal" value={summaryQ.data?.batal} tone="red" icon={XCircle} />
-        <SummaryCard label="Tamu" value={summaryQ.data?.tamu} hint="tamu yang hadir" tone="violet" icon={UserPlus} />
-      </div>
-      {!filterIbadahId && !filterTanggal ? (
-        <p className="text-xs text-neutral-500 -mt-2 mb-4">Pilih ibadah & tanggal di filter untuk melihat jumlah per pertemuan.</p>
       ) : null}
 
+      {/* 3. Tombol aksi + keterangan */}
+      <div className="flex flex-wrap items-start gap-2 mb-4">
+        {actions.map((a) => (
+          <div key={a.key} className="w-[11rem] flex flex-col">
+            <button
+              onClick={a.onClick}
+              className={`flex items-center justify-center gap-2 px-3 py-2 ${a.cls} text-white text-sm font-medium rounded-lg`}
+            >
+              <a.Icon className="w-4 h-4" />
+              {a.label}
+            </button>
+            <span className="text-[10.5px] leading-[14px] text-neutral-500 mt-1 px-0.5">{a.desc}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 4. Ringkasan — klik untuk menyaring */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mb-4">
+        <SummaryCard label="Semua" value={sm?.total} hint="reservasi + hadir + batal" tone="neutral" icon={Users} active={!filterStatus && !filterTamu} onClick={() => { setFilterStatus(''); setFilterTamu(''); setPage(1); }} />
+        <SummaryCard label="Reservasi" value={sm?.reservasi} hint="sudah reservasi, belum datang" tone="amber" icon={Clock} active={filterStatus === 'RESERVE'} onClick={() => toggleStatus('RESERVE')} />
+        <SummaryCard
+          label="Hadir"
+          value={sm?.hadir}
+          hint={sm ? `${sm.hadirJemaat} jemaat + ${sm.tamu} tamu${sm.total ? ` · ${Math.round((sm.hadir / Math.max(1, sm.total - sm.batal)) * 100)}%` : ''}` : undefined}
+          tone="green"
+          icon={CheckCircle2}
+          active={filterStatus === 'JOIN' && !filterTamu}
+          onClick={() => toggleStatus('JOIN')}
+        />
+        <SummaryCard label="Batal" value={sm?.batal} hint="termasuk tidak hadir (otomatis)" tone="red" icon={XCircle} active={filterStatus === 'CANCEL'} onClick={() => toggleStatus('CANCEL')} />
+        <div className={`bg-white border rounded-xl p-3 ${filterTamu ? 'border-violet-400 ring-1 ring-violet-400' : 'border-neutral-200'}`}>
+          <button type="button" onClick={() => toggleTamu('all')} className="w-full flex items-start gap-3 text-left">
+            <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-violet-700 bg-violet-50">
+              <UserPlus className="w-4 h-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xl font-bold text-neutral-900 tabular-nums">{sm?.tamu == null ? '—' : sm.tamu.toLocaleString('id-ID')}</span>
+              <span className="block text-xs font-medium text-neutral-600">Tamu hadir</span>
+            </span>
+          </button>
+          <div className="flex gap-1 mt-2">
+            {(
+              [
+                ['NEW_COMER', 'New Comers', sm?.newComer, 'bg-emerald-100 text-emerald-800', 'ring-emerald-500'],
+                ['VISITOR', 'Visitor', sm?.visitor, 'bg-sky-100 text-sky-800', 'ring-sky-500'],
+              ] as const
+            ).map(([k, l, n, cls, ring]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => toggleTamu(k)}
+                className={`flex-1 min-w-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-left truncate ${cls} ${filterTamu === k ? `ring-2 ${ring}` : 'hover:opacity-80'}`}
+              >
+                {l} <span className="font-bold">{n == null ? '—' : n.toLocaleString('id-ID')}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
+      <div className="bg-white border border-neutral-200 rounded-xl p-3 mb-4 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-0 basis-56">
           <label className="block text-xs font-medium text-neutral-600 mb-1">Cari nama / no HP / email / kode</label>
           <div className="flex items-center gap-2 border border-neutral-300 rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand-500">
@@ -269,37 +592,6 @@ export default function KehadiranPage() {
             />
           </div>
         </div>
-        <div className="min-w-0 max-w-full">
-          <label className="block text-xs font-medium text-neutral-600 mb-1">Ibadah</label>
-          <select
-            value={filterIbadahId}
-            onChange={(e) => {
-              setFilterIbadahId(e.target.value);
-              setPage(1);
-            }}
-            className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white w-full sm:w-auto sm:min-w-[200px] max-w-full sm:max-w-xs"
-          >
-            <option value="">Semua ibadah</option>
-            {ibadahQ.data?.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.nama}
-                {i.cabang?.nama ? ` — ${i.cabang.nama}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-neutral-600 mb-1">Tanggal</label>
-          <input
-            type="date"
-            value={filterTanggal}
-            onChange={(e) => {
-              setFilterTanggal(e.target.value);
-              setPage(1);
-            }}
-            className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">Status</label>
           <select
@@ -311,12 +603,28 @@ export default function KehadiranPage() {
             className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
           >
             <option value="">Semua</option>
-            <option value="RESERVE">Reserve</option>
-            <option value="JOIN">Join</option>
-            <option value="CANCEL">Cancel</option>
+            <option value="RESERVE">Reservasi (belum datang)</option>
+            <option value="JOIN">Hadir</option>
+            <option value="CANCEL">Batal</option>
           </select>
         </div>
-        {(filterStatus || filterIbadahId || filterTanggal || search) && (
+        <div>
+          <label className="block text-xs font-medium text-neutral-600 mb-1">Jemaat / tamu</label>
+          <select
+            value={filterTamu}
+            onChange={(e) => {
+              setFilterTamu(e.target.value as TamuFilter);
+              setPage(1);
+            }}
+            className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            <option value="">Semua</option>
+            <option value="all">Tamu</option>
+            <option value="NEW_COMER">New Comers</option>
+            <option value="VISITOR">Visitor</option>
+          </select>
+        </div>
+        {(filterStatus || filterTamu || search) && (
           <button
             onClick={resetFilter}
             className="flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-900 px-2 py-1.5"
@@ -379,9 +687,16 @@ export default function KehadiranPage() {
                         {r.jemaat.namaLengkap}
                       </Link>
                       {r.jemaat.isTamu || r.guestSource ? (
-                        <span className="ml-1.5 text-[10px] font-semibold uppercase bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">
-                          Tamu
-                        </span>
+                        <>
+                          <span className="ml-1.5 text-[10px] font-semibold uppercase bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">
+                            Tamu
+                          </span>
+                          {r.jemaat.tamuKategori === 'NEW_COMER' ? (
+                            <span className="ml-1 text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">New Comer</span>
+                          ) : (
+                            <span className="ml-1 text-[10px] font-semibold bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">Visitor</span>
+                          )}
+                        </>
                       ) : null}
                       {r.jemaat.noHp && (
                         <div className="text-xs text-neutral-500">{r.jemaat.noHp}</div>
@@ -414,6 +729,11 @@ export default function KehadiranPage() {
                           batal otomatis
                         </div>
                       ) : null}
+                      {r.status === 'JOIN' && r.checkinMethod && METHOD_LABEL[r.checkinMethod] ? (
+                        <div className={`mt-0.5 inline-block text-[10px] font-medium px-1.5 rounded ${METHOD_LABEL[r.checkinMethod]![1]}`}>
+                          {METHOD_LABEL[r.checkinMethod]![0]}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -421,27 +741,27 @@ export default function KehadiranPage() {
                           <button
                             onClick={() => statusMut.mutate({ id: r.id, status: 'JOIN' })}
                             className="px-2 py-1 text-xs text-green-700 hover:bg-green-50 rounded border border-green-200"
-                            title="Set Join (check-in)"
+                            title="Tandai hadir"
                           >
-                            Join
+                            Hadir
                           </button>
                         )}
                         {r.status !== 'CANCEL' && (
                           <button
                             onClick={() => statusMut.mutate({ id: r.id, status: 'CANCEL' })}
                             className="px-2 py-1 text-xs text-red-700 hover:bg-red-50 rounded border border-red-200"
-                            title="Cancel"
+                            title="Batalkan"
                           >
-                            Cancel
+                            Batal
                           </button>
                         )}
                         {r.status !== 'RESERVE' && (
                           <button
                             onClick={() => statusMut.mutate({ id: r.id, status: 'RESERVE' })}
                             className="px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 rounded border border-amber-200"
-                            title="Set Reserve (reset)"
+                            title="Kembalikan ke status reservasi (belum datang)"
                           >
-                            Reserve
+                            Reservasi
                           </button>
                         )}
                         <button
@@ -489,6 +809,8 @@ export default function KehadiranPage() {
       {createOpen && (
         <CreateReservasiModal
           ibadahList={ibadahQ.data ?? []}
+          defaultIbadahId={filterIbadahId}
+          defaultTanggal={filterTanggal}
           onClose={() => setCreateOpen(false)}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['reservasi'] });
@@ -537,15 +859,19 @@ export default function KehadiranPage() {
 
 function CreateReservasiModal({
   ibadahList,
+  defaultIbadahId,
+  defaultTanggal,
   onClose,
   onSuccess,
 }: {
   ibadahList: Ibadah[];
+  defaultIbadahId?: string;
+  defaultTanggal?: string;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [ibadahId, setIbadahId] = useState('');
-  const [tanggalIbadah, setTanggalIbadah] = useState(todayYmd());
+  const [ibadahId, setIbadahId] = useState(defaultIbadahId ?? '');
+  const [tanggalIbadah, setTanggalIbadah] = useState(defaultTanggal || todayYmd());
   const [search, setSearch] = useState('');
   const [jemaatId, setJemaatId] = useState('');
 
@@ -683,12 +1009,16 @@ function SummaryCard({
   hint,
   tone,
   icon: Icon,
+  active,
+  onClick,
 }: {
   label: string;
   value: number | undefined;
   hint?: string;
   tone: 'neutral' | 'amber' | 'green' | 'red' | 'violet';
   icon: typeof Clock;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const cls = {
     neutral: 'text-neutral-700 bg-neutral-100',
@@ -698,7 +1028,11 @@ function SummaryCard({
     violet: 'text-violet-700 bg-violet-50',
   }[tone];
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-3 flex items-start gap-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`bg-white border rounded-xl p-3 flex items-start gap-3 text-left ${active ? 'border-brand-400 ring-1 ring-brand-400' : 'border-neutral-200 hover:border-neutral-300'}`}
+    >
       <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cls}`}>
         <Icon className="w-4 h-4" />
       </span>
@@ -709,7 +1043,7 @@ function SummaryCard({
         <div className="text-xs font-medium text-neutral-600">{label}</div>
         {hint ? <div className="text-[11px] text-neutral-400 truncate">{hint}</div> : null}
       </div>
-    </div>
+    </button>
   );
 }
 

@@ -8,6 +8,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
+  Baby,
   Ban,
   CalendarCheck,
   ChevronDown,
@@ -25,7 +27,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-type Rule = { key: string; judul: string; isi: string; tone: 'info' | 'ok' | 'warn' | 'off' };
+export type Rule = { key: string; judul: string; isi: string; tone: 'info' | 'ok' | 'warn' | 'off' };
 
 const ICON: Record<string, LucideIcon> = {
   daftar: ClipboardList,
@@ -39,6 +41,8 @@ const ICON: Record<string, LucideIcon> = {
   batal: Ban,
   sesi: Layers,
   admin: ShieldCheck,
+  jadwal: AlertTriangle,
+  jemput: Baby,
 };
 const TONE: Record<Rule['tone'], string> = {
   info: 'from-brand-500 to-brand-700',
@@ -84,27 +88,34 @@ export function EventRulesPanel({ eventId }: { eventId: string }) {
             <p className="text-sm text-red-600">Gagal memuat aturan event.</p>
           ) : (
             <>
-              <ul className="grid gap-3 md:grid-cols-2">
-                {(q.data ?? []).map((r) => {
-                  const Icon = ICON[r.key] ?? ClipboardList;
-                  return (
-                    <li key={r.key} className="flex gap-3 min-w-0">
-                      <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${TONE[r.tone]} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                        <Icon className="w-3.5 h-3.5" />
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">{r.judul}</div>
-                        <p className="text-xs text-neutral-600 leading-5">{r.isi}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <RulesList rules={q.data ?? []} />
               <p className="text-[11px] text-neutral-400 mt-3">Jam mengikuti zona waktu cabang event. Ubah pengaturan lewat tombol Edit event.</p>
             </>
           )}
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Daftar aturan (kartu kecil berikon) — dipakai detail event & halaman Kehadiran. */
+export function RulesList({ rules }: { rules: Rule[] }) {
+  return (
+    <ul className="grid gap-3 md:grid-cols-2">
+      {rules.map((r) => {
+        const Icon = ICON[r.key] ?? ClipboardList;
+        return (
+          <li key={r.key} className="flex gap-3 min-w-0">
+            <span className={`w-7 h-7 rounded-lg bg-gradient-to-br ${TONE[r.tone]} text-white flex items-center justify-center shrink-0 mt-0.5`}>
+              <Icon className="w-3.5 h-3.5" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-neutral-900">{r.judul}</div>
+              <p className="text-xs text-neutral-600 leading-5">{r.isi}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

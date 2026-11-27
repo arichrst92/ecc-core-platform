@@ -10,7 +10,8 @@
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RotateCcw, UserPlus, Users, Home, HeartHandshake, Route } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { HomecellStructureImport } from '@/components/jemaat/homecell-structure-import';
@@ -528,27 +529,18 @@ export default function JemaatConsolidationPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-neutral-200 mb-4 overflow-x-auto">
-            {(
-              [
-                ['data', 'Data Pribadi'],
-                ['homecell', `Homecell (${data.areas.length} area, ${data.homecells.length})`],
-                ['ministry', `Ministry (${data.ministries.length})`],
-                ['journey', `Spiritual Journey (${data.journeys?.length ?? 0})`],
-                ['apply', 'Ringkasan & Apply'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
-                  tab === k ? 'border-brand-500 text-brand-600' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <PersonaTabs
+            className="mb-4"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: 'data', label: 'Data Pribadi', Icon: Users },
+              { key: 'homecell', label: `Homecell (${data.areas.length} area, ${data.homecells.length})`, Icon: Home },
+              { key: 'ministry', label: `Ministry (${data.ministries.length})`, Icon: HeartHandshake },
+              { key: 'journey', label: `Spiritual Journey (${data.journeys?.length ?? 0})`, Icon: Route },
+              { key: 'apply', label: 'Ringkasan & Apply', Icon: CheckCircle2 },
+            ]}
+          />
 
           {tab === 'data' && (
             <>

@@ -9,7 +9,8 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ClipboardList, Eye, Loader2, Lock, Save, X } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Eye, Loader2, Lock, Save, X, ListChecks, Settings2, Link2, BarChart3 } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import {
   UF_AUTOFILL_LABEL,
   UF_FORM_STATUS,
@@ -200,21 +201,18 @@ function UniversalFormEditor() {
         ) : null}
       </div>
 
-      <div className="flex gap-1 border-b border-neutral-200 mb-4 overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            disabled={t.off}
-            onClick={() => setTab(t.key)}
-            title={t.off ? 'Simpan form dulu' : undefined}
-            className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
-              tab === t.key ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            } disabled:opacity-40`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs
+        className="mb-4"
+        value={tab}
+        onChange={setTab}
+        items={TABS.map((t) => ({
+          key: t.key,
+          label: t.label,
+          Icon: t.key === 'susun' ? ListChecks : t.key === 'pengaturan' ? Settings2 : t.key === 'sematan' ? Link2 : BarChart3,
+          disabled: t.off,
+          title: t.off ? 'Simpan form dulu' : undefined,
+        }))}
+      />
 
       {tab === 'susun' ? <FieldBuilder fields={fields} onChange={setFields} anonim={s.anonim} hasResponses={hasResponses} /> : null}
       {tab === 'pengaturan' ? <SettingsTab s={s} set={(p) => setS((x) => ({ ...x, ...p }))} lockAnon={hasResponses} /> : null}

@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Disc3, Loader2, Music, Plus, Sparkles, X } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { fmtDur, type WorshipAlbum } from '@/lib/worship';
@@ -67,25 +68,15 @@ export default function WorshipPage() {
         </div>
       ) : null}
 
-      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto whitespace-nowrap">
-        {(
-          [
-            ['ALBUM', `Album (${albums.length})`, Disc3],
-            ['SINGLE', `Single (${singles.length})`, Music],
-            ['STATS', 'Statistik', BarChart3],
-          ] as const
-        ).map(([k, label, Icon]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === k ? 'border-brand-500 text-brand-600' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            <Icon className="w-4 h-4" /> {label}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'ALBUM', label: `Album (${albums.length})`, Icon: Disc3 },
+          { key: 'SINGLE', label: `Single (${singles.length})`, Icon: Music },
+          { key: 'STATS', label: 'Statistik', Icon: BarChart3 },
+        ]}
+      />
 
       {albumsQ.isLoading && tab !== 'STATS' ? (
         <div className="flex justify-center py-10">

@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Loader2, Pencil, Search, ShieldCheck, Users, X, BadgeCheck, ChevronRight, ChevronDown } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
@@ -202,24 +203,17 @@ function EditModal({ menu, onClose }: { menu: MenuRow; onClose: () => void }) {
             </button>
           </div>
           <div className="px-3 sm:px-5 pt-3 space-y-2">
-            <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
-              {(['pelayanan', 'role'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setTab(t);
-                    setSearch('');
-                  }}
-                  className={`flex-1 h-8 rounded-md text-sm inline-flex items-center justify-center gap-1.5 ${
-                    tab === t ? 'bg-white shadow-sm font-semibold text-neutral-900' : 'text-neutral-600'
-                  }`}
-                >
-                  {t === 'pelayanan' ? <Users className="w-3.5 h-3.5" /> : <BadgeCheck className="w-3.5 h-3.5" />}
-                  {t === 'pelayanan' ? 'Pelayanan' : 'Role'}
-                  <span className="text-xs text-neutral-500">({t === 'pelayanan' ? pel.size + pos.size : rol.size})</span>
-                </button>
-              ))}
-            </div>
+            <PersonaTabs
+              value={tab}
+              onChange={(t) => {
+                setTab(t);
+                setSearch('');
+              }}
+              items={[
+                { key: 'pelayanan', label: 'Pelayanan', Icon: Users, badge: pel.size + pos.size },
+                { key: 'role', label: 'Role', Icon: BadgeCheck, badge: rol.size },
+              ]}
+            />
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input

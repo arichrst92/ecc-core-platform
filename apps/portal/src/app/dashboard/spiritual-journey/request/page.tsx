@@ -175,7 +175,6 @@ export default function SpiritualJourneyRequestPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-neutral-400 mr-1">{r.step.nomor ? `${r.step.nomor}.` : ''}</span>
-                    {r.step.ikon ? `${r.step.ikon} ` : ''}
                     {r.step.judul}
                   </td>
                   <td className="px-4 py-2.5 hidden md:table-cell text-neutral-600 max-w-xs truncate">{r.catatan ?? '—'}</td>
@@ -291,7 +290,6 @@ function RequestModal({ id, onClose }: { id: string; onClose: () => void }) {
                   <div className="text-xs text-neutral-500">Tahap diminta</div>
                   <div className="font-semibold text-neutral-900">
                     {d.step.nomor ? `${d.step.nomor}. ` : ''}
-                    {d.step.ikon ? `${d.step.ikon} ` : ''}
                     {d.step.judul}
                   </div>
                 </div>

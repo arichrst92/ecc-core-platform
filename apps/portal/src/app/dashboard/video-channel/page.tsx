@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ExternalLink, Loader2, MonitorPlay, Pencil, Plus, RefreshCw, Search, Star, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ExternalLink, Loader2, MonitorPlay, Pencil, Plus, RefreshCw, Search, Star, Trash2, X, FolderTree } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
 import { useMenuAccess } from '@/lib/use-menu-access';
@@ -54,23 +55,16 @@ export default function VideoChannelPage() {
           Video YouTube untuk semua cabang — tampil di Els App (Beranda → Media → Video Channel, app 2.5.1) dan website. Hanya video biasa (bukan Shorts, live, atau playlist).
         </p>
       </div>
-      <div className="flex gap-1 border-b border-neutral-200 mb-4">
-        {(
-          [
-            ['video', 'Video'],
-            ['kategori', 'Kategori'],
-            ['youtube', 'Sinkron YouTube'],
-          ] as const
-        ).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs
+        className="mb-4"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'video', label: 'Video', Icon: MonitorPlay },
+          { key: 'kategori', label: 'Kategori', Icon: FolderTree },
+          { key: 'youtube', label: 'Sinkron YouTube', Icon: RefreshCw },
+        ]}
+      />
       {tab === 'video' ? <VideoTab /> : tab === 'kategori' ? <KategoriTab /> : <YoutubeTab />}
     </div>
   );

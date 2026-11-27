@@ -13,6 +13,7 @@ import {
   Bug,
   Languages,
 } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import { AppTextsEditor } from '@/components/diagnostics/app-texts-editor';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
@@ -36,19 +37,16 @@ export default function DiagnosticsPage() {
         </div>
       </div>
 
-      <div className="border-b border-neutral-200 mb-6">
-        <div className="flex gap-1">
-          <TabButton active={tab === 'errors'} onClick={() => setTab('errors')} icon={Bug}>
-            Error Events
-          </TabButton>
-          <TabButton active={tab === 'config'} onClick={() => setTab('config')} icon={Settings}>
-            App Config
-          </TabButton>
-          <TabButton active={tab === 'texts'} onClick={() => setTab('texts')} icon={Languages}>
-            Tulisan di App
-          </TabButton>
-        </div>
-      </div>
+      <PersonaTabs
+        className="mb-6"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'errors', label: 'Error Events', Icon: Bug },
+          { key: 'config', label: 'App Config', Icon: Settings },
+          { key: 'texts', label: 'Tulisan di App', Icon: Languages },
+        ]}
+      />
 
       {tab === 'errors' && <ErrorEventsTab />}
       {tab === 'config' && <AppConfigTab />}
@@ -57,32 +55,6 @@ export default function DiagnosticsPage() {
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  icon: Icon,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Activity;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition ${
-        active
-          ? 'border-brand-500 text-brand-600'
-          : 'border-transparent text-neutral-500 hover:text-neutral-700'
-      }`}
-    >
-      <Icon className="w-4 h-4" />
-      {children}
-    </button>
-  );
-}
 
 // ============================================================
 //  Error Events Tab

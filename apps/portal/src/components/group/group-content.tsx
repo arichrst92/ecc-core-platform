@@ -7,23 +7,8 @@
  */
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  BarChart3,
-  FileImage,
-  FileText,
-  Loader2,
-  Lock,
-  Megaphone,
-  Paperclip,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Trash2,
-  Unlock,
-  Upload,
-  X,
-} from 'lucide-react';
+import { BarChart3, FileImage, FileText, Loader2, Lock, Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, Trash2, Unlock, Upload, X } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { ConfirmDelete } from '@/components/crud/confirm-delete';
@@ -124,19 +109,7 @@ export function ContentBoardSection({
   ];
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      <div className="flex border-b border-neutral-100 px-2">
-        {tabs.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px ${
-              tab === key ? 'border-brand-500 text-brand-600' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            <Icon className="w-4 h-4" /> {label}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs className="px-2 border-neutral-100" value={tab} onChange={setTab} items={tabs.map(({ key, label, icon }) => ({ key, label, Icon: icon }))} />
       {tab === 'announcements' && <AnnouncementsTab root={root} note={notes?.announcements} />}
       {tab === 'polls' && <PollsTab root={root} />}
       {tab === 'files' && showFiles && <FilesTab root={root} />}

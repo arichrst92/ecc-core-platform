@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { Activity, BarChart3, FileText, Gauge, Loader2, Radio } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import { apiClient } from '@/lib/api-client';
 import { PagesTab } from '@/components/analytics/pages-tab';
 import { LiveTab } from '@/components/analytics/live-tab';
@@ -111,20 +112,7 @@ export default function AnalitikPage() {
       </div>
 
 
-      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto">
-        {TABS.map(({ k, label, icon: Icon }) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${
-              tab === k ? 'border-brand-500 text-brand-700 font-semibold' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs items={TABS.map((t) => ({ key: t.k, label: t.label, Icon: t.icon }))} value={tab} onChange={setTab} />
 
       {tab === 'halaman' ? (
         <PagesTab filter={pagesFilter} />

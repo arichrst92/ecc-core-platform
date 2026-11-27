@@ -9,7 +9,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CalendarClock, HeartHandshake, Loader2, Lock, Mail, Phone, Plus, Search, Settings2, Trash2, UserCheck, X } from 'lucide-react';
+import { AlertTriangle, CalendarClock, HeartHandshake, Loader2, Lock, Mail, Phone, Plus, Search, Settings2, Trash2, UserCheck, X, Inbox } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import { KONSELING_STATUS_LABEL } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { useDebounce } from '@/lib/use-debounce';
@@ -73,22 +74,15 @@ export default function KonselingPage() {
           <p className="text-neutral-500 mt-1 text-sm">Permintaan konseling dari Els App. Tugaskan konselor dari pelayanan konselor; isi bersifat rahasia.</p>
         </div>
       </div>
-      <div className="flex gap-1 border-b border-neutral-200 mb-4">
-        {(
-          [
-            ['antrian', 'Permintaan'],
-            ['pengaturan', 'Pengaturan konselor'],
-          ] as const
-        ).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
+      <PersonaTabs
+        className="mb-4"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'antrian', label: 'Permintaan', Icon: Inbox },
+          { key: 'pengaturan', label: 'Pengaturan konselor', Icon: Settings2 },
+        ]}
+      />
       {tab === 'antrian' ? <Antrian onSetup={() => setTab('pengaturan')} /> : <Pengaturan />}
     </div>
   );

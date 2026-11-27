@@ -472,7 +472,7 @@ export default function JemaatDetailPage() {
                       : 'bg-neutral-50 border-neutral-200 text-neutral-400'
                 }`}
               >
-                {st.achieved ? '✓' : st.isNext ? '→' : `${st.urutan}.`} {st.ikon ? `${st.ikon} ` : ''}
+                {st.achieved ? '✓' : st.isNext ? '→' : `${st.urutan}.`}{' '}
                 {st.judul}
               </li>
             ))}
@@ -1832,13 +1832,12 @@ const ACTIVITY_TIERS: Array<{
   label: string;
   color: string;
   bar: string;
-  emoji: string;
 }> = [
-  { key: 'PASIF', label: 'Pasif', color: 'text-red-700 bg-red-50 border-red-200', bar: 'bg-red-500', emoji: '😴' },
-  { key: 'KURANG_AKTIF', label: 'Kurang Aktif', color: 'text-orange-700 bg-orange-50 border-orange-200', bar: 'bg-orange-500', emoji: '🙂' },
-  { key: 'CUKUP_AKTIF', label: 'Cukup Aktif', color: 'text-amber-700 bg-amber-50 border-amber-200', bar: 'bg-amber-500', emoji: '😊' },
-  { key: 'AKTIF', label: 'Aktif', color: 'text-lime-700 bg-lime-50 border-lime-200', bar: 'bg-lime-500', emoji: '🙌' },
-  { key: 'SANGAT_AKTIF', label: 'Sangat Aktif', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', bar: 'bg-emerald-500', emoji: '🔥' },
+  { key: 'PASIF', label: 'Pasif', color: 'text-red-700 bg-red-50 border-red-200', bar: 'bg-red-500' },
+  { key: 'KURANG_AKTIF', label: 'Kurang Aktif', color: 'text-orange-700 bg-orange-50 border-orange-200', bar: 'bg-orange-500' },
+  { key: 'CUKUP_AKTIF', label: 'Cukup Aktif', color: 'text-amber-700 bg-amber-50 border-amber-200', bar: 'bg-amber-500' },
+  { key: 'AKTIF', label: 'Aktif', color: 'text-lime-700 bg-lime-50 border-lime-200', bar: 'bg-lime-500' },
+  { key: 'SANGAT_AKTIF', label: 'Sangat Aktif', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', bar: 'bg-emerald-500' },
 ];
 
 function ActivityIndicator({ activity }: { activity: JemaatProfileData['activity'] }) {

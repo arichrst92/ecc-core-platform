@@ -8,7 +8,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, FileAudio, Loader2, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileAudio, Loader2, Trash2, Upload, Captions, PlayCircle } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import { WORSHIP_AUDIO_MAX_BYTES, WORSHIP_DURATION_TOLERANCE_SEC } from '@ecc/shared-types';
 import { apiClient } from '@/lib/api-client';
@@ -269,23 +270,20 @@ export default function WorshipSongPage() {
 
       {/* Sinkron & Uji Putar */}
       <div>
-        <div className="flex gap-1 border-b border-neutral-200 mb-4 overflow-x-auto whitespace-nowrap">
-          {(
-            [
-              ['sync', 'Sinkron lirik'],
-              ['test', 'Uji Putar'],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-brand-500 text-brand-600' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
-            >
-              {label}
-              {k === 'sync' && dirty ? <span className="ml-1.5 text-[10px] text-amber-700">belum disimpan</span> : null}
-            </button>
-          ))}
-        </div>
+        <PersonaTabs
+          className="mb-4"
+          value={tab}
+          onChange={setTab}
+          items={[
+            {
+              key: 'sync',
+              label: 'Sinkron lirik',
+              Icon: Captions,
+              extra: dirty ? <span className="text-[10px] text-amber-700 font-medium">belum disimpan</span> : null,
+            },
+            { key: 'test', label: 'Uji Putar', Icon: PlayCircle },
+          ]}
+        />
         {tab === 'sync' ? (
           <SyncTool
             songId={s.id}

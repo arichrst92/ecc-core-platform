@@ -13,24 +13,8 @@ import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  Building2,
-  CalendarCheck,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  ClipboardList,
-  Crown,
-  Loader2,
-  Pencil,
-  Search,
-  ShieldCheck,
-  UserMinus,
-  UserPlus,
-  Users,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Building2, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Crown, Loader2, Pencil, Search, ShieldCheck, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import { useCabangOptions } from '@/components/report/report-ui';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
 import { TugasKategoriPanel } from '@/components/pelayanan/tugas-kategori-panel';
@@ -276,25 +260,17 @@ function PelayananDetail() {
       </div>
 
       {/* Tab */}
-      <div className="border-b border-neutral-200 flex gap-1 overflow-x-auto" role="tablist">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const on = tab === t.key;
-          const n = tabCount[t.key];
-          return (
-            <button
-              key={t.key}
-              role="tab"
-              aria-selected={on}
-              onClick={() => setTab(t.key)}
-              title={t.hint}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${
-                on ? 'border-brand-500 text-brand-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {t.label}
-              {n != null ? <span className={`text-xs ${on ? 'text-brand-600' : 'text-neutral-400'}`}>{n}</span> : null}
+      <PersonaTabs
+        value={tab}
+        onChange={setTab}
+        items={TABS.map((t) => ({
+          key: t.key,
+          label: t.label,
+          Icon: t.icon,
+          title: t.hint,
+          badge: tabCount[t.key] ?? null,
+          extra: (
+            <>
               {t.key === 'tugas' && kategoriKosong ? (
                 <NeedsFillBadge hint="Belum ada kategori & tugas petugas — buat di tab ini supaya koordinator bisa menetapkan tugas tiap petugas" />
               ) : null}
@@ -304,10 +280,10 @@ function PelayananDetail() {
               {t.key === 'pendaftaran' && koordinatorKosong ? (
                 <NeedsFillBadge hint="Belum ada koordinator — permintaan bergabung & jadwal di app tidak ada yang mengurus" />
               ) : null}
-            </button>
-          );
-        })}
-      </div>
+            </>
+          ),
+        }))}
+      />
       <p className="text-xs text-neutral-500 -mt-2">{TABS.find((t) => t.key === tab)?.hint}</p>
 
       {allQ.isLoading ? (

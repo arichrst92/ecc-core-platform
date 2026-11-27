@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CalendarDays, Church, Link2, Link2Off, Loader2, Search, X } from 'lucide-react';
+import { PersonaTabs } from '@/components/ui/persona-tabs';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
@@ -201,25 +202,20 @@ export function PenugasanModal({
 
           {/* Tab + filter */}
           <div className="px-4 sm:px-6 pt-4 space-y-3 border-b border-neutral-100 pb-3">
-            <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
-              {(['ibadah', 'event'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => switchTab(t)}
-                  className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold ${
-                    tab === t ? 'bg-white text-brand-700 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-                  }`}
-                >
-                  {t === 'ibadah' ? <Church className="w-4 h-4" /> : <CalendarDays className="w-4 h-4" />}
-                  {t === 'ibadah' ? 'Ibadah' : 'Event mendatang'}
-                  {data ? (
-                    <span className="text-xs font-medium text-neutral-500">
-                      {linkedCount(t)}/{totalCount(t)}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
+            <PersonaTabs
+              value={tab}
+              onChange={switchTab}
+              items={(['ibadah', 'event'] as const).map((t) => ({
+                key: t,
+                label: t === 'ibadah' ? 'Ibadah' : 'Event mendatang',
+                Icon: t === 'ibadah' ? Church : CalendarDays,
+                extra: data ? (
+                  <span className="text-xs font-medium text-neutral-500">
+                    {linkedCount(t)}/{totalCount(t)}
+                  </span>
+                ) : null,
+              }))}
+            />
             <div className="flex flex-wrap gap-2">
               <label className="flex items-center gap-2 flex-1 min-w-[200px] px-3 py-2 border border-neutral-300 rounded-lg focus-within:ring-2 focus-within:ring-brand-500">
                 <Search className="w-4 h-4 text-neutral-400" />

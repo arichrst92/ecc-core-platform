@@ -13,6 +13,7 @@ import {
   Info,
   Unlock,
   Lock,
+  Settings2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { MenuItem } from '@ecc/shared-types';
@@ -458,7 +459,7 @@ function RoleCard({
               >
                 {sr.nama}
                 {sr.canAccessPortal !== null && (
-                  <span className="ml-1 text-[10px] text-amber-600">⚙</span>
+                  <Settings2 className="inline ml-1 w-3 h-3 text-amber-600" aria-label="Diatur khusus" />
                 )}
               </button>
             ))}
@@ -492,7 +493,7 @@ function RoleCard({
                   {st.nama}
                   {!st.isActive && <span className="ml-1 text-[10px] text-neutral-500">(nonaktif)</span>}
                   {(st.canAccessPortal !== null || st.menuAccesses.length > 0) && (
-                    <span className="ml-1 text-[10px] text-amber-600">⚙</span>
+                    <Settings2 className="inline ml-1 w-3 h-3 text-amber-600" aria-label="Diatur khusus" />
                   )}
                 </button>
               ))}

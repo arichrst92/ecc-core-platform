@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Users,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PelayananIcon } from '@/components/pelayanan/pelayanan-icon';
@@ -179,17 +180,21 @@ export function EventMinistrySection({ eventId }: { eventId: string }) {
             <p className="text-neutral-400 italic">
               Belum ada pelayanan ditautkan ke event ini.
             </p>
-            <p className="text-xs text-amber-700 mt-3 bg-amber-50 border border-amber-200 rounded p-2 inline-block">
-              ⚠ Event butuh kehadiran tapi tidak ada volunteer berwenang scan —
-              <strong> tidak ada admin yang bisa melakukan check-in.</strong>
+            <p className="text-xs text-amber-700 mt-3 bg-amber-50 border border-amber-200 rounded p-2 inline-flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                Event butuh kehadiran tapi belum ada volunteer berwenang scan —
+                <strong> belum ada yang bisa scan QR dari Els App</strong> (admin tetap bisa check-in di Portal).
+              </span>
             </p>
           </div>
         ) : totalScanners === 0 ? (
           <>
             <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-              ⚠ Belum ada volunteer yang ditandai sebagai authorized scanner. Tandai
+              <AlertTriangle className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />
+              Belum ada volunteer yang ditandai sebagai authorized scanner. Tandai
               minimal satu volunteer dengan toggle <ShieldCheck className="inline w-3 h-3" />
-              untuk mengaktifkan tombol Check-in.
+              supaya bisa scan QR dari Els App.
             </div>
             <PelayananList links={links} eventId={eventId} onUnlink={setDeletingLink} />
           </>

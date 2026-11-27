@@ -73,6 +73,7 @@ import {
 import { lockGrupSesi, normGrupSesi, sesiConflict, sesiError, sesiMessage } from '../../lib/event-sesi.js';
 import { createWalkInParticipation, walkInAllowed } from '../../lib/event-walkin.js';
 import { buildEventVisual } from '../../lib/event-visual.js';
+import { buildEventRules } from '../../lib/event-rules-text.js';
 import {
   assertEventEligible,
   isEligible,
@@ -1676,6 +1677,11 @@ async function assertCanViewEventScan(req: import('express').Request, event: { i
     : null;
   if (!ok) throw Forbidden(`Anda tidak berwenang melihat data scan event "${event.judul}".`);
 }
+
+// Aturan event dalam bahasa sederhana (Portal → detail event → tab Peserta).
+eventRouter.get('/:id/aturan', W('read'), async (req, res) => {
+  res.json({ success: true, data: await buildEventRules(req.params.id) });
+});
 
 // Visualisasi Daftar & Absen (Portal → detail event): grafik pendaftaran harian,
 // absensi per 15 menit, proporsi cara check-in, dan ringkasan pendukung.

@@ -107,3 +107,7 @@ EVENT_REGISTERED (daftar diterima), EVENT_APPROVED (pembayaran disetujui), EVENT
 - **Proporsi cara absen**: Self check-in · Scan petugas (termasuk scan terlambat & walk-in) · Absen Portal (manual admin).
 - Tambahan: komposisi yang hadir, ketepatan waktu (sebelum mulai / telat ≤ 15 / > 15 menit), corong daftar → lunas → hadir, petugas scan teraktif, alasan batal, hadir per cabang.
 - Tamu tanpa kategori dihitung Visitor (sama dengan laporan event).
+
+## Aturan event & tombol di tab Peserta (Portal, 2026-11)
+- Tab Peserta punya bagian buka-tutup **Aturan event ini** (`GET /admin/event/:id/aturan`): pendaftaran (sampai kapan), kuota, biaya, self check-in (dibuka/ditutup jam berapa, cek jarak lokasi atau tidak), scan petugas (30 menit sebelum mulai s/d akhir hari, lewat 30 menit setelah mulai = terlambat), tamu & walk-in, batal otomatis, batal sendiri, grup sesi, dan wewenang admin — lengkap dengan jam sesuai zona cabang.
+- Tombol di atas daftar peserta kini berketerangan: **Tamu Walk-in** = tamu / orang baru yang belum punya data jemaat dan datang langsung; **Check-in** = menandai hadir dengan scan QR / ketik kode jemaat; **Daftarkan Jemaat** = jemaat yang sudah punya data, didaftarkan oleh admin.

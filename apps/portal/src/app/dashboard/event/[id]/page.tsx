@@ -37,6 +37,7 @@ import {
   Search, Info, Receipt, HandHeart, ClipboardList, Star, BarChart3,
 } from 'lucide-react';
 import { EventVisualTab } from '@/components/event/event-visual-tab';
+import { EventRulesPanel } from '@/components/event/event-rules-panel';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { JemaatSuggestions } from '@/components/jemaat-suggestions';
@@ -579,6 +580,8 @@ export default function EventDetailPage() {
 
       {tab === 'peserta' ? (
         <>
+      {/* Aturan event (buka-tutup) */}
+      <EventRulesPanel eventId={eventId} />
       {/* Peserta section */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
         <div className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-neutral-100">
@@ -595,33 +598,50 @@ export default function EventDetailPage() {
                 : 'Jemaat yang berpartisipasi di event ini.'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {e.butuhKehadiran && (
-              <button
-                onClick={() => setWalkInOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg"
-                title="Catat orang yang datang tanpa daftar"
-              >
-                <UserPlus className="w-4 h-4" />
-                Tamu Walk-in
-              </button>
-            )}
-            {e.butuhKehadiran && (
-              <button
-                onClick={() => setScannerOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
-              >
-                <ScanLine className="w-4 h-4" />
-                Check-in
-              </button>
-            )}
-            <button
-              onClick={() => setAddPesertaOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg"
-            >
-              <Plus className="w-4 h-4" />
-              Daftarkan Jemaat
-            </button>
+          <div className="flex flex-wrap items-start gap-2">
+            {(
+              [
+                ...(e.butuhKehadiran
+                  ? [
+                      {
+                        key: 'walkin',
+                        onClick: () => setWalkInOpen(true),
+                        cls: 'bg-violet-600 hover:bg-violet-700',
+                        Icon: UserPlus,
+                        label: 'Tamu Walk-in',
+                        desc: 'Untuk tamu / orang baru yang belum punya data jemaat dan datang langsung',
+                      },
+                      {
+                        key: 'checkin',
+                        onClick: () => setScannerOpen(true),
+                        cls: 'bg-green-600 hover:bg-green-700',
+                        Icon: ScanLine,
+                        label: 'Check-in',
+                        desc: 'Untuk menandai hadir: scan QR atau ketik kode jemaat yang datang',
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'daftar',
+                  onClick: () => setAddPesertaOpen(true),
+                  cls: 'bg-brand-500 hover:bg-brand-600',
+                  Icon: Plus,
+                  label: 'Daftarkan Jemaat',
+                  desc: 'Untuk jemaat yang sudah punya data, didaftarkan oleh admin',
+                },
+              ] as const
+            ).map((a) => (
+              <div key={a.key} className="w-[9.5rem] flex flex-col">
+                <button
+                  onClick={a.onClick}
+                  className={`flex items-center justify-center gap-2 px-3 py-1.5 ${a.cls} text-white text-sm font-medium rounded-lg`}
+                >
+                  <a.Icon className="w-4 h-4" />
+                  {a.label}
+                </button>
+                <span className="text-[10.5px] leading-[14px] text-neutral-500 mt-1 px-0.5">{a.desc}</span>
+              </div>
+            ))}
           </div>
         </div>
 

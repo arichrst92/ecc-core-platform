@@ -2467,7 +2467,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
   const rows = await prisma.pelayananScheduleAssignment.findMany({
     where: {
       jemaatId,
-      schedule: { tanggal: { gte: from, lte: to } },
+      schedule: { tanggal: { gte: from, lte: to }, pelayanan: { isActive: true } },
     },
     include: {
       pelayananRole: { select: { id: true, nama: true, level: true } },
@@ -2530,7 +2530,8 @@ meRouter.get('/ministry-schedule', async (req, res) => {
   // diturunkan ke tiap tanggal occurrence. Roster (PelayananSchedule) untuk
   // pelayanan + ibadah + tanggal yang sama didahulukan (tidak dobel).
   const links = await prisma.ibadahPelayanan.findMany({
-    where: { petugas: { some: { jemaatId } } },
+    // Pelayanan nonaktif tidak tampil di Jadwal Pelayanan Saya.
+    where: { petugas: { some: { jemaatId } }, pelayanan: { isActive: true } },
     select: {
       pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
       ibadah: {
@@ -2610,6 +2611,7 @@ meRouter.get('/ministry-schedule', async (req, res) => {
     where: {
       jemaatId,
       eventPelayanan: {
+        pelayanan: { isActive: true },
         event: {
           isActive: true,
           tanggalMulai: { lte: to },

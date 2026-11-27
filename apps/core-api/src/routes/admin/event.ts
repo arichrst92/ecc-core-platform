@@ -543,7 +543,7 @@ eventRouter.get('/:idOrSlug', async (req, res) => {
   // Tim pelayanan event (petugas tiap pelayanan) — tampil di detail event app,
   // bentuk sama dengan petugas di detail ibadah.
   const petugasRows = await prisma.eventPelayananPetugas.findMany({
-    where: { eventPelayanan: { eventId: item.id }, jemaat: { isActive: true } },
+    where: { eventPelayanan: { eventId: item.id, pelayanan: { isActive: true } }, jemaat: { isActive: true } },
     select: {
       id: true,
       jemaatId: true,
@@ -3350,7 +3350,8 @@ eventRouter.get('/:id/pelayanan', W('read'), async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) throw NotFound('Event tidak ditemukan');
   const data = await prisma.eventPelayanan.findMany({
-    where: { eventId: event.id },
+    // Pelayanan nonaktif tidak ditampilkan di penugasan (tautan tetap tersimpan, muncul lagi bila diaktifkan).
+    where: { eventId: event.id, pelayanan: { isActive: true } },
     orderBy: { pelayanan: { nama: 'asc' } },
     include: {
       pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } },

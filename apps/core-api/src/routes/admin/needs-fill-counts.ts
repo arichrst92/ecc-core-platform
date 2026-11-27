@@ -80,7 +80,7 @@ needsFillCountsRouter.get('/', async (req, res) => {
           id: true,
           isOnline: true,
           linkOnline: true,
-          ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },
+          ibadahPelayanan: { where: { pelayanan: { isActive: true } }, select: { _count: { select: { petugas: true } } } },
         },
       });
       const ids = new Set(

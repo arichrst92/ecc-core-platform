@@ -72,3 +72,8 @@ Menandai **bagian** tiap petugas (mis. Sound › Mixer, Multimedia › Kamera 1)
 
 ## Diagnosis (untuk Elsa)
 `pelayanan` → `jemaat_pelayanan` (anggota & peran) → `pelayanan_approver` (koordinator per cabang) → `pelayanan_pendaftaran` (status cabang) → `ibadah_pelayanan` + `ibadah_pelayanan_petugas` (tanggalIbadah null = tetap; tugas; canScanAttendance) / `event_pelayanan` + `event_pelayanan_petugas` → `pelayanan_tugas_kategori` + `pelayanan_tugas`.
+
+## Pelayanan nonaktif (2026-11)
+- Pelayanan yang **dinonaktifkan** tidak ditampilkan di penugasan: tab Pelayanan di detail ibadah & Pelayanan & Volunteer di detail event (Portal), pilihan "Tautkan pelayanan", tim pelayanan & "Tugas saya" di detail ibadah/event app, Jadwal Pelayanan Saya, serta tidak dihitung di badge "Perlu diisi".
+- Tautan & petugasnya **tidak dihapus** — muncul lagi bila pelayanan diaktifkan kembali.
+- Hak scan check-in petugas tidak berubah (diatur per petugas).

@@ -615,7 +615,8 @@ pelayananRouter.delete('/assign/:id', async (req, res) => {
 pelayananRouter.get('/ibadah-link/ibadah/:ibadahId', async (req, res) => {
   await requireAnyMenuP(req, ['pelayanan', 'ibadah'], 'read');
   const data = await prisma.ibadahPelayanan.findMany({
-    where: { ibadahId: req.params.ibadahId },
+    // Pelayanan nonaktif tidak ditampilkan di penugasan (tautan tetap tersimpan, muncul lagi bila diaktifkan).
+    where: { ibadahId: req.params.ibadahId, pelayanan: { isActive: true } },
     include: { pelayanan: { select: { id: true, nama: true, deskripsi: true, ikon: true, warna: true } } },
     orderBy: { pelayanan: { nama: 'asc' } },
   });

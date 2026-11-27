@@ -261,7 +261,7 @@ ibadahRouter.get('/', async (req, res) => {
         cabang: { select: { id: true, nama: true, latitude: true, longitude: true, timezone: true } },
         kategoriIbadah: { select: { id: true, nama: true } },
         // Nested count untuk hitung total petugas: sum dari semua ibadahPelayanan link
-        ibadahPelayanan: { select: { _count: { select: { petugas: true } } } },
+        ibadahPelayanan: { where: { pelayanan: { isActive: true } }, select: { _count: { select: { petugas: true } } } },
       },
     }),
     prisma.ibadah.count({ where }),
@@ -288,7 +288,9 @@ ibadahRouter.get('/:id', async (req, res) => {
       kategoriIbadah: true,
       // Include link-pelayanan + petugas. Petugas di-resolve di bawah supaya
       // bisa support per-occurrence override via ?tanggal=.
+      // Pelayanan nonaktif tidak tampil di tim pelayanan / penugasan.
       ibadahPelayanan: {
+        where: { pelayanan: { isActive: true } },
         include: {
           pelayanan: { select: { id: true, nama: true, ikon: true, warna: true } },
           petugas: {

@@ -109,6 +109,8 @@ interface Peserta {
     noHp: string | null;
     fotoUrl: string | null;
     isTamu?: boolean;
+    /** NEW_COMER | VISITOR | null (null = Visitor, sama dengan laporan event). */
+    tamuKategori?: string | null;
     cabang: { id: string; nama: string } | null;
   };
   approver: { id: string; namaLengkap: string } | null;
@@ -165,8 +167,8 @@ export default function EventDetailPage() {
   const [pesertaSearch, setPesertaSearch] = useState('');
   // Tab bagian detail (Peserta / Pembayaran / Pelayanan / Ulasan) — supaya halaman tidak memanjang.
   const [tab, setTab] = useState<'peserta' | 'pembayaran' | 'pelayanan' | 'formulir' | 'ulasan'>('peserta');
-  // Saring hanya tamu (kotak "Tamu" di ringkasan).
-  const [onlyTamu, setOnlyTamu] = useState(false);
+  // Saring tamu (kotak "Tamu" di ringkasan): semua tamu / New Comer / Visitor.
+  const [tamuFilter, setTamuFilter] = useState<'none' | 'all' | 'NEW_COMER' | 'VISITOR'>('none');
   // Pelayanan & volunteer (cache sama dengan EventMinistrySection) — untuk badge biru di tab.
   const pelayananQ = useQuery({
     queryKey: ['event', eventId, 'pelayanan'],
@@ -320,6 +322,13 @@ export default function EventDetailPage() {
   const aktifCount = pesertaAll.length - (statusCount.BATAL ?? 0);
   const tamuAktif = pesertaAll.filter((p) => p.jemaat.isTamu && p.status !== 'BATAL').length;
   const tamuHadir = pesertaAll.filter((p) => p.jemaat.isTamu && p.status === 'HADIR').length;
+  // Kategori tamu: NEW_COMER, selain itu (termasuk belum ditentukan) = Visitor — sama dengan laporan event.
+  const kategoriTamu = (p: Peserta): 'NEW_COMER' | 'VISITOR' => (p.jemaat.tamuKategori === 'NEW_COMER' ? 'NEW_COMER' : 'VISITOR');
+  const tamuAktifList = pesertaAll.filter((p) => p.jemaat.isTamu && p.status !== 'BATAL');
+  const newComerCount = tamuAktifList.filter((p) => kategoriTamu(p) === 'NEW_COMER').length;
+  const visitorCount = tamuAktifList.length - newComerCount;
+  const newComerHadir = tamuAktifList.filter((p) => kategoriTamu(p) === 'NEW_COMER' && p.status === 'HADIR').length;
+  const visitorHadir = tamuHadir - newComerHadir;
   // Pelayanan & volunteer kosong / belum ada petugas scanner → badge biru di tab.
   const pelLinks = pelayananQ.data ?? [];
   const pelVolunteers = pelLinks.reduce((n, l) => n + l.petugas.length, 0);
@@ -338,7 +347,7 @@ export default function EventDetailPage() {
   const ts = (v: string | null) => (v ? Date.parse(v) : 0);
   const peserta = pesertaAll
     .filter((p) => filterStatus === 'all' || p.status === filterStatus)
-    .filter((p) => !onlyTamu || !!p.jemaat.isTamu)
+    .filter((p) => tamuFilter === 'none' || (!!p.jemaat.isTamu && (tamuFilter === 'all' || kategoriTamu(p) === tamuFilter)))
     .filter(
       (p) =>
         !pesertaNeedle ||
@@ -645,19 +654,43 @@ export default function EventDetailPage() {
               <div className="text-[11px] text-neutral-600 leading-4">{label}</div>
             </button>
           ))}
-          {/* Tamu (non-anggota) — klik untuk menampilkan tamu saja */}
-          <button
-            type="button"
-            onClick={() => setOnlyTamu((v) => !v)}
-            className={`text-left rounded-lg px-3 py-2 bg-violet-50 ${onlyTamu ? 'ring-2 ring-violet-400' : 'hover:ring-1 hover:ring-neutral-300'}`}
-            title="Tamu (non-anggota) yang terdaftar & hadir — klik untuk menyaring"
+          {/* Tamu (non-anggota) — klik untuk menampilkan tamu saja; New Comer / Visitor menyaring per kategori */}
+          <div
+            className={`rounded-lg bg-violet-50 overflow-hidden ${tamuFilter !== 'none' ? 'ring-2 ring-violet-400' : 'hover:ring-1 hover:ring-neutral-300'}`}
           >
-            <div className="text-lg font-bold leading-6 text-violet-700">
-              {tamuAktif.toLocaleString('id-ID')}
-              {e.butuhKehadiran ? <span className="ml-1 text-xs font-semibold opacity-70">{tamuHadir} hadir</span> : null}
+            <button
+              type="button"
+              onClick={() => setTamuFilter((v) => (v === 'all' ? 'none' : 'all'))}
+              className={`w-full text-left px-3 pt-2 pb-1 ${tamuFilter === 'all' ? 'bg-violet-100/70' : ''}`}
+              title="Tamu (non-anggota) yang terdaftar & hadir — klik untuk menyaring"
+            >
+              <div className="text-lg font-bold leading-6 text-violet-700">
+                {tamuAktif.toLocaleString('id-ID')}
+                {e.butuhKehadiran ? <span className="ml-1 text-xs font-semibold opacity-70">{tamuHadir} hadir</span> : null}
+              </div>
+              <div className="text-[11px] text-neutral-600 leading-4">Tamu</div>
+            </button>
+            <div className="flex gap-1 px-2 pb-2">
+              {(
+                [
+                  ['NEW_COMER', 'New Comers', newComerCount, newComerHadir, 'bg-emerald-100 text-emerald-800', 'ring-emerald-500'],
+                  ['VISITOR', 'Visitor', visitorCount, visitorHadir, 'bg-sky-100 text-sky-800', 'ring-sky-500'],
+                ] as const
+              ).map(([k, label, n, h, cls, ring]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTamuFilter((v) => (v === k ? 'none' : k))}
+                  className={`flex-1 min-w-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-left ${cls} ${tamuFilter === k ? `ring-2 ${ring}` : 'hover:opacity-80'}`}
+                  title={`${label}${e.butuhKehadiran ? ` — ${h} hadir` : ''} · klik untuk menyaring`}
+                >
+                  <span className="block truncate">
+                    {label} <span className="font-bold">{n.toLocaleString('id-ID')}</span>
+                  </span>
+                </button>
+              ))}
             </div>
-            <div className="text-[11px] text-neutral-600 leading-4">Tamu</div>
-          </button>
+          </div>
         </div>
 
         <div className="px-4 sm:px-6 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-2 text-xs">
@@ -673,6 +706,17 @@ export default function EventDetailPage() {
             <option value="BAYAR">Bayar</option>
             <option value="HADIR">Hadir</option>
             <option value="BATAL">Batal</option>
+          </select>
+          <select
+            value={tamuFilter}
+            onChange={(ev) => setTamuFilter(ev.target.value as typeof tamuFilter)}
+            className="px-2 py-1 border border-neutral-300 rounded bg-white"
+            aria-label="Filter tamu"
+          >
+            <option value="none">Semua peserta</option>
+            <option value="all">Tamu ({tamuAktif})</option>
+            <option value="NEW_COMER">New Comers ({newComerCount})</option>
+            <option value="VISITOR">Visitor ({visitorCount})</option>
           </select>
           <div className="relative sm:ml-auto w-full sm:w-64">
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -1018,6 +1062,13 @@ function PesertaRow({
                   ? `Tamu · dibawa ${p.invitedBy.namaLengkap}`
                   : 'Tamu'}
             </span>
+          ) : null}
+          {p.jemaat.isTamu ? (
+            p.jemaat.tamuKategori === 'NEW_COMER' ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800">New Comer</span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-sky-100 text-sky-800">Visitor</span>
+            )
           ) : null}
         </div>
         <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">

@@ -1086,6 +1086,8 @@ eventRouter.get('/:id/peserta', W('read'), async (req, res) => {
           noHp: true,
           fotoUrl: true,
           isTamu: true,
+          // Portal: penanda & filter New Comer / Visitor (NULL = Visitor, sama dengan laporan).
+          tamuKategori: true,
           cabang: { select: { id: true, nama: true, timezone: true } },
         },
       },

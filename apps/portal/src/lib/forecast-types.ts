@@ -175,6 +175,19 @@ export interface ForecastData {
     persenAktif: (number | null)[];
     cmgr: { akun3: number | null; akun6: number | null; akun12: number | null; jemaat12: number | null; aktif6: number | null; aktif12: number | null };
     prediksi: { months: string[]; akun: number[] };
+    /** Bulan berjalan s/d hari ini (belum lengkap). Opsional: server lama tidak mengirim. */
+    berjalan?: {
+      month: string;
+      sampai: string;
+      hari: number;
+      hariDalamBulan: number;
+      akun: number;
+      akunBaru: number;
+      jemaat: number;
+      jemaatBaru: number;
+      aktif: number;
+      persenAktif: number | null;
+    };
   };
   insights: { tone: 'ok' | 'info' | 'warn' | 'bad'; judul: string; isi: string }[];
   langkah: { no: number; judul: string; isi: string; tone: string }[];

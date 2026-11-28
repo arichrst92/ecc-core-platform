@@ -370,7 +370,7 @@ async function computeForecastData(input: ForecastInput) {
   const hidePred = settings.belowMin === 'hide' && maturity.early;
 
   // ---------------- total kumulatif (bertambah tiap bulan) + pertumbuhan majemuk
-  const kumulatif = await cumulativeStats(cabangId, lastFull, H, mKeys, series, modelSeries);
+  const kumulatif = await cumulativeStats(cabangId, lastFull, H, mKeys, series, modelSeries, { today, aktif: berjalan });
 
   // ---------------- simulasi (dasar untuk klien)
   const sim = {
@@ -1032,17 +1032,26 @@ function cmgr(arr: number[], k: number): number | null {
  *    atau tanggal data dibuat bila kosong (data impor lama tercatat di bulan impor).
  * Plus pertumbuhan majemuk per bulan (3/6/12 bulan) & perkiraan total akun.
  */
-async function cumulativeStats(cabangId: string | null, lastFull: Date, H: number, mKeys: string[], aktif: number[], aktifReliable: number[]) {
+async function cumulativeStats(
+  cabangId: string | null,
+  lastFull: Date,
+  H: number,
+  mKeys: string[],
+  aktif: number[],
+  aktifReliable: number[],
+  now: { today: Date; aktif: number },
+) {
   const cab = cabangId ? Prisma.sql`AND j.cabang_id = ${cabangId}::uuid` : Prisma.empty;
   const end = addM(lastFull, 1);
   const [akunRows, jemaatRows] = await Promise.all([
     prisma.$queryRaw<{ m: Date; c: bigint }[]>`
       SELECT date_trunc('month', (u.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date AS m, COUNT(*) AS c
       FROM "user" u JOIN jemaat j ON j.id = u.jemaat_id
-      WHERE j.is_tamu = false AND u.created_at < ${end} ${cab} GROUP BY 1`,
+      WHERE j.is_tamu = false AND u.created_at <= now() ${cab} GROUP BY 1`,
     prisma.$queryRaw<{ m: Date; c: bigint }[]>`
       SELECT date_trunc('month', COALESCE(j.tanggal_bergabung_gereja::timestamp, (j.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta'))::date AS m, COUNT(*) AS c
-      FROM jemaat j WHERE j.is_tamu = false AND j.is_active = true ${cab} GROUP BY 1`,
+      FROM jemaat j WHERE j.is_tamu = false AND j.is_active = true
+        AND COALESCE(j.tanggal_bergabung_gereja::timestamp, (j.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta') < ${new Date(now.today.getTime() + 86_400_000)} ${cab} GROUP BY 1`,
   ]);
   const toMap = (r: { m: Date; c: bigint }[]) => {
     const mp = new Map<string, number>();
@@ -1073,6 +1082,24 @@ async function cumulativeStats(cabangId: string | null, lastFull: Date, H: numbe
   };
   const akun = cum(akunM);
   const jem = cum(jemM);
+  // Bulan berjalan (s/d hari ini) — belum lengkap, ditampilkan terpisah dengan catatan; tidak dipakai di pertumbuhan majemuk / perkiraan.
+  const curKey = mk(end);
+  const akunNow = akunM.get(curKey) ?? 0;
+  const jemNow = jemM.get(curKey) ?? 0;
+  const akunTotalNow = (akun.total[akun.total.length - 1] ?? 0) + akunNow;
+  const hariDalamBulan = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  const berjalan = {
+    month: curKey,
+    sampai: now.today.toISOString().slice(0, 10),
+    hari: now.today.getUTCDate(),
+    hariDalamBulan,
+    akun: akunTotalNow,
+    akunBaru: akunNow,
+    jemaat: (jem.total[jem.total.length - 1] ?? 0) + jemNow,
+    jemaatBaru: jemNow,
+    aktif: now.aktif,
+    persenAktif: akunTotalNow ? Math.round((now.aktif / akunTotalNow) * 1000) / 10 : null,
+  };
   const aktifBy = new Map(mKeys.map((k, i) => [k, aktif[i]!]));
   const aktifSeries = months.map((k) => aktifBy.get(k) ?? null);
   const f = fitForecast(akun.total, new Date(`${months[0]}-01T00:00:00.000Z`).getUTCMonth(), H, false);
@@ -1098,5 +1125,6 @@ async function cumulativeStats(cabangId: string | null, lastFull: Date, H: numbe
       aktif12: cmgr(aktifReliable, 12),
     },
     prediksi: { months: Array.from({ length: fc.length }, (_, i) => mk(addM(lastFull, i + 1))), akun: fc },
+    berjalan,
   };
 }

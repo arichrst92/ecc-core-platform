@@ -12,7 +12,7 @@ summary: Menu Forecast di Portal (dock di sebelah Elsa) — jemaat aktif Els App
 ## Patokan
 - **Jemaat aktif Els App** = jemaat (bukan tamu) yang membuka Els App dalam keadaan login minimal sekali dalam bulan itu.
 - **Berhenti aktif** = sebelumnya aktif, lalu tidak membuka Els App 2 bulan berturut-turut. **Kembali aktif** = sempat berhenti lalu aktif lagi. **Baru** = pertama kali aktif.
-- **Total (kumulatif)** = jumlah keseluruhan sampai akhir bulan itu, selalu bertambah: total akun Els App jemaat (bukan tamu, menurut tanggal akun dibuat) dan total jemaat terdaftar (menurut tanggal bergabung gereja; data lama tanpa tanggal ikut bulan dimasukkan). **Pertumbuhan majemuk per bulan** = rata-rata kenaikan per bulan yang "berbunga" ((akhir ÷ awal)^(1/jumlah bulan) − 1), dihitung untuk 3, 6 & 12 bulan terakhir. **% aktif** = jemaat aktif bulan itu ÷ total akun.
+- **Total (kumulatif)** = jumlah keseluruhan sampai akhir bulan itu, selalu bertambah: total akun Els App jemaat (bukan tamu, menurut tanggal akun dibuat) dan total jemaat terdaftar (menurut tanggal bergabung gereja; data lama tanpa tanggal ikut bulan dimasukkan). **Pertumbuhan majemuk per bulan** = rata-rata kenaikan per bulan yang "berbunga" ((akhir ÷ awal)^(1/jumlah bulan) − 1), dihitung untuk 3, 6 & 12 bulan terakhir. **% aktif** = jemaat aktif bulan itu ÷ total akun. **Bulan berjalan** (mis. s/d 28 Nov) ikut ditampilkan dengan catatan "belum lengkap" (kotak kuning, baris tabel teratas, titik putus-putus di grafik) — tidak dipakai untuk pertumbuhan majemuk & perkiraan.
 - Angka bulanan memakai bulan yang sudah lengkap (WIB); bulan berjalan ditampilkan terpisah.
 
 ## Dari mana datanya

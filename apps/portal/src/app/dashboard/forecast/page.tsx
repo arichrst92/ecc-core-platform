@@ -407,6 +407,9 @@ function Kumulatif({ d }: { d: ForecastData }) {
   const fcN = Math.min(12, k.prediksi.akun.length);
   const labels = [...k.months, ...k.prediksi.months.slice(0, fcN)].map((m) => mLabel(m));
   const pad = (arr: (number | null)[]) => [...arr, ...Array.from({ length: fcN }, () => null)];
+  const bj = k.berjalan ?? null;
+  const bjOnChart = !!bj && fcN > 0 && k.prediksi.months[0] === bj.month;
+  const sampaiLabel = bj ? new Date(`${bj.sampai}T00:00:00.000Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
   return (
     <Card
       title="Total jemaat per bulan (terus bertambah)"
@@ -417,6 +420,25 @@ function Kumulatif({ d }: { d: ForecastData }) {
         </button>
       }
     >
+      {bj ? (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex flex-wrap gap-x-4 gap-y-1 items-center">
+          <span className="font-bold">
+            {mLabel(bj.month, true)} · s/d {sampaiLabel} (hari ke-{bj.hari} dari {bj.hariDalamBulan})
+          </span>
+          <span>
+            Total akun <b>{nf(bj.akun)}</b> (+{nf(bj.akunBaru)})
+          </span>
+          <span>
+            Jemaat terdaftar <b>{nf(bj.jemaat)}</b> (+{nf(bj.jemaatBaru)})
+          </span>
+          <span>
+            Aktif <b>{nf(bj.aktif)}</b> ({pf(bj.persenAktif)})
+          </span>
+          <span className="basis-full text-amber-800/80">
+            Catatan: bulan berjalan belum lengkap — angka masih bisa bertambah sampai akhir bulan. Tidak dipakai untuk pertumbuhan majemuk & perkiraan.
+          </span>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <Kpi label="Total akun Els App jemaat" value={nf(k.akun[last])} color="#F97316" sub={<>+{nf(k.akunBaru[last])} bulan {mLabel(k.months[last]!)}</>} />
         <Kpi
@@ -434,6 +456,9 @@ function Kumulatif({ d }: { d: ForecastData }) {
           { label: 'Total jemaat terdaftar', color: '#8B5CF6', data: pad(k.jemaat), width: 2.5 },
           { label: 'Total akun Els App', color: '#F97316', data: pad(k.akun), width: 3 },
           { label: 'Perkiraan total akun', color: '#F97316', data: [...k.akun.map((v, i) => (i === last ? v : null)), ...k.prediksi.akun.slice(0, fcN)], dashed: true },
+          ...(bj && bjOnChart
+            ? [{ label: `Akun s/d ${sampaiLabel}`, color: '#B45309', data: [...k.akun.map((v, i) => (i === last ? v : null)), bj.akun, ...Array.from({ length: fcN - 1 }, () => null)], dashed: true, width: 2 }]
+            : []),
           { label: 'Jemaat aktif bulan itu', color: '#0EA5E9', data: pad(k.aktif), width: 2.5 },
         ]}
         height={240}
@@ -443,6 +468,7 @@ function Kumulatif({ d }: { d: ForecastData }) {
           { label: 'Total jemaat terdaftar', color: '#8B5CF6', line: true },
           { label: 'Total akun Els App (kumulatif)', color: '#F97316', line: true },
           { label: 'Jemaat aktif bulan itu', color: '#0EA5E9', line: true },
+          ...(bj && bjOnChart ? [{ label: `Total akun s/d ${sampaiLabel} (berjalan)`, color: '#B45309', line: true }] : []),
         ]}
       />
       {showTable ? (
@@ -460,6 +486,19 @@ function Kumulatif({ d }: { d: ForecastData }) {
               </tr>
             </thead>
             <tbody>
+              {bj ? (
+                <tr className="border-t border-amber-100 bg-amber-50/60">
+                  <td className="px-3 py-1.5">
+                    {mLabel(bj.month, true)} <span className="text-[10px] font-semibold text-amber-700">s/d {sampaiLabel} · berjalan</span>
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">+{nf(bj.akunBaru)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{nf(bj.akun)}</td>
+                  <td className="px-3 py-1.5 text-right text-[11px] text-neutral-400">belum lengkap</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{nf(bj.aktif)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{pf(bj.persenAktif)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{nf(bj.jemaat)}</td>
+                </tr>
+              ) : null}
               {k.months
                 .map((m, i) => ({ m, i }))
                 .reverse()

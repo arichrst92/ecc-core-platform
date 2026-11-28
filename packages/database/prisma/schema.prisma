@@ -2518,6 +2518,8 @@ model AppConfig {
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")
 
+  // Forecast (2026-11): batas data minimal & perilaku bila data belum cukup. NULL = bawaan.
+  forecastSettings           Json?    @map("forecast_settings")
   @@map("app_config")
 }
 
@@ -4248,6 +4250,25 @@ model ApiMetric {
 /// Kunjungan halaman Els App (iOS/Android/web) per hari × perangkat anonim × halaman.
 /// installId = ID acak dari app (tidak terhubung ke akun). route = pola
 /// halaman yang dinormalkan, mis. /event/[id].
+/// Aktivitas Els App per jemaat per bulan per platform (Forecast, 2026-11).
+/// Dicatat server dari request app yang login (X-Client: mobile; platform dari
+/// X-App-Version "versi/ios|android|web"). source 'riwayat' = dibentuk dari catatan
+/// sesi login & audit sebelum pencatatan dimulai (perkiraan).
+model JemaatActivityMonthly {
+  month     DateTime @db.Date // tanggal 1 bulan (WIB)
+  jemaatId  String   @map("jemaat_id") @db.Uuid
+  platform  String   @db.VarChar(10) // ios | android | web | lainnya
+  days      Int      @default(0) // hari berbeda yang aktif di bulan itu
+  firstSeen DateTime @map("first_seen")
+  lastSeen  DateTime @map("last_seen")
+  source    String   @default("live") @db.VarChar(10)
+
+  @@id([month, jemaatId, platform])
+  @@index([jemaatId])
+  @@index([month])
+  @@map("jemaat_activity_monthly")
+}
+
 /// Kunjungan halaman per JAM (2026-11) — untuk "sering dibuka pada jam" & grafik jam ramai
 /// di Portal Analitik. Diisi server saat menerima telemetri (jam = waktu diterima,
 /// app mengirim tiap ±30 detik). route '*' = semua halaman (pengguna aktif per jam).

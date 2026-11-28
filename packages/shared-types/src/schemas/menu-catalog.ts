@@ -38,6 +38,8 @@ export const MENU_CATALOG: MenuItem[] = [
   // 'dashboard' tetap di-list di RBAC supaya konsisten, walau biasanya
   // semua role yg boleh masuk portal punya akses ke dashboard.
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', group: null },
+  // Forecast — pertumbuhan jemaat & prediksi (dock: di sebelah Elsa).
+  { key: 'forecast', label: 'Forecast', href: '/dashboard/forecast', group: null },
   // Peta pin cabang gereja & homecell (di samping Elsa).
   { key: 'map-view', label: 'Map View', href: '/dashboard/map', group: null },
 

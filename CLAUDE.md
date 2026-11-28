@@ -50,6 +50,8 @@ Sebelum mengubah salah satu aturan di bawah:
 
 Pesan error dari server (`error.message`) tampil apa adanya di app — aman diubah kapan saja.
 
+**Forecast (2026-11)** bergantung pada header yang SUDAH dikirim app semua versi: `X-Client: mobile` dan `X-App-Version: <versi>/<ios|android|web>` (`app/src/api/client.ts`). Server mencatat aktivitas jemaat per bulan per platform dari header ini (`lib/app-activity.ts` → `jemaat_activity_monthly`). Jangan menghapus / mengubah format header ini di app.
+
 ### Aturan & teks lewat API (2.5.1)
 `GET /public/app-config` mengirim `rules` (angka aturan) dan `texts` (teks i18n pengganti per bahasa) — sumbernya `apps/core-api/src/lib/app-rules.ts` (dibentuk dari konstanta server: `OPEN_BEFORE_MIN`, `CLOSE_AFTER_MIN`, `SCAN_*`, `KIDS_MAX_AGE`, `VISIT_CANCEL_MIN`, `HOMECELL_*_DAYS`, `ZONE_*_DAYS`, `ENROLL_WINDOW_MS`) + override Portal (Developer Tools → Diagnostics → **Tulisan di App**, kolom `app_config.app_text_overrides`).
 App (`src/config/appRules.ts`): `appRule('…')` untuk hitungan, teks ditimpa ke i18n, disimpan di AsyncStorage (berlaku saat offline).

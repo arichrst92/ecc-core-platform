@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { forecastRouter } from './forecast.js';
+import { trackAppActivity } from '../../lib/app-activity.js';
 import { requireAuth } from '../../middleware/require-auth.js';
 import { sinodeRouter } from './sinode.js';
 import { cabangRouter } from './cabang.js';
@@ -93,6 +95,8 @@ const itMinisterTeamGuard: RequestHandler = (req, _res, next) => {
 // Semua /admin/* wajib JWT. Sebelumnya juga requireFulltimer, tapi gate
 // itu dicabut — semua role yang punya akun valid bisa akses portal.
 adminRouter.use(requireAuth);
+// Forecast: catat aktivitas Els App per jemaat per bulan per platform (tidak menahan request).
+adminRouter.use(trackAppActivity);
 
 // Token API pribadi (otomasi / agentic AI) tidak boleh mengubah akun pemiliknya
 // sendiri (/admin/me: hapus akun, ganti nomor, dsb) — cukup baca.
@@ -142,6 +146,8 @@ adminRouter.use('/prayer-request', prayerRequestRouter);
 adminRouter.use('/bible365', bible365AdminRouter);
 // Analitik Els App (halaman, aktif sekarang, performa API).
 adminRouter.use('/analytics', analyticsRouter);
+// Forecast — pertumbuhan jemaat (menu 'forecast').
+adminRouter.use('/forecast', forecastRouter);
 // ECC Worship — album, lagu, sinkron lirik (Elsa), statistik.
 adminRouter.use('/worship', worshipAdminRouter);
 adminRouter.use('/video-channel', videoChannelRouter);

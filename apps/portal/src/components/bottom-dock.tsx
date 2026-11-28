@@ -68,6 +68,7 @@ import {
   Gift,
   LayoutTemplate,
   Sparkles,
+  TrendingUp,
   MapPinned,
   UserPlus,
   MessageSquareText,
@@ -109,6 +110,7 @@ interface NavGroup {
 // Standalone dock items (kiri + kanan)
 const STANDALONE_LEFT: NavItem[] = [
   { href: '/dashboard', label: 'Elsa (Els Agentic)', icon: Sparkles },
+  { href: '/dashboard/forecast', label: 'Forecast', icon: TrendingUp, menuKey: 'forecast' },
   { href: '/dashboard/map', label: 'Map View', icon: MapPinned, menuKey: 'map-view' },
   { href: '/dashboard/user-guide', label: 'User Guide', icon: BookOpenCheck },
 ];

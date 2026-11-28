@@ -680,6 +680,7 @@ async function homecellStats(
     ideal: st.homecellIdeal,
     batas: st.homecellMax,
     _members: hcSet.size,
+    pertumbuhan: await homecellGrowth(cabangId, lastFull, st),
   };
 }
 
@@ -889,8 +890,15 @@ function buildInsights(d: Built) {
   if (d.sim.retensi1 != null) out.push({ tone: d.sim.retensi1 >= 75 ? 'ok' : 'warn', judul: `Retensi bulan pertama ${d.sim.retensi1}%`, isi: `${Math.round(100 - d.sim.retensi1)} dari 100 jemaat baru tidak kembali di bulan kedua.` });
   const penuh = d.kapasitas.list.find((x) => x.penuhMulai);
   if (penuh) out.push({ tone: 'warn', judul: 'Kapasitas ibadah', isi: `${penuh.nama} ${penuh.cabang} (${penuh.okupansi}% terisi) diperkirakan penuh sekitar ${monthLabel(penuh.penuhMulai!)}.` });
+  const hg = d.homecell.pertumbuhan;
+  if (hg && hg.tumbuh12.anggota != null)
+    out.push({
+      tone: hg.tumbuh12.anggota >= 0 ? 'ok' : 'warn',
+      judul: 'Homecell',
+      isi: `Anggota homecell ${hg.tumbuh12.anggota >= 0 ? 'naik' : 'turun'} ${Math.abs(hg.tumbuh12.anggota)}% dalam 12 bulan (${nf(hg.sekarang.anggota)} anggota di ${nf(hg.sekarang.homecell)} homecell)${hg.tambahan12 ? `; perlu ±${nf(hg.tambahan12)} homecell baru dalam 12 bulan` : ''}.`,
+    });
   if (d.tamu.bulanIni.tamu) out.push({ tone: 'info', judul: 'Tamu', isi: `${nf(d.tamu.bulanIni.tamu)} tamu hadir bulan lalu (${nf(d.tamu.bulanIni.newComer)} New Comer). ${d.tamu.konversi.total ?? 0}% tamu 3 bulan terakhir sudah menjadi jemaat aktif Els App.` });
-  return out.slice(0, 6);
+  return out.slice(0, 7);
 }
 
 function buildActions(d: Built) {
@@ -925,4 +933,78 @@ function buildStatement(d: Built) {
       : `Dalam setahun terakhir, jemaat yang aktif di Els App turun dari ${nf(ago)} menjadi ${nf(cur)}. Mari kita hubungi kembali jemaat yang lama tidak aktif dan sambut setiap tamu dengan hangat — setiap orang berharga.`;
   }
   return `Saat ini ${nf(cur)} jemaat terhubung lewat Els App. Jika kita terus menyambut setiap tamu dan menjaga setiap jemaat tetap terhubung, diperkirakan ±${nf(dec?.value ?? cur)} jemaat aktif di akhir ${dec?.tahun ?? ''}${awal}.`;
+}
+
+// ------------------------------------------------------------------ pertumbuhan homecell
+
+/**
+ * Pertumbuhan homecell 24 bulan terakhir: jumlah homecell aktif, anggota aktif,
+ * homecell baru, pertemuan & rata-rata hadir per pertemuan; prediksi anggota 12
+ * bulan & kebutuhan homecell (anggota ÷ patokan). Homecell nonaktif dianggap
+ * berhenti pada tanggal terakhir diubah (perkiraan); data impor lama tercatat
+ * di bulan impor.
+ */
+async function homecellGrowth(cabangId: string | null, lastFull: Date, st: ForecastSettings) {
+  const N = 24;
+  const months = Array.from({ length: N }, (_, i) => addM(lastFull, i - N + 1));
+  const ends = months.map((m) => addM(m, 1).getTime());
+  const areaW = cabangId ? { area: { cabangId } } : {};
+  const [hcs, members] = await Promise.all([
+    prisma.homecell.findMany({ where: areaW, select: { createdAt: true, updatedAt: true, isActive: true } }),
+    prisma.homecellMember.findMany({
+      where: { homecell: areaW },
+      select: { tanggalBergabung: true, tanggalKeluar: true, isActive: true },
+    }),
+  ]);
+  const cab = cabangId ? Prisma.sql`AND a.cabang_id = ${cabangId}::uuid` : Prisma.empty;
+  const range = Prisma.sql`s.tanggal >= ${months[0]!}::date AND s.tanggal < ${addM(lastFull, 1)}::date ${cab}`;
+  const base = Prisma.sql`JOIN homecell h ON h.id = s.homecell_id JOIN homecell_area a ON a.id = h.area_id`;
+  const [qMeet, qHadir, qTamu] = await Promise.all([
+    prisma.$queryRaw<{ m: Date; c: bigint }[]>`SELECT date_trunc('month', s.tanggal)::date AS m, COUNT(*) AS c FROM homecell_schedule s ${base} WHERE ${range} GROUP BY 1`,
+    prisma.$queryRaw<{ m: Date; c: bigint }[]>`SELECT date_trunc('month', s.tanggal)::date AS m, COUNT(*) AS c FROM homecell_attendance x JOIN homecell_schedule s ON s.id = x.schedule_id ${base} WHERE ${range} GROUP BY 1`,
+    prisma.$queryRaw<{ m: Date; c: bigint }[]>`SELECT date_trunc('month', s.tanggal)::date AS m, COUNT(*) AS c FROM homecell_tamu_attendance y JOIN homecell_schedule s ON s.id = y.schedule_id ${base} WHERE ${range} GROUP BY 1`,
+  ]);
+  const toMap = (rows: { m: Date; c: bigint }[]) => new Map(rows.map((r) => [mk(r.m), n(r.c)]));
+  const mMeet = toMap(qMeet);
+  const mHadir = toMap(qHadir);
+  const mTamu = toMap(qTamu);
+  const meet = months.map((m) => ({ m, pertemuan: mMeet.get(mk(m)) ?? 0, hadir: mHadir.get(mk(m)) ?? 0, tamu: mTamu.get(mk(m)) ?? 0 }));
+  const meetBy = new Map(meet.map((r) => [mk(r.m), r]));
+  const homecell = ends.map((e) => hcs.filter((h) => h.createdAt.getTime() < e && (h.isActive || h.updatedAt.getTime() >= e)).length);
+  const baru = months.map((m, i) => hcs.filter((h) => h.createdAt.getTime() >= m.getTime() && h.createdAt.getTime() < ends[i]!).length);
+  const anggota = ends.map(
+    (e) =>
+      members.filter((x) => x.tanggalBergabung.getTime() < e && (x.tanggalKeluar ? x.tanggalKeluar.getTime() >= e : x.isActive)).length,
+  );
+  const pertemuan = months.map((m) => n(meetBy.get(mk(m))?.pertemuan));
+  const hadirRata = months.map((m) => {
+    const r = meetBy.get(mk(m));
+    return r && n(r.pertemuan) ? Math.round(((n(r.hadir) + n(r.tamu)) / n(r.pertemuan)) * 10) / 10 : null;
+  });
+  const tamuHadir = months.map((m) => n(meetBy.get(mk(m))?.tamu));
+  // Mulai dari bulan pertama yang ada homecell.
+  const from = Math.max(0, homecell.findIndex((v) => v > 0));
+  const fitM = fitForecast(anggota.slice(from), months[from]!.getUTCMonth(), 12, false);
+  const fcAnggota = fitM ? fitM.fc.map(round) : [];
+  const fcMonths = Array.from({ length: 12 }, (_, i) => mk(addM(lastFull, i + 1)));
+  const curH = homecell[N - 1] ?? 0;
+  const curA = anggota[N - 1] ?? 0;
+  const ago = (arr: number[], k: number) => (arr[N - 1 - k] ? Math.round(((arr[N - 1]! - arr[N - 1 - k]!) / arr[N - 1 - k]!) * 1000) / 10 : null);
+  const butuh12 = fcAnggota.length ? Math.ceil(fcAnggota[fcAnggota.length - 1]! / st.homecellIdeal) : null;
+  return {
+    months: months.map(mk).slice(from),
+    homecell: homecell.slice(from),
+    baru: baru.slice(from),
+    anggota: anggota.slice(from),
+    pertemuan: pertemuan.slice(from),
+    hadirRata: hadirRata.slice(from),
+    tamuHadir: tamuHadir.slice(from),
+    sekarang: { homecell: curH, anggota: curA, rataPerHomecell: curH ? Math.round((curA / curH) * 10) / 10 : null },
+    tumbuh3: { homecell: ago(homecell, 3), anggota: ago(anggota, 3) },
+    tumbuh12: { homecell: ago(homecell, 12), anggota: ago(anggota, 12) },
+    baru12: baru.slice(-12).reduce((a, b) => a + b, 0),
+    prediksi: { months: fcMonths, anggota: fcAnggota, homecellDibutuhkan: fcAnggota.map((v) => Math.ceil(v / st.homecellIdeal)) },
+    butuh12,
+    tambahan12: butuh12 != null ? Math.max(0, butuh12 - curH) : null,
+  };
 }

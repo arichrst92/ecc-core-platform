@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { esc } from './print-report.js';
 import { ideaLogoSvg } from './idea-logo.js';
+import { VISUAL_CSS, stackedBarsSvg } from './visual-svg.js';
 import type { Forecast } from './forecast.js';
 
 const nf = (v: number | null | undefined) => (v == null ? '—' : Math.round(v).toLocaleString('id-ID'));
@@ -104,6 +105,34 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
 </div></section>`);
   }
 
+  // 5. Dari mana pertumbuhan datang
+  {
+    const c = d.components.slice(-12);
+    const insightColor: Record<string, string> = { ok: '#15803D', info: '#C2410C', warn: '#B45309', bad: '#B91C1C' };
+    slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Dari mana pertumbuhan datang</div>
+  <h2>Yang datang, yang kembali, dan yang berhenti</h2>
+  <div class="two">
+    <div class="box">${stackedBarsSvg({
+      labels: c.map((x) => x.month),
+      up: [
+        { label: 'Jemaat baru', color: '#10B981', data: c.map((x) => x.baru) },
+        { label: 'Kembali aktif', color: '#0EA5E9', data: c.map((x) => x.kembali) },
+      ],
+      down: [{ label: 'Berhenti', color: '#F87171', data: c.map((x) => x.berhenti) }],
+      tickEvery: Math.max(1, Math.ceil(c.length / 6)),
+      tickLabel: (i) => mLabel(c[i]!.month),
+      width: 460,
+      height: 230,
+    })}<div class="muted" style="font-size:13px;margin-top:4px">Batang atas = masuk (baru + kembali aktif) · batang bawah = berhenti aktif.</div></div>
+    <div class="box"><h4>Yang perlu diperhatikan</h4><ul class="pts" style="font-size:15.5px">${
+      d.insights.map((i) => `<li><b style="color:${insightColor[i.tone] ?? '#171717'}">${esc(i.judul)}</b> — ${esc(i.isi)}</li>`).join('') || '<li>Belum ada catatan khusus.</li>'
+    }</ul></div>
+  </div>
+  ${foot()}
+</div></section>`);
+  }
+
   // 5. Tamu
   const t = d.tamu;
   const stages: [string, number, string][] = [
@@ -128,6 +157,33 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
   ${foot()}
 </div></section>`);
 
+  // Tamu per bulan & per cabang
+  {
+    const b = t.bulanan.slice(-12);
+    slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Tamu</div>
+  <h2>Tamu per bulan & per cabang</h2>
+  <div class="lead">Bulan lalu <b>${nf(t.bulanIni.tamu)} tamu</b> hadir (${nf(t.bulanIni.newComer)} New Comer, ${nf(t.bulanIni.visitor)} Visitor)${t.prediksi.length ? `. Perkiraan bulan depan ±<b>${nf(t.prediksi[0])}</b> tamu` : ''}.</div>
+  <div class="two">
+    <div class="box">${stackedBarsSvg({
+      labels: b.map((x) => x.month),
+      up: [
+        { label: 'New Comer', color: '#10B981', data: b.map((x) => x.newComer) },
+        { label: 'Visitor', color: '#0EA5E9', data: b.map((x) => x.visitor) },
+      ],
+      tickEvery: Math.max(1, Math.ceil(b.length / 6)),
+      tickLabel: (i) => mLabel(b[i]!.month),
+      width: 460,
+      height: 220,
+    })}</div>
+    <div><table><thead><tr><th>Cabang</th><th class="num">Tamu</th><th class="num">Jadi jemaat</th><th class="num">Belum dihubungi</th></tr></thead><tbody>
+      ${t.perCabang.slice(0, 7).map((c) => `<tr><td><b>${esc(c.nama)}</b></td><td class="num">${nf(c.tamu)}</td><td class="num">${c.konversi == null ? '—' : `${c.konversi}%`}</td><td class="num" style="${c.belumFu > 5 ? 'color:#B91C1C;font-weight:700' : ''}">${nf(c.belumFu)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Belum ada data tamu.</td></tr>'}
+    </tbody></table></div>
+  </div>
+  ${foot()}
+</div></section>`);
+  }
+
   // 6. Kapasitas
   const st = (p: number | null) => (p == null ? ['#F1F5F9', '#475569', '—'] : p >= 90 ? ['#FEE2E2', '#B91C1C', 'penuh'] : p >= 75 ? ['#FEF3C7', '#B45309', 'mulai padat'] : ['#DCFCE7', '#15803D', 'longgar']);
   const kap = d.kapasitas.list.filter((x) => x.kursi).slice(0, 7);
@@ -137,7 +193,8 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
   <div class="kick">Kesiapan tempat ibadah</div>
   <h2>${firstFull ? 'Beberapa ibadah akan segera penuh' : 'Tempat ibadah masih cukup'}</h2>
   <div class="lead">Hijau = masih longgar · kuning = mulai padat · merah = penuh (90% kursi terisi atau lebih).</div>
-  <table style="margin-top:14px"><thead><tr><th>Ibadah</th><th class="num">Kursi</th><th class="num">Rata-rata hadir</th><th class="num">Terisi sekarang</th><th class="num">Perkiraan 1 tahun lagi</th><th>Diperkirakan penuh</th></tr></thead><tbody>
+  <div class="mini4"><div><b>${d.kapasitas.rataOkupansi == null ? '—' : `${d.kapasitas.rataOkupansi}%`}</b><span>rata-rata kursi terisi</span></div><div><b>${nf(d.kapasitas.pertemuanPenuh)}</b><span>pertemuan penuh (31 hari)</span></div><div><b>${nf(d.kapasitas.akanPenuh6)}</b><span>ibadah akan penuh ≤ 6 bulan</span></div><div><b>${nf(d.kapasitas.tanpaKapasitas)}</b><span>ibadah belum diisi jumlah kursinya</span></div></div>
+  <table style="margin-top:12px"><thead><tr><th>Ibadah</th><th class="num">Kursi</th><th class="num">Rata-rata hadir</th><th class="num">Terisi sekarang</th><th class="num">Perkiraan 1 tahun lagi</th><th>Diperkirakan penuh</th></tr></thead><tbody>
   ${
     kap
       .map((x) => {
@@ -152,25 +209,105 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
   ${foot()}
 </div></section>`);
 
-  // 7. Cabang & platform
-  const pr = d.platform.ringkasan.filter((p) => p.platform !== 'lainnya');
-  const pTot = Math.max(1, pr.reduce((a, p) => a + p.aktif, 0));
-  const PCOL: Record<string, string> = { android: '#16A34A', ios: '#2563EB', web: '#F59E0B' };
-  const PLAB: Record<string, string> = { android: 'Android', ios: 'iOS', web: 'Web' };
-  const web = pr.find((p) => p.platform === 'web');
+  // Per cabang
+  const PCOL: Record<string, string> = { android: '#16A34A', ios: '#2563EB', web: '#F59E0B', lainnya: '#A3A3A3' };
+  const PLAB: Record<string, string> = { android: 'Android', ios: 'iOS', web: 'Web', lainnya: 'Lainnya' };
   slides.push(`<section class="slide"><div class="in">
-  <div class="kick">Per cabang & perangkat</div>
+  <div class="kick">Per cabang</div>
   <h2>Cabang mana yang tumbuh paling cepat?</h2>
+  <table style="margin-top:16px"><thead><tr><th>Cabang</th><th class="num">Jemaat aktif</th><th class="num">Dibanding bulan lalu</th><th class="num">Baru</th><th class="num">Berhenti</th><th>Perangkat</th><th class="num">Perkiraan 1 tahun</th></tr></thead><tbody>
+    ${d.perCabang
+      .slice(0, 9)
+      .map((c) => {
+        const tot = Math.max(1, c.platform.android + c.platform.ios + c.platform.web);
+        const bar = (['android', 'ios', 'web'] as const).map((p) => `<span style="width:${(c.platform[p] / tot) * 100}%;background:${PCOL[p]}"></span>`).join('');
+        return `<tr><td><b>${esc(c.nama)}</b></td><td class="num">${nf(c.aktif)}</td><td class="num">${naikTurun(c.tumbuhPersen)}</td><td class="num">+${nf(c.baru)}</td><td class="num">−${nf(c.berhenti)}</td><td><span class="mix">${bar}</span></td><td class="num">${nf(c.prediksi12)}${c.kecil ? ' <span class="muted">*</span>' : ''}</td></tr>`;
+      })
+      .join('')}
+  </tbody></table>
+  <div class="lg" style="margin-top:8px"><span><b style="background:#16A34A"></b>Android</span><span><b style="background:#2563EB"></b>iOS</span><span><b style="background:#F59E0B"></b>Web</span>${d.perCabang.some((c) => c.kecil) ? '<span class="muted">* cabang kecil — perkiraan kurang pasti</span>' : ''}</div>
+  ${foot()}
+</div></section>`);
+
+  // Platform
+  {
+    const ps = d.platform.series.slice(-12);
+    const pr = d.platform.ringkasan.filter((p) => p.platform !== 'lainnya' || p.aktif > 0);
+    const pTot = Math.max(1, pr.reduce((a, p) => a + p.aktif, 0));
+    slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Perangkat</div>
+  <h2>Jemaat memakai Els App dari mana?</h2>
   <div class="two">
-    <div><table><thead><tr><th>Cabang</th><th class="num">Jemaat aktif</th><th class="num">Dibanding bulan lalu</th><th class="num">Perkiraan 1 tahun</th></tr></thead><tbody>
-      ${d.perCabang.slice(0, 7).map((c) => `<tr><td><b>${esc(c.nama)}</b></td><td class="num">${nf(c.aktif)}</td><td class="num">${naikTurun(c.tumbuhPersen)}</td><td class="num">${nf(c.prediksi12)}${c.kecil ? ' <span class="muted">*</span>' : ''}</td></tr>`).join('')}
-    </tbody></table>${d.perCabang.some((c) => c.kecil) ? '<div class="muted" style="font-size:13px;margin-top:6px">* cabang kecil — perkiraan kurang pasti.</div>' : ''}</div>
-    <div class="box"><h4>Jemaat memakai Els App dari…</h4>
-      ${pr.map((p) => `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:16px"><b>${PLAB[p.platform]}</b><b>${Math.round((p.aktif / pTot) * 100)}%</b></div><div class="fbar" style="height:14px"><div style="width:${(p.aktif / pTot) * 100}%;background:${PCOL[p.platform]}"></div></div></div>`).join('')}
-      ${web?.retensi1 != null ? `<ul class="pts" style="font-size:15px"><li>Pemakai web bertahan di bulan kedua: ${web.retensi1}%.</li></ul>` : ''}</div>
+    <div class="box">${stackedBarsSvg({
+      labels: ps.map((x) => x.month),
+      up: (['android', 'ios', 'web', 'lainnya'] as const).map((p) => ({ label: PLAB[p]!, color: PCOL[p]!, data: ps.map((x) => x[p]) })),
+      tickEvery: Math.max(1, Math.ceil(ps.length / 6)),
+      tickLabel: (i) => mLabel(ps[i]!.month),
+      width: 460,
+      height: 230,
+    })}</div>
+    <div><table><thead><tr><th>Perangkat</th><th class="num">Aktif</th><th class="num">Porsi</th><th class="num">Bertahan bln-2</th></tr></thead><tbody>
+      ${pr.map((p) => `<tr><td><b style="color:${PCOL[p.platform]}">${PLAB[p.platform]}</b></td><td class="num">${nf(p.aktif)}</td><td class="num">${Math.round((p.aktif / pTot) * 100)}%</td><td class="num">${p.retensi1 == null ? '—' : `${p.retensi1}%`}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="muted" style="font-size:13.5px;margin-top:8px">${nf(d.platform.multiPlatform)} jemaat memakai lebih dari satu perangkat. "Bertahan bln-2" = jemaat baru yang masih aktif di bulan kedua.</div></div>
   </div>
   ${foot()}
 </div></section>`);
+  }
+
+  // Usia & keterlibatan
+  {
+    const uMax = Math.max(1, ...d.usia.map((u) => u.aktif));
+    slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Siapa saja jemaat aktif</div>
+  <h2>Usia dan keterlibatan</h2>
+  <div class="two" style="grid-template-columns:1fr 1fr">
+    <div class="box"><h4>Kelompok usia</h4>${d.usia
+      .map((u) => `<div style="margin:9px 0"><div style="display:flex;justify-content:space-between;font-size:16px"><span>${esc(u.label)}</span><span><b>${nf(u.aktif)}</b> ${u.tren3 == null ? '' : `<span class="${u.tren3 >= 0 ? 'up' : 'down'}" style="font-size:13px">${u.tren3 >= 0 ? 'naik' : 'turun'} ${Math.abs(u.tren3)}% (3 bln)</span>`}</span></div><div class="fbar" style="height:10px"><div style="width:${(u.aktif / uMax) * 100}%;background:linear-gradient(90deg,#F97316,#C2410C)"></div></div></div>`)
+      .join('')}</div>
+    <div class="box"><h4>Keterlibatan jemaat aktif</h4>${d.keterlibatan
+      .map((k) => `<div style="margin:12px 0"><div style="display:flex;justify-content:space-between;font-size:16px"><span>${esc(k.label)}</span><b>${k.persen == null ? '—' : `${k.persen}%`}</b></div><div class="fbar" style="height:10px"><div style="width:${k.persen ?? 0}%;background:linear-gradient(90deg,#8B5CF6,#6D28D9)"></div></div></div>`)
+      .join('')}</div>
+  </div>
+  ${foot()}
+</div></section>`);
+  }
+
+  // Pertumbuhan homecell
+  {
+    const g = d.homecell.pertumbuhan;
+    if (g && g.months.length) {
+      const L = [...g.months, ...g.prediksi.months];
+      slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Homecell</div>
+  <h2>Pertumbuhan homecell</h2>
+  <div class="mini4"><div><b>${nf(g.sekarang.homecell)}</b><span>homecell aktif${g.tumbuh12.homecell != null ? ` · ${g.tumbuh12.homecell >= 0 ? 'naik' : 'turun'} ${Math.abs(g.tumbuh12.homecell)}% setahun` : ''}</span></div><div><b>${nf(g.sekarang.anggota)}</b><span>anggota aktif${g.tumbuh12.anggota != null ? ` · ${g.tumbuh12.anggota >= 0 ? 'naik' : 'turun'} ${Math.abs(g.tumbuh12.anggota)}% setahun` : ''}</span></div><div><b>+${nf(g.baru12)}</b><span>homecell baru dalam 12 bulan</span></div><div><b>${g.tambahan12 == null ? '—' : g.tambahan12 > 0 ? `+${nf(g.tambahan12)}` : 'cukup'}</b><span>homecell perlu ditambah dalam 12 bulan (±${d.homecell.ideal} orang per homecell)</span></div></div>
+  <div class="two" style="grid-template-columns:1fr 1fr">
+    <div class="box"><h4>Anggota aktif homecell</h4>${lineSvg(
+      L,
+      [
+        { color: '#10B981', data: [...g.anggota, ...g.prediksi.months.map(() => null)], width: 4 },
+        { color: '#8B5CF6', data: [...g.anggota.map((v, i) => (i === g.anggota.length - 1 ? v : null)), ...g.prediksi.anggota], dashed: true, width: 3 },
+      ],
+      560,
+      250,
+    )}<div class="lg"><span><b style="background:#10B981"></b>Anggota aktif</span><span><b style="background:#8B5CF6;height:3px"></b>Perkiraan</span></div></div>
+    <div class="box"><h4>Homecell aktif per bulan</h4>${stackedBarsSvg({
+      labels: g.months,
+      up: [
+        { label: 'Homecell lama', color: '#FDBA74', data: g.homecell.map((v, i) => Math.max(0, v - (g.baru[i] ?? 0))) },
+        { label: 'Baru dibuka', color: '#C2410C', data: g.baru },
+      ],
+      tickEvery: Math.max(1, Math.ceil(g.months.length / 6)),
+      tickLabel: (i) => mLabel(g.months[i]!),
+      width: 420,
+      height: 210,
+    })}</div>
+  </div>
+  ${foot()}
+</div></section>`);
+    }
+  }
 
   // 8. Homecell & event
   const hc = d.homecell;
@@ -192,6 +329,43 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
   </div>
   ${foot()}
 </div></section>`);
+
+  // Kapasitas homecell & event
+  slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Homecell & event</div>
+  <h2>Kebutuhan homecell & event yang paling menumbuhkan</h2>
+  <div class="two" style="grid-template-columns:1fr 1.2fr">
+    <div><table><thead><tr><th>Cabang</th><th class="num">Homecell</th><th class="num">Rata-rata</th><th class="num">&gt; ${hc.batas} org</th><th class="num">Perlu dibuka</th></tr></thead><tbody>
+      ${hc.perCabang.slice(0, 7).map((c) => `<tr><td><b>${esc(c.nama)}</b></td><td class="num">${nf(c.homecell)}</td><td class="num">${c.rataAnggota.toLocaleString('id-ID')}</td><td class="num" style="${c.lebihBatas ? 'color:#B91C1C;font-weight:700' : ''}">${nf(c.lebihBatas)}</td><td class="num"><b>${c.perluDibuka ? `+${c.perluDibuka}` : '0'}</b></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada homecell.</td></tr>'}
+    </tbody></table><div class="muted" style="font-size:13px;margin-top:6px">Sampai akhir ${hc.sampaiTahun}, patokan ±${hc.ideal} anggota per homecell.</div></div>
+    <div><table><thead><tr><th>Event (12 bulan)</th><th class="num">Peserta</th><th class="num">Tamu</th><th class="num">Jadi jemaat</th><th class="num">Bertahan</th></tr></thead><tbody>
+      ${d.event.perEvent.slice(0, 6).map((e) => `<tr><td><b>${esc(e.judul)}</b><div class="muted" style="font-size:12.5px">${esc(new Date(e.tanggal).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }))} · ${esc(e.cabang)}</div></td><td class="num">${nf(e.peserta)}</td><td class="num">${nf(e.tamu)}</td><td class="num">${nf(e.jadiJemaat)}</td><td class="num">${e.bertahanPersen == null ? '—' : `${e.bertahanPersen}%`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada event dalam 12 bulan terakhir.</td></tr>'}
+    </tbody></table></div>
+  </div>
+  ${foot()}
+</div></section>`);
+
+  // Tentang data
+  {
+    const stLab = { siap: ['#DCFCE7', '#15803D', 'Siap'], awal: ['#FEF3C7', '#92400E', 'Perkiraan awal'], kurang: ['#FEE2E2', '#B91C1C', 'Belum cukup'] } as const;
+    const sim = d.sim;
+    slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Tentang data</div>
+  <h2>Seberapa bisa dipercaya angka-angka ini?</h2>
+  <div class="two">
+    <div><table><thead><tr><th>Bagian</th><th class="num">Data tersedia</th><th class="num">Minimal</th><th>Status</th></tr></thead><tbody>
+      ${d.readiness.map((r) => { const [bg, fg, l] = stLab[r.status]; return `<tr><td>${esc(r.label)}</td><td class="num">${nf(r.have)} ${r.unit}</td><td class="num">${nf(r.min)} ${r.unit}</td><td><span class="chip" style="background:${bg};color:${fg}">${r.key === 'panjang' && r.status !== 'siap' ? 'Gambaran arah' : l}</span></td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="box"><h4>Cara membaca</h4><ul class="pts" style="font-size:15px">
+      <li>Perkiraan lama rata-rata meleset ${d.backtest.mape3 != null ? `<b>±${d.backtest.mape3}%</b> untuk 3 bulan ke depan` : '— (butuh ≥ 8 bulan data)'}${d.backtest.mape12 != null ? ` dan <b>±${d.backtest.mape12}%</b> untuk 12 bulan` : ''}.</li>
+      <li>Perkiraan memakai: ±${nf(sim.baruPerBulan)} jemaat baru per bulan, ${sim.retensi1 ?? '—'}% bertahan di bulan kedua, ${sim.berhentiPersen ?? '—'}% berhenti per bulan${sim.berhentiHomecell != null && sim.berhentiNonHomecell != null ? ` (ikut homecell ${sim.berhentiHomecell}%, tidak ikut ${sim.berhentiNonHomecell}%)` : ''}${d.event.ready && sim.upliftPerEvent ? `, ±${sim.upliftPerEvent} jemaat baru per event besar` : ''}.</li>
+      <li>Data dari pemakaian Els App yang login (iOS, Android, Web). Tamu tidak dihitung sebagai jemaat aktif.</li>
+      ${d.maturity.riwayatSampai ? `<li>Bulan sampai ${esc(mLabel(d.maturity.riwayatSampai, true))} berasal dari riwayat login yang kurang lengkap — hanya ditampilkan, tidak dipakai untuk perkiraan.</li>` : ''}
+      <li>Dihitung ulang setiap bulan; makin lama makin tepat.</li></ul></div>
+  </div>
+  ${foot()}
+</div></section>`);
+  }
 
   // 9. Langkah
   slides.push(`<section class="slide"><div class="in">
@@ -219,7 +393,7 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
 
   return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><title>Laporan Pertumbuhan Jemaat — ${esc(scope)}</title>
-<style>${CSS}</style></head><body>
+<style>${CSS}${VISUAL_CSS}</style></head><body>
 ${o.isMobileUa ? '<script>setTimeout(() => window.print(), 900);</script>' : `<div class="bar"><b>Laporan Pertumbuhan Jemaat</b> · ukuran slide 16:9 · Tekan <kbd>Ctrl/Cmd + P</kbd> → Simpan sebagai PDF (atur "Margin: None").<button onclick="window.print()">Print / Simpan PDF</button></div>`}
 ${slides.join('\n')}
 <script>
@@ -229,6 +403,45 @@ window.addEventListener('beforeprint',function(){document.querySelectorAll('.sli
 window.addEventListener('afterprint',fit);
 </script>
 </body></html>`;
+}
+
+function lineSvg(labels: string[], series: { color: string; data: (number | null)[]; dashed?: boolean; width?: number }[], W: number, Hh: number): string {
+  const n = labels.length;
+  const L = 48;
+  const R = 12;
+  const T = 12;
+  const B = 26;
+  const vals = series.flatMap((s) => s.data.filter((v): v is number => v != null));
+  if (!vals.length) return '<div class="muted" style="padding:20px;text-align:center">Belum ada data</div>';
+  const max = Math.max(1, ...vals) * 1.1;
+  const x = (i: number) => L + (n <= 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1));
+  const y = (v: number) => T + (Hh - T - B) - (v / max) * (Hh - T - B);
+  let s = '';
+  for (const f of [0, 0.5, 1]) s += `<line x1="${L}" x2="${W - R}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="#F1F1F1"/><text x="${L - 6}" y="${y(max * f) + 4}" text-anchor="end" font-size="12" fill="#A3A3A3">${nf(max * f)}</text>`;
+  for (const se of series) {
+    let p = '';
+    let pen = false;
+    se.data.forEach((v, i) => {
+      if (v == null) {
+        pen = false;
+        return;
+      }
+      p += `${pen ? 'L' : 'M'} ${x(i)} ${y(v)} `;
+      pen = true;
+    });
+    s += `<path d="${p}" fill="none" stroke="${se.color}" stroke-width="${se.width ?? 3}" ${se.dashed ? 'stroke-dasharray="8 5"' : ''} stroke-linejoin="round"/>`;
+  }
+  const step = Math.max(1, Math.ceil(n / 6));
+  let lastX = -999;
+  labels.forEach((l, i) => {
+    if (!(i === n - 1 || i % step === 0)) return;
+    const end = x(i) > W - R - 30;
+    const eff = end ? x(i) - 30 : x(i);
+    if (eff - lastX < 70) return;
+    lastX = eff;
+    s += `<text x="${end ? W - R : x(i)}" y="${Hh - 6}" text-anchor="${end ? 'end' : 'middle'}" font-size="12" fill="#A3A3A3">${esc(mLabel(l))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${Hh}" width="100%" style="display:block">${s}</svg>`;
 }
 
 function mainChart(d: Forecast): string {
@@ -272,8 +485,13 @@ function mainChart(d: Forecast): string {
   }
   const all = [...d.months, ...f.months];
   const step = n > 48 ? 12 : n > 24 ? 6 : 3;
+  // Label tahun tepat di Januari (bukan tiap 12 titik dari bulan pertama); label rapat dilewati.
+  let lastX = -999;
   all.forEach((k, i) => {
-    if (i % step === 0) s += `<text x="${x(i)}" y="${Hh - 6}" text-anchor="middle" font-size="13" fill="#A3A3A3">${esc(step === 12 ? k.slice(0, 4) : mLabel(k))}</text>`;
+    const show = step === 12 ? k.endsWith('-01') : i % step === 0;
+    if (!show || x(i) - lastX < 56) return;
+    lastX = x(i);
+    s += `<text x="${x(i)}" y="${Hh - 6}" text-anchor="middle" font-size="13" fill="#A3A3A3">${esc(step === 12 ? k.slice(0, 4) : mLabel(k))}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${Hh}" width="${W}" style="margin-top:6px;display:block">${s}</svg>`;
 }
@@ -334,5 +552,10 @@ const CSS = `
   .collab .x { font-size:34px; font-weight:300; color:#A3A3A3; }
   .statement { font-size:26px; line-height:1.5; font-weight:600; color:#262626; max-width:1000px; }
   .sig { margin-top:26px; font-size:15px; color:#737373; }
+  .mini4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px; }
+  .mini4 > div { border:1px solid #EFEFEF; border-radius:14px; padding:10px 14px; background:#FAFAFA; }
+  .mini4 b { display:block; font-size:26px; font-weight:800; } .mini4 span { font-size:13px; color:#525252; }
+  .mix { display:inline-flex; width:140px; height:10px; border-radius:99px; overflow:hidden; background:#F5F5F5; } .mix span { display:block; height:100%; }
+  .vz-lg { font-size:12.5px !important; } .vz-lgs { margin-top:6px; }
   .verse { margin-top:18px; font-size:16px; color:#9A3412; font-style:italic; }
 `;

@@ -648,6 +648,7 @@ function HcEvent({ d }: { d: ForecastData }) {
         <Kpi label="Jemaat baru dari event" value={pf(e.persenDariEvent)} color="#8B5CF6" sub="dari pengguna baru 3 bulan terakhir" />
         <Kpi label="Event mendatang" value={nf(e.upcoming3)} color="#0EA5E9" sub={e.ready ? '3 bulan ke depan · masuk prediksi' : `efek event dipakai setelah ${d.settings.eventMinEvents} event`} />
       </div>
+      <HomecellGrowth d={d} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Homecell menjaga jemaat tetap aktif" sub="% jemaat yang masih aktif N bulan setelah pertama memakai Els App" right={<EarlyTag show={early} />}>
           <Lines
@@ -742,6 +743,57 @@ function HcEvent({ d }: { d: ForecastData }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+
+function HomecellGrowth({ d }: { d: ForecastData }) {
+  const g = d.homecell.pertumbuhan;
+  if (!g || !g.months.length) return null;
+  const labels = [...g.months, ...g.prediksi.months].map((m) => mLabel(m));
+  const last = g.anggota[g.anggota.length - 1] ?? 0;
+  return (
+    <Card title="Pertumbuhan homecell" sub="Homecell aktif & anggota aktif per bulan · garis putus = perkiraan anggota 12 bulan ke depan">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+        <Kpi label="Homecell aktif" value={nf(g.sekarang.homecell)} color="#F97316" sub={<><Up v={g.tumbuh12.homecell} /> dalam 12 bulan</>} />
+        <Kpi label="Anggota aktif" value={nf(g.sekarang.anggota)} color="#10B981" sub={<><Up v={g.tumbuh12.anggota} /> dalam 12 bulan</>} />
+        <Kpi label="Homecell baru (12 bln)" value={`+${nf(g.baru12)}`} color="#8B5CF6" sub="dibuka / dimultiplikasi" />
+        <Kpi label="Rata-rata anggota" value={g.sekarang.rataPerHomecell == null ? '—' : g.sekarang.rataPerHomecell.toLocaleString('id-ID')} color="#0EA5E9" sub={`per homecell · patokan ${d.homecell.ideal}`} />
+        <Kpi
+          label="Homecell dibutuhkan (12 bln)"
+          value={g.butuh12 == null ? '—' : nf(g.butuh12)}
+          color="#F59E0B"
+          sub={g.tambahan12 == null ? 'data belum cukup' : g.tambahan12 > 0 ? `perlu +${nf(g.tambahan12)} homecell baru` : 'jumlah sekarang cukup'}
+        />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-neutral-600 mb-1">Anggota aktif homecell</div>
+          <Lines
+            labels={labels}
+            series={[
+              { label: 'Anggota', color: '#10B981', data: [...g.anggota, ...g.prediksi.months.map(() => null)], width: 3 },
+              { label: 'Perkiraan', color: '#8B5CF6', data: [...g.anggota.map((v, i) => (i === g.anggota.length - 1 ? last : null)), ...g.prediksi.anggota], dashed: true },
+            ]}
+          />
+          <Legend items={[{ label: 'Anggota aktif', color: '#10B981', line: true }, { label: 'Perkiraan', color: '#8B5CF6', line: true }]} />
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-neutral-600 mb-1">Homecell aktif per bulan (oranye tua = baru dibuka)</div>
+          <Bars
+            labels={g.months}
+            tick={(k) => mLabel(k)}
+            up={[
+              { label: 'Homecell lama', color: '#FDBA74', data: g.homecell.map((v, i) => Math.max(0, v - (g.baru[i] ?? 0))) },
+              { label: 'Baru dibuka', color: '#C2410C', data: g.baru },
+            ]}
+          />
+          <div className="text-xs font-semibold text-neutral-600 mt-3 mb-1">Rata-rata hadir per pertemuan (anggota + tamu)</div>
+          <Lines labels={g.months.map((m) => mLabel(m))} series={[{ label: 'Rata-rata hadir', color: '#0EA5E9', data: g.hadirRata, width: 2.5 }]} height={150} />
+        </div>
+      </div>
+      <p className="text-[11px] text-neutral-400 mt-2">Homecell nonaktif dihitung berhenti pada tanggal terakhir diubah (perkiraan). Data homecell lama hasil impor tercatat di bulan impornya.</p>
+    </Card>
   );
 }
 

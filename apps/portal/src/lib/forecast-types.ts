@@ -87,6 +87,22 @@ export interface ForecastData {
     sampaiTahun: number;
     ideal: number;
     batas: number;
+    pertumbuhan: {
+      months: string[];
+      homecell: number[];
+      baru: number[];
+      anggota: number[];
+      pertemuan: number[];
+      hadirRata: (number | null)[];
+      tamuHadir: number[];
+      sekarang: { homecell: number; anggota: number; rataPerHomecell: number | null };
+      tumbuh3: { homecell: number | null; anggota: number | null };
+      tumbuh12: { homecell: number | null; anggota: number | null };
+      baru12: number;
+      prediksi: { months: string[]; anggota: number[]; homecellDibutuhkan: number[] };
+      butuh12: number | null;
+      tambahan12: number | null;
+    };
   };
   event: {
     pastEvents: number;

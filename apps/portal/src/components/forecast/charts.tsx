@@ -4,6 +4,9 @@
 import { useState } from 'react';
 import { mLabel, nf } from '@/lib/forecast-types';
 
+/** Label sumbu-x: tiap `step`, dan yang terakhir — label sebelum yang terakhir dilewati bila terlalu dekat (tidak bertumpuk). */
+export const showTick = (i: number, n: number, step: number) => i === n - 1 || (i % step === 0 && n - 1 - i >= step);
+
 // ------------------------------------------------------------------ grafik utama
 
 export function ForecastChart({
@@ -81,14 +84,19 @@ export function ForecastChart({
           </g>
         ))}
         {fc
-          ? milestones.map((m) => {
+          ? milestones.map((m, mi) => {
               const k = fc.months.indexOf(m.month);
               if (k < 0) return null;
+              const cx = x(H + k);
+              // Label di kiri titik bila dekat tepi kanan; tonggak berdekatan diberi jarak vertikal.
+              const right = cx > W - 170;
+              const prev = mi > 0 ? fc.months.indexOf(milestones[mi - 1]!.month) : -99;
+              const close = prev >= 0 && Math.abs(x(H + prev) - cx) < 120 && Math.abs(y(milestones[mi - 1]!.target) - y(m.target)) < 16;
               return (
                 <g key={m.target}>
                   <line x1={L} x2={W - R} y1={y(m.target)} y2={y(m.target)} stroke="#C4B5FD" strokeDasharray="2 4" />
-                  <circle cx={x(H + k)} cy={y(m.target)} r={4} fill="#fff" stroke="#7C3AED" strokeWidth={2} />
-                  <text x={x(H + k) + 6} y={y(m.target) - 6} fontSize={10} fontWeight={700} fill="#6D28D9">
+                  <circle cx={cx} cy={y(m.target)} r={4} fill="#fff" stroke="#7C3AED" strokeWidth={2} />
+                  <text x={right ? cx - 8 : cx + 6} y={y(m.target) + (close ? 14 : -6)} textAnchor={right ? 'end' : 'start'} fontSize={10} fontWeight={700} fill="#6D28D9">
                     {nf(m.target)} ±{mLabel(m.month)}
                   </text>
                 </g>
@@ -122,7 +130,7 @@ export function ForecastChart({
             ) : null}
             <path d={`M ${x(H - 1)} ${y(last)} ${main.map((v, k) => `L ${x(H + k)} ${y(v)}`).join(' ')}`} fill="none" stroke="#8B5CF6" strokeWidth={2.5} strokeDasharray="7 5" />
             <circle cx={x(n - 1)} cy={y(main[F - 1]!)} r={5} fill="#8B5CF6" stroke="#fff" strokeWidth={2} />
-            <text x={x(n - 1) - 8} y={y(main[F - 1]!) + 18} textAnchor="end" fontSize={11} fontWeight={700} fill="#6D28D9">
+            <text x={x(n - 1) - 8} y={y(main[F - 1]!) < T + 24 ? y(main[F - 1]!) + 18 : y(main[F - 1]!) - 10} textAnchor="end" fontSize={11} fontWeight={700} fill="#6D28D9">
               {nf(main[F - 1]!)}
             </text>
           </>
@@ -130,15 +138,15 @@ export function ForecastChart({
         {H > 0 ? (
           <>
             <line x1={x(H - 1)} x2={x(H - 1)} y1={T} y2={T + ih} stroke="#D4D4D4" strokeDasharray="2 3" />
-            <text x={x(H - 1) + 6} y={T + 10} fontSize={10} fill="#737373">
+            <text x={x(H - 1) > W - 160 ? x(H - 1) - 6 : x(H - 1) + 6} y={T + 10} textAnchor={x(H - 1) > W - 160 ? 'end' : 'start'} fontSize={10} fill="#737373">
               bulan lengkap terakhir
             </text>
             <circle cx={x(H - 1)} cy={y(last)} r={5} fill="#C2410C" stroke="#fff" strokeWidth={2} />
           </>
         ) : null}
         {allMonths.map((k, i) =>
-          i % step === 0 || i === n - 1 ? (
-            <text key={k} x={x(i)} y={Hh - 8} textAnchor="middle" fontSize={10} fill="#A3A3A3">
+          showTick(i, n, step) ? (
+            <text key={k} x={i === n - 1 ? W - R : x(i)} y={Hh - 8} textAnchor={i === n - 1 ? 'end' : 'middle'} fontSize={10} fill="#A3A3A3">
               {mLabel(k)}
             </text>
           ) : null,
@@ -258,8 +266,8 @@ export function Bars({
                 yd += h;
                 return <rect key={s.label} x={x0} y={y0} width={w} height={h} fill={s.color} rx={2} />;
               })}
-              {i % step === 0 || i === n - 1 ? (
-                <text x={L + i * bw + bw / 2} y={Hh - 6} textAnchor="middle" fontSize={9.5} fill="#A3A3A3">
+              {showTick(i, n, step) ? (
+                <text x={i === n - 1 ? Math.min(W - R, L + i * bw + bw / 2 + 12) : L + i * bw + bw / 2} y={Hh - 6} textAnchor={i === n - 1 ? 'end' : 'middle'} fontSize={9.5} fill="#A3A3A3">
                   {tick(lab)}
                 </text>
               ) : null}
@@ -357,10 +365,11 @@ export function Lines({
           </text>
         </g>
       ))}
-      {refLines.map((r) => (
+      {refLines.map((r, ri) => (
         <g key={r.label}>
           <line x1={L} x2={W - R} y1={y(r.value)} y2={y(r.value)} stroke={r.color} strokeWidth={1.5} strokeDasharray={r.dashed ? '4 3' : undefined} />
-          <text x={W - R} y={y(r.value) - 4} textAnchor="end" fontSize={10} fontWeight={700} fill={r.color}>
+          {/* Garis referensi berdekatan: label berselang kanan / kiri supaya tidak bertumpuk. */}
+          <text x={ri % 2 ? L + 4 : W - R} y={y(r.value) - 4} textAnchor={ri % 2 ? 'start' : 'end'} fontSize={10} fontWeight={700} fill={r.color}>
             {r.label}
           </text>
         </g>
@@ -369,8 +378,8 @@ export function Lines({
         <path key={s.label} d={path(s.data)} fill="none" stroke={s.color} strokeWidth={s.width ?? 2.5} strokeDasharray={s.dashed ? '6 4' : undefined} strokeLinejoin="round" />
       ))}
       {labels.map((l, i) =>
-        i % step === 0 || i === n - 1 ? (
-          <text key={`${l}${i}`} x={x(i)} y={Hh - 6} textAnchor="middle" fontSize={9.5} fill="#A3A3A3">
+        showTick(i, n, step) ? (
+          <text key={`${l}${i}`} x={i === n - 1 ? W - R : x(i)} y={Hh - 6} textAnchor={i === n - 1 ? 'end' : 'middle'} fontSize={9.5} fill="#A3A3A3">
             {l}
           </text>
         ) : null,

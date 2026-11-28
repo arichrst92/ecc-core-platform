@@ -76,12 +76,25 @@ export function stackedBarsSvg(o: {
     parts.push(`<text x="${W - padR + 3}" y="${padT + 7}" font-size="8" fill="${line.color}">${nf(lmax)}</text>`);
     parts.push(`<text x="${W - padR + 3}" y="${padT + innerH}" font-size="8" fill="${line.color}">0</text>`);
   }
-  for (let i = 0; i < n; i++) {
-    if (i % o.tickEvery === 0 || i === n - 1) {
-      parts.push(`<text x="${x(i) + bw / 2}" y="${H - 6}" text-anchor="middle" font-size="8" fill="#9CA3AF">${esc(o.tickLabel(i))}</text>`);
-    }
+  // Label sumbu-x: tiap tickEvery + yang terakhir; dilewati bila terlalu dekat label sebelumnya (tidak bertumpuk).
+  let lastTickX = -9999;
+  const minGap = 46;
+  const ticks: number[] = [];
+  for (let i = 0; i < n; i++) if (i % o.tickEvery === 0) ticks.push(i);
+  if (ticks[ticks.length - 1] !== n - 1) {
+    // Label terakhir menggantikan label sebelumnya bila terlalu dekat.
+    if (ticks.length && x(n - 1) - x(ticks[ticks.length - 1]!) < minGap) ticks.pop();
+    ticks.push(n - 1);
   }
-  const legend = [...up.map((s) => [s.label, s.color, false] as const), ...(down.length ? [['Batal', down[0]!.color, false] as const] : []), ...(line ? [[line.label, line.color, true] as const] : [])]
+  for (const i of ticks) {
+    const cx = x(i) + bw / 2;
+    const anchor = cx > W - padR - 20 ? 'end' : 'middle';
+    const eff = anchor === 'end' ? W - padR - 22 : cx;
+    if (eff - lastTickX < minGap) continue;
+    lastTickX = eff;
+    parts.push(`<text x="${anchor === 'end' ? W - padR : cx}" y="${H - 6}" text-anchor="${anchor}" font-size="8" fill="#9CA3AF">${esc(o.tickLabel(i))}</text>`);
+  }
+  const legend = [...up.map((s) => [s.label, s.color, false] as const), ...(down.length ? [[down.length === 1 ? down[0]!.label : 'Batal', down[0]!.color, false] as const] : []), ...(line ? [[line.label, line.color, true] as const] : [])]
     .map(
       ([l, c, isLine]) =>
         `<span class="vz-lg"><i style="background:${c};${isLine ? 'height:2px;width:12px;border-radius:1px' : ''}"></i>${esc(l)}</span>`,

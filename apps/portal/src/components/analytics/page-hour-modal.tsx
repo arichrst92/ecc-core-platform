@@ -34,7 +34,13 @@ export function PageHourModal({
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    // Kunci gulir halaman di belakang selama jendela terbuka (HP: hanya jendela yang bergulir).
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', k);
+      document.body.style.overflow = prev;
+    };
   }, [onClose]);
 
   // Ringkasan dalam kalimat (mudah dibaca admin non-IT).
@@ -62,10 +68,17 @@ export function PageHourModal({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 pointer-events-none overflow-y-auto">
-        <div className="bg-neutral-50 rounded-2xl shadow-xl w-full max-w-5xl pointer-events-auto">
-          <div className="sticky top-0 z-10 flex items-start gap-3 px-4 sm:px-6 py-4 bg-white rounded-t-2xl border-b border-neutral-200">
+      {/* Wadah gulir = latar gelap: bisa digulir dengan jari di HP; klik area kosong menutup. */}
+      <div
+        className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/40 backdrop-blur-sm"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="min-h-full flex items-start justify-center p-2 sm:p-6" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="bg-neutral-50 rounded-2xl shadow-xl w-full max-w-5xl my-2 sm:my-0">
+          <div className="sticky top-0 z-10 flex items-start gap-3 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-t-2xl border-b border-neutral-200 shadow-sm">
             <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shrink-0">
               <Clock className="w-5 h-5" />
             </span>
@@ -78,7 +91,7 @@ export function PageHourModal({
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4">
+          <div className="p-3 sm:p-6 space-y-4">
             {/* Angka halaman */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <Kpi icon={Eye} color="#f97316" label="Dibuka" value={fmtNum(row.views)} sub={`${(row.views / Math.max(1, row.visitors)).toFixed(1)}× per pengunjung`} />
@@ -154,6 +167,7 @@ export function PageHourModal({
             {/* Pengunjung harian & kohort (sudah ada sebelumnya) */}
             {detail}
           </div>
+        </div>
         </div>
       </div>
     </>

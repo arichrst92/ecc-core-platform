@@ -200,7 +200,7 @@ export function PrimeHourCard({ filter, route }: { filter: AnalyticsFilter; rout
       </div>
 
       {/* Bagian hari */}
-      <div className="grid grid-cols-5 gap-2 mt-4">
+      <div className="grid grid-cols-2 min-[480px]:grid-cols-3 sm:grid-cols-5 gap-2 mt-4">
         {d.bagian.map((b) => {
           const Icon = BAGIAN_ICON[b.key as keyof typeof BAGIAN_ICON] ?? Clock;
           return (

@@ -53,6 +53,15 @@ export interface HoursData {
   jendela3: { dari: number; sampai: number; persen: number } | null;
   bagian: { key: string; label: string; dari: number; sampai: number; opens: number; persen: number }[];
   hariTeramai: number | null;
+  /** Kunjungan per hari dalam seminggu [0=Minggu … 6=Sabtu]. */
+  perHari: number[];
+  /** Rentang jam ramai berurutan di sekitar puncak (≥ 50% puncak). */
+  ramai: { dari: number; sampai: number; persen: number } | null;
+  /** Per platform (hanya bila satu halaman). */
+  platform: Record<string, number> | null;
+  /** Jam puncak seluruh app (pembanding, hanya bila satu halaman). */
+  appPuncak: number | null;
+  porsiMinggu: number;
 }
 
 export interface CohortRow {

@@ -2,13 +2,14 @@
 
 /** Tab "Halaman": halaman paling sering dibuka, durasi, dan retensi per halaman. */
 import { useMemo, useState } from 'react';
-import { ArrowDown, Clock, Eye, RotateCcw, Users } from 'lucide-react';
+import { ArrowDown, ChevronRight, Clock, Eye, RotateCcw, Users } from 'lucide-react';
 import { LineChart } from '@/components/charts/simple-charts';
 import { usePageDetail, usePageSummary, usePages } from '@/lib/analytics/use-analytics';
 import type { AnalyticsFilter, PageRow } from '@/lib/analytics/types';
 import { pageLabel } from '@/lib/analytics/labels';
 import { Card, Kpi, Loading, PlatformBar, fmtDur, fmtNum, pctOrDash, retentionClass } from './ui';
 import { PrimeHourCard } from './prime-hour';
+import { PageHourModal } from './page-hour-modal';
 
 type SortKey = 'route' | 'views' | 'visitors' | 'avgDurationSec' | 'peakHour' | 'return7' | 'return30' | 'activeNow';
 
@@ -27,6 +28,8 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
   const pages = usePages(filter);
   const [sort, setSort] = useState<SortKey>('views');
   const [selected, setSelected] = useState<string | null>(null);
+  // Klik baris → jendela detail jam ramai/sepi halaman itu.
+  const [openRoute, setOpenRoute] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const r = [...(pages.data ?? [])];
@@ -40,7 +43,7 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
     return r;
   }, [pages.data, sort]);
   const route = selected ?? rows[0]?.route ?? null;
-  const sel = rows.find((r) => r.route === route) ?? null;
+  const opened = openRoute ? (rows.find((r) => r.route === openRoute) ?? null) : null;
 
   const s = summary.data;
   return (
@@ -77,7 +80,7 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
         </>
       )}
 
-      <Card title="Halaman" sub="Klik judul kolom untuk mengurutkan · klik baris untuk melihat detail">
+      <Card title="Halaman" sub="Klik judul kolom untuk mengurutkan · klik baris untuk melihat kapan halaman itu ramai / sepi">
         {pages.isPending ? (
           <Loading />
         ) : rows.length === 0 ? (
@@ -101,7 +104,15 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <PageTr key={r.route} r={r} active={r.route === route} onClick={() => setSelected(r.route)} />
+                  <PageTr
+                    key={r.route}
+                    r={r}
+                    active={r.route === route}
+                    onClick={() => {
+                      setSelected(r.route);
+                      setOpenRoute(r.route);
+                    }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -117,8 +128,9 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
       {/* Jam ramai seluruh app */}
       <PrimeHourCard filter={filter} />
 
-      {sel ? <PageDetailCard row={sel} filter={filter} /> : null}
-      {sel ? <PrimeHourCard filter={filter} route={sel.route} /> : null}
+      {opened ? (
+        <PageHourModal row={opened} filter={filter} onClose={() => setOpenRoute(null)} detail={<PageDetailCard row={opened} filter={filter} />} />
+      ) : null}
     </div>
   );
 }
@@ -152,9 +164,12 @@ function Th({
 
 function PageTr({ r, active, onClick }: { r: PageRow; active: boolean; onClick: () => void }) {
   return (
-    <tr onClick={onClick} className={`border-t border-neutral-100 cursor-pointer ${active ? 'bg-brand-50' : 'hover:bg-neutral-50'}`}>
+    <tr onClick={onClick} title="Lihat jam ramai / sepi halaman ini" className={`group border-t border-neutral-100 cursor-pointer ${active ? 'bg-brand-50' : 'hover:bg-neutral-50'}`}>
       <td className="px-4 py-2">
-        <div className="font-medium text-neutral-900">{pageLabel(r.route)}</div>
+        <div className="font-medium text-neutral-900 inline-flex items-center gap-1 group-hover:text-brand-700">
+          {pageLabel(r.route)}
+          <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600" />
+        </div>
         <div className="text-[11px] text-neutral-400 font-mono">{r.route}</div>
       </td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(r.views)}</td>

@@ -264,7 +264,38 @@ export async function computeHours(f: F, route?: string) {
   }
   const dowTotals = heat.map((row) => row.reduce((a, b) => a + b, 0));
   const topDow = dowTotals.indexOf(Math.max(...dowTotals));
+  // Rentang ramai: jam berurutan di sekitar puncak dengan kunjungan ≥ 50% puncak.
+  let ramai: { dari: number; sampai: number; persen: number } | null = null;
+  if (active[0]) {
+    const p = active[0].jam;
+    const thr = active[0].opens * 0.5;
+    let a = p;
+    let b = p;
+    while (a - 1 >= 0 && opens[a - 1]! >= thr) a--;
+    while (b + 1 <= 23 && opens[b + 1]! >= thr) b++;
+    const v = opens.slice(a, b + 1).reduce((x, y) => x + y, 0);
+    ramai = { dari: a, sampai: (b + 1) % 24, persen: total ? Math.round((v / total) * 100) : 0 };
+  }
+  // Per platform & pembanding seluruh app (hanya bila satu halaman dipilih).
+  let platform: Record<string, number> | null = null;
+  let appPuncak: number | null = null;
+  if (route) {
+    const pr = await prisma.$queryRaw<{ platform: string; o: bigint }[]>`
+      SELECT platform, SUM(opens) AS o FROM ${PVH} ph
+      WHERE hour >= ${hr.from} AND hour < ${hr.to} AND route = ${r} ${w} GROUP BY platform`;
+    platform = Object.fromEntries(pr.map((x) => [x.platform, n(x.o)]));
+    const ap = await prisma.$queryRaw<{ h: number; o: bigint }[]>`
+      SELECT EXTRACT(HOUR FROM hour AT TIME ZONE ${DEFAULT_TZ})::int AS h, SUM(opens) AS o FROM ${PVH} ph
+      WHERE hour >= ${hr.from} AND hour < ${hr.to} AND route = '*' ${w} GROUP BY h ORDER BY o DESC LIMIT 1`;
+    appPuncak = ap[0] && n(ap[0].o) > 0 ? ap[0].h : null;
+  }
+  const minggu = dowTotals[0] ?? 0;
   return {
+    perHari: dowTotals,
+    ramai,
+    platform,
+    appPuncak,
+    porsiMinggu: total ? Math.round((minggu / total) * 100) : 0,
     timezone: DEFAULT_TZ,
     sejak: first?.m ? first.m.toISOString() : null,
     hariData: days.size,

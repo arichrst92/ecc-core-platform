@@ -12,6 +12,7 @@ summary: Menu Forecast di Portal (dock di sebelah Elsa) — jemaat aktif Els App
 ## Patokan
 - **Jemaat aktif Els App** = jemaat (bukan tamu) yang membuka Els App dalam keadaan login minimal sekali dalam bulan itu.
 - **Berhenti aktif** = sebelumnya aktif, lalu tidak membuka Els App 2 bulan berturut-turut. **Kembali aktif** = sempat berhenti lalu aktif lagi. **Baru** = pertama kali aktif.
+- **Total (kumulatif)** = jumlah keseluruhan sampai akhir bulan itu, selalu bertambah: total akun Els App jemaat (bukan tamu, menurut tanggal akun dibuat) dan total jemaat terdaftar (menurut tanggal bergabung gereja; data lama tanpa tanggal ikut bulan dimasukkan). **Pertumbuhan majemuk per bulan** = rata-rata kenaikan per bulan yang "berbunga" ((akhir ÷ awal)^(1/jumlah bulan) − 1), dihitung untuk 3, 6 & 12 bulan terakhir. **% aktif** = jemaat aktif bulan itu ÷ total akun.
 - Angka bulanan memakai bulan yang sudah lengkap (WIB); bulan berjalan ditampilkan terpisah.
 
 ## Dari mana datanya
@@ -20,7 +21,7 @@ summary: Menu Forecast di Portal (dock di sebelah Elsa) — jemaat aktif Els App
 - Tamu: kehadiran ibadah, event & homecell. Kapasitas: check-in ibadah & jumlah kursi (Ibadah → Edit ibadah). Homecell: anggota aktif. Event: peserta & jadwal event.
 
 ## Tab
-1. **Ringkasan & Prediksi** — angka utama, grafik riwayat + prediksi (skenario Pesimis / Normal / Optimis, pita rentang 80%, tonggak 3.000/5.000/…), proyeksi per tahun, komponen pertumbuhan, "Yang perlu diperhatikan", platform, usia, keterlibatan, "Apa yang perlu gereja kerjakan".
+1. **Ringkasan & Prediksi** — angka utama, **Total jemaat per bulan** (total akun Els App, total jemaat terdaftar, jemaat aktif, perkiraan total akun 12 bulan, pertumbuhan majemuk, tabel per bulan: akun baru · total · tumbuh · aktif · % aktif), grafik riwayat + prediksi (skenario Pesimis / Normal / Optimis, pita rentang 80%, tonggak 3.000/5.000/…), proyeksi per tahun, komponen pertumbuhan, "Yang perlu diperhatikan", platform, usia, keterlibatan, "Apa yang perlu gereja kerjakan".
 2. **Per Cabang** — aktif, tumbuh, tren 12 bulan, baru/berhenti, platform, prediksi 12 bulan (cabang kecil diberi tanda rentang lebar).
 3. **Platform** — jemaat aktif per iOS / Android / Web per bulan, tren & retensi bulan pertama.
 4. **Tamu** — tamu per bulan (New Comer / Visitor) + prediksi, perjalanan tamu 90 hari (hadir → hadir lagi → dihubungi/homecell → daftar Els App → jemaat aktif), New Comer belum di-follow-up, per cabang.
@@ -36,4 +37,4 @@ Bila data kurang dari batas tren, muncul kotak kuning "Data masih terlalu dini" 
 Model tren yang melambat bertahap (damped Holt) + pola musiman bulanan bila data ≥ batas musiman; event yang sudah dijadwalkan menambah perkiraan jemaat baru (bila sudah ada cukup event untuk diukur). Bukan AI kotak hitam; dihitung ulang tiap kali dibuka (cache 5 menit). Lebih dari 24 bulan = gambaran arah.
 
 ## Export PDF
-Tombol **Export PDF** → slide 16:9 (ukuran PowerPoint), ±17 halaman: sampul, ringkasan, perkiraan, per tahun, dari mana pertumbuhan datang (+ yang perlu diperhatikan), perjalanan tamu, tamu per bulan & cabang, kapasitas ibadah, per cabang, perangkat, usia & keterlibatan, pertumbuhan homecell, homecell & event, kebutuhan homecell & event teratas, tentang data (kesiapan & asumsi), **Apa yang perlu gereja kerjakan**, penutup **ECC Church × IDEA** + pernyataan pertumbuhan + Kisah Para Rasul 2:47. Simpan lewat Print → Simpan sebagai PDF (Margin: None).
+Tombol **Export PDF** → slide 16:9 (ukuran PowerPoint), ±18 halaman: sampul, ringkasan, perkiraan, per tahun, total jemaat per bulan (kumulatif & pertumbuhan majemuk), dari mana pertumbuhan datang (+ yang perlu diperhatikan), perjalanan tamu, tamu per bulan & cabang, kapasitas ibadah, per cabang, perangkat, usia & keterlibatan, pertumbuhan homecell, homecell & event, kebutuhan homecell & event teratas, tentang data (kesiapan & asumsi), **Apa yang perlu gereja kerjakan**, penutup **ECC Church × IDEA** + pernyataan pertumbuhan + Kisah Para Rasul 2:47. Simpan lewat Print → Simpan sebagai PDF (Margin: None).

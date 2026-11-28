@@ -165,6 +165,17 @@ export interface ForecastData {
     upliftPerEvent: number;
     eventPerTahun: number;
   };
+  kumulatif: {
+    months: string[];
+    akun: number[];
+    akunBaru: number[];
+    jemaat: number[];
+    jemaatBaru: number[];
+    aktif: (number | null)[];
+    persenAktif: (number | null)[];
+    cmgr: { akun3: number | null; akun6: number | null; akun12: number | null; jemaat12: number | null; aktif6: number | null; aktif12: number | null };
+    prediksi: { months: string[]; akun: number[] };
+  };
   insights: { tone: 'ok' | 'info' | 'warn' | 'bad'; judul: string; isi: string }[];
   langkah: { no: number; judul: string; isi: string; tone: string }[];
   pernyataan: string;

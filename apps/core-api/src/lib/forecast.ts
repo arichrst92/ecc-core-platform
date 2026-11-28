@@ -369,6 +369,9 @@ async function computeForecastData(input: ForecastInput) {
   };
   const hidePred = settings.belowMin === 'hide' && maturity.early;
 
+  // ---------------- total kumulatif (bertambah tiap bulan) + pertumbuhan majemuk
+  const kumulatif = await cumulativeStats(cabangId, lastFull, H, mKeys, series, modelSeries);
+
   // ---------------- simulasi (dasar untuk klien)
   const sim = {
     aktif: series[series.length - 1] ?? 0,
@@ -456,6 +459,7 @@ async function computeForecastData(input: ForecastInput) {
     kapasitas,
     readiness,
     sim,
+    kumulatif,
   };
   return out;
 }
@@ -1006,5 +1010,93 @@ async function homecellGrowth(cabangId: string | null, lastFull: Date, st: Forec
     prediksi: { months: fcMonths, anggota: fcAnggota, homecellDibutuhkan: fcAnggota.map((v) => Math.ceil(v / st.homecellIdeal)) },
     butuh12,
     tambahan12: butuh12 != null ? Math.max(0, butuh12 - curH) : null,
+  };
+}
+
+// ------------------------------------------------------------------ total kumulatif
+
+/** Pertumbuhan majemuk per bulan (CMGR, %): (akhir/awal)^(1/n) − 1. */
+function cmgr(arr: number[], k: number): number | null {
+  if (arr.length < 2) return null;
+  const n = Math.min(k, arr.length - 1);
+  const a = arr[arr.length - 1 - n]!;
+  const b = arr[arr.length - 1]!;
+  if (a <= 0 || b <= 0) return null;
+  return Math.round((Math.pow(b / a, 1 / n) - 1) * 1000) / 10;
+}
+
+/**
+ * Total yang terus bertambah (kumulatif) per bulan:
+ *  - akun Els App jemaat (bukan tamu) — dari tanggal akun dibuat;
+ *  - jemaat terdaftar di data jemaat (bukan tamu, aktif) — dari tanggal bergabung gereja,
+ *    atau tanggal data dibuat bila kosong (data impor lama tercatat di bulan impor).
+ * Plus pertumbuhan majemuk per bulan (3/6/12 bulan) & perkiraan total akun.
+ */
+async function cumulativeStats(cabangId: string | null, lastFull: Date, H: number, mKeys: string[], aktif: number[], aktifReliable: number[]) {
+  const cab = cabangId ? Prisma.sql`AND j.cabang_id = ${cabangId}::uuid` : Prisma.empty;
+  const end = addM(lastFull, 1);
+  const [akunRows, jemaatRows] = await Promise.all([
+    prisma.$queryRaw<{ m: Date; c: bigint }[]>`
+      SELECT date_trunc('month', (u.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date AS m, COUNT(*) AS c
+      FROM "user" u JOIN jemaat j ON j.id = u.jemaat_id
+      WHERE j.is_tamu = false AND u.created_at < ${end} ${cab} GROUP BY 1`,
+    prisma.$queryRaw<{ m: Date; c: bigint }[]>`
+      SELECT date_trunc('month', COALESCE(j.tanggal_bergabung_gereja::timestamp, (j.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta'))::date AS m, COUNT(*) AS c
+      FROM jemaat j WHERE j.is_tamu = false AND j.is_active = true ${cab} GROUP BY 1`,
+  ]);
+  const toMap = (r: { m: Date; c: bigint }[]) => {
+    const mp = new Map<string, number>();
+    for (const x of r) mp.set(mk(x.m), (mp.get(mk(x.m)) ?? 0) + n(x.c));
+    return mp;
+  };
+  const akunM = toMap(akunRows);
+  const jemM = toMap(jemaatRows);
+  // Rentang: 36 bulan terakhir (atau sejak akun pertama).
+  const firstAkun = [...akunM.keys()].sort()[0];
+  let start = addM(lastFull, -35);
+  if (firstAkun && new Date(`${firstAkun}-01T00:00:00.000Z`) > start) start = new Date(`${firstAkun}-01T00:00:00.000Z`);
+  const months: string[] = [];
+  for (let d = start; d <= lastFull; d = addM(d, 1)) months.push(mk(d));
+  const cum = (mp: Map<string, number>) => {
+    const first = months[0]!;
+    let base = 0;
+    for (const [k, v] of mp) if (k < first) base += v;
+    const out: number[] = [];
+    const baru: number[] = [];
+    for (const k of months) {
+      const v = mp.get(k) ?? 0;
+      base += v;
+      out.push(base);
+      baru.push(v);
+    }
+    return { total: out, baru };
+  };
+  const akun = cum(akunM);
+  const jem = cum(jemM);
+  const aktifBy = new Map(mKeys.map((k, i) => [k, aktif[i]!]));
+  const aktifSeries = months.map((k) => aktifBy.get(k) ?? null);
+  const f = fitForecast(akun.total, new Date(`${months[0]}-01T00:00:00.000Z`).getUTCMonth(), H, false);
+  // Total kumulatif tidak turun: perkiraan dipaksa tidak menurun.
+  const fc = f ? f.fc.reduce<number[]>((a, v) => (a.push(Math.max(v, a[a.length - 1] ?? akun.total[akun.total.length - 1] ?? 0)), a), []).map(round) : [];
+  return {
+    months,
+    akun: akun.total,
+    akunBaru: akun.baru,
+    jemaat: jem.total,
+    jemaatBaru: jem.baru,
+    aktif: aktifSeries,
+    persenAktif: months.map((k, i) => {
+      const a = aktifBy.get(k);
+      return a != null && akun.total[i] ? Math.round((a / akun.total[i]!) * 1000) / 10 : null;
+    }),
+    cmgr: {
+      akun3: cmgr(akun.total, 3),
+      akun6: cmgr(akun.total, 6),
+      akun12: cmgr(akun.total, 12),
+      jemaat12: cmgr(jem.total, 12),
+      aktif6: cmgr(aktifReliable, 6),
+      aktif12: cmgr(aktifReliable, 12),
+    },
+    prediksi: { months: Array.from({ length: fc.length }, (_, i) => mk(addM(lastFull, i + 1))), akun: fc },
   };
 }

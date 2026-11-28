@@ -293,6 +293,8 @@ function Ringkasan({ d, view, scenario, setScenario }: { d: ForecastData; view: 
         {d.hidePrediction ? <p className="text-xs text-amber-700 mt-2">Prediksi disembunyikan karena data belum mencapai batas minimal (Pengaturan di tab Keandalan Data).</p> : null}
       </Card>
 
+      <Kumulatif d={d} />
+
       {d.perTahun.length ? (
         <Card title="Proyeksi per tahun" sub="Jemaat aktif Els App di akhir tiap tahun · makin jauh makin lebar rentangnya" right={<Badge tone="warn">&gt; 24 bulan = gambaran arah</Badge>}>
           <div className="overflow-x-auto">
@@ -393,6 +395,96 @@ function Ringkasan({ d, view, scenario, setScenario }: { d: ForecastData; view: 
         </Card>
       ) : null}
     </div>
+  );
+}
+
+function Kumulatif({ d }: { d: ForecastData }) {
+  const k = d.kumulatif;
+  const [showTable, setShowTable] = useState(false);
+  if (!k || !k.months.length) return null;
+  const n = k.months.length;
+  const last = n - 1;
+  const fcN = Math.min(12, k.prediksi.akun.length);
+  const labels = [...k.months, ...k.prediksi.months.slice(0, fcN)].map((m) => mLabel(m));
+  const pad = (arr: (number | null)[]) => [...arr, ...Array.from({ length: fcN }, () => null)];
+  return (
+    <Card
+      title="Total jemaat per bulan (terus bertambah)"
+      sub="Jumlah keseluruhan yang terkumpul sampai akhir tiap bulan · pertumbuhan majemuk = rata-rata kenaikan per bulan yang 'berbunga'"
+      right={
+        <button type="button" onClick={() => setShowTable((v) => !v)} className="text-xs font-semibold text-brand-700 border border-brand-200 rounded-lg px-2.5 py-1 hover:bg-brand-50">
+          {showTable ? 'Sembunyikan tabel' : 'Lihat tabel per bulan'}
+        </button>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <Kpi label="Total akun Els App jemaat" value={nf(k.akun[last])} color="#F97316" sub={<>+{nf(k.akunBaru[last])} bulan {mLabel(k.months[last]!)}</>} />
+        <Kpi
+          label="Pertumbuhan majemuk akun / bulan"
+          value={k.cmgr.akun12 != null ? `${k.cmgr.akun12.toLocaleString('id-ID')}%` : k.cmgr.akun6 != null ? `${k.cmgr.akun6.toLocaleString('id-ID')}%` : '—'}
+          color="#10B981"
+          sub={`${k.cmgr.akun12 != null ? '12' : '6'} bulan terakhir · 3 bln: ${k.cmgr.akun3 == null ? '—' : `${k.cmgr.akun3.toLocaleString('id-ID')}%`}`}
+        />
+        <Kpi label="Total jemaat terdaftar" value={nf(k.jemaat[last])} color="#8B5CF6" sub={`majemuk 12 bln: ${k.cmgr.jemaat12 == null ? '—' : `${k.cmgr.jemaat12.toLocaleString('id-ID')}%/bln`}`} />
+        <Kpi label="Akun yang aktif bulan ini" value={pf(k.persenAktif[last])} color="#0EA5E9" sub={`jemaat aktif ÷ total akun · majemuk aktif 6 bln: ${k.cmgr.aktif6 == null ? '—' : `${k.cmgr.aktif6.toLocaleString('id-ID')}%`}`} />
+      </div>
+      <Lines
+        labels={labels}
+        series={[
+          { label: 'Total jemaat terdaftar', color: '#8B5CF6', data: pad(k.jemaat), width: 2.5 },
+          { label: 'Total akun Els App', color: '#F97316', data: pad(k.akun), width: 3 },
+          { label: 'Perkiraan total akun', color: '#F97316', data: [...k.akun.map((v, i) => (i === last ? v : null)), ...k.prediksi.akun.slice(0, fcN)], dashed: true },
+          { label: 'Jemaat aktif bulan itu', color: '#0EA5E9', data: pad(k.aktif), width: 2.5 },
+        ]}
+        height={240}
+      />
+      <Legend
+        items={[
+          { label: 'Total jemaat terdaftar', color: '#8B5CF6', line: true },
+          { label: 'Total akun Els App (kumulatif)', color: '#F97316', line: true },
+          { label: 'Jemaat aktif bulan itu', color: '#0EA5E9', line: true },
+        ]}
+      />
+      {showTable ? (
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="text-[11px] uppercase text-neutral-500 bg-neutral-50">
+              <tr>
+                <th className="text-left px-3 py-2">Bulan</th>
+                <th className="text-right px-3 py-2">Akun baru</th>
+                <th className="text-right px-3 py-2">Total akun</th>
+                <th className="text-right px-3 py-2">Tumbuh</th>
+                <th className="text-right px-3 py-2">Jemaat aktif</th>
+                <th className="text-right px-3 py-2">% aktif</th>
+                <th className="text-right px-3 py-2">Total jemaat terdaftar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {k.months
+                .map((m, i) => ({ m, i }))
+                .reverse()
+                .slice(0, 24)
+                .map(({ m, i }) => (
+                  <tr key={m} className="border-t border-neutral-100">
+                    <td className="px-3 py-1.5">{mLabel(m, true)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">+{nf(k.akunBaru[i])}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{nf(k.akun[i])}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <Up v={i > 0 && k.akun[i - 1] ? Math.round(((k.akun[i]! - k.akun[i - 1]!) / k.akun[i - 1]!) * 1000) / 10 : null} />
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{nf(k.aktif[i])}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{pf(k.persenAktif[i])}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{nf(k.jemaat[i])}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      <p className="text-[11px] text-neutral-400 mt-2">
+        Total akun = jemaat (bukan tamu) yang sudah membuat akun Els App sampai akhir bulan itu. Total jemaat terdaftar = data jemaat aktif menurut tanggal bergabung gereja (data impor lama tanpa tanggal tercatat di bulan impornya). Jemaat aktif bisa naik-turun; total selalu bertambah.
+      </p>
+    </Card>
   );
 }
 

@@ -105,6 +105,48 @@ export function renderForecastPdf(d: Forecast, o: { cabang: string | null; isMob
 </div></section>`);
   }
 
+  // Total jemaat per bulan (kumulatif) + pertumbuhan majemuk
+  {
+    const k = d.kumulatif;
+    if (k && k.months.length) {
+      const last = k.months.length - 1;
+      const fcN = Math.min(12, k.prediksi.akun.length);
+      const L = [...k.months, ...k.prediksi.months.slice(0, fcN)];
+      const pad = (arr: (number | null)[]) => [...arr, ...Array.from({ length: fcN }, () => null)];
+      const cm = k.cmgr.akun12 ?? k.cmgr.akun6;
+      const pct = (v: number | null) => (v == null ? '—' : `${v.toLocaleString('id-ID')}%`);
+      slides.push(`<section class="slide"><div class="in">
+  <div class="kick">Total jemaat</div>
+  <h2>Total jemaat bertambah dari bulan ke bulan</h2>
+  <div class="lead">Sampai ${esc(mLabel(k.months[last]!, true))} ada <b>${nf(k.akun[last])} jemaat</b> yang sudah punya akun Els App${cm != null ? ` — rata-rata bertambah <b>${cm.toLocaleString('id-ID')}% setiap bulan</b> (pertumbuhan majemuk)` : ''}.</div>
+  <div class="two">
+    <div class="box">${lineSvg(
+      L,
+      [
+        { color: '#8B5CF6', data: pad(k.jemaat), width: 3 },
+        { color: '#F97316', data: pad(k.akun), width: 4 },
+        { color: '#F97316', data: [...k.akun.map((v, i) => (i === last ? v : null)), ...k.prediksi.akun.slice(0, fcN)], dashed: true, width: 3 },
+        { color: '#0EA5E9', data: pad(k.aktif), width: 3 },
+      ],
+      620,
+      250,
+    )}<div class="lg"><span><b style="background:#8B5CF6"></b>Total jemaat terdaftar</span><span><b style="background:#F97316"></b>Total akun Els App</span><span><b style="background:#0EA5E9"></b>Jemaat aktif bulan itu</span></div></div>
+    <div><table><thead><tr><th>Bulan</th><th class="num">Akun baru</th><th class="num">Total akun</th><th class="num">% aktif</th></tr></thead><tbody>
+      ${k.months
+        .map((m, i) => ({ m, i }))
+        .slice(-6)
+        .reverse()
+        .map(({ m, i }) => `<tr><td>${esc(mLabel(m, true))}</td><td class="num">+${nf(k.akunBaru[i])}</td><td class="num"><b>${nf(k.akun[i])}</b></td><td class="num">${k.persenAktif[i] == null ? '—' : `${k.persenAktif[i]}%`}</td></tr>`)
+        .join('')}
+    </tbody></table>
+    <div class="muted" style="font-size:13px;margin-top:8px">Total jemaat terdaftar ${esc(mLabel(k.months[last]!))}: <b style="color:#171717">${nf(k.jemaat[last])}</b>. Jumlah total selalu bertambah; jemaat aktif bisa naik-turun.</div></div>
+  </div>
+  <div class="mini4"><div><b>${pct(k.cmgr.akun3)}</b><span>majemuk akun / bulan · 3 bulan terakhir</span></div><div><b>${pct(k.cmgr.akun12 ?? k.cmgr.akun6)}</b><span>majemuk akun / bulan · ${k.cmgr.akun12 != null ? '12' : '6'} bulan terakhir</span></div><div><b>${pct(k.cmgr.jemaat12)}</b><span>majemuk jemaat terdaftar / bulan · 12 bulan</span></div><div><b>${pct(k.cmgr.aktif12 ?? k.cmgr.aktif6)}</b><span>majemuk jemaat aktif / bulan · ${k.cmgr.aktif12 != null ? '12' : '6'} bulan</span></div></div>
+  ${foot()}
+</div></section>`);
+    }
+  }
+
   // 5. Dari mana pertumbuhan datang
   {
     const c = d.components.slice(-12);

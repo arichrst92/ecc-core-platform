@@ -50,22 +50,41 @@ export type TamuInput = z.infer<typeof tamuInputSchema>;
 
 export type GuestSource = 'DIUNDANG' | 'WALK_IN';
 
+/** Nama dianggap orang yang sama (huruf kecil, spasi dirapikan; "Budi" ≈ "Budi Santoso"). */
+export function sameNama(a: string | null | undefined, b: string | null | undefined): boolean {
+  const n = (x: string | null | undefined) => (x ?? '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const x = n(a);
+  const y = n(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return x.startsWith(`${y} `) || y.startsWith(`${x} `);
+}
+
+/** No HP tamu untuk ditampilkan: noHp, atau nomor kontak bersama (noHpKontak). */
+export const tamuHp = (j: { noHp: string | null; noHpKontak?: string | null }) => j.noHp ?? j.noHpKontak ?? null;
+
 /**
- * Cari / buat tamu berdasarkan no HP.
- *  - No HP milik ANGGOTA (bukan tamu) → `{ member }` (pemanggil yang memutuskan).
- *  - No HP milik tamu lama → pakai record itu (tamu berulang).
+ * Cari / buat tamu berdasarkan no HP + nama.
+ *  - No HP & nama cocok dengan ANGGOTA (bukan tamu) → `{ member }` (pemanggil yang memutuskan).
+ *  - No HP & nama cocok dengan tamu lama → pakai record itu (tamu berulang).
+ *  - No HP sudah dipakai orang lain (nama berbeda, mis. suami-istri satu HP, 2026-11)
+ *    → tamu baru dengan nomor di `noHpKontak` (noHp unik dibiarkan kosong).
  *  - Belum ada → buat Jemaat isTamu=true (dengan kode, supaya bisa dicari petugas).
  */
 export async function resolveTamu(
   input: TamuInput,
   cabangId: string,
 ): Promise<{ tamu: { id: string; namaLengkap: string; noHp: string | null; kode: string | null }; created: boolean; member: boolean }> {
-  const existing = await prisma.jemaat.findUnique({
-    where: { noHp: input.noHp },
-    select: { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, isActive: true, tamuKategori: true },
-  });
+  const sel = { id: true, namaLengkap: true, noHp: true, noHpKontak: true, kode: true, isTamu: true, isActive: true, tamuKategori: true } as const;
+  const owner = await prisma.jemaat.findUnique({ where: { noHp: input.noHp }, select: sel });
+  // Tamu lain yang berbagi nomor ini (nomor di noHpKontak).
+  const sharers = await prisma.jemaat.findMany({ where: { noHpKontak: input.noHp, isTamu: true }, select: sel, take: 20 });
+  const match = [owner, ...sharers].find((j) => j && sameNama(j.namaLengkap, input.nama)) ?? null;
+  // Data lama: pemilik nomor yang namanya kosong tetap dianggap orang yang sama.
+  const existing = match ?? (owner && !owner.namaLengkap?.trim() ? owner : null);
   if (existing) {
-    const { tamuKategori, isTamu, isActive, ...tamu } = existing;
+    const { tamuKategori, isTamu, isActive, noHpKontak, ...rest } = existing;
+    const tamu = { ...rest, noHp: rest.noHp ?? noHpKontak ?? null };
     if (!isTamu) return { tamu, created: false, member: true };
     const kat = mergeKategori(tamuKategori, input.kategori);
     if (!isActive || kat !== undefined) {
@@ -77,11 +96,13 @@ export async function resolveTamu(
     return { tamu, created: false, member: false };
   }
   const kode = await generateUniqueKode(async (k) => !!(await prisma.jemaat.findUnique({ where: { kode: k } })));
+  const shared = !!owner; // nomor sudah dipakai orang lain → simpan sebagai kontak bersama
   const tamu = await prisma.jemaat.create({
     data: {
       cabangId,
       namaLengkap: input.nama,
-      noHp: input.noHp,
+      noHp: shared ? null : input.noHp,
+      noHpKontak: shared ? input.noHp : null,
       kode,
       isTamu: true,
       isActive: true,
@@ -90,7 +111,7 @@ export async function resolveTamu(
     },
     select: { id: true, namaLengkap: true, noHp: true, kode: true },
   });
-  return { tamu, created: true, member: false };
+  return { tamu: { ...tamu, noHp: input.noHp }, created: true, member: false };
 }
 
 /** Error standar kalau no HP ternyata milik anggota terdaftar. */

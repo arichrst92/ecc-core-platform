@@ -81,7 +81,7 @@ export async function eventExportData(eventId: string) {
       cancelReason: true,
       donations: { select: { status: true, nominalBayar: true, tambahan: true } },
       jemaat: {
-        select: { namaLengkap: true, kode: true, noHp: true, email: true, isTamu: true, tamuKategori: true, cabang: { select: { nama: true } } },
+        select: { namaLengkap: true, kode: true, noHp: true, noHpKontak: true, email: true, isTamu: true, tamuKategori: true, cabang: { select: { nama: true } } },
       },
     },
   });
@@ -122,7 +122,7 @@ export async function eventExportData(eventId: string) {
       return {
         nama: p.jemaat.namaLengkap,
         kode: p.jemaat.kode ?? '',
-        noHp: p.jemaat.noHp ?? '',
+        noHp: p.jemaat.noHp ?? p.jemaat.noHpKontak ?? '',
         email: p.jemaat.email ?? '',
         cabang: p.jemaat.cabang?.nama ?? '',
         isTamu: p.jemaat.isTamu,

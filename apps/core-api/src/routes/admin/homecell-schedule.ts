@@ -259,7 +259,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
         select: {
           id: true,
           createdAt: true,
-          tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } },
+          tamu: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, tamuKategori: true } },
           markedBy: { select: { id: true, namaLengkap: true } },
         },
       },
@@ -315,9 +315,11 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
   const tamuList = await prisma.homecellTamu.findMany({
     where: { homecellId },
     orderBy: { createdAt: 'desc' },
-    select: { tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } } },
+    select: { tamu: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, tamuKategori: true } } },
   });
-  const tamuBelumHadir = tamuList.map((t) => t.tamu).filter((t) => !tamuHadirIds.has(t.id));
+  // No HP bersama (noHpKontak) ditampilkan sebagai noHp.
+  const hpOf = <T extends { noHp: string | null; noHpKontak: string | null }>({ noHpKontak, ...t }: T) => ({ ...t, noHp: t.noHp ?? noHpKontak });
+  const tamuBelumHadir = tamuList.map((t) => hpOf(t.tamu)).filter((t) => !tamuHadirIds.has(t.id));
 
   res.json({
     success: true,
@@ -343,7 +345,7 @@ homecellScheduleRouter.get('/:scheduleId', async (req, res) => {
       attendances: schedule.attendances.map((a) => ({ ...a, peran: peranOf.get(a.jemaatId) ?? null })),
       missingMembers,
       tamuCount: schedule.tamuAttendances.length,
-      tamuAttendances: schedule.tamuAttendances,
+      tamuAttendances: schedule.tamuAttendances.map((t) => ({ ...t, tamu: hpOf(t.tamu) })),
       tamuBelumHadir,
       files: schedule.files,
     },

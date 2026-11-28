@@ -13,7 +13,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '@ecc/database';
 import { NotFound, Unauthorized } from '../../lib/errors.js';
 import { audit } from '../../lib/audit.js';
-import { kategoriKey, memberPhoneError, resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { kategoriKey, memberPhoneError, resolveTamu, sameNama, tamuInputSchema } from '../../lib/tamu.js';
 import { TAMU_STATUS_LABEL, effectiveTamuStatus, tamuAttendance, tamuHasAttended } from '../../lib/tamu-status.js';
 
 export const meTamuRouter = Router();
@@ -27,6 +27,7 @@ const tamuSelect = {
   id: true,
   namaLengkap: true,
   noHp: true,
+  noHpKontak: true,
   kode: true,
   isTamu: true,
   tamuStatus: true,
@@ -54,7 +55,8 @@ meTamuRouter.get('/', async (req, res) => {
     data: rows.map((r) => {
       const a = att.get(r.tamu.id);
       const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: tamuHasAttended(a) });
-      const { tamuStatus: _s, tamuFollowupBy, tamuFollowupAt, ...tamu } = r.tamu;
+      const { tamuStatus: _s, tamuFollowupBy, tamuFollowupAt, noHpKontak, ...t } = r.tamu;
+      const tamu = { ...t, noHp: t.noHp ?? noHpKontak };
       return {
         ...tamu,
         tamuKategori: kategoriKey(tamu.tamuKategori),
@@ -76,9 +78,10 @@ meTamuRouter.get('/', async (req, res) => {
 meTamuRouter.post('/', async (req, res) => {
   const u = me(req);
   const input = tamuInputSchema.parse(req.body ?? {});
-  const self = await prisma.jemaat.findUnique({ where: { id: u.jemaatId }, select: { cabangId: true, noHp: true } });
+  const self = await prisma.jemaat.findUnique({ where: { id: u.jemaatId }, select: { cabangId: true, noHp: true, namaLengkap: true } });
   if (!self) throw NotFound('Jemaat tidak ditemukan');
-  if (self.noHp === input.noHp) throw memberPhoneError();
+  // Nomor sendiri boleh dipakai tamu lain (mis. pasangan / orang tua tanpa HP), asal bukan diri sendiri.
+  if (self.noHp === input.noHp && sameNama(self.namaLengkap, input.nama)) throw memberPhoneError();
   const { tamu, created, member } = await resolveTamu(input, self.cabangId);
   if (member) throw memberPhoneError();
   await prisma.jemaatTamu.upsert({

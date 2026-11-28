@@ -59,3 +59,9 @@ summary: Data jemaat & validasi isian, kartu QR, keluarga & relasi otomatis, tam
 
 ## Diagnosis (untuk Elsa)
 `jemaat` (isActive, isTamu, tamuKategori, cabang, tanggalLahir) → `jemaat_relasi` (+ `tipe_relasi`) → `jemaat_tamu` → `jemaat_role` → `spiritual_journey_request` / `spiritual_journey_step` → `jemaat_geocode`.
+
+## Tamu dengan no HP yang sama (2026-11)
+- Saat menambah tamu (Tamu saya, homecell, visit, scanner, walk-in Portal), **no HP boleh sama** dengan orang lain — mis. suami-istri atau orang tua-anak yang memakai satu HP, atau nomor milik jemaat terdaftar.
+- Tamu dikenali sebagai orang yang sama hanya bila **no HP dan namanya cocok** ("Budi" ≈ "Budi Santoso"). Nama berbeda → dicatat sebagai tamu baru yang berbagi nomor.
+- Nomor jemaat sendiri juga boleh dipakai untuk tamu lain (nama berbeda). Pesan "Nomor ini sudah terdaftar sebagai jemaat Els App" kini hanya muncul bila nama & nomornya sama dengan jemaat terdaftar.
+- Berlaku untuk semua versi app tanpa update (aturan di server). Pencarian no HP di Portal & scanner juga menemukan tamu yang berbagi nomor.

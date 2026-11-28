@@ -137,7 +137,7 @@ async function ibadahReportData(req: Request) {
           invitedByJemaatId: true,
           checkedOutAt: true,
           pickedUpAt: true,
-          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, tamuKategori: true, jenisKelamin: true, tanggalLahir: true } },
+          jemaat: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, isTamu: true, tamuKategori: true, jenisKelamin: true, tanggalLahir: true } },
         },
       })
     : [];
@@ -666,7 +666,7 @@ async function eventReportData(req: Request) {
           checkinMethod: true,
           guestSource: true,
           invitedByJemaatId: true,
-          jemaat: { select: { id: true, namaLengkap: true, noHp: true, isTamu: true, tamuKategori: true } },
+          jemaat: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, isTamu: true, tamuKategori: true } },
         },
       })
     : [];

@@ -73,6 +73,7 @@ async function loadTamu(req: Request) {
               OR: [
                 { namaLengkap: { contains: search, mode: 'insensitive' } },
                 { noHp: { contains: search.replace(/\D/g, '') || search } },
+                { noHpKontak: { contains: search.replace(/\D/g, '') || search } },
                 { diundangSebagaiTamu: { some: { inviter: { namaLengkap: { contains: search, mode: 'insensitive' } } } } },
                 { tamuHomecell: { some: { homecell: { nama: { contains: search, mode: 'insensitive' } } } } },
               ],
@@ -89,6 +90,7 @@ async function loadTamu(req: Request) {
       id: true,
       namaLengkap: true,
       noHp: true,
+      noHpKontak: true,
       kode: true,
       isTamu: true,
       tanggalLahir: true,
@@ -117,11 +119,11 @@ async function loadTamu(req: Request) {
     return {
       id: r.id,
       namaLengkap: r.namaLengkap,
-      noHp: r.noHp,
+      noHp: r.noHp ?? r.noHpKontak,
       kode: r.kode,
       isTamu: r.isTamu,
       // Tamu anak = tamu tanpa no HP (dicatat dari portal).
-      isAnak: r.isTamu && !r.noHp,
+      isAnak: r.isTamu && !r.noHp && !r.noHpKontak,
       tanggalLahir: r.tanggalLahir,
       cabang: r.cabang,
       pertamaDicatat: r.diundangSebagaiTamu[0]?.createdAt ?? r.createdAt,

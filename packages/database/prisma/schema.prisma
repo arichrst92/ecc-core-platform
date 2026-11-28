@@ -141,6 +141,9 @@ model Jemaat {
   // noHp opsional — anak balita / dependent yang di-register via parent
   // tidak punya nomor HP sendiri, account hanya bisa diakses via guardian.
   noHp                   String?       @unique @map("no_hp") @db.VarChar(20)
+  // Tamu yang memakai no HP yang sudah dipakai orang lain (mis. suami-istri satu HP,
+  // 2026-11): noHp dibiarkan NULL (unik), nomornya disimpan di sini (tidak unik).
+  noHpKontak             String?       @map("no_hp_kontak") @db.VarChar(20)
   // Verifikasi kontak (login/daftar dua saluran, 2026-12). Sumber:
   // SELF_VERIFIED (OTP saluran itu) | GUARDIAN (diisi wali) | ADMIN (Portal) | LEGACY (data lama).
   emailVerifiedAt        DateTime?     @map("email_verified_at")
@@ -374,6 +377,7 @@ model Jemaat {
 
   @@index([cabangId])
   @@index([noHp])
+  @@index([noHpKontak])
   @@index([namaLengkap])
   @@index([kode])
   @@index([primaryGuardianId])

@@ -235,7 +235,7 @@ export async function buildHomecellReportRows(
       // Tamu homecell (dicatat terpisah dari anggota).
       tamu: {
         orderBy: { createdAt: 'asc' },
-        select: { createdAt: true, tamu: { select: { id: true, namaLengkap: true, noHp: true, tamuKategori: true } } },
+        select: { createdAt: true, tamu: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, tamuKategori: true } } },
       },
       members: {
         where: { isActive: true },
@@ -335,7 +335,7 @@ export async function buildHomecellReportRows(
         const th = tamuHadir.get(`${h.id}:${t.tamu.id}`);
         return {
           nama: t.tamu.namaLengkap,
-          noHp: t.tamu.noHp,
+          noHp: t.tamu.noHp ?? t.tamu.noHpKontak,
           dicatat: ymd(t.createdAt),
           hadir: th?.hadir ?? 0,
           lastAt: th?.last ? ymd(th.last) : null,

@@ -28,7 +28,7 @@ import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../../l
 import { privacyGate } from '../../lib/privacy.js';
 import { audit } from '../../lib/audit.js';
 import { createNotification } from '../../lib/notification.js';
-import { resolveTamu, tamuInputSchema } from '../../lib/tamu.js';
+import { resolveTamu, sameNama, tamuInputSchema } from '../../lib/tamu.js';
 
 export const meVisitRouter = Router();
 
@@ -203,9 +203,10 @@ meVisitRouter.post('/guest', async (req, res) => {
   const jemaatId = assertJemaatId(req);
   const input = createGuestVisitSchema.parse(req.body ?? {});
   const tamuInput = tamuInputSchema.parse({ nama: input.nama, noHp: input.noHp, kategori: input.kategori });
-  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true, noHp: true } });
+  const me = await prisma.jemaat.findUnique({ where: { id: jemaatId }, select: { cabangId: true, noHp: true, namaLengkap: true } });
   if (!me) throw Unauthorized();
-  if (me.noHp && me.noHp === tamuInput.noHp) throw BadRequest('Tidak bisa mencatat pertemuan dengan diri sendiri.');
+  // Nomor sendiri boleh dipakai orang lain (mis. pasangan satu HP) — tolak hanya bila namanya juga sama.
+  if (me.noHp && me.noHp === tamuInput.noHp && sameNama(me.namaLengkap, tamuInput.nama)) throw BadRequest('Tidak bisa mencatat pertemuan dengan diri sendiri.');
   const { tamu, created: tamuBaru, member } = await resolveTamu(tamuInput, me.cabangId);
   if (tamu.id === jemaatId) throw BadRequest('Tidak bisa mencatat pertemuan dengan diri sendiri.');
   if (!member) {

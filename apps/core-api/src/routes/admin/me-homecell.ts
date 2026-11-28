@@ -873,7 +873,7 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
       catatan: true,
       createdAt: true,
       addedBy: { select: { id: true, namaLengkap: true } },
-      tamu: { select: { id: true, namaLengkap: true, noHp: true, kode: true, isTamu: true, tamuStatus: true, tamuKategori: true } },
+      tamu: { select: { id: true, namaLengkap: true, noHp: true, noHpKontak: true, kode: true, isTamu: true, tamuStatus: true, tamuKategori: true } },
     },
   });
   const att = await tamuAttendance(rows.map((r) => r.tamu.id));
@@ -882,7 +882,8 @@ meHomecellRouter.get('/:id/tamu', async (req, res) => {
     data: rows.map((r) => {
       const a = att.get(r.tamu.id);
       const status = effectiveTamuStatus({ stored: r.tamu.tamuStatus, isTamu: r.tamu.isTamu, hasAttended: tamuHasAttended(a) });
-      const { tamuStatus: _s, ...tamu } = r.tamu;
+      const { tamuStatus: _s, noHpKontak, ...t } = r.tamu;
+      const tamu = { ...t, noHp: t.noHp ?? noHpKontak };
       return {
         ...tamu,
         tamuKategori: kategoriKey(tamu.tamuKategori),

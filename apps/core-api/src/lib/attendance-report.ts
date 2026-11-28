@@ -54,7 +54,7 @@ export interface IbadahAttendanceRow {
   checkinMethod: string | null;
   guestSource: string | null;
   invitedByJemaatId: string | null;
-  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean; tamuKategori?: string | null };
+  jemaat: { id: string; namaLengkap: string; noHp: string | null; noHpKontak?: string | null; isTamu: boolean; tamuKategori?: string | null };
 }
 
 export interface OccurrenceKey {
@@ -157,7 +157,7 @@ export function buildIbadahReport(
       const g = guests.get(r.jemaat.id) ?? {
         id: r.jemaat.id,
         namaLengkap: r.jemaat.namaLengkap,
-        noHp: r.jemaat.noHp,
+        noHp: r.jemaat.noHp ?? r.jemaat.noHpKontak ?? null,
         kunjungan: 0,
         kunjunganPertama: firstVisit.get(r.jemaat.id) ? ymd(firstVisit.get(r.jemaat.id)!) : tanggal,
         kunjunganTerakhir: tanggal,
@@ -220,7 +220,7 @@ export interface EventParticipationRow {
   checkinMethod: string | null;
   guestSource: string | null;
   invitedByJemaatId: string | null;
-  jemaat: { id: string; namaLengkap: string; noHp: string | null; isTamu: boolean; tamuKategori?: string | null };
+  jemaat: { id: string; namaLengkap: string; noHp: string | null; noHpKontak?: string | null; isTamu: boolean; tamuKategori?: string | null };
 }
 
 export interface EventReportRow {
@@ -272,7 +272,7 @@ export function buildEventReport(eventIds: string[], rows: EventParticipationRow
         eventId: r.eventId,
         id: r.jemaat.id,
         namaLengkap: r.jemaat.namaLengkap,
-        noHp: r.jemaat.noHp,
+        noHp: r.jemaat.noHp ?? r.jemaat.noHpKontak ?? null,
         status: r.status,
         inviterId: r.invitedByJemaatId,
         walkIn: r.guestSource === 'WALK_IN',

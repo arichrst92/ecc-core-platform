@@ -57,3 +57,8 @@ summary: Daftar menu Portal beserta alamat halamannya (untuk tombol navigasi) da
 - **Profil**: Edit Profil, **User Manual** (2.5.1, PDF sesuai bahasa), Spiritual Journey, Group Saya, Cari Group, Reservasi Ibadah, Tamu Saya, Catatan saya, Prayer Request Saya, Pelayanan (Jadwal Pelayanan Saya), Mode Scanner, Usaha Saya, Kirim Kritik & Saran, Pengaturan (Privasi, Bahasa, Tampilan, Cek pembaruan, Keluar, Hapus akun), ikon target = Resolusi Tahunan.
 - **Beranda**: cabang aktif (ketuk untuk cabang lain), kartu Homecell Anda / carousel homecell & zona yang dipimpin, Ibadah Hari Ini, renungan, 6 event mendatang, berita, kalender ulang tahun (mengikuti privasi; 2.5.1 termasuk ulang tahun sendiri). Renungan di 2.5.1 hanya renungan hari ini.
 - Tarik layar ke bawah untuk memuat ulang data.
+
+## Analitik — jam ramai (2026-11)
+- Tab **Halaman** (default periode **Hari Ini**): kolom **Sering dibuka** (di sebelah Durasi) = jam (WIB) halaman itu paling sering dibuka + porsinya.
+- Kartu **Jam ramai (prime hour)**: batang halaman dibuka per jam 00–23 (jam puncak & 3 jam teratas disorot), garis rata-rata pengguna aktif per jam, sorotan jam tersibuk / jendela 3 jam teramai / hari teramai / jam tersepi (05–24), porsi Dini hari · Pagi · Siang · Sore · Malam, dan peta panas hari × jam. Klik satu halaman → kartu yang sama khusus halaman itu.
+- Data per jam dicatat server saat menerima telemetri (tiap ±30 detik), jadi berlaku untuk semua versi app tanpa update — tetapi baru terkumpul sejak pembaruan ini (data sebelumnya hanya per hari). Disimpan sama lamanya dengan data kunjungan harian.

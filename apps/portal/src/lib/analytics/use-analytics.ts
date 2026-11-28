@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type {
   AnalyticsFilter,
+  HoursData,
   ApiPerformance,
   LiveSnapshot,
   PageDetail,
@@ -22,6 +23,13 @@ export function usePageSummary(f: AnalyticsFilter) {
 
 export function usePages(f: AnalyticsFilter) {
   return useQuery({ queryKey: ['analytics', 'pages', f], queryFn: () => get<PageRow[]>('/admin/analytics/pages', fp(f)) });
+}
+
+export function usePageHours(f: AnalyticsFilter, route?: string | null) {
+  return useQuery({
+    queryKey: ['analytics', 'hours', route ?? '*', f],
+    queryFn: () => get<HoursData>('/admin/analytics/pages/hours', { ...fp(f), ...(route ? { route } : {}) }),
+  });
 }
 
 export function usePageDetail(route: string | null, f: AnalyticsFilter) {

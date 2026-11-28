@@ -422,7 +422,9 @@ export async function cleanupAnalytics() {
   const day = 24 * 60 * 60 * 1000;
   const a = await prisma.apiMetric.deleteMany({ where: { bucket: { lt: new Date(Date.now() - API_METRIC_RETENTION_DAYS * day) } } });
   const p = await prisma.pageViewDaily.deleteMany({ where: { date: { lt: new Date(Date.now() - PAGE_VIEW_RETENTION_DAYS * day) } } });
-  return { apiMetric: a.count, pageViewDaily: p.count };
+  // Data per jam: masa simpan sama dengan kunjungan harian.
+  const ph = await prisma.pageViewHourly.deleteMany({ where: { hour: { lt: new Date(Date.now() - PAGE_VIEW_RETENTION_DAYS * day) } } });
+  return { apiMetric: a.count, pageViewDaily: p.count, pageViewHourly: ph.count };
 }
 
 const intervalHandles: NodeJS.Timeout[] = [];

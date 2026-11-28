@@ -4248,6 +4248,24 @@ model ApiMetric {
 /// Kunjungan halaman Els App (iOS/Android/web) per hari × perangkat anonim × halaman.
 /// installId = ID acak dari app (tidak terhubung ke akun). route = pola
 /// halaman yang dinormalkan, mis. /event/[id].
+/// Kunjungan halaman per JAM (2026-11) — untuk "sering dibuka pada jam" & grafik jam ramai
+/// di Portal Analitik. Diisi server saat menerima telemetri (jam = waktu diterima,
+/// app mengirim tiap ±30 detik). route '*' = semua halaman (pengguna aktif per jam).
+model PageViewHourly {
+  hour     DateTime @db.Timestamptz(6) // awal jam (UTC)
+  route    String   @db.VarChar(160)
+  platform String   @db.VarChar(10)
+  mode     String   @db.VarChar(10)
+  /// Halaman dibuka di jam ini.
+  opens    Int      @default(0)
+  /// Perangkat unik (ID anonim) yang membuka / sedang di halaman ini pada jam ini.
+  users    Int      @default(0)
+
+  @@id([hour, route, platform, mode])
+  @@index([hour])
+  @@map("page_view_hourly")
+}
+
 model PageViewDaily {
   date        DateTime @db.Date
   installId   String   @map("install_id") @db.VarChar(64)

@@ -13,7 +13,7 @@
 import { Router, type Request } from 'express';
 import { prisma, Prisma } from '@ecc/database';
 import { requireMenu } from '../../middleware/require-menu.js';
-import { DEFAULT_TZ, addDays, todayInTz } from '../../lib/tz.js';
+import { DEFAULT_TZ, addDays, todayInTz, wallToInstant } from '../../lib/tz.js';
 import { LATENCY_EDGES, pendingRows, percentileFromHist, recentRpm } from '../../lib/api-metrics.js';
 import { activePresence, presenceHistory } from '../../lib/telemetry.js';
 import { renderAnalyticsReportHtml } from '../../lib/analytics-report-html.js';
@@ -63,6 +63,15 @@ const canonRoute = Prisma.sql`CASE route ${Prisma.join(
 )} ELSE route END`;
 const PV = Prisma.sql`(SELECT date, install_id, ${canonRoute} AS route, platform, mode, views, duration_sec
   FROM page_view_daily WHERE route NOT IN (${Prisma.join(REDIRECT_ROUTES)}))`;
+
+/** page_view_hourly dengan rute kanonik & tanpa rute penghubung. Pakai: FROM ${PVH} ph */
+const PVH = Prisma.sql`(SELECT hour, ${canonRoute} AS route, platform, mode, opens, users
+  FROM page_view_hourly WHERE route NOT IN (${Prisma.join(REDIRECT_ROUTES)}))`;
+
+/** Rentang jam (instant) untuk periode filter, jam dinding zona bawaan. */
+function hourRange(f: F) {
+  return { from: wallToInstant(f.start, 0, DEFAULT_TZ), to: wallToInstant(addDays(f.end, 1), 0, DEFAULT_TZ) };
+}
 
 /** Kondisi WHERE untuk page_view_daily (tanpa rentang tanggal). */
 function pvFilter(f: F) {
@@ -162,6 +171,22 @@ export async function computePages(f: F) {
       COUNT(*) FILTER (WHERE d0 <= ${addDays(f.end, -30)}::date AND back30) AS r30
     FROM flagged GROUP BY route`;
   const retMap = new Map(ret.map((r) => [r.route, r]));
+  // Jam paling sering dibuka per halaman (page_view_hourly, jam dinding zona bawaan).
+  const hr = hourRange(f);
+  const byHour = await prisma.$queryRaw<{ route: string; h: number; o: bigint }[]>`
+    SELECT route, EXTRACT(HOUR FROM hour AT TIME ZONE ${DEFAULT_TZ})::int AS h, SUM(opens) AS o
+    FROM ${PVH} ph WHERE hour >= ${hr.from} AND hour < ${hr.to} AND route <> '*' ${w}
+    GROUP BY route, h`;
+  const peak = new Map<string, { jam: number; opens: number; total: number }>();
+  for (const r of byHour) {
+    const cur = peak.get(r.route) ?? { jam: -1, opens: 0, total: 0 };
+    cur.total += n(r.o);
+    if (n(r.o) > cur.opens) {
+      cur.opens = n(r.o);
+      cur.jam = r.h;
+    }
+    peak.set(r.route, cur);
+  }
   const live = new Map<string, number>();
   for (const p of activePresence()) {
     if (f.platform !== 'all' && p.platform !== f.platform) continue;
@@ -179,12 +204,95 @@ export async function computePages(f: F) {
         return7: pct(rt?.r7, rt?.e7),
         return30: pct(rt?.r30, rt?.e30),
         activeNow: live.get(r.route) ?? 0,
+        peakHour: (() => {
+          const p = peak.get(r.route);
+          return p && p.jam >= 0 && p.opens > 0 ? { jam: p.jam, persen: Math.round((p.opens / Math.max(1, p.total)) * 100), opens: p.opens } : null;
+        })(),
       };
     });
 }
 
 analyticsRouter.get('/pages', async (req, res) => {
   res.json({ success: true, data: await computePages(filterOf(req)) });
+});
+
+// ------------------------------------------------------------------ halaman: jam ramai
+
+/**
+ * Jam ramai (prime hour) 24 jam — halaman dibuka & rata-rata pengguna aktif per jam,
+ * peta panas hari × jam, jam tersibuk / tersepi, dan porsi per bagian hari.
+ * ?route= → hanya satu halaman. Jam dinding zona bawaan (WIB).
+ */
+export async function computeHours(f: F, route?: string) {
+  const w = pvFilter(f);
+  const hr = hourRange(f);
+  const r = route ? (ROUTE_ALIAS[route] ?? route) : '*';
+  const rows = await prisma.$queryRaw<{ dow: number; h: number; d: Date; o: bigint; u: bigint }[]>`
+    SELECT EXTRACT(DOW FROM hour AT TIME ZONE ${DEFAULT_TZ})::int AS dow,
+           EXTRACT(HOUR FROM hour AT TIME ZONE ${DEFAULT_TZ})::int AS h,
+           (hour AT TIME ZONE ${DEFAULT_TZ})::date AS d,
+           SUM(opens) AS o, SUM(users) AS u
+    FROM ${PVH} ph WHERE hour >= ${hr.from} AND hour < ${hr.to} AND route = ${r} ${w}
+    GROUP BY dow, h, d`;
+  const [first] = await prisma.$queryRaw<{ m: Date | null }[]>`SELECT MIN(hour) AS m FROM page_view_hourly`;
+  const opens = Array.from({ length: 24 }, () => 0);
+  const users = Array.from({ length: 24 }, () => 0);
+  const heat = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const days = new Set<string>();
+  for (const x of rows) {
+    opens[x.h]! += n(x.o);
+    users[x.h]! += n(x.u);
+    heat[x.dow]![x.h]! += n(x.o);
+    days.add(ymd(x.d));
+  }
+  const nDays = Math.max(1, days.size);
+  const total = opens.reduce((a, b) => a + b, 0);
+  const order = opens.map((o, h) => ({ jam: h, opens: o })).sort((a, b) => b.opens - a.opens);
+  const active = order.filter((x) => x.opens > 0);
+  const BAGIAN = [
+    { key: 'dini', label: 'Dini hari', from: 0, to: 5 },
+    { key: 'pagi', label: 'Pagi', from: 5, to: 11 },
+    { key: 'siang', label: 'Siang', from: 11, to: 15 },
+    { key: 'sore', label: 'Sore', from: 15, to: 18 },
+    { key: 'malam', label: 'Malam', from: 18, to: 24 },
+  ];
+  // Jendela 3 jam tersibuk (berurutan).
+  let best3 = { jam: 0, opens: 0 };
+  for (let h = 0; h < 24; h++) {
+    const v = opens[h]! + opens[(h + 1) % 24]! + opens[(h + 2) % 24]!;
+    if (v > best3.opens) best3 = { jam: h, opens: v };
+  }
+  const dowTotals = heat.map((row) => row.reduce((a, b) => a + b, 0));
+  const topDow = dowTotals.indexOf(Math.max(...dowTotals));
+  return {
+    timezone: DEFAULT_TZ,
+    sejak: first?.m ? first.m.toISOString() : null,
+    hariData: days.size,
+    total,
+    jam: opens.map((o, h) => ({ jam: h, opens: o, avgUsers: Math.round((users[h]! / nDays) * 10) / 10 })),
+    heat,
+    puncak: active[0] ? { jam: active[0].jam, opens: active[0].opens, persen: total ? Math.round((active[0].opens / total) * 100) : 0 } : null,
+    top3: active.slice(0, 3).map((x) => ({ jam: x.jam, opens: x.opens, persen: total ? Math.round((x.opens / total) * 100) : 0 })),
+    tersepi:
+      total > 0
+        ? (() => {
+            // Jam tersepi di luar dini hari (05–23) — lebih berguna untuk jadwal pengumuman.
+            const day = opens.map((o, h) => ({ jam: h, opens: o })).filter((x) => x.jam >= 5);
+            return day.sort((a, b) => a.opens - b.opens)[0] ?? null;
+          })()
+        : null,
+    jendela3: total ? { dari: best3.jam, sampai: (best3.jam + 3) % 24, persen: Math.round((best3.opens / total) * 100) } : null,
+    bagian: BAGIAN.map((b) => {
+      const v = opens.slice(b.from, b.to).reduce((a, c) => a + c, 0);
+      return { key: b.key, label: b.label, dari: b.from, sampai: b.to, opens: v, persen: total ? Math.round((v / total) * 100) : 0 };
+    }),
+    hariTeramai: dowTotals[topDow] ? topDow : null,
+  };
+}
+
+analyticsRouter.get('/pages/hours', async (req, res) => {
+  const route = typeof req.query.route === 'string' && req.query.route ? req.query.route.slice(0, 160) : undefined;
+  res.json({ success: true, data: await computeHours(filterOf(req), route) });
 });
 
 // ------------------------------------------------------------------ halaman: detail

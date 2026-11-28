@@ -33,6 +33,26 @@ export interface PageRow {
   return7: number | null;
   return30: number | null;
   activeNow: number;
+  /** Jam (0–23, WIB) halaman ini paling sering dibuka + porsinya (null = belum ada data per jam). */
+  peakHour?: { jam: number; persen: number; opens: number } | null;
+}
+
+/** Jam ramai 24 jam (GET /admin/analytics/pages/hours). */
+export interface HoursData {
+  timezone: string;
+  /** Awal data per jam dikumpulkan (ISO) — null = belum ada. */
+  sejak: string | null;
+  hariData: number;
+  total: number;
+  jam: { jam: number; opens: number; avgUsers: number }[];
+  /** [hari 0=Minggu … 6=Sabtu][jam 0–23] = halaman dibuka. */
+  heat: number[][];
+  puncak: { jam: number; opens: number; persen: number } | null;
+  top3: { jam: number; opens: number; persen: number }[];
+  tersepi: { jam: number; opens: number } | null;
+  jendela3: { dari: number; sampai: number; persen: number } | null;
+  bagian: { key: string; label: string; dari: number; sampai: number; opens: number; persen: number }[];
+  hariTeramai: number | null;
 }
 
 export interface CohortRow {

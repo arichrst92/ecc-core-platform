@@ -143,6 +143,13 @@ export async function ingestTelemetry(input: TelemetryInput) {
         app_version = COALESCE(EXCLUDED.app_version, page_view_daily.app_version)`;
   }
 
+  // Per jam (2026-11): halaman dibuka + perangkat unik per jam. Gagal → abaikan.
+  try {
+    await recordHourly(input);
+  } catch {
+    /* tabel belum ada / sibuk — jangan ganggu telemetri utama */
+  }
+
   if (batchKey) {
     const now = Date.now();
     seenBatches.set(batchKey, now);
@@ -156,5 +163,58 @@ export async function ingestTelemetry(input: TelemetryInput) {
     const route = normalizeApiPath(a.p.replace(/^https?:\/\/[^/]+/, ''));
     if (route.startsWith('/telemetry')) continue;
     recordApi('app', input.platform, method, route, a.ms, a.s, a.t && Math.abs(Date.now() - a.t) < 10 * 60_000 ? a.t : Date.now());
+  }
+}
+
+// ------------------------------------------------------------------ per jam
+
+/** Perangkat yang sudah dihitung pada (jam, halaman) — supaya users = perangkat unik. */
+const seenHourly = new Set<string>();
+let seenHourlyAt = 0;
+const HOUR_MS = 3_600_000;
+
+/**
+ * Catat ke page_view_hourly pada jam diterima (UTC, dibulatkan ke bawah).
+ *  - opens: kunjungan baru di kiriman ini (count) — hanya untuk tanggal hari ini/kemarin
+ *    supaya kiriman tertunda lama (offline) tidak masuk ke jam yang salah.
+ *  - users: perangkat unik per jam per halaman, dan per jam untuk semua halaman (route '*').
+ */
+async function recordHourly(input: TelemetryInput) {
+  const now = Date.now();
+  const hourStart = new Date(Math.floor(now / HOUR_MS) * HOUR_MS);
+  const hKey = hourStart.getTime();
+  if (hKey !== seenHourlyAt) {
+    // Jam berganti → kosongkan penanda (cukup jam berjalan).
+    seenHourly.clear();
+    seenHourlyAt = hKey;
+  }
+  const d0 = new Date(now).toISOString().slice(0, 10);
+  const d1 = new Date(now - 86_400_000).toISOString().slice(0, 10);
+  const d2 = new Date(now + 86_400_000).toISOString().slice(0, 10);
+  const opens = new Map<string, number>();
+  const touched = new Set<string>();
+  for (const v of input.views) {
+    if (v.count > 0 && (v.date === d0 || v.date === d1 || v.date === d2)) opens.set(v.route, (opens.get(v.route) ?? 0) + v.count);
+    if (v.count > 0 || v.durSec > 0) touched.add(v.route);
+  }
+  if (input.route) touched.add(input.route);
+  if (!touched.size && !opens.size) return;
+  const newUser = (route: string) => {
+    const k = `${route}|${input.installId}`;
+    if (seenHourly.has(k)) return 0;
+    if (seenHourly.size < 500_000) seenHourly.add(k);
+    return 1;
+  };
+  const rows = new Map<string, { opens: number; users: number }>();
+  for (const r of new Set([...touched, ...opens.keys()])) rows.set(r, { opens: opens.get(r) ?? 0, users: newUser(r) });
+  rows.set('*', { opens: [...opens.values()].reduce((a, b) => a + b, 0), users: newUser('*') });
+  for (const [route, v] of rows) {
+    if (!v.opens && !v.users) continue;
+    await prisma.$executeRaw`
+      INSERT INTO page_view_hourly (hour, route, platform, mode, opens, users)
+      VALUES (${hourStart}, ${route}, ${input.platform}, ${input.mode}, ${v.opens}, ${v.users})
+      ON CONFLICT (hour, route, platform, mode) DO UPDATE SET
+        opens = page_view_hourly.opens + EXCLUDED.opens,
+        users = page_view_hourly.users + EXCLUDED.users`;
   }
 }

@@ -8,13 +8,15 @@ import { usePageDetail, usePageSummary, usePages } from '@/lib/analytics/use-ana
 import type { AnalyticsFilter, PageRow } from '@/lib/analytics/types';
 import { pageLabel } from '@/lib/analytics/labels';
 import { Card, Kpi, Loading, PlatformBar, fmtDur, fmtNum, pctOrDash, retentionClass } from './ui';
+import { PrimeHourCard } from './prime-hour';
 
-type SortKey = 'route' | 'views' | 'visitors' | 'avgDurationSec' | 'return7' | 'return30' | 'activeNow';
+type SortKey = 'route' | 'views' | 'visitors' | 'avgDurationSec' | 'peakHour' | 'return7' | 'return30' | 'activeNow';
 
 const COLS: { k: SortKey; label: string; title?: string }[] = [
   { k: 'views', label: 'Dibuka' },
   { k: 'visitors', label: 'Pengunjung', title: 'Perangkat unik (ID anonim)' },
   { k: 'avgDurationSec', label: 'Durasi', title: 'Rata-rata lama di halaman' },
+  { k: 'peakHour', label: 'Sering dibuka', title: 'Jam (WIB) halaman ini paling sering dibuka di periode ini, dan porsinya' },
   { k: 'return7', label: 'Kembali 7h', title: '% pengunjung yang membuka halaman ini lagi dalam 7 hari' },
   { k: 'return30', label: 'Kembali 30h', title: '% pengunjung yang membuka halaman ini lagi dalam 30 hari' },
   { k: 'activeNow', label: 'Aktif', title: 'Sedang membuka halaman ini sekarang' },
@@ -29,7 +31,11 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
   const rows = useMemo(() => {
     const r = [...(pages.data ?? [])];
     r.sort((a, b) =>
-      sort === 'route' ? pageLabel(a.route).localeCompare(pageLabel(b.route)) : ((b[sort] as number | null) ?? -1) - ((a[sort] as number | null) ?? -1),
+      sort === 'route'
+        ? pageLabel(a.route).localeCompare(pageLabel(b.route))
+        : sort === 'peakHour'
+          ? (a.peakHour?.jam ?? 99) - (b.peakHour?.jam ?? 99)
+          : ((b[sort] as number | null) ?? -1) - ((a[sort] as number | null) ?? -1),
     );
     return r;
   }, [pages.data, sort]);
@@ -80,7 +86,7 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
           </p>
         ) : (
           <div className="overflow-x-auto -mx-4">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[820px]">
               <thead className="text-xs text-neutral-500 bg-neutral-50">
                 <tr>
                   <Th active={sort === 'route'} onClick={() => setSort('route')} left>
@@ -108,7 +114,11 @@ export function PagesTab({ filter }: { filter: AnalyticsFilter }) {
         </p>
       </Card>
 
+      {/* Jam ramai seluruh app */}
+      <PrimeHourCard filter={filter} />
+
       {sel ? <PageDetailCard row={sel} filter={filter} /> : null}
+      {sel ? <PrimeHourCard filter={filter} route={sel.route} /> : null}
     </div>
   );
 }
@@ -150,6 +160,18 @@ function PageTr({ r, active, onClick }: { r: PageRow; active: boolean; onClick: 
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(r.views)}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtNum(r.visitors)}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fmtDur(r.avgDurationSec)}</td>
+      <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap" title={r.peakHour ? `${r.peakHour.persen}% kunjungan halaman ini terjadi pada jam ini` : 'Belum ada data per jam'}>
+        {r.peakHour ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-semibold text-neutral-900">
+              {String(r.peakHour.jam).padStart(2, '0')}.00–{String((r.peakHour.jam + 1) % 24).padStart(2, '0')}.00
+            </span>
+            <span className="text-[10px] text-neutral-400">{r.peakHour.persen}%</span>
+          </span>
+        ) : (
+          <span className="text-neutral-300">—</span>
+        )}
+      </td>
       <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return7)}`}>{pctOrDash(r.return7, 0)}</td>
       <td className={`px-4 py-2 text-right tabular-nums font-semibold ${retentionClass(r.return30)}`}>{pctOrDash(r.return30, 0)}</td>
       <td className="px-4 py-2 text-right tabular-nums">
